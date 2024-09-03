@@ -1,0 +1,74 @@
+use super::Observable;
+use crate::{
+    disposable::{anonymous_disposable::AnonymousDisposable, Disposable},
+    observer::{Event, Observer, Terminated},
+};
+
+pub(crate) struct Create<F> {
+    subscribe_handler: F,
+}
+
+impl<F> Create<F> {
+    pub(crate) fn new(subscribe_handler: F) -> Create<F> {
+        Create { subscribe_handler }
+    }
+}
+
+impl<'a, T, E, D, F> Observable<'a, T, E> for Create<F>
+where
+    D: Fn(),
+    F: Fn(&dyn Observer<T, E>) -> D,
+{
+    fn subscribe<O2>(&'a self, observer: O2) -> impl Disposable
+    where
+        O2: Observer<T, E>,
+    {
+        let disposable_closure = (self.subscribe_handler)(&observer);
+        AnonymousDisposable::new(disposable_closure)
+    }
+}
+
+// TODO: will do this.
+// #[cfg(test)]
+// mod tests {
+//     use super::create_cloned;
+//     use crate::{
+//         observable::{create::create, Observable},
+//         observer::Terminated,
+//         utils::test_helper::ObservableChecker,
+//     };
+
+//     #[test]
+//     fn test_ref() {
+//         let value = 123;
+//         let checker = ObservableChecker::new();
+//         let observable = create(value);
+//         observable.subscribe(checker.clone());
+//         assert!(checker.is_values_matched(&[&value]));
+//         assert!(checker.is_terminals_matched(&Terminated::Completed));
+//     }
+
+//     #[test]
+//     fn test_cloned() {
+//         let value = 123;
+//         let checker = ObservableChecker::new();
+//         let observable = create_cloned(value);
+//         observable.subscribe(checker.clone());
+//         assert!(checker.is_values_matched(&[value]));
+//         assert!(checker.is_terminals_matched(&Terminated::Completed));
+//     }
+
+//     #[test]
+//     fn test_multiple_subscribe() {
+//         let value = 123;
+//         let observable = create_cloned(value);
+//         let checker = ObservableChecker::new();
+//         observable.subscribe(checker.clone());
+//         assert!(checker.is_values_matched(&[value]));
+//         assert!(checker.is_terminals_matched(&Terminated::Completed));
+//         let checker = ObservableChecker::new();
+//         observable.subscribe(checker.clone());
+//         assert!(checker.is_values_matched(&[value]));
+//         assert!(checker.is_terminals_matched(&Terminated::Completed));
+//     }
+// }
