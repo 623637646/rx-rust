@@ -13,14 +13,13 @@ impl<F> Create<F> {
 impl<'a, T, E, D, F> Observable<'a, T, E> for Create<F>
 where
     D: Disposable,
-    // TODO: use Box<dyn Observer<T, E>> instead of &dyn Observer<T, E>
-    F: Fn(&dyn Observer<T, E>) -> D,
+    F: Fn(Box<dyn Observer<T, E>>) -> D,
 {
     fn subscribe<O>(&'a self, observer: O) -> impl Disposable
     where
         O: Observer<T, E> + 'static,
     {
-        (self.subscribe_handler)(&observer)
+        (self.subscribe_handler)(Box::new(observer))
     }
 }
 
