@@ -5,11 +5,13 @@ use crate::{
 };
 
 pub trait ObservableExt<'a, T, E> {
+    /// Subscribes to the observable with the given `on_next` and `on_terminated` callbacks.
     fn subscribe_on<F1, F2>(&'a self, on_next: F1, on_terminated: F2) -> impl Cancellable
     where
         F1: Fn(T) + 'static,
         F2: Fn(Terminated<E>) + 'static;
 
+    /// Subscribes to the observable with the given `on_next` callback.
     fn subscribe_on_next<F1>(&'a self, on_next: F1) -> impl Cancellable
     where
         F1: Fn(T) + 'static;
