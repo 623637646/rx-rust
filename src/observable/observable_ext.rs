@@ -1,6 +1,6 @@
 use super::Observable;
 use crate::{
-    disposable::{nop_disposable::NopDisposable, Disposable},
+    disposable::Disposable,
     observer::{anonymous_observer::AnonymousObserver, Event, Terminated},
 };
 
@@ -24,20 +24,11 @@ where
         F1: Fn(T) + 'static,
         F2: Fn(Terminated<E>) + 'static,
     {
-        // TODO use disposable
-        // let dispose: Box<dyn Disposable> = match on_disposed {
-        //     Some(f) => Box::new(AnonymousDisposable::new(f)),
-        //     None => Box::new(NopDisposable{}),
-        // };
-        let dispose = NopDisposable {};
-
         let observer = AnonymousObserver::new(move |event: Event<T, E>| match event {
             Event::Next(value) => on_next(value),
             Event::Terminated(terminated) => on_terminated(terminated),
         });
-
-        self.subscribe(observer);
-        dispose
+        self.subscribe(observer)
     }
 
     fn subscribe_on_next<F1>(&'a self, on_next: F1) -> impl Disposable
