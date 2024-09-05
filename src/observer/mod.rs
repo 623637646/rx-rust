@@ -3,7 +3,7 @@ pub mod anonymous_observer;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Terminated<E> {
     Error(E),
-    Disposed,
+    Cancelled,
     Completed,
 }
 

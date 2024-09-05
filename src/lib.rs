@@ -1,4 +1,4 @@
-pub mod disposable;
+pub mod cancellable;
 pub mod observable;
 pub mod observer;
 pub mod operators;

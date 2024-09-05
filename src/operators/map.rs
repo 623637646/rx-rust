@@ -1,5 +1,5 @@
 use crate::{
-    disposable::Disposable,
+    cancellable::Cancellable,
     observable::Observable,
     observer::{anonymous_observer::AnonymousObserver, Event, Observer},
 };
@@ -18,12 +18,12 @@ pub struct Map<T, O, F> {
         D: Fn(),
         F: Fn(&dyn Observer<T, E>) -> D,
     {
-        fn subscribe<O>(&'a self, observer: O) -> impl Disposable
+        fn subscribe<O>(&'a self, observer: O) -> impl Cancellable
         where
             O: Observer<T, E> + 'static,
         {
-            let disposable_closure = (self.subscribe_handler)(&observer);
-            AnonymousDisposable::new(disposable_closure)
+            let cancellable_closure = (self.subscribe_handler)(&observer);
+            AnonymousCancellable::new(cancellable_closure)
         }
     }
          */
@@ -45,7 +45,7 @@ where
     F: Fn(T) -> T2 + 'static,
     O: Observable<'a, T, E>,
 {
-    fn subscribe<O2>(&'a self, observer: O2) -> impl Disposable
+    fn subscribe<O2>(&'a self, observer: O2) -> impl Cancellable
     where
         O2: Observer<T2, E> + 'static,
     {

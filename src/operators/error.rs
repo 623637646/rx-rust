@@ -1,5 +1,5 @@
 use crate::{
-    disposable::{nop_disposable::NopDisposable, Disposable},
+    cancellable::{non_cancellable::NonCancellable, Cancellable},
     observable::Observable,
     observer::{Event, Observer, Terminated},
     utils::never::Never,
@@ -16,12 +16,12 @@ impl<E> Error<E> {
 }
 
 impl<'a, E> Observable<'a, Never, &'a E> for Error<E> {
-    fn subscribe<O>(&'a self, observer: O) -> impl Disposable
+    fn subscribe<O>(&'a self, observer: O) -> impl Cancellable
     where
         O: Observer<Never, &'a E> + 'static,
     {
         observer.on(Event::Terminated(Terminated::Error(&self.error)));
-        NopDisposable {}
+        NonCancellable {}
     }
 }
 

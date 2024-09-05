@@ -1,6 +1,6 @@
 use super::Observable;
 use crate::{
-    disposable::{nop_disposable::NopDisposable, Disposable},
+    cancellable::{non_cancellable::NonCancellable, Cancellable},
     observer::Observer,
 };
 use std::{cell::RefCell, rc::Rc};
@@ -12,11 +12,11 @@ struct HotObservable<T, E> {
 }
 
 impl<'a, T, E> Observable<'a, T, E> for HotObservable<T, E> {
-    fn subscribe<O>(&'a self, observer: O) -> impl Disposable
+    fn subscribe<O>(&'a self, observer: O) -> impl Cancellable
     where
         O: Observer<T, E> + 'static,
     {
         self.observers.borrow_mut().push(Box::new(observer));
-        NopDisposable {}
+        NonCancellable {}
     }
 }

@@ -1,4 +1,4 @@
-use crate::{disposable::Disposable, observable::Observable, observer::Observer};
+use crate::{cancellable::Cancellable, observable::Observable, observer::Observer};
 
 pub struct Create<F> {
     subscribe_handler: F,
@@ -12,10 +12,10 @@ impl<F> Create<F> {
 
 impl<'a, T, E, D, F> Observable<'a, T, E> for Create<F>
 where
-    D: Disposable,
+    D: Cancellable,
     F: Fn(Box<dyn Observer<T, E>>) -> D,
 {
-    fn subscribe<O>(&'a self, observer: O) -> impl Disposable
+    fn subscribe<O>(&'a self, observer: O) -> impl Cancellable
     where
         O: Observer<T, E> + 'static,
     {
