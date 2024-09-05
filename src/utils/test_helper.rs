@@ -17,6 +17,7 @@ impl<T, E> ObservableChecker<T, E> {
         }
     }
 
+    // TODO: return values instead of bool?
     pub(crate) fn is_values_matched(&self, expected: &[T]) -> bool
     where
         T: PartialEq,
@@ -73,6 +74,7 @@ impl<T, E> ObservableChecker<T, E> {
         matches!(events.last(), Some(Event::Terminated(_)))
     }
 
+    // TODO: return values instead of bool?
     pub(crate) fn is_terminals_matched(&self, expected: &Terminated<E>) -> bool
     where
         E: PartialEq,
