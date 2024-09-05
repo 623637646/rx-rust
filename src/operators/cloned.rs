@@ -2,7 +2,7 @@
 
 // use super::map::Map;
 
-// TODO: here
+// TODO: can we clone both T and E ?
 // trait Cloned<T, E> {
 //     fn cloned(self) -> impl for<'a> Observable<'a, T, E>;
 // }

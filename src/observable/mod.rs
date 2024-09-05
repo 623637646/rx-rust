@@ -1,5 +1,6 @@
 pub mod hot_observable;
-pub mod observable_ext;
+pub mod observable_into_ext;
+pub mod observable_subscribe_ext;
 
 use crate::cancellable::Cancellable;
 use crate::observer::Observer;

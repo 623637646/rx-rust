@@ -8,7 +8,7 @@ use crate::{cancellable::Cancellable, observable::Observable, observer::Observer
 /// use rx_rust::observer::Event;
 /// use rx_rust::observer::Terminated;
 /// use rx_rust::cancellable::non_cancellable::NonCancellable;
-/// use rx_rust::observable::observable_ext::ObservableExt;
+/// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 /// let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
 ///     observer.on(Event::Next(1));
 ///     observer.on(Event::Next(2));
@@ -62,8 +62,8 @@ mod tests {
 
         let checker = ObservableChecker::new();
         observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[value]));
-        assert!(checker.is_terminals_matched(&Terminated::Completed));
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_completed());
     }
 
     #[test]
@@ -77,12 +77,12 @@ mod tests {
 
         let checker = ObservableChecker::new();
         observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[value]));
-        assert!(checker.is_terminals_matched(&Terminated::Completed));
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_completed());
 
         let checker = ObservableChecker::new();
         observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[value]));
-        assert!(checker.is_terminals_matched(&Terminated::Completed));
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_completed());
     }
 }

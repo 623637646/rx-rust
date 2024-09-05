@@ -4,7 +4,7 @@ use crate::{
     observer::{anonymous_observer::AnonymousObserver, Event},
 };
 
-pub trait ObservableExt<'a, T, E> {
+pub trait ObservableSubscribeExt<'a, T, E> {
     /// Subscribes to the observable with the given `on_event` callback.
     fn subscribe_on_event<F>(&'a self, on_event: F) -> impl Cancellable
     where
@@ -16,7 +16,7 @@ pub trait ObservableExt<'a, T, E> {
         F1: Fn(T) + 'static;
 }
 
-impl<'a, T, E, O> ObservableExt<'a, T, E> for O
+impl<'a, T, E, O> ObservableSubscribeExt<'a, T, E> for O
 where
     O: Observable<'a, T, E>,
 {
