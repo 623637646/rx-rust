@@ -1,11 +1,11 @@
-use super::Disposable;
+use crate::disposable::Disposable;
 
-pub(crate) struct AnonymousDisposable<F> {
+pub struct AnonymousDisposable<F> {
     action: F,
 }
 
 impl<F> AnonymousDisposable<F> {
-    pub(crate) fn new(action: F) -> AnonymousDisposable<F> {
+    pub fn new(action: F) -> AnonymousDisposable<F> {
         AnonymousDisposable { action }
     }
 }
@@ -18,5 +18,3 @@ where
         (self.action)();
     }
 }
-
-// TODO unit tests

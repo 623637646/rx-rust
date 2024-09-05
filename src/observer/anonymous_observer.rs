@@ -1,11 +1,11 @@
 use super::{Event, Observer};
 
-pub(crate) struct AnonymousObserver<F> {
+pub struct AnonymousObserver<F> {
     on_event: F,
 }
 
 impl<F> AnonymousObserver<F> {
-    pub(crate) fn new(on_event: F) -> AnonymousObserver<F> {
+    pub fn new(on_event: F) -> AnonymousObserver<F> {
         AnonymousObserver { on_event }
     }
 }

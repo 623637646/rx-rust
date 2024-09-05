@@ -1,11 +1,11 @@
-use super::Observable;
 use crate::{
     disposable::Disposable,
+    observable::Observable,
     observer::{anonymous_observer::AnonymousObserver, Event, Observer},
 };
 use std::{marker::PhantomData, rc::Rc};
 
-pub(crate) struct Map<O, F, T> {
+pub struct Map<O, F, T> {
     observable: O,
     map: Rc<F>,
     /// TODO: Why do we need _marker? in this code. D doesn't use it. which means,
@@ -30,7 +30,7 @@ pub(crate) struct Map<O, F, T> {
 }
 
 impl<O, F, T> Map<O, F, T> {
-    pub(crate) fn new(observable: O, map: F) -> Map<O, F, T> {
+    pub fn new(observable: O, map: F) -> Map<O, F, T> {
         Map {
             observable,
             map: Rc::new(map),

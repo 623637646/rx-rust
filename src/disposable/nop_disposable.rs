@@ -1,12 +1,6 @@
-use super::Disposable;
+use crate::disposable::Disposable;
 
-pub(crate) struct NopDisposable;
-
-impl NopDisposable {
-    pub(crate) fn new() -> NopDisposable {
-        NopDisposable
-    }
-}
+pub struct NopDisposable;
 
 impl Disposable for NopDisposable {
     fn dispose(&self) {}

@@ -1,15 +1,15 @@
-use super::Observable;
 use crate::{
     disposable::{anonymous_disposable::AnonymousDisposable, Disposable},
-    observer::{Event, Observer, Terminated},
+    observable::Observable,
+    observer::Observer,
 };
 
-pub(crate) struct Create<F> {
+pub struct Create<F> {
     subscribe_handler: F,
 }
 
 impl<F> Create<F> {
-    pub(crate) fn new(subscribe_handler: F) -> Create<F> {
+    pub fn new(subscribe_handler: F) -> Create<F> {
         Create { subscribe_handler }
     }
 }

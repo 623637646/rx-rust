@@ -1,4 +1,4 @@
-pub(crate) mod anonymous_observer;
+pub mod anonymous_observer;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Terminated<E> {
