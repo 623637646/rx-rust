@@ -20,7 +20,7 @@ pub struct Map<T, O, F> {
     {
         fn subscribe<O>(&'a self, observer: O) -> impl Disposable
         where
-            O: Observer<T, E>,
+            O: Observer<T, E> + 'static,
         {
             let disposable_closure = (self.subscribe_handler)(&observer);
             AnonymousDisposable::new(disposable_closure)
@@ -31,10 +31,10 @@ pub struct Map<T, O, F> {
 }
 
 impl<T, O, F> Map<T, O, F> {
-    pub fn new(source: O, map: F) -> Map<T, O, F> {
+    pub fn new(source: O, mapper: F) -> Map<T, O, F> {
         Map {
             source,
-            mapper: Rc::new(map),
+            mapper: Rc::new(mapper),
             _marker: PhantomData,
         }
     }
@@ -42,17 +42,17 @@ impl<T, O, F> Map<T, O, F> {
 
 impl<'a, T, E, O, F, T2> Observable<'a, T2, E> for Map<T, O, F>
 where
-    F: Fn(T) -> T2,
+    F: Fn(T) -> T2 + 'static,
     O: Observable<'a, T, E>,
 {
     fn subscribe<O2>(&'a self, observer: O2) -> impl Disposable
     where
-        O2: Observer<T2, E>,
+        O2: Observer<T2, E> + 'static,
     {
-        let map = self.mapper.clone();
+        let mapper = self.mapper.clone();
         let observer = AnonymousObserver::new(move |event: Event<T, E>| {
             match event {
-                Event::Next(value) => observer.on(Event::Next(map(value))),
+                Event::Next(value) => observer.on(Event::Next(mapper(value))),
                 Event::Terminated(terminated) => observer.on(Event::Terminated(terminated)),
             };
         });
@@ -64,7 +64,7 @@ where
 trait Mappable<T, E> {
     fn map<F, T2>(self, f: F) -> impl for<'a> Observable<'a, T2, E>
     where
-        F: Fn(T) -> T2;
+        F: Fn(T) -> T2 + 'static;
 }
 
 impl<O, T, E> Mappable<T, E> for O
@@ -73,7 +73,7 @@ where
 {
     fn map<F, T2>(self, f: F) -> impl for<'a> Observable<'a, T2, E>
     where
-        F: Fn(T) -> T2,
+        F: Fn(T) -> T2 + 'static,
     {
         Map::new(self, f)
     }

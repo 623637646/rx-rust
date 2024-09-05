@@ -18,7 +18,7 @@ impl<E> Error<E> {
 impl<'a, E> Observable<'a, Never, &'a E> for Error<E> {
     fn subscribe<O>(&'a self, observer: O) -> impl Disposable
     where
-        O: Observer<Never, &'a E>,
+        O: Observer<Never, &'a E> + 'static,
     {
         observer.on(Event::Terminated(Terminated::Error(&self.error)));
         NopDisposable {}

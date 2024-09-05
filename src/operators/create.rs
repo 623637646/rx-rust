@@ -18,7 +18,7 @@ where
 {
     fn subscribe<O>(&'a self, observer: O) -> impl Disposable
     where
-        O: Observer<T, E>,
+        O: Observer<T, E> + 'static,
     {
         (self.subscribe_handler)(&observer)
     }

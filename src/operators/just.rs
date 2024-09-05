@@ -18,7 +18,7 @@ impl<T> Just<T> {
 impl<'a, T> Observable<'a, &'a T, Never> for Just<T> {
     fn subscribe<O>(&'a self, observer: O) -> impl Disposable
     where
-        O: Observer<&'a T, Never>,
+        O: Observer<&'a T, Never> + 'static,
     {
         observer.on(Event::Next(&self.value));
         observer.on(Event::Terminated(Terminated::Completed));
