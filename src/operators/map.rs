@@ -17,9 +17,9 @@ pub struct Map<O, F, T> {
         D: Fn(),
         F: Fn(&dyn Observer<T, E>) -> D,
     {
-        fn subscribe<O2>(&'a self, observer: O2) -> impl Disposable
+        fn subscribe<O>(&'a self, observer: O) -> impl Disposable
         where
-            O2: Observer<T, E>,
+            O: Observer<T, E>,
         {
             let disposable_closure = (self.subscribe_handler)(&observer);
             AnonymousDisposable::new(disposable_closure)
