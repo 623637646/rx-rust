@@ -1,5 +1,6 @@
 use super::{Event, Observer};
 
+/// An observer that wraps a closure.
 pub struct AnonymousObserver<F> {
     on_event: F,
 }
