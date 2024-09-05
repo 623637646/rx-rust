@@ -5,6 +5,7 @@ use std::{cell::RefCell, rc::Rc};
 
 // TODO: Use Arc instead of Rc? checking in multiple threads? for whole project?
 
+/// A helper struct for testing observables.
 #[derive(Debug, Clone)]
 pub(crate) struct ObservableChecker<T, E> {
     events: Rc<RefCell<Vec<Event<T, E>>>>,
