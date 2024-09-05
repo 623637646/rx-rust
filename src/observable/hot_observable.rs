@@ -17,6 +17,6 @@
 //         O: Observer<T, E> + 'static,
 //     {
 //         self.observers.borrow_mut().push(Box::new(observer));
-//         NonCancellable {}
+//         NonCancellable
 //     }
 // }

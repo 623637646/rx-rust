@@ -22,7 +22,7 @@ impl<'a, T> Observable<'a, &'a T, Never> for Just<T> {
     {
         observer.on(Event::Next(&self.value));
         observer.on(Event::Terminated(Terminated::Completed));
-        NonCancellable {}
+        NonCancellable
     }
 }
 

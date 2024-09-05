@@ -6,8 +6,8 @@ use crate::cancellable::Cancellable;
 ///
 /// # Examples
 /// ```rust
-/// use crate::rx_rust::cancellable::anonymous_cancellable::AnonymousCancellable;
-/// use crate::rx_rust::cancellable::Cancellable;
+/// use rx_rust::cancellable::anonymous_cancellable::AnonymousCancellable;
+/// use rx_rust::cancellable::Cancellable;
 /// let cancellable = AnonymousCancellable::new(|| println!("cancelled"));
 /// cancellable.cancel();
 /// ```

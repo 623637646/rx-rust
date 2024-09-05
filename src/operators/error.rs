@@ -21,7 +21,7 @@ impl<'a, E> Observable<'a, Never, &'a E> for Error<E> {
         O: Observer<Never, &'a E> + 'static,
     {
         observer.on(Event::Terminated(Terminated::Error(&self.error)));
-        NonCancellable {}
+        NonCancellable
     }
 }
 
