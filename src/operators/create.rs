@@ -1,8 +1,4 @@
-use crate::{
-    disposable::{anonymous_disposable::AnonymousDisposable, Disposable},
-    observable::Observable,
-    observer::Observer,
-};
+use crate::{disposable::Disposable, observable::Observable, observer::Observer};
 
 pub struct Create<F> {
     subscribe_handler: F,
@@ -16,15 +12,15 @@ impl<F> Create<F> {
 
 impl<'a, T, E, D, F> Observable<'a, T, E> for Create<F>
 where
-    D: Fn(),
+    D: Disposable,
+    // TODO: use Box<dyn Observer<T, E>> instead of &dyn Observer<T, E>
     F: Fn(&dyn Observer<T, E>) -> D,
 {
     fn subscribe<O>(&'a self, observer: O) -> impl Disposable
     where
         O: Observer<T, E>,
     {
-        let disposable_closure = (self.subscribe_handler)(&observer);
-        AnonymousDisposable::new(disposable_closure)
+        (self.subscribe_handler)(&observer)
     }
 }
 
