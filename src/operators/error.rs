@@ -15,12 +15,15 @@ impl<E> Error<E> {
     }
 }
 
-impl<'a, E> Observable<'a, Never, &'a E> for Error<E> {
-    fn subscribe<O>(&'a self, observer: O) -> impl Cancellable
-    where
-        O: Observer<Never, &'a E> + 'static,
-    {
-        observer.on(Event::Terminated(Terminated::Error(&self.error)));
+impl<E> Observable<Never, E> for Error<E>
+where
+    E: Clone,
+{
+    fn subscribe(
+        &self,
+        observer: impl for<'a> Observer<&'a Never, E> + 'static,
+    ) -> impl Cancellable + 'static {
+        observer.on(Event::Terminated(Terminated::Error(self.error.clone())));
         NonCancellable
     }
 }

@@ -8,17 +8,17 @@ use std::{marker::PhantomData, rc::Rc};
 pub struct Map<T, O, F> {
     source: O,
     mapper: Rc<F>,
-    /// TODO: Why do we need _marker? in this code. D doesn't use it. which means,
+    /// TODO: Why do we need _marker? in this code. C doesn't use it. which means,
     /// When generics is in Fn() 's return type, we don't need to use _marker.
     /// But when generics is in Fn() 's argument type, we need to use _marker.
     /// TODO: Ask in stackoverflow!
     /*
-        impl<'a, T, E, D, F> Observable<'a, T, E> for Create<F>
+        impl<'a, T, E, C, F> Observable<'a, T, E> for Create<F>
     where
-        D: Fn(),
-        F: Fn(&dyn Observer<T, E>) -> D,
+        C: Fn(),
+        F: Fn(&dyn Observer<T, E>) -> C,
     {
-        fn subscribe<O>(&'a self, observer: O) -> impl Cancellable
+        fn subscribe<O>(&'a self, observer: O) -> impl Cancellable+ 'static
         where
             O: Observer<T, E> + 'static,
         {
@@ -40,19 +40,23 @@ impl<T, O, F> Map<T, O, F> {
     }
 }
 
-impl<'a, T, E, O, F, T2> Observable<'a, T2, E> for Map<T, O, F>
+impl<T, E, O, F, T2> Observable<T2, E> for Map<T, O, F>
 where
-    F: Fn(T) -> T2 + 'static,
-    O: Observable<'a, T, E>,
+    F: for<'a> Fn(&'a T) -> T2 + 'static, // why do we need 'static here? comment out and see what happens.
+    O: Observable<T, E>,
 {
-    fn subscribe<O2>(&'a self, observer: O2) -> impl Cancellable
-    where
-        O2: Observer<T2, E> + 'static,
-    {
+    fn subscribe(
+        &self,
+        observer: impl for<'a> Observer<&'a T2, E> + 'static,
+    ) -> impl Cancellable + 'static {
         let mapper = self.mapper.clone();
-        let observer = AnonymousObserver::new(move |event: Event<T, E>| {
+        let observer = AnonymousObserver::new(move |event: Event<&T, E>| {
+            // TODO: why can't use for<'a> here?
             match event {
-                Event::Next(value) => observer.on(Event::Next(mapper(value))),
+                Event::Next(value) => {
+                    let new_value = mapper(value);
+                    observer.on(Event::Next(&new_value));
+                }
                 Event::Terminated(terminated) => observer.on(Event::Terminated(terminated)),
             };
         });
@@ -60,20 +64,19 @@ where
     }
 }
 
-// TODO: find a better way to implement this.
-trait Mappable<T, E> {
-    fn map<F, T2>(self, f: F) -> impl for<'a> Observable<'a, T2, E>
+trait MappableObservable<T, E> {
+    fn map<F, T2>(self, f: F) -> impl Observable<T2, E>
     where
-        F: Fn(T) -> T2 + 'static;
+        F: for<'a> Fn(&'a T) -> T2 + 'static;
 }
 
-impl<O, T, E> Mappable<T, E> for O
+impl<O, T, E> MappableObservable<T, E> for O
 where
-    O: for<'a> Observable<'a, T, E>,
+    O: Observable<T, E>,
 {
-    fn map<F, T2>(self, f: F) -> impl for<'a> Observable<'a, T2, E>
+    fn map<F, T2>(self, f: F) -> impl Observable<T2, E>
     where
-        F: Fn(T) -> T2 + 'static,
+        F: for<'a> Fn(&'a T) -> T2 + 'static,
     {
         Map::new(self, f)
     }

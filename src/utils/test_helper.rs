@@ -20,7 +20,7 @@ impl<T, E> ObservableChecker<T, E> {
         }
     }
 
-    pub(crate) fn is_values_matched(&self, expected: &[&T]) -> bool
+    pub(crate) fn is_values_matched(&self, expected: &[T]) -> bool
     where
         T: PartialEq,
     {
@@ -32,16 +32,12 @@ impl<T, E> ObservableChecker<T, E> {
                 _ => None,
             })
             .collect();
-        values == expected
+        values == expected.iter().collect::<Vec<_>>()
     }
 
     pub(crate) fn is_unterminated(&self) -> bool {
         let events = self.events.borrow();
-        if let Some(Event::Terminated(_)) = events.last() {
-            false
-        } else {
-            true
-        }
+        !matches!(events.last(), Some(Event::Terminated(_)))
     }
 
     pub(crate) fn is_error(&self, expected: &E) -> bool
@@ -58,20 +54,18 @@ impl<T, E> ObservableChecker<T, E> {
 
     pub(crate) fn is_cancelled(&self) -> bool {
         let events = self.events.borrow();
-        if let Some(Event::Terminated(Terminated::Cancelled)) = events.last() {
-            true
-        } else {
-            false
-        }
+        matches!(
+            events.last(),
+            Some(Event::Terminated(Terminated::Cancelled))
+        )
     }
 
     pub(crate) fn is_completed(&self) -> bool {
         let events = self.events.borrow();
-        if let Some(Event::Terminated(Terminated::Completed)) = events.last() {
-            true
-        } else {
-            false
-        }
+        matches!(
+            events.last(),
+            Some(Event::Terminated(Terminated::Completed))
+        )
     }
 }
 
@@ -81,6 +75,27 @@ impl<T, E> Observer<T, E> for ObservableChecker<T, E> {
         if let Some(Event::Terminated(_)) = events.last() {
             panic!("ObservableCounter is terminated");
         }
-        events.push(event);
+        match event {
+            Event::Next(value) => events.push(Event::Next(value)),
+            Event::Terminated(terminated) => match terminated {
+                Terminated::Error(error) => {
+                    events.push(Event::Terminated(Terminated::Error(error)))
+                }
+                Terminated::Cancelled => events.push(Event::Terminated(Terminated::Cancelled)),
+                Terminated::Completed => events.push(Event::Terminated(Terminated::Completed)),
+            },
+        }
     }
 }
+
+// TODO:
+// #[derive(Debug, PartialEq)]
+// struct NonCloneableStruct {
+//     value: i32,
+// }
+
+// impl NonCloneableStruct {
+//     fn new() -> Self {
+//         NonCloneableStruct { value: 33 }
+//     }
+// }

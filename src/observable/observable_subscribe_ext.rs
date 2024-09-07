@@ -4,35 +4,35 @@ use crate::{
     observer::{anonymous_observer::AnonymousObserver, Event},
 };
 
-pub trait ObservableSubscribeExt<'a, T, E> {
+pub trait ObservableSubscribeExt<T, E> {
     /// Subscribes to the observable with the given `on_event` callback.
-    fn subscribe_on_event<F>(&'a self, on_event: F) -> impl Cancellable
+    fn subscribe_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
     where
-        F: Fn(Event<T, E>) + 'static;
+        F: for<'a> Fn(Event<&'a T, E>) + 'static;
 
     /// Subscribes to the observable with the given `on_next` callback.
-    fn subscribe_on_next<F1>(&'a self, on_next: F1) -> impl Cancellable
+    fn subscribe_on_next<F>(&self, on_next: F) -> impl Cancellable + 'static
     where
-        F1: Fn(T) + 'static;
+        F: for<'a> Fn(&'a T) + 'static;
 }
 
-impl<'a, T, E, O> ObservableSubscribeExt<'a, T, E> for O
+impl<T, E, O> ObservableSubscribeExt<T, E> for O
 where
-    O: Observable<'a, T, E>,
+    O: Observable<T, E>,
 {
-    fn subscribe_on_event<F>(&'a self, on_event: F) -> impl Cancellable
+    fn subscribe_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
     where
-        F: Fn(Event<T, E>) + 'static,
+        F: for<'a> Fn(Event<&'a T, E>) + 'static,
     {
-        let observer = AnonymousObserver::new(move |event: Event<T, E>| on_event(event));
+        let observer = AnonymousObserver::new(on_event);
         self.subscribe(observer)
     }
 
-    fn subscribe_on_next<F>(&'a self, on_next: F) -> impl Cancellable
+    fn subscribe_on_next<F>(&self, on_next: F) -> impl Cancellable + 'static
     where
-        F: Fn(T) + 'static,
+        F: for<'a> Fn(&'a T) + 'static,
     {
-        self.subscribe_on_event(move |event: Event<T, E>| {
+        self.subscribe_on_event(move |event| {
             if let Event::Next(value) = event {
                 on_next(value);
             }
