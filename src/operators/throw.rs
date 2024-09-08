@@ -5,17 +5,17 @@ use crate::{
     utils::never::Never,
 };
 
-pub struct Error<E> {
+pub struct Throw<E> {
     error: E,
 }
 
-impl<E> Error<E> {
-    pub fn new(error: E) -> Error<E> {
-        Error { error }
+impl<E> Throw<E> {
+    pub fn new(error: E) -> Throw<E> {
+        Throw { error }
     }
 }
 
-impl<E> Observable<Never, E> for Error<E>
+impl<E> Observable<Never, E> for Throw<E>
 where
     E: Clone,
 {
