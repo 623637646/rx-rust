@@ -3,9 +3,7 @@ use crate::observer::Event;
 use crate::observer::{Observer, Terminated};
 use std::{cell::RefCell, rc::Rc};
 
-/// TODO:
-/// ObservableCounter is not atomic, implement struct AtomicObservableCounter {}?
-/// Use Arc instead of Rc? checking in multiple threads? for whole project?
+/// TODO: ObservableCounter is not atomic, implement struct AtomicObservableCounter {}?
 
 /// A helper struct for testing observables.
 #[derive(Debug, Clone)]

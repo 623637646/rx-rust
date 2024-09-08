@@ -17,6 +17,5 @@ pub enum Event<T, E> {
 
 /// An `Observer` is a type that can receive events from an `Observable`.
 pub trait Observer<T, E> {
-    // TODO: use mutable reference?
     fn on(&self, event: Event<T, E>);
 }

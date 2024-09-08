@@ -8,10 +8,10 @@ use std::{marker::PhantomData, rc::Rc};
 pub struct Map<T, O, F> {
     source: O,
     mapper: Rc<F>,
-    /// TODO: Why do we need _marker? in this code. C doesn't use it. which means,
+    /// TODO: Why do we need _marker?  【Ask in stackoverflow!】
+    /// in this code. C doesn't use it. which means,
     /// When generics is in Fn() 's return type, we don't need to use _marker.
     /// But when generics is in Fn() 's argument type, we need to use _marker.
-    /// TODO: Ask in stackoverflow!
     /*
         impl<'a, T, E, C, F> Observable<'a, T, E> for Create<F>
     where
@@ -51,7 +51,6 @@ where
     ) -> impl Cancellable + 'static {
         let mapper = self.mapper.clone();
         let observer = AnonymousObserver::new(move |event: Event<&T, E>| {
-            // TODO: why can't use for<'a> here?
             match event {
                 Event::Next(value) => {
                     let new_value = mapper(value);
