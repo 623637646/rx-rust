@@ -6,31 +6,31 @@ use crate::{
 
 pub trait ObservableSubscribeClonedExt<T, E> {
     /// Subscribes to the observable with the given `on_event` callback.
-    fn subscribe_cloned_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
+    fn subscribe_cloned_on_event<F>(&mut self, on_event: F) -> impl Cancellable + 'static
     where
-        F: Fn(Event<T, E>) + 'static;
+        F: FnMut(Event<T, E>) + 'static;
 
     /// Subscribes to the observable with the given `on_next` callback.
-    fn subscribe_cloned_on_next<F>(&self, on_next: F) -> impl Cancellable + 'static
+    fn subscribe_cloned_on_next<F>(&mut self, on_next: F) -> impl Cancellable + 'static
     where
-        F: Fn(T) + 'static;
+        F: FnMut(T) + 'static;
 }
 
 impl<T, E, O> ObservableSubscribeClonedExt<T, E> for O
 where
     O: ObservableCloned<T, E>,
 {
-    fn subscribe_cloned_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
+    fn subscribe_cloned_on_event<F>(&mut self, on_event: F) -> impl Cancellable + 'static
     where
-        F: Fn(Event<T, E>) + 'static,
+        F: FnMut(Event<T, E>) + 'static,
     {
         let observer = AnonymousObserver::new(on_event);
         self.subscribe_cloned(observer)
     }
 
-    fn subscribe_cloned_on_next<F>(&self, on_next: F) -> impl Cancellable + 'static
+    fn subscribe_cloned_on_next<F>(&mut self, mut on_next: F) -> impl Cancellable + 'static
     where
-        F: Fn(T) + 'static,
+        F: FnMut(T) + 'static,
     {
         self.subscribe_cloned_on_event(move |event: Event<T, E>| {
             if let Event::Next(value) = event {

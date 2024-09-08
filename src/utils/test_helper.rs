@@ -70,8 +70,8 @@ impl<T, E> ObservableChecker<T, E> {
 }
 
 impl<T, E> Observer<T, E> for ObservableChecker<T, E> {
-    fn on(&self, event: Event<T, E>) {
-        let mut events = self.events.borrow_mut();
+    fn on(&mut self, event: Event<T, E>) {
+        let mut events = self.events.borrow_mut(); // TODO: remove borrow_mut()?
         if let Some(Event::Terminated(_)) = events.last() {
             panic!("ObservableCounter is terminated");
         }

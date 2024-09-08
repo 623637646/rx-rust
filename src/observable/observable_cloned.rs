@@ -9,7 +9,7 @@ pub trait ObservableCloned<T, E> {
     /// The Observer must be 'static because it will be stored in hot observables or pass to `subscribe_handler` of `Create`.
     /// The Cancellable must be 'static because it may be stored by callers.
     fn subscribe_cloned(
-        &self,
+        &mut self,
         observer: impl Observer<T, E> + 'static,
     ) -> impl Cancellable + 'static;
 }
@@ -29,15 +29,15 @@ where
     /// use rx_rust::observer::Event;
     /// use rx_rust::operators::just::Just;
     /// use rx_rust::utils::never::Never;
-    /// let observable = Just::new(123);
+    /// let mut observable = Just::new(123);
     /// let observer = AnonymousObserver::new(|e: Event<i32, Never>| {
     ///     println!("{:?}", e);
     /// });
     /// observable.subscribe_cloned(observer);
     /// ```
     fn subscribe_cloned(
-        &self,
-        observer: impl Observer<T, E> + 'static,
+        &mut self,
+        mut observer: impl Observer<T, E> + 'static,
     ) -> impl Cancellable + 'static {
         self.subscribe_on_event(move |event| match event {
             Event::Next(value) => observer.on(Event::Next(value.clone())),
@@ -59,7 +59,7 @@ mod tests {
 
     #[test]
     fn test_subscribe_cloned() {
-        let observable = Just::new(123);
+        let mut observable = Just::new(123);
         let checker = ObservableChecker::new();
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[123]));

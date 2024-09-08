@@ -21,7 +21,7 @@ where
     ///     operators::just::Just,
     /// };
     /// let just = Just::new(123);
-    /// let observable = just.into_observable();
+    /// let mut observable = just.into_observable();
     /// observable.subscribe_on_next(|value| {
     ///     println!("value: {}", value);
     /// });
@@ -47,14 +47,14 @@ mod tests {
             value: i32,
         }
         let observable = Create::new(
-            |observer: Box<dyn for<'a> Observer<&'a MyStruct, String>>| {
+            |mut observer: Box<dyn for<'a> Observer<&'a MyStruct, String>>| {
                 let my_struct = MyStruct { value: 333 };
                 observer.on(Event::Next(&my_struct));
                 observer.on(Event::Terminated(Terminated::Completed));
                 NonCancellable
             },
         );
-        let observable = observable.into_observable();
+        let mut observable = observable.into_observable();
         observable.subscribe_on_next(|my_struct| {
             assert_eq!(my_struct.value, 333);
         });
@@ -62,12 +62,12 @@ mod tests {
 
     #[test]
     fn test_cloned() {
-        let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
+        let observable = Create::new(|mut observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
             observer.on(Event::Next(&333));
             observer.on(Event::Terminated(Terminated::Completed));
             NonCancellable
         });
-        let observable = observable.into_observable();
+        let mut observable = observable.into_observable();
         let checker = ObservableChecker::new();
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[333]));

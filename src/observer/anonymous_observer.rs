@@ -13,9 +13,9 @@ impl<F> AnonymousObserver<F> {
 
 impl<T, E, F> Observer<T, E> for AnonymousObserver<F>
 where
-    F: Fn(Event<T, E>),
+    F: FnMut(Event<T, E>),
 {
-    fn on(&self, event: Event<T, E>) {
+    fn on(&mut self, event: Event<T, E>) {
         (self.on_event)(event);
     }
 }

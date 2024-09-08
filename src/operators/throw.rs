@@ -20,8 +20,8 @@ where
     E: Clone,
 {
     fn subscribe(
-        &self,
-        observer: impl for<'a> Observer<&'a Never, E> + 'static,
+        &mut self,
+        mut observer: impl for<'a> Observer<&'a Never, E> + 'static,
     ) -> impl Cancellable + 'static {
         observer.on(Event::Terminated(Terminated::Error(self.error.clone())));
         NonCancellable

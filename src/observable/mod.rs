@@ -13,7 +13,7 @@ pub trait Observable<T, E> {
     /// The Observer must be 'static because it will be stored in hot observables or pass to `subscribe_handler` of `Create`.
     /// The Cancellable must be 'static because it may be stored by callers.
     fn subscribe(
-        &self,
+        &mut self,
         observer: impl for<'a> Observer<&'a T, E> + 'static,
     ) -> impl Cancellable + 'static;
 }

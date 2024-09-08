@@ -9,7 +9,7 @@ use crate::{cancellable::Cancellable, observable::Observable, observer::Observer
 /// use rx_rust::observer::Observer;
 /// use rx_rust::observer::Terminated;
 /// use rx_rust::operators::create::Create;
-/// let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
+/// let mut observable = Create::new(|mut observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
 ///     observer.on(Event::Next(&1));
 ///     observer.on(Event::Next(&2));
 ///     observer.on(Event::Next(&3));
@@ -31,10 +31,10 @@ impl<F> Create<F> {
 impl<T, E, C, F> Observable<T, E> for Create<F>
 where
     C: Cancellable + 'static,
-    F: Fn(Box<dyn for<'a> Observer<&'a T, E>>) -> C,
+    F: FnMut(Box<dyn for<'a> Observer<&'a T, E>>) -> C,
 {
     fn subscribe(
-        &self,
+        &mut self,
         observer: impl for<'a> Observer<&'a T, E> + 'static,
     ) -> impl Cancellable + 'static {
         (self.subscribe_handler)(Box::new(observer))
