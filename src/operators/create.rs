@@ -48,7 +48,9 @@ where
 mod tests {
     use super::*;
     use crate::{
-        cancellable::non_cancellable::NonCancellable,
+        cancellable::{
+            anonymous_cancellable::AnonymousCancellable, non_cancellable::NonCancellable,
+        },
         observable::{
             observable_cloned::ObservableCloned, observable_subscribe_ext::ObservableSubscribeExt,
         },
@@ -138,5 +140,50 @@ mod tests {
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_unterminated() {
+        let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
+            observer.on(Event::Next(&1));
+            NonCancellable
+        });
+
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
+    }
+
+    #[test]
+    fn test_error() {
+        let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
+            observer.on(Event::Next(&33));
+            observer.on(Event::Next(&44));
+            observer.on(Event::Terminated(Terminated::Error("error".to_owned())));
+            NonCancellable
+        });
+
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[33, 44]));
+        assert!(checker.is_error(&"error".to_owned()));
+    }
+
+    #[test]
+    fn test_cancelled() {
+        let checker: CheckingObserver<i32, String> = CheckingObserver::new();
+        {
+            let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
+                observer.on(Event::Next(&1));
+                observer.on(Event::Next(&2));
+                AnonymousCancellable::new(move || {
+                    observer.on(Event::Terminated(Terminated::Cancelled))
+                })
+            });
+            observable.subscribe_cloned(checker.clone());
+        }
+        assert!(checker.is_values_matched(&[1, 2]));
+        assert!(checker.is_cancelled());
     }
 }
