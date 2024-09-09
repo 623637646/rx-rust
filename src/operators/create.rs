@@ -1,23 +1,26 @@
 use crate::{cancellable::Cancellable, observable::Observable, observer::Observer};
 
-/// Create an Observable from scratch by calling observer methods programmatically
-/// Example:
-/// ```rust
-/// use rx_rust::cancellable::non_cancellable::NonCancellable;
-/// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-/// use rx_rust::observer::Event;
-/// use rx_rust::observer::Observer;
-/// use rx_rust::observer::Terminated;
-/// use rx_rust::operators::create::Create;
-/// let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
-///     observer.on(Event::Next(&1));
-///     observer.on(Event::Next(&2));
-///     observer.on(Event::Next(&3));
-///     observer.on(Event::Terminated(Terminated::Completed));
-///     NonCancellable
-/// });
-/// observable.subscribe_on_event(|v| println!("event: {:?}", v));
-/// ```
+/**
+Create an observable that emits the values provided by the subscribe_handler function.
+
+# Example
+```rust
+use rx_rust::cancellable::non_cancellable::NonCancellable;
+use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+use rx_rust::observer::Event;
+use rx_rust::observer::Observer;
+use rx_rust::observer::Terminated;
+use rx_rust::operators::create::Create;
+let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
+    observer.on(Event::Next(&1));
+    observer.on(Event::Next(&2));
+    observer.on(Event::Next(&3));
+    observer.on(Event::Terminated(Terminated::Completed));
+    NonCancellable
+});
+observable.subscribe_on_event(|v| println!("event: {:?}", v));
+```
+*/
 pub struct Create<F> {
     subscribe_handler: F,
 }
