@@ -76,15 +76,3 @@ impl<T, E> Observer<T, E> for ObservableChecker<T, E> {
         events.push(event);
     }
 }
-
-// TODO:
-// #[derive(Debug, PartialEq)]
-// struct NonCloneableStruct {
-//     value: i32,
-// }
-
-// impl NonCloneableStruct {
-//     fn new() -> Self {
-//         NonCloneableStruct { value: 33 }
-//     }
-// }
