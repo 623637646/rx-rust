@@ -39,3 +39,39 @@ where
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{observer::Observer, operators::just::Just, utils::test_helper::ObservableChecker};
+
+    #[test]
+    fn test_on_event() {
+        struct MyStruct {
+            value: i32,
+        }
+        let observable = Just::new(MyStruct { value: 333 });
+        let checker = ObservableChecker::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_on_event(move |event| {
+            checker_cloned.on(event.map_next(|my_struct| my_struct.value));
+        });
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_on_next() {
+        struct MyStruct {
+            value: i32,
+        }
+        let observable = Just::new(MyStruct { value: 333 });
+        let checker = ObservableChecker::<i32, String>::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_on_next(move |value| {
+            checker_cloned.on(Event::Next(value.value));
+        });
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_unterminated());
+    }
+}
