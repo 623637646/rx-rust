@@ -40,7 +40,7 @@ where
         &self,
         observer: impl Observer<T, E> + 'static,
     ) -> impl Cancellable + 'static {
-        self.subscribe_on_event(move |event| observer.on(event.map_next(Clone::clone)))
+        self.subscribe_on_event(move |event| observer.on(event.map_value(Clone::clone)))
     }
 }
 

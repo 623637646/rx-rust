@@ -87,7 +87,7 @@ mod tests {
         let checker = CheckingObserver::new();
         let checker_cloned = checker.clone();
         observable.subscribe_on_event(move |event| {
-            checker_cloned.on(event.map_next(|my_struct| my_struct.value));
+            checker_cloned.on(event.map_value(|my_struct| my_struct.value));
         });
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());

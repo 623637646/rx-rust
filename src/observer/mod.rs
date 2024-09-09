@@ -23,11 +23,11 @@ impl<T, E> Event<T, E> {
     ```rust
     use rx_rust::observer::Event;
     let event = Event::<i32, String>::Next(123);
-    let new_event = event.map_next(|value| value.to_string());
+    let new_event = event.map_value(|value| value.to_string());
     assert_eq!(new_event, Event::Next("123".to_owned()));
     ```
      */
-    pub fn map_next<T2, F>(self, f: F) -> Event<T2, E>
+    pub fn map_value<T2, F>(self, f: F) -> Event<T2, E>
     where
         F: Fn(T) -> T2,
     {
