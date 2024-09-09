@@ -30,7 +30,7 @@ where
 
 // #[cfg(test)]
 // mod tests {
-//     use super::error_cloned;
+//     use super::*;
 //     use crate::{
 //         observable::Observable, observer::Terminated, operators::error::error,
 //         utils::test_helper::CheckingObserver,

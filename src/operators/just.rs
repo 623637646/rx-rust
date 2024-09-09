@@ -5,6 +5,17 @@ use crate::{
     utils::never::Never,
 };
 
+/**
+Create an observable that emits a single value then completes.
+
+# Example
+```rust
+use rx_rust::operators::just::Just;
+use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+let observable = Just::new(123);
+observable.subscribe_on_event(|v| println!("event: {:?}", v));
+```
+ */
 pub struct Just<T> {
     value: T,
 }
@@ -26,45 +37,75 @@ impl<T> Observable<T, Never> for Just<T> {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::just_cloned;
-//     use crate::{
-//         observable::Observable, observer::Terminated, operators::just::just,
-//         utils::test_helper::CheckingObserver,
-//     };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        observable::{
+            observable_cloned::ObservableCloned, observable_subscribe_ext::ObservableSubscribeExt,
+        },
+        utils::checking_observer::CheckingObserver,
+    };
 
-//     #[test]
-//     fn test_ref() {
-//         let value = 123;
-//         let checker = CheckingObserver::new();
-//         let observable = just(value);
-//         observable.subscribe(checker.clone());
-//         assert!(checker.is_values_matched(&[&value]));
-//         assert!(checker.is_terminals_matched(&Terminated::Completed));
-//     }
+    #[test]
+    fn test_ref() {
+        struct MyStruct {
+            value: i32,
+        }
+        let observable = Just::new(MyStruct { value: 333 });
+        let checker = CheckingObserver::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_on_event(move |event| {
+            checker_cloned.on(event.map_next(|my_struct| my_struct.value));
+        });
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+    }
 
-//     #[test]
-//     fn test_cloned() {
-//         let value = 123;
-//         let checker = CheckingObserver::new();
-//         let observable = just_cloned(value);
-//         observable.subscribe(checker.clone());
-//         assert!(checker.is_values_matched(&[value]));
-//         assert!(checker.is_terminals_matched(&Terminated::Completed));
-//     }
+    #[test]
+    fn test_cloned() {
+        let observable = Just::new(333);
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+    }
 
-//     #[test]
-//     fn test_multiple_subscribe() {
-//         let value = 123;
-//         let observable = just_cloned(value);
-//         let checker = CheckingObserver::new();
-//         observable.subscribe(checker.clone());
-//         assert!(checker.is_values_matched(&[value]));
-//         assert!(checker.is_terminals_matched(&Terminated::Completed));
-//         let checker = CheckingObserver::new();
-//         observable.subscribe(checker.clone());
-//         assert!(checker.is_values_matched(&[value]));
-//         assert!(checker.is_terminals_matched(&Terminated::Completed));
-//     }
-// }
+    #[test]
+    fn test_ref_multiple_subscribe() {
+        struct MyStruct {
+            value: i32,
+        }
+        let observable = Just::new(MyStruct { value: 333 });
+        let checker = CheckingObserver::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_on_event(move |event| {
+            checker_cloned.on(event.map_next(|my_struct| my_struct.value));
+        });
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+
+        let checker = CheckingObserver::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_on_event(move |event| {
+            checker_cloned.on(event.map_next(|my_struct| my_struct.value));
+        });
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_cloned_multiple_subscribe() {
+        let observable = Just::new(333);
+
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+    }
+}
