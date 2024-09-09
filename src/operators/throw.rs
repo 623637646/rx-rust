@@ -5,6 +5,17 @@ use crate::{
     utils::never::Never,
 };
 
+/**
+Create an observable that emits an error.
+
+# Example
+```rust
+use rx_rust::operators::throw::Throw;
+use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+let observable = Throw::new("My error");
+observable.subscribe_on_event(|v| println!("event: {:?}", v));
+```
+ */
 pub struct Throw<E> {
     error: E,
 }
