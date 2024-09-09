@@ -80,4 +80,44 @@ mod tests {
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
     }
+
+    #[test]
+    fn test_ref_multiple() {
+        struct MyStruct {
+            value: i32,
+        }
+        let observable = Create::new(
+            |observer: Box<dyn for<'a> Observer<&'a MyStruct, String>>| {
+                let my_struct = MyStruct { value: 333 };
+                observer.on(Event::Next(&my_struct));
+                observer.on(Event::Terminated(Terminated::Completed));
+                NonCancellable
+            },
+        );
+        let observable = observable.into_observable();
+        let observable = observable.into_observable();
+        let checker = CheckingObserver::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_on_event(move |event| {
+            checker_cloned.on(event.map_next(|my_struct| my_struct.value));
+        });
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_cloned_multiple() {
+        let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
+            observer.on(Event::Next(&333));
+            observer.on(Event::Terminated(Terminated::Completed));
+            NonCancellable
+        });
+        let observable = observable.into_observable();
+        let observable = observable.into_observable();
+        let observable = observable.into_observable();
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+    }
 }
