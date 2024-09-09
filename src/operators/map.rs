@@ -51,7 +51,7 @@ where
     ) -> impl Cancellable + 'static {
         let mapper = self.mapper.clone();
         let observer = AnonymousObserver::new(move |event: Event<&T, E>| {
-            observer.on(event.map_next(|value| mapper(value)))
+            observer.on(event.map_next(|next| mapper(next)))
         });
         return self.source.subscribe(observer);
     }

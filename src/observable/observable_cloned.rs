@@ -1,7 +1,7 @@
 use super::observable_subscribe_ext::ObservableSubscribeExt;
 use super::Observable;
 use crate::cancellable::Cancellable;
-use crate::observer::{Event, Observer, Terminated};
+use crate::observer::Observer;
 
 /// An `ObservableCloned` is a type that can be subscribed to by an `Observer`. The `Observer` will receive cloned values.
 pub trait ObservableCloned<T, E> {
