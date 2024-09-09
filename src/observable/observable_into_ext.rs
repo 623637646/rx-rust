@@ -3,7 +3,7 @@ use super::Observable;
 /**
 This trait is used to convert any type that implements `Observable` into `impl Observable<T, E>`.
 
-Example:
+# Example
 ```rust
 use rx_rust::{
     observable::{

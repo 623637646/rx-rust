@@ -5,7 +5,7 @@ Create AnonymousCancellable with a closure.
 The closure will be called when the cancellable is cancelled or dropped.
 The closure will be called at most once.
 
-Example:
+# Example
 ```rust
 use rx_rust::cancellable::anonymous_cancellable::AnonymousCancellable;
 use rx_rust::cancellable::Cancellable;

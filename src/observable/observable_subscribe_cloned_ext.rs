@@ -9,7 +9,7 @@ pub trait ObservableSubscribeClonedExt<T, E> {
     /**
     Subscribes to the observable with the given `on_event` callback.
 
-    Example:
+    # Example
     ```rust
     use rx_rust::{
         observable::observable_subscribe_cloned_ext::ObservableSubscribeClonedExt,
@@ -28,7 +28,7 @@ pub trait ObservableSubscribeClonedExt<T, E> {
     /**
     Subscribes to the observable with the given `on_next` callback.
 
-    Example:
+    # Example
     ```rust
     use rx_rust::{
         observable::observable_subscribe_cloned_ext::ObservableSubscribeClonedExt,

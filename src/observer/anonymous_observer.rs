@@ -3,7 +3,7 @@ use super::{Event, Observer};
 /**
 An observer that wraps a closure.
 
-Example:
+# Example
 ```rust
 use rx_rust::observable::Observable;
 use rx_rust::observer::anonymous_observer::AnonymousObserver;

@@ -6,7 +6,7 @@ use crate::observer::Observer;
 /**
 An `ObservableCloned` is a type that can be subscribed to by an `Observer`. The `Observer` will receive cloned values.
 
-Example:
+# Example
 ```rust
 use rx_rust::observable::observable_cloned::ObservableCloned;
 use rx_rust::observer::anonymous_observer::AnonymousObserver;
