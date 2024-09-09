@@ -72,12 +72,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{observer::Observer, operators::just::Just, utils::test_helper::ObservableChecker};
+    use crate::{
+        observer::Observer, operators::just::Just, utils::checking_observer::CheckingObserver,
+    };
 
     #[test]
     fn test_on_event() {
         let observable = Just::new(123);
-        let checker = ObservableChecker::new();
+        let checker = CheckingObserver::new();
         let checker_cloned = checker.clone();
         observable.subscribe_cloned_on_event(move |event| {
             checker_cloned.on(event);
@@ -89,7 +91,7 @@ mod tests {
     #[test]
     fn test_on_next() {
         let observable = Just::new(123);
-        let checker = ObservableChecker::<i32, String>::new();
+        let checker = CheckingObserver::<i32, String>::new();
         let checker_cloned = checker.clone();
         observable.subscribe_cloned_on_next(move |value| {
             checker_cloned.on(Event::Next(value));

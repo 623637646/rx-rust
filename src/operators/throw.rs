@@ -33,13 +33,13 @@ where
 //     use super::error_cloned;
 //     use crate::{
 //         observable::Observable, observer::Terminated, operators::error::error,
-//         utils::test_helper::ObservableChecker,
+//         utils::test_helper::CheckingObserver,
 //     };
 
 //     #[test]
 //     fn test_ref() {
 //         let value = "error";
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         let observable = error(value);
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[]));
@@ -49,7 +49,7 @@ where
 //     #[test]
 //     fn test_cloned() {
 //         let value = "error";
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         let observable = error_cloned(value);
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[]));
@@ -60,11 +60,11 @@ where
 //     fn test_multiple_subscribe() {
 //         let value = "error";
 //         let observable = error_cloned(value);
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[]));
 //         assert!(checker.is_terminals_matched(&Terminated::Error(value)));
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[]));
 //         assert!(checker.is_terminals_matched(&Terminated::Error(value)));

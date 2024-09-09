@@ -42,7 +42,7 @@ mod tests {
     use crate::observable::observable_subscribe_ext::ObservableSubscribeExt;
     use crate::observer::{Event, Observer, Terminated};
     use crate::operators::create::Create;
-    use crate::utils::test_helper::ObservableChecker;
+    use crate::utils::checking_observer::CheckingObserver;
 
     #[test]
     fn test_ref() {
@@ -58,7 +58,7 @@ mod tests {
             },
         );
         let observable = observable.into_observable();
-        let checker = ObservableChecker::new();
+        let checker = CheckingObserver::new();
         let checker_cloned = checker.clone();
         observable.subscribe_on_event(move |event| {
             checker_cloned.on(event.map_next(|my_struct| my_struct.value));
@@ -75,7 +75,7 @@ mod tests {
             NonCancellable
         });
         let observable = observable.into_observable();
-        let checker = ObservableChecker::new();
+        let checker = CheckingObserver::new();
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());

@@ -31,13 +31,13 @@ impl<T> Observable<T, Never> for Just<T> {
 //     use super::just_cloned;
 //     use crate::{
 //         observable::Observable, observer::Terminated, operators::just::just,
-//         utils::test_helper::ObservableChecker,
+//         utils::test_helper::CheckingObserver,
 //     };
 
 //     #[test]
 //     fn test_ref() {
 //         let value = 123;
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         let observable = just(value);
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[&value]));
@@ -47,7 +47,7 @@ impl<T> Observable<T, Never> for Just<T> {
 //     #[test]
 //     fn test_cloned() {
 //         let value = 123;
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         let observable = just_cloned(value);
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[value]));
@@ -58,11 +58,11 @@ impl<T> Observable<T, Never> for Just<T> {
 //     fn test_multiple_subscribe() {
 //         let value = 123;
 //         let observable = just_cloned(value);
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[value]));
 //         assert!(checker.is_terminals_matched(&Terminated::Completed));
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[value]));
 //         assert!(checker.is_terminals_matched(&Terminated::Completed));

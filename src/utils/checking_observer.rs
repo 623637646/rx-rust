@@ -7,13 +7,13 @@ use std::{cell::RefCell, rc::Rc};
 
 /// A helper struct for testing observables.
 #[derive(Debug, Clone)]
-pub(crate) struct ObservableChecker<T, E> {
+pub(crate) struct CheckingObserver<T, E> {
     events: Rc<RefCell<Vec<Event<T, E>>>>,
 }
 
-impl<T, E> ObservableChecker<T, E> {
+impl<T, E> CheckingObserver<T, E> {
     pub(crate) fn new() -> Self {
-        ObservableChecker {
+        CheckingObserver {
             events: Rc::new(RefCell::new(Vec::new())),
         }
     }
@@ -67,7 +67,7 @@ impl<T, E> ObservableChecker<T, E> {
     }
 }
 
-impl<T, E> Observer<T, E> for ObservableChecker<T, E> {
+impl<T, E> Observer<T, E> for CheckingObserver<T, E> {
     fn on(&self, event: Event<T, E>) {
         let mut events = self.events.borrow_mut();
         if let Some(Event::Terminated(_)) = events.last() {

@@ -47,7 +47,7 @@ where
 //         cancellable::non_cancellable::NonCancellable,
 //         observer::{Event, Observer, Terminated},
 //         operators::create::Create,
-//         utils::test_helper::ObservableChecker,
+//         utils::test_helper::CheckingObserver,
 //     };
 
 //     #[test]
@@ -59,7 +59,7 @@ where
 //             NonCancellable
 //         });
 
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[&value]));
 //         assert!(checker.is_completed());
@@ -74,12 +74,12 @@ where
 //             NonCancellable
 //         });
 
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[&value]));
 //         assert!(checker.is_completed());
 
-//         let checker = ObservableChecker::new();
+//         let checker = CheckingObserver::new();
 //         observable.subscribe(checker.clone());
 //         assert!(checker.is_values_matched(&[&value]));
 //         assert!(checker.is_completed());

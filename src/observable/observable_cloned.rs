@@ -47,12 +47,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{operators::just::Just, utils::test_helper::ObservableChecker};
+    use crate::{operators::just::Just, utils::checking_observer::CheckingObserver};
 
     #[test]
     fn test_subscribe_cloned() {
         let observable = Just::new(123);
-        let checker = ObservableChecker::new();
+        let checker = CheckingObserver::new();
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[123]));
         assert!(checker.is_completed());
