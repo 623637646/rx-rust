@@ -38,13 +38,13 @@ impl<T, E> CheckingObserver<T, E> {
         !matches!(events.last(), Some(Event::Terminated(_)))
     }
 
-    pub(crate) fn is_error(&self, expected: &E) -> bool
+    pub(crate) fn is_error(&self, expected: E) -> bool
     where
         E: PartialEq,
     {
         let events = self.events.borrow();
         if let Some(Event::Terminated(Terminated::Error(error))) = events.last() {
-            error == expected
+            error == &expected
         } else {
             false
         }

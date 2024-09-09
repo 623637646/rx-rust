@@ -41,21 +41,21 @@ mod tests {
         let checker = CheckingObserver::new();
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_error(&333));
+        assert!(checker.is_error(333));
     }
 
     #[test]
     fn test_cloned_multiple_subscribe() {
-        let observable = Throw::new("My error".to_owned());
+        let observable = Throw::new("My error");
 
         let checker = CheckingObserver::new();
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_error(&"My error".to_owned()));
+        assert!(checker.is_error("My error"));
 
         let checker = CheckingObserver::new();
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_error(&"My error".to_owned()));
+        assert!(checker.is_error("My error"));
     }
 }

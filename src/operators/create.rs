@@ -157,17 +157,17 @@ mod tests {
 
     #[test]
     fn test_error() {
-        let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
+        let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, &str>>| {
             observer.on(Event::Next(&33));
             observer.on(Event::Next(&44));
-            observer.on(Event::Terminated(Terminated::Error("error".to_owned())));
+            observer.on(Event::Terminated(Terminated::Error("error")));
             NonCancellable
         });
 
         let checker = CheckingObserver::new();
         observable.subscribe_cloned(checker.clone());
         assert!(checker.is_values_matched(&[33, 44]));
-        assert!(checker.is_error(&"error".to_owned()));
+        assert!(checker.is_error("error"));
     }
 
     #[test]
