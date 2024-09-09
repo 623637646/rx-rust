@@ -5,6 +5,7 @@ use crate::{
 };
 use std::{marker::PhantomData, rc::Rc};
 
+/// An observable that maps the values of the source observable using a mapper function.
 pub struct Map<'a, T, O, F> {
     source: &'a O,
     mapper: Rc<F>,
@@ -61,7 +62,23 @@ where
     }
 }
 
+/// Make the `Observable` mappable.
 pub trait MappableObservable<T, E> {
+    /**
+    Maps the values of the source observable using a mapper function.
+
+    # Example
+    ```rust
+    use rx_rust::operators::just::Just;
+    use rx_rust::operators::map::MappableObservable;
+    use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+    let observable = Just::new(333);
+    let observable = observable.map(|value| (value * 3).to_string());
+    observable.subscribe_on_event(|event| {
+        println!("{:?}", event);
+    });
+    ```
+     */
     fn map<F, T2>(&self, f: F) -> impl Observable<T2, E>
     where
         F: for<'a> Fn(&'a T) -> T2 + 'static;
