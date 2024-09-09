@@ -43,6 +43,7 @@ mod tests {
 
     #[test]
     fn test_ref() {
+        // TODO: more strict
         struct MyStruct {
             value: i32,
         }

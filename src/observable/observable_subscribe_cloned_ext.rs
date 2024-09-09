@@ -20,6 +20,10 @@ impl<T, E, O> ObservableSubscribeClonedExt<T, E> for O
 where
     O: ObservableCloned<T, E>,
 {
+    /// Subscribes to the observable with the given `on_event` callback.
+    /// Example:
+    /// ```rust
+    ///
     fn subscribe_cloned_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
     where
         F: Fn(Event<T, E>) + 'static,
@@ -37,5 +41,29 @@ where
                 on_next(value);
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{observer::Observer, operators::just::Just, utils::test_helper::ObservableChecker};
+
+    #[test]
+    fn test_on_event() {
+        let observable = Just::new(123);
+        let checker = ObservableChecker::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_cloned_on_event(move |event| {
+            checker_cloned.on(event);
+        });
+        assert!(checker.is_values_matched(&[123]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_on_next() {
+        let mut observable = Just::new(123);
+        observable.subscribe_cloned_on_next(|value| assert_eq!(value, 123));
     }
 }
