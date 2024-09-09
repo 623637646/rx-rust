@@ -4,13 +4,42 @@ use crate::{
     observer::{anonymous_observer::AnonymousObserver, Event},
 };
 
+/// Extension trait for `ObservableCloned`
 pub trait ObservableSubscribeClonedExt<T, E> {
-    /// Subscribes to the observable with the given `on_event` callback.
+    /**
+    Subscribes to the observable with the given `on_event` callback.
+
+    Example:
+    ```rust
+    use rx_rust::{
+        observable::observable_subscribe_cloned_ext::ObservableSubscribeClonedExt,
+        operators::just::Just,
+    };
+    let observable = Just::new(123);
+    observable.subscribe_cloned_on_event(move |event| {
+        println!("{:?}", event);
+    });
+    ```
+    */
     fn subscribe_cloned_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
     where
         F: Fn(Event<T, E>) + 'static;
 
-    /// Subscribes to the observable with the given `on_next` callback.
+    /**
+    Subscribes to the observable with the given `on_next` callback.
+
+    Example:
+    ```rust
+    use rx_rust::{
+        observable::observable_subscribe_cloned_ext::ObservableSubscribeClonedExt,
+        operators::just::Just,
+    };
+    let observable = Just::new(123);
+    observable.subscribe_cloned_on_next(move |value| {
+        println!("{:?}", value);
+    });
+    ```
+    */
     fn subscribe_cloned_on_next<F>(&self, on_next: F) -> impl Cancellable + 'static
     where
         F: Fn(T) + 'static;
@@ -20,18 +49,6 @@ impl<T, E, O> ObservableSubscribeClonedExt<T, E> for O
 where
     O: ObservableCloned<T, E>,
 {
-    /// Subscribes to the observable with the given `on_event` callback.
-    /// Example:
-    /// ```rust
-    /// use rx_rust::{
-    ///     observable::observable_subscribe_cloned_ext::ObservableSubscribeClonedExt,
-    ///     operators::just::Just,
-    /// };
-    /// let observable = Just::new(123);
-    /// observable.subscribe_cloned_on_event(move |event| {
-    ///     println!("{:?}", event);
-    /// });
-    /// ```
     fn subscribe_cloned_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
     where
         F: Fn(Event<T, E>) + 'static,
@@ -40,18 +57,6 @@ where
         self.subscribe_cloned(observer)
     }
 
-    /// Subscribes to the observable with the given `on_next` callback.
-    /// Example:
-    /// ```rust
-    /// use rx_rust::{
-    ///     observable::observable_subscribe_cloned_ext::ObservableSubscribeClonedExt,
-    ///     operators::just::Just,
-    /// };
-    /// let observable = Just::new(123);
-    /// observable.subscribe_cloned_on_next(move |value| {
-    ///     println!("{:?}", value);
-    /// });
-    /// ```
     fn subscribe_cloned_on_next<F>(&self, on_next: F) -> impl Cancellable + 'static
     where
         F: Fn(T) + 'static,
