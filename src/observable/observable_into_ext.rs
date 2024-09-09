@@ -43,7 +43,6 @@ mod tests {
 
     #[test]
     fn test_ref() {
-        // TODO: more strict
         struct MyStruct {
             value: i32,
         }
@@ -56,9 +55,13 @@ mod tests {
             },
         );
         let observable = observable.into_observable();
-        observable.subscribe_on_next(|my_struct| {
-            assert_eq!(my_struct.value, 333);
+        let checker = ObservableChecker::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_on_event(move |event| {
+            checker_cloned.on(event.map_next(|my_struct| my_struct.value));
         });
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
     }
 
     #[test]
