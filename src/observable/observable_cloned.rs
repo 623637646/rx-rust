@@ -39,16 +39,7 @@ where
         &self,
         observer: impl Observer<T, E> + 'static,
     ) -> impl Cancellable + 'static {
-        self.subscribe_on_event(move |event| match event {
-            Event::Next(value) => observer.on(Event::Next(value.clone())),
-            Event::Terminated(terminated) => match terminated {
-                Terminated::Error(error) => {
-                    observer.on(Event::Terminated(Terminated::Error(error)))
-                }
-                Terminated::Cancelled => observer.on(Event::Terminated(Terminated::Cancelled)),
-                Terminated::Completed => observer.on(Event::Terminated(Terminated::Completed)),
-            },
-        })
+        self.subscribe_on_event(move |event| observer.on(event.map_next(Clone::clone)))
     }
 }
 

@@ -42,7 +42,7 @@ impl<T, O, F> Map<T, O, F> {
 
 impl<T, E, O, F, T2> Observable<T2, E> for Map<T, O, F>
 where
-    F: for<'a> Fn(&'a T) -> T2 + 'static, // why do we need 'static here? comment out and see what happens.
+    F: for<'a> Fn(&'a T) -> &'a T2 + 'static, // why do we need 'static here? comment out and see what happens.
     O: Observable<T, E>,
 {
     fn subscribe(
@@ -51,13 +51,7 @@ where
     ) -> impl Cancellable + 'static {
         let mapper = self.mapper.clone();
         let observer = AnonymousObserver::new(move |event: Event<&T, E>| {
-            match event {
-                Event::Next(value) => {
-                    let new_value = mapper(value);
-                    observer.on(Event::Next(&new_value));
-                }
-                Event::Terminated(terminated) => observer.on(Event::Terminated(terminated)),
-            };
+            observer.on(event.map_next(|value| mapper(value)))
         });
         return self.source.subscribe(observer);
     }
@@ -66,7 +60,7 @@ where
 trait MappableObservable<T, E> {
     fn map<F, T2>(self, f: F) -> impl Observable<T2, E>
     where
-        F: for<'a> Fn(&'a T) -> T2 + 'static;
+        F: for<'a> Fn(&'a T) -> &'a T2 + 'static;
 }
 
 impl<O, T, E> MappableObservable<T, E> for O
@@ -75,7 +69,7 @@ where
 {
     fn map<F, T2>(self, f: F) -> impl Observable<T2, E>
     where
-        F: for<'a> Fn(&'a T) -> T2 + 'static,
+        F: for<'a> Fn(&'a T) -> &'a T2 + 'static,
     {
         Map::new(self, f)
     }

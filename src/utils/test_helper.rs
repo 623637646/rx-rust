@@ -73,16 +73,7 @@ impl<T, E> Observer<T, E> for ObservableChecker<T, E> {
         if let Some(Event::Terminated(_)) = events.last() {
             panic!("ObservableCounter is terminated");
         }
-        match event {
-            Event::Next(value) => events.push(Event::Next(value)),
-            Event::Terminated(terminated) => match terminated {
-                Terminated::Error(error) => {
-                    events.push(Event::Terminated(Terminated::Error(error)))
-                }
-                Terminated::Cancelled => events.push(Event::Terminated(Terminated::Cancelled)),
-                Terminated::Completed => events.push(Event::Terminated(Terminated::Completed)),
-            },
-        }
+        events.push(event);
     }
 }
 
