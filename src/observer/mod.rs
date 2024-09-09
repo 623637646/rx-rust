@@ -16,6 +16,17 @@ pub enum Event<T, E> {
 }
 
 impl<T, E> Event<T, E> {
+    /**
+    Maps the value type of the event to a new value type using the given function.
+
+    Example:
+    ```rust
+    use rx_rust::observer::Event;
+    let event = Event::<i32, String>::Next(123);
+    let new_event = event.map_next(|value| value.to_string());
+    assert_eq!(new_event, Event::Next("123".to_owned()));
+    ```
+     */
     pub fn map_next<T2, F>(self, f: F) -> Event<T2, E>
     where
         F: Fn(T) -> T2,
@@ -26,6 +37,18 @@ impl<T, E> Event<T, E> {
         }
     }
 
+    /**
+    Maps the error type of the event to a new error type using the given function.
+
+    Example:
+    ```rust
+    use rx_rust::observer::Event;
+    use rx_rust::observer::Terminated;
+    let event = Event::<i32, i32>::Terminated(Terminated::Error(123));
+    let new_event = event.map_error(|error_code| error_code.to_string());
+    assert_eq!(new_event, Event::Terminated(Terminated::Error("123".to_owned())));
+    ```
+     */
     pub fn map_error<E2, F>(self, f: F) -> Event<T, E2>
     where
         F: Fn(E) -> E2,
