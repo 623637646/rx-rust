@@ -5,8 +5,8 @@ use crate::{
 };
 use std::{marker::PhantomData, rc::Rc};
 
-pub struct Map<T, O, F> {
-    source: O,
+pub struct Map<'a, T, O, F> {
+    source: &'a O,
     mapper: Rc<F>,
     /// TODO: Why do we need _marker?  【Ask in stackoverflow!】
     /// in this code. C doesn't use it. which means,
@@ -30,8 +30,8 @@ pub struct Map<T, O, F> {
     _marker: PhantomData<T>,
 }
 
-impl<T, O, F> Map<T, O, F> {
-    pub fn new(source: O, mapper: F) -> Map<T, O, F> {
+impl<'a, T, O, F> Map<'a, T, O, F> {
+    pub fn new(source: &'a O, mapper: F) -> Map<'a, T, O, F> {
         Map {
             source,
             mapper: Rc::new(mapper),
@@ -40,39 +40,106 @@ impl<T, O, F> Map<T, O, F> {
     }
 }
 
-impl<T, E, O, F, T2> Observable<T2, E> for Map<T, O, F>
+impl<'a, T, E, O, F, T2> Observable<T2, E> for Map<'a, T, O, F>
 where
-    F: for<'a> Fn(&'a T) -> &'a T2 + 'static, // why do we need 'static here? comment out and see what happens.
+    F: for<'b> Fn(&'b T) -> T2 + 'static,
     O: Observable<T, E>,
 {
     fn subscribe(
         &self,
-        observer: impl for<'a> Observer<&'a T2, E> + 'static,
+        observer: impl for<'b> Observer<&'b T2, E> + 'static,
     ) -> impl Cancellable + 'static {
         let mapper = self.mapper.clone();
-        let observer = AnonymousObserver::new(move |event: Event<&T, E>| {
-            observer.on(event.map_next(|next| mapper(next)))
+        let observer = AnonymousObserver::new(move |event: Event<&T, E>| match event {
+            Event::Next(next) => {
+                let next = mapper(next);
+                observer.on(Event::Next(&next));
+            }
+            Event::Terminated(terminated) => observer.on(Event::Terminated(terminated)),
         });
         return self.source.subscribe(observer);
     }
 }
 
-trait MappableObservable<T, E> {
-    fn map<F, T2>(self, f: F) -> impl Observable<T2, E>
+pub trait MappableObservable<T, E> {
+    fn map<F, T2>(&self, f: F) -> impl Observable<T2, E>
     where
-        F: for<'a> Fn(&'a T) -> &'a T2 + 'static;
+        F: for<'a> Fn(&'a T) -> T2 + 'static;
 }
 
 impl<O, T, E> MappableObservable<T, E> for O
 where
     O: Observable<T, E>,
 {
-    fn map<F, T2>(self, f: F) -> impl Observable<T2, E>
+    fn map<F, T2>(&self, f: F) -> impl Observable<T2, E>
     where
-        F: for<'a> Fn(&'a T) -> &'a T2 + 'static,
+        F: for<'a> Fn(&'a T) -> T2 + 'static,
     {
         Map::new(self, f)
     }
 }
 
-// TODO: will do this. unit test.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        observable::observable_cloned::ObservableCloned, operators::just::Just,
+        utils::checking_observer::CheckingObserver,
+    };
+
+    #[test]
+    fn test_ref() {
+        struct MyStruct {
+            value: i32,
+        }
+        let observable = Just::new(MyStruct { value: 333 });
+        let observable = observable.map(|my_struct| my_struct.value.to_string());
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&["333".to_owned()]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_cloned() {
+        let observable = Just::new(333);
+        let observable = observable.map(|value| value.to_string());
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&["333".to_owned()]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_ref_multiple_map() {
+        struct MyStruct {
+            value: i32,
+        }
+        let just = Just::new(MyStruct { value: 333 });
+        let observable1 = just.map(|my_struct| my_struct.value.to_string());
+        let observable2 = just.map(|my_struct| my_struct.value * 2);
+        let checker1 = CheckingObserver::new();
+        let checker2 = CheckingObserver::new();
+        observable1.subscribe_cloned(checker1.clone());
+        observable2.subscribe_cloned(checker2.clone());
+        assert!(checker1.is_values_matched(&["333".to_owned()]));
+        assert!(checker1.is_completed());
+        assert!(checker2.is_values_matched(&[666]));
+        assert!(checker2.is_completed());
+    }
+
+    #[test]
+    fn test_cloned_multiple_map() {
+        let just = Just::new(333);
+        let observable1 = just.map(|value| value.to_string());
+        let observable2 = just.map(|value| value * 2);
+        let checker1 = CheckingObserver::new();
+        let checker2 = CheckingObserver::new();
+        observable1.subscribe_cloned(checker1.clone());
+        observable2.subscribe_cloned(checker2.clone());
+        assert!(checker1.is_values_matched(&["333".to_owned()]));
+        assert!(checker1.is_completed());
+        assert!(checker2.is_values_matched(&[666]));
+        assert!(checker2.is_completed());
+    }
+}
