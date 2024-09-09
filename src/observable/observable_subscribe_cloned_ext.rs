@@ -63,7 +63,13 @@ mod tests {
 
     #[test]
     fn test_on_next() {
-        let mut observable = Just::new(123);
-        observable.subscribe_cloned_on_next(|value| assert_eq!(value, 123));
+        let observable = Just::new(123);
+        let checker = ObservableChecker::<i32, String>::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_cloned_on_next(move |value| {
+            checker_cloned.on(Event::Next(value));
+        });
+        assert!(checker.is_values_matched(&[123]));
+        assert!(checker.is_unterminated());
     }
 }
