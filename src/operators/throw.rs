@@ -28,45 +28,34 @@ where
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::{
-//         observable::Observable, observer::Terminated, operators::error::error,
-//         utils::test_helper::CheckingObserver,
-//     };
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        observable::observable_cloned::ObservableCloned, utils::checking_observer::CheckingObserver,
+    };
 
-//     #[test]
-//     fn test_ref() {
-//         let value = "error";
-//         let checker = CheckingObserver::new();
-//         let observable = error(value);
-//         observable.subscribe(checker.clone());
-//         assert!(checker.is_values_matched(&[]));
-//         assert!(checker.is_terminals_matched(&Terminated::Error(&value)));
-//     }
+    #[test]
+    fn test_cloned() {
+        let observable = Throw::new(333);
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_error(&333));
+    }
 
-//     #[test]
-//     fn test_cloned() {
-//         let value = "error";
-//         let checker = CheckingObserver::new();
-//         let observable = error_cloned(value);
-//         observable.subscribe(checker.clone());
-//         assert!(checker.is_values_matched(&[]));
-//         assert!(checker.is_terminals_matched(&Terminated::Error(value)));
-//     }
+    #[test]
+    fn test_cloned_multiple_subscribe() {
+        let observable = Throw::new("My error".to_owned());
 
-//     #[test]
-//     fn test_multiple_subscribe() {
-//         let value = "error";
-//         let observable = error_cloned(value);
-//         let checker = CheckingObserver::new();
-//         observable.subscribe(checker.clone());
-//         assert!(checker.is_values_matched(&[]));
-//         assert!(checker.is_terminals_matched(&Terminated::Error(value)));
-//         let checker = CheckingObserver::new();
-//         observable.subscribe(checker.clone());
-//         assert!(checker.is_values_matched(&[]));
-//         assert!(checker.is_terminals_matched(&Terminated::Error(value)));
-//     }
-// }
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_error(&"My error".to_owned()));
+
+        let checker = CheckingObserver::new();
+        observable.subscribe_cloned(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_error(&"My error".to_owned()));
+    }
+}
