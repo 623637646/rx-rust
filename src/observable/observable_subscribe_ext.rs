@@ -4,13 +4,44 @@ use crate::{
     observer::{anonymous_observer::AnonymousObserver, Event},
 };
 
+/// Extension trait for `Observable`
 pub trait ObservableSubscribeExt<T, E> {
-    /// Subscribes to the observable with the given `on_event` callback.
+    /**
+    Subscribes to the observable with the given `on_event` callback.
+
+    Example:
+    ```rust
+    use rx_rust::{
+        observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
+    };
+    #[derive(Debug)]
+    struct MyStruct {}
+    let observable = Just::new(MyStruct {});
+    observable.subscribe_on_event(move |event| {
+        println!("{:?}", event);
+    });
+    ```
+    */
     fn subscribe_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
     where
         F: for<'a> Fn(Event<&'a T, E>) + 'static;
 
-    /// Subscribes to the observable with the given `on_next` callback.
+    /**
+    Subscribes to the observable with the given `on_next` callback.
+
+    Example:
+    ```rust
+    use rx_rust::{
+        observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
+    };
+    #[derive(Debug)]
+    struct MyStruct {}
+    let observable = Just::new(MyStruct {});
+    observable.subscribe_on_next(move |value| {
+        println!("{:?}", value);
+    });
+    ```
+    */
     fn subscribe_on_next<F>(&self, on_next: F) -> impl Cancellable + 'static
     where
         F: for<'a> Fn(&'a T) + 'static;
@@ -20,19 +51,6 @@ impl<T, E, O> ObservableSubscribeExt<T, E> for O
 where
     O: Observable<T, E>,
 {
-    /// Subscribes to the observable with the given `on_event` callback.
-    /// Example:
-    /// ```rust
-    /// use rx_rust::{
-    ///     observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
-    /// };
-    /// #[derive(Debug)]
-    /// struct MyStruct {}
-    /// let observable = Just::new(MyStruct {});
-    /// observable.subscribe_on_event(move |event| {
-    ///     println!("{:?}", event);
-    /// });
-    /// ```
     fn subscribe_on_event<F>(&self, on_event: F) -> impl Cancellable + 'static
     where
         F: for<'a> Fn(Event<&'a T, E>) + 'static,
@@ -41,19 +59,6 @@ where
         self.subscribe(observer)
     }
 
-    /// Subscribes to the observable with the given `on_next` callback.
-    /// Example:
-    /// ```rust
-    /// use rx_rust::{
-    ///     observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
-    /// };
-    /// #[derive(Debug)]
-    /// struct MyStruct {}
-    /// let observable = Just::new(MyStruct {});
-    /// observable.subscribe_on_next(move |value| {
-    ///     println!("{:?}", value);
-    /// });
-    /// ```
     fn subscribe_on_next<F>(&self, on_next: F) -> impl Cancellable + 'static
     where
         F: for<'a> Fn(&'a T) + 'static,
