@@ -57,13 +57,28 @@ impl<'a, E> Observable<'a, Never, &'a E> for Throw<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::checking_observer::CheckingObserver;
+    use crate::{
+        observable::observable_subscribe_ext::ObservableSubscribeExt,
+        utils::checking_observer::CheckingObserver,
+    };
 
     #[test]
     fn test_normal() {
         let observable = Throw::new(333);
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_error(333));
+    }
+
+    #[test]
+    fn test_ref() {
+        let observable = Throw::new(333);
+        let checker = CheckingObserver::new();
+        let checker_cloned = checker.clone();
+        observable.subscribe_on_event(move |event: Event<Never, &i32>| {
+            checker_cloned.on(event.map_error(|error: &i32| *error));
+        });
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_error(333));
     }
