@@ -61,3 +61,56 @@ impl<T, E> Event<T, E> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_value_normal() {
+        let event = Event::<i32, String>::Next(123);
+        let new_event = event.map_value(|value| value.to_string());
+        assert_eq!(new_event, Event::Next("123".to_owned()));
+    }
+
+    #[test]
+    fn test_map_value_terminated() {
+        let event = Event::<i32, String>::Terminated(Terminated::Error("error".to_owned()));
+        let new_event = event.map_value(|value| value.to_string());
+        assert_eq!(
+            new_event,
+            Event::Terminated(Terminated::Error("error".to_owned()))
+        );
+    }
+
+    #[test]
+    fn test_map_error_normal() {
+        let event = Event::<i32, i32>::Terminated(Terminated::Error(123));
+        let new_event = event.map_error(|error_code| error_code.to_string());
+        assert_eq!(
+            new_event,
+            Event::Terminated(Terminated::Error("123".to_owned()))
+        );
+    }
+
+    #[test]
+    fn test_map_error_next() {
+        let event = Event::<i32, i32>::Next(333);
+        let new_event = event.map_error(|error_code| error_code.to_string());
+        assert_eq!(new_event, Event::Next(333),);
+    }
+
+    #[test]
+    fn test_map_error_cancelled() {
+        let event = Event::<i32, i32>::Terminated(Terminated::Cancelled);
+        let new_event = event.map_error(|error_code| error_code.to_string());
+        assert_eq!(new_event, Event::Terminated(Terminated::Cancelled));
+    }
+
+    #[test]
+    fn test_map_error_completed() {
+        let event = Event::<i32, i32>::Terminated(Terminated::Completed);
+        let new_event = event.map_error(|error_code| error_code.to_string());
+        assert_eq!(new_event, Event::Terminated(Terminated::Completed));
+    }
+}
