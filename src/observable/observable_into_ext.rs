@@ -38,7 +38,8 @@ where
 mod tests {
     use super::*;
     use crate::cancellable::non_cancellable::NonCancellable;
-    use crate::observer::{Event, Observer, Terminated};
+    use crate::observer::event::{Event, Terminated};
+    use crate::observer::Observer;
     use crate::operators::create::Create;
     use crate::utils::checking_observer::CheckingObserver;
 

@@ -7,9 +7,9 @@ This is an observable that emits the values provided by the subscribe_handler fu
 ```rust
 use rx_rust::cancellable::non_cancellable::NonCancellable;
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-use rx_rust::observer::Event;
+use rx_rust::observer::event::Event;
 use rx_rust::observer::Observer;
-use rx_rust::observer::Terminated;
+use rx_rust::observer::event::Terminated;
 use rx_rust::operators::create::Create;
 let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
     observer.on(Event::Next(1));
@@ -48,7 +48,7 @@ mod tests {
         cancellable::{
             anonymous_cancellable::AnonymousCancellable, non_cancellable::NonCancellable,
         },
-        observer::{Event, Terminated},
+        observer::event::{Event, Terminated},
         utils::checking_observer::CheckingObserver,
     };
 

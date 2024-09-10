@@ -1,7 +1,10 @@
 use crate::{
     cancellable::{non_cancellable::NonCancellable, Cancellable},
     observable::Observable,
-    observer::{Event, Observer, Terminated},
+    observer::{
+        event::{Event, Terminated},
+        Observer,
+    },
     utils::never::Never,
 };
 
@@ -13,7 +16,7 @@ This is an observable that emits an error.
 use rx_rust::operators::throw::Throw;
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 use rx_rust::utils::never::Never;
-use rx_rust::observer::Event;
+use rx_rust::observer::event::Event;
 let observable = Throw::new("My error");
 observable.subscribe_on_event(|event: Event<Never, &str>| println!("event: {:?}", event));
 ```

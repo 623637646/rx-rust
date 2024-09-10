@@ -1,6 +1,5 @@
-#[cfg(test)]
-use crate::observer::Event;
-use crate::observer::{Observer, Terminated};
+use crate::observer::event::{Event, Terminated};
+use crate::observer::Observer;
 use std::{cell::RefCell, rc::Rc};
 
 /// TODO: ObservableCounter is not atomic, implement struct AtomicObservableCounter {}?

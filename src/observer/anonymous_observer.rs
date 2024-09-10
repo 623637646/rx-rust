@@ -7,7 +7,7 @@ An observer that wraps a closure.
 ```rust
 use rx_rust::observable::Observable;
 use rx_rust::observer::anonymous_observer::AnonymousObserver;
-use rx_rust::observer::Event;
+use rx_rust::observer::event::Event;
 use rx_rust::operators::just::Just;
 use rx_rust::utils::never::Never;
 let observable = Just::new(123);

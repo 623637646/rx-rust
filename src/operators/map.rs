@@ -1,7 +1,7 @@
 use crate::{
     cancellable::Cancellable,
     observable::Observable,
-    observer::{anonymous_observer::AnonymousObserver, Event, Observer},
+    observer::{anonymous_observer::AnonymousObserver, event::Event, Observer},
 };
 use std::{marker::PhantomData, rc::Rc};
 

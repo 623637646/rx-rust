@@ -1,7 +1,7 @@
 use super::Observable;
 use crate::{
     cancellable::Cancellable,
-    observer::{anonymous_observer::AnonymousObserver, Event},
+    observer::{anonymous_observer::AnonymousObserver, event::Event},
 };
 
 /// Extension trait for `Observable`
@@ -15,7 +15,7 @@ pub trait ObservableSubscribeExt<'a, T, E> {
         observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
     };
     use rx_rust::utils::never::Never;
-    use rx_rust::observer::Event;
+    use rx_rust::observer::event::Event;
     let observable = Just::new(123);
     observable.subscribe_on_event(move |event: Event<i32, Never>| {
         println!("{:?}", event);
