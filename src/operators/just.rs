@@ -6,14 +6,16 @@ use crate::{
 };
 
 /**
-Create an observable that emits a single value then completes.
+This is an observable that emits a single value then completes.
 
 # Example
 ```rust
 use rx_rust::operators::just::Just;
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+use rx_rust::utils::never::Never;
+use rx_rust::observer::Event;
 let observable = Just::new(123);
-observable.subscribe_on_event(|v| println!("event: {:?}", v));
+observable.subscribe_on_event(|event: Event<i32, Never>| println!("event: {:?}", event));
 ```
  */
 pub struct Just<T> {
@@ -26,10 +28,24 @@ impl<T> Just<T> {
     }
 }
 
-impl<T> Observable<T, Never> for Just<T> {
+impl<'a, T> Observable<'a, T, Never> for Just<T>
+where
+    T: Clone,
+{
     fn subscribe(
-        &self,
-        observer: impl for<'a> Observer<&'a T, Never> + 'static,
+        &'a self,
+        observer: impl Observer<T, Never> + 'static,
+    ) -> impl Cancellable + 'static {
+        observer.on(Event::Next(self.value.clone()));
+        observer.on(Event::Terminated(Terminated::Completed));
+        NonCancellable
+    }
+}
+
+impl<'a, T> Observable<'a, &'a T, Never> for Just<T> {
+    fn subscribe(
+        &'a self,
+        observer: impl Observer<&'a T, Never> + 'static,
     ) -> impl Cancellable + 'static {
         observer.on(Event::Next(&self.value));
         observer.on(Event::Terminated(Terminated::Completed));
@@ -40,71 +56,28 @@ impl<T> Observable<T, Never> for Just<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observable::{
-            observable_cloned::ObservableCloned, observable_subscribe_ext::ObservableSubscribeExt,
-        },
-        utils::checking_observer::CheckingObserver,
-    };
+    use crate::utils::checking_observer::CheckingObserver;
 
     #[test]
-    fn test_ref() {
-        struct MyStruct {
-            value: i32,
-        }
-        let observable = Just::new(MyStruct { value: 333 });
-        let checker = CheckingObserver::new();
-        let checker_cloned = checker.clone();
-        observable.subscribe_on_event(move |event| {
-            checker_cloned.on(event.map_value(|my_struct| my_struct.value));
-        });
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
-    }
-
-    #[test]
-    fn test_cloned() {
+    fn test_normal() {
         let observable = Just::new(333);
         let checker = CheckingObserver::new();
-        observable.subscribe_cloned(checker.clone());
+        observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
     }
 
     #[test]
-    fn test_ref_multiple_subscribe() {
-        struct MyStruct {
-            value: i32,
-        }
-        let observable = Just::new(MyStruct { value: 333 });
-        let checker = CheckingObserver::new();
-        let checker_cloned = checker.clone();
-        observable.subscribe_on_event(move |event| {
-            checker_cloned.on(event.map_value(|my_struct| my_struct.value));
-        });
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
-
-        let checker = CheckingObserver::new();
-        let checker_cloned = checker.clone();
-        observable.subscribe_on_event(move |event| {
-            checker_cloned.on(event.map_value(|my_struct| my_struct.value));
-        });
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
-    }
-
-    #[test]
-    fn test_cloned_multiple_subscribe() {
+    fn test_multiple_subscribe() {
         let observable = Just::new(333);
 
         let checker = CheckingObserver::new();
-        observable.subscribe_cloned(checker.clone());
+        observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
 
         let checker = CheckingObserver::new();
-        observable.subscribe_cloned(checker.clone());
+        observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
     }

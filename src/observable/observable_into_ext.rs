@@ -1,7 +1,7 @@
 use super::Observable;
 
 /**
-This trait is used to convert any type that implements `Observable` into `impl Observable<T, E>`.
+This trait is used to convert any type that implements `Observable` into `impl Observable<'_, T, E>`.
 
 # Example
 ```rust
@@ -21,15 +21,15 @@ observable.subscribe_on_next(|value| {
  */
 
 pub trait ObservableIntoExt<T, E> {
-    /// Converts any type that implements `Observable` into `impl Observable<T, E>`.
-    fn into_observable(self) -> impl Observable<T, E>;
+    /// Converts any type that implements `Observable` into `impl Observable<'_, T, E>`.
+    fn into_observable(self) -> impl for<'a> Observable<'a, T, E>;
 }
 
 impl<T, E, O> ObservableIntoExt<T, E> for O
 where
-    O: Observable<T, E>,
+    O: for<'a> Observable<'a, T, E>,
 {
-    fn into_observable(self) -> impl Observable<T, E> {
+    fn into_observable(self) -> impl for<'a> Observable<'a, T, E> {
         self
     }
 }
@@ -38,77 +38,28 @@ where
 mod tests {
     use super::*;
     use crate::cancellable::non_cancellable::NonCancellable;
-    use crate::observable::observable_cloned::ObservableCloned;
-    use crate::observable::observable_subscribe_ext::ObservableSubscribeExt;
     use crate::observer::{Event, Observer, Terminated};
     use crate::operators::create::Create;
     use crate::utils::checking_observer::CheckingObserver;
 
     #[test]
-    fn test_ref() {
-        struct MyStruct {
-            value: i32,
-        }
-        let observable = Create::new(
-            |observer: Box<dyn for<'a> Observer<&'a MyStruct, String>>| {
-                let my_struct = MyStruct { value: 333 };
-                observer.on(Event::Next(&my_struct));
-                observer.on(Event::Terminated(Terminated::Completed));
-                NonCancellable
-            },
-        );
-        let observable = observable.into_observable();
-        let checker = CheckingObserver::new();
-        let checker_cloned = checker.clone();
-        observable.subscribe_on_event(move |event| {
-            checker_cloned.on(event.map_value(|my_struct| my_struct.value));
-        });
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
-    }
-
-    #[test]
-    fn test_cloned() {
-        let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
-            observer.on(Event::Next(&333));
+    fn test_normal() {
+        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
+            observer.on(Event::Next(333));
             observer.on(Event::Terminated(Terminated::Completed));
             NonCancellable
         });
         let observable = observable.into_observable();
         let checker = CheckingObserver::new();
-        observable.subscribe_cloned(checker.clone());
+        observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
     }
 
     #[test]
-    fn test_ref_multiple() {
-        struct MyStruct {
-            value: i32,
-        }
-        let observable = Create::new(
-            |observer: Box<dyn for<'a> Observer<&'a MyStruct, String>>| {
-                let my_struct = MyStruct { value: 333 };
-                observer.on(Event::Next(&my_struct));
-                observer.on(Event::Terminated(Terminated::Completed));
-                NonCancellable
-            },
-        );
-        let observable = observable.into_observable();
-        let observable = observable.into_observable();
-        let checker = CheckingObserver::new();
-        let checker_cloned = checker.clone();
-        observable.subscribe_on_event(move |event| {
-            checker_cloned.on(event.map_value(|my_struct| my_struct.value));
-        });
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
-    }
-
-    #[test]
-    fn test_cloned_multiple() {
-        let observable = Create::new(|observer: Box<dyn for<'a> Observer<&'a i32, String>>| {
-            observer.on(Event::Next(&333));
+    fn test_multiple() {
+        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
+            observer.on(Event::Next(333));
             observer.on(Event::Terminated(Terminated::Completed));
             NonCancellable
         });
@@ -116,7 +67,7 @@ mod tests {
         let observable = observable.into_observable();
         let observable = observable.into_observable();
         let checker = CheckingObserver::new();
-        observable.subscribe_cloned(checker.clone());
+        observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
     }

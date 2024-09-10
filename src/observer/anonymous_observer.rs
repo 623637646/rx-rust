@@ -11,7 +11,7 @@ use rx_rust::observer::Event;
 use rx_rust::operators::just::Just;
 use rx_rust::utils::never::Never;
 let observable = Just::new(123);
-let observer = AnonymousObserver::new(|e: Event<&i32, Never>| {
+let observer = AnonymousObserver::new(|e: Event<i32, Never>| {
     println!("{:?}", e);
 });
 observable.subscribe(observer);
