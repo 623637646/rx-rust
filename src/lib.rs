@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod cancellable;
 pub mod observable;
 pub mod observer;
