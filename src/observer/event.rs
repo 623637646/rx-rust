@@ -2,7 +2,7 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum Terminated<E> {
     Error(E),
-    Cancelled,
+    Unsubscribed,
     Completed,
 }
 
@@ -55,7 +55,7 @@ impl<T, E> Event<T, E> {
             Event::Next(value) => Event::Next(value),
             Event::Terminated(terminated) => match terminated {
                 Terminated::Error(error) => Event::Terminated(Terminated::Error(f(error))),
-                Terminated::Cancelled => Event::Terminated(Terminated::Cancelled),
+                Terminated::Unsubscribed => Event::Terminated(Terminated::Unsubscribed),
                 Terminated::Completed => Event::Terminated(Terminated::Completed),
             },
         }
@@ -101,10 +101,10 @@ mod tests {
     }
 
     #[test]
-    fn test_map_error_cancelled() {
-        let event = Event::<i32, i32>::Terminated(Terminated::Cancelled);
+    fn test_map_error_unsubscribed() {
+        let event = Event::<i32, i32>::Terminated(Terminated::Unsubscribed);
         let new_event = event.map_error(|error_code| error_code.to_string());
-        assert_eq!(new_event, Event::Terminated(Terminated::Cancelled));
+        assert_eq!(new_event, Event::Terminated(Terminated::Unsubscribed));
     }
 
     #[test]

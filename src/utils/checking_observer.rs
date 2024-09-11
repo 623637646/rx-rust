@@ -49,11 +49,11 @@ impl<T, E> CheckingObserver<T, E> {
         }
     }
 
-    pub(crate) fn is_cancelled(&self) -> bool {
+    pub(crate) fn is_unsubscribed(&self) -> bool {
         let events = self.events.borrow();
         matches!(
             events.last(),
-            Some(Event::Terminated(Terminated::Cancelled))
+            Some(Event::Terminated(Terminated::Unsubscribed))
         )
     }
 

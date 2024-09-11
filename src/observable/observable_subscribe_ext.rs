@@ -1,7 +1,7 @@
 use super::Observable;
 use crate::{
-    cancellable::Cancellable,
     observer::{anonymous_observer::AnonymousObserver, event::Event},
+    subscription::Subscription,
 };
 
 /// Extension trait for `Observable`
@@ -22,7 +22,7 @@ pub trait ObservableSubscribeExt<'a, T, E> {
     });
     ```
     */
-    fn subscribe_on_event<F>(&'a self, on_event: F) -> impl Cancellable + 'static
+    fn subscribe_on_event<F>(&'a self, on_event: F) -> Subscription
     where
         F: Fn(Event<T, E>) + 'static;
 
@@ -40,7 +40,7 @@ pub trait ObservableSubscribeExt<'a, T, E> {
     });
     ```
     */
-    fn subscribe_on_next<F>(&'a self, on_next: F) -> impl Cancellable + 'static
+    fn subscribe_on_next<F>(&'a self, on_next: F) -> Subscription
     where
         F: Fn(T) + 'static;
 }
@@ -49,7 +49,7 @@ impl<'a, T, E, O> ObservableSubscribeExt<'a, T, E> for O
 where
     O: Observable<'a, T, E>,
 {
-    fn subscribe_on_event<F>(&'a self, on_event: F) -> impl Cancellable + 'static
+    fn subscribe_on_event<F>(&'a self, on_event: F) -> Subscription
     where
         F: Fn(Event<T, E>) + 'static,
     {
@@ -57,7 +57,7 @@ where
         self.subscribe(observer)
     }
 
-    fn subscribe_on_next<F>(&'a self, on_next: F) -> impl Cancellable + 'static
+    fn subscribe_on_next<F>(&'a self, on_next: F) -> Subscription
     where
         F: Fn(T) + 'static,
     {

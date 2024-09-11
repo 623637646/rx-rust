@@ -1,14 +1,14 @@
-use crate::{cancellable::Cancellable, observable::Observable, observer::Observer};
+use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 
 /**
 This is an observable that emits the values provided by the subscribe_handler function.
 
 # Example
 ```rust
-use rx_rust::cancellable::non_cancellable::NonCancellable;
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 use rx_rust::observer::event::Event;
 use rx_rust::observer::Observer;
+use rx_rust::subscription::Subscription;
 use rx_rust::observer::event::Terminated;
 use rx_rust::operators::create::Create;
 let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
@@ -16,7 +16,7 @@ let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
     observer.on(Event::Next(2));
     observer.on(Event::Next(3));
     observer.on(Event::Terminated(Terminated::Completed));
-    NonCancellable
+    Subscription::non_dispose()
 });
 observable.subscribe_on_event(|event: Event<i32, String>| println!("event: {:?}", event));
 ```
@@ -31,12 +31,11 @@ impl<F> Create<F> {
     }
 }
 
-impl<'a, T, E, C, F> Observable<'a, T, E> for Create<F>
+impl<'a, T, E, F> Observable<'a, T, E> for Create<F>
 where
-    C: Cancellable + 'static,
-    F: Fn(Box<dyn Observer<T, E>>) -> C,
+    F: Fn(Box<dyn Observer<T, E>>) -> Subscription,
 {
-    fn subscribe(&'a self, observer: impl Observer<T, E> + 'static) -> impl Cancellable + 'static {
+    fn subscribe(&'a self, observer: impl Observer<T, E> + 'static) -> Subscription {
         (self.subscribe_handler)(Box::new(observer))
     }
 }
@@ -45,9 +44,6 @@ where
 mod tests {
     use super::*;
     use crate::{
-        cancellable::{
-            anonymous_cancellable::AnonymousCancellable, non_cancellable::NonCancellable,
-        },
         observer::event::{Event, Terminated},
         utils::checking_observer::CheckingObserver,
     };
@@ -57,7 +53,7 @@ mod tests {
         let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
             observer.on(Event::Next(333));
             observer.on(Event::Terminated(Terminated::Completed));
-            NonCancellable
+            Subscription::non_dispose()
         });
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
@@ -70,7 +66,7 @@ mod tests {
         let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
             observer.on(Event::Next(333));
             observer.on(Event::Terminated(Terminated::Completed));
-            NonCancellable
+            Subscription::non_dispose()
         });
 
         let checker = CheckingObserver::new();
@@ -88,7 +84,7 @@ mod tests {
     fn test_unterminated() {
         let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
             observer.on(Event::Next(1));
-            NonCancellable
+            Subscription::non_dispose()
         });
 
         let checker = CheckingObserver::new();
@@ -103,7 +99,7 @@ mod tests {
             observer.on(Event::Next(33));
             observer.on(Event::Next(44));
             observer.on(Event::Terminated(Terminated::Error("error")));
-            NonCancellable
+            Subscription::non_dispose()
         });
 
         let checker = CheckingObserver::new();
@@ -113,19 +109,17 @@ mod tests {
     }
 
     #[test]
-    fn test_cancelled() {
+    fn test_unsubscribed() {
         let checker: CheckingObserver<i32, String> = CheckingObserver::new();
         {
             let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
                 observer.on(Event::Next(1));
                 observer.on(Event::Next(2));
-                AnonymousCancellable::new(move || {
-                    observer.on(Event::Terminated(Terminated::Cancelled))
-                })
+                Subscription::new(move || observer.on(Event::Terminated(Terminated::Unsubscribed)))
             });
             observable.subscribe(checker.clone());
         }
         assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_cancelled());
+        assert!(checker.is_unsubscribed());
     }
 }

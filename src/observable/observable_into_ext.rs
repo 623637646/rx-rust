@@ -37,10 +37,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cancellable::non_cancellable::NonCancellable;
     use crate::observer::event::{Event, Terminated};
     use crate::observer::Observer;
     use crate::operators::create::Create;
+    use crate::subscription::Subscription;
     use crate::utils::checking_observer::CheckingObserver;
 
     #[test]
@@ -48,7 +48,7 @@ mod tests {
         let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
             observer.on(Event::Next(333));
             observer.on(Event::Terminated(Terminated::Completed));
-            NonCancellable
+            Subscription::non_dispose()
         });
         let observable = observable.into_observable();
         let checker = CheckingObserver::new();
@@ -62,7 +62,7 @@ mod tests {
         let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
             observer.on(Event::Next(333));
             observer.on(Event::Terminated(Terminated::Completed));
-            NonCancellable
+            Subscription::non_dispose()
         });
         let observable = observable.into_observable();
         let observable = observable.into_observable();

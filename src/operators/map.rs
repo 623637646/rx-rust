@@ -1,7 +1,7 @@
 use crate::{
-    cancellable::Cancellable,
     observable::Observable,
     observer::{anonymous_observer::AnonymousObserver, event::Event, Observer},
+    subscription::Subscription,
 };
 use std::{marker::PhantomData, rc::Rc};
 
@@ -46,7 +46,7 @@ where
     F: Fn(T) -> T2 + 'static,
     O: for<'b> Observable<'b, T, E>,
 {
-    fn subscribe(&'a self, observer: impl Observer<T2, E> + 'static) -> impl Cancellable + 'static {
+    fn subscribe(&'a self, observer: impl Observer<T2, E> + 'static) -> Subscription {
         let mapper = self.mapper.clone();
         let observer = AnonymousObserver::new(move |event: Event<T, E>| {
             observer.on(event.map_value(|v| mapper(v)))

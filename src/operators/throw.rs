@@ -1,10 +1,10 @@
 use crate::{
-    cancellable::{non_cancellable::NonCancellable, Cancellable},
     observable::Observable,
     observer::{
         event::{Event, Terminated},
         Observer,
     },
+    subscription::Subscription,
     utils::never::Never,
 };
 
@@ -35,22 +35,16 @@ impl<'a, E> Observable<'a, Never, E> for Throw<E>
 where
     E: Clone,
 {
-    fn subscribe(
-        &'a self,
-        observer: impl Observer<Never, E> + 'static,
-    ) -> impl Cancellable + 'static {
+    fn subscribe(&'a self, observer: impl Observer<Never, E> + 'static) -> Subscription {
         observer.on(Event::Terminated(Terminated::Error(self.error.clone())));
-        NonCancellable
+        Subscription::non_dispose()
     }
 }
 
 impl<'a, E> Observable<'a, Never, &'a E> for Throw<E> {
-    fn subscribe(
-        &'a self,
-        observer: impl Observer<Never, &'a E> + 'static,
-    ) -> impl Cancellable + 'static {
+    fn subscribe(&'a self, observer: impl Observer<Never, &'a E> + 'static) -> Subscription {
         observer.on(Event::Terminated(Terminated::Error(&self.error)));
-        NonCancellable
+        Subscription::non_dispose()
     }
 }
 
