@@ -25,10 +25,7 @@ impl<T, E> Event<T, E> {
     assert_eq!(new_event, Event::Next("123".to_owned()));
     ```
      */
-    pub fn map_value<T2, F>(self, f: F) -> Event<T2, E>
-    where
-        F: Fn(T) -> T2,
-    {
+    pub fn map_value<T2>(self, f: impl Fn(T) -> T2) -> Event<T2, E> {
         match self {
             Event::Next(value) => Event::Next(f(value)),
             Event::Terminated(terminated) => Event::Terminated(terminated),
@@ -47,10 +44,7 @@ impl<T, E> Event<T, E> {
     assert_eq!(new_event, Event::Terminated(Terminated::Error("123".to_owned())));
     ```
      */
-    pub fn map_error<E2, F>(self, f: F) -> Event<T, E2>
-    where
-        F: Fn(E) -> E2,
-    {
+    pub fn map_error<E2>(self, f: impl Fn(E) -> E2) -> Event<T, E2> {
         match self {
             Event::Next(value) => Event::Next(value),
             Event::Terminated(terminated) => match terminated {

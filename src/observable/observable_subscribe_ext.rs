@@ -22,9 +22,7 @@ pub trait ObservableSubscribeExt<'a, T, E> {
     });
     ```
     */
-    fn subscribe_on_event<F>(&'a self, on_event: F) -> Subscription
-    where
-        F: Fn(Event<T, E>) + 'static;
+    fn subscribe_on_event(&'a self, on_event: impl Fn(Event<T, E>) + 'static) -> Subscription;
 
     /**
     Subscribes to the observable with the given `on_next` callback.
@@ -40,27 +38,19 @@ pub trait ObservableSubscribeExt<'a, T, E> {
     });
     ```
     */
-    fn subscribe_on_next<F>(&'a self, on_next: F) -> Subscription
-    where
-        F: Fn(T) + 'static;
+    fn subscribe_on_next(&'a self, on_next: impl Fn(T) + 'static) -> Subscription;
 }
 
 impl<'a, T, E, O> ObservableSubscribeExt<'a, T, E> for O
 where
     O: Observable<'a, T, E>,
 {
-    fn subscribe_on_event<F>(&'a self, on_event: F) -> Subscription
-    where
-        F: Fn(Event<T, E>) + 'static,
-    {
+    fn subscribe_on_event(&'a self, on_event: impl Fn(Event<T, E>) + 'static) -> Subscription {
         let observer = AnonymousObserver::new(on_event);
         self.subscribe(observer)
     }
 
-    fn subscribe_on_next<F>(&'a self, on_next: F) -> Subscription
-    where
-        F: Fn(T) + 'static,
-    {
+    fn subscribe_on_next(&'a self, on_next: impl Fn(T) + 'static) -> Subscription {
         self.subscribe_on_event(move |event| {
             if let Event::Next(value) = event {
                 on_next(value);

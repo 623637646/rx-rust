@@ -72,19 +72,14 @@ pub trait MappableObservable<T, E> {
     });
     ```
      */
-    fn map<F, T2>(&self, f: F) -> impl for<'a> Observable<'a, T2, E>
-    where
-        F: Fn(T) -> T2 + 'static;
+    fn map<T2>(&self, f: impl Fn(T) -> T2 + 'static) -> impl for<'a> Observable<'a, T2, E>;
 }
 
 impl<O, T, E> MappableObservable<T, E> for O
 where
     O: for<'a> Observable<'a, T, E>,
 {
-    fn map<F, T2>(&self, f: F) -> impl for<'a> Observable<'a, T2, E>
-    where
-        F: Fn(T) -> T2 + 'static,
-    {
+    fn map<T2>(&self, f: impl Fn(T) -> T2 + 'static) -> impl for<'a> Observable<'a, T2, E> {
         Map::new(self, f)
     }
 }

@@ -17,10 +17,7 @@ pub struct Subscription {
 }
 
 impl Subscription {
-    pub fn new<F>(dispose: F) -> Subscription
-    where
-        F: FnOnce() + 'static,
-    {
+    pub fn new(dispose: impl FnOnce() + 'static) -> Subscription {
         Subscription {
             dispose: Some(Box::new(dispose) as Box<dyn FnOnce()>),
         }
