@@ -42,39 +42,16 @@ where
     }
 }
 
-impl<'a, T> Observable<'a, &'a T, Never> for Just<T> {
-    fn subscribe(&'a self, observer: impl Observer<&'a T, Never> + 'static) -> Subscription {
-        observer.on(Event::Next(&self.value));
-        observer.on(Event::Terminated(Terminated::Completed));
-        Subscription::non_dispose()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt,
-        utils::checking_observer::CheckingObserver,
-    };
+    use crate::utils::checking_observer::CheckingObserver;
 
     #[test]
     fn test_normal() {
         let observable = Just::new(333);
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
-    }
-
-    #[test]
-    fn test_ref() {
-        let observable = Just::new(333);
-        let checker = CheckingObserver::new();
-        let checker_cloned = checker.clone();
-        observable.subscribe_on_event(move |event: Event<&i32, Never>| {
-            checker_cloned.on(event.map_value(|value| *value));
-        });
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
     }
