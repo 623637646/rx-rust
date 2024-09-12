@@ -21,6 +21,8 @@ let observable = Just::new(123);
 observable.subscribe_on_event(|event: Event<i32, Never>| println!("event: {:?}", event));
 ```
  */
+
+#[derive(Clone)]
 pub struct Just<T> {
     value: T,
 }
@@ -31,14 +33,14 @@ impl<T> Just<T> {
     }
 }
 
-impl<'a, T> Observable<'a, T, Never> for Just<T>
+impl<T> Observable<T, Never> for Just<T>
 where
-    T: Clone,
+    T: Clone + Sync + Send + 'static,
 {
-    fn subscribe(&'a self, observer: impl Observer<T, Never> + 'static) -> Subscription {
-        observer.on(Event::Next(self.value.clone()));
-        observer.on(Event::Terminated(Terminated::Completed));
-        Subscription::non_dispose()
+    fn subscribe(self, observer: impl Observer<T, Never>) -> Subscription {
+        observer.notify_if_unterminated(Event::Next(self.value.clone()));
+        observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
+        Subscription::new_non_disposal_action(observer)
     }
 }
 
@@ -48,7 +50,7 @@ mod tests {
     use crate::utils::checking_observer::CheckingObserver;
 
     #[test]
-    fn test_normal() {
+    fn test_completed() {
         let observable = Just::new(333);
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
@@ -61,7 +63,7 @@ mod tests {
         let observable = Just::new(333);
 
         let checker = CheckingObserver::new();
-        observable.subscribe(checker.clone());
+        observable.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
 

@@ -3,53 +3,48 @@ use crate::{
     observer::{anonymous_observer::AnonymousObserver, event::Event, Observer},
     subscription::Subscription,
 };
-use std::{marker::PhantomData, rc::Rc};
+use std::{marker::PhantomData, sync::Arc};
 
 /// This is an observable that maps the values of the source observable using a mapper function.
-pub struct Map<'a, T, O, F> {
-    source: &'a O,
-    mapper: Rc<F>,
-    /// TODO: Why do we need _marker?  【Ask in stackoverflow!】
-    /// in this code. C doesn't use it. which means,
-    /// When generics is in Fn() 's return type, we don't need to use _marker.
-    /// But when generics is in Fn() 's argument type, we need to use _marker.
-    /*
-        impl<'a, T, E, C, F> Observable<'a, T, E> for Create<F>
-    where
-        C: Fn(),
-        F: Fn(&dyn Observer<T, E>) -> C,
-    {
-        fn subscribe<O>(&'a self, observer: O) -> impl Cancellable+ 'static
-        where
-            O: Observer<T, E> + 'static,
-        {
-            let cancellable_closure = (self.subscribe_handler)(&observer);
-            AnonymousCancellable::new(cancellable_closure)
-        }
-    }
-         */
+pub struct Map<T, O, F> {
+    source: O,
+    mapper: Arc<F>,
     _marker: PhantomData<T>,
 }
 
-impl<'a, T, O, F> Map<'a, T, O, F> {
-    pub fn new(source: &'a O, mapper: F) -> Map<'a, T, O, F> {
+impl<T, O, F> Map<T, O, F> {
+    pub fn new(source: O, mapper: F) -> Map<T, O, F> {
         Map {
             source,
-            mapper: Rc::new(mapper),
+            mapper: Arc::new(mapper),
             _marker: PhantomData,
         }
     }
 }
 
-impl<'a, T, E, O, F, T2> Observable<'a, T2, E> for Map<'_, T, O, F>
+impl<T, O, F> Clone for Map<T, O, F>
 where
-    F: Fn(T) -> T2 + 'static,
-    O: for<'b> Observable<'b, T, E>,
+    O: Clone,
 {
-    fn subscribe(&'a self, observer: impl Observer<T2, E> + 'static) -> Subscription {
+    fn clone(&self) -> Self {
+        Map {
+            source: self.source.clone(),
+            mapper: self.mapper.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T, E, O, F, T2> Observable<T2, E> for Map<T, O, F>
+where
+    T: Sync + Send + 'static,
+    F: Fn(T) -> T2 + Sync + Send + 'static,
+    O: Observable<T, E>,
+{
+    fn subscribe(self, observer: impl Observer<T2, E>) -> Subscription {
         let mapper = self.mapper.clone();
         let observer = AnonymousObserver::new(move |event: Event<T, E>| {
-            observer.on(event.map_value(|v| mapper(v)))
+            observer.notify_if_unterminated(event.map_value(|v| mapper(v)))
         });
         self.source.subscribe(observer)
     }
@@ -72,14 +67,15 @@ pub trait MappableObservable<T, E> {
     });
     ```
      */
-    fn map<T2>(&self, f: impl Fn(T) -> T2 + 'static) -> impl for<'a> Observable<'a, T2, E>;
+    fn map<T2>(self, f: impl Fn(T) -> T2 + Sync + Send + 'static) -> impl Observable<T2, E>;
 }
 
 impl<O, T, E> MappableObservable<T, E> for O
 where
-    O: for<'a> Observable<'a, T, E>,
+    O: Observable<T, E>,
+    T: Sync + Send + 'static,
 {
-    fn map<T2>(&self, f: impl Fn(T) -> T2 + 'static) -> impl for<'a> Observable<'a, T2, E> {
+    fn map<T2>(self, f: impl Fn(T) -> T2 + Sync + Send + 'static) -> impl Observable<T2, E> {
         Map::new(self, f)
     }
 }
@@ -87,10 +83,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{operators::just::Just, utils::checking_observer::CheckingObserver};
+    use crate::{
+        observer::event::Terminated,
+        operators::{create::Create, just::Just},
+        utils::checking_observer::CheckingObserver,
+    };
 
     #[test]
-    fn test_normal() {
+    fn test_completed() {
         let observable = Just::new(333);
         let observable = observable.map(|value| value.to_string());
         let checker = CheckingObserver::new();
@@ -100,17 +100,116 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_map() {
-        let just = Just::new(333);
-        let observable1 = just.map(|value| value.to_string());
-        let observable2 = just.map(|value| value * 2);
-        let checker1 = CheckingObserver::new();
-        let checker2 = CheckingObserver::new();
-        observable1.subscribe(checker1.clone());
-        observable2.subscribe(checker2.clone());
-        assert!(checker1.is_values_matched(&["333".to_owned()]));
-        assert!(checker1.is_completed());
-        assert!(checker2.is_values_matched(&[666]));
-        assert!(checker2.is_completed());
+    fn test_error() {
+        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
+            observer.notify_if_unterminated(Event::Next(333));
+            observer
+                .notify_if_unterminated(Event::Terminated(Terminated::Error("error".to_owned())));
+            Subscription::new_non_disposal_action(observer)
+        });
+        let observable = observable.map(|value| value.to_string());
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&["333".to_owned()]));
+        assert!(checker.is_error("error".to_owned()));
+    }
+
+    #[test]
+    fn test_unsubscribed() {
+        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
+            observer.notify_if_unterminated(Event::Next(333));
+            observer.notify_if_unterminated(Event::Next(444));
+            Subscription::new_non_disposal_action(observer)
+        });
+        let observable = observable.map(|value| value.to_string());
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
+        assert!(checker.is_unsubscribed());
+    }
+
+    #[test]
+    fn test_unterminated() {
+        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
+            observer.notify_if_unterminated(Event::Next(333));
+            observer.notify_if_unterminated(Event::Next(444));
+            Subscription::new_non_disposal_action(observer)
+        });
+        let observable = observable.map(|value| value.to_string());
+        let checker = CheckingObserver::new();
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
+        assert!(checker.is_unterminated());
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_multiple_subscribe() {
+        let observable = Just::new(333);
+        let observable = observable.clone().map(|value| value.to_string());
+
+        let checker = CheckingObserver::new();
+        observable.clone().subscribe(checker.clone());
+        assert!(checker.is_values_matched(&["333".to_owned()]));
+        assert!(checker.is_completed());
+
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&["333".to_owned()]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_multiple_operate() {
+        let observable = Just::new(333)
+            .map(|value| value.to_string())
+            .map(|value| value + "?");
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&["333?".to_owned()]));
+        assert!(checker.is_completed());
+    }
+
+    #[tokio::test]
+    async fn test_async() {
+        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
+            let observer = Arc::new(observer);
+            observer.notify_if_unterminated(Event::Next(1));
+            let observer_cloned = observer.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer_cloned.notify_if_unterminated(Event::Next(2));
+            });
+            let observer_cloned = observer.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+                observer_cloned.notify_if_unterminated(Event::Terminated(Terminated::Completed));
+            });
+            let observer_cloned = observer.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
+                observer_cloned.notify_if_unterminated(Event::Next(3));
+            });
+            Subscription::new_non_disposal_action(observer)
+        })
+        .map(|value| value.to_string())
+        .map(|value| value + "?");
+        let checker = CheckingObserver::new();
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&["1?".to_owned()]));
+        assert!(checker.is_unterminated());
+        tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
+        assert!(checker.is_values_matched(&["1?".to_owned()]));
+        assert!(checker.is_unterminated());
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&["1?".to_owned(), "2?".to_owned()]));
+        assert!(checker.is_unterminated());
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&["1?".to_owned(), "2?".to_owned()]));
+        assert!(checker.is_completed());
+        tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&["1?".to_owned(), "2?".to_owned()]));
+        assert!(checker.is_completed());
+        _ = subscription; // keep the subscription alive
     }
 }

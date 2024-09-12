@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tokio = { version = "1.40.0", optional = true, features = ["full"] }
+
+[features]
+default = ["tokio-scheduler"] #TODO: default without "tokio-scheduler"
+tokio-scheduler = ["tokio"]

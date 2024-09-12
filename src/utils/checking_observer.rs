@@ -1,19 +1,19 @@
 use crate::observer::event::{Event, Terminated};
 use crate::observer::Observer;
-use std::{cell::RefCell, rc::Rc};
-
-/// TODO: ObservableCounter is not atomic, implement struct AtomicObservableCounter {}?
+use std::sync::{Arc, RwLock};
 
 /// A helper struct for testing observables.
 #[derive(Debug, Clone)]
 pub(crate) struct CheckingObserver<T, E> {
-    events: Rc<RefCell<Vec<Event<T, E>>>>,
+    events: Arc<RwLock<Vec<Event<T, E>>>>,
+    terminated: Arc<RwLock<bool>>,
 }
 
 impl<T, E> CheckingObserver<T, E> {
     pub(crate) fn new() -> Self {
         CheckingObserver {
-            events: Rc::new(RefCell::new(Vec::new())),
+            events: Arc::new(RwLock::new(Vec::new())),
+            terminated: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -21,7 +21,7 @@ impl<T, E> CheckingObserver<T, E> {
     where
         T: PartialEq,
     {
-        let events = self.events.borrow();
+        let events = self.events.read().unwrap();
         let values: Vec<&T> = events
             .iter()
             .filter_map(|event| match event {
@@ -33,7 +33,7 @@ impl<T, E> CheckingObserver<T, E> {
     }
 
     pub(crate) fn is_unterminated(&self) -> bool {
-        let events = self.events.borrow();
+        let events = self.events.read().unwrap();
         !matches!(events.last(), Some(Event::Terminated(_)))
     }
 
@@ -41,7 +41,7 @@ impl<T, E> CheckingObserver<T, E> {
     where
         E: PartialEq,
     {
-        let events = self.events.borrow();
+        let events = self.events.read().unwrap();
         if let Some(Event::Terminated(Terminated::Error(error))) = events.last() {
             error == &expected
         } else {
@@ -50,7 +50,7 @@ impl<T, E> CheckingObserver<T, E> {
     }
 
     pub(crate) fn is_unsubscribed(&self) -> bool {
-        let events = self.events.borrow();
+        let events = self.events.read().unwrap();
         matches!(
             events.last(),
             Some(Event::Terminated(Terminated::Unsubscribed))
@@ -58,7 +58,7 @@ impl<T, E> CheckingObserver<T, E> {
     }
 
     pub(crate) fn is_completed(&self) -> bool {
-        let events = self.events.borrow();
+        let events = self.events.read().unwrap();
         matches!(
             events.last(),
             Some(Event::Terminated(Terminated::Completed))
@@ -66,12 +66,24 @@ impl<T, E> CheckingObserver<T, E> {
     }
 }
 
-impl<T, E> Observer<T, E> for CheckingObserver<T, E> {
-    fn on(&self, event: Event<T, E>) {
-        let mut events = self.events.borrow_mut();
+impl<T, E> Observer<T, E> for CheckingObserver<T, E>
+where
+    T: Sync + Send + 'static,
+    E: Sync + Send + 'static,
+{
+    fn received(&self, event: Event<T, E>) {
+        let mut events = self.events.write().unwrap();
         if let Some(Event::Terminated(_)) = events.last() {
             panic!("ObservableCounter is terminated");
         }
         events.push(event);
+    }
+
+    fn terminated(&self) -> bool {
+        *self.terminated.read().unwrap()
+    }
+
+    fn set_terminated(&self, terminated: bool) {
+        *self.terminated.write().unwrap() = terminated;
     }
 }

@@ -1,3 +1,4 @@
+pub mod disposal;
 pub mod never;
 
 #[cfg(test)]

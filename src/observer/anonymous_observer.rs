@@ -1,4 +1,5 @@
 use super::{Event, Observer};
+use std::sync::RwLock;
 
 /**
 An observer that wraps a closure.
@@ -19,20 +20,32 @@ observable.subscribe(observer);
 */
 
 pub struct AnonymousObserver<F> {
-    on_event: F,
+    received_event: F,
+    terminated: RwLock<bool>,
 }
 
 impl<F> AnonymousObserver<F> {
     pub fn new(on_event: F) -> AnonymousObserver<F> {
-        AnonymousObserver { on_event }
+        AnonymousObserver {
+            received_event: on_event,
+            terminated: RwLock::new(false),
+        }
     }
 }
 
 impl<T, E, F> Observer<T, E> for AnonymousObserver<F>
 where
-    F: Fn(Event<T, E>),
+    F: Fn(Event<T, E>) + Sync + Send + 'static,
 {
-    fn on(&self, event: Event<T, E>) {
-        (self.on_event)(event);
+    fn received(&self, event: Event<T, E>) {
+        (self.received_event)(event);
+    }
+
+    fn terminated(&self) -> bool {
+        *self.terminated.read().unwrap()
+    }
+
+    fn set_terminated(&self, terminated: bool) {
+        *self.terminated.write().unwrap() = terminated;
     }
 }

@@ -1,7 +1,7 @@
 use super::Observable;
 
 /**
-This trait is used to convert any type that implements `Observable` into `impl Observable<'_, T, E>`.
+This trait is used to convert any type that implements `Observable` into `impl Observable<T, E>`.
 
 # Example
 ```rust
@@ -12,8 +12,8 @@ use rx_rust::{
     },
     operators::just::Just,
 };
-let just = Just::new(123);
-let observable = just.into_observable();
+let observable = Just::new(123);
+let observable = observable.into_observable();
 observable.subscribe_on_next(|value| {
     println!("value: {}", value);
 });
@@ -21,15 +21,15 @@ observable.subscribe_on_next(|value| {
  */
 
 pub trait ObservableIntoExt<T, E> {
-    /// Converts any type that implements `Observable` into `impl Observable<'_, T, E>`.
-    fn into_observable(self) -> impl for<'a> Observable<'a, T, E>;
+    /// Converts any type that implements `Observable` into `impl Observable<T, E>`.
+    fn into_observable(self) -> impl Observable<T, E>;
 }
 
 impl<T, E, O> ObservableIntoExt<T, E> for O
 where
-    O: for<'a> Observable<'a, T, E>,
+    O: Observable<T, E>,
 {
-    fn into_observable(self) -> impl for<'a> Observable<'a, T, E> {
+    fn into_observable(self) -> impl Observable<T, E> {
         self
     }
 }
@@ -46,9 +46,9 @@ mod tests {
     #[test]
     fn test_normal() {
         let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.on(Event::Next(333));
-            observer.on(Event::Terminated(Terminated::Completed));
-            Subscription::non_dispose()
+            observer.notify_if_unterminated(Event::Next(333));
+            observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
+            Subscription::new_non_disposal_action(observer)
         });
         let observable = observable.into_observable();
         let checker = CheckingObserver::new();
@@ -60,9 +60,9 @@ mod tests {
     #[test]
     fn test_multiple() {
         let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.on(Event::Next(333));
-            observer.on(Event::Terminated(Terminated::Completed));
-            Subscription::non_dispose()
+            observer.notify_if_unterminated(Event::Next(333));
+            observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
+            Subscription::new_non_disposal_action(observer)
         });
         let observable = observable.into_observable();
         let observable = observable.into_observable();

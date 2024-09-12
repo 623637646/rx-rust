@@ -5,7 +5,7 @@ use crate::{
 };
 
 /// Extension trait for `Observable`
-pub trait ObservableSubscribeExt<'a, T, E> {
+pub trait ObservableSubscribeExt<T, E> {
     /**
     Subscribes to the observable with the given `on_event` callback.
 
@@ -22,7 +22,10 @@ pub trait ObservableSubscribeExt<'a, T, E> {
     });
     ```
     */
-    fn subscribe_on_event(&'a self, on_event: impl Fn(Event<T, E>) + 'static) -> Subscription;
+    fn subscribe_on_event(
+        self,
+        on_event: impl Fn(Event<T, E>) + Sync + Send + 'static,
+    ) -> Subscription;
 
     /**
     Subscribes to the observable with the given `on_next` callback.
@@ -38,19 +41,22 @@ pub trait ObservableSubscribeExt<'a, T, E> {
     });
     ```
     */
-    fn subscribe_on_next(&'a self, on_next: impl Fn(T) + 'static) -> Subscription;
+    fn subscribe_on_next(self, on_next: impl Fn(T) + Sync + Send + 'static) -> Subscription;
 }
 
-impl<'a, T, E, O> ObservableSubscribeExt<'a, T, E> for O
+impl<T, E, O> ObservableSubscribeExt<T, E> for O
 where
-    O: Observable<'a, T, E>,
+    O: Observable<T, E>,
 {
-    fn subscribe_on_event(&'a self, on_event: impl Fn(Event<T, E>) + 'static) -> Subscription {
+    fn subscribe_on_event(
+        self,
+        on_event: impl Fn(Event<T, E>) + Sync + Send + 'static,
+    ) -> Subscription {
         let observer = AnonymousObserver::new(on_event);
         self.subscribe(observer)
     }
 
-    fn subscribe_on_next(&'a self, on_next: impl Fn(T) + 'static) -> Subscription {
+    fn subscribe_on_next(self, on_next: impl Fn(T) + Sync + Send + 'static) -> Subscription {
         self.subscribe_on_event(move |event| {
             if let Event::Next(value) = event {
                 on_next(value);
@@ -72,7 +78,7 @@ mod tests {
         let checker = CheckingObserver::new();
         let checker_cloned = checker.clone();
         observable.subscribe_on_event(move |event| {
-            checker_cloned.on(event);
+            checker_cloned.notify_if_unterminated(event);
         });
         assert!(checker.is_values_matched(&[123]));
         assert!(checker.is_completed());
@@ -84,7 +90,7 @@ mod tests {
         let checker = CheckingObserver::<i32, String>::new();
         let checker_cloned = checker.clone();
         observable.subscribe_on_next(move |value| {
-            checker_cloned.on(Event::Next(value));
+            checker_cloned.notify_if_unterminated(Event::Next(value));
         });
         assert!(checker.is_values_matched(&[123]));
         assert!(checker.is_unterminated());
