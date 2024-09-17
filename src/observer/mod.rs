@@ -8,8 +8,8 @@ use event::Event;
 /// The observer must be Sync and Send because it will be used in multiple threads. See Scheduler usage in delay.rs.
 /// The observer must be 'static because it will be stored in Subscription or hot observables.
 pub trait Observer<T, E>: Sync + Send + 'static {
-    /// Receive an event from an `Observable`.
-    fn received(&self, event: Event<T, E>);
+    /// Received an event from an `Observable`.
+    fn on(&self, event: Event<T, E>);
 
     /// Get whether the observer is terminated.
     fn terminated(&self) -> bool;
@@ -23,10 +23,10 @@ pub trait Observer<T, E>: Sync + Send + 'static {
             return;
         }
         match event {
-            Event::Next(_) => self.received(event),
+            Event::Next(_) => self.on(event),
             Event::Terminated(_) => {
                 self.set_terminated(true);
-                self.received(event);
+                self.on(event);
             }
         }
     }

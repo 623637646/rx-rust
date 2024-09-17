@@ -37,7 +37,7 @@ impl<T, E, F> Observer<T, E> for AnonymousObserver<F>
 where
     F: Fn(Event<T, E>) + Sync + Send + 'static,
 {
-    fn received(&self, event: Event<T, E>) {
+    fn on(&self, event: Event<T, E>) {
         (self.received_event)(event);
     }
 

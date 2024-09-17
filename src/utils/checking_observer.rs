@@ -71,7 +71,7 @@ where
     T: Sync + Send + 'static,
     E: Sync + Send + 'static,
 {
-    fn received(&self, event: Event<T, E>) {
+    fn on(&self, event: Event<T, E>) {
         let mut events = self.events.write().unwrap();
         if let Some(Event::Terminated(_)) = events.last() {
             panic!("ObservableCounter is terminated");

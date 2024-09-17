@@ -1,13 +1,13 @@
 use super::{event::Event, Observer};
 use std::sync::Arc;
 
-impl<T, E> Observer<T, E> for Box<dyn Observer<T, E> >
+impl<T, E> Observer<T, E> for Box<dyn Observer<T, E>>
 where
     T: 'static,
     E: 'static,
 {
-    fn received(&self, event: Event<T, E>) {
-        self.as_ref().received(event);
+    fn on(&self, event: Event<T, E>) {
+        self.as_ref().on(event);
     }
 
     fn terminated(&self) -> bool {
@@ -25,8 +25,8 @@ where
     T: 'static,
     E: 'static,
 {
-    fn received(&self, event: Event<T, E>) {
-        self.as_ref().received(event);
+    fn on(&self, event: Event<T, E>) {
+        self.as_ref().on(event);
     }
 
     fn terminated(&self) -> bool {
