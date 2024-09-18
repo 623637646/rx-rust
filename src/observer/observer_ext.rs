@@ -22,8 +22,6 @@ where
 impl<T, E, O> Observer<T, E> for Arc<O>
 where
     O: Observer<T, E>,
-    T: 'static,
-    E: 'static,
 {
     fn on(&self, event: Event<T, E>) {
         self.as_ref().on(event);
