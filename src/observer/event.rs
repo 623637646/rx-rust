@@ -1,5 +1,5 @@
 /// A `Terminated` is a value that an `Observable` can send to an `Observer` to indicate that the observable has terminated.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Terminated<E> {
     Error(E),
     Unsubscribed,
@@ -7,7 +7,7 @@ pub enum Terminated<E> {
 }
 
 /// An `Event` is a value that an `Observable` can send to an `Observer`.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Event<T, E> {
     Next(T),
     Terminated(Terminated<E>),
