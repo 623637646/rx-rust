@@ -57,10 +57,9 @@ where
     }
 
     fn subscribe_on_next(self, on_next: impl Fn(T) + Sync + Send + 'static) -> Subscription {
-        self.subscribe_on_event(move |event| {
-            if let Event::Next(value) = event {
-                on_next(value);
-            }
+        self.subscribe_on_event(move |event| match event {
+            Event::Next(value) => on_next(value),
+            Event::Terminated(_) => {}
         })
     }
 }

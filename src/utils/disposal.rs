@@ -37,8 +37,16 @@ where
     F: FnOnce(),
 {
     fn drop(&mut self) {
-        if let Some(action) = self.action.take() {
-            action();
+        // This code causes tarpaulin wrong coverage report. For more details, see: https://github.com/xd009642/tarpaulin/issues/1624
+        // if let Some(action) = self.action.take() {
+        //     action();
+        // }
+        // This code is a workaround for the issue above.
+        match self.action.take() {
+            Some(action) => action(),
+            None => {
+                // Do nothing, using this pattern to avoid clippy warning.
+            }
         }
     }
 }
