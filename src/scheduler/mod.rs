@@ -12,9 +12,5 @@ pub trait Scheduler: Sync + Send + 'static {
     /// task: The task to be executed. The task must be Send and 'static, because the task will be executed in a different thread.
     /// delay: The delay before the task is executed.
     /// Returns a `Disposal` that can be used to cancel the task.
-    fn schedule(
-        &self,
-        task: impl FnOnce() + Send + 'static,
-        delay: Option<Duration>,
-    ) -> Disposal<impl FnOnce() + Send + 'static>;
+    fn schedule(&self, task: impl FnOnce() + Send + 'static, delay: Option<Duration>) -> Disposal;
 }

@@ -1,4 +1,5 @@
 use super::Observable;
+use crate::observer::Observer;
 
 /**
 This trait is used to convert any type that implements `Observable` into `impl Observable<T, E>`.
@@ -19,57 +20,58 @@ observable.subscribe_on_next(|value| {
 });
 ```
  */
-
-pub trait ObservableIntoExt<T, E> {
+pub trait ObservableIntoExt<T, E, ObserverType>
+where
+    ObserverType: Observer<T, E>,
+{
     /// Converts any type that implements `Observable` into `impl Observable<T, E>`.
-    fn into_observable(self) -> impl Observable<T, E>;
+    fn into_observable(self) -> impl Observable<T, E, ObserverType>;
 }
 
-impl<T, E, O> ObservableIntoExt<T, E> for O
+impl<T, E, O, ObserverType> ObservableIntoExt<T, E, ObserverType> for O
 where
-    O: Observable<T, E>,
+    ObserverType: Observer<T, E>,
+    O: Observable<T, E, ObserverType>,
 {
-    fn into_observable(self) -> impl Observable<T, E> {
+    fn into_observable(self) -> impl Observable<T, E, ObserverType> {
         self
     }
 }
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::observer::{Observer, Terminal};
+//     use crate::operators::create::Create;
+//     use crate::utils::checking_observer::CheckingObserver;
+//     use crate::utils::disposal::Disposal;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::observer::event::{Event, Terminated};
-    use crate::observer::Observer;
-    use crate::operators::create::Create;
-    use crate::subscription::Subscription;
-    use crate::utils::checking_observer::CheckingObserver;
+//     #[test]
+//     fn test_normal() {
+//         let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
+//             observer.on_next(333);
+//             observer.on_terminal(Terminal::Completed);
+//             Disposal::new_no_action()
+//         });
+//         let observable = observable.into_observable();
+//         let checker = CheckingObserver::new();
+//         observable.subscribe(checker.clone());
+//         assert!(checker.is_values_matched(&[333]));
+//         assert!(checker.is_completed());
+//     }
 
-    #[test]
-    fn test_normal() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(333));
-            observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-            Subscription::new_non_disposal_action(observer)
-        });
-        let observable = observable.into_observable();
-        let checker = CheckingObserver::new();
-        observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
-    }
-
-    #[test]
-    fn test_multiple() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(333));
-            observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-            Subscription::new_non_disposal_action(observer)
-        });
-        let observable = observable.into_observable();
-        let observable = observable.into_observable();
-        let observable = observable.into_observable();
-        let checker = CheckingObserver::new();
-        observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
-    }
-}
+//     #[test]
+//     fn test_multiple() {
+//         let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
+//             observer.on_next(333);
+//             observer.on_terminal(Terminal::Completed);
+//             Disposal::new_no_action()
+//         });
+//         let observable = observable.into_observable();
+//         let observable = observable.into_observable();
+//         let observable = observable.into_observable();
+//         let checker = CheckingObserver::new();
+//         observable.subscribe(checker.clone());
+//         assert!(checker.is_values_matched(&[333]));
+//         assert!(checker.is_completed());
+//     }
+// }

@@ -1,11 +1,7 @@
 use crate::{
     observable::Observable,
-    observer::{
-        event::{Event, Terminated},
-        Observer,
-    },
-    subscription::Subscription,
-    utils::never::Never,
+    observer::{Observer, Terminal},
+    utils::{disposal::Disposal, never::Never},
 };
 
 /**
@@ -33,14 +29,15 @@ impl<T> Just<T> {
     }
 }
 
-impl<T> Observable<T, Never> for Just<T>
+impl<T, O> Observable<T, Never, O> for Just<T>
 where
+    O: Observer<T, Never>,
     T: Clone + Sync + Send + 'static,
 {
-    fn subscribe(self, observer: impl Observer<T, Never>) -> Subscription {
-        observer.notify_if_unterminated(Event::Next(self.value.clone()));
-        observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-        Subscription::new_non_disposal_action(observer)
+    fn subscribe(self, mut observer: O) -> Disposal {
+        observer.on_next(self.value.clone());
+        Box::new(observer).on_terminal(Terminal::Completed);
+        Disposal::new_no_action()
     }
 }
 
