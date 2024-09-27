@@ -67,6 +67,7 @@ where
                     scheduler.schedule(move || observer.notify_if_unterminated(event), Some(delay));
                 let disposal = disposal.to_boxed();
                 disposals.lock().unwrap().push(disposal);
+                // TODO: should remove disposal when the schedule is completed
             } else {
                 observer.notify_if_unterminated(event);
             }

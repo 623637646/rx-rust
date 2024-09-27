@@ -5,8 +5,8 @@ use crate::{
         Observer,
     },
     subscription::Subscription,
-    utils::never::Never,
 };
+use std::convert::Infallible;
 
 /**
 This is an observable that emits a single value then completes.
@@ -15,10 +15,10 @@ This is an observable that emits a single value then completes.
 ```rust
 use rx_rust::operators::just::Just;
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-use rx_rust::utils::never::Never;
+use std::convert::Infallible;
 use rx_rust::observer::event::Event;
 let observable = Just::new(123);
-observable.subscribe_on_event(|event: Event<i32, Never>| println!("event: {:?}", event));
+observable.subscribe_on_event(|event: Event<i32, Infallible>| println!("event: {:?}", event));
 ```
  */
 
@@ -33,11 +33,11 @@ impl<T> Just<T> {
     }
 }
 
-impl<T> Observable<T, Never> for Just<T>
+impl<T> Observable<T, Infallible> for Just<T>
 where
     T: Clone + Sync + Send + 'static,
 {
-    fn subscribe(self, observer: impl Observer<T, Never>) -> Subscription {
+    fn subscribe(self, observer: impl Observer<T, Infallible>) -> Subscription {
         observer.notify_if_unterminated(Event::Next(self.value.clone()));
         observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
         Subscription::new_non_disposal_action(observer)

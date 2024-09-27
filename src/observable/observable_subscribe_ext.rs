@@ -14,10 +14,10 @@ pub trait ObservableSubscribeExt<T, E> {
     use rx_rust::{
         observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
     };
-    use rx_rust::utils::never::Never;
+    use std::convert::Infallible;
     use rx_rust::observer::event::Event;
     let observable = Just::new(123);
-    observable.subscribe_on_event(move |event: Event<i32, Never>| {
+    observable.subscribe_on_event(move |event: Event<i32, Infallible>| {
         println!("{:?}", event);
     });
     ```

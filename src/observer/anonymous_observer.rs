@@ -10,9 +10,9 @@ use rx_rust::observable::Observable;
 use rx_rust::observer::anonymous_observer::AnonymousObserver;
 use rx_rust::observer::event::Event;
 use rx_rust::operators::just::Just;
-use rx_rust::utils::never::Never;
+use std::convert::Infallible;
 let observable = Just::new(123);
-let observer = AnonymousObserver::new(|e: Event<i32, Never>| {
+let observer = AnonymousObserver::new(|e: Event<i32, Infallible>| {
     println!("{:?}", e);
 });
 observable.subscribe(observer);
