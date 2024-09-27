@@ -1,8 +1,6 @@
 pub mod event;
 pub mod observer_ext;
 
-use event::Event;
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Terminal<E> {
     Completed,

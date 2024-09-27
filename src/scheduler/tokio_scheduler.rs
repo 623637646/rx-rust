@@ -3,17 +3,18 @@ use std::time::Duration;
 
 pub struct TokioScheduler;
 
-impl<T> Scheduler<T, Box<dyn FnOnce()>> for TokioScheduler
-where
-    T: FnOnce() + Send + 'static,
-{
-    fn schedule(&self, task: T, delay: Option<Duration>) -> Box<dyn FnOnce()> {
+impl Scheduler for TokioScheduler {
+    fn schedule(
+        &self,
+        task: impl FnOnce() + Send + 'static,
+        delay: Option<Duration>,
+    ) -> impl FnOnce() + Send + 'static {
         let handle = tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
             task();
         });
-        Box::new(move || handle.abort())
+        move || handle.abort()
     }
 }

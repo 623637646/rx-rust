@@ -107,7 +107,6 @@ mod tests {
 
     use super::*;
     use crate::{
-        observer::event::Terminated,
         operators::{create::Create, just::Just},
         utils::checking_observer::CheckingObserver,
     };

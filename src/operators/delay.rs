@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{anonymous_observer::AnonymousObserver, event::Event, Observer},
+    observer::{Observer, Terminal},
     scheduler::Scheduler,
     subscription::Subscription,
 };
@@ -10,14 +10,14 @@ use std::{
 };
 
 /// This is an observable that delays the next value and completed events from the source observable by a duration. The error and unsubscribed events will post immediately.
-pub struct Delay<O, S> {
-    source: O,
+pub struct Delay<OE, S> {
+    source: OE,
     delay: Duration,
     scheduler: Arc<S>,
 }
 
-impl<O, S> Delay<O, S> {
-    pub fn new(source: O, delay: Duration, scheduler: S) -> Delay<O, S> {
+impl<OE, S> Delay<OE, S> {
+    pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S> {
         Delay {
             source,
             delay,
@@ -26,9 +26,9 @@ impl<O, S> Delay<O, S> {
     }
 }
 
-impl<O, S> Clone for Delay<O, S>
+impl<OE, S> Clone for Delay<OE, S>
 where
-    O: Clone,
+    OE: Clone,
 {
     fn clone(&self) -> Self {
         Delay {
@@ -39,50 +39,78 @@ where
     }
 }
 
-impl<T, E, O, S> Observable<T, E> for Delay<O, S>
+impl<T, E, OE, OR, S> Observable<T, E, OR> for Delay<OE, S>
 where
-    O: Observable<T, E>,
-    S: Scheduler,
     T: Send + 'static,
     E: Send + 'static,
+    OR: Observer<T, E> + Send + 'static,
+    OE: Observable<T, E, InternalObserver<OR, S>>,
+    S: Scheduler,
 {
-    fn subscribe(self, observer: impl Observer<T, E>) -> Subscription {
-        let scheduler = self.scheduler.clone();
-        let delay = self.delay;
-        let observer = Arc::new(observer);
-        let disposals = Arc::new(Mutex::new(Vec::new()));
-        let disposals_cloned = disposals.clone();
-        let observer = AnonymousObserver::new(move |event: Event<T, E>| {
-            let should_be_delay = match &event {
-                Event::Next(_) => true,
-                Event::Terminated(terminated) => match terminated {
-                    crate::observer::event::Terminated::Completed => true,
-                    crate::observer::event::Terminated::Error(_) => false,
-                    crate::observer::event::Terminated::Unsubscribed => false,
-                },
-            };
-            if should_be_delay {
-                let observer = observer.clone();
-                let disposal =
-                    scheduler.schedule(move || observer.notify_if_unterminated(event), Some(delay));
-                let disposal = disposal.to_boxed();
-                disposals.lock().unwrap().push(disposal);
-                // TODO: should remove disposal when the schedule is completed
-            } else {
-                observer.notify_if_unterminated(event);
+    fn subscribe(self, observer: OR) -> Subscription {
+        let internal_observer = InternalObserver {
+            observer: Arc::new(Mutex::new(Some(observer))),
+            delay: self.delay,
+            scheduler: self.scheduler.clone(),
+        };
+        self.source.subscribe(internal_observer)
+    }
+}
+
+struct InternalObserver<OR, S> {
+    observer: Arc<Mutex<Option<OR>>>,
+    delay: Duration,
+    scheduler: Arc<S>,
+}
+
+impl<T, E, OR, S> Observer<T, E> for InternalObserver<OR, S>
+where
+    T: Send + 'static,
+    E: Send + 'static,
+    OR: Observer<T, E> + Send + 'static,
+    S: Scheduler,
+{
+    fn on_next(&mut self, value: T) {
+        let observer = self.observer.clone();
+        _ = self.scheduler.schedule(
+            move || {
+                let mut observer = observer.lock().unwrap();
+                if let Some(observer) = &mut *observer {
+                    observer.on_next(value)
+                }
+            },
+            Some(self.delay),
+        );
+    }
+
+    fn on_terminal(self, terminal: Terminal<E>) {
+        match &terminal {
+            Terminal::Completed => {
+                _ = self.scheduler.schedule(
+                    move || {
+                        let observer = self.observer.lock().unwrap().take();
+                        if let Some(observer) = observer {
+                            observer.on_terminal(terminal);
+                        }
+                    },
+                    Some(self.delay),
+                );
             }
-        });
-        let subscription = self.source.subscribe(observer);
-        subscription.insert_disposal_action(move || {
-            for disposal in disposals_cloned.lock().unwrap().drain(..) {
-                disposal.dispose();
+            Terminal::Error(_) => {
+                let observer = self.observer.lock().unwrap().take();
+                if let Some(observer) = observer {
+                    observer.on_terminal(terminal);
+                }
             }
-        })
+        }
     }
 }
 
 /// Make the `Observable` delayable.
-pub trait DelayableObservable<T, E> {
+pub trait DelayableObservable<T, E, OR, S>
+where
+    OR: Observer<T, E>,
+{
     /**
     Delay the events from the source observable by a duration.
 
@@ -103,23 +131,18 @@ pub trait DelayableObservable<T, E> {
     }
     ```
      */
-    fn delay<S>(self, delay: Duration, scheduler: S) -> impl Observable<T, E>
-    where
-        S: Scheduler,
-        T: Send + 'static,
-        E: Send + 'static;
+    fn delay(self, delay: Duration, scheduler: S) -> impl Observable<T, E, OR>;
 }
 
-impl<O, T, E> DelayableObservable<T, E> for O
+impl<T, E, OR, S, OE> DelayableObservable<T, E, OR, S> for OE
 where
-    O: Observable<T, E>,
+    T: Send + 'static,
+    E: Send + 'static,
+    OR: Observer<T, E> + Send + 'static,
+    OE: Observable<T, E, InternalObserver<OR, S>>,
+    S: Scheduler,
 {
-    fn delay<S>(self, delay: Duration, scheduler: S) -> impl Observable<T, E>
-    where
-        S: Scheduler,
-        T: Send + 'static,
-        E: Send + 'static,
-    {
+    fn delay(self, delay: Duration, scheduler: S) -> impl Observable<T, E, OR> {
         Delay::new(self, delay, scheduler)
     }
 }
@@ -129,32 +152,22 @@ where
 mod tests {
     use super::*;
     use crate::{
-        observer::event::Terminated, operators::create::Create,
-        scheduler::tokio_scheduler::TokioScheduler, utils::checking_observer::CheckingObserver,
+        operators::create::Create, scheduler::tokio_scheduler::TokioScheduler,
+        utils::checking_observer::CheckingObserver,
     };
     use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_completed() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            let observer = Arc::new(observer);
-            observer.notify_if_unterminated(Event::Next(1));
-            let observer_cloned = observer.clone();
+        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+            observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(2));
+                observer.on_next(2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_terminal(Terminal::<String>::Completed);
             });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
-                observer_cloned.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-            });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(3));
-            });
-            Subscription::new_non_disposal_action(observer)
+            Subscription::new_non_disposal_action()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
@@ -181,27 +194,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_error() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            let observer = Arc::new(observer);
-            observer.notify_if_unterminated(Event::Next(1));
-            let observer_cloned = observer.clone();
+        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+            observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(2));
+                observer.on_next(2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+                observer.on_next(3);
+                observer.on_terminal(Terminal::Error("error".to_string()));
             });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                observer_cloned.notify_if_unterminated(Event::Terminated(Terminated::Error(
-                    "error".to_string(),
-                )));
-            });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(3));
-            });
-            Subscription::new_non_disposal_action(observer)
+            Subscription::new_non_disposal_action()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
@@ -227,67 +229,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unsubscribed() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            let observer = Arc::new(observer);
-            observer.notify_if_unterminated(Event::Next(1));
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(2));
-            });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(3));
-            });
-            Subscription::new_non_disposal_action(observer)
-        });
-        let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
-        let checker = CheckingObserver::new();
-        let subscription = observable.subscribe(checker.clone());
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-            subscription.unsubscribe()
-        });
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
-        sleep(Duration::from_millis(5)).await;
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
-        sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1]));
-        assert!(checker.is_unterminated());
-        sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unterminated());
-        sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unsubscribed());
-        sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unsubscribed());
-    }
-
-    #[tokio::test]
     async fn test_unterminated() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            let observer = Arc::new(observer);
-            observer.notify_if_unterminated(Event::Next(1));
-            let observer_cloned = observer.clone();
+        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+            observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(2));
+                observer.on_next(2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_next(3);
             });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(3));
-            });
-            Subscription::new_non_disposal_action(observer)
+            Subscription::new_non_disposal_action()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
-        let checker = CheckingObserver::new();
+        let checker: CheckingObserver<i32, String> = CheckingObserver::new();
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
@@ -301,7 +255,7 @@ mod tests {
         assert!(checker.is_values_matched(&[1, 2]));
         assert!(checker.is_unterminated());
         sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1, 2]));
+        assert!(checker.is_values_matched(&[1, 2, 3]));
         assert!(checker.is_unterminated());
         sleep(Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&[1, 2, 3]));
@@ -311,25 +265,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_subscribe() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            let observer = Arc::new(observer);
-            observer.notify_if_unterminated(Event::Next(1));
-            let observer_cloned = observer.clone();
+        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+            observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(2));
+                observer.on_next(2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_terminal(Terminal::<String>::Completed);
             });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
-                observer_cloned.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-            });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(3));
-            });
-            Subscription::new_non_disposal_action(observer)
+            Subscription::new_non_disposal_action()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
 
@@ -373,25 +317,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_operate() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            let observer = Arc::new(observer);
-            observer.notify_if_unterminated(Event::Next(1));
-            let observer_cloned = observer.clone();
+        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+            observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(2));
+                observer.on_next(2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_terminal(Terminal::<String>::Completed);
             });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
-                observer_cloned.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-            });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(3));
-            });
-            Subscription::new_non_disposal_action(observer)
+            Subscription::new_non_disposal_action()
         });
         let observable = observable.delay(Duration::from_millis(5), TokioScheduler);
         let observable = observable.delay(Duration::from_millis(5), TokioScheduler);
