@@ -1,11 +1,11 @@
 use super::Observable;
 use crate::{
-    observer::{anonymous_observer::AnonymousObserver, event::Event, Observer, Terminal},
+    observer::{anonymous_observer::AnonymousObserver, Terminal},
     subscription::Subscription,
 };
 
 /// Extension trait for `Observable`
-pub trait ObservableSubscribeExt<T, E, OR> {
+pub trait ObservableSubscribeExt<T, E, FN, FT> {
     /**
     Subscribes to the observable with the given `on_event` callback.
 
@@ -22,45 +22,18 @@ pub trait ObservableSubscribeExt<T, E, OR> {
     });
     ```
     */
-    fn subscribe_on(
-        self,
-        on_next: impl Fn(T),
-        on_terminal: impl FnOnce(Terminal<E>),
-    ) -> Subscription;
-
-    /**
-    Subscribes to the observable with the given `on_next` callback.
-
-    # Example
-    ```rust
-    use rx_rust::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
-    };
-    let observable = Just::new(123);
-    observable.subscribe_on_next(move |value: i32| {
-        println!("{:?}", value);
-    });
-    ```
-    */
-    fn subscribe_on_next(self, on_next: impl Fn(T)) -> Subscription;
+    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription;
 }
 
-impl<T, E, OR, OE> ObservableSubscribeExt<T, E, OR> for OE
+impl<T, E, FN, FT, OE> ObservableSubscribeExt<T, E, FN, FT> for OE
 where
-    OR: Observer<T, E>,
-    OE: Observable<T, E, OR>,
+    FN: FnMut(T),
+    FT: FnOnce(Terminal<E>),
+    OE: Observable<T, E, AnonymousObserver<FN, FT>>,
 {
-    fn subscribe_on(
-        self,
-        on_next: impl Fn(T),
-        on_terminal: impl FnOnce(Terminal<E>),
-    ) -> Subscription {
+    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription {
         let observer = AnonymousObserver::new(on_next, on_terminal);
         self.subscribe(observer)
-    }
-
-    fn subscribe_on_next(self, on_next: impl Fn(T)) -> Subscription {
-        self.subscribe_on(on_next, |_| {})
     }
 }
 
@@ -72,26 +45,20 @@ mod tests {
     };
 
     #[test]
-    fn test_on_event() {
+    fn test_subscribe_on() {
         let observable = Just::new(123);
         let checker = CheckingObserver::new();
-        let checker_cloned = checker.clone();
-        observable.subscribe_on_event(move |event| {
-            checker_cloned.notify_if_unterminated(event);
-        });
+        let mut checker_cloned_1 = checker.clone();
+        let checker_cloned_2 = checker.clone();
+        observable.subscribe_on(
+            move |value| {
+                checker_cloned_1.on_next(value);
+            },
+            move |terminal| {
+                checker_cloned_2.on_terminal(terminal);
+            },
+        );
         assert!(checker.is_values_matched(&[123]));
         assert!(checker.is_completed());
-    }
-
-    #[test]
-    fn test_on_next() {
-        let observable = Just::new(123);
-        let checker = CheckingObserver::<i32, String>::new();
-        let checker_cloned = checker.clone();
-        observable.subscribe_on_next(move |value| {
-            checker_cloned.notify_if_unterminated(Event::Next(value));
-        });
-        assert!(checker.is_values_matched(&[123]));
-        assert!(checker.is_unterminated());
     }
 }
