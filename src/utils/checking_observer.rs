@@ -1,4 +1,3 @@
-use crate::observer::event::Event;
 use crate::observer::{Observer, Terminal};
 use std::sync::{Arc, RwLock};
 

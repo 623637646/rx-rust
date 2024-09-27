@@ -1,5 +1,3 @@
-pub mod event;
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Terminal<E> {
     Completed,

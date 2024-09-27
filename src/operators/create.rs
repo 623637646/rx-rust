@@ -55,13 +55,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observer::{
-            event::{Event, Terminated},
-            Terminal,
-        },
-        utils::checking_observer::CheckingObserver,
-    };
+    use crate::{observer::Terminal, utils::checking_observer::CheckingObserver};
 
     #[test]
     fn test_completed() {
