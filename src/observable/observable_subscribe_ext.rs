@@ -1,6 +1,6 @@
 use super::Observable;
 use crate::{
-    observer::{anonymous_observer::AnonymousObserver, Terminal},
+    observer::{Observer, Terminal},
     subscription::Subscription,
 };
 
@@ -29,11 +29,33 @@ impl<T, E, FN, FT, OE> ObservableSubscribeExt<T, E, FN, FT> for OE
 where
     FN: FnMut(T),
     FT: FnOnce(Terminal<E>),
-    OE: Observable<T, E, AnonymousObserver<FN, FT>>,
+    OE: Observable<T, E, InternalObserver<FN, FT>>,
 {
     fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription {
-        let observer = AnonymousObserver::new(on_next, on_terminal);
+        let observer = InternalObserver {
+            on_next,
+            on_terminal,
+        };
         self.subscribe(observer)
+    }
+}
+
+struct InternalObserver<FN, FT> {
+    on_next: FN,
+    on_terminal: FT,
+}
+
+impl<T, E, FN, FT> Observer<T, E> for InternalObserver<FN, FT>
+where
+    FN: FnMut(T),
+    FT: FnOnce(Terminal<E>),
+{
+    fn on_next(&mut self, value: T) {
+        (self.on_next)(value);
+    }
+
+    fn on_terminal(self, terminal: Terminal<E>) {
+        (self.on_terminal)(terminal);
     }
 }
 

@@ -1,4 +1,3 @@
-pub mod anonymous_observer;
 pub mod event;
 pub mod observer_ext;
 
