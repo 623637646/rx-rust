@@ -1,9 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{
-        event::{Event, Terminated},
-        Observer,
-    },
+    observer::{Observer, Terminal},
     subscription::Subscription,
 };
 use std::convert::Infallible;
@@ -21,7 +18,6 @@ let observable = Just::new(123);
 observable.subscribe_on_event(|event: Event<i32, Infallible>| println!("event: {:?}", event));
 ```
  */
-
 #[derive(Clone)]
 pub struct Just<T> {
     value: T,
@@ -33,14 +29,15 @@ impl<T> Just<T> {
     }
 }
 
-impl<T> Observable<T, Infallible> for Just<T>
+impl<T, OR> Observable<T, Infallible, OR> for Just<T>
 where
-    T: Clone + Sync + Send + 'static,
+    T: Clone,
+    OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, observer: impl Observer<T, Infallible>) -> Subscription {
-        observer.notify_if_unterminated(Event::Next(self.value.clone()));
-        observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-        Subscription::new_non_disposal_action(observer)
+    fn subscribe(self, mut observer: OR) -> Subscription {
+        observer.on_next(self.value.clone());
+        Box::new(observer).on_terminal(Terminal::Completed);
+        Subscription::new_non_disposal_action()
     }
 }
 
