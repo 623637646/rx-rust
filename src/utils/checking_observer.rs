@@ -1,19 +1,19 @@
-use crate::observer::event::{Event, Terminated};
-use crate::observer::Observer;
+use crate::observer::event::Event;
+use crate::observer::{Observer, Terminal};
 use std::sync::{Arc, RwLock};
 
 /// A helper struct for testing observables.
 #[derive(Debug, Clone)]
 pub(crate) struct CheckingObserver<T, E> {
-    events: Arc<RwLock<Vec<Event<T, E>>>>,
-    terminated: Arc<RwLock<bool>>,
+    values: Arc<RwLock<Vec<T>>>,
+    terminal: Arc<RwLock<Option<Terminal<E>>>>,
 }
 
 impl<T, E> CheckingObserver<T, E> {
     pub(crate) fn new() -> Self {
         CheckingObserver {
-            events: Arc::new(RwLock::new(Vec::new())),
-            terminated: Arc::new(RwLock::new(false)),
+            values: Arc::new(RwLock::new(Vec::new())),
+            terminal: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -21,69 +21,38 @@ impl<T, E> CheckingObserver<T, E> {
     where
         T: PartialEq,
     {
-        let events = self.events.read().unwrap();
-        let values: Vec<&T> = events
-            .iter()
-            .filter_map(|event| match event {
-                Event::Next(value) => Some(value),
-                _ => None,
-            })
-            .collect();
-        values == expected.iter().collect::<Vec<_>>()
+        let values = self.values.read().unwrap();
+        *values == expected
     }
 
     pub(crate) fn is_unterminated(&self) -> bool {
-        let events = self.events.read().unwrap();
-        !matches!(events.last(), Some(Event::Terminated(_)))
+        let terminal = self.terminal.read().unwrap();
+        terminal.is_none()
     }
 
     pub(crate) fn is_error(&self, expected: E) -> bool
     where
         E: PartialEq,
     {
-        let events = self.events.read().unwrap();
-        if let Some(Event::Terminated(Terminated::Error(error))) = events.last() {
-            error == &expected
-        } else {
-            false
-        }
-    }
-
-    pub(crate) fn is_unsubscribed(&self) -> bool {
-        let events = self.events.read().unwrap();
-        matches!(
-            events.last(),
-            Some(Event::Terminated(Terminated::Unsubscribed))
-        )
+        let terminal = self.terminal.read().unwrap();
+        matches!(*terminal, Some(Terminal::Error(ref e)) if *e == expected)
     }
 
     pub(crate) fn is_completed(&self) -> bool {
-        let events = self.events.read().unwrap();
-        matches!(
-            events.last(),
-            Some(Event::Terminated(Terminated::Completed))
-        )
+        let terminal = self.terminal.read().unwrap();
+        matches!(*terminal, Some(Terminal::Completed))
     }
 }
 
-impl<T, E> Observer<T, E> for CheckingObserver<T, E>
-where
-    T: Sync + Send + 'static,
-    E: Sync + Send + 'static,
-{
-    fn on(&self, event: Event<T, E>) {
-        let mut events = self.events.write().unwrap();
-        if let Some(Event::Terminated(_)) = events.last() {
-            panic!("ObservableCounter is terminated");
-        }
-        events.push(event);
+impl<T, E> Observer<T, E> for CheckingObserver<T, E> {
+    fn on_next(&mut self, value: T) {
+        let mut values = self.values.write().unwrap();
+        values.push(value);
     }
 
-    fn terminated(&self) -> bool {
-        *self.terminated.read().unwrap()
-    }
-
-    fn set_terminated(&self, terminated: bool) {
-        *self.terminated.write().unwrap() = terminated;
+    fn on_terminal(self: Box<Self>, terminal: Terminal<E>) {
+        let mut terminal_lock = self.terminal.write().unwrap();
+        assert!(terminal_lock.is_none());
+        *terminal_lock = Some(terminal);
     }
 }
