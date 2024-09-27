@@ -1,19 +1,19 @@
 use crate::{
     observable::Observable,
-    observer::{anonymous_observer::AnonymousObserver, event::Event, Observer},
+    observer::{Observer, Terminal},
     subscription::Subscription,
 };
 use std::{marker::PhantomData, sync::Arc};
 
 /// This is an observable that maps the values of the source observable using a mapper function.
-pub struct Map<T, O, F> {
-    source: O,
+pub struct Map<TF, OE, F> {
+    source: OE,
     mapper: Arc<F>,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<TF>,
 }
 
-impl<T, O, F> Map<T, O, F> {
-    pub fn new(source: O, mapper: F) -> Map<T, O, F> {
+impl<TF, OE, F> Map<TF, OE, F> {
+    pub fn new(source: OE, mapper: F) -> Map<TF, OE, F> {
         Map {
             source,
             mapper: Arc::new(mapper),
@@ -22,9 +22,9 @@ impl<T, O, F> Map<T, O, F> {
     }
 }
 
-impl<T, O, F> Clone for Map<T, O, F>
+impl<TF, OE, F> Clone for Map<TF, OE, F>
 where
-    O: Clone,
+    OE: Clone,
 {
     fn clone(&self) -> Self {
         Map {
@@ -35,23 +35,43 @@ where
     }
 }
 
-impl<T, E, O, F, T2> Observable<T2, E> for Map<T, O, F>
+impl<TF, TT, E, OR, OE, F> Observable<TT, E, OR> for Map<TF, OE, F>
 where
-    T: Sync + Send + 'static,
-    F: Fn(T) -> T2 + Sync + Send + 'static,
-    O: Observable<T, E>,
+    OR: Observer<TT, E>,
+    OE: Observable<TF, E, InternalObserver<OR, F>>,
+    F: Fn(TF) -> TT,
 {
-    fn subscribe(self, observer: impl Observer<T2, E>) -> Subscription {
+    fn subscribe(self, observer: OR) -> Subscription {
         let mapper = self.mapper.clone();
-        let observer = AnonymousObserver::new(move |event: Event<T, E>| {
-            observer.notify_if_unterminated(event.map_value(|v| mapper(v)))
-        });
+        let observer = InternalObserver { observer, mapper };
         self.source.subscribe(observer)
     }
 }
 
+struct InternalObserver<OR, F> {
+    observer: OR,
+    mapper: Arc<F>,
+}
+
+impl<TF, TT, E, OR, F> Observer<TF, E> for InternalObserver<OR, F>
+where
+    OR: Observer<TT, E>,
+    F: Fn(TF) -> TT,
+{
+    fn on_next(&mut self, value: TF) {
+        self.observer.on_next((self.mapper)(value))
+    }
+
+    fn on_terminal(self, terminal: Terminal<E>) {
+        self.observer.on_terminal(terminal)
+    }
+}
+
 /// Make the `Observable` mappable.
-pub trait MappableObservable<T, E> {
+pub trait MappableObservable<TF, TT, E, OR, F>
+where
+    OR: Observer<TT, E>,
+{
     /**
     Maps the values of the source observable using a mapper function.
 
@@ -67,21 +87,24 @@ pub trait MappableObservable<T, E> {
     });
     ```
      */
-    fn map<T2>(self, f: impl Fn(T) -> T2 + Sync + Send + 'static) -> impl Observable<T2, E>;
+    fn map(self, f: F) -> impl Observable<TT, E, OR>; // TODO: return impl ... or Map?
 }
 
-impl<O, T, E> MappableObservable<T, E> for O
+impl<TF, TT, E, OR, F, OE> MappableObservable<TF, TT, E, OR, F> for OE
 where
-    O: Observable<T, E>,
-    T: Sync + Send + 'static,
+    OR: Observer<TT, E>,
+    OE: Observable<TF, E, InternalObserver<OR, F>>,
+    F: Fn(TF) -> TT,
 {
-    fn map<T2>(self, f: impl Fn(T) -> T2 + Sync + Send + 'static) -> impl Observable<T2, E> {
+    fn map(self, f: F) -> impl Observable<TT, E, OR> {
         Map::new(self, f)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::convert::Infallible;
+
     use super::*;
     use crate::{
         observer::event::Terminated,
@@ -101,11 +124,10 @@ mod tests {
 
     #[test]
     fn test_error() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(333));
-            observer
-                .notify_if_unterminated(Event::Terminated(Terminated::Error("error".to_owned())));
-            Subscription::new_non_disposal_action(observer)
+        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+            observer.on_next(333);
+            observer.on_terminal(Terminal::Error("error".to_owned()));
+            Subscription::new_non_disposal_action()
         });
         let observable = observable.map(|value| value.to_string());
         let checker = CheckingObserver::new();
@@ -115,28 +137,14 @@ mod tests {
     }
 
     #[test]
-    fn test_unsubscribed() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(333));
-            observer.notify_if_unterminated(Event::Next(444));
-            Subscription::new_non_disposal_action(observer)
-        });
-        let observable = observable.map(|value| value.to_string());
-        let checker = CheckingObserver::new();
-        observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
-        assert!(checker.is_unsubscribed());
-    }
-
-    #[test]
     fn test_unterminated() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(333));
-            observer.notify_if_unterminated(Event::Next(444));
-            Subscription::new_non_disposal_action(observer)
+        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+            observer.on_next(333);
+            observer.on_next(444);
+            Subscription::new_non_disposal_action()
         });
         let observable = observable.map(|value| value.to_string());
-        let checker = CheckingObserver::new();
+        let checker: CheckingObserver<String, String> = CheckingObserver::new();
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
         assert!(checker.is_unterminated());
@@ -172,25 +180,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_async() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            let observer = Arc::new(observer);
-            observer.notify_if_unterminated(Event::Next(1));
-            let observer_cloned = observer.clone();
+        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+            observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(2));
+                observer.on_next(2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_terminal(Terminal::<Infallible>::Completed);
             });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
-                observer_cloned.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-            });
-            let observer_cloned = observer.clone();
-            tokio::spawn(async move {
-                tokio::time::sleep(tokio::time::Duration::from_millis(30)).await;
-                observer_cloned.notify_if_unterminated(Event::Next(3));
-            });
-            Subscription::new_non_disposal_action(observer)
+            Subscription::new_non_disposal_action()
         })
         .map(|value| value.to_string())
         .map(|value| value + "?");
