@@ -1,4 +1,5 @@
 use super::Observable;
+use crate::observer::Observer;
 
 /**
 This trait is used to convert any type that implements `Observable` into `impl Observable<T, E>`.
@@ -20,16 +21,20 @@ observable.subscribe_on_next(|value| {
 ```
  */
 
-pub trait ObservableIntoExt<T, E> {
+pub trait ObservableIntoExt<T, E, OR>
+where
+    OR: Observer<T, E>,
+{
     /// Converts any type that implements `Observable` into `impl Observable<T, E>`.
-    fn into_observable(self) -> impl Observable<T, E>;
+    fn into_observable(self) -> impl Observable<T, E, OR>;
 }
 
-impl<T, E, O> ObservableIntoExt<T, E> for O
+impl<T, E, OR, OE> ObservableIntoExt<T, E, OR> for OE
 where
-    O: Observable<T, E>,
+    OR: Observer<T, E>,
+    OE: Observable<T, E, OR>,
 {
-    fn into_observable(self) -> impl Observable<T, E> {
+    fn into_observable(self) -> impl Observable<T, E, OR> {
         self
     }
 }
@@ -46,8 +51,8 @@ mod tests {
     #[test]
     fn test_normal() {
         let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(333));
-            observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
+            observer.on_next(333);
+            observer.on_complete();
             Subscription::new_non_disposal_action(observer)
         });
         let observable = observable.into_observable();

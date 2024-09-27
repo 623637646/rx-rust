@@ -1,11 +1,11 @@
 use super::Observable;
 use crate::{
-    observer::{anonymous_observer::AnonymousObserver, event::Event},
+    observer::{anonymous_observer::AnonymousObserver, event::Event, Observer, Terminal},
     subscription::Subscription,
 };
 
 /// Extension trait for `Observable`
-pub trait ObservableSubscribeExt<T, E> {
+pub trait ObservableSubscribeExt<T, E, OR> {
     /**
     Subscribes to the observable with the given `on_event` callback.
 
@@ -22,9 +22,10 @@ pub trait ObservableSubscribeExt<T, E> {
     });
     ```
     */
-    fn subscribe_on_event(
+    fn subscribe_on(
         self,
-        on_event: impl Fn(Event<T, E>) + Sync + Send + 'static,
+        on_next: impl Fn(T),
+        on_terminal: impl FnOnce(Terminal<E>),
     ) -> Subscription;
 
     /**
@@ -41,26 +42,25 @@ pub trait ObservableSubscribeExt<T, E> {
     });
     ```
     */
-    fn subscribe_on_next(self, on_next: impl Fn(T) + Sync + Send + 'static) -> Subscription;
+    fn subscribe_on_next(self, on_next: impl Fn(T)) -> Subscription;
 }
 
-impl<T, E, O> ObservableSubscribeExt<T, E> for O
+impl<T, E, OR, OE> ObservableSubscribeExt<T, E, OR> for OE
 where
-    O: Observable<T, E>,
+    OR: Observer<T, E>,
+    OE: Observable<T, E, OR>,
 {
-    fn subscribe_on_event(
+    fn subscribe_on(
         self,
-        on_event: impl Fn(Event<T, E>) + Sync + Send + 'static,
+        on_next: impl Fn(T),
+        on_terminal: impl FnOnce(Terminal<E>),
     ) -> Subscription {
-        let observer = AnonymousObserver::new(on_event);
+        let observer = AnonymousObserver::new(on_next, on_terminal);
         self.subscribe(observer)
     }
 
-    fn subscribe_on_next(self, on_next: impl Fn(T) + Sync + Send + 'static) -> Subscription {
-        self.subscribe_on_event(move |event| match event {
-            Event::Next(value) => on_next(value),
-            Event::Terminated(_) => {}
-        })
+    fn subscribe_on_next(self, on_next: impl Fn(T)) -> Subscription {
+        self.subscribe_on(on_next, |_| {})
     }
 }
 

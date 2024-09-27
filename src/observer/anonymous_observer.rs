@@ -1,5 +1,4 @@
-use super::{Event, Observer};
-use std::sync::RwLock;
+use super::{Observer, Terminal};
 
 /**
 An observer that wraps a closure.
@@ -19,33 +18,30 @@ observable.subscribe(observer);
 ```
 */
 
-pub struct AnonymousObserver<F> {
-    received_event: F,
-    terminated: RwLock<bool>,
+pub struct AnonymousObserver<FN, FT> {
+    on_next: FN,
+    on_terminal: FT,
 }
 
-impl<F> AnonymousObserver<F> {
-    pub fn new(on_event: F) -> AnonymousObserver<F> {
+impl<FN, FT> AnonymousObserver<FN, FT> {
+    pub fn new(on_next: FN, on_terminal: FT) -> AnonymousObserver<FN, FT> {
         AnonymousObserver {
-            received_event: on_event,
-            terminated: RwLock::new(false),
+            on_next,
+            on_terminal,
         }
     }
 }
 
-impl<T, E, F> Observer<T, E> for AnonymousObserver<F>
+impl<T, E, FN, FT> Observer<T, E> for AnonymousObserver<FN, FT>
 where
-    F: Fn(Event<T, E>) + Sync + Send + 'static,
+    FN: Fn(T),
+    FT: FnOnce(Terminal<E>),
 {
-    fn on(&self, event: Event<T, E>) {
-        (self.received_event)(event);
+    fn on_next(&self, value: T) {
+        (self.on_next)(value);
     }
 
-    fn terminated(&self) -> bool {
-        *self.terminated.read().unwrap()
-    }
-
-    fn set_terminated(&self, terminated: bool) {
-        *self.terminated.write().unwrap() = terminated;
+    fn on_terminal(self: Box<Self>, terminal: Terminal<E>) {
+        (self.on_terminal)(terminal);
     }
 }
