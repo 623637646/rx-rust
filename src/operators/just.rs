@@ -36,7 +36,7 @@ where
 {
     fn subscribe(self, mut observer: OR) -> Subscription {
         observer.on_next(self.value.clone());
-        Box::new(observer).on_terminal(Terminal::Completed);
+        observer.on_terminal(Terminal::Completed);
         Subscription::new_non_disposal_action()
     }
 }

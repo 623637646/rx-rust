@@ -1,9 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{
-        event::{Event, Terminated},
-        Observer,
-    },
+    observer::{Observer, Terminal},
     subscription::Subscription,
 };
 use std::convert::Infallible;
@@ -21,7 +18,6 @@ let observable = Throw::new("My error");
 observable.subscribe_on_event(|event: Event<Infallible, &str>| println!("event: {:?}", event));
 ```
  */
-
 #[derive(Clone)]
 pub struct Throw<E> {
     error: E,
@@ -33,13 +29,14 @@ impl<E> Throw<E> {
     }
 }
 
-impl<E> Observable<Infallible, E> for Throw<E>
+impl<E, OR> Observable<Infallible, E, OR> for Throw<E>
 where
-    E: Clone + Sync + Send + 'static,
+    E: Clone,
+    OR: Observer<Infallible, E>,
 {
-    fn subscribe(self, observer: impl Observer<Infallible, E>) -> Subscription {
-        observer.notify_if_unterminated(Event::Terminated(Terminated::Error(self.error.clone())));
-        Subscription::new_non_disposal_action(observer)
+    fn subscribe(self, observer: OR) -> Subscription {
+        observer.on_terminal(Terminal::Error(self.error.clone()));
+        Subscription::new_non_disposal_action()
     }
 }
 
