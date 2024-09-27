@@ -42,12 +42,13 @@ impl<F> Clone for Create<F> {
     }
 }
 
-impl<T, E, F> Observable<T, E> for Create<F>
+impl<T, E, OR, F> Observable<T, E, OR> for Create<F>
 where
-    F: Fn(Box<dyn Observer<T, E>>) -> Subscription + Sync + Send + 'static,
+    OR: Observer<T, E>,
+    F: Fn(OR) -> Subscription,
 {
-    fn subscribe(self, observer: impl Observer<T, E>) -> Subscription {
-        (self.subscribe_handler)(Box::new(observer))
+    fn subscribe(self, observer: OR) -> Subscription {
+        (self.subscribe_handler)(observer)
     }
 }
 
@@ -55,16 +56,19 @@ where
 mod tests {
     use super::*;
     use crate::{
-        observer::event::{Event, Terminated},
+        observer::{
+            event::{Event, Terminated},
+            Terminal,
+        },
         utils::checking_observer::CheckingObserver,
     };
 
     #[test]
     fn test_completed() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(333));
-            observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-            Subscription::new_non_disposal_action(observer)
+        let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
+            observer.on_next(333);
+            observer.on_terminal(Terminal::Completed);
+            Subscription::new_non_disposal_action()
         });
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
@@ -74,11 +78,11 @@ mod tests {
 
     #[test]
     fn test_error() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, &'static str>>| {
-            observer.notify_if_unterminated(Event::Next(33));
-            observer.notify_if_unterminated(Event::Next(44));
-            observer.notify_if_unterminated(Event::Terminated(Terminated::Error("error")));
-            Subscription::new_non_disposal_action(observer)
+        let observable = Create::new(|mut observer: CheckingObserver<i32, &'static str>| {
+            observer.on_next(33);
+            observer.on_next(44);
+            observer.on_terminal(Terminal::Error("error"));
+            Subscription::new_non_disposal_action()
         });
 
         let checker = CheckingObserver::new();
@@ -88,25 +92,10 @@ mod tests {
     }
 
     #[test]
-    fn test_unsubscribed() {
-        let checker: CheckingObserver<i32, String> = CheckingObserver::new();
-        {
-            let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-                observer.notify_if_unterminated(Event::Next(1));
-                observer.notify_if_unterminated(Event::Next(2));
-                Subscription::new_non_disposal_action(observer)
-            });
-            observable.subscribe(checker.clone());
-        }
-        assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unsubscribed());
-    }
-
-    #[test]
     fn test_unterminated() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(1));
-            Subscription::new_non_disposal_action(observer)
+        let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
+            observer.on_next(1);
+            Subscription::new_non_disposal_action()
         });
 
         let checker = CheckingObserver::new();
@@ -118,10 +107,10 @@ mod tests {
 
     #[test]
     fn test_multiple_subscribe() {
-        let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-            observer.notify_if_unterminated(Event::Next(333));
-            observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-            Subscription::new_non_disposal_action(observer)
+        let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
+            observer.on_next(333);
+            observer.on_terminal(Terminal::Completed);
+            Subscription::new_non_disposal_action()
         });
 
         let checker = CheckingObserver::new();

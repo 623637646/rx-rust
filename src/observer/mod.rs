@@ -14,7 +14,7 @@ pub enum Terminal<E> {
 /// The observer must be Sync and Send because it will be used in multiple threads. See Scheduler usage in delay.rs.
 /// The observer must be 'static because it will be stored in Subscription or hot observables.
 pub trait Observer<T, E> {
-    fn on_next(&self, value: T);
+    fn on_next(&mut self, value: T);
 
-    fn on_terminal(self: Box<Self>, terminal: Terminal<E>); // TODO: Use Box?
+    fn on_terminal(self, terminal: Terminal<E>);
 }

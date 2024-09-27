@@ -34,14 +34,14 @@ impl<FN, FT> AnonymousObserver<FN, FT> {
 
 impl<T, E, FN, FT> Observer<T, E> for AnonymousObserver<FN, FT>
 where
-    FN: Fn(T),
+    FN: FnMut(T),
     FT: FnOnce(Terminal<E>),
 {
-    fn on_next(&self, value: T) {
+    fn on_next(&mut self, value: T) {
         (self.on_next)(value);
     }
 
-    fn on_terminal(self: Box<Self>, terminal: Terminal<E>) {
+    fn on_terminal(self, terminal: Terminal<E>) {
         (self.on_terminal)(terminal);
     }
 }

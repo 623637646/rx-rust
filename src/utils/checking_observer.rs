@@ -50,7 +50,7 @@ impl<T, E> Observer<T, E> for CheckingObserver<T, E> {
         values.push(value);
     }
 
-    fn on_terminal(self: Box<Self>, terminal: Terminal<E>) {
+    fn on_terminal(self, terminal: Terminal<E>) {
         let mut terminal_lock = self.terminal.write().unwrap();
         assert!(terminal_lock.is_none());
         *terminal_lock = Some(terminal);
