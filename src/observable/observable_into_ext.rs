@@ -52,7 +52,7 @@ mod tests {
         let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
             observer.on_next(333);
             observer.on_terminal(Terminal::Completed);
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.into_observable();
         let checker = CheckingObserver::new();
@@ -66,7 +66,7 @@ mod tests {
         let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
             observer.on_next(333);
             observer.on_terminal(Terminal::Completed);
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.into_observable();
         let observable = observable.into_observable();

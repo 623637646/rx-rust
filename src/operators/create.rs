@@ -17,7 +17,7 @@ let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
     observer.notify_if_unterminated(Event::Next(2));
     observer.notify_if_unterminated(Event::Next(3));
     observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-    Subscription::new_non_disposal_action(observer)
+    Subscription::new_empty(observer)
 });
 observable.subscribe_on_event(|event: Event<i32, String>| println!("event: {:?}", event));
 ```
@@ -62,7 +62,7 @@ mod tests {
         let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
             observer.on_next(333);
             observer.on_terminal(Terminal::Completed);
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
@@ -76,7 +76,7 @@ mod tests {
             observer.on_next(33);
             observer.on_next(44);
             observer.on_terminal(Terminal::Error("error"));
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
 
         let checker = CheckingObserver::new();
@@ -89,7 +89,7 @@ mod tests {
     fn test_unterminated() {
         let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
             observer.on_next(1);
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
 
         let checker = CheckingObserver::new();
@@ -104,7 +104,7 @@ mod tests {
         let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
             observer.on_next(333);
             observer.on_terminal(Terminal::Completed);
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
 
         let checker = CheckingObserver::new();

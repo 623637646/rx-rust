@@ -126,7 +126,7 @@ mod tests {
         let observable = Create::new(|mut observer: InternalObserver<_, _>| {
             observer.on_next(333);
             observer.on_terminal(Terminal::Error("error".to_owned()));
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.map(|value| value.to_string());
         let checker = CheckingObserver::new();
@@ -140,7 +140,7 @@ mod tests {
         let observable = Create::new(|mut observer: InternalObserver<_, _>| {
             observer.on_next(333);
             observer.on_next(444);
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.map(|value| value.to_string());
         let checker: CheckingObserver<String, String> = CheckingObserver::new();
@@ -187,7 +187,7 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<Infallible>::Completed);
             });
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         })
         .map(|value| value.to_string())
         .map(|value| value + "?");

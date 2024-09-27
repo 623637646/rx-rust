@@ -167,7 +167,7 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
@@ -203,7 +203,7 @@ mod tests {
                 observer.on_next(3);
                 observer.on_terminal(Terminal::Error("error".to_string()));
             });
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
@@ -238,7 +238,7 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(3);
             });
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker: CheckingObserver<i32, String> = CheckingObserver::new();
@@ -273,7 +273,7 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
 
@@ -325,7 +325,7 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_non_disposal_action()
+            Subscription::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(5), TokioScheduler);
         let observable = observable.delay(Duration::from_millis(5), TokioScheduler);
