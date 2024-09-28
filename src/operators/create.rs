@@ -1,5 +1,4 @@
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
-use std::sync::Arc;
 
 /**
 This is an observable that emits the values provided by the subscribe_handler function.
@@ -22,32 +21,23 @@ let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
 observable.subscribe_on_event(|event: Event<i32, String>| println!("event: {:?}", event));
 ```
 */
+#[derive(Clone)]
 pub struct Create<F> {
-    subscribe_handler: Arc<F>,
+    subscribe_handler: F,
 }
 
 impl<F> Create<F> {
     pub fn new(subscribe_handler: F) -> Create<F> {
-        Create {
-            subscribe_handler: Arc::new(subscribe_handler),
-        }
-    }
-}
-
-impl<F> Clone for Create<F> {
-    fn clone(&self) -> Self {
-        Create {
-            subscribe_handler: self.subscribe_handler.clone(),
-        }
+        Create { subscribe_handler }
     }
 }
 
 impl<T, E, OR, F> Observable<T, E, OR> for Create<F>
 where
     OR: Observer<T, E>,
-    F: Fn(OR) -> Subscription,
+    F: FnMut(OR) -> Subscription + Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription {
+    fn subscribe(mut self, observer: OR) -> Subscription {
         (self.subscribe_handler)(observer)
     }
 }

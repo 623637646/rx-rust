@@ -3,12 +3,12 @@ use crate::{
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
-use std::{marker::PhantomData, sync::Arc};
+use std::marker::PhantomData;
 
 /// This is an observable that maps the values of the source observable using a mapper function.
 pub struct Map<TF, OE, F> {
     source: OE,
-    mapper: Arc<F>,
+    mapper: F,
     _marker: PhantomData<TF>,
 }
 
@@ -16,7 +16,7 @@ impl<TF, OE, F> Map<TF, OE, F> {
     pub fn new(source: OE, mapper: F) -> Map<TF, OE, F> {
         Map {
             source,
-            mapper: Arc::new(mapper),
+            mapper,
             _marker: PhantomData,
         }
     }
@@ -25,6 +25,7 @@ impl<TF, OE, F> Map<TF, OE, F> {
 impl<TF, OE, F> Clone for Map<TF, OE, F>
 where
     OE: Clone,
+    F: Clone,
 {
     fn clone(&self) -> Self {
         Map {
@@ -39,7 +40,7 @@ impl<TF, TT, E, OR, OE, F> Observable<TT, E, OR> for Map<TF, OE, F>
 where
     OR: Observer<TT, E>,
     OE: Observable<TF, E, InternalObserver<OR, F>>,
-    F: Fn(TF) -> TT,
+    F: FnMut(TF) -> TT + Clone,
 {
     fn subscribe(self, observer: OR) -> Subscription {
         let mapper = self.mapper.clone();
@@ -50,13 +51,13 @@ where
 
 struct InternalObserver<OR, F> {
     observer: OR,
-    mapper: Arc<F>,
+    mapper: F,
 }
 
 impl<TF, TT, E, OR, F> Observer<TF, E> for InternalObserver<OR, F>
 where
     OR: Observer<TT, E>,
-    F: Fn(TF) -> TT,
+    F: FnMut(TF) -> TT,
 {
     fn on_next(&mut self, value: TF) {
         self.observer.on_next((self.mapper)(value))
@@ -94,7 +95,7 @@ impl<TF, TT, E, OR, F, OE> MappableObservable<TF, TT, E, OR, F> for OE
 where
     OR: Observer<TT, E>,
     OE: Observable<TF, E, InternalObserver<OR, F>>,
-    F: Fn(TF) -> TT,
+    F: FnMut(TF) -> TT + Clone,
 {
     fn map(self, f: F) -> impl Observable<TT, E, OR> {
         Map::new(self, f)
