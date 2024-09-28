@@ -44,11 +44,11 @@ where
     T: Send + 'static,
     E: Send + 'static,
     OR: Observer<T, E> + Send + 'static,
-    OE: Observable<T, E, InternalObserver<OR, S>>,
+    OE: Observable<T, E, DelayObserver<OR, S>>,
     S: Scheduler,
 {
     fn subscribe(self, observer: OR) -> Subscription {
-        let internal_observer = InternalObserver {
+        let internal_observer = DelayObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             delay: self.delay,
             scheduler: self.scheduler.clone(),
@@ -57,13 +57,13 @@ where
     }
 }
 
-struct InternalObserver<OR, S> {
+pub struct DelayObserver<OR, S> {
     observer: Arc<Mutex<Option<OR>>>,
     delay: Duration,
     scheduler: Arc<S>,
 }
 
-impl<T, E, OR, S> Observer<T, E> for InternalObserver<OR, S>
+impl<T, E, OR, S> Observer<T, E> for DelayObserver<OR, S>
 where
     T: Send + 'static,
     E: Send + 'static,
@@ -139,7 +139,7 @@ where
     T: Send + 'static,
     E: Send + 'static,
     OR: Observer<T, E> + Send + 'static,
-    OE: Observable<T, E, InternalObserver<OR, S>>,
+    OE: Observable<T, E, DelayObserver<OR, S>>,
     S: Scheduler,
 {
     fn delay(self, delay: Duration, scheduler: S) -> impl Observable<T, E, OR> {
@@ -159,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_completed() {
-        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -194,7 +194,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_error() {
-        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -230,7 +230,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unterminated() {
-        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -265,7 +265,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_subscribe() {
-        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -317,7 +317,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiple_operate() {
-        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;

@@ -39,22 +39,22 @@ where
 impl<TF, TT, E, OR, OE, F> Observable<TT, E, OR> for Map<TF, OE, F>
 where
     OR: Observer<TT, E>,
-    OE: Observable<TF, E, InternalObserver<OR, F>>,
+    OE: Observable<TF, E, MapObserver<OR, F>>,
     F: FnMut(TF) -> TT + Clone,
 {
     fn subscribe(self, observer: OR) -> Subscription {
         let mapper = self.mapper.clone();
-        let observer = InternalObserver { observer, mapper };
+        let observer = MapObserver { observer, mapper };
         self.source.subscribe(observer)
     }
 }
 
-struct InternalObserver<OR, F> {
+pub struct MapObserver<OR, F> {
     observer: OR,
     mapper: F,
 }
 
-impl<TF, TT, E, OR, F> Observer<TF, E> for InternalObserver<OR, F>
+impl<TF, TT, E, OR, F> Observer<TF, E> for MapObserver<OR, F>
 where
     OR: Observer<TT, E>,
     F: FnMut(TF) -> TT,
@@ -94,7 +94,7 @@ where
 impl<TF, TT, E, OR, F, OE> MappableObservable<TF, TT, E, OR, F> for OE
 where
     OR: Observer<TT, E>,
-    OE: Observable<TF, E, InternalObserver<OR, F>>,
+    OE: Observable<TF, E, MapObserver<OR, F>>,
     F: FnMut(TF) -> TT + Clone,
 {
     fn map(self, f: F) -> impl Observable<TT, E, OR> {
@@ -124,12 +124,12 @@ mod tests {
 
     #[test]
     fn test_error() {
-        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_terminal(Terminal::Error("error".to_owned()));
             Subscription::new_empty()
         });
-        let observable = observable.map(|value| value.to_string());
+        let observable = observable.map(|value: i32| value.to_string());
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&["333".to_owned()]));
@@ -138,12 +138,12 @@ mod tests {
 
     #[test]
     fn test_unterminated() {
-        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_next(444);
             Subscription::new_empty()
         });
-        let observable = observable.map(|value| value.to_string());
+        let observable = observable.map(|value: i32| value.to_string());
         let checker: CheckingObserver<String, String> = CheckingObserver::new();
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
@@ -180,7 +180,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_async() {
-        let observable = Create::new(|mut observer: InternalObserver<_, _>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(1);
             tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -190,7 +190,7 @@ mod tests {
             });
             Subscription::new_empty()
         })
-        .map(|value| value.to_string())
+        .map(|value: i32| value.to_string())
         .map(|value| value + "?");
         let checker = CheckingObserver::new();
         let subscription = observable.subscribe(checker.clone());

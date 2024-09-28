@@ -49,9 +49,9 @@ mod tests {
 
     #[test]
     fn test_normal() {
-        let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(333);
-            observer.on_terminal(Terminal::Completed);
+            observer.on_terminal(Terminal::<String>::Completed);
             Subscription::new_empty()
         });
         let observable = observable.into_observable();
@@ -63,9 +63,9 @@ mod tests {
 
     #[test]
     fn test_multiple() {
-        let observable = Create::new(|mut observer: CheckingObserver<i32, String>| {
+        let observable = Create::new(|mut observer| {
             observer.on_next(333);
-            observer.on_terminal(Terminal::Completed);
+            observer.on_terminal(Terminal::<String>::Completed);
             Subscription::new_empty()
         });
         let observable = observable.into_observable();

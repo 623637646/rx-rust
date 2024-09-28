@@ -29,10 +29,10 @@ impl<T, E, FN, FT, OE> ObservableSubscribeExt<T, E, FN, FT> for OE
 where
     FN: FnMut(T),
     FT: FnOnce(Terminal<E>),
-    OE: Observable<T, E, InternalObserver<FN, FT>>,
+    OE: Observable<T, E, ObservableSubscribeExtObserver<FN, FT>>,
 {
     fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription {
-        let observer = InternalObserver {
+        let observer = ObservableSubscribeExtObserver {
             on_next,
             on_terminal,
         };
@@ -40,12 +40,12 @@ where
     }
 }
 
-struct InternalObserver<FN, FT> {
+pub struct ObservableSubscribeExtObserver<FN, FT> {
     on_next: FN,
     on_terminal: FT,
 }
 
-impl<T, E, FN, FT> Observer<T, E> for InternalObserver<FN, FT>
+impl<T, E, FN, FT> Observer<T, E> for ObservableSubscribeExtObserver<FN, FT>
 where
     FN: FnMut(T),
     FT: FnOnce(Terminal<E>),
