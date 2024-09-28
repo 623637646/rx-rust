@@ -15,11 +15,16 @@ pub trait ObservableSubscribeExt<T, E, FN, FT> {
         observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
     };
     use std::convert::Infallible;
-    use rx_rust::observer::event::Event;
+    use rx_rust::observer::Terminal;
     let observable = Just::new(123);
-    observable.subscribe_on_event(move |event: Event<i32, Infallible>| {
-        println!("{:?}", event);
-    });
+    observable.subscribe_on(
+        move |value: i32| {
+            println!("Next value: {}", value);
+        },
+        move |terminal: Terminal<Infallible>| {
+            println!("Terminal event: {:?}", terminal);
+        }
+    );
     ```
     */
     fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription;

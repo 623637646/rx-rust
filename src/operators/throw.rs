@@ -13,9 +13,12 @@ This is an observable that emits an error.
 use rx_rust::operators::throw::Throw;
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 use std::convert::Infallible;
-use rx_rust::observer::event::Event;
+use rx_rust::observer::Terminal;
 let observable = Throw::new("My error");
-observable.subscribe_on_event(|event: Event<Infallible, &str>| println!("event: {:?}", event));
+observable.subscribe_on(
+    |_| {},
+    |terminal: Terminal<&str>| println!("Terminal event: {:?}", terminal)
+);
 ```
  */
 #[derive(Clone)]

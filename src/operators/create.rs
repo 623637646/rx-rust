@@ -11,19 +11,21 @@ This is an observable that emits the values provided by the subscribe_handler fu
 # Example
 ```rust
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-use rx_rust::observer::event::Event;
 use rx_rust::observer::Observer;
 use rx_rust::subscription::Subscription;
-use rx_rust::observer::event::Terminated;
 use rx_rust::operators::create::Create;
-let observable = Create::new(|observer: Box<dyn Observer<i32, String>>| {
-    observer.notify_if_unterminated(Event::Next(1));
-    observer.notify_if_unterminated(Event::Next(2));
-    observer.notify_if_unterminated(Event::Next(3));
-    observer.notify_if_unterminated(Event::Terminated(Terminated::Completed));
-    Subscription::new_empty(observer)
+use rx_rust::observer::Terminal;
+let observable = Create::new(|mut observer| {
+    observer.on_next(1);
+    observer.on_next(2);
+    observer.on_next(3);
+    observer.on_terminal(Terminal::Completed);
+    Subscription::new_empty()
 });
-observable.subscribe_on_event(|event: Event<i32, String>| println!("event: {:?}", event));
+observable.subscribe_on(
+    move |value| println!("value: {}", value),
+    move |terminal: Terminal<String>| println!("terminal: {:?}", terminal),
+);
 ```
 */
 pub struct Create<F, OR> {

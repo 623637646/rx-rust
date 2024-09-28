@@ -13,9 +13,12 @@ This is an observable that emits a single value then completes.
 use rx_rust::operators::just::Just;
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 use std::convert::Infallible;
-use rx_rust::observer::event::Event;
+use rx_rust::observer::Terminal;
 let observable = Just::new(123);
-observable.subscribe_on_event(|event: Event<i32, Infallible>| println!("event: {:?}", event));
+observable.subscribe_on(
+    |value| println!("Next value: {}", value),
+    |terminal: Terminal<Infallible>| println!("Terminal event: {:?}", terminal)
+);
 ```
  */
 #[derive(Clone)]

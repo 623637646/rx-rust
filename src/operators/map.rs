@@ -81,11 +81,17 @@ where
     use rx_rust::operators::just::Just;
     use rx_rust::operators::map::MappableObservable;
     use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+    use rx_rust::observer::Terminal;
     let observable = Just::new(333);
     let observable = observable.map(|value| (value * 3).to_string());
-    observable.subscribe_on_event(|event| {
-        println!("{:?}", event);
-    });
+    observable.subscribe_on(
+        |value| {
+            println!("Next value: {}", value);
+        },
+        |terminal| {
+            println!("Terminal event: {:?}", terminal);
+        }
+    );
     ```
      */
     fn map(self, f: F) -> impl Observable<TT, E, OR>; // TODO: return impl ... or Map?
