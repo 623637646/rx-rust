@@ -9,7 +9,7 @@ use std::{
     time::Duration,
 };
 
-/// This is an observable that delays the next value and completed events from the source observable by a duration. The error and unsubscribed events will post immediately.
+/// This is an observable that delays the next value and completed events from the source observable by a duration. The error will post immediately.
 pub struct Delay<OE, S> {
     source: OE,
     delay: Duration,

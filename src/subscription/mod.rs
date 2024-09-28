@@ -4,12 +4,7 @@ Subscription is from Observable pattern, it is used to unsubscribe the observabl
 # Example
 ```rust
 use rx_rust::subscription::Subscription;
-use rx_rust::observer::event::Event;
-use rx_rust::observer::anonymous_observer::AnonymousObserver;
-let observer = AnonymousObserver::new(|event: Event<i32, String>| {
-    println!("{:?}", event);
-});
-let subscription = Subscription::new(observer, move || {
+let subscription = Subscription::new(move || {
     println!("Clean up");
 });
 subscription.unsubscribe();
