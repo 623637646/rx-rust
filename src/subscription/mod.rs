@@ -15,9 +15,8 @@ pub struct Subscription {
 }
 
 impl Subscription {
-    /// Create a new Subscription with the observer and disposal_action.
-    /// The observer will be notified with Event::Terminated(Terminated::Unsubscribed) if it's unterminated when the subscription is unsubscribed or dropped.
-    /// The disposal_action will be called when the subscription is unsubscribed or dropped.
+    /// Create a new Subscription with a disposal action.
+    /// The dispose will be called when the subscription is unsubscribed or dropped.
     pub fn new<F>(dispose: F) -> Subscription
     where
         F: FnOnce() + 'static,
@@ -27,8 +26,7 @@ impl Subscription {
         }
     }
 
-    /// Create a new Subscription with the observer.
-    /// The observer will be notified with Event::Terminated(Terminated::Unsubscribed) if it's unterminated when the subscription is unsubscribed or dropped.
+    /// Create a new empty Subscription. No action will be performed when the subscription is unsubscribed or dropped.
     pub fn new_empty() -> Subscription {
         Subscription { dispose: None }
     }

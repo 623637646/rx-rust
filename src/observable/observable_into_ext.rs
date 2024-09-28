@@ -1,31 +1,32 @@
 use super::Observable;
 use crate::observer::Observer;
 
-/**
-This trait is used to convert any type that implements `Observable` into `impl Observable<T, E>`.
-
-# Example
-```rust
-use rx_rust::{
-    observable::{
-        observable_into_ext::ObservableIntoExt,
-        observable_subscribe_ext::ObservableSubscribeExt,
-    },
-    operators::just::Just,
-};
-let observable = Just::new(123);
-let observable = observable.into_observable();
-observable.subscribe_on_next(|value| {
-    println!("value: {}", value);
-});
-```
- */
-
 pub trait ObservableIntoExt<T, E, OR>
 where
     OR: Observer<T, E>,
 {
-    /// Converts any type that implements `Observable` into `impl Observable<T, E>`.
+    /// Converts any type that implements `Observable` into `impl Observable<T, E, OR>`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use rx_rust::{
+    ///     observable::{
+    ///         observable_into_ext::ObservableIntoExt,
+    ///         observable_subscribe_ext::ObservableSubscribeExt,
+    ///     },
+    ///     operators::just::Just,
+    /// };
+    /// let observable = Just::new(123);
+    /// let observable = observable.into_observable();
+    /// observable.subscribe_on(
+    ///     move |value| {
+    ///         println!("value: {}", value);
+    ///     },
+    ///     move |terminal| {
+    ///         println!("terminal: {:?}", terminal);
+    ///     },
+    /// );
+    /// ```
     fn into_observable(self) -> impl Observable<T, E, OR>;
 }
 

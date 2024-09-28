@@ -66,7 +66,7 @@ where
     }
 }
 
-/** Using CreateObserver<OR> instead of directly using OR to make Create more easy to use.
+/** Using `CreateObserver<OR>` instead of directly using `OR` to make `Create` more easy to use.
 Other wise, this code can't be compiled:
 ```rust
 use rx_rust::operators::create::Create;
