@@ -66,8 +66,8 @@ mod tests {
             tx.send(()).unwrap();
         };
         let start_time = tokio::time::Instant::now();
-        let disposal = scheduler.schedule(task, None);
-        disposal();
+        let handle = scheduler.schedule(task, None);
+        handle();
         assert!(rx.await.is_err());
         let elapsed_time = start_time.elapsed();
         assert!(

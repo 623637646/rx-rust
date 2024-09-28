@@ -7,7 +7,7 @@ use crate::{
 /// Extension trait for `Observable`
 pub trait ObservableSubscribeExt<T, E, FN, FT> {
     /**
-    Subscribes to the observable with the given `on_event` callback.
+    Subscribes to the observable with the given `on_next` and `on_terminal` callbacks.
 
     # Example
     ```rust

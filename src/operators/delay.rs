@@ -112,7 +112,7 @@ where
     OR: Observer<T, E>,
 {
     /**
-    Delay the events from the source observable by a duration.
+    Delay the next value and completed events from the source observable by a duration. The error will post immediately.
 
     # Example
     ```rust

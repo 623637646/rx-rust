@@ -5,8 +5,6 @@ pub enum Terminal<E> {
 }
 
 /// An `Observer` is a type that can receive events from an `Observable`.
-/// The observer must be Sync and Send because it will be used in multiple threads. See Scheduler usage in delay.rs.
-/// The observer must be 'static because it will be stored in Subscription or hot observables.
 pub trait Observer<T, E> {
     fn on_next(&mut self, value: T);
 
