@@ -46,16 +46,8 @@ impl Subscription {
 
 impl Drop for Subscription {
     fn drop(&mut self) {
-        // This code causes tarpaulin wrong coverage report. For more details, see: https://github.com/xd009642/tarpaulin/issues/1624
-        // if let Some(action) = self.action.take() {
-        //     action();
-        // }
-        // This code is a workaround for the issue above.
-        match self.dispose.take() {
-            Some(dispose) => dispose(),
-            None => {
-                // Do nothing, using this pattern to avoid clippy warning.
-            }
+        if let Some(dispose) = self.dispose.take() {
+            dispose();
         }
     }
 }
