@@ -2,7 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
     scheduler::Scheduler,
-    subscription::Subscription,
+    subscriber::Subscriber,
 };
 use std::{
     sync::{Arc, Mutex},
@@ -47,7 +47,7 @@ where
     OE: Observable<T, E, DelayObserver<OR, S>>,
     S: Scheduler,
 {
-    fn subscribe(self, observer: OR) -> Subscription {
+    fn subscribe(self, observer: OR) -> Subscriber {
         let internal_observer = DelayObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             delay: self.delay,
@@ -172,11 +172,11 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
-        let subscription = observable.subscribe(checker.clone());
+        let subscriber = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
         sleep(Duration::from_millis(5)).await;
@@ -194,7 +194,7 @@ mod tests {
         sleep(Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&[1, 2]));
         assert!(checker.is_completed());
-        _ = subscription; // keep the subscription alive
+        _ = subscriber; // keep the subscriber alive
     }
 
     #[tokio::test]
@@ -208,11 +208,11 @@ mod tests {
                 observer.on_next(3);
                 observer.on_terminal(Terminal::Error("error".to_string()));
             });
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
-        let subscription = observable.subscribe(checker.clone());
+        let subscriber = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
         sleep(Duration::from_millis(5)).await;
@@ -230,7 +230,7 @@ mod tests {
         sleep(Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&[1, 2]));
         assert!(checker.is_error("error".to_owned()));
-        _ = subscription; // keep the subscription alive
+        _ = subscriber; // keep the subscriber alive
     }
 
     #[tokio::test]
@@ -243,11 +243,11 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(3);
             });
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker: CheckingObserver<i32, String> = CheckingObserver::new();
-        let subscription = observable.subscribe(checker.clone());
+        let subscriber = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
         sleep(Duration::from_millis(5)).await;
@@ -265,7 +265,7 @@ mod tests {
         sleep(Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&[1, 2, 3]));
         assert!(checker.is_unterminated());
-        _ = subscription; // keep the subscription alive
+        _ = subscriber; // keep the subscriber alive
     }
 
     #[tokio::test]
@@ -278,14 +278,14 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
 
         let checker1 = CheckingObserver::new();
-        let subscription1 = observable.clone().subscribe(checker1.clone());
+        let subscriber1 = observable.clone().subscribe(checker1.clone());
         let checker2 = CheckingObserver::new();
-        let subscription2 = observable.clone().subscribe(checker2.clone());
+        let subscriber2 = observable.clone().subscribe(checker2.clone());
 
         assert!(checker1.is_values_matched(&[]));
         assert!(checker1.is_unterminated());
@@ -316,8 +316,8 @@ mod tests {
         assert!(checker1.is_completed());
         assert!(checker2.is_values_matched(&[1, 2]));
         assert!(checker2.is_completed());
-        _ = subscription1; // keep the subscription alive
-        _ = subscription2; // keep the subscription alive
+        _ = subscriber1; // keep the subscriber alive
+        _ = subscriber2; // keep the subscriber alive
     }
 
     #[tokio::test]
@@ -330,12 +330,12 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
         let observable = observable.delay(Duration::from_millis(5), TokioScheduler);
         let observable = observable.delay(Duration::from_millis(5), TokioScheduler);
         let checker = CheckingObserver::new();
-        let subscription = observable.subscribe(checker.clone());
+        let subscriber = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
         sleep(Duration::from_millis(5)).await;
@@ -353,6 +353,6 @@ mod tests {
         sleep(Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&[1, 2]));
         assert!(checker.is_completed());
-        _ = subscription; // keep the subscription alive
+        _ = subscriber; // keep the subscriber alive
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
-    subscription::Subscription,
+    subscriber::Subscriber,
 };
 use std::marker::PhantomData;
 
@@ -12,7 +12,7 @@ This is an observable that emits the values provided by the subscribe_handler fu
 ```rust
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 use rx_rust::observer::Observer;
-use rx_rust::subscription::Subscription;
+use rx_rust::subscriber::Subscriber;
 use rx_rust::operators::create::Create;
 use rx_rust::observer::Terminal;
 let observable = Create::new(|mut observer| {
@@ -20,7 +20,7 @@ let observable = Create::new(|mut observer| {
     observer.on_next(2);
     observer.on_next(3);
     observer.on_terminal(Terminal::Completed);
-    Subscription::new_empty()
+    Subscriber::new_empty()
 });
 observable.subscribe_on(
     move |value| println!("value: {}", value),
@@ -33,10 +33,10 @@ pub struct Create<F, OR> {
     _marker: PhantomData<OR>,
 }
 
-// Using `F: FnMut(CreateObserver<OR>) -> Subscription + Clone` to make Create more easy to use. See more in `struct CreateObserver`
+// Using `F: FnMut(CreateObserver<OR>) -> Subscriber + Clone` to make Create more easy to use. See more in `struct CreateObserver`
 impl<F, OR> Create<F, OR>
 where
-    F: FnMut(CreateObserver<OR>) -> Subscription + Clone,
+    F: FnMut(CreateObserver<OR>) -> Subscriber + Clone,
 {
     pub fn new(subscribe_handler: F) -> Create<F, OR> {
         Create {
@@ -61,9 +61,9 @@ where
 impl<T, E, OR, F> Observable<T, E, OR> for Create<F, OR>
 where
     OR: Observer<T, E>,
-    F: FnMut(CreateObserver<OR>) -> Subscription + Clone,
+    F: FnMut(CreateObserver<OR>) -> Subscriber + Clone,
 {
-    fn subscribe(mut self, observer: OR) -> Subscription {
+    fn subscribe(mut self, observer: OR) -> Subscriber {
         (self.subscribe_handler)(CreateObserver::new(observer))
     }
 }
@@ -73,13 +73,13 @@ Other wise, this code can't be compiled:
 ```rust
 use rx_rust::operators::create::Create;
 use rx_rust::observer::Terminal;
-use rx_rust::subscription::Subscription;
+use rx_rust::subscriber::Subscriber;
 use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 use rx_rust::observer::Observer;
 let observable = Create::new(|mut observer| {
     observer.on_next(1);
     observer.on_terminal(Terminal::<String>::Completed);
-    Subscription::new_empty()
+    Subscriber::new_empty()
 });
 observable.subscribe_on(
     move |value| {},
@@ -118,7 +118,7 @@ mod tests {
         let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_terminal(Terminal::<String>::Completed);
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
@@ -132,7 +132,7 @@ mod tests {
             observer.on_next(33);
             observer.on_next(44);
             observer.on_terminal(Terminal::Error("error"));
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
 
         let checker = CheckingObserver::new();
@@ -145,14 +145,14 @@ mod tests {
     fn test_unterminated() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
 
         let checker: CheckingObserver<i32, String> = CheckingObserver::new();
-        let subscription = observable.subscribe(checker.clone());
+        let subscriber = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[1]));
         assert!(checker.is_unterminated());
-        _ = subscription; // keep the subscription alive
+        _ = subscriber; // keep the subscriber alive
     }
 
     #[test]
@@ -160,7 +160,7 @@ mod tests {
         let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_terminal(Terminal::<String>::Completed);
-            Subscription::new_empty()
+            Subscriber::new_empty()
         });
 
         let checker = CheckingObserver::new();

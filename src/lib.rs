@@ -3,5 +3,5 @@ pub mod observable;
 pub mod observer;
 pub mod operators;
 pub mod scheduler;
-pub mod subscription;
+pub mod subscriber;
 pub mod utils;

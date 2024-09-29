@@ -1,7 +1,7 @@
 use super::Observable;
 use crate::{
     observer::{Observer, Terminal},
-    subscription::Subscription,
+    subscriber::Subscriber,
 };
 
 /// Extension trait for `Observable`
@@ -27,7 +27,7 @@ pub trait ObservableSubscribeExt<T, E, FN, FT> {
     );
     ```
     */
-    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription;
+    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscriber;
 }
 
 impl<T, E, FN, FT, OE> ObservableSubscribeExt<T, E, FN, FT> for OE
@@ -36,7 +36,7 @@ where
     FT: FnOnce(Terminal<E>),
     OE: Observable<T, E, ObservableSubscribeExtObserver<FN, FT>>,
 {
-    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription {
+    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscriber {
         let observer = ObservableSubscribeExtObserver {
             on_next,
             on_terminal,

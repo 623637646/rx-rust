@@ -1,43 +1,43 @@
 /**
-Subscription is from Observable pattern, it is used to unsubscribe the observable.
+Subscriber is from Observable pattern, it is used to unsubscribe the observable.
 
 # Example
 ```rust
-use rx_rust::subscription::Subscription;
-let subscription = Subscription::new(move || {
+use rx_rust::subscriber::Subscriber;
+let subscriber = Subscriber::new(move || {
     println!("Clean up");
 });
-subscription.unsubscribe();
+subscriber.unsubscribe();
 ```
 */
-pub struct Subscription {
+pub struct Subscriber {
     dispose: Option<Box<dyn FnOnce()>>,
 }
 
-impl Subscription {
-    /// Create a new Subscription with a disposal action.
-    /// The dispose will be called when the subscription is unsubscribed or dropped.
-    pub fn new<F>(dispose: F) -> Subscription
+impl Subscriber {
+    /// Create a new Subscriber with a disposal action.
+    /// The dispose will be called when the subscriber is unsubscribed or dropped.
+    pub fn new<F>(dispose: F) -> Subscriber
     where
         F: FnOnce() + 'static,
     {
-        Subscription {
+        Subscriber {
             dispose: Some(Box::new(dispose)),
         }
     }
 
-    /// Create a new empty Subscription. No action will be performed when the subscription is unsubscribed or dropped.
-    pub fn new_empty() -> Subscription {
-        Subscription { dispose: None }
+    /// Create a new empty Subscriber. No action will be performed when the subscriber is unsubscribed or dropped.
+    pub fn new_empty() -> Subscriber {
+        Subscriber { dispose: None }
     }
 
-    /// Unsubscribe the subscription.
+    /// Unsubscribe the subscriber.
     pub fn unsubscribe(self) {
         // drop self to call the dispose
     }
 }
 
-impl Drop for Subscription {
+impl Drop for Subscriber {
     fn drop(&mut self) {
         if let Some(dispose) = self.dispose.take() {
             dispose();
@@ -54,13 +54,13 @@ mod tests {
     fn test_unsubscribe() {
         let disposed = Arc::new(RwLock::new(false));
         let disposed_clone = disposed.clone();
-        let subscription = Subscription::new(move || {
+        let subscriber = Subscriber::new(move || {
             let mut disposed = disposed_clone.write().unwrap();
             assert!(!*disposed);
             *disposed = true;
         });
         assert!(!*disposed.read().unwrap());
-        subscription.unsubscribe();
+        subscriber.unsubscribe();
         assert!(*disposed.read().unwrap());
     }
 
@@ -69,14 +69,14 @@ mod tests {
         let disposed = Arc::new(RwLock::new(false));
         let disposed_clone = disposed.clone();
         {
-            let subscription = Subscription::new(move || {
+            let subscriber = Subscriber::new(move || {
                 let mut disposed = disposed_clone.write().unwrap();
                 assert!(!*disposed);
                 *disposed = true;
             });
             assert!(!*disposed.read().unwrap());
 
-            _ = subscription; // keep the subscription alive
+            _ = subscriber; // keep the subscriber alive
         }
         assert!(*disposed.read().unwrap());
     }
