@@ -5,37 +5,46 @@ use crate::{
 };
 use std::marker::PhantomData;
 
-/**
-This is an observable that emits the values provided by the subscribe_handler function.
-
-# Example
-```rust
-use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-use rx_rust::observer::Observer;
-use rx_rust::subscriber::Subscriber;
-use rx_rust::operators::create::Create;
-use rx_rust::observer::Terminal;
-let observable = Create::new(|mut observer| {
-    observer.on_next(1);
-    observer.on_next(2);
-    observer.on_next(3);
-    observer.on_terminal(Terminal::Completed);
-    Subscriber::new_empty()
-});
-observable.subscribe_on(
-    move |value| println!("value: {}", value),
-    move |terminal: Terminal<String>| println!("terminal: {:?}", terminal),
-);
-```
-*/
+/// The `Create` struct is an implementation of the `Observable` trait that allows creating an observable
+/// from a custom subscription function. The subscription function is provided by the user and is responsible
+/// for emitting values and terminal events to the observer.
+///
+/// # Type Parameters
+///
+/// * `F` - The type of the subscription function.
+/// * `OR` - The type of the observer that will receive events from the observable.
+///
+/// The `subscribe_handler` function is called when an observer subscribes to the observable. It receives
+/// a `CreateObserver` which it can use to emit values and terminal events. The function should return a
+/// `Subscriber` which can be used to manage the subscription.
+///
+/// # Example
+/// ```rust
+/// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+/// use rx_rust::observer::Observer;
+/// use rx_rust::subscriber::Subscriber;
+/// use rx_rust::operators::create::Create;
+/// use rx_rust::observer::Terminal;
+/// let observable = Create::new(|mut observer| {
+///     observer.on_next(1);
+///     observer.on_next(2);
+///     observer.on_next(3);
+///     observer.on_terminal(Terminal::Completed);
+///     Subscriber::new_empty()
+/// });
+/// observable.subscribe_on(
+///     move |value| println!("value: {}", value),
+///     move |terminal: Terminal<String>| println!("terminal: {:?}", terminal),
+/// );
+/// ```
 pub struct Create<F, OR> {
     subscribe_handler: F,
     _marker: PhantomData<OR>,
 }
 
-// Using `F: FnMut(CreateObserver<OR>) -> Subscriber + Clone` to make Create more easy to use. See more in `struct CreateObserver`
 impl<F, OR> Create<F, OR>
 where
+    // Using `F: FnMut(CreateObserver<OR>) -> Subscriber + Clone` to make Create more easy to use. See more in `struct CreateObserver`
     F: FnMut(CreateObserver<OR>) -> Subscriber + Clone,
 {
     pub fn new(subscribe_handler: F) -> Create<F, OR> {
@@ -68,29 +77,36 @@ where
     }
 }
 
-/** Using `CreateObserver<OR>` instead of directly using `OR` to make `Create` more easy to use.
-Other wise, this code can't be compiled:
-```rust
-use rx_rust::operators::create::Create;
-use rx_rust::observer::Terminal;
-use rx_rust::subscriber::Subscriber;
-use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-use rx_rust::observer::Observer;
-let observable = Create::new(|mut observer| {
-    observer.on_next(1);
-    observer.on_terminal(Terminal::<String>::Completed);
-    Subscriber::new_empty()
-});
-observable.subscribe_on(
-    move |value| {},
-    move |terminal| {},
-);
-```
-*/
+/// `CreateObserver` is a wrapper around an observer that is used by the `Create` operator.
+/// It allows the `Create` operator to send values and terminal events to the wrapped observer.
+///
+/// # Type Parameters
+/// - `OR`: The type of the wrapped observer.
+///
+/// # Why necessary
+///
+/// Using `CreateObserver<OR>` instead of directly using `OR` to make `Create` more easy to use.
+/// Otherwise, this code can't be compiled:
+/// ```rust
+/// use rx_rust::operators::create::Create;
+/// use rx_rust::observer::Terminal;
+/// use rx_rust::subscriber::Subscriber;
+/// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+/// use rx_rust::observer::Observer;
+/// let observable = Create::new(|mut observer| { // The compiler can't infer the type of `OR` without using `CreateObserver<OR>`
+///     observer.on_next(1);
+///     observer.on_terminal(Terminal::<String>::Completed);
+///     Subscriber::new_empty()
+/// });
+/// observable.subscribe_on(
+///     move |value| {},
+///     move |terminal| {},
+/// );
+/// ```
 pub struct CreateObserver<OR>(OR);
 
 impl<OR> CreateObserver<OR> {
-    pub(crate) fn new(observer: OR) -> Self {
+    fn new(observer: OR) -> Self {
         Self(observer)
     }
 }
@@ -173,4 +189,27 @@ mod tests {
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
     }
+
+    // TODO: Think about if Observable not confirm to Clone
+    // #[tokio::test]
+    // async fn test_async() {
+    //     let (tx, rx) = tokio::sync::oneshot::channel();
+    //     let observable = Create::new(|mut observer| {
+    //         observer.on_next(333);
+    //         tokio::spawn(async move {
+    //             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    //             observer.on_next(444);
+    //             observer.on_terminal(Terminal::<String>::Completed);
+    //             tx.send(()).unwrap();
+    //         });
+    //         Subscriber::new_empty()
+    //     });
+    //     let checker = CheckingObserver::new();
+    //     observable.subscribe(checker.clone());
+    //     assert!(checker.is_values_matched(&[333]));
+    //     assert!(checker.is_unterminated());
+    //     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    //     assert!(checker.is_values_matched(&[333, 444]));
+    //     assert!(checker.is_completed());
+    // }
 }

@@ -1,6 +1,15 @@
 use super::Observable;
 use crate::observer::Observer;
 
+/// The `ObservableIntoExt` trait provides a convenient method to convert any type that implements
+/// the `Observable` trait into an `impl Observable<T, E, OR>`. This allows for more flexible and
+/// ergonomic usage of observables in the code.
+///
+/// # Type Parameters
+///
+/// * `T` - The type of the items emitted by the observable.
+/// * `E` - The type of the error that can be emitted by the observable.
+/// * `OR` - The type of the observer that will receive events from the observable. It must implement the `Observer` trait.
 pub trait ObservableIntoExt<T, E, OR>
 where
     OR: Observer<T, E>,
