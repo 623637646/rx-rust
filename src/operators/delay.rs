@@ -9,7 +9,8 @@ use std::{
     time::Duration,
 };
 
-/// This is an observable that delays the next value and completed events from the source observable by a duration. The error will post immediately.
+/// An observable that delays the next value and completed events from the source observable by a duration.
+/// The error will be emitted immediately.
 pub struct Delay<OE, S> {
     source: OE,
     delay: Duration,
@@ -17,6 +18,13 @@ pub struct Delay<OE, S> {
 }
 
 impl<OE, S> Delay<OE, S> {
+    /// Creates a new `Delay` observable.
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - The source observable to delay.
+    /// * `delay` - The duration to delay each emission.
+    /// * `scheduler` - The scheduler to use for timing the delay.
     pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S> {
         Delay {
             source,
@@ -106,36 +114,45 @@ where
     }
 }
 
-/// Make the `Observable` delayable.
+/// Extension trait to add the `delay` method to observables.
 pub trait DelayableObservable<T, E, OR, S>
 where
     OR: Observer<T, E>,
 {
-    /**
-    Delay the next value and completed events from the source observable by a duration. The error will post immediately.
-
-    # Example
-    ```rust
-    use rx_rust::operators::just::Just;
-    use rx_rust::operators::delay::DelayableObservable;
-    use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-    use rx_rust::scheduler::tokio_scheduler::TokioScheduler;
-    use std::time::Duration;
-    #[tokio::main]
-    async fn main() {
-        let observable = Just::new(333);
-        let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
-        observable.subscribe_on(
-            |value| {
-                println!("Next value: {}", value);
-            },
-            |terminal| {
-                println!("Terminal event: {:?}", terminal);
-            }
-        );
-    }
-    ```
-     */
+    /// Delays the next value and completed events from the source observable by a duration.
+    /// The error will be emitted immediately.
+    ///
+    /// # Arguments
+    ///
+    /// * `delay` - The duration to delay each emission.
+    /// * `scheduler` - The scheduler to use for timing the delay.
+    ///
+    /// # Returns
+    ///
+    /// A new observable that delays emissions from the source observable.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rx_rust::operators::just::Just;
+    /// use rx_rust::operators::delay::DelayableObservable;
+    /// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+    /// use rx_rust::scheduler::tokio_scheduler::TokioScheduler;
+    /// use std::time::Duration;
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let observable = Just::new(333);
+    ///     let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
+    ///     observable.subscribe_on(
+    ///         |value| {
+    ///             println!("Next value: {}", value);
+    ///         },
+    ///         |terminal| {
+    ///             println!("Terminal event: {:?}", terminal);
+    ///         }
+    ///     );
+    /// }
+    /// ```
     fn delay(self, delay: Duration, scheduler: S) -> impl Observable<T, E, OR>;
 }
 

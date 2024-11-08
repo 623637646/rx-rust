@@ -73,27 +73,25 @@ pub trait MappableObservable<TF, TT, E, OR, F>
 where
     OR: Observer<TT, E>,
 {
-    /**
-    Maps the values of the source observable using a mapper function.
-
-    # Example
-    ```rust
-    use rx_rust::operators::just::Just;
-    use rx_rust::operators::map::MappableObservable;
-    use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-    use rx_rust::observer::Terminal;
-    let observable = Just::new(333);
-    let observable = observable.map(|value| (value * 3).to_string());
-    observable.subscribe_on(
-        |value| {
-            println!("Next value: {}", value);
-        },
-        |terminal| {
-            println!("Terminal event: {:?}", terminal);
-        }
-    );
-    ```
-     */
+    /// Maps the values of the source observable using a mapper function.
+    ///
+    /// # Example
+    /// ```rust
+    /// use rx_rust::operators::just::Just;
+    /// use rx_rust::operators::map::MappableObservable;
+    /// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+    /// use rx_rust::observer::Terminal;
+    /// let observable = Just::new(333);
+    /// let observable = observable.map(|value| (value * 3).to_string());
+    /// observable.subscribe_on(
+    ///     |value| {
+    ///         println!("Next value: {}", value);
+    ///     },
+    ///     |terminal| {
+    ///         println!("Terminal event: {:?}", terminal);
+    ///     }
+    /// );
+    /// ```
     fn map(self, f: F) -> impl Observable<TT, E, OR>; // TODO: return impl ... or Map?
 }
 

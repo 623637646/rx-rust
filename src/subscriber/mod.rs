@@ -1,15 +1,13 @@
-/**
-Subscriber is from Observable pattern, it is used to unsubscribe the observable.
-
-# Example
-```rust
-use rx_rust::subscriber::Subscriber;
-let subscriber = Subscriber::new(move || {
-    println!("Clean up");
-});
-subscriber.unsubscribe();
-```
-*/
+/// Subscriber is from Observable pattern, it is used to unsubscribe the observable.
+///
+/// # Example
+/// ```rust
+/// use rx_rust::subscriber::Subscriber;
+/// let subscriber = Subscriber::new(move || {
+///     println!("Clean up");
+/// });
+/// subscriber.unsubscribe();
+/// ```
 pub struct Subscriber {
     dispose: Option<Box<dyn FnOnce()>>,
 }
@@ -17,6 +15,10 @@ pub struct Subscriber {
 impl Subscriber {
     /// Create a new Subscriber with a disposal action.
     /// The dispose will be called when the subscriber is unsubscribed or dropped.
+    ///
+    /// # Arguments
+    ///
+    /// * `dispose` - A closure that will be called when the subscriber is unsubscribed or dropped.
     pub fn new<F>(dispose: F) -> Subscriber
     where
         F: FnOnce() + 'static,

@@ -1,9 +1,41 @@
 use super::Scheduler;
 use std::time::Duration;
 
+/// `TokioScheduler` is an implementation of the `Scheduler` trait using Tokio runtime.
+///
+/// This scheduler allows scheduling tasks to be executed immediately or after a specified delay
+/// using Tokio's asynchronous runtime capabilities.
 pub struct TokioScheduler;
 
 impl Scheduler for TokioScheduler {
+    /// Schedules a task for execution, optionally after a specified delay.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - A closure that represents the task to be executed.
+    /// * `delay` - An optional `Duration` specifying the delay before task execution.
+    ///
+    /// # Returns
+    ///
+    /// Returns a closure that, when called, aborts the scheduled task if it hasn't started yet.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::time::Duration;
+    /// use rx_rust::scheduler::Scheduler;
+    /// use rx_rust::scheduler::tokio_scheduler::TokioScheduler;
+    ///
+    /// #[tokio::main]
+    /// async fn main() {
+    ///     let scheduler = TokioScheduler;
+    ///     let task = || println!("Task executed!");
+    ///     let cancel_handle = scheduler.schedule(task, Some(Duration::from_secs(1)));
+    ///
+    ///     // To cancel the task before it executes:
+    ///     // cancel_handle();
+    /// }
+    /// ```
     fn schedule(
         &self,
         task: impl FnOnce() + Send + 'static,

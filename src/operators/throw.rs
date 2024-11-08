@@ -5,22 +5,20 @@ use crate::{
 };
 use std::convert::Infallible;
 
-/**
-This is an observable that emits an error.
-
-# Example
-```rust
-use rx_rust::operators::throw::Throw;
-use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-use std::convert::Infallible;
-use rx_rust::observer::Terminal;
-let observable = Throw::new("My error");
-observable.subscribe_on(
-    |_| {},
-    |terminal: Terminal<&str>| println!("Terminal event: {:?}", terminal)
-);
-```
- */
+/// This is an observable that emits an error.
+///
+/// # Example
+/// ```rust
+/// use rx_rust::operators::throw::Throw;
+/// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+/// use std::convert::Infallible;
+/// use rx_rust::observer::Terminal;
+/// let observable = Throw::new("My error");
+/// observable.subscribe_on(
+///     |_| {},
+///     |terminal: Terminal<&str>| println!("Terminal event: {:?}", terminal)
+/// );
+/// ```
 #[derive(Clone)]
 pub struct Throw<E> {
     error: E,

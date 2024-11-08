@@ -5,28 +5,31 @@ use crate::{
 };
 use std::convert::Infallible;
 
-/**
-This is an observable that emits a single value then completes.
-
-# Example
-```rust
-use rx_rust::operators::just::Just;
-use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-use std::convert::Infallible;
-use rx_rust::observer::Terminal;
-let observable = Just::new(123);
-observable.subscribe_on(
-    |value| println!("Next value: {}", value),
-    |terminal: Terminal<Infallible>| println!("Terminal event: {:?}", terminal)
-);
-```
- */
+/// This is an observable that emits a single value then completes.
+///
+/// # Example
+/// ```rust
+/// use rx_rust::operators::just::Just;
+/// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+/// use std::convert::Infallible;
+/// use rx_rust::observer::Terminal;
+/// let observable = Just::new(123);
+/// observable.subscribe_on(
+///     |value| println!("Next value: {}", value),
+///     |terminal: Terminal<Infallible>| println!("Terminal event: {:?}", terminal)
+/// );
+/// ```
 #[derive(Clone)]
 pub struct Just<T> {
     value: T,
 }
 
 impl<T> Just<T> {
+    /// Creates a new `Just` observable with the given value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The value to emit.
     pub fn new(value: T) -> Just<T> {
         Just { value }
     }
