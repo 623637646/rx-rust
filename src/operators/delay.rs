@@ -5,19 +5,21 @@ use crate::{
     subscriber::Subscriber,
 };
 use std::{
+    marker::PhantomData,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 /// An observable that delays the next value and completed events from the source observable by a duration.
 /// The error will be emitted immediately.
-pub struct Delay<OE, S> {
+pub struct Delay<OE, S, OR> {
     source: OE,
     delay: Duration,
     scheduler: Arc<S>,
+    _marker: PhantomData<OR>,
 }
 
-impl<OE, S> Delay<OE, S> {
+impl<OE, S, OR> Delay<OE, S, OR> {
     /// Creates a new `Delay` observable.
     ///
     /// # Arguments
@@ -25,16 +27,17 @@ impl<OE, S> Delay<OE, S> {
     /// * `source` - The source observable to delay.
     /// * `delay` - The duration to delay each emission.
     /// * `scheduler` - The scheduler to use for timing the delay.
-    pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S> {
+    pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S, OR> {
         Delay {
             source,
             delay,
             scheduler: Arc::new(scheduler),
+            _marker: PhantomData,
         }
     }
 }
 
-impl<OE, S> Clone for Delay<OE, S>
+impl<OE, S, OR> Clone for Delay<OE, S, OR>
 where
     OE: Clone,
 {
@@ -43,11 +46,12 @@ where
             source: self.source.clone(),
             delay: self.delay,
             scheduler: self.scheduler.clone(),
+            _marker: PhantomData,
         }
     }
 }
 
-impl<T, E, OE, OR, S> Observable<T, E, OR> for Delay<OE, S>
+impl<T, E, OE, OR, S> Observable<T, E, OR> for Delay<OE, S, OR>
 where
     T: Send + 'static,
     E: Send + 'static,
@@ -115,10 +119,7 @@ where
 }
 
 /// Extension trait to add the `delay` method to observables.
-pub trait DelayableObservable<T, E, OR, S>
-where
-    OR: Observer<T, E>,
-{
+pub trait DelayableObservable<T, E, OR, S>: Sized {
     /// Delays the next value and completed events from the source observable by a duration.
     /// The error will be emitted immediately.
     ///
@@ -153,7 +154,7 @@ where
     ///     );
     /// }
     /// ```
-    fn delay(self, delay: Duration, scheduler: S) -> impl Observable<T, E, OR>;
+    fn delay(self, delay: Duration, scheduler: S) -> Delay<Self, S, OR>;
 }
 
 impl<T, E, OR, S, OE> DelayableObservable<T, E, OR, S> for OE
@@ -164,7 +165,7 @@ where
     OE: Observable<T, E, DelayObserver<OR, S>>,
     S: Scheduler,
 {
-    fn delay(self, delay: Duration, scheduler: S) -> impl Observable<T, E, OR> {
+    fn delay(self, delay: Duration, scheduler: S) -> Delay<Self, S, OR> {
         Delay::new(self, delay, scheduler)
     }
 }
@@ -174,7 +175,9 @@ where
 mod tests {
     use super::*;
     use crate::{
-        operators::create::Create, scheduler::tokio_scheduler::TokioScheduler,
+        observable::observable_subscribe_ext::ObservableSubscribeExt,
+        operators::{create::Create, just::Just},
+        scheduler::tokio_scheduler::TokioScheduler,
         utils::checking_observer::CheckingObserver,
     };
     use tokio::time::sleep;
@@ -371,5 +374,21 @@ mod tests {
         assert!(checker.is_values_matched(&[1, 2]));
         assert!(checker.is_completed());
         _ = subscriber; // keep the subscriber alive
+    }
+
+    /// If we remove `OR`` in `struct Delay`, the code will not compile.
+    /// This test is to make sure that the code compiles without any errors.
+    #[tokio::test]
+    async fn test_no_compiler_error() {
+        let observable = Just::new(333);
+        let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
+        observable.subscribe_on(
+            |value| {
+                println!("Next value: {}", value);
+            },
+            |terminal| {
+                println!("Terminal event: {:?}", terminal);
+            },
+        );
     }
 }

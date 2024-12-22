@@ -6,14 +6,14 @@ use crate::{
 use std::marker::PhantomData;
 
 /// This is an observable that maps the values of the source observable using a mapper function.
-pub struct Map<TF, OE, F> {
+pub struct Map<OE, F, TF, OR> {
     source: OE,
     mapper: F,
-    _marker: PhantomData<TF>,
+    _marker: PhantomData<(TF, OR)>,
 }
 
-impl<TF, OE, F> Map<TF, OE, F> {
-    pub fn new(source: OE, mapper: F) -> Map<TF, OE, F> {
+impl<OE, F, TF, OR> Map<OE, F, TF, OR> {
+    pub fn new(source: OE, mapper: F) -> Map<OE, F, TF, OR> {
         Map {
             source,
             mapper,
@@ -22,7 +22,7 @@ impl<TF, OE, F> Map<TF, OE, F> {
     }
 }
 
-impl<TF, OE, F> Clone for Map<TF, OE, F>
+impl<OE, F, TF, OR> Clone for Map<OE, F, TF, OR>
 where
     OE: Clone,
     F: Clone,
@@ -36,7 +36,7 @@ where
     }
 }
 
-impl<TF, TT, E, OR, OE, F> Observable<TT, E, OR> for Map<TF, OE, F>
+impl<TF, TT, E, OR, OE, F> Observable<TT, E, OR> for Map<OE, F, TF, OR>
 where
     OR: Observer<TT, E>,
     OE: Observable<TF, E, MapObserver<OR, F>>,
@@ -69,10 +69,7 @@ where
 }
 
 /// Make the `Observable` mappable.
-pub trait MappableObservable<TF, TT, E, OR, F>
-where
-    OR: Observer<TT, E>,
-{
+pub trait MappableObservable<TF, TT, E, OR, F>: Sized {
     /// Maps the values of the source observable using a mapper function.
     ///
     /// # Example
@@ -92,7 +89,7 @@ where
     ///     }
     /// );
     /// ```
-    fn map(self, f: F) -> impl Observable<TT, E, OR>; // TODO: return impl ... or Map?
+    fn map(self, f: F) -> Map<Self, F, TF, OR>;
 }
 
 impl<TF, TT, E, OR, F, OE> MappableObservable<TF, TT, E, OR, F> for OE
@@ -101,20 +98,19 @@ where
     OE: Observable<TF, E, MapObserver<OR, F>>,
     F: FnMut(TF) -> TT + Clone,
 {
-    fn map(self, f: F) -> impl Observable<TT, E, OR> {
+    fn map(self, f: F) -> Map<Self, F, TF, OR> {
         Map::new(self, f)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
-
     use super::*;
     use crate::{
         operators::{create::Create, just::Just},
         utils::checking_observer::CheckingObserver,
     };
+    use std::convert::Infallible;
 
     #[test]
     fn test_completed() {

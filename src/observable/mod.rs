@@ -13,7 +13,7 @@ use crate::{observer::Observer, subscriber::Subscriber};
 /// * `E` - The type of the error that can be emitted by the observable.
 /// * `OR` - The type of the observer that will receive events from the observable. It must implement the `Observer` trait.
 
-pub trait Observable<T, E, OR>: Clone
+pub trait Observable<T, E, OR>
 where
     OR: Observer<T, E>,
 {
