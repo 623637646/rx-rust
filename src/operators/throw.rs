@@ -1,7 +1,7 @@
 use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
-    subscriber::Subscriber,
+    subscription::Subscription,
 };
 use std::convert::Infallible;
 
@@ -35,9 +35,9 @@ where
     E: Clone,
     OR: Observer<Infallible, E>,
 {
-    fn subscribe(self, observer: OR) -> Subscriber {
+    fn subscribe(self, observer: OR) -> Subscription {
         observer.on_terminal(Terminal::Error(self.error.clone()));
-        Subscriber::new_empty()
+        Subscription::new_none_disposal()
     }
 }
 

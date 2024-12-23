@@ -1,7 +1,7 @@
 use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
-    subscriber::Subscriber,
+    subscription::{ Subscription},
 };
 use std::marker::PhantomData;
 
@@ -9,6 +9,7 @@ use std::marker::PhantomData;
 pub struct Map<OE, F, TF, OR> {
     source: OE,
     mapper: F,
+    // Adding this to avoid the compiler error: `type annotations needed. multiple `impl`s satisfying `_: observer::Observer<*, *>` found`
     _marker: PhantomData<(TF, OR)>,
 }
 
@@ -42,7 +43,7 @@ where
     OE: Observable<TF, E, MapObserver<OR, F>>,
     F: FnMut(TF) -> TT + Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscriber {
+    fn subscribe(self, observer: OR) -> Subscription {
         let mapper = self.mapper.clone();
         let observer = MapObserver { observer, mapper };
         self.source.subscribe(observer)
@@ -127,7 +128,7 @@ mod tests {
         let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_terminal(Terminal::Error("error".to_owned()));
-            Subscriber::new_empty()
+            Subscription::new_none_disposal()
         });
         let observable = observable.map(|value: i32| value.to_string());
         let checker = CheckingObserver::new();
@@ -141,14 +142,14 @@ mod tests {
         let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_next(444);
-            Subscriber::new_empty()
+            Subscription::new_none_disposal()
         });
         let observable = observable.map(|value: i32| value.to_string());
         let checker: CheckingObserver<String, String> = CheckingObserver::new();
-        let subscriber = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
         assert!(checker.is_unterminated());
-        _ = subscriber; // keep the subscriber alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -188,12 +189,12 @@ mod tests {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<Infallible>::Completed);
             });
-            Subscriber::new_empty()
+            Subscription::new_none_disposal()
         })
         .map(|value: i32| value.to_string())
         .map(|value| value + "?");
         let checker = CheckingObserver::new();
-        let subscriber = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&["1?".to_owned()]));
         assert!(checker.is_unterminated());
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
@@ -208,6 +209,6 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&["1?".to_owned(), "2?".to_owned()]));
         assert!(checker.is_completed());
-        _ = subscriber; // keep the subscriber alive
+        _ = subscription; // keep the subscription alive
     }
 }

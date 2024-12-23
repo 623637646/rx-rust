@@ -1,7 +1,7 @@
 use super::Observable;
 use crate::{
     observer::{Observer, Terminal},
-    subscriber::Subscriber,
+    subscription::Subscription,
 };
 
 /// The `ObservableSubscribeExt` trait provides a convenient method to subscribe to an observable
@@ -14,7 +14,6 @@ use crate::{
 /// * `E` - The type of the error that can be emitted by the observable.
 /// * `FN` - The type of the callback function for handling emitted items.
 /// * `FT` - The type of the callback function for handling terminal events.
-
 pub trait ObservableSubscribeExt<T, E, FN, FT> {
     /// Subscribes to the observable with the given `on_next` and `on_terminal` callbacks.
     ///
@@ -25,7 +24,7 @@ pub trait ObservableSubscribeExt<T, E, FN, FT> {
     ///
     /// # Returns
     ///
-    /// A `Subscriber` which can be used to unsubscribe the observer.
+    /// A `Subscription` which can be used to unsubscribe the observer.
     ///
     /// # Example
     /// ```rust
@@ -44,7 +43,7 @@ pub trait ObservableSubscribeExt<T, E, FN, FT> {
     ///     }
     /// );
     /// ```
-    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscriber;
+    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription;
 }
 
 impl<T, E, FN, FT, OE> ObservableSubscribeExt<T, E, FN, FT> for OE
@@ -53,7 +52,7 @@ where
     FT: FnOnce(Terminal<E>),
     OE: Observable<T, E, ObservableSubscribeExtObserver<FN, FT>>,
 {
-    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscriber {
+    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription {
         let observer = ObservableSubscribeExtObserver {
             on_next,
             on_terminal,
@@ -74,7 +73,6 @@ where
 ///
 /// * `on_next` - A callback function that will be called with each item emitted by the observable.
 /// * `on_terminal` - A callback function that will be called when the observable emits a terminal event.
-
 pub struct ObservableSubscribeExtObserver<FN, FT> {
     on_next: FN,
     on_terminal: FT,
@@ -117,5 +115,38 @@ mod tests {
         );
         assert!(checker.is_values_matched(&[123]));
         assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_subscribe_on_twice() {
+        let observable = Just::new(123);
+        let checker1 = CheckingObserver::new();
+        let checker2 = CheckingObserver::new();
+        let mut checker_cloned_1_1 = checker1.clone();
+        let checker_cloned_1_2 = checker1.clone();
+        observable.clone().subscribe_on(
+            move |value| {
+                checker_cloned_1_1.on_next(value);
+            },
+            move |terminal| {
+                checker_cloned_1_2.on_terminal(terminal);
+            },
+        );
+
+        let mut checker_cloned_2_1 = checker2.clone();
+        let checker_cloned_2_2 = checker2.clone();
+        observable.subscribe_on(
+            move |value| {
+                checker_cloned_2_1.on_next(value);
+            },
+            move |terminal| {
+                checker_cloned_2_2.on_terminal(terminal);
+            },
+        );
+
+        assert!(checker1.is_values_matched(&[123]));
+        assert!(checker1.is_completed());
+        assert!(checker2.is_values_matched(&[123]));
+        assert!(checker2.is_completed());
     }
 }

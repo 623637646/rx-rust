@@ -17,8 +17,8 @@ pub mod operators;
 /// Module containing scheduler implementations
 pub mod scheduler;
 
-/// Module containing the Subscriber struct and related functionality
-pub mod subscriber;
+/// Module containing the Subscription trait and related types
+pub mod subscription;
 
 /// Module containing utility functions and types
 pub mod utils;

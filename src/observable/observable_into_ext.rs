@@ -54,7 +54,7 @@ mod tests {
     use super::*;
     use crate::observer::{Observer, Terminal};
     use crate::operators::create::Create;
-    use crate::subscriber::Subscriber;
+    use crate::subscription::Subscription;
     use crate::utils::checking_observer::CheckingObserver;
 
     #[test]
@@ -62,7 +62,7 @@ mod tests {
         let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_terminal(Terminal::<String>::Completed);
-            Subscriber::new_empty()
+            Subscription::new_none_disposal()
         });
         let observable = observable.into_observable();
         let checker = CheckingObserver::new();
@@ -76,7 +76,7 @@ mod tests {
         let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_terminal(Terminal::<String>::Completed);
-            Subscriber::new_empty()
+            Subscription::new_none_disposal()
         });
         let observable = observable.into_observable();
         let observable = observable.into_observable();
