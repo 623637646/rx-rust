@@ -14,7 +14,7 @@ use crate::{
 /// * `E` - The type of the error that can be emitted by the observable.
 /// * `FN` - The type of the callback function for handling emitted items.
 /// * `FT` - The type of the callback function for handling terminal events.
-pub trait ObservableSubscribeExt<T, E, FN, FT> {
+pub trait ObservableSubscribeExt<T, E> {
     /// Subscribes to the observable with the given `on_next` and `on_terminal` callbacks.
     ///
     /// # Arguments
@@ -43,19 +43,24 @@ pub trait ObservableSubscribeExt<T, E, FN, FT> {
     ///     }
     /// );
     /// ```
-    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription;
+    fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription
+    where
+        FN: FnMut(T) + Send + 'static,
+        FT: FnOnce(Terminal<E>) + Send + 'static;
 }
 
-impl<T, E, FN, FT, OE> ObservableSubscribeExt<T, E, FN, FT> for OE
+impl<T, E, OE> ObservableSubscribeExt<T, E> for OE
 where
-    FN: FnMut(T),
-    FT: FnOnce(Terminal<E>),
-    OE: Observable<T, E, ObservableSubscribeExtObserver<FN, FT>>,
+    OE: Observable<T, E, ObservableSubscribeExtObserver<T, E>>,
 {
-    fn subscribe_on(self, on_next: FN, on_terminal: FT) -> Subscription {
+    fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription
+    where
+        FN: FnMut(T) + Send + 'static,
+        FT: FnOnce(Terminal<E>) + Send + 'static,
+    {
         let observer = ObservableSubscribeExtObserver {
-            on_next,
-            on_terminal,
+            on_next: Box::new(on_next),
+            on_terminal: Box::new(on_terminal),
         };
         self.subscribe(observer)
     }
@@ -73,16 +78,12 @@ where
 ///
 /// * `on_next` - A callback function that will be called with each item emitted by the observable.
 /// * `on_terminal` - A callback function that will be called when the observable emits a terminal event.
-pub struct ObservableSubscribeExtObserver<FN, FT> {
-    on_next: FN,
-    on_terminal: FT,
+pub struct ObservableSubscribeExtObserver<T, E> {
+    on_next: Box<dyn FnMut(T) + Send>,
+    on_terminal: Box<dyn FnOnce(Terminal<E>) + Send>,
 }
 
-impl<T, E, FN, FT> Observer<T, E> for ObservableSubscribeExtObserver<FN, FT>
-where
-    FN: FnMut(T),
-    FT: FnOnce(Terminal<E>),
-{
+impl<T, E> Observer<T, E> for ObservableSubscribeExtObserver<T, E> {
     fn on_next(&mut self, value: T) {
         (self.on_next)(value);
     }
@@ -96,7 +97,9 @@ where
 mod tests {
     use super::*;
     use crate::{
-        observer::Observer, operators::just::Just, utils::checking_observer::CheckingObserver,
+        observer::Observer,
+        operators::{create::Create, just::Just},
+        utils::checking_observer::CheckingObserver,
     };
 
     #[test]
@@ -119,7 +122,14 @@ mod tests {
 
     #[test]
     fn test_subscribe_on_twice() {
-        let observable = Just::new(123);
+        // Use `Create` to test the `subscribe_on` method twice.
+        // `Create` is a special in this case to avoid compile error "no two closures, even if identical, have the same type".
+        // Check the commit of this code change for more details.
+        let observable = Create::new(|mut observer| {
+            observer.on_next(123);
+            observer.on_terminal(Terminal::<String>::Completed);
+            Subscription::new_none_disposal()
+        });
         let checker1 = CheckingObserver::new();
         let checker2 = CheckingObserver::new();
         let mut checker_cloned_1_1 = checker1.clone();
