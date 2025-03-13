@@ -11,7 +11,7 @@ pub trait Scheduler {
     /// Returns a handle that can be used to cancel the task.
     fn schedule(
         &self,
-        task: impl FnOnce() + Send + 'static,
+        task: impl FnOnce() + Send + 'static, // TODO: use Future instead of FnOnce?
         delay: Option<Duration>,
     ) -> impl FnOnce() + Send + 'static;
 }

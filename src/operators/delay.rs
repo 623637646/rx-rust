@@ -2,7 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
     scheduler::Scheduler,
-    subscription::{disposable::Disposable, Subscription},
+    subscription::{disposable::CallbackDisposal, Subscription},
 };
 use std::{
     marker::PhantomData,
@@ -13,7 +13,7 @@ use std::{
 /// An observable that delays the next value and completed events from the source observable by a duration.
 /// The error will be emitted immediately.
 pub struct Delay<OE, S, OR> {
-    source: OE,
+    source_observable: OE,
     delay: Duration,
     scheduler: Arc<S>,
     // Adding this to avoid the compiler error: `type annotations needed. multiple `impl`s satisfying `_: observer::Observer<*, *>` found`
@@ -30,7 +30,7 @@ impl<OE, S, OR> Delay<OE, S, OR> {
     /// * `scheduler` - The scheduler to use for timing the delay.
     pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S, OR> {
         Delay {
-            source,
+            source_observable: source,
             delay,
             scheduler: Arc::new(scheduler),
             _marker: PhantomData,
@@ -44,7 +44,7 @@ where
 {
     fn clone(&self) -> Self {
         Delay {
-            source: self.source.clone(),
+            source_observable: self.source_observable.clone(),
             delay: self.delay,
             scheduler: self.scheduler.clone(),
             _marker: PhantomData,
@@ -60,6 +60,26 @@ where
     OE: Observable<T, E, DelayObserver<OR, S>>,
     S: Scheduler,
 {
+    // TODO: Do we need to use macro to generate this?
+    // ```text
+    // use std::sync::{Arc, Mutex};
+    // pub(crate) type ChainedSubscribeOR<OR> = Arc<Mutex<Option<OR>>>;
+    // #[macro_export]
+    // macro_rules! define_chained_subscribe {
+    //     ($builder:expr) => {
+    //         fn subscribe(self, observer: OR) -> $crate::subscription::Subscription {
+    //             let source_observer = std::sync::Arc::new(std::sync::Mutex::new(Some(observer)));
+    //             let mut subscription = $builder(self, source_observer.clone());
+    //             let disposal = $crate::subscription::disposable::CallbackDisposal::new(move || {
+    //                 let mut source_observer = source_observer.lock().unwrap();
+    //                 source_observer.take();
+    //             });
+    //             subscription.append_disposable(disposal);
+    //             subscription
+    //         }
+    //     };
+    // }
+    // ```
     fn subscribe(self, observer: OR) -> Subscription {
         let source_observer = Arc::new(Mutex::new(Some(observer)));
         let delay_observer = DelayObserver {
@@ -67,9 +87,12 @@ where
             delay: self.delay,
             scheduler: self.scheduler.clone(),
         };
-        let delay_disposal = DelayDisposal { source_observer };
-        let mut subscription = self.source.subscribe(delay_observer);
-        subscription.append_disposable(delay_disposal);
+        let disposal = CallbackDisposal::new(move || {
+            let mut source_observer = source_observer.lock().unwrap();
+            source_observer.take();
+        });
+        let mut subscription = self.source_observable.subscribe(delay_observer);
+        subscription.append_disposable(disposal);
         subscription
     }
 }
@@ -120,17 +143,6 @@ where
                 }
             }
         }
-    }
-}
-
-struct DelayDisposal<OR> {
-    source_observer: Arc<Mutex<Option<OR>>>,
-}
-
-impl<OR> Disposable for DelayDisposal<OR> {
-    fn dispose(self: Box<Self>) {
-        let mut observer = self.source_observer.lock().unwrap();
-        observer.take();
     }
 }
 
@@ -202,13 +214,13 @@ mod tests {
     async fn test_completed() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_none_disposal()
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
@@ -237,14 +249,14 @@ mod tests {
     async fn test_error() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
                 observer.on_next(3);
                 observer.on_terminal(Terminal::Error("error".to_string()));
             });
-            Subscription::new_none_disposal()
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
@@ -273,13 +285,13 @@ mod tests {
     async fn test_unterminated() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(3);
             });
-            Subscription::new_none_disposal()
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker: CheckingObserver<i32, String> = CheckingObserver::new();
@@ -308,13 +320,13 @@ mod tests {
     async fn test_multiple_subscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_none_disposal()
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
 
@@ -360,13 +372,13 @@ mod tests {
     async fn test_multiple_operate() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_none_disposal()
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
         let observable = observable.delay(Duration::from_millis(5), TokioScheduler);
         let observable = observable.delay(Duration::from_millis(5), TokioScheduler);
@@ -396,13 +408,13 @@ mod tests {
     async fn test_unsubscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            Subscription::new_none_disposal()
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();
@@ -431,18 +443,13 @@ mod tests {
     async fn test_async_unsubscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
-            // // struct NotSend(*const ());
-            // // let _not_send = NotSend(std::ptr::null());
-            // Subscription::new_with_disposal_callback(|| {
-            //     // let b = _not_send;
-            // })
-            Subscription::new_none_disposal()
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
         let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
         let checker = CheckingObserver::new();

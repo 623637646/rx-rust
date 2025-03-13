@@ -52,7 +52,8 @@ impl<F> Create<F> {
     /// * `D` - The type of the disposable that will be used to manage the subscription.
     pub fn new<OR>(handler: F) -> Create<F>
     where
-        // Using `F: FnMut(CreateObserver<OR>) -> Subscription` to make Create more easy to use. See more in `CreateObserver` "Why necessary".
+        // Using `CreateObserver<OR>` instead of `OR` to make Create more easy to use. See more in `CreateObserver` "Why necessary".
+        // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_wrap_observable`.
         F: FnMut(CreateObserver<OR>) -> Subscription,
     {
         Create { handler }
@@ -76,7 +77,7 @@ where
     F: FnMut(CreateObserver<OR>) -> Subscription,
 {
     fn subscribe(mut self, observer: OR) -> Subscription {
-        (self.handler)(CreateObserver::new(observer))
+        (self.handler)(CreateObserver(observer))
     }
 }
 
@@ -108,22 +109,16 @@ where
 /// ```
 pub struct CreateObserver<OR>(OR);
 
-impl<OR> CreateObserver<OR> {
-    fn new(observer: OR) -> Self {
-        Self(observer)
-    }
-}
-
 impl<T, E, OR> Observer<T, E> for CreateObserver<OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.0.on_next(value)
+        self.0.on_next(value);
     }
 
     fn on_terminal(self, terminal: Terminal<E>) {
-        self.0.on_terminal(terminal)
+        self.0.on_terminal(terminal);
     }
 }
 
@@ -133,6 +128,8 @@ mod tests {
     use crate::{
         observer::Terminal, operators::just::Just, utils::checking_observer::CheckingObserver,
     };
+    use std::time::Duration;
+    use tokio::time::sleep;
 
     #[test]
     fn test_completed() {
@@ -176,6 +173,34 @@ mod tests {
         _ = subscription; // keep the subscription alive
     }
 
+    #[tokio::test]
+    async fn test_unsubscribe() {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(1);
+            let handle = tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_next(2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_terminal(Terminal::<String>::Completed);
+            });
+            Subscription::new_with_disposal_callback(move || handle.abort())
+        });
+        let checker = CheckingObserver::new();
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
+        subscription.unsubscribe(); // unsubscribe
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
+    }
+
     #[test]
     fn test_multiple_subscribe() {
         let observable = Create::new(|mut observer| {
@@ -201,13 +226,13 @@ mod tests {
     //     let (tx, rx) = tokio::sync::oneshot::channel();
     //     let observable = Create::new(|mut observer| {
     //         observer.on_next(333);
-    //         tokio::spawn(async move {
+    //         let handle = tokio::spawn(async move {
     //             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     //             observer.on_next(444);
     //             observer.on_terminal(Terminal::<String>::Completed);
     //             tx.send(()).unwrap();
     //         });
-    //         Subscription::new_none_disposal()
+    //       Subscription::new_with_disposal_callback(move || handle.abort())
     //     });
     //     let checker = CheckingObserver::new();
     //     observable.subscribe(checker.clone());

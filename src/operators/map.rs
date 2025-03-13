@@ -1,7 +1,7 @@
 use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
-    subscription::{ Subscription},
+    subscription::Subscription,
 };
 use std::marker::PhantomData;
 
@@ -183,13 +183,13 @@ mod tests {
     async fn test_async() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            tokio::spawn(async move {
+            let handle = tokio::spawn(async move {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_terminal(Terminal::<Infallible>::Completed);
             });
-            Subscription::new_none_disposal()
+            Subscription::new_with_disposal_callback(move || handle.abort())
         })
         .map(|value: i32| value.to_string())
         .map(|value| value + "?");

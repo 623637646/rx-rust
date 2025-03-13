@@ -1,7 +1,7 @@
 use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
-    subscription::{ Subscription},
+    subscription::Subscription,
 };
 use std::convert::Infallible;
 

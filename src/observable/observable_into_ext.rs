@@ -1,6 +1,7 @@
 use super::Observable;
 use crate::observer::Observer;
 
+// TODO: Do we really need this trait?
 /// The `ObservableIntoExt` trait provides a convenient method to convert any type that implements
 /// the `Observable` trait into an `impl Observable<T, E, OR>`. This allows for more flexible and
 /// ergonomic usage of observables in the code.
@@ -56,9 +57,11 @@ mod tests {
     use crate::operators::create::Create;
     use crate::subscription::Subscription;
     use crate::utils::checking_observer::CheckingObserver;
+    use std::time::Duration;
+    use tokio::time::sleep;
 
     #[test]
-    fn test_normal() {
+    fn test_completed() {
         let observable = Create::new(|mut observer| {
             observer.on_next(333);
             observer.on_terminal(Terminal::<String>::Completed);
@@ -69,6 +72,62 @@ mod tests {
         observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_error() {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(333);
+            observer.on_terminal(Terminal::<String>::Error("error".to_string()));
+            Subscription::new_none_disposal()
+        });
+        let observable = observable.into_observable();
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_error("error".to_string()));
+    }
+
+    #[test]
+    fn test_unterminated() {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(333);
+            Subscription::new_none_disposal()
+        });
+        let observable = observable.into_observable();
+        let checker: CheckingObserver<i32, String> = CheckingObserver::new();
+        observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_unterminated());
+    }
+
+    #[tokio::test]
+    async fn test_unsubscribe() {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(1);
+            let handle = tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_next(2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
+                observer.on_terminal(Terminal::<String>::Completed);
+            });
+            Subscription::new_with_disposal_callback(move || handle.abort())
+        });
+        let observable = observable.into_observable();
+        let checker = CheckingObserver::new();
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
+        subscription.unsubscribe(); // unsubscribe
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_unterminated());
     }
 
     #[test]

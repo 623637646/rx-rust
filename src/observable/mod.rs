@@ -5,13 +5,18 @@ use crate::{observer::Observer, subscription::Subscription};
 
 /// The `Observable` trait represents a source of events that can be observed by an `Observer`.
 ///
-/// This trait defines the core functionality of an observable, which is the ability to subscribe an observer to receive events. When an observer is subscribed, it will start receiving events from the observable. The `subscribe` method returns a `Subscription` which can be used to unsubscribe the observer from the observable.
-///
 /// # Type Parameters
 ///
 /// * `T` - The type of the items emitted by the observable.
 /// * `E` - The type of the error that can be emitted by the observable.
 /// * `OR` - The type of the observer that will receive events from the observable. It must implement the `Observer` trait.
+///     We use `OR` generic type instead of this code:
+///     ```text
+///     pub trait Observable<T, E> {
+///         fn subscribe(self, observer: impl Observer<T, E>) -> Subscription;
+///     }
+///     ```
+///     Because `Create` operator (or others) needs the `OR` generic type in the callback function.
 pub trait Observable<T, E, OR>
 where
     OR: Observer<T, E>,
@@ -50,12 +55,12 @@ where
     ///     }
     /// }
     ///
-    /// #[derive(Clone)]
     /// struct MyObservable;
     ///
     /// impl Observable<i32, (), MyObserver> for MyObservable {
-    ///     fn subscribe(self, observer: MyObserver) -> Subscription {
-    ///         // Implementation here
+    ///     fn subscribe(self, mut observer: MyObserver) -> Subscription {
+    ///         observer.on_next(1);
+    ///         observer.on_terminal(Terminal::Completed);
     ///         Subscription::new_none_disposal()
     ///     }
     /// }

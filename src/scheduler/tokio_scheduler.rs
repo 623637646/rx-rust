@@ -107,4 +107,17 @@ mod tests {
             "Task executed with unexpected delay"
         );
     }
+
+    #[tokio::test]
+    async fn test_schedule_with_late_abort() {
+        let scheduler = TokioScheduler;
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let task = move || {
+            tx.send(()).unwrap();
+        };
+        let handle = scheduler.schedule(task, None);
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        handle();
+        assert!(rx.await.is_ok());
+    }
 }
