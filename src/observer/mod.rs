@@ -1,3 +1,5 @@
+pub mod boxed_observer;
+
 /// Represents the terminal state of an operation, which can either be completed successfully or with an error.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Terminal<E> {
