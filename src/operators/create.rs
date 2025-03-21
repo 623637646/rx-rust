@@ -35,6 +35,7 @@ use crate::{
 ///     move |terminal: Terminal<String>| println!("terminal: {:?}", terminal),
 /// );
 /// ```
+#[derive(Clone)]
 pub struct Create<F> {
     handler: F,
 }
@@ -57,17 +58,6 @@ impl<F> Create<F> {
         F: FnMut(CreateObserver<OR>) -> Subscription,
     {
         Create { handler }
-    }
-}
-
-impl<F> Clone for Create<F>
-where
-    F: Clone,
-{
-    fn clone(&self) -> Self {
-        Create {
-            handler: self.handler.clone(),
-        }
     }
 }
 

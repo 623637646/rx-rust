@@ -5,6 +5,7 @@ use std::time::Duration;
 ///
 /// This scheduler allows scheduling tasks to be executed immediately or after a specified delay
 /// using Tokio's asynchronous runtime capabilities.
+#[derive(Clone)]
 pub struct TokioScheduler;
 
 impl Scheduler for TokioScheduler {

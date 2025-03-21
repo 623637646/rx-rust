@@ -12,10 +12,11 @@ use std::{
 
 /// An observable that delays the next value and completed events from the source observable by a duration.
 /// The error will be emitted immediately.
+#[derive(Clone)]
 pub struct Delay<OE, S, OR> {
     source_observable: OE,
     delay: Duration,
-    scheduler: Arc<S>,
+    scheduler: S,
     // Adding this to avoid the compiler error: `type annotations needed. multiple `impl`s satisfying `_: observer::Observer<*, *>` found`
     _marker: PhantomData<OR>,
 }
@@ -32,21 +33,7 @@ impl<OE, S, OR> Delay<OE, S, OR> {
         Delay {
             source_observable: source,
             delay,
-            scheduler: Arc::new(scheduler),
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<OE, S, OR> Clone for Delay<OE, S, OR>
-where
-    OE: Clone,
-{
-    fn clone(&self) -> Self {
-        Delay {
-            source_observable: self.source_observable.clone(),
-            delay: self.delay,
-            scheduler: self.scheduler.clone(),
+            scheduler,
             _marker: PhantomData,
         }
     }
@@ -85,7 +72,7 @@ where
         let delay_observer = DelayObserver {
             source_observer: source_observer.clone(),
             delay: self.delay,
-            scheduler: self.scheduler.clone(),
+            scheduler: self.scheduler,
         };
         let disposal = CallbackDisposal::new(move || {
             let mut source_observer = source_observer.lock().unwrap();
@@ -100,7 +87,7 @@ where
 pub struct DelayObserver<OR, S> {
     source_observer: Arc<Mutex<Option<OR>>>,
     delay: Duration,
-    scheduler: Arc<S>,
+    scheduler: S,
 }
 
 impl<T, E, OR, S> Observer<T, E> for DelayObserver<OR, S>

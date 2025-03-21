@@ -6,6 +6,7 @@ use crate::{
 use std::marker::PhantomData;
 
 /// This is an observable that maps the values of the source observable using a mapper function.
+#[derive(Clone)]
 pub struct Map<OE, F, TF, OR> {
     source: OE,
     mapper: F,
@@ -18,20 +19,6 @@ impl<OE, F, TF, OR> Map<OE, F, TF, OR> {
         Map {
             source,
             mapper,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<OE, F, TF, OR> Clone for Map<OE, F, TF, OR>
-where
-    OE: Clone,
-    F: Clone,
-{
-    fn clone(&self) -> Self {
-        Map {
-            source: self.source.clone(),
-            mapper: self.mapper.clone(),
             _marker: PhantomData,
         }
     }
