@@ -49,7 +49,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::checking_observer::CheckingObserver;
+    use crate::{
+        observable::observable_subscribe_ext::ObservableSubscribeExt,
+        utils::checking_observer::CheckingObserver,
+    };
 
     #[test]
     fn test_completed() {
@@ -58,6 +61,31 @@ mod tests {
         observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_ref_completed() {
+        let number = 333;
+        let observable = Just::new(&number);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[&333]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_mut_ref_completed() {
+        let mut number = 333;
+        let observable = Just::new(&mut number);
+        observable.subscribe_on(
+            |value| {
+                *value = 444;
+            },
+            |terminal| {
+                assert!(matches!(terminal, Terminal::Completed));
+            },
+        );
+        assert_eq!(number, 444);
     }
 
     #[test]
