@@ -35,10 +35,10 @@ pub trait ObservableSubscribeExt<T, E> {
     /// use rx_rust::observer::Terminal;
     /// let observable = Just::new(123);
     /// observable.subscribe_on(
-    ///     move |value: i32| {
+    ///     move |value| {
     ///         println!("Next value: {}", value);
     ///     },
-    ///     move |terminal: Terminal<Infallible>| {
+    ///     move |terminal| {
     ///         println!("Terminal event: {:?}", terminal);
     ///     }
     /// );

@@ -16,7 +16,7 @@ use std::convert::Infallible;
 /// let observable = Throw::new("My error");
 /// observable.subscribe_on(
 ///     |_| {},
-///     |terminal: Terminal<&str>| println!("Terminal event: {:?}", terminal)
+///     |terminal| println!("Terminal event: {:?}", terminal)
 /// );
 /// ```
 #[derive(Clone)]

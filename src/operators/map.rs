@@ -117,7 +117,7 @@ mod tests {
             observer.on_terminal(Terminal::Error("error".to_owned()));
             Subscription::new_none_disposal()
         });
-        let observable = observable.map(|value: i32| value.to_string());
+        let observable = observable.map(|value| value.to_string());
         let checker = CheckingObserver::new();
         observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&["333".to_owned()]));
@@ -131,7 +131,7 @@ mod tests {
             observer.on_next(444);
             Subscription::new_none_disposal()
         });
-        let observable = observable.map(|value: i32| value.to_string());
+        let observable = observable.map(|value| value.to_string());
         let checker: CheckingObserver<String, String> = CheckingObserver::new();
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
@@ -178,7 +178,7 @@ mod tests {
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
         })
-        .map(|value: i32| value.to_string())
+        .map(|value| value.to_string())
         .map(|value| value + "?");
         let checker = CheckingObserver::new();
         let subscription = observable.subscribe(checker.clone());

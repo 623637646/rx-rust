@@ -16,7 +16,7 @@ use std::convert::Infallible;
 /// let observable = Just::new(123);
 /// observable.subscribe_on(
 ///     |value| println!("Next value: {}", value),
-///     |terminal: Terminal<Infallible>| println!("Terminal event: {:?}", terminal)
+///     |terminal| println!("Terminal event: {:?}", terminal)
 /// );
 /// ```
 #[derive(Clone)]
