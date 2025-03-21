@@ -32,11 +32,10 @@ impl<E> Throw<E> {
 
 impl<E, OR> Observable<Infallible, E, OR> for Throw<E>
 where
-    E: Clone,
     OR: Observer<Infallible, E>,
 {
     fn subscribe(self, observer: OR) -> Subscription {
-        observer.on_terminal(Terminal::Error(self.error.clone()));
+        observer.on_terminal(Terminal::Error(self.error));
         Subscription::new_none_disposal()
     }
 }
