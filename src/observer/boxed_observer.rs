@@ -1,7 +1,8 @@
 use super::{Observer, Terminal};
 use std::sync::{Arc, Mutex};
 
-// TODO: doc
+/// TODO: doc
+/// https://stackoverflow.com/a/56447952/9315497
 pub struct BoxedObserver<'a, T, E> {
     on_next: Box<dyn FnMut(T) + Send + 'a>,
     on_terminal: Box<dyn FnOnce(Terminal<E>) + Send + 'a>,
