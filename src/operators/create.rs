@@ -46,19 +46,19 @@ impl<F> Create<F> {
     /// # Arguments
     ///
     /// * `handler` - The subscription handler function. It receives a `BoxedObserver` which it can use to emit values and terminal events. The function should return a `Subscription` which can be used to manage the subscription.
-    pub fn new<T, E>(handler: F) -> Create<F>
+    pub fn new<'a, T, E>(handler: F) -> Create<F>
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_wrap_observable`.
-        F: FnMut(BoxedObserver<T, E>) -> Subscription,
+        F: FnMut(BoxedObserver<'a, T, E>) -> Subscription,
     {
         Create { handler }
     }
 }
 
-impl<T, E, OR, F> Observable<T, E, OR> for Create<F>
+impl<'a, T, E, OR, F> Observable<T, E, OR> for Create<F>
 where
-    OR: Observer<T, E> + Send + 'static,
-    F: FnMut(BoxedObserver<T, E>) -> Subscription,
+    OR: Observer<T, E> + Send + 'a,
+    F: FnMut(BoxedObserver<'a, T, E>) -> Subscription,
 {
     fn subscribe(mut self, observer: OR) -> Subscription {
         (self.handler)(BoxedObserver::new(observer))

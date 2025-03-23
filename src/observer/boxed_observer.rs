@@ -2,13 +2,13 @@ use super::{Observer, Terminal};
 use std::sync::{Arc, Mutex};
 
 // TODO: doc
-pub struct BoxedObserver<T, E> {
-    on_next: Box<dyn FnMut(T) + Send>,
-    on_terminal: Box<dyn FnOnce(Terminal<E>) + Send>,
+pub struct BoxedObserver<'a, T, E> {
+    on_next: Box<dyn FnMut(T) + Send + 'a>,
+    on_terminal: Box<dyn FnOnce(Terminal<E>) + Send + 'a>,
 }
 
-impl<T, E> BoxedObserver<T, E> {
-    pub fn new(observer: impl Observer<T, E> + Send + 'static) -> Self {
+impl<'a, T, E> BoxedObserver<'a, T, E> {
+    pub fn new(observer: impl Observer<T, E> + Send + 'a) -> Self {
         let observer = Arc::new(Mutex::new(Some(observer)));
         let observer_cloned = observer.clone();
         BoxedObserver {
@@ -26,7 +26,7 @@ impl<T, E> BoxedObserver<T, E> {
     }
 }
 
-impl<T, E> Observer<T, E> for BoxedObserver<T, E> {
+impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
     fn on_next(&mut self, value: T) {
         (self.on_next)(value);
     }
