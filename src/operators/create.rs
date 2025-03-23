@@ -72,7 +72,10 @@ mod tests {
         observable::observable_subscribe_ext::ObservableSubscribeExt, observer::Terminal,
         operators::just::Just, utils::checking_observer::CheckingObserver,
     };
-    use std::time::Duration;
+    use std::{
+        sync::{Arc, Mutex},
+        time::Duration,
+    };
     use tokio::time::sleep;
 
     #[test]
@@ -217,5 +220,27 @@ mod tests {
         observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
+    }
+
+    #[tokio::test]
+    async fn test_boxed_observer_in_arc_mutex() {
+        let observable = Create::new(|observer| {
+            let observer = Arc::new(Mutex::new(observer));
+            let handle = tokio::spawn(async move {
+                let mut observer = Arc::try_unwrap(observer)
+                    .unwrap_or_else(|_| panic!())
+                    .into_inner()
+                    .unwrap();
+                observer.on_next(1);
+                observer.on_terminal(Terminal::<String>::Completed);
+            });
+            Subscription::new_with_disposal_callback(move || handle.abort())
+        });
+        let checker = CheckingObserver::new();
+        let subscription = observable.subscribe(checker.clone());
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.is_values_matched(&[1]));
+        assert!(checker.is_completed());
+        _ = subscription; // keep the subscription alive
     }
 }
