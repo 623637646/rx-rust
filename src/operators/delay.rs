@@ -2,7 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
     scheduler::Scheduler,
-    subscription::{disposable::CallbackDisposal, Subscription},
+    subscription::{Subscription, disposable::CallbackDisposal},
 };
 use std::{
     marker::PhantomData,
@@ -201,7 +201,7 @@ mod tests {
     async fn test_completed() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -236,7 +236,7 @@ mod tests {
     async fn test_error() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
@@ -307,7 +307,7 @@ mod tests {
     async fn test_multiple_subscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -359,7 +359,7 @@ mod tests {
     async fn test_multiple_operate() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -395,7 +395,7 @@ mod tests {
     async fn test_unsubscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -430,7 +430,7 @@ mod tests {
     async fn test_async_unsubscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -449,7 +449,7 @@ mod tests {
         sleep(Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&[1]));
         assert!(checker.is_unterminated());
-        tokio::spawn(async move {
+        tokio::spawn(async {
             subscription.unsubscribe(); // unsubscribe
         });
         sleep(Duration::from_millis(10)).await;

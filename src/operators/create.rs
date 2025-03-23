@@ -31,8 +31,8 @@ use crate::{
 ///     Subscription::new_none_disposal()
 /// });
 /// observable.subscribe_on(
-///     move |value| println!("value: {}", value),
-///     move |terminal: Terminal<String>| println!("terminal: {:?}", terminal),
+///     |value| println!("value: {}", value),
+///     |terminal: Terminal<String>| println!("terminal: {:?}", terminal),
 /// );
 /// ```
 #[derive(Clone)]
@@ -124,7 +124,7 @@ mod tests {
     async fn test_unsubscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
@@ -177,8 +177,8 @@ mod tests {
         let checker = CheckingObserver::new();
         observable.clone().subscribe(checker.clone());
         observable.subscribe_on(
-            move |value| println!("value: {}", value),
-            move |terminal| println!("terminal: {:?}", terminal),
+            |value| println!("value: {}", value),
+            |terminal| println!("terminal: {:?}", terminal),
         );
         assert!(checker.is_values_matched(&[333]));
         assert!(checker.is_completed());
@@ -190,7 +190,7 @@ mod tests {
     //     let (tx, rx) = tokio::sync::oneshot::channel();
     //     let observable = Create::new(|mut observer| {
     //         observer.on_next(333);
-    //         let handle = tokio::spawn(async move {
+    //         let handle = tokio::spawn(async {
     //             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     //             observer.on_next(444);
     //             observer.on_terminal(Terminal::<String>::Completed);
@@ -226,7 +226,7 @@ mod tests {
     async fn test_boxed_observer_in_arc_mutex() {
         let observable = Create::new(|observer| {
             let observer = Arc::new(Mutex::new(observer));
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 let mut observer = Arc::try_unwrap(observer)
                     .unwrap_or_else(|_| panic!())
                     .into_inner()

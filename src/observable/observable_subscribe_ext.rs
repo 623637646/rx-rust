@@ -14,7 +14,7 @@ use crate::{
 /// * `E` - The type of the error that can be emitted by the observable.
 /// * `FN` - The type of the callback function for handling emitted items.
 /// * `FT` - The type of the callback function for handling terminal events.
-pub trait ObservableSubscribeExt<T, E> {
+pub trait ObservableSubscribeExt<'a, T, E> {
     /// Subscribes to the observable with the given `on_next` and `on_terminal` callbacks.
     ///
     /// # Arguments
@@ -35,28 +35,28 @@ pub trait ObservableSubscribeExt<T, E> {
     /// use rx_rust::observer::Terminal;
     /// let observable = Just::new(123);
     /// observable.subscribe_on(
-    ///     move |value| {
+    ///     |value| {
     ///         println!("Next value: {}", value);
     ///     },
-    ///     move |terminal| {
+    ///     |terminal| {
     ///         println!("Terminal event: {:?}", terminal);
     ///     }
     /// );
     /// ```
     fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription
     where
-        FN: FnMut(T) + Send + 'static,
-        FT: FnOnce(Terminal<E>) + Send + 'static;
+        FN: FnMut(T) + Send + 'a,
+        FT: FnOnce(Terminal<E>) + Send + 'a;
 }
 
-impl<T, E, OE> ObservableSubscribeExt<T, E> for OE
+impl<'a, T, E, OE> ObservableSubscribeExt<'a, T, E> for OE
 where
-    OE: Observable<T, E, ObservableSubscribeExtObserver<T, E>>,
+    OE: Observable<T, E, ObservableSubscribeExtObserver<'a, T, E>>,
 {
     fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription
     where
-        FN: FnMut(T) + Send + 'static,
-        FT: FnOnce(Terminal<E>) + Send + 'static,
+        FN: FnMut(T) + Send + 'a,
+        FT: FnOnce(Terminal<E>) + Send + 'a,
     {
         let observer = ObservableSubscribeExtObserver {
             on_next: Box::new(on_next),
@@ -78,12 +78,12 @@ where
 ///
 /// * `on_next` - A callback function that will be called with each item emitted by the observable.
 /// * `on_terminal` - A callback function that will be called when the observable emits a terminal event.
-pub struct ObservableSubscribeExtObserver<T, E> {
-    on_next: Box<dyn FnMut(T) + Send>,
-    on_terminal: Box<dyn FnOnce(Terminal<E>) + Send>,
+pub struct ObservableSubscribeExtObserver<'a, T, E> {
+    on_next: Box<dyn FnMut(T) + Send + 'a>,
+    on_terminal: Box<dyn FnOnce(Terminal<E>) + Send + 'a>,
 }
 
-impl<T, E> Observer<T, E> for ObservableSubscribeExtObserver<T, E> {
+impl<T, E> Observer<T, E> for ObservableSubscribeExtObserver<'_, T, E> {
     fn on_next(&mut self, value: T) {
         (self.on_next)(value);
     }
@@ -109,10 +109,10 @@ mod tests {
         let mut checker_cloned_1 = checker.clone();
         let checker_cloned_2 = checker.clone();
         observable.subscribe_on(
-            move |value| {
+            |value| {
                 checker_cloned_1.on_next(value);
             },
-            move |terminal| {
+            |terminal| {
                 checker_cloned_2.on_terminal(terminal);
             },
         );
@@ -135,10 +135,10 @@ mod tests {
         let mut checker_cloned_1_1 = checker1.clone();
         let checker_cloned_1_2 = checker1.clone();
         observable.clone().subscribe_on(
-            move |value| {
+            |value| {
                 checker_cloned_1_1.on_next(value);
             },
-            move |terminal| {
+            |terminal| {
                 checker_cloned_1_2.on_terminal(terminal);
             },
         );
@@ -146,10 +146,10 @@ mod tests {
         let mut checker_cloned_2_1 = checker2.clone();
         let checker_cloned_2_2 = checker2.clone();
         observable.subscribe_on(
-            move |value| {
+            |value| {
                 checker_cloned_2_1.on_next(value);
             },
-            move |terminal| {
+            |terminal| {
                 checker_cloned_2_2.on_terminal(terminal);
             },
         );

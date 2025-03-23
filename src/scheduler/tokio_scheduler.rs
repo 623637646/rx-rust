@@ -61,7 +61,7 @@ mod tests {
     async fn test_schedule_with_no_delay() {
         let scheduler = TokioScheduler;
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let task = move || {
+        let task = || {
             tx.send(()).unwrap();
         };
         let start_time = tokio::time::Instant::now();
@@ -78,7 +78,7 @@ mod tests {
     async fn test_schedule_with_delay() {
         let scheduler = TokioScheduler;
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let task = move || {
+        let task = || {
             tx.send(()).unwrap();
         };
         let start_time = tokio::time::Instant::now();
@@ -95,7 +95,7 @@ mod tests {
     async fn test_schedule_with_abort() {
         let scheduler = TokioScheduler;
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let task = move || {
+        let task = || {
             tx.send(()).unwrap();
         };
         let start_time = tokio::time::Instant::now();
@@ -113,7 +113,7 @@ mod tests {
     async fn test_schedule_with_late_abort() {
         let scheduler = TokioScheduler;
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let task = move || {
+        let task = || {
             tx.send(()).unwrap();
         };
         let handle = scheduler.schedule(task, None);

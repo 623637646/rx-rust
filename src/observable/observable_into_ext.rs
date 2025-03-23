@@ -29,10 +29,10 @@ where
     /// let observable = Just::new(123);
     /// let observable = observable.into_observable();
     /// observable.subscribe_on(
-    ///     move |value| {
+    ///     |value| {
     ///         println!("value: {}", value);
     ///     },
-    ///     move |terminal| {
+    ///     |terminal| {
     ///         println!("terminal: {:?}", terminal);
     ///     },
     /// );
@@ -105,7 +105,7 @@ mod tests {
     async fn test_unsubscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            let handle = tokio::spawn(async move {
+            let handle = tokio::spawn(async {
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
                 observer.on_next(2);
                 tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
