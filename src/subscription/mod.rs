@@ -1,14 +1,14 @@
 pub mod disposable;
 
-use disposable::{CallbackDisposal, Disposable};
+use disposable::{BoxedDisposal, CallbackDisposal, Disposable};
 
 /// Subscription is from Observable pattern, it is used to unsubscribe the observable.
 /// The `dispose` method of `Disposable` will be called when the subscription is unsubscribe or dropped.
-pub struct Subscription(Vec<Box<dyn Disposable + Send>>);
+pub struct Subscription(Vec<BoxedDisposal<'static>>);
 
 impl Subscription {
     /// Create a new subscription.
-    pub fn new_with_disposals(disposables: Vec<Box<dyn Disposable + Send>>) -> Subscription {
+    pub fn new_with_disposals(disposables: Vec<BoxedDisposal<'static>>) -> Subscription {
         Subscription(disposables)
     }
 
@@ -18,15 +18,15 @@ impl Subscription {
     }
 
     pub fn new_with_disposal(disposable: impl Disposable + Send + 'static) -> Self {
-        Subscription(vec![Box::new(disposable)])
+        Subscription(vec![BoxedDisposal::new(disposable)])
     }
 
     pub fn new_with_disposal_callback(callback: impl FnOnce() + Send + 'static) -> Self {
-        Subscription(vec![Box::new(CallbackDisposal::new(callback))])
+        Subscription(vec![BoxedDisposal::new(CallbackDisposal::new(callback))])
     }
 
     pub fn append_disposable(&mut self, disposable: impl Disposable + Send + 'static) {
-        self.0.push(Box::new(disposable));
+        self.0.push(BoxedDisposal::new(disposable));
     }
 
     /// Unsubscribe the subscription.
@@ -52,7 +52,7 @@ mod tests {
         disposed: Arc<RwLock<bool>>,
     }
     impl Disposable for TestDisposal {
-        fn dispose(self: Box<Self>) {
+        fn dispose(self) {
             let mut disposed = self.disposed.write().unwrap();
             assert!(!*disposed);
             *disposed = true;

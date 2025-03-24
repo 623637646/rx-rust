@@ -1,4 +1,5 @@
 use super::Scheduler;
+use crate::subscription::disposable::{CallbackDisposal, Disposable};
 use std::time::Duration;
 
 /// `TokioScheduler` is an implementation of the `Scheduler` trait using Tokio runtime.
@@ -18,7 +19,7 @@ impl Scheduler for TokioScheduler {
     ///
     /// # Returns
     ///
-    /// Returns a closure that, when called, aborts the scheduled task if it hasn't started yet.
+    /// Returns a `Disposable` which can abort the scheduled task if it hasn't started yet.
     ///
     /// # Example
     ///
@@ -26,29 +27,27 @@ impl Scheduler for TokioScheduler {
     /// use std::time::Duration;
     /// use rx_rust::scheduler::Scheduler;
     /// use rx_rust::scheduler::tokio_scheduler::TokioScheduler;
-    ///
+    /// use rx_rust::subscription::disposable::Disposable;
     /// #[tokio::main]
     /// async fn main() {
     ///     let scheduler = TokioScheduler;
     ///     let task = || println!("Task executed!");
-    ///     let cancel_handle = scheduler.schedule(task, Some(Duration::from_secs(1)));
-    ///
-    ///     // To cancel the task before it executes:
-    ///     // cancel_handle();
+    ///     let disposal = scheduler.schedule(task, Some(Duration::from_secs(1)));
+    ///     disposal.dispose(); // To cancel the task before it executes:
     /// }
     /// ```
     fn schedule(
         &self,
         task: impl FnOnce() + Send + 'static,
         delay: Option<Duration>,
-    ) -> impl FnOnce() + Send + 'static {
+    ) -> impl Disposable {
         let handle = tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
             task();
         });
-        move || handle.abort()
+        CallbackDisposal::new(move || handle.abort())
     }
 }
 
@@ -99,8 +98,8 @@ mod tests {
             tx.send(()).unwrap();
         };
         let start_time = tokio::time::Instant::now();
-        let handle = scheduler.schedule(task, None);
-        handle();
+        let disposal = scheduler.schedule(task, None);
+        disposal.dispose();
         assert!(rx.await.is_err());
         let elapsed_time = start_time.elapsed();
         assert!(
@@ -116,9 +115,9 @@ mod tests {
         let task = || {
             tx.send(()).unwrap();
         };
-        let handle = scheduler.schedule(task, None);
+        let disposal = scheduler.schedule(task, None);
         tokio::time::sleep(Duration::from_millis(10)).await;
-        handle();
+        disposal.dispose();
         assert!(rx.await.is_ok());
     }
 }

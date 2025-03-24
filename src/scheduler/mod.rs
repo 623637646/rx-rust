@@ -1,3 +1,4 @@
+use crate::subscription::disposable::Disposable;
 use std::time::Duration;
 
 #[cfg(feature = "tokio-scheduler")]
@@ -8,10 +9,10 @@ pub trait Scheduler: Clone {
     /// Schedule a task to be executed.
     /// task: The task to be executed. The task must be Send and 'static, because the task will be executed in a different thread.
     /// delay: The delay before the task is executed.
-    /// Returns a handle that can be used to cancel the task.
+    /// Returns a `Disposable` that can be used to cancel the task.
     fn schedule(
         &self,
         task: impl FnOnce() + Send + 'static, // TODO: use Future instead of FnOnce?
         delay: Option<Duration>,
-    ) -> impl FnOnce() + Send + 'static;
+    ) -> impl Disposable;
 }
