@@ -1,26 +1,30 @@
 use super::{Observer, Terminal};
-use std::sync::{Arc, Mutex};
 
 /// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
 pub struct BoxedObserver<'a, T, E> {
-    on_next: Box<dyn FnMut(T) + Send + 'a>,
-    on_terminal: Box<dyn FnOnce(Terminal<E>) + Send + 'a>,
+    handle: Box<dyn FnMut(HandleEvent<T, E>) + Send + 'a>,
+}
+
+enum HandleEvent<T, E> {
+    Value(T),
+    Terminal(Terminal<E>),
 }
 
 impl<'a, T, E> BoxedObserver<'a, T, E> {
     pub fn new(observer: impl Observer<T, E> + Send + 'a) -> Self {
-        let observer = Arc::new(Mutex::new(Some(observer)));
-        let observer_cloned = observer.clone();
+        let mut observer = Some(observer);
         BoxedObserver {
-            on_next: Box::new(move |value| {
-                if let Some(observer) = observer.lock().unwrap().as_mut() {
-                    observer.on_next(value)
+            handle: Box::new(move |event| match event {
+                HandleEvent::Value(value) => {
+                    if let Some(observer) = &mut observer {
+                        observer.on_next(value);
+                    }
                 }
-            }),
-            on_terminal: Box::new(move |terminal| {
-                if let Some(observer) = observer_cloned.lock().unwrap().take() {
-                    observer.on_terminal(terminal)
+                HandleEvent::Terminal(terminal) => {
+                    if let Some(observer) = observer.take() {
+                        observer.on_terminal(terminal);
+                    }
                 }
             }),
         }
@@ -29,10 +33,10 @@ impl<'a, T, E> BoxedObserver<'a, T, E> {
 
 impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
     fn on_next(&mut self, value: T) {
-        (self.on_next)(value);
+        (self.handle)(HandleEvent::Value(value));
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
-        (self.on_terminal)(terminal);
+    fn on_terminal(mut self, terminal: Terminal<E>) {
+        (self.handle)(HandleEvent::Terminal(terminal));
     }
 }
