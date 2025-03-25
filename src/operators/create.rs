@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{boxed_observer::BoxedObserver, Observer},
+    observer::{Observer, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
 
