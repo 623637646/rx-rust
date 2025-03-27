@@ -4,11 +4,11 @@ use disposable::{BoxedDisposal, CallbackDisposal, Disposable};
 
 /// Subscription is from Observable pattern, it is used to unsubscribe the observable.
 /// The `dispose` method of `Disposable` will be called when the subscription is unsubscribe or dropped.
-pub struct Subscription(Vec<BoxedDisposal<'static>>);
+pub struct Subscription<'a>(Vec<BoxedDisposal<'a>>);
 
-impl Subscription {
+impl<'a> Subscription<'a> {
     /// Create a new subscription.
-    pub fn new_with_disposals(disposables: Vec<BoxedDisposal<'static>>) -> Subscription {
+    pub fn new_with_disposals(disposables: Vec<BoxedDisposal<'a>>) -> Subscription<'a> {
         Subscription(disposables)
     }
 
@@ -17,15 +17,15 @@ impl Subscription {
         Subscription(vec![])
     }
 
-    pub fn new_with_disposal(disposable: impl Disposable + Send + 'static) -> Self {
+    pub fn new_with_disposal(disposable: impl Disposable + Send + 'a) -> Self {
         Subscription(vec![BoxedDisposal::new(disposable)])
     }
 
-    pub fn new_with_disposal_callback(callback: impl FnOnce() + Send + 'static) -> Self {
+    pub fn new_with_disposal_callback(callback: impl FnOnce() + Send + 'a) -> Self {
         Subscription(vec![BoxedDisposal::new(CallbackDisposal::new(callback))])
     }
 
-    pub fn append_disposable(&mut self, disposable: impl Disposable + Send + 'static) {
+    pub fn append_disposable(&mut self, disposable: impl Disposable + Send + 'a) {
         self.0.push(BoxedDisposal::new(disposable));
     }
 
@@ -35,7 +35,7 @@ impl Subscription {
     }
 }
 
-impl Drop for Subscription {
+impl Drop for Subscription<'_> {
     fn drop(&mut self) {
         for disposable in self.0.drain(..) {
             disposable.dispose();

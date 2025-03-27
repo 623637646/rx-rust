@@ -17,7 +17,7 @@ use crate::{observer::Observer, subscription::Subscription};
 ///     }
 ///     ```
 ///     Because `Create` operator (or others) needs the `OR` generic type in the callback function.
-pub trait Observable<T, E, OR>
+pub trait Observable<'a, T, E, OR>
 where
     OR: Observer<T, E>,
 {
@@ -57,8 +57,8 @@ where
     ///
     /// struct MyObservable;
     ///
-    /// impl Observable<i32, (), MyObserver> for MyObservable {
-    ///     fn subscribe(self, mut observer: MyObserver) -> Subscription {
+    /// impl<'a> Observable<'a, i32, (), MyObserver> for MyObservable {
+    ///     fn subscribe(self, mut observer: MyObserver) -> Subscription<'a> {
     ///         observer.on_next(1);
     ///         observer.on_terminal(Terminal::Completed);
     ///         Subscription::new_none_disposal()
@@ -69,5 +69,5 @@ where
     /// let observer = MyObserver;
     /// let subscription = observable.subscribe(observer);
     /// ```
-    fn subscribe(self, observer: OR) -> Subscription;
+    fn subscribe(self, observer: OR) -> Subscription<'a>;
 }

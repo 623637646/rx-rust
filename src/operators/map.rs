@@ -24,13 +24,13 @@ impl<OE, F, TF, OR> Map<OE, F, TF, OR> {
     }
 }
 
-impl<TF, TT, E, OR, OE, F> Observable<TT, E, OR> for Map<OE, F, TF, OR>
+impl<'a, TF, TT, E, OR, OE, F> Observable<'a, TT, E, OR> for Map<OE, F, TF, OR>
 where
     OR: Observer<TT, E>,
-    OE: Observable<TF, E, MapObserver<OR, F>>,
+    OE: Observable<'a, TF, E, MapObserver<OR, F>>,
     F: FnMut(TF) -> TT + Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription {
+    fn subscribe(self, observer: OR) -> Subscription<'a> {
         let mapper = self.mapper.clone();
         let observer = MapObserver { observer, mapper };
         self.source.subscribe(observer)
@@ -80,10 +80,10 @@ pub trait MappableObservable<TF, TT, E, OR, F>: Sized {
     fn map(self, f: F) -> Map<Self, F, TF, OR>;
 }
 
-impl<TF, TT, E, OR, F, OE> MappableObservable<TF, TT, E, OR, F> for OE
+impl<'a, TF, TT, E, OR, F, OE> MappableObservable<TF, TT, E, OR, F> for OE
 where
     OR: Observer<TT, E>,
-    OE: Observable<TF, E, MapObserver<OR, F>>,
+    OE: Observable<'a, TF, E, MapObserver<OR, F>>,
     F: FnMut(TF) -> TT + Clone,
 {
     fn map(self, f: F) -> Map<Self, F, TF, OR> {

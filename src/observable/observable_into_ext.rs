@@ -11,7 +11,7 @@ use crate::observer::Observer;
 /// * `T` - The type of the items emitted by the observable.
 /// * `E` - The type of the error that can be emitted by the observable.
 /// * `OR` - The type of the observer that will receive events from the observable. It must implement the `Observer` trait.
-pub trait ObservableIntoExt<T, E, OR>
+pub trait ObservableIntoExt<'a, T, E, OR>
 where
     OR: Observer<T, E>,
 {
@@ -37,15 +37,15 @@ where
     ///     },
     /// );
     /// ```
-    fn into_observable(self) -> impl Observable<T, E, OR>;
+    fn into_observable(self) -> impl Observable<'a, T, E, OR>;
 }
 
-impl<T, E, OR, OE> ObservableIntoExt<T, E, OR> for OE
+impl<'a, T, E, OR, OE> ObservableIntoExt<'a, T, E, OR> for OE
 where
     OR: Observer<T, E>,
-    OE: Observable<T, E, OR>,
+    OE: Observable<'a, T, E, OR>,
 {
-    fn into_observable(self) -> impl Observable<T, E, OR> {
+    fn into_observable(self) -> impl Observable<'a, T, E, OR> {
         self
     }
 }

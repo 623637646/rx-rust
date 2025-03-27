@@ -43,7 +43,7 @@ pub trait ObservableSubscribeExt<'a, T, E> {
     ///     }
     /// );
     /// ```
-    fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription
+    fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription<'a>
     where
         FN: FnMut(T) + Send + 'a,
         FT: FnOnce(Terminal<E>) + Send + 'a;
@@ -51,9 +51,9 @@ pub trait ObservableSubscribeExt<'a, T, E> {
 
 impl<'a, T, E, OE> ObservableSubscribeExt<'a, T, E> for OE
 where
-    OE: Observable<T, E, ObservableSubscribeExtObserver<'a, T, E>>,
+    OE: Observable<'a, T, E, ObservableSubscribeExtObserver<'a, T, E>>,
 {
-    fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription
+    fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription<'a>
     where
         FN: FnMut(T) + Send + 'a,
         FT: FnOnce(Terminal<E>) + Send + 'a,

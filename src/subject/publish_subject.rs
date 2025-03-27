@@ -8,12 +8,12 @@ use crate::{
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
-pub struct PublishSubject<T, E> {
-    observers: Arc<Mutex<UniqueKeyStore<BoxedObserver<'static, T, E>>>>,
+pub struct PublishSubject<'a, T, E> {
+    observers: Arc<Mutex<UniqueKeyStore<BoxedObserver<'a, T, E>>>>,
     terminated: Arc<Mutex<Option<Terminal<E>>>>,
 }
 
-impl<T, E> PublishSubject<T, E> {
+impl<T, E> PublishSubject<'_, T, E> {
     fn new() -> Self {
         PublishSubject {
             observers: Arc::new(Mutex::new(UniqueKeyStore::new())),
@@ -22,19 +22,19 @@ impl<T, E> PublishSubject<T, E> {
     }
 }
 
-impl<T, E> Default for PublishSubject<T, E> {
+impl<T, E> Default for PublishSubject<'_, T, E> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<T, E, OR> Observable<T, E, OR> for PublishSubject<T, E>
+impl<'a, T, E, OR> Observable<'a, T, E, OR> for PublishSubject<'a, T, E>
 where
-    T: 'static,
-    E: Clone + 'static,
-    OR: Observer<T, E> + Send + 'static,
+    T: 'a,
+    E: Clone + 'a,
+    OR: Observer<T, E> + Send + 'a,
 {
-    fn subscribe(self, observer: OR) -> Subscription {
+    fn subscribe(self, observer: OR) -> Subscription<'a> {
         if let Some(terminated) = self.terminated.lock().unwrap().as_ref().cloned() {
             observer.on_terminal(terminated);
             return Subscription::new_none_disposal();
@@ -50,7 +50,7 @@ where
     }
 }
 
-impl<T, E> Observer<T, E> for PublishSubject<T, E>
+impl<T, E> Observer<T, E> for PublishSubject<'_, T, E>
 where
     T: Clone,
     E: Clone,
@@ -72,11 +72,11 @@ where
     }
 }
 
-impl<T, E, OR> Subject<T, E, OR> for PublishSubject<T, E>
+impl<'a, T, E, OR> Subject<'a, T, E, OR> for PublishSubject<'a, T, E>
 where
-    T: Clone + 'static,
-    E: Clone + 'static,
-    OR: Observer<T, E> + Send + 'static,
+    T: Clone + 'a,
+    E: Clone + 'a,
+    OR: Observer<T, E> + Send + 'a,
 {
 }
 
@@ -147,6 +147,59 @@ mod tests {
         subject.on_next(222);
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_unterminated());
+    }
+
+    #[test]
+    fn test_ref() {
+        let value = 111;
+        let error = 222;
+        let mut subject = PublishSubject::default();
+        let checker = CheckingObserver::new();
+
+        let subscription = subject.clone().subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(&value);
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_unterminated());
+
+        subject.on_terminal(Terminal::Error(&error));
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_error(&error));
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[tokio::test]
+    async fn test_async() {
+        let subject = PublishSubject::default();
+        let checker = CheckingObserver::new();
+        let subject_cloned = subject.clone();
+        let checker_cloned = checker.clone();
+
+        let handle = tokio::spawn(async move { subject_cloned.subscribe(checker_cloned) });
+        let subscription = handle.await;
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+
+        let mut subject_cloned = subject.clone();
+        let handle = tokio::spawn(async move {
+            subject_cloned.on_next(&111);
+        });
+        let _ = handle.await;
+        assert!(checker.is_values_matched(&[&111]));
+        assert!(checker.is_unterminated());
+
+        let subject_cloned = subject.clone();
+        let handle = tokio::spawn(async move {
+            subject_cloned.on_terminal(Terminal::<&str>::Completed);
+        });
+        let _ = handle.await;
+        assert!(checker.is_values_matched(&[&111]));
+        assert!(checker.is_completed());
+
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
