@@ -3,6 +3,7 @@ use crate::{
     observer::{Observer, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
+use std::marker::PhantomData;
 
 /// The `Create` struct is an implementation of the `Observable` trait that allows creating an observable
 /// from a custom subscription function. The subscription function is provided by the user and is responsible
@@ -36,29 +37,33 @@ use crate::{
 /// );
 /// ```
 #[derive(Clone)]
-pub struct Create<F> {
+pub struct Create<'a, 'b, F> {
     handler: F,
+    _marker: PhantomData<(&'a (), &'b ())>,
 }
 
-impl<F> Create<F> {
+impl<'a, 'b, F> Create<'a, 'b, F> {
     /// Creates a new `Create` observable.
     ///
     /// # Arguments
     ///
     /// * `handler` - The subscription handler function. It receives a `BoxedObserver` which it can use to emit values and terminal events. The function should return a `Subscription` which can be used to manage the subscription.
-    pub fn new<'a, T, E>(handler: F) -> Create<F>
+    pub fn new<T, E>(handler: F) -> Create<'a, 'b, F>
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_wrap_observable`.
-        F: FnMut(BoxedObserver<'a, T, E>) -> Subscription<'a>,
+        F: FnMut(BoxedObserver<'b, T, E>) -> Subscription<'a>,
     {
-        Create { handler }
+        Create {
+            handler,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<'a, T, E, OR, F> Observable<'a, T, E, OR> for Create<F>
+impl<'a, 'b, T, E, OR, F> Observable<'a, T, E, OR> for Create<'a, 'b, F>
 where
-    OR: Observer<T, E> + Send + 'a,
-    F: FnMut(BoxedObserver<'a, T, E>) -> Subscription<'a>,
+    OR: Observer<T, E> + Send + 'b,
+    F: FnMut(BoxedObserver<'b, T, E>) -> Subscription<'a>,
 {
     fn subscribe(mut self, observer: OR) -> Subscription<'a> {
         (self.handler)(BoxedObserver::new(observer))
@@ -241,6 +246,25 @@ mod tests {
         sleep(Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&[1]));
         assert!(checker.is_completed());
+        _ = subscription; // keep the subscription alive
+    }
+
+    // Test with lifetime. See more for the git commit.
+    #[test]
+    fn test_lifetime() {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(&1);
+            observer.on_terminal(Terminal::<String>::Completed);
+            Subscription::new_none_disposal()
+        });
+
+        let subscription;
+        {
+            let b = 1;
+            let checker = CheckingObserver::new();
+            checker.is_values_matched(&[&b]);
+            subscription = observable.subscribe(checker);
+        }
         _ = subscription; // keep the subscription alive
     }
 }
