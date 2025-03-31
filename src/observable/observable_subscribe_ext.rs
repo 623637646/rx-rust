@@ -14,7 +14,7 @@ use crate::{
 /// * `E` - The type of the error that can be emitted by the observable.
 /// * `FN` - The type of the callback function for handling emitted items.
 /// * `FT` - The type of the callback function for handling terminal events.
-pub trait ObservableSubscribeExt<'a, T, E> {
+pub trait ObservableSubscribeExt<'a, 'b, T, E> {
     /// Subscribes to the observable with the given `on_next` and `on_terminal` callbacks.
     ///
     /// # Arguments
@@ -45,18 +45,18 @@ pub trait ObservableSubscribeExt<'a, T, E> {
     /// ```
     fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription<'a>
     where
-        FN: FnMut(T) + Send + 'a,
-        FT: FnOnce(Terminal<E>) + Send + 'a;
+        FN: FnMut(T) + Send + 'b,
+        FT: FnOnce(Terminal<E>) + Send + 'b;
 }
 
-impl<'a, T, E, OE> ObservableSubscribeExt<'a, T, E> for OE
+impl<'a, 'b, T, E, OE> ObservableSubscribeExt<'a, 'b, T, E> for OE
 where
-    OE: Observable<'a, T, E, ObservableSubscribeExtObserver<'a, T, E>>,
+    OE: Observable<'a, T, E, ObservableSubscribeExtObserver<'b, T, E>>,
 {
     fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription<'a>
     where
-        FN: FnMut(T) + Send + 'a,
-        FT: FnOnce(Terminal<E>) + Send + 'a,
+        FN: FnMut(T) + Send + 'b,
+        FT: FnOnce(Terminal<E>) + Send + 'b,
     {
         let observer = ObservableSubscribeExtObserver {
             on_next: Box::new(on_next),
@@ -313,5 +313,22 @@ mod tests {
 
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive
+    }
+
+    // Test `on_next` and `on_terminal` with lifetime. See more for the git commit.
+    #[test]
+    fn test_lifetime() {
+        let observable = Just::new(1);
+        let subscription;
+        {
+            let a = 1;
+            let on_next = |_| println!("{}", &a);
+
+            let b = 1;
+            let on_terminal = |_| println!("{}", &b);
+
+            subscription = observable.subscribe_on(on_next, on_terminal);
+        }
+        _ = subscription; // keep the subscription alive
     }
 }
