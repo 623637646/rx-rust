@@ -51,7 +51,7 @@ impl<'a, 'b, F> Create<'a, 'b, F> {
     pub fn new<T, E>(handler: F) -> Create<'a, 'b, F>
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_wrap_observable`.
-        F: FnMut(BoxedObserver<'b, T, E>) -> Subscription<'a>,
+        F: FnOnce(BoxedObserver<'b, T, E>) -> Subscription<'a>,
     {
         Create {
             handler,
@@ -63,9 +63,9 @@ impl<'a, 'b, F> Create<'a, 'b, F> {
 impl<'a, 'b, T, E, OR, F> Observable<'a, T, E, OR> for Create<'a, 'b, F>
 where
     OR: Observer<T, E> + Send + 'b,
-    F: FnMut(BoxedObserver<'b, T, E>) -> Subscription<'a>,
+    F: FnOnce(BoxedObserver<'b, T, E>) -> Subscription<'a>,
 {
-    fn subscribe(mut self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'a> {
         (self.handler)(BoxedObserver::new(observer))
     }
 }
