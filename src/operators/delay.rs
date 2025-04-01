@@ -451,13 +451,18 @@ mod tests {
         assert!(checker.is_values_matched(&[&111]));
         assert!(checker.is_unterminated());
 
+        let handle = tokio::spawn(async { subscription.unsubscribe() });
+        let _ = handle.await;
+        assert!(checker.is_values_matched(&[&111]));
+        assert!(checker.is_unterminated());
+
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
             subject_cloned.on_terminal(Terminal::Error("error"));
         });
         let _ = handle.await;
         assert!(checker.is_values_matched(&[&111]));
-        assert!(checker.is_error("error"));
+        assert!(checker.is_unterminated());
 
         _ = subscription; // keep the subscription alive
     }

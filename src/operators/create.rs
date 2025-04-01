@@ -224,10 +224,8 @@ mod tests {
             let handle = tokio::spawn(async {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 observer.on_next(2);
-                tokio::spawn(async {
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                    observer.on_terminal(Terminal::<String>::Completed);
-                });
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                observer.on_terminal(Terminal::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
         });
@@ -247,9 +245,14 @@ mod tests {
         assert!(checker.is_values_matched(&[1, 2]));
         assert!(checker.is_unterminated());
 
+        let handle = tokio::spawn(async { subscription.unsubscribe() });
+        let _ = handle.await;
+        assert!(checker.is_values_matched(&[1, 2]));
+        assert!(checker.is_unterminated());
+
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_completed());
+        assert!(checker.is_unterminated());
 
         _ = subscription; // keep the subscription alive
     }
