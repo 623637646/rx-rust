@@ -1,7 +1,6 @@
 use super::Observable;
 use crate::observer::Observer;
 
-// TODO: Do we really need this trait?
 /// The `ObservableIntoExt` trait provides a convenient method to convert any type that implements
 /// the `Observable` trait into an `impl Observable<T, E, OR>`. This allows for more flexible and
 /// ergonomic usage of observables in the code.

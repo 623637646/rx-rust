@@ -1,4 +1,4 @@
-pub mod observable_into_ext;
+// pub mod observable_into_ext; // TODO: Do we really need this trait?
 pub mod observable_subscribe_ext;
 
 use crate::{observer::Observer, subscription::Subscription};
