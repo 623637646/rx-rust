@@ -1,11 +1,10 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
 };
 use std::{
-    marker::PhantomData,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -13,15 +12,13 @@ use std::{
 /// An observable that delays the next value and completed events from the source observable by a duration.
 /// The error will be emitted immediately.
 #[derive(Clone)]
-pub struct Delay<OE, S, OR> {
+pub struct Delay<OE, S> {
     source_observable: OE,
     delay: Duration,
     scheduler: S,
-    // Adding this to avoid the compiler error: `type annotations needed. multiple `impl`s satisfying `_: observer::Observer<*, *>` found`
-    _marker: PhantomData<OR>,
 }
 
-impl<OE, S, OR> Delay<OE, S, OR> {
+impl<OE, S> Delay<OE, S> {
     /// Creates a new `Delay` observable.
     ///
     /// # Arguments
@@ -29,22 +26,21 @@ impl<OE, S, OR> Delay<OE, S, OR> {
     /// * `source` - The source observable to delay.
     /// * `delay` - The duration to delay each emission.
     /// * `scheduler` - The scheduler to use for timing the delay.
-    pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S, OR> {
+    pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S> {
         Delay {
             source_observable: source,
             delay,
             scheduler,
-            _marker: PhantomData,
         }
     }
 }
 
-impl<'a, T, E, OE, OR, S> Observable<'a, T, E, OR> for Delay<OE, S, OR>
+impl<'a, T, E, OE, OR, S> Observable<'a, T, E, OR> for Delay<OE, S>
 where
     T: Send + 'static,
     E: Send + 'static,
     OR: Observer<T, E> + Send + 'static,
-    OE: Observable<'a, T, E, DelayObserver<OR, S>>,
+    OE: Observable<'a, T, E, DelayObserver<T, E, S>>,
     S: Scheduler,
 {
     // TODO: Do we need to use macro to generate this?
@@ -68,7 +64,7 @@ where
     // }
     // ```
     fn subscribe(self, observer: OR) -> Subscription<'a> {
-        let source_observer = Arc::new(Mutex::new(Some(observer)));
+        let source_observer = Arc::new(Mutex::new(Some(BoxedObserver::new(observer))));
         let delay_observer = DelayObserver {
             source_observer: source_observer.clone(),
             delay: self.delay,
@@ -84,17 +80,16 @@ where
     }
 }
 
-pub struct DelayObserver<OR, S> {
-    source_observer: Arc<Mutex<Option<OR>>>,
+pub struct DelayObserver<T, E, S> {
+    source_observer: Arc<Mutex<Option<BoxedObserver<'static, T, E>>>>,
     delay: Duration,
     scheduler: S,
 }
 
-impl<T, E, OR, S> Observer<T, E> for DelayObserver<OR, S>
+impl<T, E, S> Observer<T, E> for DelayObserver<T, E, S>
 where
     T: Send + 'static,
     E: Send + 'static,
-    OR: Observer<T, E> + Send + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
@@ -134,7 +129,7 @@ where
 }
 
 /// Extension trait to add the `delay` method to observables.
-pub trait DelayableObservable<T, E, OR, S>: Sized {
+pub trait DelayableObservable<T, E, S>: Sized {
     /// Delays the next value and completed events from the source observable by a duration.
     /// The error will be emitted immediately.
     ///
@@ -169,18 +164,17 @@ pub trait DelayableObservable<T, E, OR, S>: Sized {
     ///     );
     /// }
     /// ```
-    fn delay(self, delay: Duration, scheduler: S) -> Delay<Self, S, OR>;
+    fn delay(self, delay: Duration, scheduler: S) -> Delay<Self, S>;
 }
 
-impl<'a, T, E, OR, S, OE> DelayableObservable<T, E, OR, S> for OE
+impl<'a, T, E, S, OE> DelayableObservable<T, E, S> for OE
 where
     T: Send + 'static,
     E: Send + 'static,
-    OR: Observer<T, E> + Send + 'static,
-    OE: Observable<'a, T, E, DelayObserver<OR, S>>,
+    OE: Observable<'a, T, E, DelayObserver<T, E, S>>,
     S: Scheduler,
 {
-    fn delay(self, delay: Duration, scheduler: S) -> Delay<Self, S, OR> {
+    fn delay(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
         Delay::new(self, delay, scheduler)
     }
 }

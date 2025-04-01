@@ -244,7 +244,7 @@ mod tests {
 
         // Custom operations
         let observable_1 = subject.clone();
-        let observable_2 = subject.clone();
+        let observable_2 = observable_1.clone();
 
         let subscription_1 = observable_1.subscribe(checker_1.clone());
 

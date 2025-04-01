@@ -266,7 +266,7 @@ mod tests {
 
         // Custom operations
         let observable_1 = observable.clone();
-        let observable_2 = observable.clone();
+        let observable_2 = observable_1.clone();
 
         let subscription_1 = observable_1.subscribe(checker_1.clone());
 
