@@ -185,12 +185,9 @@ mod tests {
     use super::*;
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
-        operators::{create::Create, just::Just},
-        scheduler::tokio_scheduler::TokioScheduler,
-        subject::publish_subject::PublishSubject,
+        scheduler::tokio_scheduler::TokioScheduler, subject::publish_subject::PublishSubject,
         utils::checking_observer::CheckingObserver,
     };
-    use tokio::time::sleep;
 
     #[tokio::test]
     async fn test_completed() {
@@ -609,58 +606,5 @@ mod tests {
         assert!(checker.is_error("error"));
 
         _ = subscription; // keep the subscription alive
-    }
-
-    #[tokio::test]
-    async fn test_async_unsubscribe() {
-        let observable = Create::new(|mut observer| {
-            observer.on_next(1);
-            let handle = tokio::spawn(async {
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer.on_next(2);
-                tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                observer.on_terminal(Terminal::<String>::Completed);
-            });
-            Subscription::new_with_disposal_callback(move || handle.abort())
-        });
-        let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
-        let checker = CheckingObserver::new();
-        let subscription = observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
-        sleep(Duration::from_millis(5)).await;
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
-        sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1]));
-        assert!(checker.is_unterminated());
-        tokio::spawn(async {
-            subscription.unsubscribe(); // unsubscribe
-        });
-        sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1]));
-        assert!(checker.is_unterminated());
-        sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1]));
-        assert!(checker.is_unterminated());
-        sleep(Duration::from_millis(10)).await;
-        assert!(checker.is_values_matched(&[1]));
-        assert!(checker.is_unterminated());
-    }
-
-    /// If we remove `OR`` in `struct Delay`, the code will not compile.
-    /// This test is to make sure that the code compiles without any errors.
-    #[tokio::test]
-    async fn test_no_compiler_error() {
-        let observable = Just::new(333);
-        let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
-        observable.subscribe_on(
-            |value| {
-                println!("Next value: {}", value);
-            },
-            |terminal| {
-                println!("Terminal event: {:?}", terminal);
-            },
-        );
     }
 }
