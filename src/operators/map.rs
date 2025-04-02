@@ -10,14 +10,18 @@ use std::{
 
 /// This is an observable that maps the values of the source observable using a mapper function.
 #[derive(Clone)]
-pub struct Map<OE, F, T1> {
+pub struct Map<OE, F, T1, T2, E> {
     source: OE,
     mapper: Arc<Mutex<F>>,
-    _marker: PhantomData<T1>,
+    _marker: PhantomData<(T1, T2, E)>,
 }
 
-impl<OE, F, T1> Map<OE, F, T1> {
-    pub fn new(source: OE, mapper: F) -> Map<OE, F, T1> {
+impl<'a, 'b, OE, F, T1, T2, E> Map<OE, F, T1, T2, E> {
+    pub fn new(source: OE, mapper: F) -> Map<OE, F, T1, T2, E>
+    where
+        OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
+        F: FnMut(T1) -> T2,
+    {
         Map {
             source,
             mapper: Arc::new(Mutex::new(mapper)),
@@ -26,7 +30,7 @@ impl<OE, F, T1> Map<OE, F, T1> {
     }
 }
 
-impl<'a, 'b, T1, T2, E, OR, OE, F> Observable<'a, T2, E, OR> for Map<OE, F, T1>
+impl<'a, 'b, T1, T2, E, OR, OE, F> Observable<'a, T2, E, OR> for Map<OE, F, T1, T2, E>
 where
     OR: Observer<T2, E> + Send + 'b,
     OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
@@ -80,7 +84,7 @@ pub trait MappableObservable<T1, T2, E, F>: Sized {
     ///     }
     /// );
     /// ```
-    fn map(self, f: F) -> Map<Self, F, T1>;
+    fn map(self, f: F) -> Map<Self, F, T1, T2, E>;
 }
 
 impl<'a, 'b, T1, T2, E, F, OE> MappableObservable<T1, T2, E, F> for OE
@@ -88,7 +92,7 @@ where
     OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
     F: FnMut(T1) -> T2,
 {
-    fn map(self, f: F) -> Map<Self, F, T1> {
+    fn map(self, f: F) -> Map<Self, F, T1, T2, E> {
         Map::new(self, f)
     }
 }
@@ -97,10 +101,8 @@ where
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt,
-        operators::{create::Create, just::Just},
-        subject::publish_subject::PublishSubject,
-        utils::checking_observer::CheckingObserver,
+        observable::observable_subscribe_ext::ObservableSubscribeExt, operators::create::Create,
+        subject::publish_subject::PublishSubject, utils::checking_observer::CheckingObserver,
     };
 
     #[test]
@@ -388,6 +390,30 @@ mod tests {
 
         drop(subscription_1); // keep the subscription alive
         drop(subscription_2); // keep the subscription alive
+    }
+
+    #[test]
+    fn test_without_convenient_api() {
+        let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let observable = subject.clone();
+        let observable = Map::new(observable, |value| value.to_string());
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(111);
+        assert!(checker.is_values_matched(&["111".to_owned()]));
+        assert!(checker.is_unterminated());
+
+        subject.on_terminal(Terminal::Error("error"));
+        assert!(checker.is_values_matched(&["111".to_owned()]));
+        assert!(checker.is_error("error"));
+
+        drop(subscription); // keep the subscription alive
     }
 
     #[test]
