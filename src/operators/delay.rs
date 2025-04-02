@@ -94,7 +94,7 @@ where
 {
     fn on_next(&mut self, value: T) {
         let observer = self.source_observer.clone();
-        _ = self.scheduler.schedule(
+        self.scheduler.schedule(
             move || {
                 let mut observer = observer.lock().unwrap();
                 if let Some(observer) = &mut *observer {
@@ -108,7 +108,7 @@ where
     fn on_terminal(self, terminal: Terminal<E>) {
         match &terminal {
             Terminal::Completed => {
-                _ = self.scheduler.schedule(
+                self.scheduler.schedule(
                     move || {
                         let observer = self.source_observer.lock().unwrap().take();
                         if let Some(observer) = observer {

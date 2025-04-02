@@ -64,7 +64,7 @@ mod tests {
             tx.send(()).unwrap();
         };
         let start_time = tokio::time::Instant::now();
-        _ = scheduler.schedule(task, None);
+        scheduler.schedule(task, None);
         assert!(rx.await.is_ok());
         let elapsed_time = start_time.elapsed();
         assert!(
@@ -81,7 +81,7 @@ mod tests {
             tx.send(()).unwrap();
         };
         let start_time = tokio::time::Instant::now();
-        _ = scheduler.schedule(task, Some(Duration::from_millis(100)));
+        scheduler.schedule(task, Some(Duration::from_millis(100)));
         assert!(rx.await.is_ok());
         let elapsed_time = start_time.elapsed();
         assert!(
