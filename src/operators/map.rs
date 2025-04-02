@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
 use std::{
@@ -10,15 +10,14 @@ use std::{
 
 /// This is an observable that maps the values of the source observable using a mapper function.
 #[derive(Clone)]
-pub struct Map<OE, F, TF, OR> {
+pub struct Map<OE, F, T1> {
     source: OE,
     mapper: Arc<Mutex<F>>,
-    // Adding this to avoid the compiler error: `type annotations needed. multiple `impl`s satisfying `_: observer::Observer<*, *>` found`
-    _marker: PhantomData<(TF, OR)>,
+    _marker: PhantomData<T1>,
 }
 
-impl<OE, F, TF, OR> Map<OE, F, TF, OR> {
-    pub fn new(source: OE, mapper: F) -> Map<OE, F, TF, OR> {
+impl<OE, F, T1> Map<OE, F, T1> {
+    pub fn new(source: OE, mapper: F) -> Map<OE, F, T1> {
         Map {
             source,
             mapper: Arc::new(Mutex::new(mapper)),
@@ -27,32 +26,31 @@ impl<OE, F, TF, OR> Map<OE, F, TF, OR> {
     }
 }
 
-impl<'a, TF, TT, E, OR, OE, F> Observable<'a, TT, E, OR> for Map<OE, F, TF, OR>
+impl<'a, 'b, T1, T2, E, OR, OE, F> Observable<'a, T2, E, OR> for Map<OE, F, T1>
 where
-    OR: Observer<TT, E>,
-    OE: Observable<'a, TF, E, MapObserver<OR, F>>,
-    F: FnMut(TF) -> TT,
+    OR: Observer<T2, E> + Send + 'b,
+    OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
+    F: FnMut(T1) -> T2,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
         let observer = MapObserver {
-            observer,
+            observer: BoxedObserver::new(observer),
             mapper: self.mapper,
         };
         self.source.subscribe(observer)
     }
 }
 
-pub struct MapObserver<OR, F> {
-    observer: OR,
+pub struct MapObserver<'b, T2, E, F> {
+    observer: BoxedObserver<'b, T2, E>,
     mapper: Arc<Mutex<F>>,
 }
 
-impl<TF, TT, E, OR, F> Observer<TF, E> for MapObserver<OR, F>
+impl<T1, T2, E, F> Observer<T1, E> for MapObserver<'_, T2, E, F>
 where
-    OR: Observer<TT, E>,
-    F: FnMut(TF) -> TT,
+    F: FnMut(T1) -> T2,
 {
-    fn on_next(&mut self, value: TF) {
+    fn on_next(&mut self, value: T1) {
         self.observer.on_next(self.mapper.lock().unwrap()(value))
     }
 
@@ -62,7 +60,7 @@ where
 }
 
 /// Make the `Observable` mappable.
-pub trait MappableObservable<TF, TT, E, OR, F>: Sized {
+pub trait MappableObservable<T1, T2, E, F>: Sized {
     /// Maps the values of the source observable using a mapper function.
     ///
     /// # Example
@@ -82,16 +80,15 @@ pub trait MappableObservable<TF, TT, E, OR, F>: Sized {
     ///     }
     /// );
     /// ```
-    fn map(self, f: F) -> Map<Self, F, TF, OR>;
+    fn map(self, f: F) -> Map<Self, F, T1>;
 }
 
-impl<'a, TF, TT, E, OR, F, OE> MappableObservable<TF, TT, E, OR, F> for OE
+impl<'a, 'b, T1, T2, E, F, OE> MappableObservable<T1, T2, E, F> for OE
 where
-    OR: Observer<TT, E>,
-    OE: Observable<'a, TF, E, MapObserver<OR, F>>,
-    F: FnMut(TF) -> TT,
+    OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
+    F: FnMut(T1) -> T2,
 {
-    fn map(self, f: F) -> Map<Self, F, TF, OR> {
+    fn map(self, f: F) -> Map<Self, F, T1> {
         Map::new(self, f)
     }
 }
