@@ -56,50 +56,94 @@ mod tests {
 
     #[test]
     fn test_completed() {
-        let observable = Just::new(333);
+        let observable = Just::new(111);
         let checker = CheckingObserver::new();
-        observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[333]));
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
+
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
-    fn test_ref_completed() {
-        let number = 333;
-        let observable = Just::new(&number);
+    fn test_ref() {
+        let value = 111;
+
+        let observable = Just::new(&value);
         let checker = CheckingObserver::new();
-        observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[&333]));
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[&value]));
         assert!(checker.is_completed());
+
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
-    fn test_mut_ref_completed() {
-        let mut number = 333;
-        let observable = Just::new(&mut number);
-        observable.subscribe_on(
+    fn test_mut_ref() {
+        let mut value = 111;
+
+        let observable = Just::new(&mut value);
+        let checker = CheckingObserver::new();
+
+        let mut checker_cloned_1 = checker.clone();
+        let checker_cloned_2 = checker.clone();
+        let subscription = observable.subscribe_on(
             |value| {
-                *value = 444;
+                checker_cloned_1.on_next(*value);
+                *value *= 2;
             },
-            |terminal| {
-                assert!(matches!(terminal, Terminal::Completed));
-            },
+            |terminal| checker_cloned_2.on_terminal(terminal),
         );
-        assert_eq!(number, 444);
+
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+        assert_eq!(value, 222);
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[tokio::test]
+    async fn test_async() {
+        let observable = Just::new(111);
+        let checker = CheckingObserver::new();
+
+        let checker_cloned = checker.clone();
+        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let subscription = handle.await.unwrap();
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+
+        let handle = tokio::spawn(async { subscription.unsubscribe() });
+        let _ = handle.await;
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
-    fn test_multiple_subscribe() {
-        let observable = Just::new(333);
+    fn test_subscribe_by_different_observer() {
+        let observable = Just::new(111);
+        let checker_1 = CheckingObserver::new();
+        let checker_2 = CheckingObserver::new();
 
-        let checker = CheckingObserver::new();
-        observable.clone().subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
+        // Custom operations
+        let observable_1 = observable.clone();
+        let observable_2 = observable_1.clone();
 
-        let checker = CheckingObserver::new();
-        observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[333]));
-        assert!(checker.is_completed());
+        let subscription_1 = observable_1.subscribe(checker_1.clone());
+
+        let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
+        let subscription_2 = observable_2.subscribe_on(on_next, on_terminal);
+
+        assert!(checker_1.is_values_matched(&[111]));
+        assert!(checker_1.is_completed());
+        assert!(checker_2.is_values_matched(&[111]));
+        assert!(checker_2.is_completed());
+
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 }
