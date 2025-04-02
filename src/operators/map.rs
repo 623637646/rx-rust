@@ -101,8 +101,10 @@ where
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt, operators::create::Create,
-        subject::publish_subject::PublishSubject, utils::checking_observer::CheckingObserver,
+        observable::observable_subscribe_ext::ObservableSubscribeExt,
+        operators::{create::Create, just::Just},
+        subject::publish_subject::PublishSubject,
+        utils::checking_observer::CheckingObserver,
     };
 
     #[test]
@@ -413,6 +415,23 @@ mod tests {
         assert!(checker.is_values_matched(&["111".to_owned()]));
         assert!(checker.is_error("error"));
 
+        drop(subscription); // keep the subscription alive
+    }
+
+    #[test]
+    fn test_lifetime() {
+        let observable = Just::new(&1);
+
+        // Custom operations
+        let observable = observable.map(|value| value);
+
+        let subscription;
+        {
+            let b = 1;
+            let checker = CheckingObserver::new();
+            checker.is_values_matched(&[&b]);
+            subscription = observable.subscribe(checker);
+        }
         drop(subscription); // keep the subscription alive
     }
 
