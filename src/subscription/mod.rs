@@ -129,4 +129,42 @@ mod tests {
         }
         assert!(*disposed.read().unwrap());
     }
+
+    #[test]
+    fn test_append_disposable() {
+        let disposed_1 = Arc::new(RwLock::new(false));
+        let disposed_2 = Arc::new(RwLock::new(false));
+        let test_disposal_1 = TestDisposal {
+            disposed: disposed_1.clone(),
+        };
+        let test_disposal_2 = TestDisposal {
+            disposed: disposed_2.clone(),
+        };
+        let mut subscription = Subscription::new_with_disposal(test_disposal_1);
+        subscription.append_disposable(test_disposal_2);
+        assert!(!*disposed_1.read().unwrap());
+        assert!(!*disposed_2.read().unwrap());
+        subscription.unsubscribe();
+        assert!(*disposed_1.read().unwrap());
+        assert!(*disposed_2.read().unwrap());
+    }
+
+    #[test]
+    fn test_add() {
+        let disposed_1 = Arc::new(RwLock::new(false));
+        let disposed_2 = Arc::new(RwLock::new(false));
+        let test_disposal_1 = TestDisposal {
+            disposed: disposed_1.clone(),
+        };
+        let test_disposal_2 = TestDisposal {
+            disposed: disposed_2.clone(),
+        };
+        let subscription = Subscription::new_with_disposal(test_disposal_1);
+        let subscription = subscription + test_disposal_2;
+        assert!(!*disposed_1.read().unwrap());
+        assert!(!*disposed_2.read().unwrap());
+        subscription.unsubscribe();
+        assert!(*disposed_1.read().unwrap());
+        assert!(*disposed_2.read().unwrap());
+    }
 }
