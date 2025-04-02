@@ -335,4 +335,31 @@ mod tests {
         }
         drop(subscription); // keep the subscription alive
     }
+
+    #[test]
+    fn test_fn() {
+        struct MyStruct;
+        impl MyStruct {
+            fn test(self) {}
+            fn mut_test(&mut self) {}
+            // fn ref_test(&self) {}
+        }
+        let mut s1 = MyStruct;
+        let s2 = MyStruct;
+
+        let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+
+        // Custom operations
+        let observable = subject.clone();
+
+        let subscription = observable.subscribe_on(
+            |_| {
+                s1.mut_test();
+            },
+            |_| {
+                s2.test();
+            },
+        );
+        drop(subscription); // keep the subscription alive
+    }
 }

@@ -327,4 +327,22 @@ mod tests {
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_unterminated());
     }
+
+    #[test]
+    fn test_fn() {
+        struct MyStruct;
+        impl MyStruct {
+            fn test(self) {}
+            // fn mut_test(&mut self) {}
+            // fn ref_test(&self) {}
+        }
+        let s = MyStruct;
+
+        let _ = Create::new(|mut observer| {
+            s.test();
+            observer.on_next(111);
+            observer.on_terminal(Terminal::Error("error"));
+            Subscription::new_none_disposal()
+        });
+    }
 }

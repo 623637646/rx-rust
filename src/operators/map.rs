@@ -97,6 +97,7 @@ mod tests {
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
         operators::{create::Create, just::Just},
+        subject::publish_subject::PublishSubject,
         utils::checking_observer::CheckingObserver,
     };
     use std::convert::Infallible;
@@ -240,5 +241,27 @@ mod tests {
         assert_eq!(error, 444);
 
         drop(subscription); // keep the subscription alive
+    }
+
+    #[test]
+    fn test_fn() {
+        struct MyStruct;
+        impl MyStruct {
+            // fn test(self) {}
+            fn mut_test(&mut self) {}
+            // fn ref_test(&self) {}
+        }
+        let mut s = MyStruct;
+
+        let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+
+        // Custom operations
+        let observable = subject.clone();
+        let observable = observable.map(|value| {
+            s.mut_test();
+            value.to_string()
+        });
+
+        observable.subscribe_on(|_| {}, |_| {});
     }
 }
