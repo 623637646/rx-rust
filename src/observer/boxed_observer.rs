@@ -36,3 +36,87 @@ impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
         self.0(HandleEvent::Terminal(terminal));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::utils::checking_observer::CheckingObserver;
+
+    #[test]
+    fn test_completed() {
+        let checker = CheckingObserver::new();
+        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        boxed_observer.on_next(111);
+        boxed_observer.on_terminal(Terminal::<&str>::Completed);
+
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_error() {
+        let checker = CheckingObserver::new();
+        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        boxed_observer.on_next(111);
+        boxed_observer.on_terminal(Terminal::Error("error"));
+
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_error("error"));
+    }
+
+    #[test]
+    fn test_ref() {
+        let value = 111;
+        let error = 222;
+        let checker = CheckingObserver::new();
+        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        boxed_observer.on_next(&value);
+        boxed_observer.on_terminal(Terminal::Error(&error));
+
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_error(&error));
+    }
+
+    #[test]
+    fn test_mut_ref() {
+        struct MyObserver;
+        impl Observer<&mut i32, &mut i32> for MyObserver {
+            fn on_next(&mut self, value: &mut i32) {
+                *value *= 2
+            }
+
+            fn on_terminal(self, terminal: Terminal<&mut i32>) {
+                match terminal {
+                    Terminal::Completed => unreachable!(),
+                    Terminal::Error(error) => *error *= 2,
+                }
+            }
+        }
+        let mut value = 111;
+        let mut error = 222;
+        let observer = MyObserver;
+        let mut boxed_observer = BoxedObserver::new(observer);
+        boxed_observer.on_next(&mut value);
+        boxed_observer.on_terminal(Terminal::Error(&mut error));
+
+        assert_eq!(value, 222);
+        assert_eq!(error, 444);
+    }
+
+    #[tokio::test]
+    async fn test_async() {
+        let checker = CheckingObserver::new();
+        let checker_cloned = checker.clone();
+        let mut boxed_observer = tokio::spawn(async { BoxedObserver::new(checker_cloned) })
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            boxed_observer.on_next(111);
+            boxed_observer.on_terminal(Terminal::Error("error"));
+            assert!(checker.is_values_matched(&[111]));
+            assert!(checker.is_error("error"));
+        })
+        .await
+        .unwrap();
+    }
+}
