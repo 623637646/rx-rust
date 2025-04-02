@@ -221,12 +221,12 @@ mod tests {
         let handle = tokio::spawn(async move {
             subject_cloned.on_next(&111);
         });
-        let _ = handle.await;
+        handle.await.unwrap();
         assert!(checker.is_values_matched(&[&111]));
         assert!(checker.is_unterminated());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
-        let _ = handle.await;
+        handle.await.unwrap();
         assert!(checker.is_values_matched(&[&111]));
         assert!(checker.is_unterminated());
 
@@ -234,7 +234,7 @@ mod tests {
         let handle = tokio::spawn(async move {
             subject_cloned.on_terminal(Terminal::Error("error"));
         });
-        let _ = handle.await;
+        handle.await.unwrap();
         assert!(checker.is_values_matched(&[&111]));
         assert!(checker.is_unterminated());
 

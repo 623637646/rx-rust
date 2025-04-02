@@ -246,7 +246,7 @@ mod tests {
         assert!(checker.is_unterminated());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
-        let _ = handle.await;
+        handle.await.unwrap();
         assert!(checker.is_values_matched(&[1, 2]));
         assert!(checker.is_unterminated());
 

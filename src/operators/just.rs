@@ -116,7 +116,7 @@ mod tests {
         assert!(checker.is_completed());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
-        let _ = handle.await;
+        handle.await.unwrap();
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
 
