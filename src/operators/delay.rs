@@ -195,9 +195,8 @@ mod tests {
         let checker = CheckingObserver::new();
 
         // Custom operations
-        let observable = subject
-            .clone()
-            .delay(Duration::from_millis(100), TokioScheduler);
+        let observable = subject.clone();
+        let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -250,9 +249,8 @@ mod tests {
         let checker = CheckingObserver::new();
 
         // Custom operations
-        let observable = subject
-            .clone()
-            .delay(Duration::from_millis(100), TokioScheduler);
+        let observable = subject.clone();
+        let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -307,9 +305,9 @@ mod tests {
         let checker_3 = CheckingObserver::new();
 
         // Custom operations
-        let observable_1 = subject
-            .clone()
-            .delay(Duration::from_millis(100), TokioScheduler);
+        let observable = subject.clone();
+        let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
+        let observable_1 = observable;
         let observable_2 = observable_1.clone();
         let observable_3 = observable_2.clone();
 
@@ -422,9 +420,8 @@ mod tests {
         let checker = CheckingObserver::new();
 
         // Custom operations
-        let observable = subject
-            .clone()
-            .delay(Duration::from_millis(100), TokioScheduler);
+        let observable = subject.clone();
+        let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -469,9 +466,9 @@ mod tests {
         let checker_2 = CheckingObserver::new();
 
         // Custom operations
-        let observable_1 = subject
-            .clone()
-            .delay(Duration::from_millis(100), TokioScheduler);
+        let observable = subject.clone();
+        let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
+        let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
         let subscription_1 = observable_1.subscribe(checker_1.clone());
@@ -517,8 +514,8 @@ mod tests {
         let checker = CheckingObserver::new();
 
         // Custom operations
-        let observable = subject
-            .clone()
+        let observable = subject.clone();
+        let observable = observable
             .delay(Duration::from_millis(50), TokioScheduler)
             .delay(Duration::from_millis(50), TokioScheduler);
 
@@ -559,7 +556,8 @@ mod tests {
         let checker = CheckingObserver::new();
 
         // Custom operations
-        let observable = Delay::new(subject.clone(), Duration::from_millis(100), TokioScheduler);
+        let observable = subject.clone();
+        let observable = Delay::new(observable, Duration::from_millis(100), TokioScheduler);
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));

@@ -156,8 +156,9 @@ mod tests {
         let checker_2 = CheckingObserver::new();
 
         // Custom operations
-        let observable_1 = subject.clone();
-        let observable_2 = subject.clone();
+        let observable = subject.clone();
+        let observable_1 = observable;
+        let observable_2 = observable_1.clone();
 
         let (on_next, on_terminal) = checker_1.fn_for_subscribe_on();
         let subscription_1 = observable_1.subscribe_on(on_next, on_terminal);
