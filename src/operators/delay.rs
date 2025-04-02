@@ -299,7 +299,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_unsubscribe() {
-        let mut subject: PublishSubject<i32, &str> = PublishSubject::default();
+        let mut subject = PublishSubject::default();
         let checker_1 = CheckingObserver::new();
         let checker_2 = CheckingObserver::new();
         let checker_3 = CheckingObserver::new();
