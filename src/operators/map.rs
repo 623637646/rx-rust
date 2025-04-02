@@ -3,13 +3,16 @@ use crate::{
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 
 /// This is an observable that maps the values of the source observable using a mapper function.
 #[derive(Clone)]
 pub struct Map<OE, F, TF, OR> {
     source: OE,
-    mapper: F,
+    mapper: Arc<Mutex<F>>,
     // Adding this to avoid the compiler error: `type annotations needed. multiple `impl`s satisfying `_: observer::Observer<*, *>` found`
     _marker: PhantomData<(TF, OR)>,
 }
@@ -18,7 +21,7 @@ impl<OE, F, TF, OR> Map<OE, F, TF, OR> {
     pub fn new(source: OE, mapper: F) -> Map<OE, F, TF, OR> {
         Map {
             source,
-            mapper,
+            mapper: Arc::new(Mutex::new(mapper)),
             _marker: PhantomData,
         }
     }
@@ -28,18 +31,20 @@ impl<'a, TF, TT, E, OR, OE, F> Observable<'a, TT, E, OR> for Map<OE, F, TF, OR>
 where
     OR: Observer<TT, E>,
     OE: Observable<'a, TF, E, MapObserver<OR, F>>,
-    F: FnMut(TF) -> TT + Clone,
+    F: FnMut(TF) -> TT,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
-        let mapper = self.mapper.clone();
-        let observer = MapObserver { observer, mapper };
+        let observer = MapObserver {
+            observer,
+            mapper: self.mapper,
+        };
         self.source.subscribe(observer)
     }
 }
 
 pub struct MapObserver<OR, F> {
     observer: OR,
-    mapper: F,
+    mapper: Arc<Mutex<F>>,
 }
 
 impl<TF, TT, E, OR, F> Observer<TF, E> for MapObserver<OR, F>
@@ -48,7 +53,7 @@ where
     F: FnMut(TF) -> TT,
 {
     fn on_next(&mut self, value: TF) {
-        self.observer.on_next((self.mapper)(value))
+        self.observer.on_next(self.mapper.lock().unwrap()(value))
     }
 
     fn on_terminal(self, terminal: Terminal<E>) {
@@ -84,7 +89,7 @@ impl<'a, TF, TT, E, OR, F, OE> MappableObservable<TF, TT, E, OR, F> for OE
 where
     OR: Observer<TT, E>,
     OE: Observable<'a, TF, E, MapObserver<OR, F>>,
-    F: FnMut(TF) -> TT + Clone,
+    F: FnMut(TF) -> TT,
 {
     fn map(self, f: F) -> Map<Self, F, TF, OR> {
         Map::new(self, f)
