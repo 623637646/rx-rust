@@ -1,6 +1,7 @@
 pub mod disposable;
 
 use disposable::{BoxedDisposal, CallbackDisposal, Disposable};
+use std::ops::Add;
 
 /// Subscription is from Observable pattern, it is used to unsubscribe the observable.
 /// The `dispose` method of `Disposable` will be called when the subscription is unsubscribe or dropped.
@@ -40,6 +41,19 @@ impl Drop for Subscription<'_> {
         for disposable in self.0.drain(..) {
             disposable.dispose();
         }
+    }
+}
+
+impl<'a, T> Add<T> for Subscription<'a>
+where
+    T: Disposable + Send + 'a,
+{
+    type Output = Subscription<'a>;
+
+    #[inline]
+    fn add(mut self, other: T) -> Subscription<'a> {
+        self.append_disposable(other);
+        self
     }
 }
 

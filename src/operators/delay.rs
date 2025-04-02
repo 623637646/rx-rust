@@ -52,13 +52,12 @@ where
     //     ($builder:expr) => {
     //         fn subscribe(self, observer: OR) -> $crate::subscription::Subscription {
     //             let source_observer = std::sync::Arc::new(std::sync::Mutex::new(Some(observer)));
-    //             let mut subscription = $builder(self, source_observer.clone());
+    //             let subscription = $builder(self, source_observer.clone());
     //             let disposal = $crate::subscription::disposable::CallbackDisposal::new(move || {
     //                 let mut source_observer = source_observer.lock().unwrap();
     //                 source_observer.take();
     //             });
-    //             subscription.append_disposable(disposal);
-    //             subscription
+    //             subscription + disposal
     //         }
     //     };
     // }
@@ -74,9 +73,8 @@ where
             let mut source_observer = source_observer.lock().unwrap();
             source_observer.take();
         });
-        let mut subscription = self.source_observable.subscribe(delay_observer);
-        subscription.append_disposable(disposal);
-        subscription
+        let subscription = self.source_observable.subscribe(delay_observer);
+        subscription + disposal
     }
 }
 
