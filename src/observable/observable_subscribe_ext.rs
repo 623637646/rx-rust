@@ -122,7 +122,7 @@ mod tests {
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
 
-        _ = subscription; // keep the subscription alive
+        drop(subscription); // keep the subscription alive
     }
 
     #[test]
@@ -146,7 +146,7 @@ mod tests {
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_error("error"));
 
-        _ = subscription; // keep the subscription alive
+        drop(subscription); // keep the subscription alive
     }
 
     #[test]
@@ -192,7 +192,7 @@ mod tests {
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_error("error"));
 
-        _ = subscription_2; // keep the subscription alive
+        drop(subscription_2); // keep the subscription alive
     }
 
     #[test]
@@ -219,7 +219,7 @@ mod tests {
         assert!(checker.is_values_matched(&[&value]));
         assert!(checker.is_error(&error));
 
-        _ = subscription; // keep the subscription alive
+        drop(subscription); // keep the subscription alive
     }
 
     #[test]
@@ -242,7 +242,7 @@ mod tests {
         assert!(checker.is_completed());
         assert_eq!(value, 222);
 
-        _ = subscription; // keep the subscription alive
+        drop(subscription); // keep the subscription alive
     }
 
     #[tokio::test]
@@ -282,8 +282,6 @@ mod tests {
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[&111]));
         assert!(checker.is_unterminated());
-
-        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -316,8 +314,8 @@ mod tests {
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_error("error"));
 
-        _ = subscription_1; // keep the subscription alive
-        _ = subscription_2; // keep the subscription alive
+        drop(subscription_1); // keep the subscription alive
+        drop(subscription_2); // keep the subscription alive
     }
 
     // Test `on_next` and `on_terminal` with lifetime. See more for the git commit.
@@ -334,6 +332,6 @@ mod tests {
 
             subscription = observable.subscribe_on(on_next, on_terminal);
         }
-        _ = subscription; // keep the subscription alive
+        drop(subscription); // keep the subscription alive
     }
 }

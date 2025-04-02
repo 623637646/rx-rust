@@ -136,7 +136,7 @@ mod tests {
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
         assert!(checker.is_unterminated());
-        _ = subscription; // keep the subscription alive
+        drop(subscription); // keep the subscription alive
     }
 
     #[test]
@@ -196,6 +196,6 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&["1?".to_owned(), "2?".to_owned()]));
         assert!(checker.is_completed());
-        _ = subscription; // keep the subscription alive
+        drop(subscription); // keep the subscription alive
     }
 }
