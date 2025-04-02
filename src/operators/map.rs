@@ -109,12 +109,26 @@ mod tests {
 
     #[test]
     fn test_completed() {
-        let observable = Just::new(333);
-        let observable = observable.map(|value| value.to_string());
+        let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
         let checker = CheckingObserver::new();
-        observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&["333".to_owned()]));
+
+        // Custom operations
+        let observable = subject.clone();
+        let observable = observable.map(|value| value.to_string());
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(111);
+        assert!(checker.is_values_matched(&["111".to_owned()]));
+        assert!(checker.is_unterminated());
+
+        subject.on_terminal(Terminal::<&str>::Completed);
+        assert!(checker.is_values_matched(&["111".to_owned()]));
         assert!(checker.is_completed());
+
+        drop(subscription); // keep the subscription alive
     }
 
     #[test]
@@ -144,6 +158,43 @@ mod tests {
         assert!(checker.is_values_matched(&["333".to_owned(), "444".to_owned()]));
         assert!(checker.is_unterminated());
         drop(subscription); // keep the subscription alive
+    }
+
+    #[test]
+    fn test_subscribe_by_different_observer() {
+        let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+        let checker_1 = CheckingObserver::new();
+        let checker_2 = CheckingObserver::new();
+
+        // Custom operations
+        let observable = subject.clone();
+        let observable = observable.map(|value| value.to_string());
+        let observable_1 = observable;
+        let observable_2 = observable_1.clone();
+
+        let subscription_1 = observable_1.subscribe(checker_1.clone());
+
+        let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
+        let subscription_2 = observable_2.subscribe_on(on_next, on_terminal);
+        assert!(checker_1.is_values_matched(&[]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[]));
+        assert!(checker_2.is_unterminated());
+
+        subject.on_next(111);
+        assert!(checker_1.is_values_matched(&["111".to_owned()]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&["111".to_owned()]));
+        assert!(checker_2.is_unterminated());
+
+        subject.on_terminal(Terminal::Error("error"));
+        assert!(checker_1.is_values_matched(&["111".to_owned()]));
+        assert!(checker_1.is_error("error"));
+        assert!(checker_2.is_values_matched(&["111".to_owned()]));
+        assert!(checker_2.is_error("error"));
+
+        drop(subscription_1); // keep the subscription alive
+        drop(subscription_2); // keep the subscription alive
     }
 
     #[test]
