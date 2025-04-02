@@ -95,6 +95,7 @@ where
 mod tests {
     use super::*;
     use crate::{
+        observable::observable_subscribe_ext::ObservableSubscribeExt,
         operators::{create::Create, just::Just},
         utils::checking_observer::CheckingObserver,
     };
@@ -196,6 +197,48 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         assert!(checker.is_values_matched(&["1?".to_owned(), "2?".to_owned()]));
         assert!(checker.is_completed());
+        drop(subscription); // keep the subscription alive
+    }
+
+    #[test]
+    fn test_mut_ref() {
+        let mut value = 111;
+        let mut error = 222;
+
+        let observable = Create::new(|mut observer| {
+            observer.on_next(&mut value);
+            observer.on_terminal(Terminal::Error(&mut error));
+            Subscription::new_none_disposal()
+        });
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let observable = observable.map(|value| {
+            *value *= 2;
+            value
+        });
+
+        let mut checker_cloned_1 = checker.clone();
+        let checker_cloned_2 = checker.clone();
+        let subscription = observable.subscribe_on(
+            |value| {
+                checker_cloned_1.on_next(*value);
+                *value *= 2;
+            },
+            |terminal| match terminal {
+                Terminal::Completed => panic!(),
+                Terminal::Error(error) => {
+                    checker_cloned_2.on_terminal(Terminal::Error(*error));
+                    *error *= 2;
+                }
+            },
+        );
+
+        assert!(checker.is_values_matched(&[222]));
+        assert!(checker.is_error(222));
+        assert_eq!(value, 444);
+        assert_eq!(error, 444);
+
         drop(subscription); // keep the subscription alive
     }
 }
