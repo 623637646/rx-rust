@@ -40,3 +40,32 @@ impl Disposable for BoxedDisposal<'_> {
         self.0();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_callback_disposal() {
+        let mut called = false;
+        let disposal = CallbackDisposal::new(|| {
+            called = true;
+        });
+        disposal.dispose();
+        assert!(called);
+    }
+
+    #[test]
+    fn test_boxed_disposal() {
+        let boxed_disposal;
+        let mut called = false;
+        {
+            let call_back_disposal = CallbackDisposal::new(|| {
+                called = true;
+            });
+            boxed_disposal = BoxedDisposal::new(call_back_disposal);
+        }
+        boxed_disposal.dispose();
+        assert!(called);
+    }
+}
