@@ -1,3 +1,4 @@
+pub mod behavior_subject;
 pub mod publish_subject;
 
 use crate::{observable::Observable, observer::Observer};
