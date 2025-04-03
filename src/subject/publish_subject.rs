@@ -20,6 +20,13 @@ impl<T, E> PublishSubject<'_, T, E> {
             terminated: Arc::new(RwLock::new(None)),
         }
     }
+
+    pub(crate) fn terminated(&self) -> Option<Terminal<E>>
+    where
+        E: Clone,
+    {
+        self.terminated.read().unwrap().as_ref().cloned()
+    }
 }
 
 impl<T, E> Default for PublishSubject<'_, T, E> {
@@ -98,14 +105,17 @@ mod tests {
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
-        subject.on_terminal(Terminal::<&str>::Completed);
+        subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
+        assert!(matches!(subject.terminated(), Some(Terminal::Completed)));
 
         drop(subscription); // keep the subscription alive
     }
@@ -121,14 +131,20 @@ mod tests {
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
-        subject.on_terminal(Terminal::Error("error"));
+        subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
 
         drop(subscription); // keep the subscription alive
     }
@@ -150,30 +166,38 @@ mod tests {
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[]));
         assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
 
-        subject.on_terminal(Terminal::Error("error"));
+        subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
 
         drop(subscription_2); // keep the subscription alive
     }
@@ -192,14 +216,17 @@ mod tests {
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.on_next(&value);
         assert!(checker.is_values_matched(&[&value]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
-        subject.on_terminal(Terminal::Error(&error));
+        subject.clone().on_terminal(Terminal::Error(&error));
         assert!(checker.is_values_matched(&[&value]));
         assert!(checker.is_error(&error));
+        assert!(matches!(subject.terminated(), Some(Terminal::Error(&222))));
 
         drop(subscription); // keep the subscription alive
     }
@@ -217,6 +244,7 @@ mod tests {
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         let mut subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -225,11 +253,13 @@ mod tests {
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[&111]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[&111]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -238,6 +268,10 @@ mod tests {
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[&111]));
         assert!(checker.is_unterminated());
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
     }
 
     #[test]
@@ -259,18 +293,24 @@ mod tests {
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[]));
         assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
 
-        subject.on_terminal(Terminal::Error("error"));
+        subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_error("error"));
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
 
         drop(subscription_1); // keep the subscription alive
         drop(subscription_2); // keep the subscription alive
@@ -284,14 +324,20 @@ mod tests {
         let subscription = subject.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
 
         drop(subscription); // keep the subscription alive
 
@@ -299,6 +345,10 @@ mod tests {
         let subscription = subject.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
         drop(subscription); // keep the subscription alive
     }
 
@@ -310,18 +360,28 @@ mod tests {
         let subscription = subject.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
 
         subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
 
         subject.clone().on_terminal(Terminal::Completed);
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
 
         drop(subscription); // keep the subscription alive
 
@@ -329,6 +389,10 @@ mod tests {
         let subscription = subject.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
         drop(subscription); // keep the subscription alive
     }
 }
