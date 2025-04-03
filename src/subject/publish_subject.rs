@@ -5,19 +5,19 @@ use crate::{
     subscription::Subscription,
     utils::unique_key_store::UniqueKeyStore,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(Clone)]
 pub struct PublishSubject<'a, T, E> {
     observers: Arc<Mutex<UniqueKeyStore<BoxedObserver<'a, T, E>>>>,
-    terminated: Arc<Mutex<Option<Terminal<E>>>>,
+    terminated: Arc<RwLock<Option<Terminal<E>>>>,
 }
 
 impl<T, E> PublishSubject<'_, T, E> {
     pub fn new() -> Self {
         PublishSubject {
             observers: Arc::new(Mutex::new(UniqueKeyStore::new())),
-            terminated: Arc::new(Mutex::new(None)),
+            terminated: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -35,7 +35,7 @@ where
     OR: Observer<T, E> + Send + 'a,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
-        if let Some(terminated) = self.terminated.lock().unwrap().as_ref().cloned() {
+        if let Some(terminated) = self.terminated.read().unwrap().as_ref().cloned() {
             observer.on_terminal(terminated);
             return Subscription::new_none_disposal();
         }
@@ -62,10 +62,10 @@ where
     }
 
     fn on_terminal(self, terminal: Terminal<E>) {
-        if self.terminated.lock().unwrap().is_some() {
+        if self.terminated.read().unwrap().is_some() {
             return;
         }
-        *self.terminated.lock().unwrap() = Some(terminal.clone());
+        *self.terminated.write().unwrap() = Some(terminal.clone());
         for observer in self.observers.lock().unwrap().drain() {
             observer.on_terminal(terminal.clone());
         }
