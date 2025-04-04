@@ -3,7 +3,6 @@ use crate::{
     observer::{Observer, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
-use std::marker::PhantomData;
 
 /// The `Create` struct is an implementation of the `Observable` trait that allows creating an observable
 /// from a custom subscription function. The subscription function is provided by the user and is responsible
@@ -37,30 +36,26 @@ use std::marker::PhantomData;
 /// );
 /// ```
 #[derive(Clone)]
-pub struct Create<'a, 'b, F> {
+pub struct Create<F> {
     handler: F,
-    _marker: PhantomData<(&'a (), &'b ())>,
 }
 
-impl<'a, 'b, F> Create<'a, 'b, F> {
+impl<F> Create<F> {
     /// Creates a new `Create` observable.
     ///
     /// # Arguments
     ///
     /// * `handler` - The subscription handler function. It receives a `BoxedObserver` which it can use to emit values and terminal events. The function should return a `Subscription` which can be used to manage the subscription.
-    pub fn new<T, E>(handler: F) -> Create<'a, 'b, F>
+    pub fn new<'a, 'b, T, E>(handler: F) -> Create<F>
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_wrap_observable`.
         F: FnOnce(BoxedObserver<'b, T, E>) -> Subscription<'a>,
     {
-        Create {
-            handler,
-            _marker: PhantomData,
-        }
+        Create { handler }
     }
 }
 
-impl<'a, 'b, T, E, OR, F> Observable<'a, T, E, OR> for Create<'a, 'b, F>
+impl<'a, 'b, T, E, OR, F> Observable<'a, T, E, OR> for Create<F>
 where
     OR: Observer<T, E> + Send + 'b,
     F: FnOnce(BoxedObserver<'b, T, E>) -> Subscription<'a>,
