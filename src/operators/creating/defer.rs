@@ -1,7 +1,6 @@
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 use std::marker::PhantomData;
 
-#[derive(Clone)]
 pub struct Defer<F, OE> {
     handler: F,
     _marker: PhantomData<OE>,
@@ -14,6 +13,18 @@ impl<F, OE> Defer<F, OE> {
     {
         Defer {
             handler,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<F, OE> Clone for Defer<F, OE>
+where
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            handler: self.handler.clone(),
             _marker: PhantomData,
         }
     }
@@ -46,7 +57,7 @@ mod tests {
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn test_completed() {
@@ -302,30 +313,34 @@ mod tests {
     }
 
     #[test]
-    fn test_boxed_observable() {
-        let checker = CheckingObserver::new();
+    fn test_clone() {
+        let observable = Defer::new(|| Just::new(TestStruct));
+        let _ = observable.clone(); // make sure Defer is Clone when OE is not Clone.
+    }
 
+    #[test]
+    fn test_boxed_observable() {
         // Custom operations
-        let mut switch = false;
+        let switch = Arc::new(Mutex::new(false));
         let observable = Defer::new(|| {
             let observable = Just::new(111);
-            if true {
+            if *switch.lock().unwrap() {
                 BoxedObservable::new(observable)
             } else {
                 BoxedObservable::new(observable.map(|value| value * 2))
             }
         });
-
+        let checker = CheckingObserver::new();
         let subscription = observable.clone().subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_values_matched(&[222]));
         assert!(checker.is_completed());
-
         drop(subscription); // keep the subscription alive
 
+        *switch.lock().unwrap() = true;
+        let checker = CheckingObserver::new();
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
-
         drop(subscription); // keep the subscription alive
     }
 }
