@@ -3,16 +3,12 @@ use crate::{
     observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::marker::PhantomData;
 
 /// This is an observable that maps the values of the source observable using a mapper function.
-#[derive(Clone)]
 pub struct Map<OE, F, T1> {
     source: OE,
-    mapper: Arc<Mutex<F>>,
+    mapper: F,
     _marker: PhantomData<T1>,
 }
 
@@ -24,7 +20,21 @@ impl<OE, F, T1> Map<OE, F, T1> {
     {
         Map {
             source,
-            mapper: Arc::new(Mutex::new(mapper)),
+            mapper,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<OE, F, T1> Clone for Map<OE, F, T1>
+where
+    OE: Clone,
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            source: self.source.clone(),
+            mapper: self.mapper.clone(),
             _marker: PhantomData,
         }
     }
@@ -47,7 +57,7 @@ where
 
 pub struct MapObserver<'b, T2, E, F> {
     observer: BoxedObserver<'b, T2, E>,
-    mapper: Arc<Mutex<F>>,
+    mapper: F,
 }
 
 impl<T1, T2, E, F> Observer<T1, E> for MapObserver<'_, T2, E, F>
@@ -55,7 +65,7 @@ where
     F: FnMut(T1) -> T2,
 {
     fn on_next(&mut self, value: T1) {
-        self.observer.on_next(self.mapper.lock().unwrap()(value))
+        self.observer.on_next((self.mapper)(value))
     }
 
     fn on_terminal(self, terminal: Terminal<E>) {
@@ -449,5 +459,16 @@ mod tests {
         });
 
         observable.subscribe_on(|_| {}, |_| {});
+    }
+
+    #[test]
+    fn test_clone() {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(TestStruct);
+            observer.on_terminal(Terminal::Error(TestStruct));
+            Subscription::new_none_disposal()
+        });
+        let observable = observable.map(|value| value);
+        let _ = observable.clone(); // make sure Map is Clone when T is not Clone.
     }
 }
