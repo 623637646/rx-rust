@@ -1,5 +1,10 @@
-pub mod create;
-pub mod delay;
-pub mod just;
-pub mod map;
-pub mod throw;
+pub mod backpressure;
+pub mod combining;
+pub mod conditional;
+pub mod connectable;
+pub mod creating;
+pub mod error_handling;
+pub mod filtering;
+pub mod mathematical;
+pub mod transforming;
+pub mod utility;

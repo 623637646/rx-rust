@@ -5,37 +5,43 @@ use crate::{
 };
 use std::convert::Infallible;
 
-/// This is an observable that emits an error.
+/// This is an observable that emits a single value then completes.
 ///
 /// # Example
 /// ```rust
-/// use rx_rust::operators::throw::Throw;
+/// use rx_rust::operators::creating::just::Just;
 /// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 /// use std::convert::Infallible;
 /// use rx_rust::observer::Terminal;
-/// let observable = Throw::new("My error");
+/// let observable = Just::new(123);
 /// observable.subscribe_on(
-///     |_| {},
+///     |value| println!("Next value: {}", value),
 ///     |terminal| println!("Terminal event: {:?}", terminal)
 /// );
 /// ```
 #[derive(Clone)]
-pub struct Throw<E> {
-    error: E,
+pub struct Just<T> {
+    value: T,
 }
 
-impl<E> Throw<E> {
-    pub fn new(error: E) -> Throw<E> {
-        Throw { error }
+impl<T> Just<T> {
+    /// Creates a new `Just` observable with the given value.
+    ///
+    /// # Arguments
+    ///
+    /// * `value` - The value to emit.
+    pub fn new(value: T) -> Just<T> {
+        Just { value }
     }
 }
 
-impl<'a, E, OR> Observable<'a, Infallible, E, OR> for Throw<E>
+impl<'a, T, OR> Observable<'a, T, Infallible, OR> for Just<T>
 where
-    OR: Observer<Infallible, E>,
+    OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
-        observer.on_terminal(Terminal::Error(self.error));
+    fn subscribe(self, mut observer: OR) -> Subscription<'a> {
+        observer.on_next(self.value);
+        observer.on_terminal(Terminal::Completed);
         Subscription::new_none_disposal()
     }
 }
@@ -49,77 +55,75 @@ mod tests {
     };
 
     #[test]
-    fn test_error() {
-        let observable = Throw::new(111);
+    fn test_completed() {
+        let observable = Just::new(111);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_error(111));
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
 
         drop(subscription); // keep the subscription alive
     }
 
     #[test]
     fn test_ref() {
-        let error = 111;
+        let value = 111;
 
-        let observable = Throw::new(&error);
+        let observable = Just::new(&value);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_error(&error));
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_completed());
 
         drop(subscription); // keep the subscription alive
     }
 
     #[test]
     fn test_mut_ref() {
-        let mut error = 111;
+        let mut value = 111;
 
-        let observable = Throw::new(&mut error);
-        let checker: CheckingObserver<i32, i32> = CheckingObserver::new();
+        let observable = Just::new(&mut value);
+        let checker = CheckingObserver::new();
 
-        let checker_cloned = checker.clone();
+        let mut checker_cloned_1 = checker.clone();
+        let checker_cloned_2 = checker.clone();
         let subscription = observable.subscribe_on(
-            |_| unreachable!(),
-            |terminal| match terminal {
-                Terminal::Completed => unreachable!(),
-                Terminal::Error(error) => {
-                    checker_cloned.on_terminal(Terminal::Error(*error));
-                    *error = 222;
-                }
+            |value| {
+                checker_cloned_1.on_next(*value);
+                *value *= 2;
             },
+            |terminal| checker_cloned_2.on_terminal(terminal),
         );
 
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_error(111));
-        assert_eq!(error, 222);
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+        assert_eq!(value, 222);
 
         drop(subscription); // keep the subscription alive
     }
 
     #[tokio::test]
     async fn test_async() {
-        let observable = Throw::new(111);
+        let observable = Just::new(111);
         let checker = CheckingObserver::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
         let subscription = handle.await.unwrap();
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_error(111));
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
-        assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_error(111));
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
     }
 
     #[test]
     fn test_subscribe_by_different_observer() {
-        let observable = Throw::new(111);
+        let observable = Just::new(111);
         let checker_1 = CheckingObserver::new();
         let checker_2 = CheckingObserver::new();
 
@@ -132,10 +136,10 @@ mod tests {
         let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
         let subscription_2 = observable_2.subscribe_on(on_next, on_terminal);
 
-        assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_error(111));
-        assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_1.is_error(111));
+        assert!(checker_1.is_values_matched(&[111]));
+        assert!(checker_1.is_completed());
+        assert!(checker_2.is_values_matched(&[111]));
+        assert!(checker_2.is_completed());
 
         drop(subscription_1); // keep the subscription alive
         drop(subscription_2); // keep the subscription alive

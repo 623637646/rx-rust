@@ -143,8 +143,8 @@ pub trait DelayableObservable<T, E, S>: Sized {
     /// # Example
     ///
     /// ```rust
-    /// use rx_rust::operators::just::Just;
-    /// use rx_rust::operators::delay::DelayableObservable;
+    /// use rx_rust::operators::creating::just::Just;
+    /// use rx_rust::operators::utility::delay::DelayableObservable;
     /// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
     /// use rx_rust::scheduler::tokio_scheduler::TokioScheduler;
     /// use std::time::Duration;

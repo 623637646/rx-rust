@@ -29,7 +29,7 @@ pub trait ObservableSubscribeExt<'a, 'b, T, E> {
     /// # Example
     /// ```rust
     /// use rx_rust::{
-    ///     observable::observable_subscribe_ext::ObservableSubscribeExt, operators::just::Just,
+    ///     observable::observable_subscribe_ext::ObservableSubscribeExt, operators::creating::just::Just,
     /// };
     /// use std::convert::Infallible;
     /// use rx_rust::observer::Terminal;
@@ -97,8 +97,8 @@ impl<T, E> Observer<T, E> for ObservableSubscribeExtObserver<'_, T, E> {
 mod tests {
     use super::*;
     use crate::{
-        observer::Observer, operators::just::Just, subject::publish_subject::PublishSubject,
-        utils::checking_observer::CheckingObserver,
+        observer::Observer, operators::creating::just::Just,
+        subject::publish_subject::PublishSubject, utils::checking_observer::CheckingObserver,
     };
 
     #[test]

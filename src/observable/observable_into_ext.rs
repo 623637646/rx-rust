@@ -23,7 +23,7 @@ where
     ///         observable_into_ext::ObservableIntoExt,
     ///         observable_subscribe_ext::ObservableSubscribeExt,
     ///     },
-    ///     operators::just::Just,
+    ///     operators::creating::just::Just,
     /// };
     /// let observable = Just::new(123);
     /// let observable = observable.into_observable();
@@ -54,7 +54,7 @@ mod tests {
     use super::*;
     use crate::observable::observable_subscribe_ext::ObservableSubscribeExt;
     use crate::observer::{Observer, Terminal};
-    use crate::operators::just::Just;
+    use crate::operators::creating::just::Just;
     use crate::subject::publish_subject::PublishSubject;
     use crate::utils::checking_observer::CheckingObserver;
 

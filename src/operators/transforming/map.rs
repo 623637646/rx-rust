@@ -69,8 +69,8 @@ pub trait MappableObservable<T1, T2, E, F>: Sized {
     ///
     /// # Example
     /// ```rust
-    /// use rx_rust::operators::just::Just;
-    /// use rx_rust::operators::map::MappableObservable;
+    /// use rx_rust::operators::creating::just::Just;
+    /// use rx_rust::operators::transforming::map::MappableObservable;
     /// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
     /// use rx_rust::observer::Terminal;
     /// let observable = Just::new(333);
@@ -102,7 +102,7 @@ mod tests {
     use super::*;
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
-        operators::{create::Create, just::Just},
+        operators::{creating::create::Create, creating::just::Just},
         subject::publish_subject::PublishSubject,
         utils::checking_observer::CheckingObserver,
     };

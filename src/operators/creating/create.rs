@@ -22,7 +22,7 @@ use std::marker::PhantomData;
 /// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
 /// use rx_rust::observer::Observer;
 /// use rx_rust::subscription::Subscription;
-/// use rx_rust::operators::create::Create;
+/// use rx_rust::operators::creating::create::Create;
 /// use rx_rust::observer::Terminal;
 /// let observable = Create::new(|mut observer| {
 ///     observer.on_next(1);
