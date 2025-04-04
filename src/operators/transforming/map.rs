@@ -102,9 +102,9 @@ mod tests {
     use super::*;
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
-        operators::{creating::create::Create, creating::just::Just},
+        operators::creating::{create::Create, just::Just},
         subject::publish_subject::PublishSubject,
-        utils::checking_observer::CheckingObserver,
+        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
 
     #[test]
@@ -437,20 +437,14 @@ mod tests {
 
     #[test]
     fn test_fn() {
-        struct MyStruct;
-        impl MyStruct {
-            // fn test(self) {}
-            fn mut_test(&mut self) {}
-            // fn ref_test(&self) {}
-        }
-        let mut s = MyStruct;
+        let mut s = TestStruct;
 
         let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
 
         // Custom operations
         let observable = subject.clone();
         let observable = observable.map(|value| {
-            s.mut_test();
+            s.consume_mut();
             value.to_string()
         });
 

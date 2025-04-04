@@ -56,7 +56,7 @@ mod tests {
     use crate::observer::{Observer, Terminal};
     use crate::operators::creating::just::Just;
     use crate::subject::publish_subject::PublishSubject;
-    use crate::utils::checking_observer::CheckingObserver;
+    use crate::utils::tests_utils::checking_observer::CheckingObserver;
 
     #[test]
     fn test_completed() {

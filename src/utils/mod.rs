@@ -1,4 +1,3 @@
-pub mod unique_key_store;
-
 #[cfg(test)]
-pub(crate) mod checking_observer;
+pub(crate) mod tests_utils;
+pub mod unique_key_store;

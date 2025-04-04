@@ -76,7 +76,7 @@ mod tests {
     use super::*;
     use crate::observable::observable_subscribe_ext::ObservableSubscribeExt;
     use crate::observer::{Observer, Terminal};
-    use crate::utils::checking_observer::CheckingObserver;
+    use crate::utils::tests_utils::checking_observer::CheckingObserver;
 
     #[test]
     fn test_completed() {

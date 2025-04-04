@@ -184,7 +184,7 @@ mod tests {
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
         scheduler::tokio_scheduler::TokioScheduler, subject::publish_subject::PublishSubject,
-        utils::checking_observer::CheckingObserver,
+        utils::tests_utils::checking_observer::CheckingObserver,
     };
 
     #[tokio::test]

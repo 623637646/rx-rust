@@ -69,8 +69,10 @@ where
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt, observer::Terminal,
-        subject::publish_subject::PublishSubject, utils::checking_observer::CheckingObserver,
+        observable::observable_subscribe_ext::ObservableSubscribeExt,
+        observer::Terminal,
+        subject::publish_subject::PublishSubject,
+        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
     use std::time::Duration;
 
@@ -325,16 +327,10 @@ mod tests {
 
     #[test]
     fn test_fn() {
-        struct MyStruct;
-        impl MyStruct {
-            fn test(self) {}
-            // fn mut_test(&mut self) {}
-            // fn ref_test(&self) {}
-        }
-        let s = MyStruct;
+        let s = TestStruct;
 
         let _ = Create::new(|mut observer| {
-            s.test();
+            s.consume();
             observer.on_next(111);
             observer.on_terminal(Terminal::Error("error"));
             Subscription::new_none_disposal()

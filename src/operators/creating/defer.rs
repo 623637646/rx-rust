@@ -44,7 +44,7 @@ mod tests {
             transforming::map::MappableObservable,
         },
         subject::publish_subject::PublishSubject,
-        utils::checking_observer::CheckingObserver,
+        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -287,20 +287,14 @@ mod tests {
 
     #[test]
     fn test_fn() {
-        struct MyStruct;
-        impl MyStruct {
-            fn test(self) {}
-            // fn mut_test(&mut self) {}
-            // fn ref_test(&self) {}
-        }
-        let s = MyStruct;
+        let s = TestStruct;
 
         let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
 
         // Custom operations
         let observable = subject.clone();
         let observable = Defer::new(|| {
-            s.test();
+            s.consume();
             observable
         });
 

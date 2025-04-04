@@ -45,7 +45,7 @@ mod tests {
     use super::*;
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
-        utils::checking_observer::CheckingObserver,
+        utils::tests_utils::checking_observer::CheckingObserver,
     };
 
     #[test]

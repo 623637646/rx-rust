@@ -97,8 +97,10 @@ impl<T, E> Observer<T, E> for ObservableSubscribeExtObserver<'_, T, E> {
 mod tests {
     use super::*;
     use crate::{
-        observer::Observer, operators::creating::just::Just,
-        subject::publish_subject::PublishSubject, utils::checking_observer::CheckingObserver,
+        observer::Observer,
+        operators::creating::just::Just,
+        subject::publish_subject::PublishSubject,
+        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
 
     #[test]
@@ -338,14 +340,8 @@ mod tests {
 
     #[test]
     fn test_fn() {
-        struct MyStruct;
-        impl MyStruct {
-            fn test(self) {}
-            fn mut_test(&mut self) {}
-            // fn ref_test(&self) {}
-        }
-        let mut s1 = MyStruct;
-        let s2 = MyStruct;
+        let mut s1 = TestStruct;
+        let s2 = TestStruct;
 
         let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
 
@@ -354,10 +350,10 @@ mod tests {
 
         let subscription = observable.subscribe_on(
             |_| {
-                s1.mut_test();
+                s1.consume_mut();
             },
             |_| {
-                s2.test();
+                s2.consume();
             },
         );
         drop(subscription); // keep the subscription alive
