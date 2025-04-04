@@ -35,10 +35,18 @@ where
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt, observer::Terminal,
-        operators::creating::create::Create, subject::publish_subject::PublishSubject,
+        observable::{
+            boxed_observable::BoxedObservable, observable_subscribe_ext::ObservableSubscribeExt,
+        },
+        observer::Terminal,
+        operators::{
+            creating::{create::Create, just::Just},
+            transforming::map::MappableObservable,
+        },
+        subject::publish_subject::PublishSubject,
         utils::checking_observer::CheckingObserver,
     };
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn test_completed() {
@@ -297,5 +305,33 @@ mod tests {
         });
 
         observable.subscribe_on(|_| {}, |_| {});
+    }
+
+    #[test]
+    fn test_boxed_observable() {
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let mut switch = false;
+        let observable = Defer::new(|| {
+            let observable = Just::new(111);
+            if true {
+                BoxedObservable::new(observable)
+            } else {
+                BoxedObservable::new(observable.map(|value| value * 2))
+            }
+        });
+
+        let subscription = observable.clone().subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+
+        drop(subscription); // keep the subscription alive
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+
+        drop(subscription); // keep the subscription alive
     }
 }
