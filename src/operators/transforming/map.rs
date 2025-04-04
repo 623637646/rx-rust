@@ -10,14 +10,14 @@ use std::{
 
 /// This is an observable that maps the values of the source observable using a mapper function.
 #[derive(Clone)]
-pub struct Map<OE, F, T1, T2, E> {
+pub struct Map<OE, F, T1> {
     source: OE,
     mapper: Arc<Mutex<F>>,
-    _marker: PhantomData<(T1, T2, E)>,
+    _marker: PhantomData<T1>,
 }
 
-impl<'a, 'b, OE, F, T1, T2, E> Map<OE, F, T1, T2, E> {
-    pub fn new(source: OE, mapper: F) -> Map<OE, F, T1, T2, E>
+impl<OE, F, T1> Map<OE, F, T1> {
+    pub fn new<'a, 'b, T2, E>(source: OE, mapper: F) -> Map<OE, F, T1>
     where
         OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
         F: FnMut(T1) -> T2,
@@ -30,7 +30,7 @@ impl<'a, 'b, OE, F, T1, T2, E> Map<OE, F, T1, T2, E> {
     }
 }
 
-impl<'a, 'b, T1, T2, E, OR, OE, F> Observable<'a, T2, E, OR> for Map<OE, F, T1, T2, E>
+impl<'a, 'b, T1, T2, E, OR, OE, F> Observable<'a, T2, E, OR> for Map<OE, F, T1>
 where
     OR: Observer<T2, E> + Send + 'b,
     OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
@@ -84,7 +84,7 @@ pub trait MappableObservable<T1, T2, E, F>: Sized {
     ///     }
     /// );
     /// ```
-    fn map(self, f: F) -> Map<Self, F, T1, T2, E>;
+    fn map(self, f: F) -> Map<Self, F, T1>;
 }
 
 impl<'a, 'b, T1, T2, E, F, OE> MappableObservable<T1, T2, E, F> for OE
@@ -92,7 +92,7 @@ where
     OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
     F: FnMut(T1) -> T2,
 {
-    fn map(self, f: F) -> Map<Self, F, T1, T2, E> {
+    fn map(self, f: F) -> Map<Self, F, T1> {
         Map::new(self, f)
     }
 }
