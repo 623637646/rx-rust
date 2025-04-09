@@ -2,7 +2,7 @@ use crate::observer::{Observer, Terminal};
 use std::sync::{Arc, RwLock};
 
 /// A helper struct for testing observables.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub(crate) struct CheckingObserver<T, E> {
     values: Arc<RwLock<Vec<T>>>,
     terminal: Arc<RwLock<Option<Terminal<E>>>>,
@@ -49,8 +49,8 @@ impl<T, E> CheckingObserver<T, E> {
         impl FnOnce(Terminal<E>) + Send + use<T, E>,
     )
     where
-        T: Send + Sync + Clone,
-        E: Send + Sync + Clone,
+        T: Send + Sync,
+        E: Send + Sync,
     {
         let mut checker_cloned_1 = self.clone();
         let checker_cloned_2 = self.clone();
@@ -58,6 +58,15 @@ impl<T, E> CheckingObserver<T, E> {
             move |value| checker_cloned_1.on_next(value),
             |terminal| checker_cloned_2.on_terminal(terminal),
         )
+    }
+}
+
+impl<T, E> Clone for CheckingObserver<T, E> {
+    fn clone(&self) -> Self {
+        Self {
+            values: self.values.clone(),
+            terminal: self.terminal.clone(),
+        }
     }
 }
 
