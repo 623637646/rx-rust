@@ -20,13 +20,11 @@ use std::convert::Infallible;
 /// );
 /// ```
 #[derive(Clone)]
-pub struct Throw<E> {
-    error: E,
-}
+pub struct Throw<E>(E);
 
 impl<E> Throw<E> {
     pub fn new(error: E) -> Throw<E> {
-        Throw { error }
+        Throw(error)
     }
 }
 
@@ -35,7 +33,7 @@ where
     OR: Observer<Infallible, E>,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
-        observer.on_terminal(Terminal::Error(self.error));
+        observer.on_terminal(Terminal::Error(self.0));
         Subscription::new_none_disposal()
     }
 }

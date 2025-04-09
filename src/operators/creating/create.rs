@@ -36,9 +36,7 @@ use crate::{
 /// );
 /// ```
 #[derive(Clone)]
-pub struct Create<F> {
-    handler: F,
-}
+pub struct Create<F>(F);
 
 impl<F> Create<F> {
     /// Creates a new `Create` observable.
@@ -51,7 +49,7 @@ impl<F> Create<F> {
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_wrap_observable`.
         F: FnOnce(BoxedObserver<'b, T, E>) -> Subscription<'a>,
     {
-        Create { handler }
+        Create(handler)
     }
 }
 
@@ -61,7 +59,7 @@ where
     F: FnOnce(BoxedObserver<'b, T, E>) -> Subscription<'a>,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
-        (self.handler)(BoxedObserver::new(observer))
+        self.0(BoxedObserver::new(observer))
     }
 }
 

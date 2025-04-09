@@ -20,9 +20,7 @@ use std::convert::Infallible;
 /// );
 /// ```
 #[derive(Clone)]
-pub struct Just<T> {
-    value: T,
-}
+pub struct Just<T>(T);
 
 impl<T> Just<T> {
     /// Creates a new `Just` observable with the given value.
@@ -31,7 +29,7 @@ impl<T> Just<T> {
     ///
     /// * `value` - The value to emit.
     pub fn new(value: T) -> Just<T> {
-        Just { value }
+        Just(value)
     }
 }
 
@@ -40,7 +38,7 @@ where
     OR: Observer<T, Infallible>,
 {
     fn subscribe(self, mut observer: OR) -> Subscription<'a> {
-        observer.on_next(self.value);
+        observer.on_next(self.0);
         observer.on_terminal(Terminal::Completed);
         Subscription::new_none_disposal()
     }
