@@ -11,13 +11,13 @@ use crate::{observer::Observer, subscription::Subscription};
 /// * `T` - The type of the items emitted by the observable.
 /// * `E` - The type of the error that can be emitted by the observable.
 /// * `OR` - The type of the observer that will receive events from the observable. It must implement the `Observer` trait.
-///     We use `OR` generic type instead of this code:
-///     ```text
-///     pub trait Observable<T, E> {
-///         fn subscribe(self, observer: impl Observer<T, E>) -> Subscription;
-///     }
-///     ```
-///     Because `Create` operator (or others) needs the `OR` generic type in the callback function.
+///   We use `OR` generic type instead of this code:
+///   ```text
+///   pub trait Observable<T, E> {
+///       fn subscribe(self, observer: impl Observer<T, E>) -> Subscription;
+///   }
+///   ```
+///   Because `Create` operator (or others) needs the `OR` generic type in the callback function.
 pub trait Observable<'a, T, E, OR>
 where
     OR: Observer<T, E>,
