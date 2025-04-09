@@ -6,7 +6,6 @@ use crate::{
 };
 use std::sync::{Arc, RwLock};
 
-#[derive(Clone)]
 pub struct BehaviorSubject<'a, T, E> {
     value: Arc<RwLock<T>>,
     publish_subject: PublishSubject<'a, T, E>,
@@ -32,6 +31,15 @@ impl<T, E> BehaviorSubject<'_, T, E> {
         T: Clone,
     {
         self.value.read().unwrap().clone()
+    }
+}
+
+impl<T, E> Clone for BehaviorSubject<'_, T, E> {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone(),
+            publish_subject: self.publish_subject.clone(),
+        }
     }
 }
 
@@ -77,6 +85,7 @@ mod tests {
     use crate::observable::observable_subscribe_ext::ObservableSubscribeExt;
     use crate::observer::{Observer, Terminal};
     use crate::utils::tests_utils::checking_observer::CheckingObserver;
+    use crate::utils::tests_utils::test_struct::TestStruct;
 
     #[test]
     fn test_completed() {
@@ -320,6 +329,12 @@ mod tests {
 
         drop(subscription_1); // keep the subscription alive
         drop(subscription_2); // keep the subscription alive
+    }
+
+    #[test]
+    fn test_clone() {
+        let observable = BehaviorSubject::<'_, _, i32>::new(TestStruct);
+        let _ = observable.clone(); // make sure BehaviorSubject is Clone when T and E are not Clone.
     }
 
     #[test]
