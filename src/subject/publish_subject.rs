@@ -7,7 +7,6 @@ use crate::{
 };
 use std::sync::{Arc, Mutex, RwLock};
 
-#[derive(Clone)]
 pub struct PublishSubject<'a, T, E> {
     observers: Arc<Mutex<UniqueKeyStore<BoxedObserver<'a, T, E>>>>,
     terminated: Arc<RwLock<Option<Terminal<E>>>>,
@@ -26,6 +25,15 @@ impl<T, E> PublishSubject<'_, T, E> {
         E: Clone,
     {
         self.terminated.read().unwrap().as_ref().cloned()
+    }
+}
+
+impl<T, E> Clone for PublishSubject<'_, T, E> {
+    fn clone(&self) -> Self {
+        Self {
+            observers: self.observers.clone(),
+            terminated: self.terminated.clone(),
+        }
     }
 }
 
@@ -93,6 +101,7 @@ mod tests {
     use crate::observable::observable_subscribe_ext::ObservableSubscribeExt;
     use crate::observer::{Observer, Terminal};
     use crate::utils::tests_utils::checking_observer::CheckingObserver;
+    use crate::utils::tests_utils::test_struct::TestStruct;
 
     #[test]
     fn test_completed() {
@@ -314,6 +323,12 @@ mod tests {
 
         drop(subscription_1); // keep the subscription alive
         drop(subscription_2); // keep the subscription alive
+    }
+
+    #[test]
+    fn test_clone() {
+        let observable = PublishSubject::<'_, TestStruct, TestStruct>::default();
+        let _ = observable.clone(); // make sure PublishSubject is Clone when T and E are not Clone.
     }
 
     #[test]
