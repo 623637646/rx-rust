@@ -1,6 +1,7 @@
 use super::Scheduler;
 use crate::subscription::disposable::{CallbackDisposal, Disposable};
 use std::time::Duration;
+use tokio::time::interval;
 
 /// `TokioScheduler` is an implementation of the `Scheduler` trait using Tokio runtime.
 ///
@@ -40,12 +41,33 @@ impl Scheduler for TokioScheduler {
         &self,
         task: impl FnOnce() + Send + 'static,
         delay: Option<Duration>,
-    ) -> impl Disposable {
+    ) -> impl Disposable + Send + 'static {
         let handle = tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
             task();
+        });
+        CallbackDisposal::new(move || handle.abort())
+    }
+
+    fn schedule_period(
+        &self,
+        mut task: impl FnMut(usize) + Send + 'static, // TODO: use Future instead of FnOnce?
+        period: Duration,
+        delay: Option<Duration>,
+    ) -> impl Disposable + Send + 'static {
+        let handle = tokio::spawn(async move {
+            if let Some(delay) = delay {
+                tokio::time::sleep(delay).await;
+            }
+            let mut ticker = interval(period);
+            let mut count = 0;
+            loop {
+                ticker.tick().await;
+                task(count);
+                count += 1;
+            }
         });
         CallbackDisposal::new(move || handle.abort())
     }

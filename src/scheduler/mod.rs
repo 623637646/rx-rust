@@ -14,5 +14,12 @@ pub trait Scheduler: Clone {
         &self,
         task: impl FnOnce() + Send + 'static, // TODO: use Future instead of FnOnce?
         delay: Option<Duration>,
-    ) -> impl Disposable;
+    ) -> impl Disposable + Send + 'static;
+
+    fn schedule_period(
+        &self,
+        task: impl FnMut(usize) + Send + 'static, // TODO: use Future instead of FnOnce?
+        period: Duration,
+        delay: Option<Duration>,
+    ) -> impl Disposable + Send + 'static;
 }
