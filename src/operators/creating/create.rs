@@ -128,33 +128,52 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 observer.on_next(2);
                 tokio::time::sleep(Duration::from_millis(100)).await;
+                observer.on_next(3);
+                tokio::time::sleep(Duration::from_millis(100)).await;
                 observer.on_terminal(Terminal::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
         });
-        let checker = CheckingObserver::new();
+        let checker_1 = CheckingObserver::new();
+        let checker_2 = CheckingObserver::new();
 
-        let subscription = observable.subscribe(checker.clone());
-        assert!(checker.is_values_matched(&[1]));
-        assert!(checker.is_unterminated());
+        let observable_1 = observable;
+        let observable_2 = observable_1.clone();
+
+        let subscription_1 = observable_1.subscribe(checker_1.clone());
+        let subscription_2 = observable_2.subscribe(checker_2.clone());
+        assert!(checker_1.is_values_matched(&[1]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[1]));
+        assert!(checker_2.is_unterminated());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
-        assert!(checker.is_values_matched(&[1]));
-        assert!(checker.is_unterminated());
+        assert!(checker_1.is_values_matched(&[1]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[1]));
+        assert!(checker_2.is_unterminated());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker_1.is_values_matched(&[1, 2]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[1, 2]));
+        assert!(checker_2.is_unterminated());
 
-        subscription.unsubscribe(); // unsubscribe
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unterminated());
+        subscription_1.unsubscribe(); // unsubscribe
 
         tokio::time::sleep(Duration::from_millis(100)).await;
-        assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker_1.is_values_matched(&[1, 2]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[1, 2, 3]));
+        assert!(checker_2.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(checker_1.is_values_matched(&[1, 2]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[1, 2, 3]));
+        assert!(checker_2.is_completed());
+
+        drop(subscription_2); // keep the subscription alive
     }
 
     #[test]
