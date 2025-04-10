@@ -1,40 +1,37 @@
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
-use std::marker::PhantomData;
 
-pub struct Defer<F, OE> {
+pub struct Defer<F, OE>
+where
+    F: FnOnce() -> OE,
+{
     handler: F,
-    _marker: PhantomData<OE>,
 }
 
-impl<F, OE> Defer<F, OE> {
-    pub fn new(handler: F) -> Defer<F, OE>
-    where
-        F: FnOnce() -> OE,
-    {
-        Defer {
-            handler,
-            _marker: PhantomData,
-        }
+impl<F, OE> Defer<F, OE>
+where
+    F: FnOnce() -> OE,
+{
+    pub fn new(handler: F) -> Defer<F, OE> {
+        Defer { handler }
     }
 }
 
 impl<F, OE> Clone for Defer<F, OE>
 where
-    F: Clone,
+    F: FnOnce() -> OE + Clone,
 {
     fn clone(&self) -> Self {
         Self {
             handler: self.handler.clone(),
-            _marker: PhantomData,
         }
     }
 }
 
 impl<'a, T, E, OR, OE, F> Observable<'a, T, E, OR> for Defer<F, OE>
 where
+    F: FnOnce() -> OE,
     OR: Observer<T, E>,
     OE: Observable<'a, T, E, OR>,
-    F: FnOnce() -> OE,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
         let observable = (self.handler)();
