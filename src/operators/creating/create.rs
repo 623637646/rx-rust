@@ -12,7 +12,7 @@ use crate::{
 ///
 /// * `F` - The type of the subscription function.
 ///
-/// The `handler` function is called when an observer subscribes to the observable. It receives
+/// The `builder` function is called when an observer subscribes to the observable. It receives
 /// a `BoxedObserver` which it can use to emit values and terminal events. The function should return a
 /// `Subscription` which can be used to manage the subscription.
 ///
@@ -43,13 +43,13 @@ impl<F> Create<F> {
     ///
     /// # Arguments
     ///
-    /// * `handler` - The subscription handler function. It receives a `BoxedObserver` which it can use to emit values and terminal events. The function should return a `Subscription` which can be used to manage the subscription.
-    pub fn new<'a, 'b, T, E>(handler: F) -> Create<F>
+    /// * `builder` - The subscription builder function. It receives a `BoxedObserver` which it can use to emit values and terminal events. The function should return a `Subscription` which can be used to manage the subscription.
+    pub fn new<'a, 'b, T, E>(builder: F) -> Create<F>
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_wrap_observable`.
         F: FnOnce(BoxedObserver<'b, T, E>) -> Subscription<'a>,
     {
-        Create(handler)
+        Create(builder)
     }
 }
 

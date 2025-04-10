@@ -1,18 +1,15 @@
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 
-pub struct Defer<F, OE>
+pub struct Defer<F, OE>(F)
 where
-    F: FnOnce() -> OE,
-{
-    handler: F,
-}
+    F: FnOnce() -> OE;
 
 impl<F, OE> Defer<F, OE>
 where
     F: FnOnce() -> OE,
 {
-    pub fn new(handler: F) -> Defer<F, OE> {
-        Defer { handler }
+    pub fn new(builder: F) -> Defer<F, OE> {
+        Defer(builder)
     }
 }
 
@@ -21,9 +18,7 @@ where
     F: FnOnce() -> OE + Clone,
 {
     fn clone(&self) -> Self {
-        Self {
-            handler: self.handler.clone(),
-        }
+        Self(self.0.clone())
     }
 }
 
@@ -34,7 +29,7 @@ where
     OE: Observable<'a, T, E, OR>,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
-        let observable = (self.handler)();
+        let observable = self.0();
         observable.subscribe(observer)
     }
 }
