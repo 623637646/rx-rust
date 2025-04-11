@@ -183,8 +183,10 @@ mod tests {
     use super::*;
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
-        scheduler::tokio_scheduler::TokioScheduler, subject::publish_subject::PublishSubject,
-        utils::tests_utils::checking_observer::CheckingObserver,
+        operators::creating::create::Create,
+        scheduler::tokio_scheduler::TokioScheduler,
+        subject::publish_subject::PublishSubject,
+        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
 
     #[tokio::test]
@@ -598,6 +600,35 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[111, 222, 333]));
         assert!(checker.is_error("error"));
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[tokio::test]
+    async fn test_lifetime() {
+        // OK
+        let life_marker = TestStruct;
+        let subscription;
+
+        // Error
+        // let subscription;
+        // let life_marker = TestStruct;
+
+        {
+            let observable = Create::new(|mut observer| {
+                observer.on_next(1);
+                observer.on_terminal(Terminal::<String>::Completed);
+                Subscription::new_with_disposal_callback(|| {
+                    life_marker.consume_ref();
+                })
+            });
+
+            let observable = Delay::new(observable, Duration::from_millis(100), TokioScheduler);
+
+            let checker = CheckingObserver::new();
+            checker.is_values_matched(&[1]);
+            subscription = observable.subscribe(checker);
+        }
 
         _ = subscription; // keep the subscription alive
     }
