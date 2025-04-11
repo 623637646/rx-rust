@@ -116,6 +116,7 @@ mod tests {
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
+    use std::convert::Infallible;
 
     #[test]
     fn test_completed() {
@@ -459,23 +460,27 @@ mod tests {
 
     #[test]
     fn test_lifetime_b() {
-        let life_marker = TestStruct;
-        let observable = Create::new(|mut observer| {
-            observer.on_next(&life_marker);
-            observer.on_terminal(Terminal::<String>::Completed);
-            Subscription::new_none_disposal()
-        });
-        let observable = observable.map(|_| "");
-
         // OK
+        let life_marker_2 = TestStruct;
+        let mut life_marker_1 = None;
 
         // Error
-        // drop(life_marker);
+        // let mut life_marker_1 = None;
+        // let life_marker_2 = TestStruct;
 
-        let checker = CheckingObserver::new();
-        let subscription = observable.subscribe(checker);
+        {
+            let observable = Create::new(|observer| {
+                life_marker_1 = Some(observer);
+                Subscription::new_none_disposal()
+            });
+            let observable = observable.map(|_: i32| None);
 
-        _ = subscription; // keep the subscription alive
+            let mut checker: CheckingObserver<_, Infallible> = CheckingObserver::new();
+            checker.on_next(Some(&life_marker_2));
+            let subscription = observable.subscribe(checker);
+
+            _ = subscription; // keep the subscription alive
+        }
     }
 
     #[test]

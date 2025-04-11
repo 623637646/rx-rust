@@ -124,14 +124,18 @@ mod tests {
     fn test_lifetime() {
         // OK
         let value = 111;
-        let mut boxed_observer;
+        let boxed_observer;
 
         // Error
-        // let mut boxed_observer;
+        // let boxed_observer;
         // let value = 111;
 
-        let checker: CheckingObserver<&i32, &str> = CheckingObserver::new();
-        boxed_observer = BoxedObserver::new(checker);
-        boxed_observer.on_next(&value);
+        {
+            let mut checker: CheckingObserver<&i32, &str> = CheckingObserver::new();
+            checker.on_next(&value);
+            boxed_observer = BoxedObserver::new(checker);
+        }
+
+        _ = boxed_observer;
     }
 }

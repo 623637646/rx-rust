@@ -348,23 +348,26 @@ mod tests {
 
     #[test]
     fn test_lifetime_b() {
-        let life_marker = TestStruct;
-        let observable = Create::new(|mut observer| {
-            observer.on_next(&life_marker);
-            observer.on_terminal(Terminal::<String>::Completed);
-            Subscription::new_none_disposal()
-        });
-
         // OK
+        let life_marker_2 = TestStruct;
+        let mut life_marker_1 = None;
 
         // Error
-        // drop(life_marker);
+        // let mut life_marker_1 = None;
+        // let life_marker_2 = TestStruct;
 
-        let on_next = |_| {};
-        let on_terminal = |_| {};
-        let subscription = observable.subscribe_on(on_next, on_terminal);
+        {
+            let observable = Create::new(|observer| {
+                life_marker_1 = Some(observer);
+                Subscription::new_none_disposal()
+            });
 
-        _ = subscription; // keep the subscription alive
+            let on_next = |_: i32| life_marker_2.consume_ref();
+            let on_terminal = |_: Terminal<String>| life_marker_2.consume_ref();
+            let subscription = observable.subscribe_on(on_next, on_terminal);
+
+            _ = subscription; // keep the subscription alive
+        }
     }
 
     #[test]
