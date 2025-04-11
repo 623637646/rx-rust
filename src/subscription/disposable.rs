@@ -44,6 +44,7 @@ impl Disposable for BoxedDisposal<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::tests_utils::test_struct::TestStruct;
 
     #[test]
     fn test_callback_disposal() {
@@ -57,15 +58,32 @@ mod tests {
 
     #[test]
     fn test_boxed_disposal() {
-        let boxed_disposal;
         let mut called = false;
-        {
-            let call_back_disposal = CallbackDisposal::new(|| {
-                called = true;
-            });
-            boxed_disposal = BoxedDisposal::new(call_back_disposal);
-        }
-        boxed_disposal.dispose();
+        let disposal = CallbackDisposal::new(|| {
+            called = true;
+        });
+        let disposal = BoxedDisposal::new(disposal);
+        disposal.dispose();
         assert!(called);
+    }
+
+    #[test]
+    fn test_lifetime_boxed() {
+        // OK
+        let life_marker = TestStruct;
+        let disposal;
+
+        // Error
+        // let disposal;
+        // let life_marker = TestStruct;
+
+        {
+            let callback_disposal = CallbackDisposal::new(|| {
+                life_marker.consume_ref();
+            });
+            disposal = BoxedDisposal::new(callback_disposal);
+        }
+
+        _ = disposal;
     }
 }
