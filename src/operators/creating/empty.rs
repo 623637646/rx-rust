@@ -78,4 +78,10 @@ mod tests {
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive
     }
+
+    #[test]
+    fn test_clone() {
+        let observable = Empty;
+        let _ = observable.clone();
+    }
 }

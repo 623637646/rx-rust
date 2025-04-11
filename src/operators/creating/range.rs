@@ -34,4 +34,11 @@ mod tests {
 
         _ = subscription; // keep the subscription alive
     }
+
+    #[test]
+    fn test_clone() {
+        let source = 100..103;
+        let observable = Range::new(source);
+        let _ = observable.clone();
+    }
 }

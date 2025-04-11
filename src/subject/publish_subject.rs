@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn test_clone() {
         let observable = PublishSubject::<'_, TestStruct, TestStruct>::default();
-        let _ = observable.clone(); // make sure PublishSubject is Clone when T and E are not Clone.
+        let _ = observable.clone(); // make sure it's Clone when T and E are not Clone.
     }
 
     #[test]

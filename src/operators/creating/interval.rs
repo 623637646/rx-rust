@@ -303,4 +303,10 @@ mod tests {
         assert!(checker_2.is_values_matched(&[0, 1, 2]));
         assert!(checker_2.is_unterminated());
     }
+
+    #[test]
+    fn test_clone() {
+        let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
+        let _ = observable.clone();
+    }
 }

@@ -507,6 +507,6 @@ mod tests {
             Subscription::new_none_disposal()
         });
         let observable = observable.map(|value| value);
-        let _ = observable.clone(); // make sure Map is Clone when T is not Clone.
+        let _ = observable.clone(); // make sure it's Clone when T is not Clone.
     }
 }

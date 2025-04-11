@@ -24,4 +24,10 @@ mod tests {
 
         _ = subscription; // keep the subscription alive
     }
+
+    #[test]
+    fn test_clone() {
+        let observable = repeat(3, 4);
+        let _ = observable.clone();
+    }
 }

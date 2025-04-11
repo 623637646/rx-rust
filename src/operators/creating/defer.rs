@@ -335,7 +335,7 @@ mod tests {
     #[test]
     fn test_clone() {
         let observable = Defer::new(|| Just::new(TestStruct));
-        let _ = observable.clone(); // make sure Defer is Clone when OE is not Clone.
+        let _ = observable.clone(); // make sure it's Clone when OE is not Clone.
     }
 
     #[test]

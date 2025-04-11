@@ -142,4 +142,10 @@ mod tests {
         disposal.dispose();
         assert!(rx.await.is_ok());
     }
+
+    #[test]
+    fn test_clone() {
+        let scheduler = TokioScheduler;
+        let _ = scheduler.clone();
+    }
 }

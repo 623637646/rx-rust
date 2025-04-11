@@ -238,4 +238,11 @@ mod tests {
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive
     }
+
+    #[test]
+    fn test_clone() {
+        let source = [1, 2, 3];
+        let observable = From::new(source);
+        let _ = observable.clone();
+    }
 }

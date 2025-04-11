@@ -183,7 +183,7 @@ mod tests {
     use super::*;
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
-        operators::creating::create::Create,
+        operators::creating::{create::Create, just::Just},
         scheduler::tokio_scheduler::TokioScheduler,
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
@@ -631,5 +631,12 @@ mod tests {
         }
 
         _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_clone() {
+        let observable = Just::new(111);
+        let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
+        let _ = observable.clone();
     }
 }

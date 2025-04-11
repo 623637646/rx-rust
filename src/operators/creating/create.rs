@@ -349,6 +349,28 @@ mod tests {
     }
 
     #[test]
+    fn test_fn() {
+        let s = TestStruct;
+
+        let _ = Create::new(|mut observer| {
+            s.consume();
+            observer.on_next(111);
+            observer.on_terminal(Terminal::Error("error"));
+            Subscription::new_none_disposal()
+        });
+    }
+
+    #[test]
+    fn test_clone() {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(111);
+            observer.on_terminal(Terminal::<String>::Completed);
+            Subscription::new_none_disposal()
+        });
+        let _ = observable.clone();
+    }
+
+    #[test]
     fn test_wrap_observable() {
         let mut subject = PublishSubject::default();
         let subject_cloned = subject.clone();
@@ -372,17 +394,5 @@ mod tests {
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_unterminated());
-    }
-
-    #[test]
-    fn test_fn() {
-        let s = TestStruct;
-
-        let _ = Create::new(|mut observer| {
-            s.consume();
-            observer.on_next(111);
-            observer.on_terminal(Terminal::Error("error"));
-            Subscription::new_none_disposal()
-        });
     }
 }

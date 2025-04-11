@@ -142,4 +142,10 @@ mod tests {
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive
     }
+
+    #[test]
+    fn test_clone() {
+        let observable = Just::new(111);
+        let _ = observable.clone();
+    }
 }
