@@ -17,12 +17,12 @@ impl<I> From<I> {
     }
 }
 
-impl<'a, T, OR, I> Observable<'a, T, Infallible, OR> for From<I>
+impl<T, OR, I> Observable<'static, T, Infallible, OR> for From<I>
 where
     OR: Observer<T, Infallible>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<'a> {
+    fn subscribe(self, mut observer: OR) -> Subscription<'static> {
         for value in self.0.into_iter() {
             observer.on_next(value);
         }
