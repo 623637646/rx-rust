@@ -119,4 +119,19 @@ mod tests {
         .await
         .unwrap();
     }
+
+    #[test]
+    fn test_lifetime() {
+        // OK
+        let value = 111;
+        let mut boxed_observer;
+
+        // Error
+        // let mut boxed_observer;
+        // let value = 111;
+
+        let checker: CheckingObserver<&i32, &str> = CheckingObserver::new();
+        boxed_observer = BoxedObserver::new(checker);
+        boxed_observer.on_next(&value);
+    }
 }
