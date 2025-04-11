@@ -289,6 +289,34 @@ mod tests {
     }
 
     #[test]
+    fn test_lifetime() {
+        // OK
+        let life_marker = TestStruct;
+        let subscription;
+
+        // Error
+        // let subscription;
+        // let life_marker = TestStruct;
+
+        {
+            let observable = Create::new(|mut observer| {
+                observer.on_next(1);
+                observer.on_terminal(Terminal::<String>::Completed);
+                Subscription::new_with_disposal_callback(|| {
+                    life_marker.consume_ref();
+                })
+            });
+            let observable = Defer::new(|| observable);
+
+            let checker = CheckingObserver::new();
+            checker.is_values_matched(&[1]);
+            subscription = observable.subscribe(checker);
+        }
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
     fn test_fn() {
         let s = TestStruct;
 
