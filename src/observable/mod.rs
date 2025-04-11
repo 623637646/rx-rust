@@ -1,4 +1,3 @@
-// pub mod observable_into_ext; // TODO: Do we really need this trait?
 pub mod boxed_observable;
 pub mod observable_subscribe_ext;
 
