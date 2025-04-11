@@ -3,7 +3,7 @@ use crate::subscription::Subscription;
 
 /// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
-pub struct BoxedObservable<'a, 'b, OR>(Box<dyn FnOnce(OR) -> Subscription<'a> + 'b>);
+pub struct BoxedObservable<'a, 'b, OR>(Box<dyn FnOnce(OR) -> Subscription<'a> + Send + 'b>);
 
 impl<'a, 'b, OR> BoxedObservable<'a, 'b, OR> {
     pub fn new<T, E>(observable: impl Observable<'a, T, E, OR> + Send + 'b) -> Self
@@ -23,4 +23,313 @@ where
     }
 }
 
-// TODO: Unit Tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        observable::observable_subscribe_ext::ObservableSubscribeExt,
+        observer::Terminal,
+        operators::creating::{create::Create, just::Just},
+        subject::publish_subject::PublishSubject,
+        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
+    };
+
+    #[test]
+    fn test_completed() {
+        let mut subject = PublishSubject::default();
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let observable = BoxedObservable::new(subject.clone());
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.on_next(111);
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.clone().on_terminal(Terminal::<&str>::Completed);
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+        assert!(matches!(subject.terminated(), Some(Terminal::Completed)));
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_error() {
+        let mut subject = PublishSubject::default();
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let observable = BoxedObservable::new(subject.clone());
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.on_next(111);
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.clone().on_terminal(Terminal::Error("error"));
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_unsubscribe() {
+        let mut subject = PublishSubject::default();
+        let checker_1 = CheckingObserver::new();
+        let checker_2 = CheckingObserver::new();
+
+        // Custom operations
+        let observable_1 = BoxedObservable::new(subject.clone());
+        let observable_2 = BoxedObservable::new(subject.clone());
+
+        let subscription_1 = observable_1.subscribe(checker_1.clone());
+        let subscription_2 = observable_2.subscribe(checker_2.clone());
+        assert!(checker_1.is_values_matched(&[]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[]));
+        assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.on_next(111);
+        assert!(checker_1.is_values_matched(&[111]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[111]));
+        assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subscription_1.unsubscribe();
+        assert!(checker_1.is_values_matched(&[111]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[111]));
+        assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.on_next(222);
+        assert!(checker_1.is_values_matched(&[111]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[111, 222]));
+        assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.clone().on_terminal(Terminal::Error("error"));
+        assert!(checker_1.is_values_matched(&[111]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[111, 222]));
+        assert!(checker_2.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
+
+        _ = subscription_2; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_ref() {
+        let value = 111;
+        let error = 222;
+
+        let mut subject = PublishSubject::default();
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let observable = BoxedObservable::new(subject.clone());
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.on_next(&value);
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.clone().on_terminal(Terminal::Error(&error));
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_error(&error));
+        assert!(matches!(subject.terminated(), Some(Terminal::Error(&222))));
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_mut_ref() {
+        let mut value = 111;
+
+        let observable = Just::new(&mut value);
+        let observable = BoxedObservable::new(observable);
+
+        let checker = CheckingObserver::new();
+
+        let mut checker_cloned_1 = checker.clone();
+        let checker_cloned_2 = checker.clone();
+        let subscription = observable.subscribe_on(
+            |value| {
+                checker_cloned_1.on_next(*value);
+                *value *= 2;
+            },
+            |terminal| checker_cloned_2.on_terminal(terminal),
+        );
+
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+        assert_eq!(value, 222);
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[tokio::test]
+    async fn test_async() {
+        let subject = PublishSubject::default();
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let observable = BoxedObservable::new(subject.clone());
+
+        let checker_cloned = checker.clone();
+        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let subscription = handle.await.unwrap();
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        let mut subject_cloned = subject.clone();
+        let handle = tokio::spawn(async move {
+            subject_cloned.on_next(&111);
+        });
+        handle.await.unwrap();
+        assert!(checker.is_values_matched(&[&111]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        let handle = tokio::spawn(async { subscription.unsubscribe() });
+        handle.await.unwrap();
+        assert!(checker.is_values_matched(&[&111]));
+        assert!(checker.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        let subject_cloned = subject.clone();
+        let handle = tokio::spawn(async move {
+            subject_cloned.on_terminal(Terminal::Error("error"));
+        });
+        handle.await.unwrap();
+        assert!(checker.is_values_matched(&[&111]));
+        assert!(checker.is_unterminated());
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
+    }
+
+    #[test]
+    fn test_subscribe_by_different_observer() {
+        let mut subject = PublishSubject::default();
+        let checker_1 = CheckingObserver::new();
+        let checker_2 = CheckingObserver::new();
+
+        // Custom operations
+        let observable_1 = BoxedObservable::new(subject.clone());
+        let observable_2 = BoxedObservable::new(subject.clone());
+
+        let subscription_1 = observable_1.subscribe(checker_1.clone());
+
+        let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
+        let subscription_2 = observable_2.subscribe_on(on_next, on_terminal);
+        assert!(checker_1.is_values_matched(&[]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[]));
+        assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.on_next(111);
+        assert!(checker_1.is_values_matched(&[111]));
+        assert!(checker_1.is_unterminated());
+        assert!(checker_2.is_values_matched(&[111]));
+        assert!(checker_2.is_unterminated());
+        assert!(subject.terminated().is_none());
+
+        subject.clone().on_terminal(Terminal::Error("error"));
+        assert!(checker_1.is_values_matched(&[111]));
+        assert!(checker_1.is_error("error"));
+        assert!(checker_2.is_values_matched(&[111]));
+        assert!(checker_2.is_error("error"));
+        assert!(matches!(
+            subject.terminated(),
+            Some(Terminal::Error("error"))
+        ));
+
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_lifetime_a() {
+        // OK
+        let life_marker = TestStruct;
+        let subscription;
+
+        // Error
+        // let subscription;
+        // let life_marker = TestStruct;
+
+        {
+            let observable = Create::new(|mut observer| {
+                observer.on_next(1);
+                observer.on_terminal(Terminal::<String>::Completed);
+                Subscription::new_with_disposal_callback(|| {
+                    life_marker.consume_ref();
+                })
+            });
+
+            let observable = BoxedObservable::new(observable);
+
+            let checker = CheckingObserver::new();
+            checker.is_values_matched(&[1]);
+            subscription = observable.subscribe(checker);
+        }
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_lifetime_b() {
+        // OK
+        let life_marker = TestStruct;
+        let observable: BoxedObservable<'_, '_, CheckingObserver<i32, String>>;
+
+        // Error
+        // let observable: BoxedObservable<'_, '_, CheckingObserver<i32, String>>;
+        // let life_marker = TestStruct;
+
+        {
+            let create = Create::new(|mut observer| {
+                life_marker.consume_ref();
+                observer.on_next(1);
+                observer.on_terminal(Terminal::<String>::Completed);
+                Subscription::new_none_disposal()
+            });
+
+            observable = BoxedObservable::new(create);
+        }
+
+        _ = observable;
+    }
+}
