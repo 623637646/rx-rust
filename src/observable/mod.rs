@@ -57,8 +57,8 @@ where
     ///
     /// struct MyObservable;
     ///
-    /// impl<'a> Observable<'a, i32, (), MyObserver> for MyObservable {
-    ///     fn subscribe(self, mut observer: MyObserver) -> Subscription<'a> {
+    /// impl Observable<'static, i32, (), MyObserver> for MyObservable {
+    ///     fn subscribe(self, mut observer: MyObserver) -> Subscription<'static> {
     ///         observer.on_next(1);
     ///         observer.on_terminal(Terminal::Completed);
     ///         Subscription::new_none_disposal()
