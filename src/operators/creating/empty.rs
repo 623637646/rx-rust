@@ -8,11 +8,11 @@ use std::convert::Infallible;
 #[derive(Clone)]
 pub struct Empty;
 
-impl<'a, T, OR> Observable<'a, T, Infallible, OR> for Empty
+impl<T, OR> Observable<'static, T, Infallible, OR> for Empty
 where
     OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'static> {
         observer.on_terminal(Terminal::Completed);
         Subscription::new_none_disposal()
     }
