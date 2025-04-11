@@ -297,22 +297,50 @@ mod tests {
         _ = subscription_2; // keep the subscription alive
     }
 
-    // Test with lifetime. See more for the git commit.
     #[test]
-    fn test_lifetime() {
+    fn test_lifetime_a() {
+        // OK
+        let life_marker = TestStruct;
+        let subscription;
+
+        // Error
+        // let subscription;
+        // let life_marker = TestStruct;
+
+        {
+            let observable = Create::new(|mut observer| {
+                observer.on_next(1);
+                observer.on_terminal(Terminal::<String>::Completed);
+                Subscription::new_with_disposal_callback(|| {
+                    life_marker.consume_ref();
+                })
+            });
+
+            let checker = CheckingObserver::new();
+            checker.is_values_matched(&[1]);
+            subscription = observable.subscribe(checker);
+        }
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_lifetime_b() {
+        let life_marker = TestStruct;
         let observable = Create::new(|mut observer| {
-            observer.on_next(&1);
+            observer.on_next(&life_marker);
             observer.on_terminal(Terminal::<String>::Completed);
             Subscription::new_none_disposal()
         });
 
-        let subscription;
-        {
-            let b = 1;
-            let checker = CheckingObserver::new();
-            checker.is_values_matched(&[&b]);
-            subscription = observable.subscribe(checker);
-        }
+        // OK
+
+        // Error
+        // drop(life_marker);
+
+        let checker = CheckingObserver::new();
+        let subscription = observable.subscribe(checker);
+
         _ = subscription; // keep the subscription alive
     }
 
