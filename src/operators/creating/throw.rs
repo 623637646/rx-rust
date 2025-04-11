@@ -28,11 +28,11 @@ impl<E> Throw<E> {
     }
 }
 
-impl<'a, E, OR> Observable<'a, Infallible, E, OR> for Throw<E>
+impl<E, OR> Observable<'static, Infallible, E, OR> for Throw<E>
 where
     OR: Observer<Infallible, E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'static> {
         observer.on_terminal(Terminal::Error(self.0));
         Subscription::new_none_disposal()
     }
