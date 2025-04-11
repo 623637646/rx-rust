@@ -186,7 +186,7 @@ mod tests {
         assert!(checker_2.is_values_matched(&[0, 1, 2, 3, 4]));
         assert!(checker_2.is_unterminated());
 
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 
     #[tokio::test]

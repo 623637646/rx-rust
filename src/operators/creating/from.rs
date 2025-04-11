@@ -50,7 +50,7 @@ mod tests {
         assert!(checker.is_values_matched(&[1, 2, 3]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -64,7 +64,7 @@ mod tests {
         assert!(checker.is_values_matched(&[&1, &2, &3]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -81,7 +81,7 @@ mod tests {
         );
         assert_eq!(source, [2, 4, 6]);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -95,7 +95,7 @@ mod tests {
         assert!(checker.is_values_matched(&[&1, &2, &3]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -113,7 +113,7 @@ mod tests {
         );
         assert_eq!(data, [2, 4, 6]);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -127,7 +127,7 @@ mod tests {
         assert!(checker.is_values_matched(&[1, 2, 3]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -141,7 +141,7 @@ mod tests {
         assert!(checker.is_values_matched(&[&1, &2, &3]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -158,7 +158,7 @@ mod tests {
         );
         assert_eq!(source, [2, 4, 6]);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -172,7 +172,7 @@ mod tests {
         assert!(checker.is_values_matched(&[100, 101, 102]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -189,7 +189,7 @@ mod tests {
         assert!(checker.is_values_matched(&[&v1, &v2, &v3]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(v2, 4);
         assert_eq!(v3, 6);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -235,7 +235,7 @@ mod tests {
         assert!(checker_2.is_values_matched(&[1, 2, 3]));
         assert!(checker_2.is_completed());
 
-        drop(subscription_1); // keep the subscription alive
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 }

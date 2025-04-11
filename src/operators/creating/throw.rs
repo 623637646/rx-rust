@@ -55,7 +55,7 @@ mod tests {
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_error(111));
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -69,7 +69,7 @@ mod tests {
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_error(&error));
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -95,7 +95,7 @@ mod tests {
         assert!(checker.is_error(111));
         assert_eq!(error, 222);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[tokio::test]
@@ -135,7 +135,7 @@ mod tests {
         assert!(checker_2.is_values_matched(&[]));
         assert!(checker_1.is_error(111));
 
-        drop(subscription_1); // keep the subscription alive
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 }

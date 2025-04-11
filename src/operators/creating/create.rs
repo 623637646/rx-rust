@@ -87,7 +87,7 @@ mod tests {
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -103,7 +103,7 @@ mod tests {
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_error("error"));
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -117,7 +117,7 @@ mod tests {
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[1]));
         assert!(checker.is_unterminated());
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[tokio::test]
@@ -173,7 +173,7 @@ mod tests {
         assert!(checker_2.is_values_matched(&[1, 2, 3]));
         assert!(checker_2.is_completed());
 
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 
     #[test]
@@ -192,7 +192,7 @@ mod tests {
         assert!(checker.is_values_matched(&[&value]));
         assert!(checker.is_error(&error));
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -228,7 +228,7 @@ mod tests {
         assert_eq!(value, 222);
         assert_eq!(error, 444);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[tokio::test]
@@ -293,8 +293,8 @@ mod tests {
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_error("error"));
 
-        drop(subscription_1); // keep the subscription alive
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 
     // Test with lifetime. See more for the git commit.
@@ -313,7 +313,7 @@ mod tests {
             checker.is_values_matched(&[&b]);
             subscription = observable.subscribe(checker);
         }
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]

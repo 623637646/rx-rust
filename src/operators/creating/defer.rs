@@ -72,7 +72,7 @@ mod tests {
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -96,7 +96,7 @@ mod tests {
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_error("error"));
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -142,7 +142,7 @@ mod tests {
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_error("error"));
 
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 
     #[test]
@@ -172,7 +172,7 @@ mod tests {
         assert!(checker.is_error(&error));
         assert!(matches!(subject.terminated(), Some(Terminal::Error(&222))));
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(value, 222);
         assert_eq!(error, 444);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[tokio::test]
@@ -284,8 +284,8 @@ mod tests {
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_error("error"));
 
-        drop(subscription_1); // keep the subscription alive
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 
     #[test]
@@ -326,13 +326,13 @@ mod tests {
         let subscription = observable.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[222]));
         assert!(checker.is_completed());
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
 
         *switch.lock().unwrap() = true;
         let checker = CheckingObserver::new();
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 }

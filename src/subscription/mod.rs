@@ -94,7 +94,7 @@ mod tests {
             };
             let subscription = Subscription::new_with_disposal(test_disposal);
             assert!(!*disposed.read().unwrap());
-            drop(subscription); // keep the subscription alive
+            _ = subscription; // keep the subscription alive
         }
         assert!(*disposed.read().unwrap());
     }
@@ -125,7 +125,7 @@ mod tests {
             });
             assert!(!*disposed.read().unwrap());
 
-            drop(subscription); // keep the subscription alive
+            _ = subscription; // keep the subscription alive
         }
         assert!(*disposed.read().unwrap());
     }

@@ -18,7 +18,7 @@ mod tests {
         assert!(checker.is_values_matched(&[100, 101, 102]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -32,6 +32,6 @@ mod tests {
         assert!(checker.is_values_matched(&[100, 101, 102, 103]));
         assert!(checker.is_completed());
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 }

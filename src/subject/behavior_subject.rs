@@ -113,7 +113,7 @@ mod tests {
         assert!(matches!(subject.terminated(), Some(Terminal::Completed)));
         assert_eq!(subject.value(), 111);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -145,7 +145,7 @@ mod tests {
         ));
         assert_eq!(subject.value(), 111);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
@@ -203,7 +203,7 @@ mod tests {
         ));
         assert_eq!(subject.value(), 222);
 
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 
     #[test]
@@ -236,7 +236,7 @@ mod tests {
         assert!(matches!(subject.terminated(), Some(Terminal::Error(&222))));
         assert_eq!(subject.value(), &value_2);
 
-        drop(subscription); // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[tokio::test]
@@ -327,8 +327,8 @@ mod tests {
         ));
         assert_eq!(subject.value(), 111);
 
-        drop(subscription_1); // keep the subscription alive
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 
     #[test]
@@ -414,7 +414,7 @@ mod tests {
         ));
         assert_eq!(subject.value(), 111);
 
-        drop(subscription_1); // keep the subscription alive
-        drop(subscription_2); // keep the subscription alive
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
     }
 }
