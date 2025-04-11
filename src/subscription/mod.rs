@@ -9,21 +9,21 @@ pub struct Subscription<'a>(Vec<BoxedDisposal<'a>>);
 
 impl<'a> Subscription<'a> {
     /// Create a new subscription.
-    pub fn new_with_disposals(disposables: Vec<BoxedDisposal<'a>>) -> Subscription<'a> {
-        Subscription(disposables)
+    pub fn new_with_disposals(disposables: Vec<BoxedDisposal<'a>>) -> Self {
+        Self(disposables)
     }
 
     /// Create a new `Subscription` with no disposal. No action will be performed when the subscription is unsubscribed or dropped.
     pub fn new_none_disposal() -> Self {
-        Subscription(vec![])
+        Self(vec![])
     }
 
     pub fn new_with_disposal(disposable: impl Disposable + Send + 'a) -> Self {
-        Subscription(vec![BoxedDisposal::new(disposable)])
+        Self(vec![BoxedDisposal::new(disposable)])
     }
 
     pub fn new_with_disposal_callback(callback: impl FnOnce() + Send + 'a) -> Self {
-        Subscription(vec![BoxedDisposal::new(CallbackDisposal::new(callback))])
+        Self(vec![BoxedDisposal::new(CallbackDisposal::new(callback))])
     }
 
     pub fn append_disposable(&mut self, disposable: impl Disposable + Send + 'a) {
@@ -60,6 +60,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::utils::tests_utils::test_struct::TestStruct;
     use std::sync::{Arc, RwLock};
 
     struct TestDisposal {
@@ -166,5 +167,24 @@ mod tests {
         subscription.unsubscribe();
         assert!(*disposed_1.read().unwrap());
         assert!(*disposed_2.read().unwrap());
+    }
+
+    #[test]
+    fn test_lifetime() {
+        // OK
+        let life_marker = TestStruct;
+        let subscription;
+
+        // Error
+        // let subscription;
+        // let life_marker = TestStruct;
+
+        {
+            let callback = || {
+                life_marker.consume_ref();
+            };
+            subscription = Subscription::new_with_disposal_callback(callback);
+        }
+        _ = subscription;
     }
 }
