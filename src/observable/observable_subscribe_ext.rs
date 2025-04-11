@@ -98,7 +98,7 @@ mod tests {
     use super::*;
     use crate::{
         observer::Observer,
-        operators::creating::just::Just,
+        operators::creating::{create::Create, just::Just},
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
@@ -321,20 +321,49 @@ mod tests {
         _ = subscription_2; // keep the subscription alive
     }
 
-    // Test `on_next` and `on_terminal` with lifetime. See more for the git commit.
     #[test]
-    fn test_lifetime() {
-        let observable = Just::new(1);
+    fn test_lifetime_a() {
+        // OK
+        let life_marker = TestStruct;
         let subscription;
+
+        // Error
+        // let subscription;
+        // let life_marker = TestStruct;
+
         {
-            let a = 1;
-            let on_next = |_| println!("{}", &a);
+            let observable = Create::new(|mut observer| {
+                observer.on_next(1);
+                observer.on_terminal(Terminal::<String>::Completed);
+                Subscription::new_with_disposal_callback(|| {
+                    life_marker.consume_ref();
+                })
+            });
 
-            let b = 1;
-            let on_terminal = |_| println!("{}", &b);
-
-            subscription = observable.subscribe_on(on_next, on_terminal);
+            subscription = observable.subscribe_on(|_| {}, |_| {});
         }
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_lifetime_b() {
+        let life_marker = TestStruct;
+        let observable = Create::new(|mut observer| {
+            observer.on_next(&life_marker);
+            observer.on_terminal(Terminal::<String>::Completed);
+            Subscription::new_none_disposal()
+        });
+
+        // OK
+
+        // Error
+        // drop(life_marker);
+
+        let on_next = |_| {};
+        let on_terminal = |_| {};
+        let subscription = observable.subscribe_on(on_next, on_terminal);
+
         _ = subscription; // keep the subscription alive
     }
 
