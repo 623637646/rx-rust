@@ -6,4 +6,5 @@ pub mod interval;
 pub mod just;
 pub mod never;
 pub mod range;
+pub mod repeat;
 pub mod throw;
