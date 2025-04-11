@@ -40,7 +40,7 @@ impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::tests_utils::checking_observer::CheckingObserver;
+    use crate::utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct};
 
     #[test]
     fn test_completed() {
@@ -123,16 +123,16 @@ mod tests {
     #[test]
     fn test_lifetime() {
         // OK
-        let value = 111;
+        let life_marker = TestStruct;
         let boxed_observer;
 
         // Error
         // let boxed_observer;
-        // let value = 111;
+        // let life_marker = TestStruct;
 
         {
-            let mut checker: CheckingObserver<&i32, &str> = CheckingObserver::new();
-            checker.on_next(&value);
+            let mut checker: CheckingObserver<_, &str> = CheckingObserver::new();
+            checker.on_next(&life_marker);
             boxed_observer = BoxedObserver::new(checker);
         }
 
