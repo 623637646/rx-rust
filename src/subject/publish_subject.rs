@@ -102,6 +102,7 @@ mod tests {
     use crate::observer::{Observer, Terminal};
     use crate::utils::tests_utils::checking_observer::CheckingObserver;
     use crate::utils::tests_utils::test_struct::TestStruct;
+    use std::convert::Infallible;
 
     #[test]
     fn test_completed() {
@@ -323,6 +324,26 @@ mod tests {
 
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_lifetime() {
+        // OK
+        let life_marker = TestStruct;
+        let subscription;
+
+        // Error
+        // let subscription;
+        // let life_marker = TestStruct;
+
+        {
+            let mut checker: CheckingObserver<_, Infallible> = CheckingObserver::new();
+            checker.on_next(&life_marker);
+            let subject = PublishSubject::default();
+            subscription = subject.subscribe(checker);
+        }
+
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]
