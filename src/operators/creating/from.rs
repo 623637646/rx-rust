@@ -6,21 +6,21 @@ use crate::{
 use std::convert::Infallible;
 
 #[derive(Clone)]
-pub struct From<IT>(IT);
+pub struct From<I>(I);
 
-impl<IT> From<IT> {
-    pub fn new(into_iterator: IT) -> Self
+impl<I> From<I> {
+    pub fn new(into_iterator: I) -> Self
     where
-        IT: IntoIterator,
+        I: IntoIterator,
     {
         Self(into_iterator)
     }
 }
 
-impl<'a, T, OR, IT> Observable<'a, T, Infallible, OR> for From<IT>
+impl<'a, T, OR, I> Observable<'a, T, Infallible, OR> for From<I>
 where
     OR: Observer<T, Infallible>,
-    IT: IntoIterator<Item = T>,
+    I: IntoIterator<Item = T>,
 {
     fn subscribe(self, mut observer: OR) -> Subscription<'a> {
         for value in self.0.into_iter() {
