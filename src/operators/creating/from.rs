@@ -162,6 +162,20 @@ mod tests {
     }
 
     #[test]
+    fn test_range() {
+        let source = 100..103;
+
+        let observable = From::new(source);
+        let checker = CheckingObserver::new();
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[100, 101, 102]));
+        assert!(checker.is_completed());
+
+        drop(subscription); // keep the subscription alive
+    }
+
+    #[test]
     fn test_ref() {
         let v1 = 1;
         let v2 = 2;
