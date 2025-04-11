@@ -112,7 +112,7 @@ mod tests {
     use super::*;
     use crate::{
         observable::observable_subscribe_ext::ObservableSubscribeExt,
-        operators::creating::{create::Create, just::Just},
+        operators::creating::create::Create,
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
@@ -429,19 +429,52 @@ mod tests {
     }
 
     #[test]
-    fn test_lifetime() {
-        let observable = Just::new(&1);
-
-        // Custom operations
-        let observable = observable.map(|value| value);
-
+    fn test_lifetime_a() {
+        // OK
+        let life_marker = TestStruct;
         let subscription;
+
+        // Error
+        // let subscription;
+        // let life_marker = TestStruct;
+
         {
-            let b = 1;
+            let observable = Create::new(|mut observer| {
+                observer.on_next(1);
+                observer.on_terminal(Terminal::<String>::Completed);
+                Subscription::new_with_disposal_callback(|| {
+                    life_marker.consume_ref();
+                })
+            });
+
+            let observable = observable.map(|value| value.to_string());
+
             let checker = CheckingObserver::new();
-            checker.is_values_matched(&[&b]);
+            checker.is_values_matched(&["1".to_owned()]);
             subscription = observable.subscribe(checker);
         }
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_lifetime_b() {
+        let life_marker = TestStruct;
+        let observable = Create::new(|mut observer| {
+            observer.on_next(&life_marker);
+            observer.on_terminal(Terminal::<String>::Completed);
+            Subscription::new_none_disposal()
+        });
+        let observable = observable.map(|_| "");
+
+        // OK
+
+        // Error
+        // drop(life_marker);
+
+        let checker = CheckingObserver::new();
+        let subscription = observable.subscribe(checker);
+
         _ = subscription; // keep the subscription alive
     }
 
