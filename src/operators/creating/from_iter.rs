@@ -6,9 +6,9 @@ use crate::{
 use std::convert::Infallible;
 
 #[derive(Clone)]
-pub struct From<I>(I);
+pub struct FromIter<I>(I);
 
-impl<I> From<I> {
+impl<I> FromIter<I> {
     pub fn new(into_iterator: I) -> Self
     where
         I: IntoIterator,
@@ -17,7 +17,7 @@ impl<I> From<I> {
     }
 }
 
-impl<T, OR, I> Observable<'static, T, Infallible, OR> for From<I>
+impl<T, OR, I> Observable<'static, T, Infallible, OR> for FromIter<I>
 where
     OR: Observer<T, Infallible>,
     I: IntoIterator<Item = T>,
@@ -43,7 +43,7 @@ mod tests {
     fn test_array() {
         let source = [1, 2, 3];
 
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -57,7 +57,7 @@ mod tests {
     fn test_array_ref() {
         let source = [1, 2, 3];
 
-        let observable = From::new(&source);
+        let observable = FromIter::new(&source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -71,7 +71,7 @@ mod tests {
     fn test_array_mut() {
         let mut source = [1, 2, 3];
 
-        let observable = From::new(&mut source);
+        let observable = FromIter::new(&mut source);
 
         let subscription = observable.subscribe_on(
             |value| {
@@ -88,7 +88,7 @@ mod tests {
     fn test_slice() {
         let source: &[i32] = &[1, 2, 3];
 
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -103,7 +103,7 @@ mod tests {
         let mut data = [1, 2, 3];
         let source: &mut [i32] = &mut data;
 
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
 
         let subscription = observable.subscribe_on(
             |value| {
@@ -120,7 +120,7 @@ mod tests {
     fn test_vec() {
         let source = vec![1, 2, 3];
 
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -134,7 +134,7 @@ mod tests {
     fn test_vec_ref() {
         let source = vec![1, 2, 3];
 
-        let observable = From::new(&source);
+        let observable = FromIter::new(&source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -148,7 +148,7 @@ mod tests {
     fn test_vec_mut() {
         let mut source = vec![1, 2, 3];
 
-        let observable = From::new(&mut source);
+        let observable = FromIter::new(&mut source);
 
         let subscription = observable.subscribe_on(
             |value| {
@@ -165,7 +165,7 @@ mod tests {
     fn test_range() {
         let source = 100..103;
 
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -182,7 +182,7 @@ mod tests {
         let v3 = 3;
         let source = [&v1, &v2, &v3];
 
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -199,7 +199,7 @@ mod tests {
         let mut v3 = 3;
         let source = [&mut v1, &mut v2, &mut v3];
 
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
 
         let subscription = observable.subscribe_on(
             |value| {
@@ -218,7 +218,7 @@ mod tests {
     fn test_subscribe_by_different_observer() {
         let source = [1, 2, 3];
 
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn test_clone() {
         let source = [1, 2, 3];
-        let observable = From::new(source);
+        let observable = FromIter::new(source);
         let _ = observable.clone();
     }
 }

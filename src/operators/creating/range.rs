@@ -1,11 +1,11 @@
-use super::from::From;
+use super::from_iter::FromIter;
 use std::ops::RangeBounds;
 
-pub fn range<T, R>(range: R) -> From<R>
+pub fn range<T, R>(range: R) -> FromIter<R>
 where
     R: IntoIterator<Item = T> + RangeBounds<T>,
 {
-    From::new(range)
+    FromIter::new(range)
 }
 
 #[cfg(test)]

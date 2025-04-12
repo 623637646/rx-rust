@@ -1,11 +1,11 @@
-use super::from::From;
+use super::from_iter::FromIter;
 use std::iter::RepeatN;
 
-pub fn repeat<T>(value: T, n: usize) -> From<RepeatN<T>>
+pub fn repeat<T>(value: T, n: usize) -> FromIter<RepeatN<T>>
 where
     T: Clone,
 {
-    From::new(std::iter::repeat_n(value, n))
+    FromIter::new(std::iter::repeat_n(value, n))
 }
 
 #[cfg(test)]
