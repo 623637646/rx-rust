@@ -45,8 +45,8 @@ impl<T, E> CheckingObserver<T, E> {
     pub(crate) fn fn_for_subscribe_on(
         &self,
     ) -> (
-        impl FnMut(T) + Send + Sync + use<T, E>,
-        impl FnOnce(Terminal<E>) + Send + Sync + use<T, E>,
+        impl FnMut(T) + Send + use<T, E>,
+        impl FnOnce(Terminal<E>) + Send + use<T, E>,
     )
     where
         T: Send + Sync,

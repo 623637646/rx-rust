@@ -41,7 +41,7 @@ impl Scheduler for TokioScheduler {
         &self,
         task: impl FnOnce() + Send + 'static,
         delay: Option<Duration>,
-    ) -> impl Disposable + Send + Sync + 'static {
+    ) -> impl Disposable + Send + 'static {
         let handle = tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
@@ -56,7 +56,7 @@ impl Scheduler for TokioScheduler {
         mut task: impl FnMut(usize) + Send + 'static, // TODO: use Future instead of FnOnce?
         period: Duration,
         delay: Option<Duration>,
-    ) -> impl Disposable + Send + Sync + 'static {
+    ) -> impl Disposable + Send + 'static {
         let handle = tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
