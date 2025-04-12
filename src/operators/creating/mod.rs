@@ -9,3 +9,4 @@ pub mod range;
 pub mod repeat;
 pub mod start;
 pub mod throw;
+pub mod timer;
