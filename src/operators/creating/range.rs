@@ -1,6 +1,12 @@
 use super::from::From;
+use std::ops::RangeBounds;
 
-pub type Range<I> = From<I>;
+pub fn range<T, R>(range: R) -> From<R>
+where
+    R: IntoIterator<Item = T> + RangeBounds<T>,
+{
+    From::new(range)
+}
 
 #[cfg(test)]
 mod tests {
@@ -11,7 +17,7 @@ mod tests {
     fn test_range() {
         let source = 100..103;
 
-        let observable = Range::new(source);
+        let observable = range(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -25,7 +31,7 @@ mod tests {
     fn test_range_inclusive() {
         let source = 100..=103;
 
-        let observable = Range::new(source);
+        let observable = range(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -38,7 +44,7 @@ mod tests {
     #[test]
     fn test_clone() {
         let source = 100..103;
-        let observable = Range::new(source);
+        let observable = range(source);
         let _ = observable.clone();
     }
 }
