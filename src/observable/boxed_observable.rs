@@ -1,4 +1,4 @@
-use super::{Observable, Observer};
+use super::{Observable, Observer, observable_ext::ObservableExt};
 use crate::subscription::Subscription;
 
 /// TODO: doc
@@ -23,11 +23,12 @@ where
     }
 }
 
+impl<OR> ObservableExt for BoxedObservable<'_, '_, OR> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt,
         observer::Terminal,
         operators::creating::{create::Create, just::Just},
         subject::publish_subject::PublishSubject,

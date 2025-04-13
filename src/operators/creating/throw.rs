@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
@@ -11,7 +11,7 @@ use std::convert::Infallible;
 /// # Example
 /// ```rust
 /// use rx_rust::operators::creating::throw::Throw;
-/// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+/// use rx_rust::observable::observable_ext::ObservableExt;
 /// use std::convert::Infallible;
 /// use rx_rust::observer::Terminal;
 /// let observable = Throw::new("My error");
@@ -40,13 +40,12 @@ where
     }
 }
 
+impl<E> ObservableExt for Throw<E> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt,
-        utils::tests_utils::checking_observer::CheckingObserver,
-    };
+    use crate::utils::tests_utils::checking_observer::CheckingObserver;
 
     #[test]
     fn test_error() {

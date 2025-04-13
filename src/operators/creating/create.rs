@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
@@ -19,7 +19,7 @@ use educe::Educe;
 ///
 /// # Example
 /// ```rust
-/// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
+/// use rx_rust::observable::observable_ext::ObservableExt;
 /// use rx_rust::observer::Observer;
 /// use rx_rust::subscription::Subscription;
 /// use rx_rust::operators::creating::create::Create;
@@ -65,11 +65,12 @@ where
     }
 }
 
+impl<F> ObservableExt for Create<F> {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt,
         observer::Terminal,
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},

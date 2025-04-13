@@ -1,4 +1,8 @@
-use crate::{observable::Observable, observer::Observer, subscription::Subscription};
+use crate::{
+    observable::{Observable, observable_ext::ObservableExt},
+    observer::Observer,
+    subscription::Subscription,
+};
 use educe::Educe;
 
 #[derive(Educe)]
@@ -28,18 +32,15 @@ where
     }
 }
 
+impl<F, OE> ObservableExt for Defer<F, OE> where F: FnOnce() -> OE {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        observable::{
-            boxed_observable::BoxedObservable, observable_subscribe_ext::ObservableSubscribeExt,
-        },
+        observable::boxed_observable::BoxedObservable,
         observer::Terminal,
-        operators::{
-            creating::{create::Create, just::Just},
-            transforming::map::MappableObservable,
-        },
+        operators::creating::{create::Create, just::Just},
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };

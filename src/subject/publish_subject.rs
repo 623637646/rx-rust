@@ -1,6 +1,6 @@
 use super::Subject;
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     subscription::Subscription,
     utils::unique_key_store::UniqueKeyStore,
@@ -59,6 +59,8 @@ where
     }
 }
 
+impl<T, E> ObservableExt for PublishSubject<'_, T, E> {}
+
 impl<T, E> Observer<T, E> for PublishSubject<'_, T, E>
 where
     T: Clone,
@@ -92,7 +94,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::observable::observable_subscribe_ext::ObservableSubscribeExt;
     use crate::observer::{Observer, Terminal};
     use crate::utils::tests_utils::checking_observer::CheckingObserver;
     use crate::utils::tests_utils::test_struct::TestStruct;

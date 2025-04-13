@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
@@ -44,6 +44,8 @@ where
     }
 }
 
+impl<OE, F, T> ObservableExt for Map<OE, F, T> {}
+
 pub struct MapObserver<'b, T2, E, F> {
     observer: BoxedObserver<'b, T2, E>,
     mapper: F,
@@ -62,45 +64,10 @@ where
     }
 }
 
-/// Make the `Observable` mappable.
-pub trait MappableObservable<T1, T2, E, F>: Sized {
-    /// Maps the values of the source observable using a mapper function.
-    ///
-    /// # Example
-    /// ```rust
-    /// use rx_rust::operators::creating::just::Just;
-    /// use rx_rust::operators::transforming::map::MappableObservable;
-    /// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-    /// use rx_rust::observer::Terminal;
-    /// let observable = Just::new(333);
-    /// let observable = observable.map(|value| (value * 3).to_string());
-    /// observable.subscribe_on(
-    ///     |value| {
-    ///         println!("Next value: {}", value);
-    ///     },
-    ///     |terminal| {
-    ///         println!("Terminal event: {:?}", terminal);
-    ///     }
-    /// );
-    /// ```
-    fn map(self, f: F) -> Map<Self, F, T1>;
-}
-
-impl<'a, 'b, T1, T2, E, F, OE> MappableObservable<T1, T2, E, F> for OE
-where
-    OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
-    F: FnMut(T1) -> T2,
-{
-    fn map(self, f: F) -> Map<Self, F, T1> {
-        Map::new(self, f)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt,
         operators::creating::create::Create,
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},

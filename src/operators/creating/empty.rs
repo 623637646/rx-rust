@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
@@ -20,13 +20,12 @@ where
     }
 }
 
+impl ObservableExt for Empty {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt,
-        utils::tests_utils::checking_observer::CheckingObserver,
-    };
+    use crate::utils::tests_utils::checking_observer::CheckingObserver;
 
     #[test]
     fn test_completed() {

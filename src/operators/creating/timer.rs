@@ -1,8 +1,8 @@
 use super::just::Just;
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::Observer,
-    operators::utility::delay::{Delay, DelayableObservable},
+    operators::utility::delay::Delay,
     scheduler::Scheduler,
     subscription::Subscription,
 };

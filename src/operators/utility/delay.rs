@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
@@ -80,6 +80,8 @@ where
     }
 }
 
+impl<OE, S> ObservableExt for Delay<OE, S> {}
+
 pub struct DelayObserver<T, E, S> {
     source_observer: Arc<Mutex<Option<BoxedObserver<'static, T, E>>>>,
     delay: Duration,
@@ -128,63 +130,12 @@ where
     }
 }
 
-/// Extension trait to add the `delay` method to observables.
-pub trait DelayableObservable<T, E, S>: Sized {
-    /// Delays the next value and completed events from the source observable by a duration.
-    /// The error will be emitted immediately.
-    ///
-    /// # Arguments
-    ///
-    /// * `delay` - The duration to delay each emission.
-    /// * `scheduler` - The scheduler to use for timing the delay.
-    ///
-    /// # Returns
-    ///
-    /// A new observable that delays emissions from the source observable.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use rx_rust::operators::creating::just::Just;
-    /// use rx_rust::operators::utility::delay::DelayableObservable;
-    /// use rx_rust::observable::observable_subscribe_ext::ObservableSubscribeExt;
-    /// use rx_rust::scheduler::tokio_scheduler::TokioScheduler;
-    /// use std::time::Duration;
-    /// #[tokio::main]
-    /// async fn main() {
-    ///     let observable = Just::new(333);
-    ///     let observable = observable.delay(Duration::from_millis(10), TokioScheduler);
-    ///     observable.subscribe_on(
-    ///         |value| {
-    ///             println!("Next value: {}", value);
-    ///         },
-    ///         |terminal| {
-    ///             println!("Terminal event: {:?}", terminal);
-    ///         }
-    ///     );
-    /// }
-    /// ```
-    fn delay(self, delay: Duration, scheduler: S) -> Delay<Self, S>;
-}
-
-impl<'a, T, E, S, OE> DelayableObservable<T, E, S> for OE
-where
-    T: Send + 'static,
-    E: Send + 'static,
-    OE: Observable<'a, T, E, DelayObserver<T, E, S>>,
-    S: Scheduler,
-{
-    fn delay(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
-        Delay::new(self, delay, scheduler)
-    }
-}
-
 #[cfg(feature = "tokio-scheduler")]
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_subscribe_ext::ObservableSubscribeExt,
+        
         operators::creating::{create::Create, just::Just},
         scheduler::tokio_scheduler::TokioScheduler,
         subject::publish_subject::PublishSubject,

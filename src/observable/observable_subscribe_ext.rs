@@ -1,70 +1,4 @@
-use super::Observable;
-use crate::{
-    observer::{Observer, Terminal},
-    subscription::Subscription,
-};
-
-/// The `ObservableSubscribeExt` trait provides a convenient method to subscribe to an observable
-/// with custom `on_next` and `on_terminal` callbacks. This allows for more flexible and ergonomic
-/// usage of observables in the code.
-///
-/// # Type Parameters
-///
-/// * `T` - The type of the items emitted by the observable.
-/// * `E` - The type of the error that can be emitted by the observable.
-/// * `FN` - The type of the callback function for handling emitted items.
-/// * `FT` - The type of the callback function for handling terminal events.
-pub trait ObservableSubscribeExt<'a, 'b, T, E> {
-    /// Subscribes to the observable with the given `on_next` and `on_terminal` callbacks.
-    ///
-    /// # Arguments
-    ///
-    /// * `on_next` - A callback function that will be called with each item emitted by the observable.
-    /// * `on_terminal` - A callback function that will be called when the observable emits a terminal event.
-    ///
-    /// # Returns
-    ///
-    /// A `Subscription` which can be used to unsubscribe the observer.
-    ///
-    /// # Example
-    /// ```rust
-    /// use rx_rust::{
-    ///     observable::observable_subscribe_ext::ObservableSubscribeExt, operators::creating::just::Just,
-    /// };
-    /// use std::convert::Infallible;
-    /// use rx_rust::observer::Terminal;
-    /// let observable = Just::new(123);
-    /// observable.subscribe_on(
-    ///     |value| {
-    ///         println!("Next value: {}", value);
-    ///     },
-    ///     |terminal| {
-    ///         println!("Terminal event: {:?}", terminal);
-    ///     }
-    /// );
-    /// ```
-    fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription<'a>
-    where
-        FN: FnMut(T) + Send + 'b,
-        FT: FnOnce(Terminal<E>) + Send + 'b;
-}
-
-impl<'a, 'b, T, E, OE> ObservableSubscribeExt<'a, 'b, T, E> for OE
-where
-    OE: Observable<'a, T, E, ObservableSubscribeExtObserver<'b, T, E>>,
-{
-    fn subscribe_on<FN, FT>(self, on_next: FN, on_terminal: FT) -> Subscription<'a>
-    where
-        FN: FnMut(T) + Send + 'b,
-        FT: FnOnce(Terminal<E>) + Send + 'b,
-    {
-        let observer = ObservableSubscribeExtObserver {
-            on_next: Box::new(on_next),
-            on_terminal: Box::new(on_terminal),
-        };
-        self.subscribe(observer)
-    }
-}
+use crate::observer::{Observer, Terminal};
 
 /// The `ObservableSubscribeExtObserver` struct is an implementation of the `Observer` trait
 /// that allows subscribing to an observable with custom `on_next` and `on_terminal` callbacks.
@@ -83,6 +17,19 @@ pub struct ObservableSubscribeExtObserver<'a, T, E> {
     on_terminal: Box<dyn FnOnce(Terminal<E>) + Send + 'a>,
 }
 
+impl<'a, T, E> ObservableSubscribeExtObserver<'a, T, E> {
+    pub fn new<FN, FT>(on_next: FN, on_terminal: FT) -> Self
+    where
+        FN: FnMut(T) + Send + 'a,
+        FT: FnOnce(Terminal<E>) + Send + 'a,
+    {
+        Self {
+            on_next: Box::new(on_next),
+            on_terminal: Box::new(on_terminal),
+        }
+    }
+}
+
 impl<T, E> Observer<T, E> for ObservableSubscribeExtObserver<'_, T, E> {
     fn on_next(&mut self, value: T) {
         (self.on_next)(value);
@@ -97,9 +44,11 @@ impl<T, E> Observer<T, E> for ObservableSubscribeExtObserver<'_, T, E> {
 mod tests {
     use super::*;
     use crate::{
+        observable::observable_ext::ObservableExt,
         observer::Observer,
         operators::creating::{create::Create, just::Just},
         subject::publish_subject::PublishSubject,
+        subscription::Subscription,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
     };
 
