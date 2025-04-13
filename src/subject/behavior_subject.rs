@@ -1,4 +1,4 @@
-use super::publish_subject::PublishSubject;
+use super::{Subject, publish_subject::PublishSubject};
 use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
@@ -77,6 +77,14 @@ where
             self.publish_subject.on_terminal(terminal);
         }
     }
+}
+
+impl<'a, T, E, OR> Subject<'a, T, E, OR> for BehaviorSubject<'a, T, E>
+where
+    T: Clone + 'a,
+    E: Clone + 'a,
+    OR: Observer<T, E> + Send + 'a,
+{
 }
 
 #[cfg(test)]
