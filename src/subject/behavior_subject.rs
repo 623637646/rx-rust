@@ -356,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_clone() {
-        let observable = BehaviorSubject::<'_, _, i32>::new(TestStruct);
+        let observable = BehaviorSubject::<'_, _, TestStruct>::new(TestStruct);
         let _ = observable.clone(); // make sure it's Clone when T and E are not Clone.
     }
 

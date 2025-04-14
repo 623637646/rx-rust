@@ -61,4 +61,10 @@ mod tests {
 
         _ = subscription; // keep the subscription alive
     }
+
+    #[test]
+    fn test_clone() {
+        let observable = Timer::new(111, Duration::from_millis(100), TokioScheduler);
+        let _ = observable.clone();
+    }
 }
