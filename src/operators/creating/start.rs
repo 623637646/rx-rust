@@ -14,11 +14,11 @@ impl<T> Start<T> {
     }
 }
 
-impl<T, OR> Observable<'static, T, Infallible, OR> for Start<T>
+impl<'a, T, OR> Observable<'a, T, Infallible, OR> for Start<T>
 where
     OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'static> {
+    fn subscribe(self, observer: OR) -> Subscription<'a> {
         self.0.subscribe(observer)
     }
 }
