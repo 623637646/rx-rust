@@ -36,3 +36,5 @@ pub trait ObservableExt: Sized {
         Delay::new(self, delay, scheduler)
     }
 }
+
+impl<OE> ObservableExt for OE {}

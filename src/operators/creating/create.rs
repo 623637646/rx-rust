@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
@@ -65,12 +65,11 @@ where
     }
 }
 
-impl<F> ObservableExt for Create<F> {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
+        observable::observable_ext::ObservableExt,
         observer::Terminal,
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},

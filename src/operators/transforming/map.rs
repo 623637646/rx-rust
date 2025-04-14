@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
@@ -44,8 +44,6 @@ where
     }
 }
 
-impl<OE, F, T> ObservableExt for Map<OE, F, T> {}
-
 pub struct MapObserver<'b, T2, E, F> {
     observer: BoxedObserver<'b, T2, E>,
     mapper: F,
@@ -68,6 +66,7 @@ where
 mod tests {
     use super::*;
     use crate::{
+        observable::observable_ext::ObservableExt,
         operators::creating::create::Create,
         subject::publish_subject::PublishSubject,
         utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
@@ -337,7 +336,9 @@ mod tests {
             .map(|value| value + "?");
 
         let (on_next, on_terminal) = checker_1.fn_for_subscribe_on();
-        let subscription_1 = observable.clone().subscribe_with_callback(on_next, on_terminal);
+        let subscription_1 = observable
+            .clone()
+            .subscribe_with_callback(on_next, on_terminal);
         let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
         let subscription_2 = observable.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[]));

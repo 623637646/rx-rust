@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
@@ -33,12 +33,13 @@ where
     }
 }
 
-impl<I> ObservableExt for FromIter<I> {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::tests_utils::checking_observer::CheckingObserver;
+    use crate::{
+        observable::observable_ext::ObservableExt,
+        utils::tests_utils::checking_observer::CheckingObserver,
+    };
 
     #[test]
     fn test_array() {

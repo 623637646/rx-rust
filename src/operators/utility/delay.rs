@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
@@ -80,8 +80,6 @@ where
     }
 }
 
-impl<OE, S> ObservableExt for Delay<OE, S> {}
-
 pub struct DelayObserver<T, E, S> {
     source_observer: Arc<Mutex<Option<BoxedObserver<'static, T, E>>>>,
     delay: Duration,
@@ -135,7 +133,7 @@ where
 mod tests {
     use super::*;
     use crate::{
-        
+        observable::observable_ext::ObservableExt,
         operators::creating::{create::Create, just::Just},
         scheduler::tokio_scheduler::TokioScheduler,
         subject::publish_subject::PublishSubject,

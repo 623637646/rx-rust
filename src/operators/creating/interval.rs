@@ -1,8 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
-    scheduler::Scheduler,
-    subscription::Subscription,
+    observable::Observable, observer::Observer, scheduler::Scheduler, subscription::Subscription,
 };
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
@@ -42,14 +39,11 @@ where
     }
 }
 
-impl<S> ObservableExt for Interval<S> {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        
-        scheduler::tokio_scheduler::TokioScheduler,
+        observable::observable_ext::ObservableExt, scheduler::tokio_scheduler::TokioScheduler,
         utils::tests_utils::checking_observer::CheckingObserver,
     };
 
