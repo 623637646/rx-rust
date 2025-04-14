@@ -48,7 +48,7 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn test_no_delay() {
+    async fn test_completed_no_delay() {
         let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
         let checker = CheckingObserver::new();
 
@@ -81,7 +81,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_with_delay() {
+    async fn test_completed_with_delay() {
         let observable = Interval::new(
             Duration::from_millis(100),
             TokioScheduler,

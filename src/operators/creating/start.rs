@@ -28,10 +28,13 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{observable::Observable, utils::tests_utils::checking_observer::CheckingObserver};
+    use crate::{
+        observable::{Observable, observable_ext::ObservableExt},
+        utils::tests_utils::checking_observer::CheckingObserver,
+    };
 
     #[test]
-    fn test_start() {
+    fn test_completed() {
         let value = 111;
         let observable = Start::new(|| value + 222);
         let checker = CheckingObserver::new();
@@ -41,5 +44,91 @@ mod tests {
         assert!(checker.is_completed());
 
         _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_ref() {
+        let value = 111;
+        let observable = Start::new(|| &value);
+        let checker = CheckingObserver::new();
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[&value]));
+        assert!(checker.is_completed());
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_mut_ref() {
+        let mut value = 111;
+        let observable = Start::new(|| &mut value);
+        let checker = CheckingObserver::new();
+
+        let mut checker_cloned_1 = checker.clone();
+        let checker_cloned_2 = checker.clone();
+        let subscription = observable.subscribe_with_callback(
+            |value| {
+                checker_cloned_1.on_next(*value);
+                *value *= 2;
+            },
+            |terminal| checker_cloned_2.on_terminal(terminal),
+        );
+
+        assert!(checker.is_values_matched(&[111]));
+        assert!(checker.is_completed());
+        assert_eq!(value, 222);
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[tokio::test]
+    async fn test_async() {
+        let value = 111;
+        let observable = Start::new(|| value + 222);
+        let checker = CheckingObserver::new();
+
+        let checker_cloned = checker.clone();
+        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let subscription = handle.await.unwrap();
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+
+        let handle = tokio::spawn(async { subscription.unsubscribe() });
+        handle.await.unwrap();
+        assert!(checker.is_values_matched(&[333]));
+        assert!(checker.is_completed());
+    }
+
+    #[test]
+    fn test_subscribe_by_different_observer() {
+        let value = 111;
+        let observable = Start::new(|| value + 222);
+        let checker_1 = CheckingObserver::new();
+        let checker_2 = CheckingObserver::new();
+
+        // Custom operations
+        let observable_1 = observable.clone();
+        let observable_2 = observable_1.clone();
+
+        let subscription_1 = observable_1.subscribe(checker_1.clone());
+
+        let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
+        let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+
+        assert!(checker_1.is_values_matched(&[333]));
+        assert!(checker_1.is_completed());
+        assert!(checker_2.is_values_matched(&[333]));
+        assert!(checker_2.is_completed());
+
+        _ = subscription_1; // keep the subscription alive
+        _ = subscription_2; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_clone() {
+        let value = 111;
+        let observable = Start::new(|| value + 222);
+        let _ = observable.clone();
     }
 }

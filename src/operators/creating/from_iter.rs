@@ -42,7 +42,7 @@ mod tests {
     };
 
     #[test]
-    fn test_array() {
+    fn test_completed_array() {
         let source = [1, 2, 3];
 
         let observable = FromIter::new(source);
@@ -56,7 +56,7 @@ mod tests {
     }
 
     #[test]
-    fn test_array_ref() {
+    fn test_completed_array_ref() {
         let source = [1, 2, 3];
 
         let observable = FromIter::new(&source);
@@ -70,7 +70,7 @@ mod tests {
     }
 
     #[test]
-    fn test_array_mut() {
+    fn test_completed_array_mut() {
         let mut source = [1, 2, 3];
 
         let observable = FromIter::new(&mut source);
@@ -87,7 +87,7 @@ mod tests {
     }
 
     #[test]
-    fn test_slice() {
+    fn test_completed_slice() {
         let source: &[i32] = &[1, 2, 3];
 
         let observable = FromIter::new(source);
@@ -101,7 +101,7 @@ mod tests {
     }
 
     #[test]
-    fn test_slice_mut() {
+    fn test_completed_slice_mut() {
         let mut data = [1, 2, 3];
         let source: &mut [i32] = &mut data;
 
@@ -119,7 +119,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vec() {
+    fn test_completed_vec() {
         let source = vec![1, 2, 3];
 
         let observable = FromIter::new(source);
@@ -133,7 +133,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vec_ref() {
+    fn test_completed_vec_ref() {
         let source = vec![1, 2, 3];
 
         let observable = FromIter::new(&source);
@@ -147,7 +147,7 @@ mod tests {
     }
 
     #[test]
-    fn test_vec_mut() {
+    fn test_completed_vec_mut() {
         let mut source = vec![1, 2, 3];
 
         let observable = FromIter::new(&mut source);
@@ -164,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn test_range() {
+    fn test_completed_range() {
         let source = 100..103;
 
         let observable = FromIter::new(source);
@@ -214,6 +214,24 @@ mod tests {
         assert_eq!(v3, 6);
 
         _ = subscription; // keep the subscription alive
+    }
+
+    #[tokio::test]
+    async fn test_async() {
+        let source = vec![1, 2, 3];
+        let observable = FromIter::new(source);
+        let checker: CheckingObserver<i32, Infallible> = CheckingObserver::new();
+
+        let checker_cloned = checker.clone();
+        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let subscription = handle.await.unwrap();
+        assert!(checker.is_values_matched(&[1, 2, 3]));
+        assert!(checker.is_completed());
+
+        let handle = tokio::spawn(async { subscription.unsubscribe() });
+        handle.await.unwrap();
+        assert!(checker.is_values_matched(&[1, 2, 3]));
+        assert!(checker.is_completed());
     }
 
     #[test]
