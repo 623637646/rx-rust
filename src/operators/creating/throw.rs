@@ -15,7 +15,7 @@ use std::convert::Infallible;
 /// use std::convert::Infallible;
 /// use rx_rust::observer::Terminal;
 /// let observable = Throw::new("My error");
-/// observable.subscribe_on(
+/// observable.subscribe_with_callback(
 ///     |_| {},
 ///     |terminal| println!("Terminal event: {:?}", terminal)
 /// );
@@ -81,7 +81,7 @@ mod tests {
         let checker: CheckingObserver<i32, i32> = CheckingObserver::new();
 
         let checker_cloned = checker.clone();
-        let subscription = observable.subscribe_on(
+        let subscription = observable.subscribe_with_callback(
             |_| unreachable!(),
             |terminal| match terminal {
                 Terminal::Completed => unreachable!(),
@@ -129,7 +129,7 @@ mod tests {
         let subscription_1 = observable_1.subscribe(checker_1.clone());
 
         let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
-        let subscription_2 = observable_2.subscribe_on(on_next, on_terminal);
+        let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
 
         assert!(checker_1.is_values_matched(&[]));
         assert!(checker_1.is_error(111));

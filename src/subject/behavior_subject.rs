@@ -304,7 +304,7 @@ mod tests {
         let subscription_1 = observable_1.subscribe(checker_1.clone());
 
         let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
-        let subscription_2 = observable_2.subscribe_on(on_next, on_terminal);
+        let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[-1]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[-1]));

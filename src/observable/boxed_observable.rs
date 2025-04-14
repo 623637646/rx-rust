@@ -182,7 +182,7 @@ mod tests {
 
         let mut checker_cloned_1 = checker.clone();
         let checker_cloned_2 = checker.clone();
-        let subscription = observable.subscribe_on(
+        let subscription = observable.subscribe_with_callback(
             |value| {
                 checker_cloned_1.on_next(*value);
                 *value *= 2;
@@ -253,7 +253,7 @@ mod tests {
         let subscription_1 = observable_1.subscribe(checker_1.clone());
 
         let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
-        let subscription_2 = observable_2.subscribe_on(on_next, on_terminal);
+        let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[]));
