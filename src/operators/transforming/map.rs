@@ -9,17 +9,17 @@ use std::marker::PhantomData;
 /// This is an observable that maps the values of the source observable using a mapper function.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Map<OE, F, T1> {
+pub struct Map<OE, F, T> {
     source: OE,
     mapper: F,
-    _marker: PhantomData<T1>,
+    _marker: PhantomData<T>,
 }
 
-impl<OE, F, T1> Map<OE, F, T1> {
-    pub fn new<'a, 'b, T2, E>(source: OE, mapper: F) -> Map<OE, F, T1>
+impl<OE, F, T> Map<OE, F, T> {
+    pub fn new<'a, 'b, T2, E>(source: OE, mapper: F) -> Map<OE, F, T>
     where
-        OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
-        F: FnMut(T1) -> T2,
+        OE: Observable<'a, T, E, MapObserver<'b, T2, E, F>>,
+        F: FnMut(T) -> T2,
     {
         Map {
             source,
@@ -29,11 +29,11 @@ impl<OE, F, T1> Map<OE, F, T1> {
     }
 }
 
-impl<'a, 'b, T1, T2, E, OR, OE, F> Observable<'a, T2, E, OR> for Map<OE, F, T1>
+impl<'a, 'b, T, T2, E, OR, OE, F> Observable<'a, T2, E, OR> for Map<OE, F, T>
 where
     OR: Observer<T2, E> + Send + 'b,
-    OE: Observable<'a, T1, E, MapObserver<'b, T2, E, F>>,
-    F: FnMut(T1) -> T2,
+    OE: Observable<'a, T, E, MapObserver<'b, T2, E, F>>,
+    F: FnMut(T) -> T2,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
         let observer = MapObserver {
@@ -49,11 +49,11 @@ pub struct MapObserver<'b, T2, E, F> {
     mapper: F,
 }
 
-impl<T1, T2, E, F> Observer<T1, E> for MapObserver<'_, T2, E, F>
+impl<T, T2, E, F> Observer<T, E> for MapObserver<'_, T2, E, F>
 where
-    F: FnMut(T1) -> T2,
+    F: FnMut(T) -> T2,
 {
-    fn on_next(&mut self, value: T1) {
+    fn on_next(&mut self, value: T) {
         self.observer.on_next((self.mapper)(value))
     }
 
