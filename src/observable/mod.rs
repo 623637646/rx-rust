@@ -1,6 +1,5 @@
 pub mod boxed_observable;
 pub mod observable_ext;
-pub mod observable_subscribe_ext;
 
 use crate::{observer::Observer, subscription::Subscription};
 

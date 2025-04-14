@@ -1,4 +1,5 @@
 pub mod boxed_observer;
+pub mod callback_observer;
 
 use educe::Educe;
 

@@ -1,23 +1,11 @@
-use crate::observer::{Observer, Terminal};
+use super::{Observer, Terminal};
 
-/// The `ObservableSubscribeExtObserver` struct is an implementation of the `Observer` trait
-/// that allows subscribing to an observable with custom `on_next` and `on_terminal` callbacks.
-///
-/// # Type Parameters
-///
-/// * `FN` - The type of the callback function for handling emitted items.
-/// * `FT` - The type of the callback function for handling terminal events.
-///
-/// # Fields
-///
-/// * `on_next` - A callback function that will be called with each item emitted by the observable.
-/// * `on_terminal` - A callback function that will be called when the observable emits a terminal event.
-pub struct ObservableSubscribeExtObserver<'a, T, E> {
+pub struct CallbackObserver<'a, T, E> {
     on_next: Box<dyn FnMut(T) + Send + 'a>,
     on_terminal: Box<dyn FnOnce(Terminal<E>) + Send + 'a>,
 }
 
-impl<'a, T, E> ObservableSubscribeExtObserver<'a, T, E> {
+impl<'a, T, E> CallbackObserver<'a, T, E> {
     pub fn new<FN, FT>(on_next: FN, on_terminal: FT) -> Self
     where
         FN: FnMut(T) + Send + 'a,
@@ -30,7 +18,7 @@ impl<'a, T, E> ObservableSubscribeExtObserver<'a, T, E> {
     }
 }
 
-impl<T, E> Observer<T, E> for ObservableSubscribeExtObserver<'_, T, E> {
+impl<T, E> Observer<T, E> for CallbackObserver<'_, T, E> {
     fn on_next(&mut self, value: T) {
         (self.on_next)(value);
     }

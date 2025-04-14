@@ -1,6 +1,6 @@
-use super::{Observable, observable_subscribe_ext::ObservableSubscribeExtObserver};
+use super::Observable;
 use crate::{
-    observer::Terminal,
+    observer::{Terminal, callback_observer::CallbackObserver},
     operators::{
         transforming::map::{Map, MapObserver},
         utility::delay::Delay,
@@ -16,11 +16,11 @@ pub trait ObservableExt: Sized {
         on_terminal: FT,
     ) -> Subscription<'a>
     where
-        Self: Observable<'a, T, E, ObservableSubscribeExtObserver<'b, T, E>>,
+        Self: Observable<'a, T, E, CallbackObserver<'b, T, E>>,
         FN: FnMut(T) + Send + 'b,
         FT: FnOnce(Terminal<E>) + Send + 'b,
     {
-        let observer = ObservableSubscribeExtObserver::new(on_next, on_terminal);
+        let observer = CallbackObserver::new(on_next, on_terminal);
         self.subscribe(observer)
     }
 
