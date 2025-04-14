@@ -1,11 +1,27 @@
 use super::from_iter::FromIter;
-use std::iter::RepeatN;
+use crate::{observable::Observable, observer::Observer, subscription::Subscription};
+use std::{convert::Infallible, iter::RepeatN};
 
-pub fn repeat<T>(value: T, n: usize) -> FromIter<RepeatN<T>>
+#[derive(Clone)]
+pub struct Repeat<T>(FromIter<RepeatN<T>>);
+
+impl<T> Repeat<T> {
+    pub fn new(value: T, n: usize) -> Self
+    where
+        T: Clone,
+    {
+        Self(FromIter::new(std::iter::repeat_n(value, n)))
+    }
+}
+
+impl<T, OR> Observable<'static, T, Infallible, OR> for Repeat<T>
 where
     T: Clone,
+    OR: Observer<T, Infallible>,
 {
-    FromIter::new(std::iter::repeat_n(value, n))
+    fn subscribe(self, observer: OR) -> Subscription<'static> {
+        self.0.subscribe(observer)
+    }
 }
 
 #[cfg(test)]
@@ -15,7 +31,7 @@ mod tests {
 
     #[test]
     fn test_repeat() {
-        let observable = repeat(3, 4);
+        let observable = Repeat::new(3, 4);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -27,7 +43,7 @@ mod tests {
 
     #[test]
     fn test_clone() {
-        let observable = repeat(3, 4);
+        let observable = Repeat::new(3, 4);
         let _ = observable.clone();
     }
 }

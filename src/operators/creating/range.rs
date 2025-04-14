@@ -1,11 +1,27 @@
 use super::from_iter::FromIter;
-use std::ops::RangeBounds;
+use crate::{observable::Observable, observer::Observer, subscription::Subscription};
+use std::{convert::Infallible, ops::RangeBounds};
 
-pub fn range<T, R>(range: R) -> FromIter<R>
+#[derive(Clone)]
+pub struct Range<I>(FromIter<I>);
+
+impl<I> Range<I> {
+    pub fn new<T>(range: I) -> Self
+    where
+        I: IntoIterator<Item = T> + RangeBounds<T>,
+    {
+        Self(FromIter::new(range))
+    }
+}
+
+impl<T, OR, I> Observable<'static, T, Infallible, OR> for Range<I>
 where
-    R: IntoIterator<Item = T> + RangeBounds<T>,
+    OR: Observer<T, Infallible>,
+    I: IntoIterator<Item = T>,
 {
-    FromIter::new(range)
+    fn subscribe(self, observer: OR) -> Subscription<'static> {
+        self.0.subscribe(observer)
+    }
 }
 
 #[cfg(test)]
@@ -17,7 +33,7 @@ mod tests {
     fn test_range() {
         let source = 100..103;
 
-        let observable = range(source);
+        let observable = Range::new(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -31,7 +47,7 @@ mod tests {
     fn test_range_inclusive() {
         let source = 100..=103;
 
-        let observable = range(source);
+        let observable = Range::new(source);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
@@ -44,7 +60,7 @@ mod tests {
     #[test]
     fn test_clone() {
         let source = 100..103;
-        let observable = range(source);
+        let observable = Range::new(source);
         let _ = observable.clone();
     }
 }

@@ -1,16 +1,35 @@
 use super::just::Just;
 use crate::{
+    observable::Observable,
+    observer::Observer,
     operators::utility::delay::{Delay, DelayableObservable},
     scheduler::Scheduler,
+    subscription::Subscription,
 };
-use std::time::Duration;
+use std::{convert::Infallible, time::Duration};
 
-pub fn timer<T, S>(value: T, delay: Duration, scheduler: S) -> Delay<Just<T>, S>
+#[derive(Clone)]
+pub struct Timer<T, S>(Delay<Just<T>, S>);
+
+impl<T, S> Timer<T, S> {
+    pub fn new(value: T, delay: Duration, scheduler: S) -> Self
+    where
+        T: Send + 'static,
+        S: Scheduler,
+    {
+        Self(Just::new(value).delay(delay, scheduler))
+    }
+}
+
+impl<T, OR, S> Observable<'static, T, Infallible, OR> for Timer<T, S>
 where
     T: Send + 'static,
+    OR: Observer<T, Infallible> + Send + 'static,
     S: Scheduler,
 {
-    Just::new(value).delay(delay, scheduler)
+    fn subscribe(self, observer: OR) -> Subscription<'static> {
+        self.0.subscribe(observer)
+    }
 }
 
 #[cfg(test)]
@@ -23,7 +42,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_timer() {
-        let observable = timer(111, Duration::from_millis(100), TokioScheduler);
+        let observable = Timer::new(111, Duration::from_millis(100), TokioScheduler);
         let checker = CheckingObserver::new();
 
         let subscription = observable.subscribe(checker.clone());
