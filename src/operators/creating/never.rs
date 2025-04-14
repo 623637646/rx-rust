@@ -1,7 +1,9 @@
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
+use educe::Educe;
 use std::convert::Infallible;
 
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Never;
 
 impl<'a, T, OR> Observable<'a, T, Infallible, OR> for Never

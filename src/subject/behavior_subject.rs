@@ -4,8 +4,11 @@ use crate::{
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
+use educe::Educe;
 use std::sync::{Arc, RwLock};
 
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct BehaviorSubject<'a, T, E> {
     value: Arc<RwLock<T>>,
     publish_subject: PublishSubject<'a, T, E>,
@@ -31,15 +34,6 @@ impl<T, E> BehaviorSubject<'_, T, E> {
         T: Clone,
     {
         self.value.read().unwrap().clone()
-    }
-}
-
-impl<T, E> Clone for BehaviorSubject<'_, T, E> {
-    fn clone(&self) -> Self {
-        Self {
-            value: self.value.clone(),
-            publish_subject: self.publish_subject.clone(),
-        }
     }
 }
 

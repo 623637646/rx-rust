@@ -6,9 +6,11 @@ use crate::{
     scheduler::Scheduler,
     subscription::Subscription,
 };
+use educe::Educe;
 use std::{convert::Infallible, time::Duration};
 
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Timer<T, S>(Delay<Just<T>, S>);
 
 impl<T, S> Timer<T, S> {

@@ -1,5 +1,8 @@
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
+use educe::Educe;
 
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Defer<F, OE>(F)
 where
     F: FnOnce() -> OE;
@@ -10,15 +13,6 @@ where
 {
     pub fn new(builder: F) -> Defer<F, OE> {
         Defer(builder)
-    }
-}
-
-impl<F, OE> Clone for Defer<F, OE>
-where
-    F: FnOnce() -> OE + Clone,
-{
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
     }
 }
 

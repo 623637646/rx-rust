@@ -3,9 +3,11 @@ use crate::{
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
+use educe::Educe;
 use std::convert::Infallible;
 
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct FromIter<I>(I);
 
 impl<I> FromIter<I> {

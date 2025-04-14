@@ -3,6 +3,7 @@ use crate::{
     observer::{Observer, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
+use educe::Educe;
 
 /// The `Create` struct is an implementation of the `Observable` trait that allows creating an observable
 /// from a custom subscription function. The subscription function is provided by the user and is responsible
@@ -35,7 +36,8 @@ use crate::{
 ///     |terminal: Terminal<String>| println!("terminal: {:?}", terminal),
 /// );
 /// ```
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Create<F>(F);
 
 impl<F> Create<F> {

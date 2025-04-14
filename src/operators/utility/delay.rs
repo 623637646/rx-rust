@@ -4,6 +4,7 @@ use crate::{
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
 };
+use educe::Educe;
 use std::{
     sync::{Arc, Mutex},
     time::Duration,
@@ -11,7 +12,8 @@ use std::{
 
 /// An observable that delays the next value and completed events from the source observable by a duration.
 /// The error will be emitted immediately.
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Delay<OE, S> {
     source_observable: OE,
     delay: Duration,

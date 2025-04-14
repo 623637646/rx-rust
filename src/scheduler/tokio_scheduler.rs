@@ -1,5 +1,6 @@
 use super::Scheduler;
 use crate::subscription::disposable::{CallbackDisposal, Disposable};
+use educe::Educe;
 use std::time::Duration;
 use tokio::time::interval;
 
@@ -7,7 +8,8 @@ use tokio::time::interval;
 ///
 /// This scheduler allows scheduling tasks to be executed immediately or after a specified delay
 /// using Tokio's asynchronous runtime capabilities.
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct TokioScheduler;
 
 impl Scheduler for TokioScheduler {

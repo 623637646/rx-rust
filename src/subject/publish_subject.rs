@@ -5,8 +5,11 @@ use crate::{
     subscription::Subscription,
     utils::unique_key_store::UniqueKeyStore,
 };
+use educe::Educe;
 use std::sync::{Arc, Mutex, RwLock};
 
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct PublishSubject<'a, T, E> {
     observers: Arc<Mutex<UniqueKeyStore<BoxedObserver<'a, T, E>>>>,
     terminated: Arc<RwLock<Option<Terminal<E>>>>,
@@ -25,15 +28,6 @@ impl<T, E> PublishSubject<'_, T, E> {
         E: Clone,
     {
         self.terminated.read().unwrap().as_ref().cloned()
-    }
-}
-
-impl<T, E> Clone for PublishSubject<'_, T, E> {
-    fn clone(&self) -> Self {
-        Self {
-            observers: self.observers.clone(),
-            terminated: self.terminated.clone(),
-        }
     }
 }
 

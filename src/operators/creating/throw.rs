@@ -3,6 +3,7 @@ use crate::{
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
+use educe::Educe;
 use std::convert::Infallible;
 
 /// This is an observable that emits an error.
@@ -19,7 +20,8 @@ use std::convert::Infallible;
 ///     |terminal| println!("Terminal event: {:?}", terminal)
 /// );
 /// ```
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Throw<E>(E);
 
 impl<E> Throw<E> {

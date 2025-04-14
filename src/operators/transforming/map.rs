@@ -3,9 +3,12 @@ use crate::{
     observer::{Observer, Terminal, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
+use educe::Educe;
 use std::marker::PhantomData;
 
 /// This is an observable that maps the values of the source observable using a mapper function.
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Map<OE, F, T1> {
     source: OE,
     mapper: F,
@@ -21,20 +24,6 @@ impl<OE, F, T1> Map<OE, F, T1> {
         Map {
             source,
             mapper,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<OE, F, T1> Clone for Map<OE, F, T1>
-where
-    OE: Clone,
-    F: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            source: self.source.clone(),
-            mapper: self.mapper.clone(),
             _marker: PhantomData,
         }
     }

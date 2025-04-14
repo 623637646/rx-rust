@@ -1,9 +1,11 @@
 use crate::{
     observable::Observable, observer::Observer, scheduler::Scheduler, subscription::Subscription,
 };
+use educe::Educe;
 use std::{convert::Infallible, time::Duration};
 
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Interval<S> {
     period: Duration,
     scheduler: S,

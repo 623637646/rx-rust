@@ -3,9 +3,11 @@ use crate::{
     observer::{Observer, Terminal},
     subscription::Subscription,
 };
+use educe::Educe;
 use std::convert::Infallible;
 
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Empty;
 
 impl<'a, T, OR> Observable<'a, T, Infallible, OR> for Empty

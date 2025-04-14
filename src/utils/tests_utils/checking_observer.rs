@@ -1,8 +1,10 @@
 use crate::observer::{Observer, Terminal};
+use educe::Educe;
 use std::sync::{Arc, RwLock};
 
 /// A helper struct for testing observables.
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub(crate) struct CheckingObserver<T, E> {
     values: Arc<RwLock<Vec<T>>>,
     terminal: Arc<RwLock<Option<Terminal<E>>>>,
@@ -58,15 +60,6 @@ impl<T, E> CheckingObserver<T, E> {
             move |value| checker_cloned_1.on_next(value),
             |terminal| checker_cloned_2.on_terminal(terminal),
         )
-    }
-}
-
-impl<T, E> Clone for CheckingObserver<T, E> {
-    fn clone(&self) -> Self {
-        Self {
-            values: self.values.clone(),
-            terminal: self.terminal.clone(),
-        }
     }
 }
 

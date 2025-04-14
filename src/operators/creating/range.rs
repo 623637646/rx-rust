@@ -1,8 +1,10 @@
 use super::from_iter::FromIter;
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
+use educe::Educe;
 use std::{convert::Infallible, ops::RangeBounds};
 
-#[derive(Clone)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct Range<I>(FromIter<I>);
 
 impl<I> Range<I> {
