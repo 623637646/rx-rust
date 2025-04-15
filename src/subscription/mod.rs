@@ -30,6 +30,10 @@ impl<'a> Subscription<'a> {
         self.0.push(BoxedDisposal::new(disposable));
     }
 
+    pub fn append_subscription(&mut self, mut subscription: Self) {
+        self.0.append(&mut subscription.0);
+    }
+
     /// Unsubscribe the subscription.
     pub fn unsubscribe(self) {
         // drop self to call the dispose
@@ -53,6 +57,16 @@ where
     #[inline]
     fn add(mut self, other: T) -> Subscription<'a> {
         self.append_disposable(other);
+        self
+    }
+}
+
+impl<'a> Add<Subscription<'a>> for Subscription<'a> {
+    type Output = Subscription<'a>;
+
+    #[inline]
+    fn add(mut self, other: Subscription<'a>) -> Subscription<'a> {
+        self.append_subscription(other);
         self
     }
 }
@@ -151,7 +165,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add() {
+    fn test_add_disposable() {
         let disposed_1 = Arc::new(RwLock::new(false));
         let disposed_2 = Arc::new(RwLock::new(false));
         let test_disposal_1 = TestDisposal {
@@ -162,6 +176,46 @@ mod tests {
         };
         let subscription = Subscription::new_with_disposal(test_disposal_1);
         let subscription = subscription + test_disposal_2;
+        assert!(!*disposed_1.read().unwrap());
+        assert!(!*disposed_2.read().unwrap());
+        subscription.unsubscribe();
+        assert!(*disposed_1.read().unwrap());
+        assert!(*disposed_2.read().unwrap());
+    }
+
+    #[test]
+    fn test_append_subscription() {
+        let disposed_1 = Arc::new(RwLock::new(false));
+        let disposed_2 = Arc::new(RwLock::new(false));
+        let test_disposal_1 = TestDisposal {
+            disposed: disposed_1.clone(),
+        };
+        let test_disposal_2 = TestDisposal {
+            disposed: disposed_2.clone(),
+        };
+        let mut subscription_1 = Subscription::new_with_disposal(test_disposal_1);
+        let subscription_2 = Subscription::new_with_disposal(test_disposal_2);
+        subscription_1.append_subscription(subscription_2);
+        assert!(!*disposed_1.read().unwrap());
+        assert!(!*disposed_2.read().unwrap());
+        subscription_1.unsubscribe();
+        assert!(*disposed_1.read().unwrap());
+        assert!(*disposed_2.read().unwrap());
+    }
+
+    #[test]
+    fn test_add_subscription() {
+        let disposed_1 = Arc::new(RwLock::new(false));
+        let disposed_2 = Arc::new(RwLock::new(false));
+        let test_disposal_1 = TestDisposal {
+            disposed: disposed_1.clone(),
+        };
+        let test_disposal_2 = TestDisposal {
+            disposed: disposed_2.clone(),
+        };
+        let subscription_1 = Subscription::new_with_disposal(test_disposal_1);
+        let subscription_2 = Subscription::new_with_disposal(test_disposal_2);
+        let subscription = subscription_1 + subscription_2;
         assert!(!*disposed_1.read().unwrap());
         assert!(!*disposed_2.read().unwrap());
         subscription.unsubscribe();
