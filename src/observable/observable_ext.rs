@@ -3,6 +3,7 @@ use crate::{
     observer::{Terminal, callback_observer::CallbackObserver},
     operators::{
         transforming::{
+            buffer::Buffer,
             buffer_with_count::BufferWithCount,
             map::{Map, MapObserver},
         },
@@ -37,6 +38,10 @@ pub trait ObservableExt: Sized {
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
         Delay::new(self, delay, scheduler)
+    }
+
+    fn buffer<OE>(self, boundary: OE) -> Buffer<Self, OE> {
+        Buffer::new(self, boundary)
     }
 
     fn buffer_with_count(self, count: usize) -> BufferWithCount<Self> {

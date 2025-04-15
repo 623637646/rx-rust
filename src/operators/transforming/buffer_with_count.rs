@@ -614,7 +614,6 @@ mod tests {
             let observable = observable.buffer_with_count(2).buffer_with_count(2);
 
             let checker = CheckingObserver::new();
-            checker.is_values_matched(&[vec![vec![1]]]);
             subscription = observable.subscribe(checker);
         }
 

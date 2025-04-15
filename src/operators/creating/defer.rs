@@ -298,7 +298,6 @@ mod tests {
             let observable = Defer::new(|| observable);
 
             let checker = CheckingObserver::new();
-            checker.is_values_matched(&[1]);
             subscription = observable.subscribe(checker);
         }
 

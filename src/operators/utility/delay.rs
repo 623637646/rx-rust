@@ -577,7 +577,6 @@ mod tests {
             let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
 
             let checker = CheckingObserver::new();
-            checker.is_values_matched(&[1]);
             subscription = observable.subscribe(checker);
         }
 
