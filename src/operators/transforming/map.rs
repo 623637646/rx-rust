@@ -326,8 +326,7 @@ mod tests {
     #[test]
     fn test_multiple_operation() {
         let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker = CheckingObserver::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -335,31 +334,19 @@ mod tests {
             .map(|value| value.to_string())
             .map(|value| value + "?");
 
-        let (on_next, on_terminal) = checker_1.fn_for_subscribe_on();
-        let subscription_1 = observable
-            .clone()
-            .subscribe_with_callback(on_next, on_terminal);
-        let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
-        let subscription_2 = observable.subscribe_with_callback(on_next, on_terminal);
-        assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
-        assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
 
         subject.on_next(111);
-        assert!(checker_1.is_values_matched(&["111?".to_owned()]));
-        assert!(checker_1.is_unterminated());
-        assert!(checker_2.is_values_matched(&["111?".to_owned()]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker.is_values_matched(&["111?".to_owned()]));
+        assert!(checker.is_unterminated());
 
         subject.on_terminal(Terminal::Error("error"));
-        assert!(checker_1.is_values_matched(&["111?".to_owned()]));
-        assert!(checker_1.is_error("error"));
-        assert!(checker_2.is_values_matched(&["111?".to_owned()]));
-        assert!(checker_2.is_error("error"));
+        assert!(checker.is_values_matched(&["111?".to_owned()]));
+        assert!(checker.is_error("error"));
 
-        _ = subscription_1; // keep the subscription alive
-        _ = subscription_2; // keep the subscription alive
+        _ = subscription; // keep the subscription alive
     }
 
     #[test]

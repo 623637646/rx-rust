@@ -2,7 +2,10 @@ use super::Observable;
 use crate::{
     observer::{Terminal, callback_observer::CallbackObserver},
     operators::{
-        transforming::map::{Map, MapObserver},
+        transforming::{
+            buffer_with_count::BufferWithCount,
+            map::{Map, MapObserver},
+        },
         utility::delay::Delay,
     },
     subscription::Subscription,
@@ -34,6 +37,10 @@ pub trait ObservableExt: Sized {
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
         Delay::new(self, delay, scheduler)
+    }
+
+    fn buffer_with_count(self, count: usize) -> BufferWithCount<Self> {
+        BufferWithCount::new(self, count)
     }
 }
 
