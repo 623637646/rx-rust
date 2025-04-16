@@ -1,10 +1,6 @@
-use std::collections::HashMap;
+pub struct ID(usize);
 
-/// A store that assigns a unique key to each inserted value.
-pub struct UniqueKeyStore<T> {
-    data: HashMap<usize, T>,
-    counter: usize, // Auto-incrementing key generator
-}
+pub struct UniqueKeyStore<T>(Vec<Option<T>>);
 
 impl<T> Default for UniqueKeyStore<T> {
     fn default() -> Self {
@@ -14,105 +10,157 @@ impl<T> Default for UniqueKeyStore<T> {
 
 impl<T> UniqueKeyStore<T> {
     pub fn new() -> Self {
-        Self {
-            data: HashMap::new(),
-            counter: 0,
+        Self(Vec::new())
+    }
+
+    pub fn insert(&mut self, value: T) -> ID {
+        // Reuse empty slot if available
+        for (i, slot) in self.0.iter_mut().enumerate() {
+            if slot.is_none() {
+                *slot = Some(value);
+                return ID(i);
+            }
         }
+
+        self.0.push(Some(value));
+        ID(self.0.len() - 1)
     }
 
-    pub fn insert(&mut self, value: T) -> usize {
-        let key = self.counter;
-        self.data.insert(key, value);
-        self.counter += 1;
-        key
-    }
-
-    pub fn remove(&mut self, key: usize) -> Option<T> {
-        self.data.remove(&key)
+    pub fn remove(&mut self, key: ID) -> Option<T> {
+        self.0.get_mut(key.0).and_then(Option::take)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        self.data.values()
+        self.0.iter().filter_map(Option::as_ref)
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.data.values_mut()
+        self.0.iter_mut().filter_map(Option::as_mut)
     }
 
-    pub fn drain(&mut self) -> impl Iterator<Item = T> {
-        self.data.drain().map(|(_, v)| v)
+    pub fn drain(&mut self) -> impl Iterator<Item = T> + '_ {
+        self.0.drain(..).flatten()
     }
 }
 
 impl<T> IntoIterator for UniqueKeyStore<T> {
     type Item = T;
-    type IntoIter = std::collections::hash_map::IntoValues<usize, T>;
+    type IntoIter = std::vec::IntoIter<T>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.data.into_values()
+        self.0.into_iter().flatten().collect::<Vec<_>>().into_iter()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::UniqueKeyStore;
-    use std::ptr;
+    use crate::utils::unique_key_store::ID;
 
     #[test]
-    fn test_insert() {
-        let mut store = UniqueKeyStore::default();
-        let key1 = store.insert("value1");
-        let key2 = store.insert("value2");
-        assert_ne!(key1, key2);
+    fn test_insert_and_iter() {
+        let mut vec = UniqueKeyStore::new();
+        let id1 = vec.insert(10);
+        let id2 = vec.insert(20);
+        let id3 = vec.insert(30);
+
+        let collected: Vec<_> = vec.iter().cloned().collect();
+        assert_eq!(collected, vec![10, 20, 30]);
+
+        assert_eq!(id1.0, 0);
+        assert_eq!(id2.0, 1);
+        assert_eq!(id3.0, 2);
     }
 
     #[test]
     fn test_remove() {
-        let mut store = UniqueKeyStore::default();
-        let key = store.insert("value");
-        assert_eq!(store.remove(key), Some("value"));
-        assert_eq!(store.remove(key), None); // Ensure it's really removed
+        let mut vec = UniqueKeyStore::new();
+        let id1 = vec.insert("a");
+        vec.insert("b");
+
+        assert_eq!(vec.remove(ID(id1.0)), Some("a"));
+        assert_eq!(vec.remove(id1), None); // Already removed
+        assert_eq!(vec.remove(ID(100)), None); // Out of bounds
+
+        let remaining: Vec<_> = vec.iter().cloned().collect();
+        assert_eq!(remaining, vec!["b"]);
     }
 
     #[test]
-    fn test_iter() {
-        let mut store = UniqueKeyStore::default();
-        store.insert("a");
-        store.insert("b");
-        let values: Vec<_> = store.iter().cloned().collect();
-        assert!(values.contains(&"a"));
-        assert!(values.contains(&"b"));
+    fn test_insert_reuse_slot() {
+        let mut vec = UniqueKeyStore::new();
+        let id1 = vec.insert(1);
+        vec.insert(2);
+        vec.remove(ID(id1.0));
+        let id3 = vec.insert(3);
+
+        assert_eq!(id3.0, id1.0); // reused slot
+        let values: Vec<_> = vec.iter().cloned().collect();
+        assert_eq!(values, vec![3, 2]);
     }
 
     #[test]
     fn test_iter_mut() {
-        let mut store = UniqueKeyStore::default();
-        let key = store.insert(String::from("old"));
-        for value in store.iter_mut() {
-            *value = String::from("new");
+        let mut vec = UniqueKeyStore::new();
+        vec.insert(1);
+        vec.insert(2);
+        vec.insert(3);
+
+        for val in vec.iter_mut() {
+            *val *= 2;
         }
-        assert_eq!(store.remove(key), Some(String::from("new")));
+
+        let values: Vec<_> = vec.iter().cloned().collect();
+        assert_eq!(values, vec![2, 4, 6]);
     }
 
     #[test]
     fn test_drain() {
-        let mut store = UniqueKeyStore::default();
-        store.insert("x");
-        store.insert("y");
-        let drained: Vec<_> = store.drain().collect();
-        assert_eq!(drained.len(), 2);
-        assert_eq!(store.iter().count(), 0); // Ensure it's empty
+        let mut vec = UniqueKeyStore::new();
+        vec.insert("x");
+        vec.insert("y");
+        vec.insert("z");
+
+        let drained: Vec<_> = vec.drain().collect();
+        assert_eq!(drained, vec!["x", "y", "z"]);
+        assert_eq!(vec.iter().count(), 0);
     }
 
     #[test]
-    fn test_into_iterator() {
-        let mut store = UniqueKeyStore::default();
-        store.insert("first");
-        store.insert("second");
-        let values: Vec<_> = store.into_iter().collect();
-        assert_eq!(values.len(), 2);
-        assert!(values.contains(&"first"));
-        assert!(values.contains(&"second"));
+    fn test_into_iter() {
+        let mut vec = UniqueKeyStore::new();
+        vec.insert("hello");
+        vec.insert("world");
+
+        let collected: Vec<_> = vec.into_iter().collect();
+        assert_eq!(collected, vec!["hello", "world"]);
+    }
+
+    #[test]
+    fn test_default() {
+        let vec: UniqueKeyStore<i32> = Default::default();
+        assert_eq!(vec.iter().count(), 0);
+    }
+
+    #[test]
+    fn test_remove_and_iter_mut_combo() {
+        let mut vec = UniqueKeyStore::new();
+        let _ = vec.insert(1);
+        let id = vec.insert(2);
+        let _ = vec.insert(3);
+        vec.remove(id);
+
+        let mut iter_mut = vec.iter_mut();
+        assert_eq!(iter_mut.next(), Some(&mut 1));
+        assert_eq!(iter_mut.next(), Some(&mut 3));
+        assert_eq!(iter_mut.next(), None);
+    }
+
+    #[test]
+    fn test_drain_empty() {
+        let mut vec: UniqueKeyStore<u8> = UniqueKeyStore::new();
+        let drained: Vec<_> = vec.drain().collect();
+        assert!(drained.is_empty());
     }
 
     #[test]
@@ -122,9 +170,20 @@ mod tests {
         let key = store.insert(&value);
         {
             let mut iter = store.iter();
-            assert!(ptr::eq(*iter.next().unwrap(), &value));
+            assert!(std::ptr::eq(*iter.next().unwrap(), &value));
             assert_eq!(iter.next(), None);
         }
-        assert!(ptr::eq(store.remove(key).unwrap(), &value));
+        assert!(std::ptr::eq(store.remove(key).unwrap(), &value));
+    }
+
+    #[test]
+    fn test_order() {
+        let mut store = UniqueKeyStore::default();
+        for i in 0..100 {
+            store.insert(format!("value{}", i));
+        }
+        for (i, value) in store.into_iter().enumerate() {
+            assert_eq!(value, format!("value{}", i));
+        }
     }
 }
