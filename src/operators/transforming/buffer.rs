@@ -43,7 +43,7 @@ where
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-struct BufferObserver<T, E, OR> {
+pub struct BufferObserver<T, E, OR> {
     observer: Arc<Mutex<Option<OR>>>,
     values: Arc<Mutex<Vec<T>>>,
     _marker: PhantomData<E>,
@@ -77,7 +77,7 @@ where
     }
 }
 
-struct BoundaryObserver<T, E, OR>(BufferObserver<T, E, OR>);
+pub struct BoundaryObserver<T, E, OR>(BufferObserver<T, E, OR>);
 
 impl<T, E, OR> Observer<(), E> for BoundaryObserver<T, E, OR>
 where

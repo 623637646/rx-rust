@@ -33,7 +33,7 @@ where
     }
 }
 
-struct BufferWithCountObserver<T, OR> {
+pub struct BufferWithCountObserver<T, OR> {
     observer: OR,
     values: Vec<T>,
     count: usize,
