@@ -2,9 +2,13 @@ use super::Observable;
 use crate::{
     observer::{Terminal, callback_observer::CallbackObserver},
     operators::{
+        others::{
+            map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
+        },
         transforming::{
             buffer::Buffer,
             buffer_with_count::BufferWithCount,
+            buffer_with_time::BufferWithTime,
             map::{Map, MapObserver},
         },
         utility::delay::Delay,
@@ -22,6 +26,10 @@ pub trait ObservableExt: Sized {
         BufferWithCount::new(self, count)
     }
 
+    fn buffer_with_time<S>(self, time_pan: Duration, scheduler: S) -> BufferWithTime<Self, S> {
+        BufferWithTime::new(self, time_pan, scheduler)
+    }
+
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
         Delay::new(self, delay, scheduler)
     }
@@ -32,6 +40,14 @@ pub trait ObservableExt: Sized {
         Self: Observable<'a, T0, E, MapObserver<'b, T, E, F>>,
     {
         Map::new(self, f)
+    }
+
+    fn map_infallible_to_error(self) -> MapInfallibleToError<Self> {
+        MapInfallibleToError::new(self)
+    }
+
+    fn map_value_to_void<T>(self) -> MapValueToVoid<T, Self> {
+        MapValueToVoid::new(self)
     }
 
     fn subscribe_with_callback<'a, 'b, T, E, FN, FT>(

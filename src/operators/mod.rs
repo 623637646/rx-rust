@@ -6,5 +6,6 @@ pub mod creating;
 pub mod error_handling;
 pub mod filtering;
 pub mod mathematical;
+pub mod others;
 pub mod transforming;
 pub mod utility;
