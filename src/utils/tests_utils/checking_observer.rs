@@ -44,8 +44,8 @@ impl<T, E> CheckingObserver<T, E> {
         matches!(*terminal, Some(Terminal::Completed))
     }
 
-    pub(crate) fn fn_for_subscribe_on(
-        &self,
+    pub(crate) fn into_callbacks(
+        self,
     ) -> (
         impl FnMut(T) + Send + use<T, E>,
         impl FnOnce(Terminal<E>) + Send + use<T, E>,

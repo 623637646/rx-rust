@@ -48,7 +48,7 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let (on_next, on_terminal) = checker.fn_for_subscribe_on();
+        let (on_next, on_terminal) = checker.clone().into_callbacks();
         let subscription = observable.subscribe_with_callback(on_next, on_terminal);
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
@@ -72,7 +72,7 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let (on_next, on_terminal) = checker.fn_for_subscribe_on();
+        let (on_next, on_terminal) = checker.clone().into_callbacks();
         let subscription = observable.subscribe_with_callback(on_next, on_terminal);
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
@@ -99,9 +99,9 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let (on_next, on_terminal) = checker_1.fn_for_subscribe_on();
+        let (on_next, on_terminal) = checker_1.clone().into_callbacks();
         let subscription_1 = observable_1.subscribe_with_callback(on_next, on_terminal);
-        let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
+        let (on_next, on_terminal) = checker_2.clone().into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[]));
         assert!(checker_1.is_unterminated());
@@ -146,7 +146,7 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let (on_next, on_terminal) = checker.fn_for_subscribe_on();
+        let (on_next, on_terminal) = checker.clone().into_callbacks();
         let subscription = observable.subscribe_with_callback(on_next, on_terminal);
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
@@ -195,7 +195,7 @@ mod tests {
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move {
-            let (on_next, on_terminal) = checker_cloned.fn_for_subscribe_on();
+            let (on_next, on_terminal) = checker_cloned.clone().into_callbacks();
             observable.subscribe_with_callback(on_next, on_terminal)
         });
         let subscription = handle.await.unwrap();
@@ -233,11 +233,11 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let (on_next, on_terminal) = checker_1.fn_for_subscribe_on();
+        let (on_next, on_terminal) = checker_1.clone().into_callbacks();
         let subscription_1 = observable
             .clone()
             .subscribe_with_callback(on_next, on_terminal);
-        let (on_next, on_terminal) = checker_2.fn_for_subscribe_on();
+        let (on_next, on_terminal) = checker_2.clone().into_callbacks();
         let subscription_2 = observable.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[]));
         assert!(checker_1.is_unterminated());
