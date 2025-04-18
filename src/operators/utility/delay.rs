@@ -15,7 +15,7 @@ use std::{
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Delay<OE, S> {
-    source_observable: OE,
+    source: OE,
     delay: Duration,
     scheduler: S,
 }
@@ -30,7 +30,7 @@ impl<OE, S> Delay<OE, S> {
     /// * `scheduler` - The scheduler to use for timing the delay.
     pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S> {
         Delay {
-            source_observable: source,
+            source,
             delay,
             scheduler,
         }
@@ -75,7 +75,7 @@ where
             let mut source_observer = source_observer.lock().unwrap();
             source_observer.take();
         });
-        let subscription = self.source_observable.subscribe(delay_observer);
+        let subscription = self.source.subscribe(delay_observer);
         subscription + disposal
     }
 }
