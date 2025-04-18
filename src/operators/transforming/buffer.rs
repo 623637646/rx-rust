@@ -868,4 +868,26 @@ mod tests {
         let _ = observable.clone(); // make sure it's Clone when T is not Clone.
         observable.subscribe(CheckingObserver::new());
     }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let boundary_subject = PublishSubject::default();
+        let observable = subject.buffer(boundary_subject);
+
+        let observable = observable.buffer_with_count(1);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let boundary_subject: PublishSubject<'_, (), String> = PublishSubject::default();
+        let observable = subject.buffer(boundary_subject);
+
+        let _ = observable.buffer_with_count(1);
+    }
 }

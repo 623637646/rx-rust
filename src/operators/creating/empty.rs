@@ -86,4 +86,22 @@ mod tests {
         let observable = Empty;
         let _ = observable.clone();
     }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let observable = Empty;
+
+        let observable = observable.buffer_with_count(1);
+        let checker: CheckingObserver<Vec<i32>, Infallible> = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let observable = Empty;
+
+        let _ = observable.buffer_with_count(1);
+    }
 }

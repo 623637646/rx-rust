@@ -332,4 +332,25 @@ mod tests {
 
         _ = observable;
     }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable = BoxedObservable::new(subject);
+
+        let observable = observable.buffer_with_count(1);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable: BoxedObservable<'_, '_, CheckingObserver<i32, String>> =
+            BoxedObservable::new(subject);
+
+        let _ = observable.buffer_with_count(1);
+    }
 }

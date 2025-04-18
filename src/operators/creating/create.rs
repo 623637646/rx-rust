@@ -397,4 +397,30 @@ mod tests {
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_unterminated());
     }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let observable = Create::new(|mut observer| {
+            observer.on_next(111);
+            observer.on_terminal(Terminal::Error("error"));
+            Subscription::new_none_disposal()
+        });
+
+        let observable = observable.buffer_with_count(1);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let observable = Create::new(|mut observer| {
+            observer.on_next(111);
+            observer.on_terminal(Terminal::Error("error"));
+            Subscription::new_none_disposal()
+        });
+
+        let _ = observable.buffer_with_count(1);
+    }
 }

@@ -104,4 +104,22 @@ mod tests {
         let observable = Repeat::new(3, 4);
         let _ = observable.clone();
     }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let observable = Repeat::new(3, 4);
+
+        let observable = observable.buffer_with_count(1);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let observable = Repeat::new(3, 4);
+
+        let _ = observable.buffer_with_count(1);
+    }
 }

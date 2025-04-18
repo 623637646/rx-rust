@@ -589,4 +589,24 @@ mod tests {
         let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
         let _ = observable.clone();
     }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable = subject.delay(Duration::from_millis(100), TokioScheduler);
+
+        let observable = observable.buffer_with_count(1);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable = subject.delay(Duration::from_millis(100), TokioScheduler);
+
+        let _ = observable.buffer_with_count(1);
+    }
 }

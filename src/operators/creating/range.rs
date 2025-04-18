@@ -108,4 +108,24 @@ mod tests {
         let observable = Range::new(source);
         let _ = observable.clone();
     }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let source = 100..103;
+        let observable = Range::new(source);
+
+        let observable = observable.buffer_with_count(1);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let source = 100..103;
+        let observable = Range::new(source);
+
+        let _ = observable.buffer_with_count(1);
+    }
 }

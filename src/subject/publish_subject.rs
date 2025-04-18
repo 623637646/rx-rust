@@ -419,4 +419,24 @@ mod tests {
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive
     }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable = subject;
+
+        let observable = observable.buffer_with_count(1);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable = subject;
+
+        let _ = observable.buffer_with_count(1);
+    }
 }

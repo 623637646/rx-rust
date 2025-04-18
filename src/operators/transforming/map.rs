@@ -9,17 +9,17 @@ use std::marker::PhantomData;
 /// This is an observable that maps the values of the source observable using a mapper function.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Map<OE, F, T> {
+pub struct Map<T0, OE, F> {
     source: OE,
     mapper: F,
-    _marker: PhantomData<T>,
+    _marker: PhantomData<T0>,
 }
 
-impl<OE, F, T> Map<OE, F, T> {
-    pub fn new<'a, 'b, T2, E>(source: OE, mapper: F) -> Map<OE, F, T>
+impl<T0, OE, F> Map<T0, OE, F> {
+    pub fn new<'a, 'b, T, E>(source: OE, mapper: F) -> Map<T0, OE, F>
     where
-        OE: Observable<'a, T, E, MapObserver<'b, T2, E, F>>,
-        F: FnMut(T) -> T2,
+        OE: Observable<'a, T0, E, MapObserver<'b, T, E, F>>,
+        F: FnMut(T0) -> T,
     {
         Map {
             source,
@@ -29,11 +29,11 @@ impl<OE, F, T> Map<OE, F, T> {
     }
 }
 
-impl<'a, 'b, T, T2, E, OR, OE, F> Observable<'a, T2, E, OR> for Map<OE, F, T>
+impl<'a, 'b, T0, T, E, OR, OE, F> Observable<'a, T, E, OR> for Map<T0, OE, F>
 where
-    OR: Observer<T2, E> + Send + 'b,
-    OE: Observable<'a, T, E, MapObserver<'b, T2, E, F>>,
-    F: FnMut(T) -> T2,
+    OR: Observer<T, E> + Send + 'b,
+    OE: Observable<'a, T0, E, MapObserver<'b, T, E, F>>,
+    F: FnMut(T0) -> T,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
         let observer = MapObserver {
@@ -44,16 +44,16 @@ where
     }
 }
 
-pub struct MapObserver<'b, T2, E, F> {
-    observer: BoxedObserver<'b, T2, E>,
+pub struct MapObserver<'b, T, E, F> {
+    observer: BoxedObserver<'b, T, E>,
     mapper: F,
 }
 
-impl<T, T2, E, F> Observer<T, E> for MapObserver<'_, T2, E, F>
+impl<T0, T, E, F> Observer<T0, E> for MapObserver<'_, T, E, F>
 where
-    F: FnMut(T) -> T2,
+    F: FnMut(T0) -> T,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T0) {
         self.observer.on_next((self.mapper)(value))
     }
 
@@ -452,5 +452,25 @@ mod tests {
         });
         let observable = observable.map(|value| value);
         let _ = observable.clone(); // make sure it's Clone when T is not Clone.
+    }
+
+    #[test]
+    fn test_type_inference_with_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable = subject.map(|value| value.to_string());
+
+        let observable = observable.buffer_with_count(1);
+        let checker = CheckingObserver::new();
+        observable.subscribe(checker);
+    }
+
+    #[test]
+    fn test_type_inference_without_subscribe() {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable = subject.map(|value| value.to_string());
+
+        let _ = observable.buffer_with_count(1);
     }
 }
