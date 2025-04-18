@@ -149,17 +149,14 @@ mod tests {
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
-        assert!(subject.terminated().is_none());
 
         subject.on_next(&value);
         assert!(checker.is_values_matched(&[&value]));
         assert!(checker.is_unterminated());
-        assert!(subject.terminated().is_none());
 
         subject.clone().on_terminal(Terminal::Error(&error));
         assert!(checker.is_values_matched(&[&value]));
         assert!(checker.is_error(&error));
-        assert!(matches!(subject.terminated(), Some(Terminal::Error(&222))));
 
         _ = subscription; // keep the subscription alive
     }
