@@ -34,7 +34,7 @@ impl<OE, S> BufferWithTime<OE, S> {
 impl<'a, T, E, OR, OE, S> Observable<'a, Vec<T>, E, OR> for BufferWithTime<OE, S>
 where
     T: Send + 'static,
-    E: Send + 'static,
+    E: 'static,
     OR: Observer<Vec<T>, E> + Send + 'static,
     OE: Observable<'a, T, E, BufferObserver<T, OR>>,
     S: Scheduler,

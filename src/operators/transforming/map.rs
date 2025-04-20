@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 pub struct Map<T0, OE, F> {
     source: OE,
     mapper: F,
-    _marker: PhantomData<T0>,
+    _marker: PhantomData<fn(T0) -> T0>,
 }
 
 impl<T0, OE, F> Map<T0, OE, F> {
