@@ -36,7 +36,7 @@ where
     T: Send + 'static,
     E: Send + 'static,
     OR: Observer<Vec<T>, E> + Send + 'static,
-    OE: Observable<'a, T, E, BufferObserver<T, E, OR>>,
+    OE: Observable<'a, T, E, BufferObserver<T, OR>>,
     S: Scheduler,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {

@@ -4,10 +4,7 @@ use crate::{
     subscription::Subscription,
 };
 use educe::Educe;
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -25,14 +22,13 @@ impl<OE, OE2> Buffer<OE, OE2> {
 impl<'a, T, E, OR, OE, OE2> Observable<'a, Vec<T>, E, OR> for Buffer<OE, OE2>
 where
     OR: Observer<Vec<T>, E>,
-    OE: Observable<'a, T, E, BufferObserver<T, E, OR>>,
-    OE2: Observable<'a, (), E, BoundaryObserver<T, E, OR>>,
+    OE: Observable<'a, T, E, BufferObserver<T, OR>>,
+    OE2: Observable<'a, (), E, BoundaryObserver<T, OR>>,
 {
     fn subscribe(self, observer: OR) -> Subscription<'a> {
         let observer = BufferObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             values: Arc::new(Mutex::new(Vec::default())),
-            _marker: PhantomData,
         };
         let subscription_1 = self.source.subscribe(observer.clone());
         let observer = BoundaryObserver(observer);
@@ -43,13 +39,12 @@ where
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct BufferObserver<T, E, OR> {
+pub struct BufferObserver<T, OR> {
     observer: Arc<Mutex<Option<OR>>>,
     values: Arc<Mutex<Vec<T>>>,
-    _marker: PhantomData<E>,
 }
 
-impl<T, E, OR> Observer<T, E> for BufferObserver<T, E, OR>
+impl<T, E, OR> Observer<T, E> for BufferObserver<T, OR>
 where
     OR: Observer<Vec<T>, E>,
 {
@@ -77,9 +72,9 @@ where
     }
 }
 
-pub struct BoundaryObserver<T, E, OR>(BufferObserver<T, E, OR>);
+pub struct BoundaryObserver<T, OR>(BufferObserver<T, OR>);
 
-impl<T, E, OR> Observer<(), E> for BoundaryObserver<T, E, OR>
+impl<T, E, OR> Observer<(), E> for BoundaryObserver<T, OR>
 where
     OR: Observer<Vec<T>, E>,
 {
