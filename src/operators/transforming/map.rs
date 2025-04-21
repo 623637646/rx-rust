@@ -45,7 +45,7 @@ where
 }
 
 pub struct MapObserver<'b, T, E, F> {
-    observer: BoxedObserver<'b, T, E>,
+    observer: BoxedObserver<'b, T, E>, // TODO: Find a better way to avoid using BoxedObserver here.
     mapper: F,
 }
 
