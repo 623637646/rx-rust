@@ -12,7 +12,7 @@ enum HandleEvent<T, E> {
 impl<'a, T, E> BoxedObserver<'a, T, E> {
     pub fn new(observer: impl Observer<T, E> + Send + 'a) -> Self {
         let mut observer = Some(observer);
-        BoxedObserver(Box::new(move |event| match event {
+        Self(Box::new(move |event| match event {
             HandleEvent::Value(value) => {
                 if let Some(observer) = &mut observer {
                     observer.on_next(value);

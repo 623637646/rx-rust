@@ -30,8 +30,8 @@ impl<T> Just<T> {
     /// # Arguments
     ///
     /// * `value` - The value to emit.
-    pub fn new(value: T) -> Just<T> {
-        Just(value)
+    pub fn new(value: T) -> Self {
+        Self(value)
     }
 }
 

@@ -17,7 +17,7 @@ pub struct PublishSubject<'a, T, E> {
 
 impl<T, E> PublishSubject<'_, T, E> {
     pub fn new() -> Self {
-        PublishSubject {
+        Self {
             observers: Arc::new(Mutex::new(UniqueKeyStore::new())),
             terminated: Arc::new(RwLock::new(None)),
         }

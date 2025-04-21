@@ -16,7 +16,7 @@ pub struct BehaviorSubject<'a, T, E> {
 
 impl<T, E> BehaviorSubject<'_, T, E> {
     pub fn new(value: T) -> Self {
-        BehaviorSubject {
+        Self {
             value: Arc::new(RwLock::new(value)),
             publish_subject: PublishSubject::default(),
         }

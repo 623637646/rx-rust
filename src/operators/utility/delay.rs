@@ -28,8 +28,8 @@ impl<OE, S> Delay<OE, S> {
     /// * `source` - The source observable to delay.
     /// * `delay` - The duration to delay each emission.
     /// * `scheduler` - The scheduler to use for timing the delay.
-    pub fn new(source: OE, delay: Duration, scheduler: S) -> Delay<OE, S> {
-        Delay {
+    pub fn new(source: OE, delay: Duration, scheduler: S) -> Self {
+        Self {
             source,
             delay,
             scheduler,

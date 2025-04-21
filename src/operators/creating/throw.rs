@@ -25,8 +25,8 @@ use std::convert::Infallible;
 pub struct Throw<E>(E);
 
 impl<E> Throw<E> {
-    pub fn new(error: E) -> Throw<E> {
-        Throw(error)
+    pub fn new(error: E) -> Self {
+        Self(error)
     }
 }
 

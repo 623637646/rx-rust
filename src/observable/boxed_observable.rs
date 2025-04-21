@@ -10,7 +10,7 @@ impl<'a, 'b, OR> BoxedObservable<'a, 'b, OR> {
     where
         OR: Observer<T, E>,
     {
-        BoxedObservable(Box::new(|observer| observable.subscribe(observer)))
+        Self(Box::new(|observer| observable.subscribe(observer)))
     }
 }
 

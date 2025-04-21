@@ -12,7 +12,7 @@ pub(crate) struct CheckingObserver<T, E> {
 
 impl<T, E> CheckingObserver<T, E> {
     pub(crate) fn new() -> Self {
-        CheckingObserver {
+        Self {
             values: Arc::new(RwLock::new(Vec::new())),
             terminal: Arc::new(RwLock::new(None)),
         }

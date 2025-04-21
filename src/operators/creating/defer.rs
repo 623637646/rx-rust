@@ -11,8 +11,8 @@ impl<F, OE> Defer<F, OE>
 where
     F: FnOnce() -> OE,
 {
-    pub fn new(builder: F) -> Defer<F, OE> {
-        Defer(builder)
+    pub fn new(builder: F) -> Self {
+        Self(builder)
     }
 }
 

@@ -16,12 +16,12 @@ pub struct Map<T0, OE, F> {
 }
 
 impl<T0, OE, F> Map<T0, OE, F> {
-    pub fn new<'a, 'b, T, E>(source: OE, mapper: F) -> Map<T0, OE, F>
+    pub fn new<'a, 'b, T, E>(source: OE, mapper: F) -> Self
     where
         OE: Observable<'a, T0, E, MapObserver<'b, T, E, F>>,
         F: FnMut(T0) -> T,
     {
-        Map {
+        Self {
             source,
             mapper,
             _marker: PhantomData,

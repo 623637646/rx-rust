@@ -12,8 +12,8 @@ where
     F: FnOnce(),
 {
     /// Creates a new callback disposal.
-    pub fn new(callback: F) -> CallbackDisposal<F> {
-        CallbackDisposal(callback)
+    pub fn new(callback: F) -> Self {
+        Self(callback)
     }
 }
 
@@ -29,7 +29,7 @@ pub struct BoxedDisposal<'a>(Box<dyn FnOnce() + Send + 'a>);
 
 impl<'a> BoxedDisposal<'a> {
     pub fn new(disposal: impl Disposable + Send + 'a) -> Self {
-        BoxedDisposal(Box::new(|| {
+        Self(Box::new(|| {
             disposal.dispose();
         }))
     }
