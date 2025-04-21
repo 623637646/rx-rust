@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal, boxed_observer::BoxedObserver},
+    observer::{Observer, Terminal},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
 };
@@ -42,7 +42,7 @@ where
     T: Send + 'static,
     E: Send + 'static,
     OR: Observer<T, E> + Send + 'static,
-    OE: Observable<'a, T, E, DelayObserver<T, E, S>>,
+    OE: Observable<'a, T, E, DelayObserver<OR, S>>,
     S: Scheduler,
 {
     // TODO: Do we need to use macro to generate this?
@@ -65,7 +65,7 @@ where
     // }
     // ```
     fn subscribe(self, observer: OR) -> Subscription<'a> {
-        let source_observer = Arc::new(Mutex::new(Some(BoxedObserver::new(observer))));
+        let source_observer = Arc::new(Mutex::new(Some(observer)));
         let delay_observer = DelayObserver {
             source_observer: source_observer.clone(),
             delay: self.delay,
@@ -80,16 +80,17 @@ where
     }
 }
 
-pub struct DelayObserver<T, E, S> {
-    source_observer: Arc<Mutex<Option<BoxedObserver<'static, T, E>>>>,
+pub struct DelayObserver<OR, S> {
+    source_observer: Arc<Mutex<Option<OR>>>,
     delay: Duration,
     scheduler: S,
 }
 
-impl<T, E, S> Observer<T, E> for DelayObserver<T, E, S>
+impl<T, E, OR, S> Observer<T, E> for DelayObserver<OR, S>
 where
     T: Send + 'static,
     E: Send + 'static,
+    OR: Observer<T, E> + Send + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
