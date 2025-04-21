@@ -14,6 +14,7 @@ use crate::{
         utility::{
             delay::Delay,
             do_on_next::{DoOnNext, DoOnNextObserver},
+            do_on_terminal::{DoOnTerminal, DoOnTerminalObserver},
         },
     },
     subscription::Subscription,
@@ -43,6 +44,14 @@ pub trait ObservableExt: Sized {
         Self: Observable<'a, T, E, DoOnNextObserver<'b, T, E, F>>,
     {
         DoOnNext::new(self, callback)
+    }
+
+    fn do_on_terminal<'a, 'b, T, E, F>(self, callback: F) -> DoOnTerminal<Self, F>
+    where
+        F: FnOnce(&Terminal<E>),
+        Self: Observable<'a, T, E, DoOnTerminalObserver<'b, T, E, F>>,
+    {
+        DoOnTerminal::new(self, callback)
     }
 
     fn map<'a, 'b, T0, T, E, F>(self, f: F) -> Map<T0, Self, F>

@@ -5,7 +5,7 @@ use educe::Educe;
 
 /// Represents the terminal state of an operation, which can either be completed successfully or with an error.
 #[derive(Educe)]
-#[educe(Debug, Clone)]
+#[educe(Debug, Clone, PartialEq, Eq)]
 pub enum Terminal<E> {
     /// Indicates that the operation has completed successfully.
     Completed,
