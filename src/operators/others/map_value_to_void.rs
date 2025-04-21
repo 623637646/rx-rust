@@ -10,7 +10,7 @@ use std::marker::PhantomData;
 #[educe(Debug, Clone)]
 pub struct MapValueToVoid<T, OE> {
     source: OE,
-    _marker: PhantomData<fn(T) -> T>,
+    _marker: PhantomData<fn(T) -> T>, // Refer to `MapInfallibleToErrorObserver` for the reason of using `PhantomData<fn(T) -> T>`
 }
 
 impl<T, OE> MapValueToVoid<T, OE> {
