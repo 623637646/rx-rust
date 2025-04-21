@@ -11,7 +11,10 @@ use crate::{
             buffer_with_time::BufferWithTime,
             map::{Map, MapObserver},
         },
-        utility::delay::Delay,
+        utility::{
+            delay::Delay,
+            do_on_next::{DoOnNext, DoOnNextObserver},
+        },
     },
     subscription::Subscription,
 };
@@ -32,6 +35,14 @@ pub trait ObservableExt: Sized {
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
         Delay::new(self, delay, scheduler)
+    }
+
+    fn do_on_next<'a, 'b, T, E, F>(self, callback: F) -> DoOnNext<Self, F>
+    where
+        F: FnMut(&T),
+        Self: Observable<'a, T, E, DoOnNextObserver<'b, T, E, F>>,
+    {
+        DoOnNext::new(self, callback)
     }
 
     fn map<'a, 'b, T0, T, E, F>(self, f: F) -> Map<T0, Self, F>
