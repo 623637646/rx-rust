@@ -13,19 +13,19 @@ pub struct DoOnTerminal<OE, F> {
 }
 
 impl<OE, F> DoOnTerminal<OE, F> {
-    pub fn new<'sub, 'b, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'sub, 'or, T, E>(source: OE, callback: F) -> Self
     where
         F: FnOnce(&Terminal<E>),
-        OE: Observable<'sub, T, E, DoOnTerminalObserver<'b, T, E, F>>,
+        OE: Observable<'sub, T, E, DoOnTerminalObserver<'or, T, E, F>>,
     {
         Self { source, callback }
     }
 }
 
-impl<'sub, 'b, T, E, OR, OE, F> Observable<'sub, T, E, OR> for DoOnTerminal<OE, F>
+impl<'sub, 'or, T, E, OR, OE, F> Observable<'sub, T, E, OR> for DoOnTerminal<OE, F>
 where
-    OR: Observer<T, E> + Send + 'b,
-    OE: Observable<'sub, T, E, DoOnTerminalObserver<'b, T, E, F>>,
+    OR: Observer<T, E> + Send + 'or,
+    OE: Observable<'sub, T, E, DoOnTerminalObserver<'or, T, E, F>>,
     F: FnOnce(&Terminal<E>),
 {
     fn subscribe(self, observer: OR) -> Subscription<'sub> {
@@ -37,8 +37,8 @@ where
     }
 }
 
-pub struct DoOnTerminalObserver<'b, T, E, F> {
-    observer: BoxedObserver<'b, T, E>, // TODO: Find a better way to avoid using BoxedObserver here.
+pub struct DoOnTerminalObserver<'or, T, E, F> {
+    observer: BoxedObserver<'or, T, E>, // TODO: Find a better way to avoid using BoxedObserver here.
     callback: F,
 }
 

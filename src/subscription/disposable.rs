@@ -25,10 +25,10 @@ impl<F: FnOnce()> Disposable for CallbackDisposal<F> {
 
 /// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
-pub struct BoxedDisposal<'a>(Box<dyn FnOnce() + Send + 'a>);
+pub struct BoxedDisposal<'dis>(Box<dyn FnOnce() + Send + 'dis>);
 
-impl<'a> BoxedDisposal<'a> {
-    pub fn new(disposal: impl Disposable + Send + 'a) -> Self {
+impl<'dis> BoxedDisposal<'dis> {
+    pub fn new(disposal: impl Disposable + Send + 'dis) -> Self {
         Self(Box::new(|| {
             disposal.dispose();
         }))

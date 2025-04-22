@@ -38,26 +38,26 @@ pub trait ObservableExt: Sized {
         Delay::new(self, delay, scheduler)
     }
 
-    fn do_on_next<'sub, 'b, T, E, F>(self, callback: F) -> DoOnNext<Self, F>
+    fn do_on_next<'sub, 'or, T, E, F>(self, callback: F) -> DoOnNext<Self, F>
     where
         F: FnMut(&T),
-        Self: Observable<'sub, T, E, DoOnNextObserver<'b, T, E, F>>,
+        Self: Observable<'sub, T, E, DoOnNextObserver<'or, T, E, F>>,
     {
         DoOnNext::new(self, callback)
     }
 
-    fn do_on_terminal<'sub, 'b, T, E, F>(self, callback: F) -> DoOnTerminal<Self, F>
+    fn do_on_terminal<'sub, 'or, T, E, F>(self, callback: F) -> DoOnTerminal<Self, F>
     where
         F: FnOnce(&Terminal<E>),
-        Self: Observable<'sub, T, E, DoOnTerminalObserver<'b, T, E, F>>,
+        Self: Observable<'sub, T, E, DoOnTerminalObserver<'or, T, E, F>>,
     {
         DoOnTerminal::new(self, callback)
     }
 
-    fn map<'sub, 'b, T0, T, E, F>(self, f: F) -> Map<T0, Self, F>
+    fn map<'sub, 'or, T0, T, E, F>(self, f: F) -> Map<T0, Self, F>
     where
         F: FnMut(T0) -> T,
-        Self: Observable<'sub, T0, E, MapObserver<'b, T, E, F>>,
+        Self: Observable<'sub, T0, E, MapObserver<'or, T, E, F>>,
     {
         Map::new(self, f)
     }
@@ -70,15 +70,15 @@ pub trait ObservableExt: Sized {
         MapValueToVoid::new(self)
     }
 
-    fn subscribe_with_callback<'sub, 'b, T, E, FN, FT>(
+    fn subscribe_with_callback<'sub, 'fn_life, T, E, FN, FT>(
         self,
         on_next: FN,
         on_terminal: FT,
     ) -> Subscription<'sub>
     where
-        Self: Observable<'sub, T, E, CallbackObserver<'b, T, E>>,
-        FN: FnMut(T) + Send + 'b,
-        FT: FnOnce(Terminal<E>) + Send + 'b,
+        Self: Observable<'sub, T, E, CallbackObserver<'fn_life, T, E>>,
+        FN: FnMut(T) + Send + 'fn_life,
+        FT: FnOnce(Terminal<E>) + Send + 'fn_life,
     {
         self.subscribe(CallbackObserver::new(on_next, on_terminal))
     }

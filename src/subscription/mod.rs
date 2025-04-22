@@ -5,11 +5,11 @@ use std::ops::Add;
 
 /// Subscription is from Observable pattern, it is used to unsubscribe the observable.
 /// The `dispose` method of `Disposable` will be called when the subscription is unsubscribe or dropped.
-pub struct Subscription<'a>(Vec<BoxedDisposal<'a>>);
+pub struct Subscription<'dis>(Vec<BoxedDisposal<'dis>>);
 
-impl<'a> Subscription<'a> {
+impl<'dis> Subscription<'dis> {
     /// Create a new subscription.
-    pub fn new_with_disposals(disposables: Vec<BoxedDisposal<'a>>) -> Self {
+    pub fn new_with_disposals(disposables: Vec<BoxedDisposal<'dis>>) -> Self {
         Self(disposables)
     }
 
@@ -18,15 +18,15 @@ impl<'a> Subscription<'a> {
         Self(vec![])
     }
 
-    pub fn new_with_disposal(disposable: impl Disposable + Send + 'a) -> Self {
+    pub fn new_with_disposal(disposable: impl Disposable + Send + 'dis) -> Self {
         Self(vec![BoxedDisposal::new(disposable)])
     }
 
-    pub fn new_with_disposal_callback(callback: impl FnOnce() + Send + 'a) -> Self {
+    pub fn new_with_disposal_callback(callback: impl FnOnce() + Send + 'dis) -> Self {
         Self(vec![BoxedDisposal::new(CallbackDisposal::new(callback))])
     }
 
-    pub fn append_disposable(&mut self, disposable: impl Disposable + Send + 'a) {
+    pub fn append_disposable(&mut self, disposable: impl Disposable + Send + 'dis) {
         self.0.push(BoxedDisposal::new(disposable));
     }
 
@@ -48,24 +48,24 @@ impl Drop for Subscription<'_> {
     }
 }
 
-impl<'a, T> Add<T> for Subscription<'a>
+impl<'dis, T> Add<T> for Subscription<'dis>
 where
-    T: Disposable + Send + 'a,
+    T: Disposable + Send + 'dis,
 {
-    type Output = Subscription<'a>;
+    type Output = Subscription<'dis>;
 
     #[inline]
-    fn add(mut self, other: T) -> Subscription<'a> {
+    fn add(mut self, other: T) -> Subscription<'dis> {
         self.append_disposable(other);
         self
     }
 }
 
-impl<'a> Add<Subscription<'a>> for Subscription<'a> {
-    type Output = Subscription<'a>;
+impl<'dis> Add<Subscription<'dis>> for Subscription<'dis> {
+    type Output = Subscription<'dis>;
 
     #[inline]
-    fn add(mut self, other: Subscription<'a>) -> Subscription<'a> {
+    fn add(mut self, other: Subscription<'dis>) -> Subscription<'dis> {
         self.append_subscription(other);
         self
     }

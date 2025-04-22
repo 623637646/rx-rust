@@ -1,15 +1,15 @@
 use super::{Observer, Terminal};
 
-pub struct CallbackObserver<'a, T, E> {
-    on_next: Box<dyn FnMut(T) + Send + 'a>,
-    on_terminal: Box<dyn FnOnce(Terminal<E>) + Send + 'a>,
+pub struct CallbackObserver<'fn_life, T, E> {
+    on_next: Box<dyn FnMut(T) + Send + 'fn_life>,
+    on_terminal: Box<dyn FnOnce(Terminal<E>) + Send + 'fn_life>,
 }
 
-impl<'a, T, E> CallbackObserver<'a, T, E> {
+impl<'fn_life, T, E> CallbackObserver<'fn_life, T, E> {
     pub fn new<FN, FT>(on_next: FN, on_terminal: FT) -> Self
     where
-        FN: FnMut(T) + Send + 'a,
-        FT: FnOnce(Terminal<E>) + Send + 'a,
+        FN: FnMut(T) + Send + 'fn_life,
+        FT: FnOnce(Terminal<E>) + Send + 'fn_life,
     {
         Self {
             on_next: Box::new(on_next),

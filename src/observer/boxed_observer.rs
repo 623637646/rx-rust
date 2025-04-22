@@ -2,15 +2,15 @@ use super::{Observer, Terminal};
 
 /// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
-pub struct BoxedObserver<'a, T, E>(Box<dyn FnMut(HandleEvent<T, E>) + Send + 'a>);
+pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(HandleEvent<T, E>) + Send + 'or>);
 
 enum HandleEvent<T, E> {
     Value(T),
     Terminal(Terminal<E>),
 }
 
-impl<'a, T, E> BoxedObserver<'a, T, E> {
-    pub fn new(observer: impl Observer<T, E> + Send + 'a) -> Self {
+impl<'or, T, E> BoxedObserver<'or, T, E> {
+    pub fn new(observer: impl Observer<T, E> + Send + 'or) -> Self {
         let mut observer = Some(observer);
         Self(Box::new(move |event| match event {
             HandleEvent::Value(value) => {

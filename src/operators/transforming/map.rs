@@ -16,9 +16,9 @@ pub struct Map<T0, OE, F> {
 }
 
 impl<T0, OE, F> Map<T0, OE, F> {
-    pub fn new<'sub, 'b, T, E>(source: OE, mapper: F) -> Self
+    pub fn new<'sub, 'or, T, E>(source: OE, mapper: F) -> Self
     where
-        OE: Observable<'sub, T0, E, MapObserver<'b, T, E, F>>,
+        OE: Observable<'sub, T0, E, MapObserver<'or, T, E, F>>,
         F: FnMut(T0) -> T,
     {
         Self {
@@ -29,10 +29,10 @@ impl<T0, OE, F> Map<T0, OE, F> {
     }
 }
 
-impl<'sub, 'b, T0, T, E, OR, OE, F> Observable<'sub, T, E, OR> for Map<T0, OE, F>
+impl<'sub, 'or, T0, T, E, OR, OE, F> Observable<'sub, T, E, OR> for Map<T0, OE, F>
 where
-    OR: Observer<T, E> + Send + 'b,
-    OE: Observable<'sub, T0, E, MapObserver<'b, T, E, F>>,
+    OR: Observer<T, E> + Send + 'or,
+    OE: Observable<'sub, T0, E, MapObserver<'or, T, E, F>>,
     F: FnMut(T0) -> T,
 {
     fn subscribe(self, observer: OR) -> Subscription<'sub> {
@@ -44,8 +44,8 @@ where
     }
 }
 
-pub struct MapObserver<'b, T, E, F> {
-    observer: BoxedObserver<'b, T, E>, // TODO: Find a better way to avoid using BoxedObserver here.
+pub struct MapObserver<'or, T, E, F> {
+    observer: BoxedObserver<'or, T, E>, // TODO: Find a better way to avoid using BoxedObserver here.
     mapper: F,
 }
 
