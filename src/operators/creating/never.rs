@@ -6,11 +6,11 @@ use std::convert::Infallible;
 #[educe(Debug, Clone)]
 pub struct Never;
 
-impl<'a, T, OR> Observable<'a, T, Infallible, OR> for Never
+impl<'sub, T, OR> Observable<'sub, T, Infallible, OR> for Never
 where
     OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, _: OR) -> Subscription<'a> {
+    fn subscribe(self, _: OR) -> Subscription<'sub> {
         Subscription::new_none_disposal()
     }
 }

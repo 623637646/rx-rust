@@ -16,13 +16,13 @@ where
     }
 }
 
-impl<'a, T, E, OR, OE, F> Observable<'a, T, E, OR> for Defer<F, OE>
+impl<'sub, T, E, OR, OE, F> Observable<'sub, T, E, OR> for Defer<F, OE>
 where
     F: FnOnce() -> OE,
     OR: Observer<T, E>,
-    OE: Observable<'a, T, E, OR>,
+    OE: Observable<'sub, T, E, OR>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         let observable = self.0();
         observable.subscribe(observer)
     }

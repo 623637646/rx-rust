@@ -16,12 +16,12 @@ impl<I> Range<I> {
     }
 }
 
-impl<'a, T, OR, I> Observable<'a, T, Infallible, OR> for Range<I>
+impl<'sub, T, OR, I> Observable<'sub, T, Infallible, OR> for Range<I>
 where
     OR: Observer<T, Infallible>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
 }

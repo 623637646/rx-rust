@@ -10,8 +10,8 @@ use std::sync::{Arc, Mutex, RwLock};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct PublishSubject<'a, T, E> {
-    observers: Arc<Mutex<UniqueKeyStore<BoxedObserver<'a, T, E>>>>,
+pub struct PublishSubject<'or, T, E> {
+    observers: Arc<Mutex<UniqueKeyStore<BoxedObserver<'or, T, E>>>>,
     terminated: Arc<RwLock<Option<Terminal<E>>>>,
 }
 
@@ -37,13 +37,14 @@ impl<T, E> Default for PublishSubject<'_, T, E> {
     }
 }
 
-impl<'a, T, E, OR> Observable<'a, T, E, OR> for PublishSubject<'a, T, E>
+impl<'sub, 'or, T, E, OR> Observable<'sub, T, E, OR> for PublishSubject<'or, T, E>
 where
-    T: 'a,
-    E: Clone + 'a,
-    OR: Observer<T, E> + Send + 'a,
+    T: 'sub,
+    E: Clone + 'sub,
+    OR: Observer<T, E> + Send + 'or,
+    'or: 'sub,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated.read().unwrap().as_ref().cloned() {
             observer.on_terminal(terminated);
             return Subscription::new_none_disposal();
@@ -81,11 +82,12 @@ where
     }
 }
 
-impl<'a, T, E, OR> Subject<'a, T, E, OR> for PublishSubject<'a, T, E>
+impl<'sub, 'or, T, E, OR> Subject<'sub, T, E, OR> for PublishSubject<'or, T, E>
 where
-    T: Clone + 'a,
-    E: Clone + 'a,
-    OR: Observer<T, E> + Send + 'a,
+    T: Clone + 'sub,
+    E: Clone + 'sub,
+    OR: Observer<T, E> + Send + 'or,
+    'or: 'sub,
 {
 }
 

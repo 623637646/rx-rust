@@ -31,15 +31,15 @@ impl<OE, S> BufferWithTime<OE, S> {
     }
 }
 
-impl<'a, T, E, OR, OE, S> Observable<'a, Vec<T>, E, OR> for BufferWithTime<OE, S>
+impl<'sub, T, E, OR, OE, S> Observable<'sub, Vec<T>, E, OR> for BufferWithTime<OE, S>
 where
     T: Send + 'static,
     E: 'static,
     OR: Observer<Vec<T>, E> + Send + 'static,
-    OE: Observable<'a, T, E, BufferObserver<T, OR>>,
+    OE: Observable<'sub, T, E, BufferObserver<T, OR>>,
     S: Scheduler,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
 }

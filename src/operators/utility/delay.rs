@@ -37,12 +37,12 @@ impl<OE, S> Delay<OE, S> {
     }
 }
 
-impl<'a, T, E, OE, OR, S> Observable<'a, T, E, OR> for Delay<OE, S>
+impl<'sub, T, E, OE, OR, S> Observable<'sub, T, E, OR> for Delay<OE, S>
 where
     T: Send + 'static,
     E: Send + 'static,
     OR: Observer<T, E> + Send + 'static,
-    OE: Observable<'a, T, E, DelayObserver<OR, S>>,
+    OE: Observable<'sub, T, E, DelayObserver<OR, S>>,
     S: Scheduler,
 {
     // TODO: Do we need to use macro to generate this?
@@ -64,7 +64,7 @@ where
     //     };
     // }
     // ```
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         let source_observer = Arc::new(Mutex::new(Some(observer)));
         let delay_observer = DelayObserver {
             source_observer: source_observer.clone(),

@@ -19,13 +19,13 @@ impl<OE, OE2> Buffer<OE, OE2> {
     }
 }
 
-impl<'a, T, E, OR, OE, OE2> Observable<'a, Vec<T>, E, OR> for Buffer<OE, OE2>
+impl<'sub, T, E, OR, OE, OE2> Observable<'sub, Vec<T>, E, OR> for Buffer<OE, OE2>
 where
     OR: Observer<Vec<T>, E>,
-    OE: Observable<'a, T, E, BufferObserver<T, OR>>,
-    OE2: Observable<'a, (), E, BoundaryObserver<T, OR>>,
+    OE: Observable<'sub, T, E, BufferObserver<T, OR>>,
+    OE2: Observable<'sub, (), E, BoundaryObserver<T, OR>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         let observer = BufferObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             values: Arc::new(Mutex::new(Vec::default())),

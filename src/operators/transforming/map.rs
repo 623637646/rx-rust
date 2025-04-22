@@ -16,9 +16,9 @@ pub struct Map<T0, OE, F> {
 }
 
 impl<T0, OE, F> Map<T0, OE, F> {
-    pub fn new<'a, 'b, T, E>(source: OE, mapper: F) -> Self
+    pub fn new<'sub, 'b, T, E>(source: OE, mapper: F) -> Self
     where
-        OE: Observable<'a, T0, E, MapObserver<'b, T, E, F>>,
+        OE: Observable<'sub, T0, E, MapObserver<'b, T, E, F>>,
         F: FnMut(T0) -> T,
     {
         Self {
@@ -29,13 +29,13 @@ impl<T0, OE, F> Map<T0, OE, F> {
     }
 }
 
-impl<'a, 'b, T0, T, E, OR, OE, F> Observable<'a, T, E, OR> for Map<T0, OE, F>
+impl<'sub, 'b, T0, T, E, OR, OE, F> Observable<'sub, T, E, OR> for Map<T0, OE, F>
 where
     OR: Observer<T, E> + Send + 'b,
-    OE: Observable<'a, T0, E, MapObserver<'b, T, E, F>>,
+    OE: Observable<'sub, T0, E, MapObserver<'b, T, E, F>>,
     F: FnMut(T0) -> T,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         let observer = MapObserver {
             observer: BoxedObserver::new(observer),
             mapper: self.mapper,

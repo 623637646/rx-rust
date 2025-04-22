@@ -17,7 +17,7 @@ use crate::{observer::Observer, subscription::Subscription};
 ///   }
 ///   ```
 ///   Because `Create` operator (or others) needs the `OR` generic type in the callback function.
-pub trait Observable<'a, T, E, OR>
+pub trait Observable<'sub, T, E, OR>
 where
     OR: Observer<T, E>,
 {
@@ -35,5 +35,5 @@ where
     ///
     /// A `Subscription` which can be used to unsubscribe the observer.
     /// We use `Subscription` struct instead of trait like `impl Cancellable`, because we need to cancel the subscription when the `Subscription` is dropped. It's not possible to implement Drop for a trait object.
-    fn subscribe(self, observer: OR) -> Subscription<'a>;
+    fn subscribe(self, observer: OR) -> Subscription<'sub>;
 }

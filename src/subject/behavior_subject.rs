@@ -9,9 +9,9 @@ use std::sync::{Arc, RwLock};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct BehaviorSubject<'a, T, E> {
+pub struct BehaviorSubject<'or, T, E> {
     value: Arc<RwLock<T>>,
-    publish_subject: PublishSubject<'a, T, E>,
+    publish_subject: PublishSubject<'or, T, E>,
 }
 
 impl<T, E> BehaviorSubject<'_, T, E> {
@@ -37,13 +37,14 @@ impl<T, E> BehaviorSubject<'_, T, E> {
     }
 }
 
-impl<'a, T, E, OR> Observable<'a, T, E, OR> for BehaviorSubject<'a, T, E>
+impl<'sub, 'or, T, E, OR> Observable<'sub, T, E, OR> for BehaviorSubject<'or, T, E>
 where
-    T: Clone + 'a,
-    E: Clone + 'a,
-    OR: Observer<T, E> + Send + 'a,
+    T: Clone + 'sub,
+    E: Clone + 'sub,
+    OR: Observer<T, E> + Send + 'or,
+    'or: 'sub,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<'a> {
+    fn subscribe(self, mut observer: OR) -> Subscription<'sub> {
         if let Some(terminated) = self.publish_subject.terminated() {
             observer.on_terminal(terminated);
             Subscription::new_none_disposal()
@@ -73,11 +74,12 @@ where
     }
 }
 
-impl<'a, T, E, OR> Subject<'a, T, E, OR> for BehaviorSubject<'a, T, E>
+impl<'sub, 'or, T, E, OR> Subject<'sub, T, E, OR> for BehaviorSubject<'or, T, E>
 where
-    T: Clone + 'a,
-    E: Clone + 'a,
-    OR: Observer<T, E> + Send + 'a,
+    T: Clone + 'sub,
+    E: Clone + 'sub,
+    OR: Observer<T, E> + Send + 'or,
+    'or: 'sub,
 {
 }
 

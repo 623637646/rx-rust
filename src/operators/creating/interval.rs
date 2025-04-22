@@ -22,12 +22,12 @@ impl<S> Interval<S> {
     }
 }
 
-impl<'a, OR, S> Observable<'a, usize, Infallible, OR> for Interval<S>
+impl<'sub, OR, S> Observable<'sub, usize, Infallible, OR> for Interval<S>
 where
     OR: Observer<usize, Infallible> + Send + 'static,
     S: Scheduler,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<'a> {
+    fn subscribe(self, mut observer: OR) -> Subscription<'sub> {
         let disposal = self.scheduler.schedule_period(
             move |count| {
                 observer.on_next(count);

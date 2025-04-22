@@ -10,11 +10,11 @@ use std::convert::Infallible;
 #[educe(Debug, Clone)]
 pub struct Empty;
 
-impl<'a, T, OR> Observable<'a, T, Infallible, OR> for Empty
+impl<'sub, T, OR> Observable<'sub, T, Infallible, OR> for Empty
 where
     OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         observer.on_terminal(Terminal::Completed);
         Subscription::new_none_disposal()
     }

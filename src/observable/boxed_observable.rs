@@ -3,10 +3,10 @@ use crate::subscription::Subscription;
 
 /// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
-pub struct BoxedObservable<'a, 'b, OR>(Box<dyn FnOnce(OR) -> Subscription<'a> + Send + 'b>);
+pub struct BoxedObservable<'sub, 'b, OR>(Box<dyn FnOnce(OR) -> Subscription<'sub> + Send + 'b>);
 
-impl<'a, 'b, OR> BoxedObservable<'a, 'b, OR> {
-    pub fn new<T, E>(observable: impl Observable<'a, T, E, OR> + Send + 'b) -> Self
+impl<'sub, 'b, OR> BoxedObservable<'sub, 'b, OR> {
+    pub fn new<T, E>(observable: impl Observable<'sub, T, E, OR> + Send + 'b) -> Self
     where
         OR: Observer<T, E>,
     {
@@ -14,11 +14,11 @@ impl<'a, 'b, OR> BoxedObservable<'a, 'b, OR> {
     }
 }
 
-impl<'a, T, E, OR> Observable<'a, T, E, OR> for BoxedObservable<'a, '_, OR>
+impl<'sub, T, E, OR> Observable<'sub, T, E, OR> for BoxedObservable<'sub, '_, OR>
 where
     OR: Observer<T, E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         self.0(observer)
     }
 }

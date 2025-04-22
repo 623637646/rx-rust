@@ -23,13 +23,13 @@ impl<T, S> Timer<T, S> {
     }
 }
 
-impl<'a, T, OR, S> Observable<'a, T, Infallible, OR> for Timer<T, S>
+impl<'sub, T, OR, S> Observable<'sub, T, Infallible, OR> for Timer<T, S>
 where
     T: Send + 'static,
     OR: Observer<T, Infallible> + Send + 'static,
     S: Scheduler,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
 }

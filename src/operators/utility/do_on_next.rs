@@ -13,22 +13,22 @@ pub struct DoOnNext<OE, F> {
 }
 
 impl<OE, F> DoOnNext<OE, F> {
-    pub fn new<'a, 'b, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'sub, 'b, T, E>(source: OE, callback: F) -> Self
     where
         F: FnMut(&T),
-        OE: Observable<'a, T, E, DoOnNextObserver<'b, T, E, F>>,
+        OE: Observable<'sub, T, E, DoOnNextObserver<'b, T, E, F>>,
     {
         Self { source, callback }
     }
 }
 
-impl<'a, 'b, T, E, OR, OE, F> Observable<'a, T, E, OR> for DoOnNext<OE, F>
+impl<'sub, 'b, T, E, OR, OE, F> Observable<'sub, T, E, OR> for DoOnNext<OE, F>
 where
     OR: Observer<T, E> + Send + 'b,
-    OE: Observable<'a, T, E, DoOnNextObserver<'b, T, E, F>>,
+    OE: Observable<'sub, T, E, DoOnNextObserver<'b, T, E, F>>,
     F: FnMut(&T),
 {
-    fn subscribe(self, observer: OR) -> Subscription<'a> {
+    fn subscribe(self, observer: OR) -> Subscription<'sub> {
         let observer = DoOnNextObserver {
             observer: BoxedObserver::new(observer),
             callback: self.callback,
