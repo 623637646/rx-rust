@@ -6,16 +6,10 @@ use crate::{
             map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
         },
         transforming::{
-            buffer::Buffer,
-            buffer_with_count::BufferWithCount,
-            buffer_with_time::BufferWithTime,
-            map::{Map, MapObserver},
+            buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
+            map::Map,
         },
-        utility::{
-            delay::Delay,
-            do_on_next::{DoOnNext, DoOnNextObserver},
-            do_on_terminal::{DoOnTerminal, DoOnTerminalObserver},
-        },
+        utility::{delay::Delay, do_on_next::DoOnNext, do_on_terminal::DoOnTerminal},
     },
     subscription::Subscription,
 };
@@ -38,10 +32,10 @@ pub trait ObservableExt: Sized {
         Delay::new(self, delay, scheduler)
     }
 
-    fn do_on_next<'sub, 'or, T, E, F>(self, callback: F) -> DoOnNext<Self, F>
+    fn do_on_next<'or, 'sub, T, E, F>(self, callback: F) -> DoOnNext<Self, F>
     where
         F: FnMut(&T),
-        Self: Observable<'sub, T, E, DoOnNextObserver<'or, T, E, F>>,
+        Self: Observable<'or, 'sub, T, E>,
     {
         DoOnNext::new(self, callback)
     }
@@ -49,7 +43,7 @@ pub trait ObservableExt: Sized {
     fn do_on_terminal<'sub, 'or, T, E, F>(self, callback: F) -> DoOnTerminal<Self, F>
     where
         F: FnOnce(&Terminal<E>),
-        Self: Observable<'sub, T, E, DoOnTerminalObserver<'or, T, E, F>>,
+        Self: Observable<'or, 'sub, T, E>,
     {
         DoOnTerminal::new(self, callback)
     }
@@ -57,7 +51,7 @@ pub trait ObservableExt: Sized {
     fn map<'sub, 'or, T0, T, E, F>(self, f: F) -> Map<T0, Self, F>
     where
         F: FnMut(T0) -> T,
-        Self: Observable<'sub, T0, E, MapObserver<'or, T, E, F>>,
+        Self: Observable<'or, 'sub, T0, E>,
     {
         Map::new(self, f)
     }
@@ -70,15 +64,17 @@ pub trait ObservableExt: Sized {
         MapValueToVoid::new(self)
     }
 
-    fn subscribe_with_callback<'sub, 'fn_life, T, E, FN, FT>(
+    fn subscribe_with_callback<'or, 'sub, T, E, FN, FT>(
         self,
         on_next: FN,
         on_terminal: FT,
     ) -> Subscription<'sub>
     where
-        Self: Observable<'sub, T, E, CallbackObserver<'fn_life, T, E>>,
-        FN: FnMut(T) + Send + 'fn_life,
-        FT: FnOnce(Terminal<E>) + Send + 'fn_life,
+        T: 'or,
+        E: 'or,
+        Self: Observable<'or, 'sub, T, E>,
+        FN: FnMut(T) + Send + 'or,
+        FT: FnOnce(Terminal<E>) + Send + 'or,
     {
         self.subscribe(CallbackObserver::new(on_next, on_terminal))
     }
