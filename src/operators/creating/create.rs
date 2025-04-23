@@ -46,7 +46,7 @@ impl<F> Create<F> {
     /// # Arguments
     ///
     /// * `builder` - The subscription builder function. It receives a `BoxedObserver` which it can use to emit values and terminal events. The function should return a `Subscription` which can be used to manage the subscription.
-    pub fn new<'sub, 'or, T, E>(builder: F) -> Self
+    pub fn new<'or, 'sub, T, E>(builder: F) -> Self
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_wrap_observable`.
         F: FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub>,
@@ -55,9 +55,8 @@ impl<F> Create<F> {
     }
 }
 
-impl<'sub, 'or, T, E, OR, F> Observable<'sub, T, E, OR> for Create<F>
+impl<'or, 'sub, T, E, F> Observable<'or, 'sub, T, E> for Create<F>
 where
-    OR: Observer<T, E> + Send + 'or,
     F: FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub>,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
