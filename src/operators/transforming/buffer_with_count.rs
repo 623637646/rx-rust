@@ -18,12 +18,12 @@ impl<OE> BufferWithCount<OE> {
     }
 }
 
-impl<'sub, T, E, OR, OE> Observable<'sub, Vec<T>, E, OR> for BufferWithCount<OE>
+impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, Vec<T>, E> for BufferWithCount<OE>
 where
-    OR: Observer<Vec<T>, E>,
-    OE: Observable<'sub, T, E, BufferWithCountObserver<T, OR>>,
+    T: Send + 'or,
+    OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'or) -> Subscription<'sub> {
         let observer = BufferWithCountObserver {
             observer,
             values: Vec::default(),
