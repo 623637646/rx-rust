@@ -19,12 +19,14 @@ impl<I> FromIter<I> {
     }
 }
 
-impl<'sub, T, OR, I> Observable<'sub, T, Infallible, OR> for FromIter<I>
+impl<'or, 'sub, T, I> Observable<'or, 'sub, T, Infallible> for FromIter<I>
 where
-    OR: Observer<T, Infallible>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, Infallible> + Send + 'or,
+    ) -> Subscription<'sub> {
         for value in self.0.into_iter() {
             observer.on_next(value);
         }
