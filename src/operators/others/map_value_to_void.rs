@@ -22,12 +22,11 @@ impl<T, OE> MapValueToVoid<T, OE> {
     }
 }
 
-impl<'sub, T, E, OR, OE> Observable<'sub, (), E, OR> for MapValueToVoid<T, OE>
+impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (), E> for MapValueToVoid<T, OE>
 where
-    OR: Observer<(), E>,
-    OE: Observable<'sub, T, E, MapValueToVoidObserver<OR>>,
+    OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<(), E> + Send + 'or) -> Subscription<'sub> {
         let observer = MapValueToVoidObserver(observer);
         self.source.subscribe(observer)
     }
