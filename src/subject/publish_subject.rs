@@ -37,14 +37,13 @@ impl<T, E> Default for PublishSubject<'_, T, E> {
     }
 }
 
-impl<'sub, 'or, T, E, OR> Observable<'sub, T, E, OR> for PublishSubject<'or, T, E>
+impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for PublishSubject<'or, T, E>
 where
     T: 'sub,
     E: Clone + 'sub,
-    OR: Observer<T, E> + Send + 'or,
     'or: 'sub,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated.read().unwrap().as_ref().cloned() {
             observer.on_terminal(terminated);
             return Subscription::new_none_disposal();
@@ -82,11 +81,10 @@ where
     }
 }
 
-impl<'sub, 'or, T, E, OR> Subject<'sub, T, E, OR> for PublishSubject<'or, T, E>
+impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for PublishSubject<'or, T, E>
 where
     T: Clone + 'sub,
     E: Clone + 'sub,
-    OR: Observer<T, E> + Send + 'or,
     'or: 'sub,
 {
 }

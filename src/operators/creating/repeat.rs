@@ -16,12 +16,11 @@ impl<T> Repeat<T> {
     }
 }
 
-impl<'sub, T, OR> Observable<'sub, T, Infallible, OR> for Repeat<T>
+impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Repeat<T>
 where
     T: Clone,
-    OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, Infallible> + Send + 'or) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
 }

@@ -1,4 +1,4 @@
-use super::buffer::{Buffer, BufferObserver};
+use super::buffer::Buffer;
 use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Observer,
@@ -31,15 +31,14 @@ impl<OE, S> BufferWithTime<OE, S> {
     }
 }
 
-impl<'sub, T, E, OR, OE, S> Observable<'sub, Vec<T>, E, OR> for BufferWithTime<OE, S>
+impl<'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTime<OE, S>
 where
     T: Send + 'static,
     E: 'static,
-    OR: Observer<Vec<T>, E> + Send + 'static,
-    OE: Observable<'sub, T, E, BufferObserver<T, OR>>,
+    OE: Observable<'static, 'sub, T, E>,
     S: Scheduler,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'static) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
 }

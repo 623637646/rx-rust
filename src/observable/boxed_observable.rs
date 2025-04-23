@@ -1,25 +1,25 @@
 use super::{Observable, Observer};
-use crate::subscription::Subscription;
+use crate::{observer::boxed_observer::BoxedObserver, subscription::Subscription};
 
 /// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
-pub struct BoxedObservable<'sub, 'oe, OR>(Box<dyn FnOnce(OR) -> Subscription<'sub> + Send + 'oe>);
+pub struct BoxedObservable<'or, 'sub, 'oe, T, E>(
+    Box<dyn FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub> + Send + 'oe>,
+);
 
-impl<'sub, 'oe, OR> BoxedObservable<'sub, 'oe, OR> {
-    pub fn new<T, E>(observable: impl Observable<'sub, T, E, OR> + Send + 'oe) -> Self
+impl<'or, 'sub, 'oe, T, E> BoxedObservable<'or, 'sub, 'oe, T, E> {
+    pub fn new(observable: impl Observable<'or, 'sub, T, E> + Send + 'oe) -> Self
     where
-        OR: Observer<T, E>,
+        T: 'or,
+        E: 'or,
     {
         Self(Box::new(|observer| observable.subscribe(observer)))
     }
 }
 
-impl<'sub, T, E, OR> Observable<'sub, T, E, OR> for BoxedObservable<'sub, '_, OR>
-where
-    OR: Observer<T, E>,
-{
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
-        self.0(observer)
+impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BoxedObservable<'or, 'sub, '_, T, E> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+        self.0(BoxedObserver::new(observer))
     }
 }
 
@@ -280,7 +280,7 @@ mod tests {
     fn test_lifetime_b() {
         // OK
         let life_marker = TestStruct;
-        let observable: BoxedObservable<'_, '_, CheckingObserver<i32, String>>;
+        let observable;
 
         // Error
         // let observable: BoxedObservable<'_, '_, CheckingObserver<i32, String>>;
@@ -315,8 +315,7 @@ mod tests {
     fn test_type_inference_without_subscribe() {
         // Custom operations
         let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-        let observable: BoxedObservable<'_, '_, CheckingObserver<i32, String>> =
-            BoxedObservable::new(subject);
+        let observable = BoxedObservable::new(subject);
 
         let _ = observable.buffer_with_count(1);
     }

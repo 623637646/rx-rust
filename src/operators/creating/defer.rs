@@ -3,11 +3,11 @@ use educe::Educe;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Defer<F, OE>(F)
+pub struct Defer<OE, F>(F)
 where
     F: FnOnce() -> OE;
 
-impl<F, OE> Defer<F, OE>
+impl<OE, F> Defer<OE, F>
 where
     F: FnOnce() -> OE,
 {
@@ -16,13 +16,12 @@ where
     }
 }
 
-impl<'sub, T, E, OR, OE, F> Observable<'sub, T, E, OR> for Defer<F, OE>
+impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for Defer<OE, F>
 where
     F: FnOnce() -> OE,
-    OR: Observer<T, E>,
-    OE: Observable<'sub, T, E, OR>,
+    OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observable = self.0();
         observable.subscribe(observer)
     }

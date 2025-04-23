@@ -3,8 +3,4 @@ pub mod publish_subject;
 
 use crate::{observable::Observable, observer::Observer};
 
-pub trait Subject<'sub, T, E, OR>: Observable<'sub, T, E, OR> + Observer<T, E>
-where
-    OR: Observer<T, E>,
-{
-}
+pub trait Subject<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Observer<T, E> {}

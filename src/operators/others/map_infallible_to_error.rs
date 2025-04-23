@@ -16,12 +16,12 @@ impl<OE> MapInfallibleToError<OE> {
     }
 }
 
-impl<'sub, T, E, OR, OE> Observable<'sub, T, E, OR> for MapInfallibleToError<OE>
+impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for MapInfallibleToError<OE>
 where
-    OR: Observer<T, E>,
-    OE: Observable<'sub, T, Infallible, MapInfallibleToErrorObserver<E, OR>>,
+    E: 'or,
+    OE: Observable<'or, 'sub, T, Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = MapInfallibleToErrorObserver {
             observer,
             _marker: PhantomData,

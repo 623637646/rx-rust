@@ -37,14 +37,13 @@ impl<T, E> BehaviorSubject<'_, T, E> {
     }
 }
 
-impl<'sub, 'or, T, E, OR> Observable<'sub, T, E, OR> for BehaviorSubject<'or, T, E>
+impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BehaviorSubject<'or, T, E>
 where
     T: Clone + 'sub,
     E: Clone + 'sub,
-    OR: Observer<T, E> + Send + 'or,
     'or: 'sub,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, mut observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         if let Some(terminated) = self.publish_subject.terminated() {
             observer.on_terminal(terminated);
             Subscription::new_none_disposal()
@@ -74,11 +73,10 @@ where
     }
 }
 
-impl<'sub, 'or, T, E, OR> Subject<'sub, T, E, OR> for BehaviorSubject<'or, T, E>
+impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for BehaviorSubject<'or, T, E>
 where
     T: Clone + 'sub,
     E: Clone + 'sub,
-    OR: Observer<T, E> + Send + 'or,
     'or: 'sub,
 {
 }

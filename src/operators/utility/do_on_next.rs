@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal, boxed_observer::BoxedObserver},
+    observer::{Observer, Terminal},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -13,37 +13,37 @@ pub struct DoOnNext<OE, F> {
 }
 
 impl<OE, F> DoOnNext<OE, F> {
-    pub fn new<'sub, 'or, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
     where
         F: FnMut(&T),
-        OE: Observable<'sub, T, E, DoOnNextObserver<'or, T, E, F>>,
+        OE: Observable<'or, 'sub, T, E>,
     {
         Self { source, callback }
     }
 }
 
-impl<'sub, 'or, T, E, OR, OE, F> Observable<'sub, T, E, OR> for DoOnNext<OE, F>
+impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoOnNext<OE, F>
 where
-    OR: Observer<T, E> + Send + 'or,
-    OE: Observable<'sub, T, E, DoOnNextObserver<'or, T, E, F>>,
-    F: FnMut(&T),
+    OE: Observable<'or, 'sub, T, E>,
+    F: FnMut(&T) + Send + 'or,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = DoOnNextObserver {
-            observer: BoxedObserver::new(observer),
+            observer,
             callback: self.callback,
         };
         self.source.subscribe(observer)
     }
 }
 
-pub struct DoOnNextObserver<'or, T, E, F> {
-    observer: BoxedObserver<'or, T, E>, // TODO: Find a better way to avoid using BoxedObserver here.
+pub struct DoOnNextObserver<OR, F> {
+    observer: OR,
     callback: F,
 }
 
-impl<T, E, F> Observer<T, E> for DoOnNextObserver<'_, T, E, F>
+impl<T, E, OR, F> Observer<T, E> for DoOnNextObserver<OR, F>
 where
+    OR: Observer<T, E>,
     F: FnMut(&T),
 {
     fn on_next(&mut self, value: T) {
