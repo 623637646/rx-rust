@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal, boxed_observer::BoxedObserver},
+    observer::{Observer, Terminal},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -18,7 +18,7 @@ pub struct Map<T0, OE, F> {
 impl<T0, OE, F> Map<T0, OE, F> {
     pub fn new<'sub, 'or, T, E>(source: OE, mapper: F) -> Self
     where
-        OE: Observable<'sub, T0, E, MapObserver<'or, T, E, F>>,
+        OE: Observable<'or, 'sub, T0, E>,
         F: FnMut(T0) -> T,
     {
         Self {
@@ -29,28 +29,30 @@ impl<T0, OE, F> Map<T0, OE, F> {
     }
 }
 
-impl<'sub, 'or, T0, T, E, OR, OE, F> Observable<'sub, T, E, OR> for Map<T0, OE, F>
+impl<'or, 'sub, T0, T, E, OE, F> Observable<'or, 'sub, T, E> for Map<T0, OE, F>
 where
-    OR: Observer<T, E> + Send + 'or,
-    OE: Observable<'sub, T0, E, MapObserver<'or, T, E, F>>,
-    F: FnMut(T0) -> T,
+    T: 'or,
+    E: 'or,
+    OE: Observable<'or, 'sub, T0, E>,
+    F: FnMut(T0) -> T + Send + 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = MapObserver {
-            observer: BoxedObserver::new(observer),
+            observer,
             mapper: self.mapper,
         };
         self.source.subscribe(observer)
     }
 }
 
-pub struct MapObserver<'or, T, E, F> {
-    observer: BoxedObserver<'or, T, E>, // TODO: Find a better way to avoid using BoxedObserver here.
+pub struct MapObserver<OR, F> {
+    observer: OR,
     mapper: F,
 }
 
-impl<T0, T, E, F> Observer<T0, E> for MapObserver<'_, T, E, F>
+impl<T0, T, E, OR, F> Observer<T0, E> for MapObserver<OR, F>
 where
+    OR: Observer<T, E>,
     F: FnMut(T0) -> T,
 {
     fn on_next(&mut self, value: T0) {
