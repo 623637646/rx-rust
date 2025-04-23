@@ -5,7 +5,7 @@ use super::{Observer, Terminal};
 pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(HandleEvent<T, E>) + Send + 'or>);
 
 enum HandleEvent<T, E> {
-    Value(T),
+    Next(T),
     Terminal(Terminal<E>),
 }
 
@@ -13,7 +13,7 @@ impl<'or, T, E> BoxedObserver<'or, T, E> {
     pub fn new(observer: impl Observer<T, E> + Send + 'or) -> Self {
         let mut observer = Some(observer);
         Self(Box::new(move |event| match event {
-            HandleEvent::Value(value) => {
+            HandleEvent::Next(value) => {
                 if let Some(observer) = &mut observer {
                     observer.on_next(value);
                 }
@@ -29,7 +29,7 @@ impl<'or, T, E> BoxedObserver<'or, T, E> {
 
 impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
     fn on_next(&mut self, value: T) {
-        self.0(HandleEvent::Value(value));
+        self.0(HandleEvent::Next(value));
     }
 
     fn on_terminal(mut self, terminal: Terminal<E>) {
