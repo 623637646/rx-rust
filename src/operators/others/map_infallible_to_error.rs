@@ -35,7 +35,7 @@ pub struct MapInfallibleToErrorObserver<E, OR> {
     /// Using `PhantomData<fn(E) -> E>` instead of `PhantomData<E>` to make MapInfallibleToErrorObserver being `Send + Sync` when OR is `Send + Sync` but E is not.
     /// For more detail: https://doc.rust-lang.org/nomicon/phantom-data.html#table-of-phantomdata-patterns
     /// But the lifetime of MapInfallibleToErrorObserver is affected by E.
-    /// Which means that when OR is 'static but E is not 'static, MapInfallibleToErrorObserver is not 'statac.
+    /// Which means that when OR is 'static but E is not 'static, MapInfallibleToErrorObserver is not 'static.
     /// TODO: find a better way to fix this, so we can remove `E: 'static` from BufferWithTime.
     /// For more detail: https://users.rust-lang.org/t/getting-phantomdata-to-have-a-static-lifetime/38505
     _marker: PhantomData<fn(E) -> E>,
