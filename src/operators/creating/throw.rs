@@ -34,7 +34,7 @@ impl<'sub, E, OR> Observable<'sub, Infallible, E, OR> for Throw<E>
 where
     OR: Observer<Infallible, E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         observer.on_terminal(Terminal::Error(self.0));
         Subscription::new_none_disposal()
     }

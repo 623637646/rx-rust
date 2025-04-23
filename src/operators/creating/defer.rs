@@ -22,7 +22,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<'sub, T, E, OR>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observable = self.0();
         observable.subscribe(observer)
     }

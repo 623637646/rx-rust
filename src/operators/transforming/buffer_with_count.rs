@@ -23,7 +23,7 @@ where
     OR: Observer<Vec<T>, E>,
     OE: Observable<'sub, T, E, BufferWithCountObserver<T, OR>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = BufferWithCountObserver {
             observer,
             values: Vec::default(),

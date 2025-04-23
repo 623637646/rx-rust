@@ -39,7 +39,7 @@ where
     OE: Observable<'sub, T, E, BufferObserver<T, OR>>,
     S: Scheduler,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
 }

@@ -27,7 +27,7 @@ where
     OR: Observer<usize, Infallible> + Send + 'static,
     S: Scheduler,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let disposal = self.scheduler.schedule_period(
             move |count| {
                 observer.on_next(count);

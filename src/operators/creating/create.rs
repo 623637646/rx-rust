@@ -60,7 +60,7 @@ where
     OR: Observer<T, E> + Send + 'or,
     F: FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         self.0(BoxedObserver::new(observer))
     }
 }

@@ -10,7 +10,7 @@ impl<'sub, T, OR> Observable<'sub, T, Infallible, OR> for Never
 where
     OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, _: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         Subscription::new_none_disposal()
     }
 }

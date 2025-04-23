@@ -13,14 +13,11 @@ use crate::{observer::Observer, subscription::Subscription};
 ///   We use `OR` generic type instead of this code:
 ///   ```text
 ///   pub trait Observable<T, E> {
-///       fn subscribe(self, observer: impl Observer<T, E>) -> Subscription;
+///       fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription;
 ///   }
 ///   ```
 ///   Because `Create` operator (or others) needs the `OR` generic type in the callback function.
-pub trait Observable<'sub, T, E, OR>
-where
-    OR: Observer<T, E>,
-{
+pub trait Observable<'or, 'sub, T, E> {
     /// Subscribes an observer to this observable.
     ///
     /// When an observer is subscribed, it will start receiving events from the observable.
@@ -35,5 +32,5 @@ where
     ///
     /// A `Subscription` which can be used to unsubscribe the observer.
     /// We use `Subscription` struct instead of trait like `impl Cancellable`, because we need to cancel the subscription when the `Subscription` is dropped. It's not possible to implement Drop for a trait object.
-    fn subscribe(self, observer: OR) -> Subscription<'sub>;
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub>;
 }

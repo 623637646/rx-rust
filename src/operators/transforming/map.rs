@@ -35,7 +35,7 @@ where
     OE: Observable<'sub, T0, E, MapObserver<'or, T, E, F>>,
     F: FnMut(T0) -> T,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = MapObserver {
             observer: BoxedObserver::new(observer),
             mapper: self.mapper,

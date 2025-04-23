@@ -44,7 +44,7 @@ where
     OR: Observer<T, E> + Send + 'or,
     'or: 'sub,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated.read().unwrap().as_ref().cloned() {
             observer.on_terminal(terminated);
             return Subscription::new_none_disposal();

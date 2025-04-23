@@ -18,7 +18,7 @@ impl<'sub, T, E, OR> Observable<'sub, T, E, OR> for BoxedObservable<'sub, '_, OR
 where
     OR: Observer<T, E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         self.0(observer)
     }
 }

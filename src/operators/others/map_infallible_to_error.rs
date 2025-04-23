@@ -21,7 +21,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<'sub, T, Infallible, MapInfallibleToErrorObserver<E, OR>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = MapInfallibleToErrorObserver {
             observer,
             _marker: PhantomData,

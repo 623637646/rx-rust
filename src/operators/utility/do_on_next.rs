@@ -28,7 +28,7 @@ where
     OE: Observable<'sub, T, E, DoOnNextObserver<'or, T, E, F>>,
     F: FnMut(&T),
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = DoOnNextObserver {
             observer: BoxedObserver::new(observer),
             callback: self.callback,

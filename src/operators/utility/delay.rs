@@ -52,7 +52,7 @@ where
     // #[macro_export]
     // macro_rules! define_chained_subscribe {
     //     ($builder:expr) => {
-    //         fn subscribe(self, observer: OR) -> $crate::subscription::Subscription {
+    //         fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> $crate::subscription::Subscription {
     //             let source_observer = std::sync::Arc::new(std::sync::Mutex::new(Some(observer)));
     //             let subscription = $builder(self, source_observer.clone());
     //             let disposal = $crate::subscription::disposable::CallbackDisposal::new(move || {
@@ -64,7 +64,7 @@ where
     //     };
     // }
     // ```
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let source_observer = Arc::new(Mutex::new(Some(observer)));
         let delay_observer = DelayObserver {
             source_observer: source_observer.clone(),

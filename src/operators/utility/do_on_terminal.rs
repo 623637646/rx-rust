@@ -28,7 +28,7 @@ where
     OE: Observable<'sub, T, E, DoOnTerminalObserver<'or, T, E, F>>,
     F: FnOnce(&Terminal<E>),
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = DoOnTerminalObserver {
             observer: BoxedObserver::new(observer),
             callback: self.callback,

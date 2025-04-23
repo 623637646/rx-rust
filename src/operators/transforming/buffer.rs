@@ -25,7 +25,7 @@ where
     OE: Observable<'sub, T, E, BufferObserver<T, OR>>,
     OE2: Observable<'sub, (), E, BoundaryObserver<T, OR>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = BufferObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             values: Arc::new(Mutex::new(Vec::default())),

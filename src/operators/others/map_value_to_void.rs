@@ -27,7 +27,7 @@ where
     OR: Observer<(), E>,
     OE: Observable<'sub, T, E, MapValueToVoidObserver<OR>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = MapValueToVoidObserver(observer);
         self.source.subscribe(observer)
     }
