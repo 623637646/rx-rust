@@ -1,33 +1,28 @@
-use super::buffer::Buffer;
 use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Observer,
-    operators::{
-        creating::interval::Interval,
-        others::{
-            map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
-        },
-    },
+    operators::creating::interval::Interval,
     scheduler::Scheduler,
     subscription::Subscription,
 };
 use educe::Educe;
 use std::time::Duration;
 
-type BufferWithTimeType<OE, S> =
-    Buffer<OE, MapInfallibleToError<MapValueToVoid<usize, Interval<S>>>>;
-
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct BufferWithTime<OE, S>(BufferWithTimeType<OE, S>);
+pub struct BufferWithTime<OE, S> {
+    source: OE,
+    time_pan: Duration,
+    scheduler: S,
+}
 
 impl<OE, S> BufferWithTime<OE, S> {
     pub fn new(source: OE, time_pan: Duration, scheduler: S) -> Self {
-        let boundary = Interval::new(time_pan, scheduler, Some(time_pan))
-            .map_value_to_void()
-            .map_infallible_to_error();
-        let buffer = source.buffer(boundary);
-        Self(buffer)
+        Self {
+            source,
+            time_pan,
+            scheduler,
+        }
     }
 }
 
@@ -39,7 +34,11 @@ where
     S: Scheduler,
 {
     fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'static) -> Subscription<'sub> {
-        self.0.subscribe(observer)
+        let boundary = Interval::new(self.time_pan, self.scheduler, Some(self.time_pan))
+            .map_value_to_void()
+            .map_infallible_to_error();
+        let buffer = self.source.buffer(boundary);
+        buffer.subscribe(observer)
     }
 }
 

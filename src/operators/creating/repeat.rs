@@ -1,18 +1,18 @@
 use super::from_iter::FromIter;
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 use educe::Educe;
-use std::{convert::Infallible, iter::RepeatN};
+use std::convert::Infallible;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Repeat<T>(FromIter<RepeatN<T>>);
+pub struct Repeat<T> {
+    value: T,
+    n: usize,
+}
 
 impl<T> Repeat<T> {
-    pub fn new(value: T, n: usize) -> Self
-    where
-        T: Clone,
-    {
-        Self(FromIter::new(std::iter::repeat_n(value, n)))
+    pub fn new(value: T, n: usize) -> Self {
+        Self { value, n }
     }
 }
 
@@ -21,7 +21,7 @@ where
     T: Clone,
 {
     fn subscribe(self, observer: impl Observer<T, Infallible> + Send + 'or) -> Subscription<'sub> {
-        self.0.subscribe(observer)
+        FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
     }
 }
 

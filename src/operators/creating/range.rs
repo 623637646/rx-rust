@@ -5,14 +5,14 @@ use std::{convert::Infallible, ops::RangeBounds};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Range<I>(FromIter<I>);
+pub struct Range<I>(I);
 
 impl<I> Range<I> {
     pub fn new<T>(range: I) -> Self
     where
         I: IntoIterator<Item = T> + RangeBounds<T>,
     {
-        Self(FromIter::new(range))
+        Self(range)
     }
 }
 
@@ -21,7 +21,7 @@ where
     I: IntoIterator<Item = T>,
 {
     fn subscribe(self, observer: impl Observer<T, Infallible> + Send + 'or) -> Subscription<'sub> {
-        self.0.subscribe(observer)
+        FromIter::new(self.0).subscribe(observer)
     }
 }
 
