@@ -35,11 +35,11 @@ impl<T> Just<T> {
     }
 }
 
-impl<'sub, T, OR> Observable<'sub, T, Infallible, OR> for Just<T>
-where
-    OR: Observer<T, Infallible>,
-{
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Just<T> {
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, Infallible> + Send + 'or,
+    ) -> Subscription<'sub> {
         observer.on_next(self.0);
         observer.on_terminal(Terminal::Completed);
         Subscription::new_none_disposal()
