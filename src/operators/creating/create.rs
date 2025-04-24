@@ -299,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lifetime_a() {
+    fn test_lifetime_sub() {
         // OK
         let life_marker = TestStruct;
         let subscription;
@@ -326,7 +326,7 @@ mod tests {
     }
 
     #[test]
-    fn test_lifetime_b() {
+    fn test_lifetime_or() {
         // OK
         let life_marker_2 = TestStruct;
         let mut life_marker_1 = None;
