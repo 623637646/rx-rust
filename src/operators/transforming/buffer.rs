@@ -30,9 +30,9 @@ where
             observer: Arc::new(Mutex::new(Some(observer))),
             values: Arc::new(Mutex::new(Vec::default())),
         };
-        let subscription_1 = self.source.subscribe(observer.clone());
-        let observer = BoundaryObserver(observer);
-        let subscription_2 = self.boundary.subscribe(observer);
+        let boundary = BoundaryObserver(observer.clone());
+        let subscription_1 = self.boundary.subscribe(boundary);
+        let subscription_2 = self.source.subscribe(observer);
         subscription_1 + subscription_2
     }
 }
@@ -243,15 +243,15 @@ mod tests {
         assert!(checker.is_unterminated());
 
         subject.on_next(());
-        assert!(checker.is_values_matched(&[vec![()]]));
+        assert!(checker.is_values_matched(&[vec![]]));
         assert!(checker.is_unterminated());
 
         subject.on_next(());
-        assert!(checker.is_values_matched(&[vec![()], vec![()]]));
+        assert!(checker.is_values_matched(&[vec![], vec![()]]));
         assert!(checker.is_unterminated());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
-        assert!(checker.is_values_matched(&[vec![()], vec![()]]));
+        assert!(checker.is_values_matched(&[vec![], vec![()], vec![()]]));
         assert!(checker.is_completed());
 
         _ = subscription; // keep the subscription alive
@@ -750,27 +750,31 @@ mod tests {
         assert!(checker.is_unterminated());
 
         boundary_subject.on_next(());
-        assert!(checker.is_values_matched(&[vec![vec![]]]));
+        assert!(checker.is_values_matched(&[vec![]]));
         assert!(checker.is_unterminated());
 
         subject.on_next(111);
-        assert!(checker.is_values_matched(&[vec![vec![]]]));
+        assert!(checker.is_values_matched(&[vec![]]));
         assert!(checker.is_unterminated());
 
         boundary_subject.on_next(());
-        assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]]]));
+        assert!(checker.is_values_matched(&[vec![], vec![vec![]]]));
         assert!(checker.is_unterminated());
 
         subject.on_next(222);
-        assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]]]));
+        assert!(checker.is_values_matched(&[vec![], vec![vec![]]]));
         assert!(checker.is_unterminated());
 
         subject.on_next(333);
-        assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]]]));
+        assert!(checker.is_values_matched(&[vec![], vec![vec![]]]));
         assert!(checker.is_unterminated());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
-        assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]], vec![vec![222, 333]]]));
+        assert!(checker.is_values_matched(&[
+            vec![],
+            vec![vec![]],
+            vec![vec![111], vec![222, 333]]
+        ]));
         assert!(checker.is_completed());
 
         _ = subscription; // keep the subscription alive
