@@ -3,8 +3,8 @@ use crate::{
     observer::{Terminal, callback_observer::CallbackObserver},
     operators::{
         others::{
-            hook_on_next::HookOnNext, map_infallible_to_error::MapInfallibleToError,
-            map_value_to_void::MapValueToVoid,
+            hook_on_next::HookOnNext, hook_on_terminal::HookOnTerminal,
+            map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
@@ -60,6 +60,14 @@ pub trait ObservableExt: Sized {
         F: for<'a> FnMut(T, Box<dyn FnOnce(T) + 'a>),
     {
         HookOnNext::new(self, callback)
+    }
+
+    fn hook_on_terminal<'or, 'sub, T, E, F>(self, callback: F) -> HookOnTerminal<Self, F>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        F: for<'a> FnOnce(Terminal<E>, Box<dyn FnOnce(Terminal<E>) + 'a>),
+    {
+        HookOnTerminal::new(self, callback)
     }
 
     fn map<'sub, 'or, T0, T, E, F>(self, callback: F) -> Map<T0, Self, F>
