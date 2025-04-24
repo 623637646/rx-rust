@@ -15,8 +15,8 @@ pub struct DoOnNext<OE, F> {
 impl<OE, F> DoOnNext<OE, F> {
     pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
     where
-        F: FnMut(&T),
         OE: Observable<'or, 'sub, T, E>,
+        F: FnMut(&T),
     {
         Self { source, callback }
     }

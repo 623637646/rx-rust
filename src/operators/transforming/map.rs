@@ -6,24 +6,24 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// This is an observable that maps the values of the source observable using a mapper function.
+/// This is an observable that maps the values of the source observable using a callback.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Map<T0, OE, F> {
     source: OE,
-    mapper: F,
+    callback: F,
     _marker: PhantomData<fn(T0) -> T0>, // Refer to `MapInfallibleToErrorObserver` for the reason of using `PhantomData<fn(T0) -> T0>`
 }
 
 impl<T0, OE, F> Map<T0, OE, F> {
-    pub fn new<'sub, 'or, T, E>(source: OE, mapper: F) -> Self
+    pub fn new<'sub, 'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, 'sub, T0, E>,
         F: FnMut(T0) -> T,
     {
         Self {
             source,
-            mapper,
+            callback,
             _marker: PhantomData,
         }
     }
@@ -39,7 +39,7 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = MapObserver {
             observer,
-            mapper: self.mapper,
+            callback: self.callback,
         };
         self.source.subscribe(observer)
     }
@@ -47,7 +47,7 @@ where
 
 pub struct MapObserver<OR, F> {
     observer: OR,
-    mapper: F,
+    callback: F,
 }
 
 impl<T0, T, E, OR, F> Observer<T0, E> for MapObserver<OR, F>
@@ -56,7 +56,7 @@ where
     F: FnMut(T0) -> T,
 {
     fn on_next(&mut self, value: T0) {
-        self.observer.on_next((self.mapper)(value))
+        self.observer.on_next((self.callback)(value))
     }
 
     fn on_terminal(self, terminal: Terminal<E>) {

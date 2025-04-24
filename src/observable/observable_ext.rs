@@ -34,26 +34,26 @@ pub trait ObservableExt: Sized {
 
     fn do_on_next<'or, 'sub, T, E, F>(self, callback: F) -> DoOnNext<Self, F>
     where
-        F: FnMut(&T),
         Self: Observable<'or, 'sub, T, E>,
+        F: FnMut(&T),
     {
         DoOnNext::new(self, callback)
     }
 
     fn do_on_terminal<'sub, 'or, T, E, F>(self, callback: F) -> DoOnTerminal<Self, F>
     where
-        F: FnOnce(&Terminal<E>),
         Self: Observable<'or, 'sub, T, E>,
+        F: FnOnce(&Terminal<E>),
     {
         DoOnTerminal::new(self, callback)
     }
 
-    fn map<'sub, 'or, T0, T, E, F>(self, f: F) -> Map<T0, Self, F>
+    fn map<'sub, 'or, T0, T, E, F>(self, callback: F) -> Map<T0, Self, F>
     where
-        F: FnMut(T0) -> T,
         Self: Observable<'or, 'sub, T0, E>,
+        F: FnMut(T0) -> T,
     {
-        Map::new(self, f)
+        Map::new(self, callback)
     }
 
     fn map_infallible_to_error(self) -> MapInfallibleToError<Self> {

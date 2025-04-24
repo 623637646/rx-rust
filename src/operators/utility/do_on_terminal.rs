@@ -15,8 +15,8 @@ pub struct DoOnTerminal<OE, F> {
 impl<OE, F> DoOnTerminal<OE, F> {
     pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
     where
-        F: FnOnce(&Terminal<E>),
         OE: Observable<'or, 'sub, T, E>,
+        F: FnOnce(&Terminal<E>),
     {
         Self { source, callback }
     }
