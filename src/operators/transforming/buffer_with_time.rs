@@ -16,14 +16,16 @@ pub struct BufferWithTime<OE, S> {
     source: OE,
     time_pan: Duration,
     scheduler: S,
+    delay: Option<Duration>,
 }
 
 impl<OE, S> BufferWithTime<OE, S> {
-    pub fn new(source: OE, time_pan: Duration, scheduler: S) -> Self {
+    pub fn new(source: OE, time_pan: Duration, scheduler: S, delay: Option<Duration>) -> Self {
         Self {
             source,
             time_pan,
             scheduler,
+            delay,
         }
     }
 }
@@ -48,7 +50,7 @@ where
                 }
             },
             self.time_pan,
-            Some(self.time_pan),
+            self.delay,
         );
         self.source.subscribe(observer) + disposal
     }
@@ -108,7 +110,11 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -156,7 +162,11 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -194,13 +204,118 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_completed_no_delay() {
+        let mut subject = PublishSubject::default();
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let observable = subject.clone();
+        let observable =
+            observable.buffer_with_time(Duration::from_millis(100), TokioScheduler, None);
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(checker.is_values_matched(&[vec![]]));
+        assert!(checker.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(checker.is_values_matched(&[vec![], vec![]]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(111);
+        assert!(checker.is_values_matched(&[vec![], vec![]]));
+        assert!(checker.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(222);
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(333);
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
+        assert!(checker.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
+        assert!(checker.is_unterminated());
+
+        subject.clone().on_terminal(Terminal::<&str>::Completed);
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
+        assert!(checker.is_completed());
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[tokio::test]
+    async fn test_completed_small_delay() {
+        let mut subject = PublishSubject::default();
+        let checker = CheckingObserver::new();
+
+        // Custom operations
+        let observable = subject.clone();
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(30)),
+        );
+
+        let subscription = observable.subscribe(checker.clone());
+        assert!(checker.is_values_matched(&[]));
+        assert!(checker.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert!(checker.is_values_matched(&[vec![]]));
+        assert!(checker.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(checker.is_values_matched(&[vec![], vec![]]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(111);
+        assert!(checker.is_values_matched(&[vec![], vec![]]));
+        assert!(checker.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(222);
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
+        assert!(checker.is_unterminated());
+
+        subject.on_next(333);
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
+        assert!(checker.is_unterminated());
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
+        assert!(checker.is_unterminated());
+
+        subject.clone().on_terminal(Terminal::<&str>::Completed);
+        assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
+        assert!(checker.is_completed());
+
+        _ = subscription; // keep the subscription alive
+    }
+
+    #[tokio::test]
     async fn test_error_last_empty() {
         let mut subject = PublishSubject::default();
         let checker = CheckingObserver::new();
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -248,7 +363,11 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -293,7 +412,11 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
@@ -364,7 +487,11 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -428,7 +555,11 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
@@ -495,8 +626,16 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
         let observable = observable
-            .buffer_with_time(Duration::from_millis(90), TokioScheduler)
-            .buffer_with_time(Duration::from_millis(100), TokioScheduler);
+            .buffer_with_time(
+                Duration::from_millis(90),
+                TokioScheduler,
+                Some(Duration::from_millis(90)),
+            )
+            .buffer_with_time(
+                Duration::from_millis(100),
+                TokioScheduler,
+                Some(Duration::from_millis(100)),
+            );
 
         let subscription = observable.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -540,8 +679,12 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let observable =
-            BufferWithTime::new(observable, Duration::from_millis(100), TokioScheduler);
+        let observable = BufferWithTime::new(
+            observable,
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -596,8 +739,11 @@ mod tests {
                 })
             });
 
-            let observable =
-                observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+            let observable = observable.buffer_with_time(
+                Duration::from_millis(100),
+                TokioScheduler,
+                Some(Duration::from_millis(100)),
+            );
 
             let checker: CheckingObserver<_, ()> = CheckingObserver::new();
             subscription = observable.subscribe(checker.clone());
@@ -613,7 +759,11 @@ mod tests {
             observer.on_terminal(Terminal::Error("error"));
             Subscription::new_none_disposal()
         });
-        let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = observable.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
         let _ = observable.clone(); // make sure it's Clone when T is not Clone.
     }
 
@@ -621,7 +771,11 @@ mod tests {
     async fn test_type_inference_with_subscribe() {
         // Custom operations
         let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-        let observable = subject.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = subject.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
 
         let observable = observable.buffer_with_count(1);
         let checker = CheckingObserver::new();
@@ -632,7 +786,11 @@ mod tests {
     fn test_type_inference_without_subscribe() {
         // Custom operations
         let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-        let observable = subject.buffer_with_time(Duration::from_millis(100), TokioScheduler);
+        let observable = subject.buffer_with_time(
+            Duration::from_millis(100),
+            TokioScheduler,
+            Some(Duration::from_millis(100)),
+        );
 
         let _ = observable.buffer_with_count(1);
     }

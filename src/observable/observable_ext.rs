@@ -25,8 +25,13 @@ pub trait ObservableExt: Sized {
         BufferWithCount::new(self, count)
     }
 
-    fn buffer_with_time<S>(self, time_pan: Duration, scheduler: S) -> BufferWithTime<Self, S> {
-        BufferWithTime::new(self, time_pan, scheduler)
+    fn buffer_with_time<S>(
+        self,
+        time_pan: Duration,
+        scheduler: S,
+        delay: Option<Duration>,
+    ) -> BufferWithTime<Self, S> {
+        BufferWithTime::new(self, time_pan, scheduler, delay)
     }
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
