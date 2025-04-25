@@ -44,25 +44,6 @@ where
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler + Send + 'or,
 {
-    // TODO: Do we need to use macro to generate this?
-    // ```text
-    // use std::sync::{Arc, Mutex};
-    // pub(crate) type ChainedSubscribeOR<OR> = Arc<Mutex<Option<OR>>>;
-    // #[macro_export]
-    // macro_rules! define_chained_subscribe {
-    //     ($builder:expr) => {
-    //         fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> $crate::subscription::Subscription {
-    //             let source_observer = std::sync::Arc::new(std::sync::Mutex::new(Some(observer)));
-    //             let subscription = $builder(self, source_observer.clone());
-    //             let disposal = $crate::subscription::disposable::CallbackDisposal::new(move || {
-    //                 let mut source_observer = source_observer.lock().unwrap();
-    //                 source_observer.take();
-    //             });
-    //             subscription + disposal
-    //         }
-    //     };
-    // }
-    // ```
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'static) -> Subscription<'sub> {
         let source_observer = Arc::new(Mutex::new(Some(observer)));
         let delay_observer = DelayObserver {
@@ -71,8 +52,7 @@ where
             scheduler: self.scheduler,
         };
         let disposal = CallbackDisposal::new(move || {
-            let mut source_observer = source_observer.lock().unwrap();
-            source_observer.take();
+            source_observer.lock().unwrap().take();
         });
         let subscription = self.source.subscribe(delay_observer);
         subscription + disposal
