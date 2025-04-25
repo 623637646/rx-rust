@@ -318,7 +318,6 @@ mod tests {
             });
 
             let checker = CheckingObserver::new();
-            checker.is_values_matched(&[1]);
             subscription = observable.subscribe(checker);
         }
 
