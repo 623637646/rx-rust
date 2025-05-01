@@ -176,8 +176,7 @@ mod tests {
         let error = 333;
 
         let (checker_1, observer_1) = Checker::new();
-        let (checker_2, observer_2) = Checker::<_, &str>::new();
-        let mut checker_2_cloned = checker_2.clone();
+        let (checker_2, mut observer_2) = Checker::<_, &str>::new();
 
         let mut subject = PublishSubject::default();
 
