@@ -45,7 +45,7 @@ mod tests {
     #[test]
     fn test_completed() {
         let (checker, observer) = Checker::new();
-        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        let mut boxed_observer = BoxedObserver::new(observer);
         boxed_observer.on_next(111);
         boxed_observer.on_terminal(Terminal::<&str>::Completed);
 
@@ -56,7 +56,7 @@ mod tests {
     #[test]
     fn test_error() {
         let (checker, observer) = Checker::new();
-        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        let mut boxed_observer = BoxedObserver::new(observer);
         boxed_observer.on_next(111);
         boxed_observer.on_terminal(Terminal::Error("error"));
 
@@ -69,7 +69,7 @@ mod tests {
         let value = 111;
         let error = 222;
         let (checker, observer) = Checker::new();
-        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        let mut boxed_observer = BoxedObserver::new(observer);
         boxed_observer.on_next(&value);
         boxed_observer.on_terminal(Terminal::Error(&error));
 
@@ -107,7 +107,7 @@ mod tests {
     async fn test_async() {
         let (checker, observer) = Checker::new();
         let checker_cloned = checker.clone();
-        let mut boxed_observer = tokio::spawn(async { BoxedObserver::new(checker_cloned) })
+        let mut boxed_observer = tokio::spawn(async { BoxedObserver::new(observer) })
             .await
             .unwrap();
         tokio::spawn(async move {
@@ -133,7 +133,7 @@ mod tests {
         {
             let (checker, mut observer) = Checker::<_, &str>::new();
             observer.on_next(&life_marker);
-            boxed_observer = BoxedObserver::new(checker);
+            boxed_observer = BoxedObserver::new(observer);
         }
 
         _ = boxed_observer;
