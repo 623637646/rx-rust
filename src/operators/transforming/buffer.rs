@@ -97,14 +97,14 @@ mod tests {
         observable::{Observable, observable_ext::ObservableExt},
         operators::creating::create::Create,
         subject::publish_subject::PublishSubject,
-        utils::tests_utils::{checker::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::Checker, test_struct::TestStruct},
     };
 
     #[tokio::test]
     async fn test_completed_last_empty() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -149,7 +149,7 @@ mod tests {
     async fn test_completed_last_not_empty() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -190,7 +190,7 @@ mod tests {
     async fn test_completed_from_boundary() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -232,7 +232,7 @@ mod tests {
     #[tokio::test]
     async fn test_completed_source_and_boundary_are_same() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -261,7 +261,7 @@ mod tests {
     async fn test_error_last_empty() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -306,7 +306,7 @@ mod tests {
     async fn test_error_last_not_empty() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -347,7 +347,7 @@ mod tests {
     async fn test_error_from_boundary() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -390,8 +390,8 @@ mod tests {
     async fn test_unsubscribe() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -462,7 +462,7 @@ mod tests {
 
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -539,7 +539,7 @@ mod tests {
     async fn test_async() {
         let subject = PublishSubject::default();
         let boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -609,8 +609,8 @@ mod tests {
     fn test_subscribe_by_different_observer() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -672,7 +672,7 @@ mod tests {
         let mut subject = PublishSubject::default();
         let mut boundary_subject_1 = PublishSubject::default();
         let mut boundary_subject_2 = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -737,7 +737,7 @@ mod tests {
     fn test_multiple_operation_same_boundary() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -784,7 +784,7 @@ mod tests {
     async fn test_without_convenient_api() {
         let mut subject = PublishSubject::default();
         let mut boundary_subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -848,7 +848,7 @@ mod tests {
             });
             let observable = observable.buffer(boundary_subject);
 
-            let checker: CheckingObserver<_, ()> = CheckingObserver::new();
+            let checker: Checker<_, ()> = Checker::new();
             subscription = observable.subscribe(checker.clone());
         }
 
@@ -875,7 +875,7 @@ mod tests {
         let observable = subject.buffer(boundary_subject);
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
         observable.subscribe(checker);
     }
 

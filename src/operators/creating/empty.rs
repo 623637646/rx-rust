@@ -21,13 +21,13 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Empty {
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_ext::ObservableExt, utils::tests_utils::checker::CheckingObserver,
+        observable::observable_ext::ObservableExt, utils::tests_utils::checker::Checker,
     };
 
     #[test]
     fn test_completed() {
         let observable = Empty;
-        let checker: CheckingObserver<i32, Infallible> = CheckingObserver::new();
+        let checker: Checker<i32, Infallible> = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -39,7 +39,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let observable = Empty;
-        let checker: CheckingObserver<i32, Infallible> = CheckingObserver::new();
+        let checker: Checker<i32, Infallible> = Checker::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -56,8 +56,8 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let observable = Empty;
-        let checker_1: CheckingObserver<i32, Infallible> = CheckingObserver::new();
-        let checker_2: CheckingObserver<i32, Infallible> = CheckingObserver::new();
+        let checker_1: Checker<i32, Infallible> = Checker::new();
+        let checker_2: Checker<i32, Infallible> = Checker::new();
 
         // Custom operations
         let observable_1 = observable.clone();
@@ -89,7 +89,7 @@ mod tests {
         let observable = Empty;
 
         let observable = observable.buffer_with_count(1);
-        let checker: CheckingObserver<Vec<i32>, Infallible> = CheckingObserver::new();
+        let checker: Checker<Vec<i32>, Infallible> = Checker::new();
         observable.subscribe(checker);
     }
 

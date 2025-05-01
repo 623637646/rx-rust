@@ -27,14 +27,14 @@ mod tests {
     use super::*;
     use crate::{
         observable::{Observable, observable_ext::ObservableExt},
-        utils::tests_utils::checker::CheckingObserver,
+        utils::tests_utils::checker::Checker,
     };
 
     #[test]
     fn test_completed() {
         let value = 111;
         let observable = Start::new(|| value + 222);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[333]));
@@ -47,7 +47,7 @@ mod tests {
     fn test_ref() {
         let value = 111;
         let observable = Start::new(|| &value);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[&value]));
@@ -60,7 +60,7 @@ mod tests {
     fn test_mut_ref() {
         let mut value = 111;
         let observable = Start::new(|| &mut value);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let mut checker_cloned_1 = checker.clone();
         let checker_cloned_2 = checker.clone();
@@ -83,7 +83,7 @@ mod tests {
     async fn test_async() {
         let value = 111;
         let observable = Start::new(|| value + 222);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -101,8 +101,8 @@ mod tests {
     fn test_subscribe_by_different_observer() {
         let value = 111;
         let observable = Start::new(|| value + 222);
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
 
         // Custom operations
         let observable_1 = observable.clone();
@@ -136,7 +136,7 @@ mod tests {
         let observable = Start::new(|| value + 222);
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
         observable.subscribe(checker);
     }
 

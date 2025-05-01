@@ -71,7 +71,7 @@ mod tests {
         observable::observable_ext::ObservableExt,
         observer::Terminal,
         subject::publish_subject::PublishSubject,
-        utils::tests_utils::{checker::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::Checker, test_struct::TestStruct},
     };
     use std::{convert::Infallible, time::Duration};
 
@@ -82,7 +82,7 @@ mod tests {
             observer.on_terminal(Terminal::<String>::Completed);
             Subscription::new_none_disposal()
         });
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[111]));
@@ -98,7 +98,7 @@ mod tests {
             observer.on_terminal(Terminal::Error("error"));
             Subscription::new_none_disposal()
         });
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[111]));
@@ -114,7 +114,7 @@ mod tests {
             Subscription::new_none_disposal()
         });
 
-        let checker: CheckingObserver<i32, String> = CheckingObserver::new();
+        let checker: Checker<i32, String> = Checker::new();
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[1]));
         assert!(checker.is_unterminated());
@@ -135,8 +135,8 @@ mod tests {
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
         });
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
 
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -187,7 +187,7 @@ mod tests {
             observer.on_terminal(Terminal::Error(&error));
             Subscription::new_none_disposal()
         });
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[&value]));
@@ -206,7 +206,7 @@ mod tests {
             observer.on_terminal(Terminal::Error(&mut error));
             Subscription::new_none_disposal()
         });
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let mut checker_cloned_1 = checker.clone();
         let checker_cloned_2 = checker.clone();
@@ -244,7 +244,7 @@ mod tests {
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
         });
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -277,8 +277,8 @@ mod tests {
             observer.on_terminal(Terminal::Error("error"));
             Subscription::new_none_disposal()
         });
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
 
         // Custom operations
         let observable_1 = observable.clone();
@@ -317,7 +317,7 @@ mod tests {
                 })
             });
 
-            let checker = CheckingObserver::new();
+            let checker = Checker::new();
             subscription = observable.subscribe(checker);
         }
 
@@ -340,7 +340,7 @@ mod tests {
                 Subscription::new_none_disposal()
             });
 
-            let mut checker: CheckingObserver<_, Infallible> = CheckingObserver::new();
+            let mut checker: Checker<_, Infallible> = Checker::new();
             checker.on_next(&life_marker_2);
             let subscription = observable.subscribe(checker);
 
@@ -375,7 +375,7 @@ mod tests {
         let mut subject = PublishSubject::default();
         let subject_cloned = subject.clone();
         let observable = Create::new(|observer| subject_cloned.subscribe(observer));
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -406,7 +406,7 @@ mod tests {
         });
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
         observable.subscribe(checker);
     }
 

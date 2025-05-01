@@ -40,7 +40,7 @@ mod tests {
     use super::*;
     use crate::{
         observable::observable_ext::ObservableExt,
-        utils::tests_utils::checker::CheckingObserver,
+        utils::tests_utils::checker::Checker,
     };
 
     #[test]
@@ -48,7 +48,7 @@ mod tests {
         let source = [1, 2, 3];
 
         let observable = FromIter::new(source);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[1, 2, 3]));
@@ -62,7 +62,7 @@ mod tests {
         let source = [1, 2, 3];
 
         let observable = FromIter::new(&source);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[&1, &2, &3]));
@@ -93,7 +93,7 @@ mod tests {
         let source: &[i32] = &[1, 2, 3];
 
         let observable = FromIter::new(source);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[&1, &2, &3]));
@@ -125,7 +125,7 @@ mod tests {
         let source = vec![1, 2, 3];
 
         let observable = FromIter::new(source);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[1, 2, 3]));
@@ -139,7 +139,7 @@ mod tests {
         let source = vec![1, 2, 3];
 
         let observable = FromIter::new(&source);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[&1, &2, &3]));
@@ -170,7 +170,7 @@ mod tests {
         let source = 100..103;
 
         let observable = FromIter::new(source);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[100, 101, 102]));
@@ -187,7 +187,7 @@ mod tests {
         let source = [&v1, &v2, &v3];
 
         let observable = FromIter::new(source);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[&v1, &v2, &v3]));
@@ -222,7 +222,7 @@ mod tests {
     async fn test_async() {
         let source = vec![1, 2, 3];
         let observable = FromIter::new(source);
-        let checker: CheckingObserver<i32, Infallible> = CheckingObserver::new();
+        let checker: Checker<i32, Infallible> = Checker::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -244,8 +244,8 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
 
         let subscription_1 = observable_1.subscribe(checker_1.clone());
 
@@ -275,7 +275,7 @@ mod tests {
         let observable = FromIter::new(source);
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
         observable.subscribe(checker);
     }
 

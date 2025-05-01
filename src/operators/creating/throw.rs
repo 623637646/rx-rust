@@ -40,15 +40,12 @@ impl<'or, 'sub, E> Observable<'or, 'sub, Infallible, E> for Throw<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observable::observable_ext::ObservableExt,
-        utils::tests_utils::checker::CheckingObserver,
-    };
+    use crate::{observable::observable_ext::ObservableExt, utils::tests_utils::checker::Checker};
 
     #[test]
     fn test_error() {
         let observable = Throw::new(111);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -62,7 +59,7 @@ mod tests {
         let error = 111;
 
         let observable = Throw::new(&error);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -76,7 +73,7 @@ mod tests {
         let mut error = 111;
 
         let observable = Throw::new(&mut error);
-        let checker: CheckingObserver<i32, i32> = CheckingObserver::new();
+        let checker: Checker<i32, i32> = Checker::new();
 
         let checker_cloned = checker.clone();
         let subscription = observable.subscribe_with_callback(
@@ -100,7 +97,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let observable = Throw::new(111);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -117,8 +114,8 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let observable = Throw::new(111);
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
 
         // Custom operations
         let observable_1 = observable.clone();
@@ -150,7 +147,7 @@ mod tests {
         let observable = Throw::new(111);
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
         observable.subscribe(checker);
     }
 

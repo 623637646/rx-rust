@@ -63,7 +63,7 @@ mod tests {
         observable::observable_ext::ObservableExt,
         operators::creating::create::Create,
         subject::publish_subject::PublishSubject,
-        utils::tests_utils::{checker::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::Checker, test_struct::TestStruct},
     };
     use std::{
         convert::Infallible,
@@ -73,8 +73,8 @@ mod tests {
     #[test]
     fn test_completed() {
         let mut subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2: CheckingObserver<(), _> = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2: Checker<(), _> = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -107,8 +107,8 @@ mod tests {
     #[test]
     fn test_error() {
         let mut subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2: CheckingObserver<(), _> = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2: Checker<(), _> = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -141,9 +141,9 @@ mod tests {
     #[test]
     fn test_unsubscribe() {
         let mut subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
-        let checker_3: CheckingObserver<(), _> = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
+        let checker_3: Checker<(), _> = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -203,8 +203,8 @@ mod tests {
         let value = 111;
         let error = 222;
 
-        let checker_1 = CheckingObserver::new();
-        let checker_2: CheckingObserver<(), _> = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2: Checker<(), _> = Checker::new();
         let checker_2_cloned = checker_2.clone();
 
         let mut subject = PublishSubject::default();
@@ -246,7 +246,7 @@ mod tests {
             observer.on_terminal(Terminal::Error(&mut error));
             Subscription::new_none_disposal()
         });
-        let checker: CheckingObserver<(), _> = CheckingObserver::new();
+        let checker: Checker<(), _> = Checker::new();
         let checker_cloned = checker.clone();
 
         // Custom operations
@@ -280,8 +280,8 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2: CheckingObserver<(), _> = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2: Checker<(), _> = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -329,8 +329,8 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let mut subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2 = Checker::new();
         let terminals = Arc::new(Mutex::new(Vec::new()));
 
         // Custom operations
@@ -376,7 +376,7 @@ mod tests {
     #[test]
     fn test_multiple_operation() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
         let terminals = Arc::new(Mutex::new(Vec::new()));
 
         // Custom operations
@@ -415,8 +415,8 @@ mod tests {
     #[test]
     fn test_without_convenient_api() {
         let mut subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2: CheckingObserver<(), _> = CheckingObserver::new();
+        let checker_1 = Checker::new();
+        let checker_2: Checker<(), _> = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -467,7 +467,7 @@ mod tests {
 
             let observable = observable.do_on_terminal(|_| {});
 
-            let checker = CheckingObserver::new();
+            let checker = Checker::new();
             subscription = observable.subscribe(checker);
         }
 
@@ -491,7 +491,7 @@ mod tests {
             });
             let observable = observable.do_on_terminal(|_| {});
 
-            let mut checker: CheckingObserver<_, Infallible> = CheckingObserver::new();
+            let mut checker: Checker<_, Infallible> = Checker::new();
             checker.on_next(Some(&life_marker_2));
             let subscription = observable.subscribe(checker);
 
@@ -532,7 +532,7 @@ mod tests {
         let observable = subject.do_on_terminal(|_| {});
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
+        let checker = Checker::new();
         observable.subscribe(checker);
     }
 
