@@ -493,7 +493,6 @@ mod tests {
             Some(Duration::from_millis(100)),
         );
 
-        let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
@@ -745,7 +744,7 @@ mod tests {
                 Some(Duration::from_millis(100)),
             );
 
-            let (checker, observer) = Checker::<_, ()>::new();
+            let (_, observer) = Checker::<_, ()>::new();
             subscription = observable.subscribe(observer);
         }
 
@@ -778,7 +777,7 @@ mod tests {
         );
 
         let observable = observable.buffer_with_count(1);
-        let (checker, observer) = Checker::new();
+        let (_, observer) = Checker::new();
         observable.subscribe(observer);
     }
 

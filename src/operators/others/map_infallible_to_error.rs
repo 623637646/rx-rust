@@ -198,7 +198,6 @@ mod tests {
         // Custom operations
         let observable = subject.clone().map_infallible_to_error();
 
-        let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
@@ -330,7 +329,7 @@ mod tests {
             });
             let observable = observable.map_infallible_to_error();
 
-            let (checker, observer) = Checker::<i32, String>::new();
+            let (_, observer) = Checker::<i32, String>::new();
             subscription = observable.subscribe(observer);
         }
 
@@ -351,7 +350,7 @@ mod tests {
         let observable = subject.map_infallible_to_error();
 
         let observable = observable.buffer_with_count(1);
-        let (checker, observer) = Checker::<_, String>::new();
+        let (_, observer) = Checker::<_, String>::new();
         observable.subscribe(observer);
     }
 

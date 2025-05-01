@@ -524,7 +524,7 @@ mod tests {
 
             let observable = observable.hook_on_terminal(|_, _| {});
 
-            let (checker, observer) = Checker::new();
+            let (_, observer) = Checker::new();
             subscription = observable.subscribe(observer);
         }
 
@@ -548,7 +548,7 @@ mod tests {
             });
             let observable = observable.hook_on_terminal(|_, _| {});
 
-            let (checker, mut observer) = Checker::<_, Infallible>::new();
+            let (_, mut observer) = Checker::<_, Infallible>::new();
             observer.on_next(Some(&life_marker_2));
             let subscription = observable.subscribe(observer);
 
@@ -589,7 +589,7 @@ mod tests {
         let observable = subject.hook_on_terminal(|_, _| {});
 
         let observable = observable.buffer_with_count(1);
-        let (checker, observer) = Checker::new();
+        let (_, observer) = Checker::new();
         observable.subscribe(observer);
     }
 

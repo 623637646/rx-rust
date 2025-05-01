@@ -201,7 +201,6 @@ mod tests {
         );
         let (checker, observer) = Checker::new();
 
-        let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
@@ -319,7 +318,7 @@ mod tests {
         let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
 
         let observable = observable.buffer_with_count(1);
-        let (checker, observer) = Checker::new();
+        let (_, observer) = Checker::new();
         observable.subscribe(observer);
     }
 

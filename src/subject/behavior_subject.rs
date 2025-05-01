@@ -250,7 +250,6 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[&-1]));
@@ -345,7 +344,7 @@ mod tests {
         // let life_marker = TestStruct;
 
         {
-            let (checker, mut observer) = Checker::<_, Infallible>::new();
+            let (_, mut observer) = Checker::<_, Infallible>::new();
             observer.on_next(Some(&life_marker));
             let subject = BehaviorSubject::new(None);
             subscription = subject.subscribe(observer);
@@ -448,7 +447,7 @@ mod tests {
         let observable = subject;
 
         let observable = observable.buffer_with_count(1);
-        let (checker, observer) = Checker::new();
+        let (_, observer) = Checker::new();
         observable.subscribe(observer);
     }
 

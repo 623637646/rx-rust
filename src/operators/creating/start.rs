@@ -84,7 +84,6 @@ mod tests {
         let observable = Start::new(|| value + 222);
         let (checker, observer) = Checker::new();
 
-        let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[333]));
@@ -135,7 +134,7 @@ mod tests {
         let observable = Start::new(|| value + 222);
 
         let observable = observable.buffer_with_count(1);
-        let (checker, observer) = Checker::new();
+        let (_, observer) = Checker::new();
         observable.subscribe(observer);
     }
 

@@ -258,7 +258,6 @@ mod tests {
         let observable = subject.clone();
         let observable = observable.map(|value| value.to_string());
 
-        let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
@@ -394,7 +393,7 @@ mod tests {
 
             let observable = observable.map(|value| value.to_string());
 
-            let (checker, observer) = Checker::new();
+            let (_, observer) = Checker::new();
             subscription = observable.subscribe(observer);
         }
 
@@ -418,7 +417,7 @@ mod tests {
             });
             let observable = observable.map(|_: i32| None);
 
-            let (checker, mut observer) = Checker::<_, Infallible>::new();
+            let (_, mut observer) = Checker::<_, Infallible>::new();
             observer.on_next(Some(&life_marker_2));
             let subscription = observable.subscribe(observer);
 
@@ -460,7 +459,7 @@ mod tests {
         let observable = subject.map(|value| value.to_string());
 
         let observable = observable.buffer_with_count(1);
-        let (checker, observer) = Checker::new();
+        let (_, observer) = Checker::new();
         observable.subscribe(observer);
     }
 

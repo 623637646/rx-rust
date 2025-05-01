@@ -192,7 +192,6 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move {
             let (on_next, on_terminal) = observer.into_callbacks();
             observable.subscribe_with_callback(on_next, on_terminal)

@@ -245,7 +245,6 @@ mod tests {
         });
         let (checker, observer) = Checker::new();
 
-        let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[1]));
@@ -316,7 +315,7 @@ mod tests {
                 })
             });
 
-            let (checker, observer) = Checker::new();
+            let (_, observer) = Checker::new();
             subscription = observable.subscribe(observer);
         }
 
@@ -339,7 +338,7 @@ mod tests {
                 Subscription::new_none_disposal()
             });
 
-            let (checker, mut observer) = Checker::<_, Infallible>::new();
+            let (_, mut observer) = Checker::<_, Infallible>::new();
             observer.on_next(&life_marker_2);
             let subscription = observable.subscribe(observer);
 
@@ -405,7 +404,7 @@ mod tests {
         });
 
         let observable = observable.buffer_with_count(1);
-        let (checker, observer) = Checker::new();
+        let (_, observer) = Checker::new();
         observable.subscribe(observer);
     }
 
