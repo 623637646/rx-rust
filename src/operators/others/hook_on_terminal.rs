@@ -71,6 +71,7 @@ mod tests {
     };
     use std::{
         convert::Infallible,
+        ops::Deref,
         sync::{Arc, Mutex},
     };
 
@@ -82,9 +83,8 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let checker_2_cloned = checker_2.clone();
         let observable = observable.hook_on_terminal(move |terminal, original| {
-            checker_2_cloned.on_terminal(terminal);
+            observer_2.on_terminal(terminal);
             original(Terminal::Error("error"));
         });
 
@@ -117,9 +117,8 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let checker_2_cloned = checker_2.clone();
         let observable = observable.hook_on_terminal(move |terminal, _| {
-            checker_2_cloned.on_terminal(terminal);
+            observer_2.on_terminal(terminal);
         });
 
         let subscription = observable.subscribe(observer_1);
@@ -151,9 +150,8 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let checker_2_cloned = checker_2.clone();
         let observable = observable.hook_on_terminal(move |terminal, original| {
-            checker_2_cloned.on_terminal(terminal);
+            observer_2.on_terminal(terminal);
             original(Terminal::Completed);
         });
 
@@ -180,15 +178,14 @@ mod tests {
 
     #[test]
     fn test_unsubscribe() {
+        let terminals = Arc::new(Mutex::new(Vec::new()));
         let mut subject = PublishSubject::default();
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
-        let (checker_3, observer_3) = Checker::<Infallible, _>::new();
 
         // Custom operations
         let observable = subject.clone();
-        let checker_3_cloned = checker_3.clone();
-        let observable = observable.hook_on_terminal(move |terminal, original| {
+        let observable = observable.hook_on_terminal(|terminal, original| {
             match terminal {
                 Terminal::Completed => panic!(),
                 Terminal::Error(error) => {
@@ -196,7 +193,7 @@ mod tests {
                     original(Terminal::Error("hooked"));
                 }
             }
-            checker_3_cloned.on_terminal(terminal);
+            terminals.lock().unwrap().push(terminal);
         });
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -207,40 +204,38 @@ mod tests {
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[]));
         assert!(checker_2.is_unterminated());
-        assert!(checker_3.is_values_matched(&[]));
-        assert!(checker_3.is_unterminated());
+        assert!(terminals.lock().unwrap().is_empty());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_unterminated());
-        assert!(checker_3.is_values_matched(&[]));
-        assert!(checker_3.is_unterminated());
+        assert!(terminals.lock().unwrap().is_empty());
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_unterminated());
-        assert!(checker_3.is_values_matched(&[]));
-        assert!(checker_3.is_unterminated());
+        assert!(terminals.lock().unwrap().is_empty());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_unterminated());
-        assert!(checker_3.is_values_matched(&[]));
-        assert!(checker_3.is_unterminated());
+        assert!(terminals.lock().unwrap().is_empty());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_error("hooked"));
-        assert!(checker_3.is_values_matched(&[]));
-        assert!(checker_3.is_error("error"));
+        assert_eq!(
+            terminals.lock().unwrap().deref(),
+            &[Terminal::Error("error")]
+        );
 
         _ = subscription_2; // keep the subscription alive
     }
@@ -253,14 +248,13 @@ mod tests {
 
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::<Infallible, _>::new();
-        let checker_2_cloned = checker_2.clone();
 
         let mut subject = PublishSubject::default();
 
         // Custom operations
         let observable = subject.clone();
         let observable = observable.hook_on_terminal(|terminal, original| {
-            checker_2_cloned.on_terminal(terminal);
+            observer_2.on_terminal(terminal);
             original(Terminal::Error(&error_2));
         });
 
@@ -340,15 +334,13 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let checker_2_cloned = checker_2.clone();
         let observable = observable.hook_on_terminal(move |terminal, original| {
-            checker_2_cloned.on_terminal(terminal);
+            observer_2.on_terminal(terminal);
             original(Terminal::Completed);
             panic!()
         });
 
-        let checker_cloned = checker_1.clone();
-        let handle = tokio::spawn(async move { observable.subscribe(observer) });
+        let handle = tokio::spawn(async move { observable.subscribe(observer_1) });
         let subscription = handle.await.unwrap();
         assert!(checker_1.is_values_matched(&[]));
         assert!(checker_1.is_unterminated());
@@ -440,15 +432,13 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let checker_2_cloned = checker_2.clone();
-        let checker_3_cloned = checker_3.clone();
         let observable = observable
             .hook_on_terminal(move |terminal, original| {
-                checker_2_cloned.on_terminal(terminal);
+                observer_2.on_terminal(terminal);
                 original(Terminal::Error("222"));
             })
             .hook_on_terminal(move |terminal, original| {
-                checker_3_cloned.on_terminal(terminal);
+                observer_3.on_terminal(terminal);
                 original(Terminal::Error("333"));
             });
 
@@ -487,9 +477,8 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let checker_2_cloned = checker_2.clone();
         let observable = HookOnTerminal::new(observable, move |terminal, original| {
-            checker_2_cloned.on_terminal(terminal);
+            observer_2.on_terminal(terminal);
             original(Terminal::Completed);
         });
 
