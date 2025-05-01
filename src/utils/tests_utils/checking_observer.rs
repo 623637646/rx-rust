@@ -5,17 +5,29 @@ use std::sync::{Arc, RwLock};
 /// A helper struct for testing observables.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub(crate) struct CheckingObserver<T, E> {
+pub(crate) struct Checker<T, E> {
     values: Arc<RwLock<Vec<T>>>,
     terminal: Arc<RwLock<Option<Terminal<E>>>>,
+    dropped: Arc<RwLock<bool>>,
 }
 
-impl<T, E> CheckingObserver<T, E> {
-    pub(crate) fn new() -> Self {
-        Self {
-            values: Arc::new(RwLock::new(Vec::new())),
-            terminal: Arc::new(RwLock::new(None)),
-        }
+impl<T, E> Checker<T, E> {
+    pub(crate) fn new() -> (Self, CheckerObserver<T, E>) {
+        let values = Arc::new(RwLock::new(Vec::new()));
+        let terminal = Arc::new(RwLock::new(None));
+        let dropped = Arc::new(RwLock::new(false));
+        (
+            Self {
+                values: values.clone(),
+                terminal: terminal.clone(),
+                dropped: dropped.clone(),
+            },
+            CheckerObserver {
+                values,
+                terminal,
+                dropped,
+            },
+        )
     }
 
     pub(crate) fn is_values_matched(&self, expected: &[T]) -> bool
@@ -28,7 +40,14 @@ impl<T, E> CheckingObserver<T, E> {
 
     pub(crate) fn is_unterminated(&self) -> bool {
         let terminal = self.terminal.read().unwrap();
-        terminal.is_none()
+        let dropped = self.dropped.read().unwrap();
+        terminal.is_none() && !*dropped
+    }
+
+    pub(crate) fn is_unsubscribed(&self) -> bool {
+        let terminal = self.terminal.read().unwrap();
+        let dropped = self.dropped.read().unwrap();
+        terminal.is_none() && *dropped
     }
 
     pub(crate) fn is_error(&self, expected: E) -> bool
@@ -43,7 +62,17 @@ impl<T, E> CheckingObserver<T, E> {
         let terminal = self.terminal.read().unwrap();
         matches!(*terminal, Some(Terminal::Completed))
     }
+}
 
+#[derive(Educe)]
+#[educe(Debug)]
+pub(crate) struct CheckerObserver<T, E> {
+    values: Arc<RwLock<Vec<T>>>,
+    terminal: Arc<RwLock<Option<Terminal<E>>>>,
+    dropped: Arc<RwLock<bool>>,
+}
+
+impl<T, E> CheckerObserver<T, E> {
     pub(crate) fn into_callbacks(
         self,
     ) -> (
@@ -54,16 +83,24 @@ impl<T, E> CheckingObserver<T, E> {
         T: Send + Sync,
         E: Send + Sync,
     {
-        let mut checker_cloned_1 = self.clone();
-        let checker_cloned_2 = self.clone();
+        let values = self.values.clone();
         (
-            move |value| checker_cloned_1.on_next(value),
-            |terminal| checker_cloned_2.on_terminal(terminal),
+            move |value| {
+                let mut values = values.write().unwrap();
+                values.push(value);
+            },
+            |terminal| self.on_terminal(terminal),
         )
     }
 }
 
-impl<T, E> Observer<T, E> for CheckingObserver<T, E> {
+impl<T, E> Drop for CheckerObserver<T, E> {
+    fn drop(&mut self) {
+        *self.dropped.write().unwrap() = true;
+    }
+}
+
+impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
     fn on_next(&mut self, value: T) {
         let mut values = self.values.write().unwrap();
         values.push(value);
