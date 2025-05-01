@@ -98,7 +98,7 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[-1]));
         assert!(checker.is_unterminated());
         assert!(subject.terminated().is_none());
@@ -127,7 +127,7 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[-1]));
         assert!(checker.is_unterminated());
         assert!(subject.terminated().is_none());
@@ -162,8 +162,8 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let subscription_1 = observable_1.subscribe(checker_1.clone());
-        let subscription_2 = observable_2.subscribe(checker_2.clone());
+        let subscription_1 = observable_1.subscribe(observer_1);
+        let subscription_2 = observable_2.subscribe(observer_2);
         assert!(checker_1.is_values_matched(&[-1]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[-1]));
@@ -221,7 +221,7 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[&value_1]));
         assert!(checker.is_unterminated());
         assert!(subject.terminated().is_none());
@@ -251,7 +251,7 @@ mod tests {
         let observable = subject.clone();
 
         let checker_cloned = checker.clone();
-        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[&-1]));
         assert!(checker.is_unterminated());
@@ -300,7 +300,7 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let subscription_1 = observable_1.subscribe(checker_1.clone());
+        let subscription_1 = observable_1.subscribe(observer_1);
 
         let (on_next, on_terminal) = checker_2.clone().into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
@@ -348,7 +348,7 @@ mod tests {
             let (checker, mut observer) = Checker::<_, Infallible>::new();
             checker.on_next(Some(&life_marker));
             let subject = BehaviorSubject::new(None);
-            subscription = subject.subscribe(checker);
+            subscription = subject.subscribe(observer);
         }
 
         _ = subscription; // keep the subscription alive
@@ -366,7 +366,7 @@ mod tests {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
-        let subscription_1 = subject.clone().subscribe(checker_1.clone());
+        let subscription_1 = subject.clone().subscribe(observer_1);
         assert!(checker_1.is_values_matched(&[-1]));
         assert!(checker_1.is_unterminated());
         assert!(checker_2.is_values_matched(&[]));
@@ -393,7 +393,7 @@ mod tests {
         ));
         assert_eq!(subject.value(), 111);
 
-        let subscription_2 = subject.clone().subscribe(checker_2.clone());
+        let subscription_2 = subject.clone().subscribe(observer_2);
         assert!(checker_1.is_values_matched(&[-1, 111]));
         assert!(checker_1.is_error("error"));
         assert!(checker_2.is_values_matched(&[]));
@@ -449,7 +449,7 @@ mod tests {
 
         let observable = observable.buffer_with_count(1);
         let (checker, observer) = Checker::new();
-        observable.subscribe(checker);
+        observable.subscribe(observer);
     }
 
     #[test]

@@ -22,7 +22,7 @@ mod tests {
         let observable = Never;
         let (checker, observer) = Checker::<i32, Infallible>::new();
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
 
@@ -35,7 +35,7 @@ mod tests {
         let (checker, observer) = Checker::<i32, Infallible>::new();
 
         let checker_cloned = checker.clone();
-        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_unterminated());
@@ -56,7 +56,7 @@ mod tests {
         let observable_1 = observable.clone();
         let observable_2 = observable_1.clone();
 
-        let subscription_1 = observable_1.subscribe(checker_1.clone());
+        let subscription_1 = observable_1.subscribe(observer_1);
 
         let (on_next, on_terminal) = checker_2.clone().into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
@@ -83,7 +83,7 @@ mod tests {
 
         let observable = observable.buffer_with_count(1);
         let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
-        observable.subscribe(checker);
+        observable.subscribe(observer);
     }
 
     #[test]
