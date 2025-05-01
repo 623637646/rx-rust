@@ -46,7 +46,7 @@ mod tests {
     use super::*;
     use crate::{
         observable::Observable, scheduler::tokio_scheduler::TokioScheduler,
-        utils::tests_utils::checking_observer::CheckingObserver,
+        utils::tests_utils::checker::CheckingObserver,
     };
 
     #[tokio::test]

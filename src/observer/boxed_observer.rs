@@ -40,7 +40,7 @@ impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct};
+    use crate::utils::tests_utils::{checker::CheckingObserver, test_struct::TestStruct};
 
     #[test]
     fn test_completed() {

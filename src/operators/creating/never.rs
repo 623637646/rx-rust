@@ -16,8 +16,7 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Never {
 mod tests {
     use super::*;
     use crate::{
-        observable::observable_ext::ObservableExt,
-        utils::tests_utils::checking_observer::CheckingObserver,
+        observable::observable_ext::ObservableExt, utils::tests_utils::checker::CheckingObserver,
     };
 
     #[test]

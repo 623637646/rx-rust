@@ -63,7 +63,7 @@ mod tests {
         observable::observable_ext::ObservableExt,
         operators::creating::create::Create,
         subject::publish_subject::PublishSubject,
-        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::CheckingObserver, test_struct::TestStruct},
     };
     use std::convert::Infallible;
 

@@ -31,7 +31,7 @@ mod tests {
         observer::Terminal,
         operators::creating::{create::Create, just::Just},
         subject::publish_subject::PublishSubject,
-        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::CheckingObserver, test_struct::TestStruct},
     };
     use std::convert::Infallible;
 

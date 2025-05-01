@@ -100,7 +100,7 @@ mod tests {
         operators::creating::create::Create,
         scheduler::tokio_scheduler::TokioScheduler,
         subject::publish_subject::PublishSubject,
-        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::CheckingObserver, test_struct::TestStruct},
     };
 
     #[tokio::test]

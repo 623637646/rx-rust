@@ -37,7 +37,7 @@ mod tests {
         operators::creating::{create::Create, just::Just},
         subject::publish_subject::PublishSubject,
         subscription::Subscription,
-        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::CheckingObserver, test_struct::TestStruct},
     };
 
     #[test]

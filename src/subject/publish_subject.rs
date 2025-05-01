@@ -94,7 +94,7 @@ mod tests {
     use super::*;
     use crate::observable::observable_ext::ObservableExt;
     use crate::observer::{Observer, Terminal};
-    use crate::utils::tests_utils::checking_observer::CheckingObserver;
+    use crate::utils::tests_utils::checker::CheckingObserver;
     use crate::utils::tests_utils::test_struct::TestStruct;
     use std::convert::Infallible;
 
