@@ -62,14 +62,13 @@ mod tests {
         let observable = Start::new(|| &mut value);
         let (checker, observer) = Checker::new();
 
-        let mut checker_cloned_1 = checker.clone();
-        let checker_cloned_2 = checker.clone();
+        let (mut on_next, on_terminal) = observer.into_callbacks();
         let subscription = observable.subscribe_with_callback(
             |value| {
-                observer_1.on_next(*value);
+                on_next(*value);
                 *value *= 2;
             },
-            |terminal| checker_cloned_2.on_terminal(terminal),
+            on_terminal,
         );
 
         assert!(checker.is_values_matched(&[111]));

@@ -175,17 +175,16 @@ mod tests {
         // Custom operations
         let observable = Defer::new(|| observable);
 
-        let mut checker_cloned_1 = checker.clone();
-        let checker_cloned_2 = checker.clone();
+        let (mut on_next, on_terminal) = observer.into_callbacks();
         let subscription = observable.subscribe_with_callback(
             |value| {
-                observer_1.on_next(*value);
+                on_next(*value);
                 *value *= 2;
             },
             |terminal| match terminal {
                 Terminal::Completed => panic!(),
                 Terminal::Error(error) => {
-                    checker_cloned_2.on_terminal(Terminal::Error(*error));
+                    on_terminal(Terminal::Error(*error));
                     *error *= 2;
                 }
             },

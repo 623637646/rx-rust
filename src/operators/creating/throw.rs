@@ -75,13 +75,13 @@ mod tests {
         let observable = Throw::new(&mut error);
         let (checker, observer) = Checker::<i32, i32>::new();
 
-        let checker_cloned = checker.clone();
+        let (_, on_terminal) = observer.into_callbacks();
         let subscription = observable.subscribe_with_callback(
             |_| unreachable!(),
             |terminal| match terminal {
                 Terminal::Completed => unreachable!(),
                 Terminal::Error(error) => {
-                    checker_cloned.on_terminal(Terminal::Error(*error));
+                    on_terminal(Terminal::Error(*error));
                     *error = 222;
                 }
             },

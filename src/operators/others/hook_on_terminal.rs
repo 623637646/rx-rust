@@ -297,14 +297,14 @@ mod tests {
             Subscription::new_none_disposal()
         });
         let (checker, observer) = Checker::<Infallible, _>::new();
-        let checker_cloned = checker.clone();
+        let (_, on_terminal) = observer.into_callbacks();
 
         // Custom operations
         let observable = observable.hook_on_terminal(|mut terminal, original| {
             match &mut terminal {
                 Terminal::Completed => panic!(),
                 Terminal::Error(error) => {
-                    checker_cloned.on_terminal(Terminal::Error(**error));
+                    on_terminal(Terminal::Error(**error));
                     **error *= 2;
                 }
             }
