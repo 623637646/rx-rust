@@ -172,7 +172,7 @@ mod tests {
         let checker_cloned_2 = checker.clone();
         let subscription = observable.subscribe_with_callback(
             |value| {
-                checker_cloned_1.on_next(*value);
+                observer_1.on_next(*value);
                 *value *= 2;
             },
             |terminal| checker_cloned_2.on_terminal(terminal),

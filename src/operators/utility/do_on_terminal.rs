@@ -492,7 +492,7 @@ mod tests {
             let observable = observable.do_on_terminal(|_| {});
 
             let (checker, mut observer) = Checker::<_, Infallible>::new();
-            checker.on_next(Some(&life_marker_2));
+            observer.on_next(Some(&life_marker_2));
             let subscription = observable.subscribe(observer);
 
             _ = subscription; // keep the subscription alive

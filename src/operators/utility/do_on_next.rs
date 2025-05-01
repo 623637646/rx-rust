@@ -77,7 +77,7 @@ mod tests {
         let observable = subject.clone();
         let mut checker_2_cloned = checker_2.clone();
         let observable = observable.do_on_next(move |value| {
-            checker_2_cloned.on_next(*value);
+            observer_2.on_next(*value);
         });
 
         let subscription = observable.subscribe(observer_1);
@@ -111,7 +111,7 @@ mod tests {
         let observable = subject.clone();
         let mut checker_2_cloned = checker_2.clone();
         let observable = observable.do_on_next(move |value| {
-            checker_2_cloned.on_next(*value);
+            observer_2.on_next(*value);
         });
 
         let subscription = observable.subscribe(observer_1);
@@ -146,7 +146,7 @@ mod tests {
         let observable = subject.clone();
         let mut checker_3_cloned = checker_3.clone();
         let observable = observable.do_on_next(move |value| {
-            checker_3_cloned.on_next(*value);
+            observer_3.on_next(*value);
         });
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -209,7 +209,7 @@ mod tests {
         // Custom operations
         let observable = subject.clone();
         let observable = observable.do_on_next(|value| {
-            checker_2_cloned.on_next(*value);
+            observer_2.on_next(*value);
         });
 
         let subscription = observable.subscribe(observer_1);
@@ -247,7 +247,7 @@ mod tests {
 
         // Custom operations
         let observable = observable.do_on_next(|value| {
-            checker.on_next(**value);
+            observer.on_next(**value);
         });
 
         let subscription = observable.subscribe_with_callback(
@@ -280,7 +280,7 @@ mod tests {
         let observable = subject.clone();
         let mut checker_2_cloned = checker_2.clone();
         let observable = observable.do_on_next(move |value| {
-            checker_2_cloned.on_next(*value);
+            observer_2.on_next(*value);
         });
 
         let checker_cloned = checker_1.clone();
@@ -330,7 +330,7 @@ mod tests {
         let observable = subject.clone();
         let mut checker_3_cloned = checker_3.clone();
         let observable = observable.do_on_next(move |value| {
-            checker_3_cloned.on_next(*value);
+            observer_3.on_next(*value);
         });
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -379,10 +379,10 @@ mod tests {
         let mut checker_3_cloned = checker_3.clone();
         let observable = observable
             .do_on_next(move |value| {
-                checker_2_cloned.on_next(*value);
+                observer_2.on_next(*value);
             })
             .do_on_next(move |value| {
-                checker_3_cloned.on_next(*value);
+                observer_3.on_next(*value);
             });
 
         let subscription = observable.subscribe(observer_1);
@@ -422,7 +422,7 @@ mod tests {
         let observable = subject.clone();
         let mut checker_2_cloned = checker_2.clone();
         let observable = DoOnNext::new(observable, move |value| {
-            checker_2_cloned.on_next(*value);
+            observer_2.on_next(*value);
         });
 
         let subscription = observable.subscribe(observer_1);
@@ -492,7 +492,7 @@ mod tests {
             let observable = observable.do_on_next(|_| {});
 
             let (checker, mut observer) = Checker::<_, Infallible>::new();
-            checker.on_next(Some(&life_marker_2));
+            observer.on_next(Some(&life_marker_2));
             let subscription = observable.subscribe(observer);
 
             _ = subscription; // keep the subscription alive

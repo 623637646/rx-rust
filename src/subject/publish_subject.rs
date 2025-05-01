@@ -332,7 +332,7 @@ mod tests {
 
         {
             let (checker, mut observer) = Checker::<_, Infallible>::new();
-            checker.on_next(&life_marker);
+            observer.on_next(&life_marker);
             let subject = PublishSubject::default();
             subscription = subject.subscribe(observer);
         }

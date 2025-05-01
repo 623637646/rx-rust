@@ -132,7 +132,7 @@ mod tests {
 
         {
             let (checker, mut observer) = Checker::<_, &str>::new();
-            checker.on_next(&life_marker);
+            observer.on_next(&life_marker);
             boxed_observer = BoxedObserver::new(checker);
         }
 

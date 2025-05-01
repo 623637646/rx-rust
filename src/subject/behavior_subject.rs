@@ -346,7 +346,7 @@ mod tests {
 
         {
             let (checker, mut observer) = Checker::<_, Infallible>::new();
-            checker.on_next(Some(&life_marker));
+            observer.on_next(Some(&life_marker));
             let subject = BehaviorSubject::new(None);
             subscription = subject.subscribe(observer);
         }

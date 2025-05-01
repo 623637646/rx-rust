@@ -164,7 +164,7 @@ mod tests {
         let checker_cloned_2 = checker.clone();
         let subscription = observable.subscribe_with_callback(
             |value| {
-                checker_cloned_1.on_next(*value);
+                observer_1.on_next(*value);
                 *value *= 2;
             },
             |terminal| checker_cloned_2.on_terminal(terminal),
@@ -294,7 +294,7 @@ mod tests {
             let observable = BoxedObservable::new(observable);
 
             let (checker, mut observer) = Checker::<_, Infallible>::new();
-            checker.on_next(Some(&life_marker_2));
+            observer.on_next(Some(&life_marker_2));
             let subscription = observable.subscribe(observer);
 
             _ = subscription; // keep the subscription alive
