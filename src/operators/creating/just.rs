@@ -49,15 +49,12 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Just<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observable::observable_ext::ObservableExt,
-        utils::tests_utils::checker::Checker,
-    };
+    use crate::{observable::observable_ext::ObservableExt, utils::tests_utils::checker::Checker};
 
     #[test]
     fn test_completed() {
         let observable = Just::new(111);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[111]));
@@ -71,7 +68,7 @@ mod tests {
         let value = 111;
 
         let observable = Just::new(&value);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[&value]));
@@ -85,7 +82,7 @@ mod tests {
         let mut value = 111;
 
         let observable = Just::new(&mut value);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let mut checker_cloned_1 = checker.clone();
         let checker_cloned_2 = checker.clone();
@@ -107,7 +104,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let observable = Just::new(111);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -124,8 +121,8 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let observable = Just::new(111);
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable_1 = observable.clone();
@@ -157,7 +154,7 @@ mod tests {
         let observable = Just::new(111);
 
         let observable = observable.buffer_with_count(1);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
         observable.subscribe(checker);
     }
 

@@ -70,7 +70,7 @@ mod tests {
     #[test]
     fn test_completed() {
         let mut subject = PublishSubject::default();
-        let checker: Checker<i32, String> = Checker::new();
+        let (checker, observer) = Checker::<i32, String>::new();
 
         // Custom operations
         let observable = subject.clone().map_infallible_to_error();
@@ -93,8 +93,8 @@ mod tests {
     #[test]
     fn test_unsubscribe() {
         let mut subject = PublishSubject::default();
-        let checker_1: Checker<i32, String> = Checker::new();
-        let checker_2: Checker<i32, i32> = Checker::new();
+        let (checker_1, observer_1) = Checker::<i32, String>::new();
+        let (checker_2, observer_2) = Checker::<i32, i32>::new();
 
         // Custom operations
         let observable = subject.clone().map_infallible_to_error();
@@ -140,7 +140,7 @@ mod tests {
         let value = 111;
 
         let mut subject = PublishSubject::default();
-        let checker: Checker<&i32, String> = Checker::new();
+        let (checker, observer) = Checker::<&i32, String>::new();
 
         // Custom operations
         let observable = subject.clone().map_infallible_to_error();
@@ -193,7 +193,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let subject = PublishSubject::default();
-        let checker: Checker<&i32, String> = Checker::new();
+        let (checker, observer) = Checker::<&i32, String>::new();
 
         // Custom operations
         let observable = subject.clone().map_infallible_to_error();
@@ -229,8 +229,8 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let mut subject = PublishSubject::default();
-        let checker_1: Checker<i32, String> = Checker::new();
-        let checker_2: Checker<i32, i32> = Checker::new();
+        let (checker_1, observer_1) = Checker::<i32, String>::new();
+        let (checker_2, observer_2) = Checker::<i32, i32>::new();
 
         // Custom operations
         let observable = subject.clone().map_infallible_to_error();
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn test_multiple_operation() {
         let mut subject = PublishSubject::default();
-        let checker: Checker<_, String> = Checker::new();
+        let (checker, observer) = Checker::<_, String>::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -291,7 +291,7 @@ mod tests {
     #[test]
     fn test_without_convenient_api() {
         let mut subject = PublishSubject::default();
-        let checker: Checker<i32, String> = Checker::new();
+        let (checker, observer) = Checker::<i32, String>::new();
 
         // Custom operations
         let observable = MapInfallibleToError::new(subject.clone());
@@ -330,7 +330,7 @@ mod tests {
             });
             let observable = observable.map_infallible_to_error();
 
-            let checker: Checker<i32, String> = Checker::new();
+            let (checker, observer) = Checker::<i32, String>::new();
             subscription = observable.subscribe(checker);
         }
 
@@ -351,7 +351,7 @@ mod tests {
         let observable = subject.map_infallible_to_error();
 
         let observable = observable.buffer_with_count(1);
-        let checker: Checker<_, String> = Checker::new();
+        let (checker, observer) = Checker::<_, String>::new();
         observable.subscribe(checker);
     }
 

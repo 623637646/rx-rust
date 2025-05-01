@@ -60,7 +60,7 @@ mod tests {
     #[test]
     fn test_completed() {
         let mut subject: PublishSubject<'_, _, String> = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone().map_value_to_void();
@@ -83,8 +83,8 @@ mod tests {
     #[test]
     fn test_unsubscribe() {
         let mut subject: PublishSubject<'_, _, String> = PublishSubject::default();
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone().map_value_to_void();
@@ -130,7 +130,7 @@ mod tests {
         let value = 111;
 
         let mut subject: PublishSubject<'_, _, String> = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone().map_value_to_void();
@@ -181,7 +181,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let subject: PublishSubject<'_, _, String> = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone().map_value_to_void();
@@ -217,8 +217,8 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let mut subject: PublishSubject<'_, _, String> = PublishSubject::default();
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone().map_value_to_void();
@@ -253,7 +253,7 @@ mod tests {
     #[test]
     fn test_multiple_operation() {
         let mut subject: PublishSubject<'_, _, String> = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -277,7 +277,7 @@ mod tests {
     #[test]
     fn test_without_convenient_api() {
         let mut subject: PublishSubject<'_, _, String> = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = MapValueToVoid::new(subject.clone());
@@ -317,7 +317,7 @@ mod tests {
             });
             let observable = observable.map_value_to_void();
 
-            let checker = Checker::new();
+            let (checker, observer) = Checker::new();
             subscription = observable.subscribe(checker);
         }
 
@@ -338,7 +338,7 @@ mod tests {
         let observable = subject.map_value_to_void();
 
         let observable = observable.buffer_with_count(1);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
         observable.subscribe(checker);
     }
 

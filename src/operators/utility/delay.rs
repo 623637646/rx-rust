@@ -123,7 +123,7 @@ mod tests {
     #[tokio::test]
     async fn test_completed() {
         let mut subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -177,7 +177,7 @@ mod tests {
     #[tokio::test]
     async fn test_error() {
         let mut subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -231,9 +231,9 @@ mod tests {
     #[tokio::test]
     async fn test_unsubscribe() {
         let mut subject = PublishSubject::default();
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
-        let checker_3 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
+        let (checker_3, observer_3) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -348,7 +348,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -393,8 +393,8 @@ mod tests {
     #[tokio::test]
     async fn test_subscribe_by_different_observer() {
         let mut subject = PublishSubject::default();
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -442,7 +442,7 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_operation() {
         let mut subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -484,7 +484,7 @@ mod tests {
     #[tokio::test]
     async fn test_without_convenient_api() {
         let mut subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -556,7 +556,7 @@ mod tests {
 
             let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
 
-            let checker = Checker::new();
+            let (checker, observer) = Checker::new();
             subscription = observable.subscribe(checker);
         }
 
@@ -577,7 +577,7 @@ mod tests {
         let observable = subject.delay(Duration::from_millis(100), TokioScheduler);
 
         let observable = observable.buffer_with_count(1);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
         observable.subscribe(checker);
     }
 

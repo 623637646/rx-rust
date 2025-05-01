@@ -36,7 +36,7 @@ mod tests {
     #[test]
     fn test_completed() {
         let observable = Repeat::new(3, 4);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[3, 3, 3, 3]));
@@ -49,7 +49,7 @@ mod tests {
     fn test_ref() {
         let value = 1;
         let observable = Repeat::new(&value, 4);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[&value, &value, &value, &value]));
@@ -61,7 +61,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let observable = Repeat::new(3, 4);
-        let checker: Checker<i32, Infallible> = Checker::new();
+        let (checker, observer) = Checker::<i32, Infallible>::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -81,8 +81,8 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         let subscription_1 = observable_1.subscribe(checker_1.clone());
 
@@ -110,7 +110,7 @@ mod tests {
         let observable = Repeat::new(3, 4);
 
         let observable = observable.buffer_with_count(1);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
         observable.subscribe(checker);
     }
 

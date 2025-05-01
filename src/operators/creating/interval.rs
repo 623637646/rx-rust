@@ -52,7 +52,7 @@ mod tests {
     #[tokio::test]
     async fn test_completed_no_delay() {
         let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
 
@@ -89,7 +89,7 @@ mod tests {
             TokioScheduler,
             Some(Duration::from_millis(100)),
         );
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -127,8 +127,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_unsubscribe() {
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = Interval::new(
@@ -199,7 +199,7 @@ mod tests {
             TokioScheduler,
             Some(Duration::from_millis(100)),
         );
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -240,8 +240,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_subscribe_by_different_observer() {
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = Interval::new(
@@ -319,7 +319,7 @@ mod tests {
         let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
 
         let observable = observable.buffer_with_count(1);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
         observable.subscribe(checker);
     }
 

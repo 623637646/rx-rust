@@ -42,7 +42,7 @@ mod tests {
     #[test]
     fn test_completed() {
         let mut subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -66,7 +66,7 @@ mod tests {
     #[test]
     fn test_error() {
         let mut subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -90,8 +90,8 @@ mod tests {
     #[test]
     fn test_unsubscribe() {
         let mut subject = PublishSubject::default();
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -139,7 +139,7 @@ mod tests {
         let error = 222;
 
         let mut subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -170,7 +170,7 @@ mod tests {
             observer.on_terminal(Terminal::Error(&mut error));
             Subscription::new_none_disposal()
         });
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = Defer::new(|| observable);
@@ -202,7 +202,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let subject = PublishSubject::default();
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -239,8 +239,8 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let mut subject = PublishSubject::default();
-        let checker_1 = Checker::new();
-        let checker_2 = Checker::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -293,7 +293,7 @@ mod tests {
             });
             let observable = Defer::new(|| observable);
 
-            let checker = Checker::new();
+            let (checker, observer) = Checker::new();
             subscription = observable.subscribe(checker);
         }
 
@@ -334,14 +334,14 @@ mod tests {
                 BoxedObservable::new(observable.map(|value| value * 2))
             }
         });
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
         let subscription = observable.clone().subscribe(checker.clone());
         assert!(checker.is_values_matched(&[222]));
         assert!(checker.is_completed());
         _ = subscription; // keep the subscription alive
 
         *switch.lock().unwrap() = true;
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_completed());
@@ -355,7 +355,7 @@ mod tests {
         let observable = Defer::new(|| subject);
 
         let observable = observable.buffer_with_count(1);
-        let checker = Checker::new();
+        let (checker, observer) = Checker::new();
         observable.subscribe(checker);
     }
 

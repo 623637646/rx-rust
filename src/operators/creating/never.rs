@@ -15,14 +15,12 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Never {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observable::observable_ext::ObservableExt, utils::tests_utils::checker::Checker,
-    };
+    use crate::{observable::observable_ext::ObservableExt, utils::tests_utils::checker::Checker};
 
     #[test]
     fn test_unterminated() {
         let observable = Never;
-        let checker: Checker<i32, Infallible> = Checker::new();
+        let (checker, observer) = Checker::<i32, Infallible>::new();
 
         let subscription = observable.subscribe(checker.clone());
         assert!(checker.is_values_matched(&[]));
@@ -34,7 +32,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let observable = Never;
-        let checker: Checker<i32, Infallible> = Checker::new();
+        let (checker, observer) = Checker::<i32, Infallible>::new();
 
         let checker_cloned = checker.clone();
         let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
@@ -51,8 +49,8 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let observable = Never;
-        let checker_1: Checker<i32, Infallible> = Checker::new();
-        let checker_2: Checker<i32, Infallible> = Checker::new();
+        let (checker_1, observer_1) = Checker::<i32, Infallible>::new();
+        let (checker_2, observer_2) = Checker::<i32, Infallible>::new();
 
         // Custom operations
         let observable_1 = observable.clone();
@@ -84,7 +82,7 @@ mod tests {
         let observable = Never;
 
         let observable = observable.buffer_with_count(1);
-        let checker: Checker<Vec<i32>, Infallible> = Checker::new();
+        let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
         observable.subscribe(checker);
     }
 
