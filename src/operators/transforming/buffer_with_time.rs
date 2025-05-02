@@ -72,18 +72,16 @@ where
     }
 
     fn on_terminal(self, terminal: Terminal<E>) {
-        match terminal {
-            Terminal::Completed => {
-                if let Some(mut observer) = self.observer.lock().unwrap().take() {
+        if let Some(mut observer) = self.observer.lock().unwrap().take() {
+            match terminal {
+                Terminal::Completed => {
                     let mut values = self.values.lock().unwrap();
                     if !values.is_empty() {
                         observer.on_next(std::mem::take(&mut values));
                     }
                     observer.on_terminal(Terminal::Completed);
                 }
-            }
-            Terminal::Error(error) => {
-                if let Some(observer) = self.observer.lock().unwrap().take() {
+                Terminal::Error(error) => {
                     observer.on_terminal(Terminal::Error(error));
                 }
             }
