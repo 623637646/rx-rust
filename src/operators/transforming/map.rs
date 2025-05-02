@@ -150,19 +150,19 @@ mod tests {
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&["111".to_owned()]));
         assert!(checker_2.is_unterminated());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&["111".to_owned(), "222".to_owned()]));
         assert!(checker_2.is_unterminated());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&["111".to_owned(), "222".to_owned()]));
         assert!(checker_2.is_error("error"));
 
@@ -173,6 +173,7 @@ mod tests {
     fn test_ref() {
         let value_1 = 111;
         let value_2 = 222;
+        let value_2_ref = &value_2;
         let error = 333;
 
         let (checker_1, observer_1) = Checker::new();
@@ -182,9 +183,9 @@ mod tests {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.map(|value| {
+        let observable = observable.map(move |value| {
             observer_2.on_next(value);
-            &value_2
+            value_2_ref
         });
 
         let subscription = observable.subscribe(observer_1);
@@ -203,7 +204,7 @@ mod tests {
         assert!(checker_1.is_values_matched(&[&value_2]));
         assert!(checker_1.is_error(&error));
         assert!(checker_2.is_values_matched(&[&value_1]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_unsubscribed());
 
         _ = subscription; // keep the subscription alive
     }
@@ -274,7 +275,7 @@ mod tests {
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -282,7 +283,7 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
     }
 
     #[test]

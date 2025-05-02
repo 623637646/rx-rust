@@ -181,7 +181,7 @@ mod tests {
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&[-1, 111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[-1, 111]));
         assert!(checker_2.is_unterminated());
         assert!(subject.terminated().is_none());
@@ -189,7 +189,7 @@ mod tests {
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[-1, 111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[-1, 111, 222]));
         assert!(checker_2.is_unterminated());
         assert!(subject.terminated().is_none());
@@ -197,7 +197,7 @@ mod tests {
 
         subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[-1, 111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[-1, 111, 222]));
         assert!(checker_2.is_error("error"));
         assert!(matches!(
@@ -270,7 +270,7 @@ mod tests {
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[&-1, &111]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
         assert!(subject.terminated().is_none());
         assert_eq!(subject.value(), &111);
 
@@ -280,7 +280,7 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[&-1, &111]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
         assert!(matches!(
             subject.terminated(),
             Some(Terminal::Error("error"))

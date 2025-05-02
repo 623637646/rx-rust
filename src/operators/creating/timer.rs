@@ -95,7 +95,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[]));
         assert!(checker_2.is_unterminated());
         assert!(checker_3.is_values_matched(&[]));
@@ -105,9 +105,9 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_unsubscribed());
         assert!(checker_3.is_values_matched(&[111]));
         assert!(checker_3.is_completed());
 

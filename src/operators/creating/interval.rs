@@ -71,15 +71,15 @@ mod tests {
         subscription.unsubscribe();
 
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
     }
 
     #[tokio::test]
@@ -114,15 +114,15 @@ mod tests {
         subscription.unsubscribe();
 
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
     }
 
     #[tokio::test]
@@ -173,19 +173,19 @@ mod tests {
         subscription_1.unsubscribe();
 
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[0, 1, 2]));
         assert!(checker_2.is_unterminated());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[0, 1, 2, 3]));
         assert!(checker_2.is_unterminated());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[0, 1, 2, 3, 4]));
         assert!(checker_2.is_unterminated());
 
@@ -226,15 +226,15 @@ mod tests {
         handle.await.unwrap();
 
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
     }
 
     #[tokio::test]
@@ -289,21 +289,21 @@ mod tests {
         subscription_2.unsubscribe();
 
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[0, 1, 2]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[0, 1, 2]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[0, 1, 2]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_unsubscribed());
     }
 
     #[tokio::test]

@@ -135,7 +135,7 @@ mod tests {
 
         subject.on_terminal(Terminal::<&str>::Completed);
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[]));
         assert!(checker_2.is_completed());
 
@@ -215,21 +215,21 @@ mod tests {
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_unterminated());
         assert!(terminals.lock().unwrap().is_empty());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_unterminated());
         assert!(terminals.lock().unwrap().is_empty());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_error("hooked"));
         assert_eq!(
@@ -360,9 +360,9 @@ mod tests {
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_unsubscribed());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -370,9 +370,9 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_unsubscribed());
     }
 
     #[test]

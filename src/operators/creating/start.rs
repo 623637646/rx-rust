@@ -27,7 +27,7 @@ mod tests {
     use super::*;
     use crate::{
         observable::{Observable, observable_ext::ObservableExt},
-        utils::tests_utils::checker::Checker,
+        utils::tests_utils::{checker::Checker, test_struct::TestStruct},
     };
 
     #[test]
@@ -118,6 +118,16 @@ mod tests {
 
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive
+    }
+
+    #[test]
+    fn test_fn() {
+        let s = TestStruct;
+        let observable = Start::new(|| {
+            s.consume();
+            222
+        });
+        observable.subscribe_with_callback(|_| {}, |_| {});
     }
 
     #[test]

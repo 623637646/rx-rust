@@ -24,7 +24,7 @@ mod tests {
 
         let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         _ = subscription; // keep the subscription alive
     }
@@ -37,12 +37,12 @@ mod tests {
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
     }
 
     #[test]
@@ -61,9 +61,9 @@ mod tests {
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
 
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_unsubscribed());
 
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive

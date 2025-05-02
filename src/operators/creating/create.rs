@@ -117,7 +117,7 @@ mod tests {
         let (checker, observer) = Checker::<i32, String>::new();
         let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[1]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
         _ = subscription; // keep the subscription alive
     }
 
@@ -164,13 +164,13 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[1, 2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[1, 2, 3]));
         assert!(checker_2.is_unterminated());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[1, 2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[1, 2, 3]));
         assert!(checker_2.is_completed());
 
@@ -261,11 +261,11 @@ mod tests {
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[1, 2]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
     }
 
     #[test]
@@ -387,11 +387,11 @@ mod tests {
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[111]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&[111]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_unsubscribed());
     }
 
     #[test]
