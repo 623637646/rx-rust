@@ -1,5 +1,5 @@
-use crate::observer::{Observer, Terminal};
 use educe::Educe;
+use rx_rust::observer::{Observer, Terminal};
 use std::sync::{Arc, RwLock};
 
 /// A helper struct for testing observables.
