@@ -33,6 +33,7 @@ where
         let disposal = self.scheduler.schedule_period(
             move |count| {
                 observer.on_next(count);
+                false
             },
             self.period,
             self.delay,

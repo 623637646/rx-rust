@@ -47,6 +47,9 @@ where
                 if let Some(observer) = observer_cloned.observer.lock().unwrap().as_mut() {
                     let mut values = observer_cloned.values.lock().unwrap();
                     observer.on_next(std::mem::take(&mut values));
+                    false
+                } else {
+                    true
                 }
             },
             self.time_pan,
