@@ -2,7 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
     scheduler::Scheduler,
-    subscription::Subscription,
+    subscription::{Subscription, disposable::CallbackDisposal},
 };
 use educe::Educe;
 use std::{
@@ -42,7 +42,7 @@ where
             values: Arc::new(Mutex::new(Vec::default())),
         };
         let observer_cloned = observer.clone();
-        let disposal = self.scheduler.schedule_period(
+        let disposal_1 = self.scheduler.schedule_period(
             move |_| {
                 if let Some(observer) = observer_cloned.observer.lock().unwrap().as_mut() {
                     let mut values = observer_cloned.values.lock().unwrap();
@@ -52,7 +52,11 @@ where
             self.time_pan,
             self.delay,
         );
-        self.source.subscribe(observer) + disposal
+        let observer_cloned = observer.clone();
+        let disposal_2 = CallbackDisposal::new(move || {
+            observer_cloned.observer.lock().unwrap().take();
+        });
+        self.source.subscribe(observer) + disposal_1 + disposal_2
     }
 }
 
