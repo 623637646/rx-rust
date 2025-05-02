@@ -69,6 +69,64 @@ async fn test_completed() {
 }
 
 #[tokio::test]
+async fn test_completed_then_error() {
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    subject.on_next(111);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    subject.on_next(222);
+    subject.on_next(333);
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert!(checker.is_active());
+
+    subject.on_next(444);
+    subject.clone().on_terminal(Terminal::<&str>::Completed);
+    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert!(checker.is_active());
+
+    subject.on_terminal(Terminal::Error("error"));
+    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(checker.is_values_matched(&[111, 222, 333, 444]));
+    assert!(checker.is_completed());
+
+    _ = subscription; // keep the subscription alive
+}
+
+#[tokio::test]
 async fn test_error() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
