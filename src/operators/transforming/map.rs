@@ -71,26 +71,26 @@ mod tests {
         observable::observable_ext::ObservableExt,
         operators::creating::create::Create,
         subject::publish_subject::PublishSubject,
-        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::Checker, test_struct::TestStruct},
     };
     use std::convert::Infallible;
 
     #[test]
     fn test_completed() {
         let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
         let observable = observable.map(|value| value.to_string());
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&["111".to_owned()]));
@@ -102,19 +102,19 @@ mod tests {
     #[test]
     fn test_error() {
         let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
         let observable = observable.map(|value| value.to_string());
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&["111".to_owned()]));
@@ -126,8 +126,8 @@ mod tests {
     #[test]
     fn test_unsubscribe() {
         let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -135,34 +135,34 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let subscription_1 = observable_1.subscribe(checker_1.clone());
-        let subscription_2 = observable_2.subscribe(checker_2.clone());
+        let subscription_1 = observable_1.subscribe(observer_1);
+        let subscription_2 = observable_2.subscribe(observer_2);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&["111".to_owned()]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&["111".to_owned()]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&["111".to_owned(), "222".to_owned()]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&["111".to_owned(), "222".to_owned()]));
         assert!(checker_2.is_error("error"));
 
@@ -173,38 +173,38 @@ mod tests {
     fn test_ref() {
         let value_1 = 111;
         let value_2 = 222;
+        let value_2_ref = &value_2;
         let error = 333;
 
-        let checker_1 = CheckingObserver::new();
-        let checker_2: CheckingObserver<_, &str> = CheckingObserver::new();
-        let mut checker_2_cloned = checker_2.clone();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, mut observer_2) = Checker::<_, &str>::new();
 
         let mut subject = PublishSubject::default();
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.map(|value| {
-            checker_2_cloned.on_next(value);
-            &value_2
+        let observable = observable.map(move |value| {
+            observer_2.on_next(value);
+            value_2_ref
         });
 
-        let subscription = observable.subscribe(checker_1.clone());
+        let subscription = observable.subscribe(observer_1);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(&value_1);
         assert!(checker_1.is_values_matched(&[&value_2]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[&value_1]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_terminal(Terminal::Error(&error));
         assert!(checker_1.is_values_matched(&[&value_2]));
         assert!(checker_1.is_error(&error));
         assert!(checker_2.is_values_matched(&[&value_1]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_dropped());
 
         _ = subscription; // keep the subscription alive
     }
@@ -219,7 +219,7 @@ mod tests {
             observer.on_terminal(Terminal::Error(&mut error));
             Subscription::new_none_disposal()
         });
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = observable.map(|value| {
@@ -227,17 +227,16 @@ mod tests {
             (value.to_string(), value)
         });
 
-        let mut checker_cloned_1 = checker.clone();
-        let checker_cloned_2 = checker.clone();
+        let (mut on_next, on_terminal) = observer.into_callbacks();
         let subscription = observable.subscribe_with_callback(
             |value| {
-                checker_cloned_1.on_next(value.0);
+                on_next(value.0);
                 *value.1 *= 2;
             },
             |terminal| match terminal {
                 Terminal::Completed => panic!(),
                 Terminal::Error(error) => {
-                    checker_cloned_2.on_terminal(Terminal::Error(*error));
+                    on_terminal(Terminal::Error(*error));
                     *error *= 2;
                 }
             },
@@ -254,17 +253,16 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let subject: PublishSubject<'_, i32, _> = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
         let observable = observable.map(|value| value.to_string());
 
-        let checker_cloned = checker.clone();
-        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -272,12 +270,12 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -285,14 +283,14 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_dropped());
     }
 
     #[test]
     fn test_subscribe_by_different_observer() {
         let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -300,20 +298,20 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let subscription_1 = observable_1.subscribe(checker_1.clone());
+        let subscription_1 = observable_1.subscribe(observer_1);
 
-        let (on_next, on_terminal) = checker_2.clone().into_callbacks();
+        let (on_next, on_terminal) = observer_2.into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&["111".to_owned()]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
@@ -328,7 +326,7 @@ mod tests {
     #[test]
     fn test_multiple_operation() {
         let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -336,13 +334,13 @@ mod tests {
             .map(|value| value.to_string())
             .map(|value| value + "?");
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&["111?".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&["111?".to_owned()]));
@@ -354,19 +352,19 @@ mod tests {
     #[test]
     fn test_without_convenient_api() {
         let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
         let observable = Map::new(observable, |value| value.to_string());
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&["111".to_owned()]));
@@ -396,8 +394,8 @@ mod tests {
 
             let observable = observable.map(|value| value.to_string());
 
-            let checker = CheckingObserver::new();
-            subscription = observable.subscribe(checker);
+            let (_, observer) = Checker::new();
+            subscription = observable.subscribe(observer);
         }
 
         _ = subscription; // keep the subscription alive
@@ -420,9 +418,9 @@ mod tests {
             });
             let observable = observable.map(|_: i32| None);
 
-            let mut checker: CheckingObserver<_, Infallible> = CheckingObserver::new();
-            checker.on_next(Some(&life_marker_2));
-            let subscription = observable.subscribe(checker);
+            let (_, mut observer) = Checker::<_, Infallible>::new();
+            observer.on_next(Some(&life_marker_2));
+            let subscription = observable.subscribe(observer);
 
             _ = subscription; // keep the subscription alive
         }
@@ -462,8 +460,8 @@ mod tests {
         let observable = subject.map(|value| value.to_string());
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
-        observable.subscribe(checker);
+        let (_, observer) = Checker::new();
+        observable.subscribe(observer);
     }
 
     #[test]

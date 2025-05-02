@@ -2,7 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Terminal},
     scheduler::Scheduler,
-    subscription::Subscription,
+    subscription::{Subscription, disposable::CallbackDisposal},
 };
 use educe::Educe;
 use std::{
@@ -42,7 +42,7 @@ where
             values: Arc::new(Mutex::new(Vec::default())),
         };
         let observer_cloned = observer.clone();
-        let disposal = self.scheduler.schedule_period(
+        let disposal_1 = self.scheduler.schedule_period(
             move |_| {
                 if let Some(observer) = observer_cloned.observer.lock().unwrap().as_mut() {
                     let mut values = observer_cloned.values.lock().unwrap();
@@ -52,7 +52,11 @@ where
             self.time_pan,
             self.delay,
         );
-        self.source.subscribe(observer) + disposal
+        let observer_cloned = observer.clone();
+        let disposal_2 = CallbackDisposal::new(move || {
+            observer_cloned.observer.lock().unwrap().take();
+        });
+        self.source.subscribe(observer) + disposal_1 + disposal_2
     }
 }
 
@@ -72,18 +76,16 @@ where
     }
 
     fn on_terminal(self, terminal: Terminal<E>) {
-        match terminal {
-            Terminal::Completed => {
-                if let Some(mut observer) = self.observer.lock().unwrap().take() {
+        if let Some(mut observer) = self.observer.lock().unwrap().take() {
+            match terminal {
+                Terminal::Completed => {
                     let mut values = self.values.lock().unwrap();
                     if !values.is_empty() {
                         observer.on_next(std::mem::take(&mut values));
                     }
                     observer.on_terminal(Terminal::Completed);
                 }
-            }
-            Terminal::Error(error) => {
-                if let Some(observer) = self.observer.lock().unwrap().take() {
+                Terminal::Error(error) => {
                     observer.on_terminal(Terminal::Error(error));
                 }
             }
@@ -100,13 +102,13 @@ mod tests {
         operators::creating::create::Create,
         scheduler::tokio_scheduler::TokioScheduler,
         subject::publish_subject::PublishSubject,
-        utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct},
+        utils::tests_utils::{checker::Checker, test_struct::TestStruct},
     };
 
     #[tokio::test]
     async fn test_completed_last_empty() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -116,37 +118,37 @@ mod tests {
             Some(Duration::from_millis(100)),
         );
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(333);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -158,7 +160,7 @@ mod tests {
     #[tokio::test]
     async fn test_completed_last_not_empty() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -168,33 +170,33 @@ mod tests {
             Some(Duration::from_millis(100)),
         );
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(333);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -206,44 +208,44 @@ mod tests {
     #[tokio::test]
     async fn test_completed_no_delay() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
         let observable =
             observable.buffer_with_time(Duration::from_millis(100), TokioScheduler, None);
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[vec![], vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(333);
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
@@ -255,7 +257,7 @@ mod tests {
     #[tokio::test]
     async fn test_completed_small_delay() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -265,37 +267,37 @@ mod tests {
             Some(Duration::from_millis(30)),
         );
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[vec![], vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(333);
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
@@ -307,7 +309,7 @@ mod tests {
     #[tokio::test]
     async fn test_error_last_empty() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -317,37 +319,37 @@ mod tests {
             Some(Duration::from_millis(100)),
         );
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(333);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -359,7 +361,7 @@ mod tests {
     #[tokio::test]
     async fn test_error_last_not_empty() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -369,33 +371,33 @@ mod tests {
             Some(Duration::from_millis(100)),
         );
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(333);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
@@ -407,8 +409,8 @@ mod tests {
     #[tokio::test]
     async fn test_unsubscribe() {
         let mut subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -420,60 +422,60 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let subscription_1 = observable_1.subscribe(checker_1.clone());
-        let subscription_2 = observable_2.subscribe(checker_2.clone());
+        let subscription_1 = observable_1.subscribe(observer_1);
+        let subscription_2 = observable_2.subscribe(observer_2);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[vec![]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[vec![]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&[vec![]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[vec![]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subscription_1.unsubscribe();
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(333);
         assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
         assert!(checker_2.is_completed());
 
@@ -483,7 +485,7 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -493,19 +495,18 @@ mod tests {
             Some(Duration::from_millis(100)),
         );
 
-        let checker_cloned = checker.clone();
-        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -515,7 +516,7 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -523,7 +524,7 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -531,12 +532,12 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -544,14 +545,14 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_dropped());
     }
 
     #[tokio::test]
     async fn test_subscribe_by_different_observer() {
         let mut subject = PublishSubject::default();
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -563,50 +564,50 @@ mod tests {
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
-        let subscription_1 = observable_1.subscribe(checker_1.clone());
+        let subscription_1 = observable_1.subscribe(observer_1);
 
-        let (on_next, on_terminal) = checker_2.clone().into_callbacks();
+        let (on_next, on_terminal) = observer_2.into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[vec![]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[vec![]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&[vec![]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[vec![]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(333);
         assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker_1.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -621,7 +622,7 @@ mod tests {
     #[tokio::test]
     async fn test_multiple_operation() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -637,33 +638,33 @@ mod tests {
                 Some(Duration::from_millis(100)),
             );
 
-        let subscription = observable.clone().subscribe(checker.clone());
+        let subscription = observable.clone().subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![vec![]]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[vec![vec![]]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(333);
         assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]], vec![vec![222, 333]]]));
@@ -675,7 +676,7 @@ mod tests {
     #[tokio::test]
     async fn test_without_convenient_api() {
         let mut subject = PublishSubject::default();
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
@@ -686,33 +687,33 @@ mod tests {
             Some(Duration::from_millis(100)),
         );
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[vec![]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(222);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(333);
         assert!(checker.is_values_matched(&[vec![], vec![111]]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -745,8 +746,8 @@ mod tests {
                 Some(Duration::from_millis(100)),
             );
 
-            let checker: CheckingObserver<_, ()> = CheckingObserver::new();
-            subscription = observable.subscribe(checker.clone());
+            let (_, observer) = Checker::<_, ()>::new();
+            subscription = observable.subscribe(observer);
         }
 
         _ = subscription; // keep the subscription alive
@@ -778,8 +779,8 @@ mod tests {
         );
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
-        observable.subscribe(checker);
+        let (_, observer) = Checker::new();
+        observable.subscribe(observer);
     }
 
     #[test]

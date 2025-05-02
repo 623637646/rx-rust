@@ -40,12 +40,12 @@ impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::tests_utils::{checking_observer::CheckingObserver, test_struct::TestStruct};
+    use crate::utils::tests_utils::{checker::Checker, test_struct::TestStruct};
 
     #[test]
     fn test_completed() {
-        let checker = CheckingObserver::new();
-        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        let (checker, observer) = Checker::new();
+        let mut boxed_observer = BoxedObserver::new(observer);
         boxed_observer.on_next(111);
         boxed_observer.on_terminal(Terminal::<&str>::Completed);
 
@@ -55,8 +55,8 @@ mod tests {
 
     #[test]
     fn test_error() {
-        let checker = CheckingObserver::new();
-        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        let (checker, observer) = Checker::new();
+        let mut boxed_observer = BoxedObserver::new(observer);
         boxed_observer.on_next(111);
         boxed_observer.on_terminal(Terminal::Error("error"));
 
@@ -68,8 +68,8 @@ mod tests {
     fn test_ref() {
         let value = 111;
         let error = 222;
-        let checker = CheckingObserver::new();
-        let mut boxed_observer = BoxedObserver::new(checker.clone());
+        let (checker, observer) = Checker::new();
+        let mut boxed_observer = BoxedObserver::new(observer);
         boxed_observer.on_next(&value);
         boxed_observer.on_terminal(Terminal::Error(&error));
 
@@ -105,9 +105,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_async() {
-        let checker = CheckingObserver::new();
-        let checker_cloned = checker.clone();
-        let mut boxed_observer = tokio::spawn(async { BoxedObserver::new(checker_cloned) })
+        let (checker, observer) = Checker::new();
+        let mut boxed_observer = tokio::spawn(async { BoxedObserver::new(observer) })
             .await
             .unwrap();
         tokio::spawn(async move {
@@ -131,9 +130,9 @@ mod tests {
         // let life_marker = TestStruct;
 
         {
-            let mut checker: CheckingObserver<_, &str> = CheckingObserver::new();
-            checker.on_next(&life_marker);
-            boxed_observer = BoxedObserver::new(checker);
+            let (_, mut observer) = Checker::<_, &str>::new();
+            observer.on_next(&life_marker);
+            boxed_observer = BoxedObserver::new(observer);
         }
 
         _ = boxed_observer;

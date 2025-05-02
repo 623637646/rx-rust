@@ -40,17 +40,14 @@ impl<'or, 'sub, E> Observable<'or, 'sub, Infallible, E> for Throw<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        observable::observable_ext::ObservableExt,
-        utils::tests_utils::checking_observer::CheckingObserver,
-    };
+    use crate::{observable::observable_ext::ObservableExt, utils::tests_utils::checker::Checker};
 
     #[test]
     fn test_error() {
         let observable = Throw::new(111);
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_error(111));
 
@@ -62,9 +59,9 @@ mod tests {
         let error = 111;
 
         let observable = Throw::new(&error);
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
-        let subscription = observable.subscribe(checker.clone());
+        let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_error(&error));
 
@@ -76,15 +73,15 @@ mod tests {
         let mut error = 111;
 
         let observable = Throw::new(&mut error);
-        let checker: CheckingObserver<i32, i32> = CheckingObserver::new();
+        let (checker, observer) = Checker::<i32, i32>::new();
 
-        let checker_cloned = checker.clone();
+        let (_, on_terminal) = observer.into_callbacks();
         let subscription = observable.subscribe_with_callback(
             |_| unreachable!(),
             |terminal| match terminal {
                 Terminal::Completed => unreachable!(),
                 Terminal::Error(error) => {
-                    checker_cloned.on_terminal(Terminal::Error(*error));
+                    on_terminal(Terminal::Error(*error));
                     *error = 222;
                 }
             },
@@ -100,10 +97,9 @@ mod tests {
     #[tokio::test]
     async fn test_async() {
         let observable = Throw::new(111);
-        let checker = CheckingObserver::new();
+        let (checker, observer) = Checker::new();
 
-        let checker_cloned = checker.clone();
-        let handle = tokio::spawn(async move { observable.subscribe(checker_cloned) });
+        let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
         assert!(checker.is_error(111));
@@ -117,16 +113,16 @@ mod tests {
     #[test]
     fn test_subscribe_by_different_observer() {
         let observable = Throw::new(111);
-        let checker_1 = CheckingObserver::new();
-        let checker_2 = CheckingObserver::new();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable_1 = observable.clone();
         let observable_2 = observable_1.clone();
 
-        let subscription_1 = observable_1.subscribe(checker_1.clone());
+        let subscription_1 = observable_1.subscribe(observer_1);
 
-        let (on_next, on_terminal) = checker_2.clone().into_callbacks();
+        let (on_next, on_terminal) = observer_2.into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
 
         assert!(checker_1.is_values_matched(&[]));
@@ -150,8 +146,8 @@ mod tests {
         let observable = Throw::new(111);
 
         let observable = observable.buffer_with_count(1);
-        let checker = CheckingObserver::new();
-        observable.subscribe(checker);
+        let (_, observer) = Checker::new();
+        observable.subscribe(observer);
     }
 
     #[test]
