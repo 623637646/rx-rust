@@ -45,11 +45,11 @@ mod tests {
 
         let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[111]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker.is_values_matched(&[111]));
@@ -68,11 +68,11 @@ mod tests {
 
         let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(111);
         assert!(checker.is_values_matched(&[111]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker.is_values_matched(&[111]));
@@ -94,27 +94,27 @@ mod tests {
         let subscription_1 = observable_1.subscribe(observer_1);
         let subscription_2 = observable_2.subscribe(observer_2);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[111]));
         assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[111, 222]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[111]));
@@ -138,11 +138,11 @@ mod tests {
 
         let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.on_next(&value);
         assert!(checker.is_values_matched(&[&value]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         subject.clone().on_terminal(Terminal::Error(&error));
         assert!(checker.is_values_matched(&[&value]));
@@ -187,7 +187,7 @@ mod tests {
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -195,7 +195,7 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[&111]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
@@ -226,15 +226,15 @@ mod tests {
         let (on_next, on_terminal) = observer_2.into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.on_next(111);
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         subject.clone().on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[111]));

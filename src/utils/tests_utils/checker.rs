@@ -38,7 +38,7 @@ impl<T, E> Checker<T, E> {
         *values == expected
     }
 
-    pub(crate) fn is_unterminated(&self) -> bool {
+    pub(crate) fn is_active(&self) -> bool {
         let terminal = self.terminal.read().unwrap();
         let dropped = self.dropped.read().unwrap();
         terminal.is_none() && !*dropped

@@ -56,11 +56,11 @@ mod tests {
 
         let subscription = observable.subscribe(observer);
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[111]));
@@ -85,11 +85,11 @@ mod tests {
         let subscription_2 = observable_2.subscribe(observer_2);
         let subscription_3 = observable_3.subscribe(observer_3);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
         assert!(checker_3.is_values_matched(&[]));
-        assert!(checker_3.is_unterminated());
+        assert!(checker_3.is_active());
 
         subscription_1.unsubscribe();
 
@@ -97,9 +97,9 @@ mod tests {
         assert!(checker_1.is_values_matched(&[]));
         assert!(checker_1.is_unsubscribed());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
         assert!(checker_3.is_values_matched(&[]));
-        assert!(checker_3.is_unterminated());
+        assert!(checker_3.is_active());
 
         subscription_2.unsubscribe();
 
@@ -122,11 +122,11 @@ mod tests {
         let handle = tokio::spawn(async move { observable.subscribe(observer) });
         let subscription = handle.await.unwrap();
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker.is_values_matched(&[]));
-        assert!(checker.is_unterminated());
+        assert!(checker.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[111]));
@@ -150,15 +150,15 @@ mod tests {
         let (on_next, on_terminal) = observer_2.into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert!(checker_1.is_values_matched(&[]));
-        assert!(checker_1.is_unterminated());
+        assert!(checker_1.is_active());
         assert!(checker_2.is_values_matched(&[]));
-        assert!(checker_2.is_unterminated());
+        assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[111]));
