@@ -44,7 +44,7 @@ impl<T, E> Checker<T, E> {
         terminal.is_none() && !*dropped
     }
 
-    pub(crate) fn is_unsubscribed(&self) -> bool {
+    pub(crate) fn is_dropped(&self) -> bool {
         let terminal = self.terminal.read().unwrap();
         let dropped = self.dropped.read().unwrap();
         terminal.is_none() && *dropped

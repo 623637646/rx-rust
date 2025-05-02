@@ -150,19 +150,19 @@ mod tests {
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&["111".to_owned()]));
         assert!(checker_2.is_active());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&["111".to_owned(), "222".to_owned()]));
         assert!(checker_2.is_active());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&["111".to_owned()]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&["111".to_owned(), "222".to_owned()]));
         assert!(checker_2.is_error("error"));
 
@@ -204,7 +204,7 @@ mod tests {
         assert!(checker_1.is_values_matched(&[&value_2]));
         assert!(checker_1.is_error(&error));
         assert!(checker_2.is_values_matched(&[&value_1]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
 
         _ = subscription; // keep the subscription alive
     }
@@ -275,7 +275,7 @@ mod tests {
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -283,7 +283,7 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&["111".to_owned()]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
     }
 
     #[test]

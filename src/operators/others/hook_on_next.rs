@@ -103,7 +103,7 @@ mod tests {
         assert!(checker_1.is_values_matched(&[222]));
         assert!(checker_1.is_completed());
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
 
         _ = subscription; // keep the subscription alive
     }
@@ -136,7 +136,7 @@ mod tests {
         assert!(checker_1.is_values_matched(&[]));
         assert!(checker_1.is_completed());
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
 
         _ = subscription; // keep the subscription alive
     }
@@ -170,7 +170,7 @@ mod tests {
         assert!(checker_1.is_values_matched(&[222]));
         assert!(checker_1.is_error("error"));
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
 
         _ = subscription; // keep the subscription alive
     }
@@ -211,7 +211,7 @@ mod tests {
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&[222]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[222]));
         assert!(checker_2.is_active());
         assert!(checker_3.is_values_matched(&[111, 111]));
@@ -219,7 +219,7 @@ mod tests {
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[222]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[222, 444]));
         assert!(checker_2.is_active());
         assert!(checker_3.is_values_matched(&[111, 111, 222]));
@@ -227,11 +227,11 @@ mod tests {
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[222]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[222, 444]));
         assert!(checker_2.is_error("error"));
         assert!(checker_3.is_values_matched(&[111, 111, 222]));
-        assert!(checker_3.is_unsubscribed());
+        assert!(checker_3.is_dropped());
 
         _ = subscription_2; // keep the subscription alive
     }
@@ -271,7 +271,7 @@ mod tests {
         assert!(checker_1.is_values_matched(&[&value_2]));
         assert!(checker_1.is_error(&error));
         assert!(checker_2.is_values_matched(&[&value_1]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
 
         _ = subscription; // keep the subscription alive
     }
@@ -307,7 +307,7 @@ mod tests {
         );
 
         assert!(checker.is_values_matched(&[111]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
         assert_eq!(value, 222);
         assert_eq!(error, 444);
 
@@ -347,9 +347,9 @@ mod tests {
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker_1.is_values_matched(&[222]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -357,9 +357,9 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker_1.is_values_matched(&[222]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
     }
 
     #[test]
@@ -404,7 +404,7 @@ mod tests {
         assert!(checker_2.is_values_matched(&[222]));
         assert!(checker_2.is_error("error"));
         assert!(checker_3.is_values_matched(&[111, 111]));
-        assert!(checker_3.is_unsubscribed());
+        assert!(checker_3.is_dropped());
 
         _ = subscription_1; // keep the subscription alive
         _ = subscription_2; // keep the subscription alive
@@ -449,9 +449,9 @@ mod tests {
         assert!(checker_1.is_values_matched(&[444]));
         assert!(checker_1.is_error("error"));
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
         assert!(checker_3.is_values_matched(&[222]));
-        assert!(checker_3.is_unsubscribed());
+        assert!(checker_3.is_dropped());
 
         _ = subscription; // keep the subscription alive
     }
@@ -485,7 +485,7 @@ mod tests {
         assert!(checker_1.is_values_matched(&[222]));
         assert!(checker_1.is_error("error"));
         assert!(checker_2.is_values_matched(&[111]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
 
         _ = subscription; // keep the subscription alive
     }

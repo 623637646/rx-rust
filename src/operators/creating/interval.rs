@@ -75,11 +75,11 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
     }
 
     #[tokio::test]
@@ -118,11 +118,11 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
     }
 
     #[tokio::test]
@@ -179,13 +179,13 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[0, 1, 2, 3]));
         assert!(checker_2.is_active());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[0, 1, 2, 3, 4]));
         assert!(checker_2.is_active());
 
@@ -226,15 +226,15 @@ mod tests {
         handle.await.unwrap();
 
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker.is_values_matched(&[0, 1, 2]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
     }
 
     #[tokio::test]
@@ -295,15 +295,15 @@ mod tests {
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[0, 1, 2]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
 
         tokio::time::sleep(Duration::from_millis(100)).await;
         assert!(checker_1.is_values_matched(&[0, 1, 2]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[0, 1, 2]));
-        assert!(checker_2.is_unsubscribed());
+        assert!(checker_2.is_dropped());
     }
 
     #[tokio::test]

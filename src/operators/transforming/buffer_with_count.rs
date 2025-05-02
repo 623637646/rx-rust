@@ -318,13 +318,13 @@ mod tests {
 
         subject.on_next(555);
         assert!(checker_1.is_values_matched(&[vec![111, 222, 333]]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[vec![111, 222, 333]]));
         assert!(checker_2.is_active());
 
         subject.clone().on_terminal(Terminal::<&str>::Completed);
         assert!(checker_1.is_values_matched(&[vec![111, 222, 333]]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[vec![111, 222, 333], vec![444, 555]]));
         assert!(checker_2.is_completed());
 
@@ -441,7 +441,7 @@ mod tests {
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[vec![111, 222]]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -449,7 +449,7 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[vec![111, 222]]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
     }
 
     #[test]

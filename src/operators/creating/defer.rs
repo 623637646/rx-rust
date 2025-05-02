@@ -114,19 +114,19 @@ mod tests {
 
         subscription_1.unsubscribe();
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[111]));
         assert!(checker_2.is_active());
 
         subject.on_next(222);
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_active());
 
         subject.on_terminal(Terminal::Error("error"));
         assert!(checker_1.is_values_matched(&[111]));
-        assert!(checker_1.is_unsubscribed());
+        assert!(checker_1.is_dropped());
         assert!(checker_2.is_values_matched(&[111, 222]));
         assert!(checker_2.is_error("error"));
 
@@ -223,7 +223,7 @@ mod tests {
         let handle = tokio::spawn(async { subscription.unsubscribe() });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[111]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
         let handle = tokio::spawn(async move {
@@ -231,7 +231,7 @@ mod tests {
         });
         handle.await.unwrap();
         assert!(checker.is_values_matched(&[111]));
-        assert!(checker.is_unsubscribed());
+        assert!(checker.is_dropped());
     }
 
     #[test]
