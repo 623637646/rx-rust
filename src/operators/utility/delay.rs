@@ -76,8 +76,7 @@ where
         let observer = self.source_observer.clone();
         self.scheduler.schedule(
             move || {
-                let mut observer = observer.lock().unwrap();
-                if let Some(observer) = &mut *observer {
+                if let Some(observer) = observer.lock().unwrap().as_mut() {
                     observer.on_next(value)
                 }
             },
@@ -90,8 +89,7 @@ where
             Terminal::Completed => {
                 self.scheduler.schedule(
                     move || {
-                        let observer = self.source_observer.lock().unwrap().take();
-                        if let Some(observer) = observer {
+                        if let Some(observer) = self.source_observer.lock().unwrap().take() {
                             observer.on_terminal(terminal);
                         }
                     },
@@ -99,8 +97,7 @@ where
                 );
             }
             Terminal::Error(_) => {
-                let observer = self.source_observer.lock().unwrap().take();
-                if let Some(observer) = observer {
+                if let Some(observer) = self.source_observer.lock().unwrap().take() {
                     observer.on_terminal(terminal);
                 }
             }

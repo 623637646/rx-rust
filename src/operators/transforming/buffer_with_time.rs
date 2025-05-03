@@ -45,8 +45,9 @@ where
         let disposal_1 = self.scheduler.schedule_period(
             move |_| {
                 if let Some(observer) = observer_cloned.observer.lock().unwrap().as_mut() {
-                    let mut values = observer_cloned.values.lock().unwrap();
-                    observer.on_next(std::mem::take(&mut values));
+                    observer.on_next(std::mem::take(
+                        observer_cloned.values.lock().unwrap().as_mut(),
+                    ));
                     false
                 } else {
                     true
