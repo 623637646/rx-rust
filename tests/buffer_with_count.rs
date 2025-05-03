@@ -9,8 +9,8 @@ use rx_rust::{
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
-#[tokio::test]
-async fn test_completed_last_empty() {
+#[test]
+fn test_completed_last_empty() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
@@ -53,8 +53,8 @@ async fn test_completed_last_empty() {
     _ = subscription; // keep the subscription alive
 }
 
-#[tokio::test]
-async fn test_completed_last_not_empty() {
+#[test]
+fn test_completed_last_not_empty() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
@@ -93,8 +93,8 @@ async fn test_completed_last_not_empty() {
     _ = subscription; // keep the subscription alive
 }
 
-#[tokio::test]
-async fn test_error_last_empty() {
+#[test]
+fn test_error_last_empty() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
@@ -137,8 +137,8 @@ async fn test_error_last_empty() {
     _ = subscription; // keep the subscription alive
 }
 
-#[tokio::test]
-async fn test_error_last_not_empty() {
+#[test]
+fn test_error_last_not_empty() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
@@ -177,8 +177,8 @@ async fn test_error_last_not_empty() {
     _ = subscription; // keep the subscription alive
 }
 
-#[tokio::test]
-async fn test_error_one_count() {
+#[test]
+fn test_error_one_count() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
@@ -205,8 +205,8 @@ async fn test_error_one_count() {
     _ = subscription; // keep the subscription alive
 }
 
-#[tokio::test]
-async fn test_unsubscribe() {
+#[test]
+fn test_unsubscribe() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
