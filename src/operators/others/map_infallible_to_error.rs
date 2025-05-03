@@ -30,7 +30,7 @@ where
     }
 }
 
-pub struct MapInfallibleToErrorObserver<E, OR> {
+struct MapInfallibleToErrorObserver<E, OR> {
     observer: OR,
     /// Using `PhantomData<fn(E) -> E>` instead of `PhantomData<E>` to make MapInfallibleToErrorObserver being `Send + Sync` when OR is `Send + Sync` but E is not.
     /// For more detail: https://doc.rust-lang.org/nomicon/phantom-data.html#table-of-phantomdata-patterns

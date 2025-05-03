@@ -36,7 +36,7 @@ where
     }
 }
 
-pub struct DoOnNextObserver<OR, F> {
+struct DoOnNextObserver<OR, F> {
     observer: OR,
     callback: F,
 }

@@ -59,7 +59,7 @@ where
     }
 }
 
-pub struct DelayObserver<OR, S> {
+struct DelayObserver<OR, S> {
     source_observer: Arc<Mutex<Option<OR>>>,
     delay: Duration,
     scheduler: S,

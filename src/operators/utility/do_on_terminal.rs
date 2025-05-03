@@ -36,7 +36,7 @@ where
     }
 }
 
-pub struct DoOnTerminalObserver<OR, F> {
+struct DoOnTerminalObserver<OR, F> {
     observer: OR,
     callback: F,
 }

@@ -66,7 +66,7 @@ where
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct BufferWithTimeObserver<T, OR> {
+struct BufferWithTimeObserver<T, OR> {
     observer: Arc<Mutex<Option<OR>>>,
     values: Arc<Mutex<Vec<T>>>,
 }

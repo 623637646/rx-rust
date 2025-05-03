@@ -36,7 +36,7 @@ where
     }
 }
 
-pub struct HookOnTerminalObserver<OR, F> {
+struct HookOnTerminalObserver<OR, F> {
     observer: OR,
     callback: F,
 }

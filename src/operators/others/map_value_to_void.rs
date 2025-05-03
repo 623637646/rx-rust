@@ -32,7 +32,7 @@ where
     }
 }
 
-pub struct MapValueToVoidObserver<OR>(OR);
+struct MapValueToVoidObserver<OR>(OR);
 
 impl<T, E, OR> Observer<T, E> for MapValueToVoidObserver<OR>
 where

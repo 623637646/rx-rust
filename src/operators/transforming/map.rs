@@ -45,7 +45,7 @@ where
     }
 }
 
-pub struct MapObserver<OR, F> {
+struct MapObserver<OR, F> {
     observer: OR,
     callback: F,
 }
