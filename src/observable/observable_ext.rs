@@ -8,7 +8,7 @@ use crate::{
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
-            map::Map,
+            buffer_with_time_or_count::BufferWithTimeOrCount, map::Map,
         },
         utility::{delay::Delay, do_on_next::DoOnNext, do_on_terminal::DoOnTerminal},
     },
@@ -32,6 +32,16 @@ pub trait ObservableExt: Sized {
         delay: Option<Duration>,
     ) -> BufferWithTime<Self, S> {
         BufferWithTime::new(self, time_pan, scheduler, delay)
+    }
+
+    fn buffer_with_time_or_count<S>(
+        self,
+        count: usize,
+        time_pan: Duration,
+        scheduler: S,
+        delay: Option<Duration>,
+    ) -> BufferWithTimeOrCount<Self, S> {
+        BufferWithTimeOrCount::new(self, count, time_pan, scheduler, delay)
     }
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
