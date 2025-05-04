@@ -145,9 +145,9 @@ mod tests {
     #[test]
     fn test_remove_and_iter_mut_combo() {
         let mut vec = UniqueKeyStore::new();
-        let _ = vec.insert(1);
+        let _id = vec.insert(1);
         let id = vec.insert(2);
-        let _ = vec.insert(3);
+        let _id = vec.insert(3);
         vec.remove(id);
 
         let mut iter_mut = vec.iter_mut();
