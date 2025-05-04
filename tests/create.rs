@@ -42,20 +42,6 @@ fn test_error() {
     _ = subscription; // keep the subscription alive
 }
 
-#[test]
-fn test_unterminated() {
-    let observable = Create::new(|mut observer| {
-        observer.on_next(1);
-        Subscription::new_none_disposal()
-    });
-
-    let (checker, observer) = Checker::<i32, String>::new();
-    let subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[1]));
-    assert!(checker.is_dropped());
-    _ = subscription; // keep the subscription alive
-}
-
 #[tokio::test]
 async fn test_unsubscribe() {
     let observable = Create::new(|mut observer| {

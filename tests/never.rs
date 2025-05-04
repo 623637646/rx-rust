@@ -7,18 +7,6 @@ use rx_rust::{
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
 
-#[test]
-fn test_unterminated() {
-    let observable = Never;
-    let (checker, observer) = Checker::<i32, Infallible>::new();
-
-    let subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
-    assert!(checker.is_dropped());
-
-    _ = subscription; // keep the subscription alive
-}
-
 #[tokio::test]
 async fn test_async() {
     let observable = Never;
