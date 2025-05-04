@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -13,11 +13,11 @@ use std::convert::Infallible;
 /// use rx_rust::operators::creating::just::Just;
 /// use rx_rust::observable::observable_ext::ObservableExt;
 /// use std::convert::Infallible;
-/// use rx_rust::observer::Terminal;
+/// use rx_rust::observer::Termination;
 /// let observable = Just::new(123);
 /// observable.subscribe_with_callback(
 ///     |value| println!("Next value: {}", value),
-///     |terminal| println!("Terminal event: {:?}", terminal)
+///     |termination| println!("Termination event: {:?}", termination)
 /// );
 /// ```
 #[derive(Educe)]
@@ -41,7 +41,7 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Just<T> {
         mut observer: impl Observer<T, Infallible> + Send + 'or,
     ) -> Subscription<'sub> {
         observer.on_next(self.0);
-        observer.on_terminal(Terminal::Completed);
+        observer.on_termination(Termination::Completed);
         Subscription::new_none_disposal()
     }
 }

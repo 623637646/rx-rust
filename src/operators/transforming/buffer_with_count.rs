@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -50,16 +50,16 @@ where
         }
     }
 
-    fn on_terminal(mut self, terminal: Terminal<E>) {
-        match terminal {
-            Terminal::Completed => {
+    fn on_termination(mut self, termination: Termination<E>) {
+        match termination {
+            Termination::Completed => {
                 if !self.values.is_empty() {
                     self.observer.on_next(std::mem::take(&mut self.values));
                 }
-                self.observer.on_terminal(Terminal::Completed);
+                self.observer.on_termination(Termination::Completed);
             }
-            Terminal::Error(error) => {
-                self.observer.on_terminal(Terminal::Error(error));
+            Termination::Error(error) => {
+                self.observer.on_termination(Termination::Error(error));
             }
         }
     }

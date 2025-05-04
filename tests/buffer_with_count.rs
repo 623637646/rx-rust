@@ -2,7 +2,7 @@ mod tests_utils;
 
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     operators::{creating::create::Create, transforming::buffer_with_count::BufferWithCount},
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
@@ -47,7 +47,9 @@ fn test_completed_last_empty() {
     assert!(checker.is_values_matched(&[vec![111, 222, 333], vec![444, 555, 666]]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![111, 222, 333], vec![444, 555, 666]]));
     assert!(checker.is_completed());
 }
@@ -85,7 +87,9 @@ fn test_completed_last_not_empty() {
     assert!(checker.is_values_matched(&[vec![111, 222, 333]]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![111, 222, 333], vec![444, 555]]));
     assert!(checker.is_completed());
 }
@@ -127,7 +131,7 @@ fn test_error_last_empty() {
     assert!(checker.is_values_matched(&[vec![111, 222, 333], vec![444, 555, 666]]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker.is_values_matched(&[vec![111, 222, 333], vec![444, 555, 666]]));
     assert!(checker.is_error("error"));
 }
@@ -165,7 +169,7 @@ fn test_error_last_not_empty() {
     assert!(checker.is_values_matched(&[vec![111, 222, 333]]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker.is_values_matched(&[vec![111, 222, 333]]));
     assert!(checker.is_error("error"));
 }
@@ -191,7 +195,7 @@ fn test_error_one_count() {
     assert!(checker.is_values_matched(&[vec![111], vec![222]]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker.is_values_matched(&[vec![111], vec![222]]));
     assert!(checker.is_error("error"));
 }
@@ -247,7 +251,9 @@ fn test_unsubscribe() {
     assert!(checker_2.is_values_matched(&[vec![111, 222, 333]]));
     assert!(checker_2.is_active());
 
-    subject.clone().on_terminal(Terminal::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker_1.is_values_matched(&[vec![111, 222, 333]]));
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[vec![111, 222, 333], vec![444, 555]]));
@@ -284,7 +290,7 @@ fn test_ref() {
     assert!(checker.is_values_matched(&[vec![&value_1, &value_2]]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::Error(&error));
+    subject.clone().on_termination(Termination::Error(&error));
     assert!(checker.is_values_matched(&[vec![&value_1, &value_2]]));
     assert!(checker.is_error(&error));
 }
@@ -300,7 +306,7 @@ fn test_mut_ref() {
         observer.on_next(&mut value_1);
         observer.on_next(&mut value_2);
         observer.on_next(&mut value_3);
-        observer.on_terminal(Terminal::Error("error"));
+        observer.on_termination(Termination::Error("error"));
         Subscription::new_none_disposal()
     });
     let observable = observable.buffer_with_count(2);
@@ -311,7 +317,7 @@ fn test_mut_ref() {
                 *i *= 2;
             }
         },
-        |terminal| assert!(matches!(terminal, Terminal::Error("error"))),
+        |termination| assert!(matches!(termination, Termination::Error("error"))),
     );
 
     assert_eq!(value_1, 222);
@@ -364,7 +370,7 @@ async fn test_async() {
 
     let subject_cloned = subject.clone();
     let handle = tokio::spawn(async move {
-        subject_cloned.on_terminal(Terminal::Error("error"));
+        subject_cloned.on_termination(Termination::Error("error"));
     });
     handle.await.unwrap();
     assert!(checker.is_values_matched(&[vec![111, 222]]));
@@ -384,8 +390,8 @@ fn test_subscribe_by_different_observer() {
     let observable_2 = observable_1.clone();
 
     let _subscription_1 = observable_1.subscribe(observer_1);
-    let (on_next, on_terminal) = observer_2.into_callbacks();
-    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -409,7 +415,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.is_values_matched(&[vec![111, 222]]));
     assert!(checker_2.is_active());
 
-    subject.on_terminal(Terminal::Error("error"));
+    subject.on_termination(Termination::Error("error"));
     assert!(checker_1.is_values_matched(&[vec![111, 222]]));
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[vec![111, 222]]));
@@ -457,7 +463,7 @@ fn test_multiple_operation() {
     assert!(checker.is_values_matched(&[vec![vec![111, 222], vec![333, 444]]]));
     assert!(checker.is_active());
 
-    subject.on_terminal(Terminal::<&str>::Completed);
+    subject.on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[
         vec![vec![111, 222], vec![333, 444]],
         vec![vec![555, 666], vec![777]]
@@ -498,7 +504,9 @@ fn test_without_convenient_api() {
     assert!(checker.is_values_matched(&[vec![111, 222, 333]]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![111, 222, 333], vec![444, 555]]));
     assert!(checker.is_completed());
 }
@@ -516,7 +524,7 @@ fn test_lifetime_sub() {
     {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            observer.on_terminal(Terminal::<String>::Completed);
+            observer.on_termination(Termination::<String>::Completed);
             Subscription::new_with_disposal_callback(|| {
                 life_marker.consume_ref();
             })
@@ -555,7 +563,7 @@ fn test_lifetime_or() {
 fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
-        observer.on_terminal(Terminal::Error(TestStruct));
+        observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
     let observable = observable.buffer_with_count(3);

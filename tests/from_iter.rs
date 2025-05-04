@@ -2,7 +2,7 @@ mod tests_utils;
 
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
-    observer::Terminal,
+    observer::Termination,
     operators::creating::from_iter::FromIter,
 };
 use std::convert::Infallible;
@@ -42,7 +42,7 @@ fn test_completed_array_mut() {
         |value| {
             *value *= 2;
         },
-        |terminal| assert!(matches!(terminal, Terminal::Completed)),
+        |termination| assert!(matches!(termination, Termination::Completed)),
     );
     assert_eq!(source, [2, 4, 6]);
 }
@@ -70,7 +70,7 @@ fn test_completed_slice_mut() {
         |value| {
             *value *= 2;
         },
-        |terminal| assert!(matches!(terminal, Terminal::Completed)),
+        |termination| assert!(matches!(termination, Termination::Completed)),
     );
     assert_eq!(data, [2, 4, 6]);
 }
@@ -109,7 +109,7 @@ fn test_completed_vec_mut() {
         |value| {
             *value *= 2;
         },
-        |terminal| assert!(matches!(terminal, Terminal::Completed)),
+        |termination| assert!(matches!(termination, Termination::Completed)),
     );
     assert_eq!(source, [2, 4, 6]);
 }
@@ -154,7 +154,7 @@ fn test_mut_ref() {
         |value| {
             *value *= 2;
         },
-        |terminal| assert!(matches!(terminal, Terminal::Completed)),
+        |termination| assert!(matches!(termination, Termination::Completed)),
     );
     assert_eq!(v1, 2);
     assert_eq!(v2, 4);
@@ -191,8 +191,8 @@ fn test_subscribe_by_different_observer() {
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
-    let (on_next, on_terminal) = observer_2.into_callbacks();
-    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
     assert!(checker_1.is_values_matched(&[1, 2, 3]));
     assert!(checker_1.is_completed());

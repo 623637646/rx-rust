@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -59,7 +59,7 @@ where
         self.observer.on_next((self.callback)(value))
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
-        self.observer.on_terminal(terminal)
+    fn on_termination(self, termination: Termination<E>) {
+        self.observer.on_termination(termination)
     }
 }

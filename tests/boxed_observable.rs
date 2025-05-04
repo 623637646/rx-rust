@@ -2,7 +2,7 @@ mod tests_utils;
 
 use rx_rust::{
     observable::{Observable, boxed_observable::BoxedObservable, observable_ext::ObservableExt},
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     operators::creating::{create::Create, just::Just},
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
@@ -26,7 +26,9 @@ fn test_completed() {
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
 }
@@ -47,7 +49,7 @@ fn test_error() {
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_error("error"));
 }
@@ -87,7 +89,7 @@ fn test_unsubscribe() {
     assert!(checker_2.is_values_matched(&[111, 222]));
     assert!(checker_2.is_active());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[111, 222]));
@@ -113,7 +115,7 @@ fn test_ref() {
     assert!(checker.is_values_matched(&[&value]));
     assert!(checker.is_active());
 
-    subject.clone().on_terminal(Terminal::Error(&error));
+    subject.clone().on_termination(Termination::Error(&error));
     assert!(checker.is_values_matched(&[&value]));
     assert!(checker.is_error(&error));
 }
@@ -127,13 +129,13 @@ fn test_mut_ref() {
 
     let (checker, observer) = Checker::new();
 
-    let (mut on_next, on_terminal) = observer.into_callbacks();
+    let (mut on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(
         |value| {
             on_next(*value);
             *value *= 2;
         },
-        on_terminal,
+        on_termination,
     );
 
     assert!(checker.is_values_matched(&[111]));
@@ -169,7 +171,7 @@ async fn test_async() {
 
     let subject_cloned = subject.clone();
     let handle = tokio::spawn(async move {
-        subject_cloned.on_terminal(Terminal::Error("error"));
+        subject_cloned.on_termination(Termination::Error("error"));
     });
     handle.await.unwrap();
     assert!(checker.is_values_matched(&[&111]));
@@ -188,8 +190,8 @@ fn test_subscribe_by_different_observer() {
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
-    let (on_next, on_terminal) = observer_2.into_callbacks();
-    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -201,7 +203,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.is_values_matched(&[111]));
     assert!(checker_2.is_active());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[111]));
@@ -221,7 +223,7 @@ fn test_lifetime_sub() {
     {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            observer.on_terminal(Terminal::<String>::Completed);
+            observer.on_termination(Termination::<String>::Completed);
             Subscription::new_with_disposal_callback(|| {
                 life_marker.consume_ref();
             })
@@ -271,7 +273,7 @@ fn test_lifetime_oe() {
         let create = Create::new(|mut observer| {
             life_marker.consume_ref();
             observer.on_next(1);
-            observer.on_terminal(Terminal::<String>::Completed);
+            observer.on_termination(Termination::<String>::Completed);
             Subscription::new_none_disposal()
         });
 

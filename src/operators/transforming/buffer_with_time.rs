@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
 };
@@ -79,18 +79,18 @@ where
         self.values.lock().unwrap().push(value);
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
+    fn on_termination(self, termination: Termination<E>) {
         if let Some(mut observer) = self.observer.lock().unwrap().take() {
-            match terminal {
-                Terminal::Completed => {
+            match termination {
+                Termination::Completed => {
                     let mut values = self.values.lock().unwrap();
                     if !values.is_empty() {
                         observer.on_next(std::mem::take(&mut values));
                     }
-                    observer.on_terminal(Terminal::Completed);
+                    observer.on_termination(Termination::Completed);
                 }
-                Terminal::Error(error) => {
-                    observer.on_terminal(Terminal::Error(error));
+                Termination::Error(error) => {
+                    observer.on_termination(Termination::Error(error));
                 }
             }
         }

@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -13,11 +13,11 @@ use std::convert::Infallible;
 /// use rx_rust::operators::creating::throw::Throw;
 /// use rx_rust::observable::observable_ext::ObservableExt;
 /// use std::convert::Infallible;
-/// use rx_rust::observer::Terminal;
+/// use rx_rust::observer::Termination;
 /// let observable = Throw::new("My error");
 /// observable.subscribe_with_callback(
 ///     |_| {},
-///     |terminal| println!("Terminal event: {:?}", terminal)
+///     |termination| println!("Termination event: {:?}", termination)
 /// );
 /// ```
 #[derive(Educe)]
@@ -32,7 +32,7 @@ impl<E> Throw<E> {
 
 impl<'or, 'sub, E> Observable<'or, 'sub, Infallible, E> for Throw<E> {
     fn subscribe(self, observer: impl Observer<Infallible, E> + Send + 'or) -> Subscription<'sub> {
-        observer.on_terminal(Terminal::Error(self.0));
+        observer.on_termination(Termination::Error(self.0));
         Subscription::new_none_disposal()
     }
 }

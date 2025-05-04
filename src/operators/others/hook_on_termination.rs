@@ -1,34 +1,34 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct HookOnTerminal<OE, F> {
+pub struct HookOnTermination<OE, F> {
     source: OE,
     callback: F,
 }
 
-impl<OE, F> HookOnTerminal<OE, F> {
+impl<OE, F> HookOnTermination<OE, F> {
     pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
-        F: for<'a> FnOnce(Terminal<E>, Box<dyn FnOnce(Terminal<E>) + 'a>),
+        F: for<'a> FnOnce(Termination<E>, Box<dyn FnOnce(Termination<E>) + 'a>),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for HookOnTerminal<OE, F>
+impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for HookOnTermination<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F: for<'a> FnOnce(Terminal<E>, Box<dyn FnOnce(Terminal<E>) + 'a>) + Send + 'or,
+    F: for<'a> FnOnce(Termination<E>, Box<dyn FnOnce(Termination<E>) + 'a>) + Send + 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let observer = HookOnTerminalObserver {
+        let observer = HookOnTerminationObserver {
             observer,
             callback: self.callback,
         };
@@ -36,25 +36,25 @@ where
     }
 }
 
-struct HookOnTerminalObserver<OR, F> {
+struct HookOnTerminationObserver<OR, F> {
     observer: OR,
     callback: F,
 }
 
-impl<T, E, OR, F> Observer<T, E> for HookOnTerminalObserver<OR, F>
+impl<T, E, OR, F> Observer<T, E> for HookOnTerminationObserver<OR, F>
 where
     OR: Observer<T, E>,
-    F: for<'a> FnOnce(Terminal<E>, Box<dyn FnOnce(Terminal<E>) + 'a>),
+    F: for<'a> FnOnce(Termination<E>, Box<dyn FnOnce(Termination<E>) + 'a>),
 {
     fn on_next(&mut self, value: T) {
         self.observer.on_next(value);
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
+    fn on_termination(self, termination: Termination<E>) {
         (self.callback)(
-            terminal,
-            Box::new(|terminal| {
-                self.observer.on_terminal(terminal);
+            termination,
+            Box::new(|termination| {
+                self.observer.on_termination(termination);
             }),
         );
     }

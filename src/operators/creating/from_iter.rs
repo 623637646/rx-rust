@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -30,7 +30,7 @@ where
         for value in self.0.into_iter() {
             observer.on_next(value);
         }
-        observer.on_terminal(Terminal::Completed);
+        observer.on_termination(Termination::Completed);
         Subscription::new_none_disposal()
     }
 }

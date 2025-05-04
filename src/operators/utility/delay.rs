@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
 };
@@ -84,21 +84,21 @@ where
         );
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
-        match &terminal {
-            Terminal::Completed => {
+    fn on_termination(self, termination: Termination<E>) {
+        match &termination {
+            Termination::Completed => {
                 self.scheduler.schedule(
                     move || {
                         if let Some(observer) = self.source_observer.lock().unwrap().take() {
-                            observer.on_terminal(terminal);
+                            observer.on_termination(termination);
                         }
                     },
                     Some(self.delay),
                 );
             }
-            Terminal::Error(_) => {
+            Termination::Error(_) => {
                 if let Some(observer) = self.source_observer.lock().unwrap().take() {
-                    observer.on_terminal(terminal);
+                    observer.on_termination(termination);
                 }
             }
         }

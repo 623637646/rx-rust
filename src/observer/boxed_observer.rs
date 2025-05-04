@@ -1,4 +1,4 @@
-use super::{Observer, Terminal};
+use super::{Observer, Termination};
 
 /// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
@@ -6,7 +6,7 @@ pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(HandleEvent<T, E>) + Send + 'o
 
 enum HandleEvent<T, E> {
     Next(T),
-    Terminal(Terminal<E>),
+    Termination(Termination<E>),
 }
 
 impl<'or, T, E> BoxedObserver<'or, T, E> {
@@ -18,9 +18,9 @@ impl<'or, T, E> BoxedObserver<'or, T, E> {
                     observer.on_next(value);
                 }
             }
-            HandleEvent::Terminal(terminal) => {
+            HandleEvent::Termination(termination) => {
                 if let Some(observer) = observer.take() {
-                    observer.on_terminal(terminal);
+                    observer.on_termination(termination);
                 }
             }
         }))
@@ -32,7 +32,7 @@ impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
         self.0(HandleEvent::Next(value));
     }
 
-    fn on_terminal(mut self, terminal: Terminal<E>) {
-        self.0(HandleEvent::Terminal(terminal));
+    fn on_termination(mut self, termination: Termination<E>) {
+        self.0(HandleEvent::Termination(termination));
     }
 }

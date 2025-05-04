@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use rx_rust::observer::{Observer, Terminal, boxed_observer::BoxedObserver};
+use rx_rust::observer::{Observer, Termination, boxed_observer::BoxedObserver};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -8,7 +8,7 @@ fn test_completed() {
     let (checker, observer) = Checker::new();
     let mut boxed_observer = BoxedObserver::new(observer);
     boxed_observer.on_next(111);
-    boxed_observer.on_terminal(Terminal::<&str>::Completed);
+    boxed_observer.on_termination(Termination::<&str>::Completed);
 
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
@@ -19,7 +19,7 @@ fn test_error() {
     let (checker, observer) = Checker::new();
     let mut boxed_observer = BoxedObserver::new(observer);
     boxed_observer.on_next(111);
-    boxed_observer.on_terminal(Terminal::Error("error"));
+    boxed_observer.on_termination(Termination::Error("error"));
 
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_error("error"));
@@ -32,7 +32,7 @@ fn test_ref() {
     let (checker, observer) = Checker::new();
     let mut boxed_observer = BoxedObserver::new(observer);
     boxed_observer.on_next(&value);
-    boxed_observer.on_terminal(Terminal::Error(&error));
+    boxed_observer.on_termination(Termination::Error(&error));
 
     assert!(checker.is_values_matched(&[&value]));
     assert!(checker.is_error(&error));
@@ -46,10 +46,10 @@ fn test_mut_ref() {
             *value *= 2
         }
 
-        fn on_terminal(self, terminal: Terminal<&mut i32>) {
-            match terminal {
-                Terminal::Completed => unreachable!(),
-                Terminal::Error(error) => *error *= 2,
+        fn on_termination(self, termination: Termination<&mut i32>) {
+            match termination {
+                Termination::Completed => unreachable!(),
+                Termination::Error(error) => *error *= 2,
             }
         }
     }
@@ -58,7 +58,7 @@ fn test_mut_ref() {
     let observer = MyObserver;
     let mut boxed_observer = BoxedObserver::new(observer);
     boxed_observer.on_next(&mut value);
-    boxed_observer.on_terminal(Terminal::Error(&mut error));
+    boxed_observer.on_termination(Termination::Error(&mut error));
 
     assert_eq!(value, 222);
     assert_eq!(error, 444);
@@ -72,7 +72,7 @@ async fn test_async() {
         .unwrap();
     tokio::spawn(async move {
         boxed_observer.on_next(111);
-        boxed_observer.on_terminal(Terminal::Error("error"));
+        boxed_observer.on_termination(Termination::Error("error"));
         assert!(checker.is_values_matched(&[111]));
         assert!(checker.is_error("error"));
     })

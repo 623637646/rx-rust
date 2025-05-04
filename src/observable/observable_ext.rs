@@ -1,17 +1,17 @@
 use super::Observable;
 use crate::{
-    observer::{Terminal, callback_observer::CallbackObserver},
+    observer::{Termination, callback_observer::CallbackObserver},
     operators::{
         combining::merge_all::MergeAll,
         others::{
-            hook_on_next::HookOnNext, hook_on_terminal::HookOnTerminal,
+            hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
             map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, map::Map,
         },
-        utility::{delay::Delay, do_on_next::DoOnNext, do_on_terminal::DoOnTerminal},
+        utility::{delay::Delay, do_on_next::DoOnNext, do_on_termination::DoOnTermination},
     },
     subscription::Subscription,
 };
@@ -57,12 +57,12 @@ pub trait ObservableExt: Sized {
         DoOnNext::new(self, callback)
     }
 
-    fn do_on_terminal<'sub, 'or, T, E, F>(self, callback: F) -> DoOnTerminal<Self, F>
+    fn do_on_termination<'sub, 'or, T, E, F>(self, callback: F) -> DoOnTermination<Self, F>
     where
         Self: Observable<'or, 'sub, T, E>,
-        F: FnOnce(&Terminal<E>),
+        F: FnOnce(&Termination<E>),
     {
-        DoOnTerminal::new(self, callback)
+        DoOnTermination::new(self, callback)
     }
 
     fn hook_on_next<'or, 'sub, T, E, F>(self, callback: F) -> HookOnNext<Self, F>
@@ -73,12 +73,12 @@ pub trait ObservableExt: Sized {
         HookOnNext::new(self, callback)
     }
 
-    fn hook_on_terminal<'or, 'sub, T, E, F>(self, callback: F) -> HookOnTerminal<Self, F>
+    fn hook_on_termination<'or, 'sub, T, E, F>(self, callback: F) -> HookOnTermination<Self, F>
     where
         Self: Observable<'or, 'sub, T, E>,
-        F: for<'a> FnOnce(Terminal<E>, Box<dyn FnOnce(Terminal<E>) + 'a>),
+        F: for<'a> FnOnce(Termination<E>, Box<dyn FnOnce(Termination<E>) + 'a>),
     {
-        HookOnTerminal::new(self, callback)
+        HookOnTermination::new(self, callback)
     }
 
     fn map<'sub, 'or, T0, T, E, F>(self, callback: F) -> Map<T0, Self, F>
@@ -104,16 +104,16 @@ pub trait ObservableExt: Sized {
     fn subscribe_with_callback<'or, 'sub, T, E, FN, FT>(
         self,
         on_next: FN,
-        on_terminal: FT,
+        on_termination: FT,
     ) -> Subscription<'sub>
     where
         T: 'or,
         E: 'or,
         Self: Observable<'or, 'sub, T, E>,
         FN: FnMut(T) + Send + 'or,
-        FT: FnOnce(Terminal<E>) + Send + 'or,
+        FT: FnOnce(Termination<E>) + Send + 'or,
     {
-        self.subscribe(CallbackObserver::new(on_next, on_terminal))
+        self.subscribe(CallbackObserver::new(on_next, on_termination))
     }
 }
 

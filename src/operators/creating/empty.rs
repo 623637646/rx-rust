@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -12,7 +12,7 @@ pub struct Empty;
 
 impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Empty {
     fn subscribe(self, observer: impl Observer<T, Infallible> + Send + 'or) -> Subscription<'sub> {
-        observer.on_terminal(Terminal::Completed);
+        observer.on_termination(Termination::Completed);
         Subscription::new_none_disposal()
     }
 }

@@ -2,7 +2,7 @@ mod tests_utils;
 
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     operators::creating::create::Create,
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
@@ -14,7 +14,7 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 fn test_completed() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
-        observer.on_terminal(Terminal::<String>::Completed);
+        observer.on_termination(Termination::<String>::Completed);
         Subscription::new_none_disposal()
     });
     let (checker, observer) = Checker::new();
@@ -28,7 +28,7 @@ fn test_completed() {
 fn test_error() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
-        observer.on_terminal(Terminal::Error("error"));
+        observer.on_termination(Termination::Error("error"));
         Subscription::new_none_disposal()
     });
     let (checker, observer) = Checker::new();
@@ -48,7 +48,7 @@ async fn test_unsubscribe() {
             tokio::time::sleep(Duration::from_millis(100)).await;
             observer.on_next(3);
             tokio::time::sleep(Duration::from_millis(100)).await;
-            observer.on_terminal(Terminal::<String>::Completed);
+            observer.on_termination(Termination::<String>::Completed);
         });
         Subscription::new_with_disposal_callback(move || handle.abort())
     });
@@ -99,7 +99,7 @@ fn test_ref() {
 
     let observable = Create::new(|mut observer| {
         observer.on_next(&value);
-        observer.on_terminal(Terminal::Error(&error));
+        observer.on_termination(Termination::Error(&error));
         Subscription::new_none_disposal()
     });
     let (checker, observer) = Checker::new();
@@ -116,21 +116,21 @@ fn test_mut_ref() {
 
     let observable = Create::new(|mut observer| {
         observer.on_next(&mut value);
-        observer.on_terminal(Terminal::Error(&mut error));
+        observer.on_termination(Termination::Error(&mut error));
         Subscription::new_none_disposal()
     });
     let (checker, observer) = Checker::new();
 
-    let (mut on_next, on_terminal) = observer.into_callbacks();
+    let (mut on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(
         |value| {
             on_next(*value);
             *value *= 2;
         },
-        |terminal| match terminal {
-            Terminal::Completed => panic!(),
-            Terminal::Error(error) => {
-                on_terminal(Terminal::Error(*error));
+        |termination| match termination {
+            Termination::Completed => panic!(),
+            Termination::Error(error) => {
+                on_termination(Termination::Error(*error));
                 *error *= 2;
             }
         },
@@ -150,7 +150,7 @@ async fn test_async() {
             tokio::time::sleep(Duration::from_millis(100)).await;
             observer.on_next(2);
             tokio::time::sleep(Duration::from_millis(100)).await;
-            observer.on_terminal(Terminal::<String>::Completed);
+            observer.on_termination(Termination::<String>::Completed);
         });
         Subscription::new_with_disposal_callback(move || handle.abort())
     });
@@ -183,7 +183,7 @@ async fn test_async() {
 fn test_subscribe_by_different_observer() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
-        observer.on_terminal(Terminal::Error("error"));
+        observer.on_termination(Termination::Error("error"));
         Subscription::new_none_disposal()
     });
     let (checker_1, observer_1) = Checker::new();
@@ -195,8 +195,8 @@ fn test_subscribe_by_different_observer() {
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
-    let (on_next, on_terminal) = observer_2.into_callbacks();
-    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_error("error"));
@@ -217,7 +217,7 @@ fn test_lifetime_sub() {
     {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            observer.on_terminal(Terminal::<String>::Completed);
+            observer.on_termination(Termination::<String>::Completed);
             Subscription::new_with_disposal_callback(|| {
                 life_marker.consume_ref();
             })
@@ -257,7 +257,7 @@ fn test_fn() {
     Create::new(|mut observer| {
         s.consume();
         observer.on_next(111);
-        observer.on_terminal(Terminal::Error("error"));
+        observer.on_termination(Termination::Error("error"));
         Subscription::new_none_disposal()
     });
 }
@@ -266,7 +266,7 @@ fn test_fn() {
 fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
-        observer.on_terminal(Terminal::Error(TestStruct));
+        observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
@@ -293,7 +293,7 @@ fn test_wrap_observable() {
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_dropped());
 
-    subject.on_terminal(Terminal::Error("error"));
+    subject.on_termination(Termination::Error("error"));
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_dropped());
 }
@@ -303,7 +303,7 @@ fn test_type_inference_with_subscribe() {
     // Custom operations
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
-        observer.on_terminal(Terminal::Error("error"));
+        observer.on_termination(Termination::Error("error"));
         Subscription::new_none_disposal()
     });
 
@@ -317,7 +317,7 @@ fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
-        observer.on_terminal(Terminal::Error("error"));
+        observer.on_termination(Termination::Error("error"));
         Subscription::new_none_disposal()
     });
 

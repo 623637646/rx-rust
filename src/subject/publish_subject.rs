@@ -1,7 +1,7 @@
 use super::Subject;
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal, boxed_observer::BoxedObserver},
+    observer::{Observer, Termination, boxed_observer::BoxedObserver},
     subscription::Subscription,
     utils::unique_key_store::UniqueKeyStore,
 };
@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex, RwLock};
 #[educe(Debug, Clone)]
 pub struct PublishSubject<'or, T, E> {
     observers: Arc<Mutex<UniqueKeyStore<BoxedObserver<'or, T, E>>>>,
-    terminated: Arc<RwLock<Option<Terminal<E>>>>,
+    terminated: Arc<RwLock<Option<Termination<E>>>>,
 }
 
 impl<T, E> PublishSubject<'_, T, E> {
@@ -23,7 +23,7 @@ impl<T, E> PublishSubject<'_, T, E> {
         }
     }
 
-    pub fn terminated(&self) -> Option<Terminal<E>>
+    pub fn terminated(&self) -> Option<Termination<E>>
     where
         E: Clone,
     {
@@ -45,7 +45,7 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated.read().unwrap().as_ref().cloned() {
-            observer.on_terminal(terminated);
+            observer.on_termination(terminated);
             return Subscription::new_none_disposal();
         }
         let observers = self.observers;
@@ -70,13 +70,13 @@ where
         }
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
+    fn on_termination(self, termination: Termination<E>) {
         if self.terminated.read().unwrap().is_some() {
             return;
         }
-        *self.terminated.write().unwrap() = Some(terminal.clone());
+        *self.terminated.write().unwrap() = Some(termination.clone());
         for observer in self.observers.lock().unwrap().drain() {
-            observer.on_terminal(terminal.clone());
+            observer.on_termination(termination.clone());
         }
     }
 }

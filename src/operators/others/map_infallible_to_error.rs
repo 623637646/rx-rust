@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -49,10 +49,10 @@ where
         self.observer.on_next(value);
     }
 
-    fn on_terminal(self, terminal: Terminal<Infallible>) {
-        match terminal {
-            Terminal::Completed => self.observer.on_terminal(Terminal::Completed),
-            Terminal::Error(_) => unreachable!(),
+    fn on_termination(self, termination: Termination<Infallible>) {
+        match termination {
+            Termination::Completed => self.observer.on_termination(Termination::Completed),
+            Termination::Error(_) => unreachable!(),
         }
     }
 }

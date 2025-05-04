@@ -1,7 +1,7 @@
 use super::{Subject, publish_subject::PublishSubject};
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
@@ -22,7 +22,7 @@ impl<T, E> BehaviorSubject<'_, T, E> {
         }
     }
 
-    pub fn terminated(&self) -> Option<Terminal<E>>
+    pub fn terminated(&self) -> Option<Termination<E>>
     where
         E: Clone,
     {
@@ -45,7 +45,7 @@ where
 {
     fn subscribe(self, mut observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         if let Some(terminated) = self.publish_subject.terminated() {
-            observer.on_terminal(terminated);
+            observer.on_termination(terminated);
             Subscription::new_none_disposal()
         } else {
             observer.on_next(self.value.read().unwrap().clone());
@@ -66,9 +66,9 @@ where
         }
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
+    fn on_termination(self, termination: Termination<E>) {
         if self.publish_subject.terminated().is_none() {
-            self.publish_subject.on_terminal(terminal);
+            self.publish_subject.on_termination(termination);
         }
     }
 }

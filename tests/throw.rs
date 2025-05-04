@@ -2,7 +2,7 @@ mod tests_utils;
 
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
-    observer::Terminal,
+    observer::Termination,
     operators::creating::throw::Throw,
 };
 use tests_utils::checker::Checker;
@@ -36,13 +36,13 @@ fn test_mut_ref() {
     let observable = Throw::new(&mut error);
     let (checker, observer) = Checker::<i32, i32>::new();
 
-    let (_, on_terminal) = observer.into_callbacks();
+    let (_, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(
         |_| unreachable!(),
-        |terminal| match terminal {
-            Terminal::Completed => unreachable!(),
-            Terminal::Error(error) => {
-                on_terminal(Terminal::Error(*error));
+        |termination| match termination {
+            Termination::Completed => unreachable!(),
+            Termination::Error(error) => {
+                on_termination(Termination::Error(*error));
                 *error = 222;
             }
         },
@@ -81,8 +81,8 @@ fn test_subscribe_by_different_observer() {
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
-    let (on_next, on_terminal) = observer_2.into_callbacks();
-    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_error(111));

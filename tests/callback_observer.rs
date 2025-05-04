@@ -2,7 +2,7 @@ mod tests_utils;
 
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
-    observer::{Observer, Terminal, callback_observer::CallbackObserver},
+    observer::{Observer, Termination, callback_observer::CallbackObserver},
     operators::creating::{create::Create, just::Just},
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
@@ -17,8 +17,8 @@ fn test_completed() {
     // Custom operations
     let observable = subject.clone();
 
-    let (on_next, on_terminal) = observer.into_callbacks();
-    let _subscription = observable.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer.into_callbacks();
+    let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -26,7 +26,7 @@ fn test_completed() {
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_active());
 
-    subject.on_terminal(Terminal::<&str>::Completed);
+    subject.on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
 }
@@ -39,8 +39,8 @@ fn test_error() {
     // Custom operations
     let observable = subject.clone();
 
-    let (on_next, on_terminal) = observer.into_callbacks();
-    let _subscription = observable.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer.into_callbacks();
+    let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -48,7 +48,7 @@ fn test_error() {
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_active());
 
-    subject.on_terminal(Terminal::Error("error"));
+    subject.on_termination(Termination::Error("error"));
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_error("error"));
 }
@@ -64,10 +64,10 @@ fn test_unsubscribe() {
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
-    let (on_next, on_terminal) = observer_1.into_callbacks();
-    let subscription_1 = observable_1.subscribe_with_callback(on_next, on_terminal);
-    let (on_next, on_terminal) = observer_2.into_callbacks();
-    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer_1.into_callbacks();
+    let subscription_1 = observable_1.subscribe_with_callback(on_next, on_termination);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -91,7 +91,7 @@ fn test_unsubscribe() {
     assert!(checker_2.is_values_matched(&[111, 222]));
     assert!(checker_2.is_active());
 
-    subject.on_terminal(Terminal::Error("error"));
+    subject.on_termination(Termination::Error("error"));
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[111, 222]));
@@ -109,8 +109,8 @@ fn test_ref() {
     // Custom operations
     let observable = subject.clone();
 
-    let (on_next, on_terminal) = observer.into_callbacks();
-    let _subscription = observable.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer.into_callbacks();
+    let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -118,7 +118,7 @@ fn test_ref() {
     assert!(checker.is_values_matched(&[&value]));
     assert!(checker.is_active());
 
-    subject.on_terminal(Terminal::Error(&error));
+    subject.on_termination(Termination::Error(&error));
     assert!(checker.is_values_matched(&[&value]));
     assert!(checker.is_error(&error));
 }
@@ -129,13 +129,13 @@ fn test_mut_ref() {
     let observable = Just::new(&mut value);
     let (checker, observer) = Checker::new();
 
-    let (mut on_next, on_terminal) = observer.into_callbacks();
+    let (mut on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(
         |value| {
             on_next(*value);
             *value *= 2;
         },
-        on_terminal,
+        on_termination,
     );
 
     assert!(checker.is_values_matched(&[111]));
@@ -152,8 +152,8 @@ async fn test_async() {
     let observable = subject.clone();
 
     let handle = tokio::spawn(async move {
-        let (on_next, on_terminal) = observer.into_callbacks();
-        observable.subscribe_with_callback(on_next, on_terminal)
+        let (on_next, on_termination) = observer.into_callbacks();
+        observable.subscribe_with_callback(on_next, on_termination)
     });
     let subscription = handle.await.unwrap();
     assert!(checker.is_values_matched(&[]));
@@ -174,7 +174,7 @@ async fn test_async() {
 
     let subject_cloned = subject.clone();
     let handle = tokio::spawn(async move {
-        subject_cloned.on_terminal(Terminal::Error("error"));
+        subject_cloned.on_termination(Termination::Error("error"));
     });
     handle.await.unwrap();
     assert!(checker.is_values_matched(&[&111]));
@@ -190,12 +190,12 @@ fn test_multiple_operation() {
     // Custom operations
     let observable = subject.clone();
 
-    let (on_next, on_terminal) = observer_1.into_callbacks();
+    let (on_next, on_termination) = observer_1.into_callbacks();
     let _subscription_1 = observable
         .clone()
-        .subscribe_with_callback(on_next, on_terminal);
-    let (on_next, on_terminal) = observer_2.into_callbacks();
-    let _subscription_2 = observable.subscribe_with_callback(on_next, on_terminal);
+        .subscribe_with_callback(on_next, on_termination);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -207,7 +207,7 @@ fn test_multiple_operation() {
     assert!(checker_2.is_values_matched(&[111]));
     assert!(checker_2.is_active());
 
-    subject.on_terminal(Terminal::Error("error"));
+    subject.on_termination(Termination::Error("error"));
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[111]));
@@ -222,8 +222,8 @@ fn test_without_convenient_api() {
     // Custom operations
     let observable = subject.clone();
 
-    let (on_next, on_terminal) = observer.into_callbacks();
-    let _subscription = observable.subscribe(CallbackObserver::new(on_next, on_terminal));
+    let (on_next, on_termination) = observer.into_callbacks();
+    let _subscription = observable.subscribe(CallbackObserver::new(on_next, on_termination));
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -231,7 +231,7 @@ fn test_without_convenient_api() {
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_active());
 
-    subject.on_terminal(Terminal::<&str>::Completed);
+    subject.on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
 }
@@ -249,7 +249,7 @@ fn test_lifetime_sub() {
     {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
-            observer.on_terminal(Terminal::<String>::Completed);
+            observer.on_termination(Termination::<String>::Completed);
             Subscription::new_with_disposal_callback(|| {
                 life_marker.consume_ref();
             })
@@ -276,8 +276,8 @@ fn test_lifetime_or() {
         });
 
         let on_next = |_: i32| life_marker_2.consume_ref();
-        let on_terminal = |_: Terminal<String>| life_marker_2.consume_ref();
-        let _subscription = observable.subscribe_with_callback(on_next, on_terminal);
+        let on_termination = |_: Termination<String>| life_marker_2.consume_ref();
+        let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     }
 }
 

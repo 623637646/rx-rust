@@ -1,5 +1,5 @@
 use educe::Educe;
-use rx_rust::observer::{Observer, Terminal};
+use rx_rust::observer::{Observer, Termination};
 use std::sync::{Arc, RwLock};
 
 /// A helper struct for testing observables.
@@ -7,24 +7,24 @@ use std::sync::{Arc, RwLock};
 #[educe(Debug, Clone)]
 pub(crate) struct Checker<T, E> {
     values: Arc<RwLock<Vec<T>>>,
-    terminal: Arc<RwLock<Option<Terminal<E>>>>,
+    termination: Arc<RwLock<Option<Termination<E>>>>,
     dropped: Arc<RwLock<bool>>,
 }
 
 impl<T, E> Checker<T, E> {
     pub(crate) fn new() -> (Self, CheckerObserver<T, E>) {
         let values = Arc::new(RwLock::new(Vec::new()));
-        let terminal = Arc::new(RwLock::new(None));
+        let termination = Arc::new(RwLock::new(None));
         let dropped = Arc::new(RwLock::new(false));
         (
             Self {
                 values: values.clone(),
-                terminal: terminal.clone(),
+                termination: termination.clone(),
                 dropped: dropped.clone(),
             },
             CheckerObserver {
                 values,
-                terminal,
+                termination,
                 dropped,
             },
         )
@@ -39,28 +39,28 @@ impl<T, E> Checker<T, E> {
     }
 
     pub(crate) fn is_active(&self) -> bool {
-        let terminal = self.terminal.read().unwrap();
+        let termination = self.termination.read().unwrap();
         let dropped = self.dropped.read().unwrap();
-        terminal.is_none() && !*dropped
+        termination.is_none() && !*dropped
     }
 
     pub(crate) fn is_dropped(&self) -> bool {
-        let terminal = self.terminal.read().unwrap();
+        let termination = self.termination.read().unwrap();
         let dropped = self.dropped.read().unwrap();
-        terminal.is_none() && *dropped
+        termination.is_none() && *dropped
     }
 
     pub(crate) fn is_error(&self, expected: E) -> bool
     where
         E: PartialEq,
     {
-        let terminal = self.terminal.read().unwrap();
-        matches!(*terminal, Some(Terminal::Error(ref e)) if *e == expected)
+        let termination = self.termination.read().unwrap();
+        matches!(*termination, Some(Termination::Error(ref e)) if *e == expected)
     }
 
     pub(crate) fn is_completed(&self) -> bool {
-        let terminal = self.terminal.read().unwrap();
-        matches!(*terminal, Some(Terminal::Completed))
+        let termination = self.termination.read().unwrap();
+        matches!(*termination, Some(Termination::Completed))
     }
 }
 
@@ -68,7 +68,7 @@ impl<T, E> Checker<T, E> {
 #[educe(Debug)]
 pub(crate) struct CheckerObserver<T, E> {
     values: Arc<RwLock<Vec<T>>>,
-    terminal: Arc<RwLock<Option<Terminal<E>>>>,
+    termination: Arc<RwLock<Option<Termination<E>>>>,
     dropped: Arc<RwLock<bool>>,
 }
 
@@ -77,7 +77,7 @@ impl<T, E> CheckerObserver<T, E> {
         self,
     ) -> (
         impl FnMut(T) + Send + use<T, E>,
-        impl FnOnce(Terminal<E>) + Send + use<T, E>,
+        impl FnOnce(Termination<E>) + Send + use<T, E>,
     )
     where
         T: Send + Sync,
@@ -89,7 +89,7 @@ impl<T, E> CheckerObserver<T, E> {
                 let mut values = values.write().unwrap();
                 values.push(value);
             },
-            |terminal| self.on_terminal(terminal),
+            |termination| self.on_termination(termination),
         )
     }
 }
@@ -106,9 +106,9 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
         values.push(value);
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
-        let mut terminal_lock = self.terminal.write().unwrap();
-        assert!(terminal_lock.is_none());
-        *terminal_lock = Some(terminal);
+    fn on_termination(self, termination: Termination<E>) {
+        let mut termination_lock = self.termination.write().unwrap();
+        assert!(termination_lock.is_none());
+        *termination_lock = Some(termination);
     }
 }

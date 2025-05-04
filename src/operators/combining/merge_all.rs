@@ -1,6 +1,6 @@
 use crate::{
     observable::Observable,
-    observer::{Observer, Terminal},
+    observer::{Observer, Termination},
     subscription::{Subscription, disposable::CallbackDisposal},
 };
 use educe::Educe;
@@ -37,7 +37,7 @@ where
         let observer = MergeAllObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             subscriptions: subscriptions.clone(),
-            pending_terminals_count: Arc::new(Mutex::new(1)),
+            pending_termination_count: Arc::new(Mutex::new(1)),
             _marker: PhantomData,
         };
         let disposal = CallbackDisposal::new(|| {
@@ -50,7 +50,7 @@ where
 struct MergeAllObserver<'sub, T, OR> {
     observer: Arc<Mutex<Option<OR>>>,
     subscriptions: Arc<Mutex<Vec<Subscription<'sub>>>>,
-    pending_terminals_count: Arc<Mutex<usize>>,
+    pending_termination_count: Arc<Mutex<usize>>,
     _marker: PhantomData<fn(T) -> T>, // Refer to `MapInfallibleToErrorObserver` for the reason of using `PhantomData<fn(T) -> T>`
 }
 
@@ -62,27 +62,27 @@ where
     fn on_next(&mut self, value: OE2) {
         let observer = MergeAllInnerObserver {
             observer: self.observer.clone(),
-            pending_terminals_count: self.pending_terminals_count.clone(),
+            pending_termination_count: self.pending_termination_count.clone(),
         };
-        *self.pending_terminals_count.lock().unwrap() += 1;
+        *self.pending_termination_count.lock().unwrap() += 1;
         let sub = value.subscribe(observer);
         self.subscriptions.lock().unwrap().push(sub);
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
-        match terminal {
-            Terminal::Completed => {
-                let mut count = self.pending_terminals_count.lock().unwrap();
+    fn on_termination(self, termination: Termination<E>) {
+        match termination {
+            Termination::Completed => {
+                let mut count = self.pending_termination_count.lock().unwrap();
                 *count -= 1;
                 if *count == 0 {
                     if let Some(observer) = self.observer.lock().unwrap().take() {
-                        observer.on_terminal(terminal);
+                        observer.on_termination(termination);
                     }
                 }
             }
-            Terminal::Error(_) => {
+            Termination::Error(_) => {
                 if let Some(observer) = self.observer.lock().unwrap().take() {
-                    observer.on_terminal(terminal);
+                    observer.on_termination(termination);
                 }
             }
         }
@@ -91,7 +91,7 @@ where
 
 struct MergeAllInnerObserver<OR> {
     observer: Arc<Mutex<Option<OR>>>,
-    pending_terminals_count: Arc<Mutex<usize>>,
+    pending_termination_count: Arc<Mutex<usize>>,
 }
 
 impl<T, E, OR> Observer<T, E> for MergeAllInnerObserver<OR>
@@ -104,20 +104,20 @@ where
         }
     }
 
-    fn on_terminal(self, terminal: Terminal<E>) {
-        match terminal {
-            Terminal::Completed => {
-                let mut count = self.pending_terminals_count.lock().unwrap();
+    fn on_termination(self, termination: Termination<E>) {
+        match termination {
+            Termination::Completed => {
+                let mut count = self.pending_termination_count.lock().unwrap();
                 *count -= 1;
                 if *count == 0 {
                     if let Some(observer) = self.observer.lock().unwrap().take() {
-                        observer.on_terminal(terminal);
+                        observer.on_termination(termination);
                     }
                 }
             }
-            Terminal::Error(_) => {
+            Termination::Error(_) => {
                 if let Some(observer) = self.observer.lock().unwrap().take() {
-                    observer.on_terminal(terminal);
+                    observer.on_termination(termination);
                 }
             }
         }

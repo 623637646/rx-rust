@@ -2,7 +2,7 @@ mod tests_utils;
 
 use rx_rust::observable::Observable;
 use rx_rust::observable::observable_ext::ObservableExt;
-use rx_rust::observer::{Observer, Terminal};
+use rx_rust::observer::{Observer, Termination};
 use rx_rust::subject::publish_subject::PublishSubject;
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
@@ -26,10 +26,12 @@ fn test_completed() {
     assert!(checker.is_active());
     assert!(subject.terminated().is_none());
 
-    subject.clone().on_terminal(Terminal::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
-    assert!(matches!(subject.terminated(), Some(Terminal::Completed)));
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
 
 #[test]
@@ -50,12 +52,12 @@ fn test_error() {
     assert!(checker.is_active());
     assert!(subject.terminated().is_none());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_error("error"));
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 }
 
@@ -99,14 +101,14 @@ fn test_unsubscribe() {
     assert!(checker_2.is_active());
     assert!(subject.terminated().is_none());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[111, 222]));
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 }
 
@@ -131,10 +133,13 @@ fn test_ref() {
     assert!(checker.is_active());
     assert!(subject.terminated().is_none());
 
-    subject.clone().on_terminal(Terminal::Error(&error));
+    subject.clone().on_termination(Termination::Error(&error));
     assert!(checker.is_values_matched(&[&value]));
     assert!(checker.is_error(&error));
-    assert!(matches!(subject.terminated(), Some(Terminal::Error(&222))));
+    assert!(matches!(
+        subject.terminated(),
+        Some(Termination::Error(&222))
+    ));
 }
 
 #[tokio::test]
@@ -168,14 +173,14 @@ async fn test_async() {
 
     let subject_cloned = subject.clone();
     let handle = tokio::spawn(async move {
-        subject_cloned.on_terminal(Terminal::Error("error"));
+        subject_cloned.on_termination(Termination::Error("error"));
     });
     handle.await.unwrap();
     assert!(checker.is_values_matched(&[&111]));
     assert!(checker.is_dropped());
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 }
 
@@ -192,8 +197,8 @@ fn test_subscribe_by_different_observer() {
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
-    let (on_next, on_terminal) = observer_2.into_callbacks();
-    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -207,14 +212,14 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.is_active());
     assert!(subject.terminated().is_none());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[111]));
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 }
 
@@ -243,7 +248,7 @@ fn test_clone() {
 }
 
 #[test]
-fn test_actions_after_terminal() {
+fn test_actions_after_termination() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -262,14 +267,14 @@ fn test_actions_after_terminal() {
     assert!(checker_2.is_active());
     assert!(subject.terminated().is_none());
 
-    subject.clone().on_terminal(Terminal::Error("error"));
+    subject.clone().on_termination(Termination::Error("error"));
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[]));
     assert!(checker_2.is_active());
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 
     let _subscription_2 = subject.clone().subscribe(observer_2);
@@ -279,7 +284,7 @@ fn test_actions_after_terminal() {
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 
     subject.on_next(222);
@@ -289,27 +294,27 @@ fn test_actions_after_terminal() {
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 
-    subject.clone().on_terminal(Terminal::Completed);
+    subject.clone().on_termination(Termination::Completed);
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[]));
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 
-    subject.clone().on_terminal(Terminal::Error("error2"));
+    subject.clone().on_termination(Termination::Error("error2"));
     assert!(checker_1.is_values_matched(&[111]));
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[]));
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
-        Some(Terminal::Error("error"))
+        Some(Termination::Error("error"))
     ));
 }
 
