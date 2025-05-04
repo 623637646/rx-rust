@@ -22,4 +22,12 @@ pub trait Scheduler {
         period: Duration,
         delay: Option<Duration>,
     ) -> impl Disposable + Send + 'static;
+
+    fn schedule_future<FU>(
+        &self,
+        future: FU,
+        result_callback: impl FnOnce(FU::Output) + Send + 'static,
+    ) -> impl Disposable + Send + 'static
+    where
+        FU: Future + Send + 'static;
 }

@@ -1,6 +1,7 @@
 pub mod create;
 pub mod defer;
 pub mod empty;
+pub mod from_future;
 pub mod from_iter;
 pub mod interval;
 pub mod just;

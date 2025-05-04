@@ -76,4 +76,18 @@ impl Scheduler for TokioScheduler {
         });
         CallbackDisposal::new(move || handle.abort())
     }
+
+    fn schedule_future<FU>(
+        &self,
+        future: FU,
+        result_callback: impl FnOnce(FU::Output) + Send + 'static,
+    ) -> impl Disposable + Send + 'static
+    where
+        FU: Future + Send + 'static,
+    {
+        let handle = tokio::spawn(async {
+            result_callback(future.await);
+        });
+        CallbackDisposal::new(move || handle.abort())
+    }
 }
