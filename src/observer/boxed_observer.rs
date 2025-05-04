@@ -1,4 +1,9 @@
-use super::{Event, Observer, Termination};
+use super::{Observer, Termination};
+
+pub enum Event<T, E> {
+    Next(T),
+    Termination(Termination<E>),
+}
 
 /// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
