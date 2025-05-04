@@ -1,4 +1,5 @@
 use crate::subscription::disposable::Disposable;
+use futures::{Stream, stream::StreamExt};
 use std::time::Duration;
 
 #[cfg(feature = "tokio-scheduler")]
@@ -30,4 +31,23 @@ pub trait Scheduler {
     ) -> impl Disposable + Send + 'static
     where
         FU: Future + Send + 'static;
+
+    fn schedule_stream<SM>(
+        &self,
+        mut stream: SM,
+        mut result_callback: impl FnMut(Option<SM::Item>) + Send + 'static,
+    ) -> impl Disposable + Send + 'static
+    where
+        SM: Stream + Send + Unpin + 'static,
+    {
+        self.schedule_future(
+            async move {
+                while let Some(item) = stream.next().await {
+                    result_callback(Some(item));
+                }
+                result_callback(None);
+            },
+            |_| {},
+        )
+    }
 }

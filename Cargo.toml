@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tokio = { version = "1.40.0", optional = true, features = ["full"] }
-
 # Using this to fix the issue: https://github.com/rust-lang/rust/issues/26925 
 # Refer to: https://stackoverflow.com/a/79571732/9315497
-educe = "0.6.0" 
+educe = "0.6.0"
+
+# TODO: Dependent below crates in some features instead of in all.
+tokio = { version = "1.40.0", optional = true, features = ["full"] }
+futures = "0.3.31"
 
 [features]
 default = ["tokio-scheduler"] #TODO: default without "tokio-scheduler"
