@@ -261,7 +261,7 @@ fn test_lifetime_or_sub() {
 #[test]
 fn test_clone() {
     let observable = BehaviorSubject::<'_, _, TestStruct>::new(TestStruct);
-    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
@@ -359,5 +359,5 @@ fn test_type_inference_without_subscribe() {
     let subject: BehaviorSubject<'_, i32, String> = BehaviorSubject::new(-1);
     let observable = subject;
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

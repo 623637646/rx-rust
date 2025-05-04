@@ -299,7 +299,7 @@ fn test_fn() {
 #[test]
 fn test_clone() {
     let observable = Defer::new(|| Just::new(TestStruct));
-    let _ = observable.clone(); // Make sure it's Clone when OE is not Clone.
+    _ = observable.clone(); // Make sure it's Clone when OE is not Clone.
 }
 
 #[test]
@@ -343,5 +343,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = Defer::new(|| subject);
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

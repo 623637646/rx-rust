@@ -123,7 +123,7 @@ async fn test_subscribe_by_different_observer() {
 #[tokio::test]
 async fn test_clone() {
     let observable = Timer::new(111, Duration::from_millis(100), TokioScheduler);
-    let _ = observable.clone();
+    _ = observable.clone();
 }
 
 #[tokio::test]
@@ -141,5 +141,5 @@ async fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Timer::new(111, Duration::from_millis(100), TokioScheduler);
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

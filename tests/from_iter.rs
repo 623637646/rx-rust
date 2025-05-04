@@ -204,7 +204,7 @@ fn test_subscribe_by_different_observer() {
 fn test_clone() {
     let source = [1, 2, 3];
     let observable = FromIter::new(source);
-    let _ = observable.clone();
+    _ = observable.clone();
 }
 
 #[test]
@@ -224,5 +224,5 @@ fn test_type_inference_without_subscribe() {
     let source = [1, 2, 3];
     let observable = FromIter::new(source);
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

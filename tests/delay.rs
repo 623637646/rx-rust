@@ -502,7 +502,7 @@ fn test_clone() {
         Subscription::new_none_disposal()
     });
     let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
-    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
@@ -522,5 +522,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject.delay(Duration::from_millis(100), TokioScheduler);
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

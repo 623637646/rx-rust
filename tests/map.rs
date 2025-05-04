@@ -364,7 +364,7 @@ fn test_clone() {
         Subscription::new_none_disposal()
     });
     let observable = observable.map(|value| value);
-    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
@@ -384,5 +384,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject.map(|value| value.to_string());
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

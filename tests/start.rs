@@ -101,7 +101,7 @@ fn test_fn() {
 fn test_clone() {
     let value = 111;
     let observable = Start::new(|| value + 222);
-    let _ = observable.clone();
+    _ = observable.clone();
 }
 
 #[test]
@@ -121,5 +121,5 @@ fn test_type_inference_without_subscribe() {
     let value = 111;
     let observable = Start::new(|| value + 222);
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

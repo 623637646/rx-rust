@@ -254,7 +254,7 @@ fn test_lifetime_or() {
 fn test_fn() {
     let s = TestStruct;
 
-    let _ = Create::new(|mut observer| {
+    _ = Create::new(|mut observer| {
         s.consume();
         observer.on_next(111);
         observer.on_terminal(Terminal::Error("error"));
@@ -269,7 +269,7 @@ fn test_clone() {
         observer.on_terminal(Terminal::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
@@ -321,5 +321,5 @@ fn test_type_inference_without_subscribe() {
         Subscription::new_none_disposal()
     });
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

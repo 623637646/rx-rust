@@ -57,7 +57,7 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_clone() {
     let observable = Empty;
-    let _ = observable.clone();
+    _ = observable.clone();
 }
 
 #[test]
@@ -75,5 +75,5 @@ fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Empty;
 
-    let _ = observable.buffer_with_count(1);
+    _ = observable.buffer_with_count(1);
 }

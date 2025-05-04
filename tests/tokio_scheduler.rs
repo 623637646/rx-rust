@@ -152,5 +152,5 @@ async fn test_schedule_period_stop() {
 #[test]
 fn test_clone() {
     let scheduler = TokioScheduler;
-    let _ = scheduler.clone();
+    _ = scheduler.clone();
 }
