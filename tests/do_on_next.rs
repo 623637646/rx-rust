@@ -430,7 +430,7 @@ fn test_lifetime_or() {
         let observable = observable.do_on_next(|_| {});
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(Some(&life_marker_2));
+        observer.on_next(&life_marker_2);
         let subscription = observable.subscribe(observer);
 
         _ = subscription; // keep the subscription alive
