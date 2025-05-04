@@ -316,7 +316,7 @@ fn test_fn() {
 #[test]
 fn test_clone() {
     let observable = Defer::new(|| Just::new(TestStruct));
-    let _ = observable.clone(); // make sure it's Clone when OE is not Clone.
+    let _ = observable.clone(); // Make sure it's Clone when OE is not Clone.
 }
 
 #[test]

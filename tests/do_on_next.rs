@@ -460,7 +460,7 @@ fn test_clone() {
         Subscription::new_none_disposal()
     });
     let observable = observable.do_on_next(|_| {});
-    let _ = observable.clone(); // make sure it's Clone when T and E is not Clone.
+    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]

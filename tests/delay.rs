@@ -3,10 +3,7 @@ mod tests_utils;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Terminal},
-    operators::{
-        creating::{create::Create, just::Just},
-        utility::delay::Delay,
-    },
+    operators::{creating::create::Create, utility::delay::Delay},
     scheduler::tokio_scheduler::TokioScheduler,
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
@@ -516,9 +513,13 @@ async fn test_lifetime_sub() {
 
 #[test]
 fn test_clone() {
-    let observable = Just::new(111);
+    let observable = Create::new(|mut observer| {
+        observer.on_next(TestStruct);
+        observer.on_terminal(Terminal::Error(TestStruct));
+        Subscription::new_none_disposal()
+    });
     let observable = observable.delay(Duration::from_millis(100), TokioScheduler);
-    let _ = observable.clone();
+    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]

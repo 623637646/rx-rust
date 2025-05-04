@@ -274,7 +274,7 @@ fn test_lifetime_or_sub() {
 #[test]
 fn test_clone() {
     let observable = BehaviorSubject::<'_, _, TestStruct>::new(TestStruct);
-    let _ = observable.clone(); // make sure it's Clone when T and E are not Clone.
+    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]

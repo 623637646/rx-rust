@@ -277,9 +277,13 @@ fn test_lifetime_sub() {
 
 #[test]
 fn test_clone() {
-    let subject: PublishSubject<'_, i32, &i32> = PublishSubject::default();
-    let observable: MapValueToVoid<&str, _> = subject.map_value_to_void();
-    let _ = observable.clone();
+    let observable = Create::new(|mut observer| {
+        observer.on_next(TestStruct);
+        observer.on_terminal(Terminal::Error(TestStruct));
+        Subscription::new_none_disposal()
+    });
+    let observable: MapValueToVoid<&str, _> = observable.map_value_to_void();
+    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]

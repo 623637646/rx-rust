@@ -795,12 +795,12 @@ fn test_lifetime_or() {
 fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
-        observer.on_terminal(Terminal::Error("error"));
+        observer.on_terminal(Terminal::Error(TestStruct));
         Subscription::new_none_disposal()
     });
     let boundary_subject: PublishSubject<'_, i32, ()> = PublishSubject::default();
     let observable = observable.buffer(boundary_subject);
-    let _ = observable.clone(); // make sure it's Clone when T is not Clone.
+    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]

@@ -282,11 +282,11 @@ fn test_fn() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
-        observer.on_terminal(Terminal::<String>::Completed);
+        observer.on_next(TestStruct);
+        observer.on_terminal(Terminal::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let _ = observable.clone();
+    let _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
