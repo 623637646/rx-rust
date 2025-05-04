@@ -254,7 +254,7 @@ fn test_lifetime_or() {
 fn test_fn() {
     let s = TestStruct;
 
-    _ = Create::new(|mut observer| {
+    Create::new(|mut observer| {
         s.consume();
         observer.on_next(111);
         observer.on_terminal(Terminal::Error("error"));

@@ -84,17 +84,15 @@ async fn test_async() {
 fn test_lifetime_or() {
     // OK
     let life_marker = TestStruct;
-    let boxed_observer;
+    let _boxed_observer;
 
     // Error
-    // let boxed_observer;
+    // let _boxed_observer;
     // let life_marker = TestStruct;
 
     {
         let (_, mut observer) = Checker::<_, &str>::new();
         observer.on_next(&life_marker);
-        boxed_observer = BoxedObserver::new(observer);
+        _boxed_observer = BoxedObserver::new(observer);
     }
-
-    _ = boxed_observer;
 }

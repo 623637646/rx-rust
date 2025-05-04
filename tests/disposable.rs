@@ -28,18 +28,16 @@ fn test_boxed_disposal() {
 fn test_lifetime_boxed() {
     // OK
     let life_marker = TestStruct;
-    let disposal;
+    let _disposal;
 
     // Error
-    // let disposal;
+    // let _disposal;
     // let life_marker = TestStruct;
 
     {
         let callback_disposal = CallbackDisposal::new(|| {
             life_marker.consume_ref();
         });
-        disposal = BoxedDisposal::new(callback_disposal);
+        _disposal = BoxedDisposal::new(callback_disposal);
     }
-
-    _ = disposal;
 }

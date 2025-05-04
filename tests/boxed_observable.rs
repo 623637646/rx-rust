@@ -261,10 +261,10 @@ fn test_lifetime_or() {
 fn test_lifetime_oe() {
     // OK
     let life_marker = TestStruct;
-    let observable;
+    let _observable;
 
     // Error
-    // let observable;
+    // let _observable;
     // let life_marker = TestStruct;
 
     {
@@ -275,10 +275,8 @@ fn test_lifetime_oe() {
             Subscription::new_none_disposal()
         });
 
-        observable = BoxedObservable::new(create);
+        _observable = BoxedObservable::new(create);
     }
-
-    _ = observable;
 }
 
 #[test]
