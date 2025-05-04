@@ -20,7 +20,7 @@ async fn test_completed_last_empty() {
     let observable = subject.clone();
     let observable = observable.buffer(boundary_subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -51,8 +51,6 @@ async fn test_completed_last_empty() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -65,7 +63,7 @@ async fn test_completed_last_not_empty() {
     let observable = subject.clone();
     let observable = observable.buffer(boundary_subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -92,8 +90,6 @@ async fn test_completed_last_not_empty() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -106,7 +102,7 @@ async fn test_completed_from_boundary() {
     let observable = subject.clone();
     let observable = observable.buffer(boundary_subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -135,8 +131,6 @@ async fn test_completed_from_boundary() {
         .on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -148,7 +142,7 @@ async fn test_completed_source_and_boundary_are_same() {
     let observable = subject.clone();
     let observable = observable.buffer(subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -163,8 +157,6 @@ async fn test_completed_source_and_boundary_are_same() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![()], vec![()]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -177,7 +169,7 @@ async fn test_error_last_empty() {
     let observable = subject.clone();
     let observable = observable.buffer(boundary_subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -208,8 +200,6 @@ async fn test_error_last_empty() {
     subject.clone().on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -222,7 +212,7 @@ async fn test_error_last_not_empty() {
     let observable = subject.clone();
     let observable = observable.buffer(boundary_subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -249,8 +239,6 @@ async fn test_error_last_not_empty() {
     subject.clone().on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&[vec![], vec![111]]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -263,7 +251,7 @@ async fn test_error_from_boundary() {
     let observable = subject.clone();
     let observable = observable.buffer(boundary_subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -292,8 +280,6 @@ async fn test_error_from_boundary() {
         .on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&[vec![], vec![111]]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -310,7 +296,7 @@ async fn test_unsubscribe() {
     let observable_2 = observable_1.clone();
 
     let subscription_1 = observable_1.subscribe(observer_1);
-    let subscription_2 = observable_2.subscribe(observer_2);
+    let _subscription_2 = observable_2.subscribe(observer_2);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -359,8 +345,6 @@ async fn test_unsubscribe() {
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker_2.is_completed());
-
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]
@@ -378,7 +362,7 @@ fn test_ref() {
     let observable = subject.clone();
     let observable = observable.buffer(boundary_subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -405,8 +389,6 @@ fn test_ref() {
     subject.clone().on_terminal(Terminal::Error(&error));
     assert!(checker.is_values_matched(&[vec![], vec![&value_1]]));
     assert!(checker.is_error(&error));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -527,10 +509,10 @@ fn test_subscribe_by_different_observer() {
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
-    let subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_1 = observable_1.subscribe(observer_1);
 
     let (on_next, on_terminal) = observer_2.into_callbacks();
-    let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -571,9 +553,6 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_1.is_completed());
     assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker_2.is_completed());
-
-    _ = subscription_1; // keep the subscription alive
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]
@@ -589,7 +568,7 @@ fn test_multiple_operation() {
         .buffer(boundary_subject_1.clone())
         .buffer(boundary_subject_2.clone());
 
-    let subscription = observable.clone().subscribe(observer);
+    let _subscription = observable.clone().subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -638,8 +617,6 @@ fn test_multiple_operation() {
         vec![vec![222, 333]]
     ]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -654,7 +631,7 @@ fn test_multiple_operation_same_boundary() {
         .buffer(boundary_subject.clone())
         .buffer(boundary_subject.clone());
 
-    let subscription = observable.clone().subscribe(observer);
+    let _subscription = observable.clone().subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -681,8 +658,6 @@ fn test_multiple_operation_same_boundary() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![vec![]], vec![vec![111], vec![222, 333]]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -695,7 +670,7 @@ async fn test_without_convenient_api() {
     let observable = subject.clone();
     let observable = Buffer::new(observable, boundary_subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -722,8 +697,6 @@ async fn test_without_convenient_api() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -731,10 +704,10 @@ fn test_lifetime_sub() {
     // OK
     let life_marker_1 = TestStruct;
     let life_marker_2 = TestStruct;
-    let subscription;
+    let _subscription;
 
     // Error
-    // let subscription;
+    // let _subscription;
     // let life_marker_1 = TestStruct;
     // let life_marker_2 = TestStruct;
 
@@ -754,10 +727,8 @@ fn test_lifetime_sub() {
         let observable = observable.buffer(boundary_subject);
 
         let (_, observer) = Checker::<_, ()>::new();
-        subscription = observable.subscribe(observer);
+        _subscription = observable.subscribe(observer);
     }
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -785,9 +756,7 @@ fn test_lifetime_or() {
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(vec![&life_marker_3]);
-        let subscription = observable.subscribe(observer);
-
-        _ = subscription; // keep the subscription alive
+        let _subscription = observable.subscribe(observer);
     }
 }
 

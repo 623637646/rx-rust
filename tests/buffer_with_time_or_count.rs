@@ -27,7 +27,7 @@ async fn test_completed_time_last_empty() {
         Some(Duration::from_millis(100)),
     );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -62,8 +62,6 @@ async fn test_completed_time_last_empty() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -80,7 +78,7 @@ async fn test_completed_time_last_not_empty() {
         Some(Duration::from_millis(100)),
     );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -111,8 +109,6 @@ async fn test_completed_time_last_not_empty() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -125,7 +121,7 @@ async fn test_completed_time_no_delay() {
     let observable =
         observable.buffer_with_time_or_count(100, Duration::from_millis(100), TokioScheduler, None);
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -160,8 +156,6 @@ async fn test_completed_time_no_delay() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -178,7 +172,7 @@ async fn test_completed_time_small_delay() {
         Some(Duration::from_millis(30)),
     );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -213,8 +207,6 @@ async fn test_completed_time_small_delay() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -231,7 +223,7 @@ async fn test_completed_count_last_empty() {
         Some(Duration::from_millis(30)),
     );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -262,8 +254,6 @@ async fn test_completed_count_last_empty() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![111, 222, 333], vec![444, 555, 666]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -280,7 +270,7 @@ async fn test_completed_count_last_not_empty() {
         Some(Duration::from_millis(30)),
     );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -307,8 +297,6 @@ async fn test_completed_count_last_not_empty() {
     subject.clone().on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![111, 222, 333], vec![444, 555]]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -325,7 +313,7 @@ async fn test_completed_time_and_count() {
         Some(Duration::from_millis(100)),
     );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -441,8 +429,6 @@ async fn test_completed_time_and_count() {
         vec![777]
     ]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -459,7 +445,7 @@ async fn test_error_time_and_count() {
         Some(Duration::from_millis(100)),
     );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -574,8 +560,6 @@ async fn test_error_time_and_count() {
         vec![],
     ]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -596,7 +580,7 @@ async fn test_unsubscribe() {
     let observable_2 = observable_1.clone();
 
     let subscription_1 = observable_1.subscribe(observer_1);
-    let subscription_2 = observable_2.subscribe(observer_2);
+    let _subscription_2 = observable_2.subscribe(observer_2);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -750,8 +734,6 @@ async fn test_unsubscribe() {
         vec![777]
     ]));
     assert!(checker_2.is_completed());
-
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -915,8 +897,6 @@ async fn test_async() {
         vec![],
     ]));
     assert!(checker.is_dropped());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -938,7 +918,7 @@ async fn test_subscribe_by_different_observer() {
 
     let subscription_1 = observable_1.subscribe(observer_1);
     let (on_next, on_terminal) = observer_2.into_callbacks();
-    let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -1092,8 +1072,6 @@ async fn test_subscribe_by_different_observer() {
         vec![777]
     ]));
     assert!(checker_2.is_completed());
-
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -1117,7 +1095,7 @@ async fn test_multiple_operation() {
             Some(Duration::from_millis(100)),
         );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -1212,8 +1190,6 @@ async fn test_multiple_operation() {
         vec![vec![], vec![555, 555]]
     ]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -1231,7 +1207,7 @@ async fn test_without_convenient_api() {
         Some(Duration::from_millis(100)),
     );
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -1346,18 +1322,16 @@ async fn test_without_convenient_api() {
         vec![],
     ]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
 async fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
-    let subscription;
+    let _subscription;
 
     // Error
-    // let subscription;
+    // let _subscription;
     // let life_marker = TestStruct;
 
     {
@@ -1376,10 +1350,8 @@ async fn test_lifetime_sub() {
         );
 
         let (_, observer) = Checker::<_, ()>::new();
-        subscription = observable.subscribe(observer);
+        _subscription = observable.subscribe(observer);
     }
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]

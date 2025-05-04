@@ -34,9 +34,8 @@ fn test_disposal_dropped() {
         let test_disposal = TestDisposal {
             disposed: disposed.clone(),
         };
-        let subscription = Subscription::new_with_disposal(test_disposal);
+        let _subscription = Subscription::new_with_disposal(test_disposal);
         assert!(!*disposed.read().unwrap());
-        _ = subscription; // keep the subscription alive
     }
     assert!(*disposed.read().unwrap());
 }
@@ -60,14 +59,12 @@ fn test_callback_dropped() {
     let disposed = Arc::new(RwLock::new(false));
     {
         let disposed_clone = disposed.clone();
-        let subscription = Subscription::new_with_disposal_callback(move || {
+        let _subscription = Subscription::new_with_disposal_callback(move || {
             let mut disposed = disposed_clone.write().unwrap();
             assert!(!*disposed);
             *disposed = true;
         });
         assert!(!*disposed.read().unwrap());
-
-        _ = subscription; // keep the subscription alive
     }
     assert!(*disposed.read().unwrap());
 }
@@ -154,17 +151,16 @@ fn test_add_subscription() {
 fn test_lifetime_dis() {
     // OK
     let life_marker = TestStruct;
-    let subscription;
+    let _subscription;
 
     // Error
-    // let subscription;
+    // let _subscription;
     // let life_marker = TestStruct;
 
     {
         let callback = || {
             life_marker.consume_ref();
         };
-        subscription = Subscription::new_with_disposal_callback(callback);
+        _subscription = Subscription::new_with_disposal_callback(callback);
     }
-    _ = subscription;
 }

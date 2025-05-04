@@ -18,7 +18,7 @@ fn test_completed() {
     // Custom operations
     let observable = subject.clone().map_infallible_to_error();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -29,8 +29,6 @@ fn test_completed() {
     subject.clone().on_terminal(Terminal::Completed);
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -45,7 +43,7 @@ fn test_unsubscribe() {
     let observable_2 = observable_1.clone();
 
     let subscription_1 = observable_1.subscribe(observer_1);
-    let subscription_2 = observable_2.subscribe(observer_2);
+    let _subscription_2 = observable_2.subscribe(observer_2);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -74,8 +72,6 @@ fn test_unsubscribe() {
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[111, 222]));
     assert!(checker_2.is_completed());
-
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]
@@ -88,7 +84,7 @@ fn test_ref() {
     // Custom operations
     let observable = subject.clone().map_infallible_to_error();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -99,8 +95,6 @@ fn test_ref() {
     subject.clone().on_terminal(Terminal::Completed);
     assert!(checker.is_values_matched(&[&value]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -119,7 +113,7 @@ fn test_mut_ref() {
     });
     let observable = observable.map_infallible_to_error();
 
-    let subscription = observable.subscribe_with_callback(
+    let _subscription = observable.subscribe_with_callback(
         |value| {
             *value *= 2;
         },
@@ -129,8 +123,6 @@ fn test_mut_ref() {
     assert_eq!(value_1, 222);
     assert_eq!(value_2, 444);
     assert_eq!(value_3, 666);
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -179,10 +171,10 @@ fn test_subscribe_by_different_observer() {
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
-    let subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_1 = observable_1.subscribe(observer_1);
 
     let (on_next, on_terminal) = observer_2.into_callbacks();
-    let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -199,9 +191,6 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_1.is_completed());
     assert!(checker_2.is_values_matched(&[111]));
     assert!(checker_2.is_completed());
-
-    _ = subscription_1; // keep the subscription alive
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]
@@ -215,7 +204,7 @@ fn test_multiple_operation() {
         .map_infallible_to_error()
         .map_infallible_to_error();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -226,8 +215,6 @@ fn test_multiple_operation() {
     subject.on_terminal(Terminal::Completed);
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -238,7 +225,7 @@ fn test_without_convenient_api() {
     // Custom operations
     let observable = MapInfallibleToError::new(subject.clone());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -249,18 +236,16 @@ fn test_without_convenient_api() {
     subject.clone().on_terminal(Terminal::Completed);
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
-    let subscription;
+    let _subscription;
 
     // Error
-    // let subscription;
+    // let _subscription;
     // let life_marker = TestStruct;
 
     {
@@ -273,10 +258,8 @@ fn test_lifetime_sub() {
         let observable = observable.map_infallible_to_error();
 
         let (_, observer) = Checker::<i32, String>::new();
-        subscription = observable.subscribe(observer);
+        _subscription = observable.subscribe(observer);
     }
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -298,9 +281,7 @@ fn test_lifetime_or() {
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(&life_marker_2);
-        let subscription = observable.subscribe(observer);
-
-        _ = subscription; // keep the subscription alive
+        let _subscription = observable.subscribe(observer);
     }
 }
 

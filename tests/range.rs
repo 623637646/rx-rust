@@ -13,11 +13,9 @@ fn test_completed_range() {
     let observable = Range::new(source);
     let (checker, observer) = Checker::new();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[100, 101, 102]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -26,11 +24,9 @@ fn test_completed_range_inclusive() {
     let observable = Range::new(source);
     let (checker, observer) = Checker::new();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[100, 101, 102, 103]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -60,18 +56,15 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_1 = observable_1.subscribe(observer_1);
 
     let (on_next, on_terminal) = observer_2.into_callbacks();
-    let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
 
     assert!(checker_1.is_values_matched(&[100, 101, 102]));
     assert!(checker_1.is_completed());
     assert!(checker_2.is_values_matched(&[100, 101, 102]));
     assert!(checker_2.is_completed());
-
-    _ = subscription_1; // keep the subscription alive
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]

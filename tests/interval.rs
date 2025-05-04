@@ -99,7 +99,7 @@ async fn test_unsubscribe() {
     let observable_2 = observable_1.clone();
 
     let subscription_1 = observable_1.subscribe(observer_1);
-    let subscription_2 = observable_2.subscribe(observer_2);
+    let _subscription_2 = observable_2.subscribe(observer_2);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -147,8 +147,6 @@ async fn test_unsubscribe() {
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[0, 1, 2, 3, 4]));
     assert!(checker_2.is_active());
-
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[tokio::test]

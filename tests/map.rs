@@ -19,7 +19,7 @@ fn test_completed() {
     let observable = subject.clone();
     let observable = observable.map(|value| value.to_string());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -30,8 +30,6 @@ fn test_completed() {
     subject.on_terminal(Terminal::<&str>::Completed);
     assert!(checker.is_values_matched(&["111".to_owned()]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -43,7 +41,7 @@ fn test_error() {
     let observable = subject.clone();
     let observable = observable.map(|value| value.to_string());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -54,8 +52,6 @@ fn test_error() {
     subject.on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&["111".to_owned()]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -71,7 +67,7 @@ fn test_unsubscribe() {
     let observable_2 = observable_1.clone();
 
     let subscription_1 = observable_1.subscribe(observer_1);
-    let subscription_2 = observable_2.subscribe(observer_2);
+    let _subscription_2 = observable_2.subscribe(observer_2);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -100,8 +96,6 @@ fn test_unsubscribe() {
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&["111".to_owned(), "222".to_owned()]));
     assert!(checker_2.is_error("error"));
-
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]
@@ -123,7 +117,7 @@ fn test_ref() {
         value_2_ref
     });
 
-    let subscription = observable.subscribe(observer_1);
+    let _subscription = observable.subscribe(observer_1);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -140,8 +134,6 @@ fn test_ref() {
     assert!(checker_1.is_error(&error));
     assert!(checker_2.is_values_matched(&[&value_1]));
     assert!(checker_2.is_dropped());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -163,7 +155,7 @@ fn test_mut_ref() {
     });
 
     let (mut on_next, on_terminal) = observer.into_callbacks();
-    let subscription = observable.subscribe_with_callback(
+    let _subscription = observable.subscribe_with_callback(
         |value| {
             on_next(value.0);
             *value.1 *= 2;
@@ -181,8 +173,6 @@ fn test_mut_ref() {
     assert!(checker.is_error(222));
     assert_eq!(value, 444);
     assert_eq!(error, 444);
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -233,10 +223,10 @@ fn test_subscribe_by_different_observer() {
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
-    let subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_1 = observable_1.subscribe(observer_1);
 
     let (on_next, on_terminal) = observer_2.into_callbacks();
-    let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -253,9 +243,6 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&["111".to_owned()]));
     assert!(checker_2.is_error("error"));
-
-    _ = subscription_1; // keep the subscription alive
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]
@@ -269,7 +256,7 @@ fn test_multiple_operation() {
         .map(|value| value.to_string())
         .map(|value| value + "?");
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -280,8 +267,6 @@ fn test_multiple_operation() {
     subject.on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&["111?".to_owned()]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -293,7 +278,7 @@ fn test_without_convenient_api() {
     let observable = subject.clone();
     let observable = Map::new(observable, |value| value.to_string());
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -304,18 +289,16 @@ fn test_without_convenient_api() {
     subject.on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&["111".to_owned()]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
-    let subscription;
+    let _subscription;
 
     // Error
-    // let subscription;
+    // let _subscription;
     // let life_marker = TestStruct;
 
     {
@@ -330,10 +313,8 @@ fn test_lifetime_sub() {
         let observable = observable.map(|value| value.to_string());
 
         let (_, observer) = Checker::new();
-        subscription = observable.subscribe(observer);
+        _subscription = observable.subscribe(observer);
     }
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -355,9 +336,7 @@ fn test_lifetime_or() {
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(Some(&life_marker_2));
-        let subscription = observable.subscribe(observer);
-
-        _ = subscription; // keep the subscription alive
+        let _subscription = observable.subscribe(observer);
     }
 }
 

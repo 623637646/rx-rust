@@ -24,7 +24,7 @@ fn test_completed_inner_finish() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -63,8 +63,6 @@ fn test_completed_inner_finish() {
     subject_2.on_terminal(Terminal::Completed);
     assert!(checker.is_values_matched(&[111, 222, 333, 444]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -78,7 +76,7 @@ fn test_completed_outer_finish() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -117,8 +115,6 @@ fn test_completed_outer_finish() {
     subject.on_terminal(Terminal::<Infallible>::Completed);
     assert!(checker.is_values_matched(&[111, 222, 333, 444]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -130,15 +126,13 @@ fn test_completed_empty() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
     subject.on_terminal(Terminal::<Infallible>::Completed);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -151,7 +145,7 @@ fn test_completed_same_inner() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -182,8 +176,6 @@ fn test_completed_same_inner() {
     subject_1.on_terminal(Terminal::Completed);
     assert!(checker.is_values_matched(&[111, 222, 222, 333, 333]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -253,7 +245,7 @@ fn test_error_inner_finish() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -292,8 +284,6 @@ fn test_error_inner_finish() {
     subject_2.on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&[111, 222, 333, 444]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -307,7 +297,7 @@ fn test_error_outer_finish() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -346,8 +336,6 @@ fn test_error_outer_finish() {
     subject.on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&[111, 222, 333, 444]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -359,15 +347,13 @@ fn test_error_empty() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
     subject.on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -380,7 +366,7 @@ fn test_error_same_inner() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -411,8 +397,6 @@ fn test_error_same_inner() {
     subject_1.on_terminal(Terminal::Error("error"));
     assert!(checker.is_values_matched(&[111, 222, 222, 333, 333]));
     assert!(checker.is_error("error"));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -486,7 +470,7 @@ fn test_unsubscribe() {
     let observable_2 = observable_1.clone();
 
     let subscription_1 = observable_1.subscribe(observer_1);
-    let subscription_2 = observable_2.subscribe(observer_2);
+    let _subscription_2 = observable_2.subscribe(observer_2);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -547,8 +531,6 @@ fn test_unsubscribe() {
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[111, 222, 333, 444]));
     assert!(checker_2.is_completed());
-
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]
@@ -568,7 +550,7 @@ fn test_ref() {
     let observable = subject.clone();
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -607,8 +589,6 @@ fn test_ref() {
     subject_2.on_terminal(Terminal::Error(&error));
     assert!(checker.is_values_matched(&[&value_1, &value_2, &value_3, &value_4]));
     assert!(checker.is_error(&error));
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -628,7 +608,7 @@ fn test_mut_ref() {
     });
     let observable = observable.merge_all();
 
-    let subscription = observable.subscribe_with_callback(
+    let _subscription = observable.subscribe_with_callback(
         |value| {
             *value *= 2;
         },
@@ -642,8 +622,6 @@ fn test_mut_ref() {
     assert_eq!(value_2, 444);
     assert_eq!(value_3, 666);
     assert_eq!(error, -2);
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[tokio::test]
@@ -748,9 +726,9 @@ fn test_subscribe_by_different_observer() {
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
-    let subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_1 = observable_1.subscribe(observer_1);
     let (on_next, on_terminal) = observer_2.into_callbacks();
-    let subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_terminal);
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[]));
@@ -809,9 +787,6 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[111, 222, 333, 444]));
     assert!(checker_2.is_error("error"));
-
-    _ = subscription_1; // keep the subscription alive
-    _ = subscription_2; // keep the subscription alive
 }
 
 #[test]
@@ -827,7 +802,7 @@ fn test_multiple_operation() {
     let observable = subject.clone();
     let observable = observable.merge_all().merge_all();
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -874,8 +849,6 @@ fn test_multiple_operation() {
     subject_4.on_terminal(Terminal::Completed);
     assert!(checker.is_values_matched(&[111, 222]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -889,7 +862,7 @@ fn test_without_convenient_api() {
     let observable = subject.clone();
     let observable = MergeAll::new(observable);
 
-    let subscription = observable.subscribe(observer);
+    let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -928,18 +901,16 @@ fn test_without_convenient_api() {
     subject_2.on_terminal(Terminal::Completed);
     assert!(checker.is_values_matched(&[111, 222, 333, 444]));
     assert!(checker.is_completed());
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
-    let subscription;
+    let _subscription;
 
     // Error
-    // let subscription;
+    // let _subscription;
     // let life_marker = TestStruct;
 
     {
@@ -954,10 +925,8 @@ fn test_lifetime_sub() {
         let observable = observable.merge_all();
 
         let (_, observer) = Checker::new();
-        subscription = observable.subscribe(observer);
+        _subscription = observable.subscribe(observer);
     }
-
-    _ = subscription; // keep the subscription alive
 }
 
 #[test]
@@ -981,9 +950,7 @@ fn test_lifetime_or() {
 
         let (_, mut observer) = Checker::new();
         observer.on_next(&life_marker_2);
-        let subscription = observable.subscribe(observer);
-
-        _ = subscription; // keep the subscription alive
+        let _subscription = observable.subscribe(observer);
     }
 }
 
