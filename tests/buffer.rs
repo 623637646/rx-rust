@@ -7,6 +7,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
+use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[tokio::test]
@@ -726,7 +727,7 @@ async fn test_without_convenient_api() {
 }
 
 #[test]
-fn test_lifetime() {
+fn test_lifetime_sub() {
     // OK
     let life_marker_1 = TestStruct;
     let life_marker_2 = TestStruct;
@@ -757,6 +758,37 @@ fn test_lifetime() {
     }
 
     _ = subscription; // keep the subscription alive
+}
+
+#[test]
+fn test_lifetime_or() {
+    // OK
+    let life_marker_3 = TestStruct;
+    let mut life_marker_1 = None;
+    let mut life_marker_2 = None;
+
+    // Error
+    // let mut life_marker_1 = None;
+    // let mut life_marker_2 = None;
+    // let life_marker_3 = TestStruct;
+
+    {
+        let observable = Create::new(|observer| {
+            life_marker_1 = Some(observer);
+            Subscription::new_none_disposal()
+        });
+        let boundary_subject = Create::new(|observer| {
+            life_marker_2 = Some(observer);
+            Subscription::new_none_disposal()
+        });
+        let observable = observable.buffer(boundary_subject);
+
+        let (_, mut observer) = Checker::<_, Infallible>::new();
+        observer.on_next(vec![&life_marker_3]);
+        let subscription = observable.subscribe(observer);
+
+        _ = subscription; // keep the subscription alive
+    }
 }
 
 #[test]

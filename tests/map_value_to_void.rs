@@ -249,7 +249,7 @@ fn test_without_convenient_api() {
 }
 
 #[test]
-fn test_lifetime() {
+fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
     let subscription;

@@ -1351,7 +1351,7 @@ async fn test_without_convenient_api() {
 }
 
 #[tokio::test]
-async fn test_lifetime() {
+async fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
     let subscription;

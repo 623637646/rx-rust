@@ -7,7 +7,10 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
-use std::sync::{Arc, Mutex};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -243,7 +246,7 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
-fn test_lifetime() {
+fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
     let subscription;
@@ -267,6 +270,31 @@ fn test_lifetime() {
     }
 
     _ = subscription; // keep the subscription alive
+}
+
+#[test]
+fn test_lifetime_or() {
+    // OK
+    let life_marker_2 = TestStruct;
+    let mut life_marker_1 = None;
+
+    // Error
+    // let mut life_marker_1 = None;
+    // let life_marker_2 = TestStruct;
+
+    {
+        let observable = Create::new(|observer| {
+            life_marker_1 = Some(observer);
+            Subscription::new_none_disposal()
+        });
+        let observable = Defer::new(|| observable);
+
+        let (_, mut observer) = Checker::<_, Infallible>::new();
+        observer.on_next(&life_marker_2);
+        let subscription = observable.subscribe(observer);
+
+        _ = subscription; // keep the subscription alive
+    }
 }
 
 #[test]

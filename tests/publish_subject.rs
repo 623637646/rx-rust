@@ -230,7 +230,7 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
-fn test_lifetime() {
+fn test_lifetime_or_sub() {
     // OK
     let life_marker = TestStruct;
     let subscription;

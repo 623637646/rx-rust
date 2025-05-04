@@ -81,7 +81,7 @@ async fn test_async() {
 }
 
 #[test]
-fn test_lifetime() {
+fn test_lifetime_or() {
     // OK
     let life_marker = TestStruct;
     let boxed_observer;

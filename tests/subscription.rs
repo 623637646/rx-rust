@@ -151,7 +151,7 @@ fn test_add_subscription() {
 }
 
 #[test]
-fn test_lifetime() {
+fn test_lifetime_dis() {
     // OK
     let life_marker = TestStruct;
     let subscription;
