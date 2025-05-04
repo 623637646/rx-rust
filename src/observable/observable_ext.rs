@@ -2,6 +2,7 @@ use super::Observable;
 use crate::{
     observer::{Terminal, callback_observer::CallbackObserver},
     operators::{
+        combining::merge_all::MergeAll,
         others::{
             hook_on_next::HookOnNext, hook_on_terminal::HookOnTerminal,
             map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
@@ -94,6 +95,10 @@ pub trait ObservableExt: Sized {
 
     fn map_value_to_void<T>(self) -> MapValueToVoid<T, Self> {
         MapValueToVoid::new(self)
+    }
+
+    fn merge_all<OE2>(self) -> MergeAll<Self, OE2> {
+        MergeAll::new(self)
     }
 
     fn subscribe_with_callback<'or, 'sub, T, E, FN, FT>(
