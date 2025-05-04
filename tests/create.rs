@@ -321,5 +321,5 @@ fn test_type_inference_without_subscribe() {
         Subscription::new_none_disposal()
     });
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

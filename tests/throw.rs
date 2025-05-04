@@ -111,5 +111,5 @@ fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Throw::new(111);
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

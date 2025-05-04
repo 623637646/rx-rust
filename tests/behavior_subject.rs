@@ -359,5 +359,5 @@ fn test_type_inference_without_subscribe() {
     let subject: BehaviorSubject<'_, i32, String> = BehaviorSubject::new(-1);
     let observable = subject;
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

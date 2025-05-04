@@ -791,5 +791,5 @@ fn test_type_inference_without_subscribe() {
     let boundary_subject: PublishSubject<'_, (), String> = PublishSubject::default();
     let observable = subject.buffer(boundary_subject);
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

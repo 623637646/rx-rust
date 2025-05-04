@@ -224,5 +224,5 @@ fn test_type_inference_without_subscribe() {
     let source = [1, 2, 3];
     let observable = FromIter::new(source);
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

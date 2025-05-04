@@ -313,5 +313,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
     let observable = subject.map_infallible_to_error();
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

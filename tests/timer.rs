@@ -141,5 +141,5 @@ async fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Timer::new(111, Duration::from_millis(100), TokioScheduler);
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

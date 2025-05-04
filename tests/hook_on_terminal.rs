@@ -515,5 +515,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject.hook_on_terminal(|_, _| {});
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

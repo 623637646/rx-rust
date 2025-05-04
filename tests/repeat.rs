@@ -85,5 +85,5 @@ fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Repeat::new(3, 4);
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

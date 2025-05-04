@@ -1010,5 +1010,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, Just<i32>, Infallible> = PublishSubject::default();
     let observable: MergeAll<_, Just<i32>> = subject.merge_all();
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }

@@ -286,5 +286,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
     let observable: MapValueToVoid<String, _> = subject.map_value_to_void();
 
-    _ = observable.buffer_with_count(1);
+    observable.buffer_with_count(1);
 }
