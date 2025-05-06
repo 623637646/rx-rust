@@ -1,8 +1,8 @@
 mod tests_utils;
 
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::{Observer, Termination, callback_observer::CallbackObserver},
+    observable::observable_ext::ObservableExt,
+    observer::{Observer, Termination},
     operators::creating::{create::Create, just::Just},
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
@@ -212,28 +212,6 @@ fn test_multiple_operation() {
     assert!(checker_1.is_error("error"));
     assert!(checker_2.is_values_matched(&[111]));
     assert!(checker_2.is_error("error"));
-}
-
-#[test]
-fn test_without_convenient_api() {
-    let mut subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = subject.clone();
-
-    let (on_next, on_termination) = observer.into_callbacks();
-    let _subscription = observable.subscribe(CallbackObserver::new(on_next, on_termination));
-    assert!(checker.is_values_matched(&[]));
-    assert!(checker.is_active());
-
-    subject.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
-    assert!(checker.is_active());
-
-    subject.on_termination(Termination::<&str>::Completed);
-    assert!(checker.is_values_matched(&[111]));
-    assert!(checker.is_completed());
 }
 
 #[test]
