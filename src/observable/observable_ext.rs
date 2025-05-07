@@ -6,6 +6,7 @@ use crate::{
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
             map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
+            observable_stream::ObservableStream,
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
@@ -79,6 +80,13 @@ pub trait ObservableExt: Sized {
         F: for<'a> FnOnce(Termination<E>, Box<dyn FnOnce(Termination<E>) + 'a>),
     {
         HookOnTermination::new(self, callback)
+    }
+
+    fn into_stream<'or, 'sub, T, E>(self) -> ObservableStream<'sub, T, E, Self>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+    {
+        ObservableStream::new(self)
     }
 
     fn map<'sub, 'or, T0, T, E, F>(self, callback: F) -> Map<T0, Self, F>

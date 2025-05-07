@@ -1,5 +1,10 @@
 use educe::Educe;
-use rx_rust::observer::{Observer, Termination};
+use futures::Stream;
+use futures::stream::StreamExt;
+use rx_rust::{
+    observer::{Event, Observer, Termination},
+    subscription::disposable::{CallbackDisposal, Disposable},
+};
 use std::sync::{Arc, RwLock};
 
 /// A helper struct for testing observables.
@@ -27,6 +32,39 @@ impl<T, E> Checker<T, E> {
                 termination,
                 dropped,
             },
+        )
+    }
+
+    pub(crate) fn from_stream(
+        stream: impl Stream<Item = Event<T, E>> + Send + Unpin + 'static,
+    ) -> (Self, impl Disposable + Send + 'static)
+    where
+        T: Clone + Send + Sync + 'static,
+        E: Clone + Send + Sync + 'static,
+    {
+        let values = Arc::new(RwLock::new(Vec::new()));
+        let termination = Arc::new(RwLock::new(None));
+        let dropped = Arc::new(RwLock::new(false));
+
+        let mut stream = CheckerStream {
+            source: stream,
+            values: values.clone(),
+            termination: termination.clone(),
+            dropped: dropped.clone(),
+        };
+
+        let handle = tokio::spawn(async move { while stream.next().await.is_some() {} });
+        let disposal = CallbackDisposal::new(move || {
+            handle.abort();
+        });
+
+        (
+            Self {
+                values,
+                termination,
+                dropped,
+            },
+            disposal,
         )
     }
 
@@ -110,5 +148,51 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
         let mut termination_lock = self.termination.write().unwrap();
         assert!(termination_lock.is_none());
         *termination_lock = Some(termination);
+    }
+}
+
+struct CheckerStream<T, E, SM> {
+    source: SM,
+    values: Arc<RwLock<Vec<T>>>,
+    termination: Arc<RwLock<Option<Termination<E>>>>,
+    dropped: Arc<RwLock<bool>>,
+}
+
+impl<T, E, SM> Stream for CheckerStream<T, E, SM>
+where
+    T: Clone,
+    E: Clone,
+    SM: Stream<Item = Event<T, E>> + Unpin,
+{
+    type Item = SM::Item;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let poll = self.source.poll_next_unpin(cx);
+        match &poll {
+            std::task::Poll::Ready(event) => {
+                if let Some(event) = event {
+                    match event {
+                        Event::Next(value) => self.values.write().unwrap().push(value.clone()),
+                        Event::Termination(termination) => {
+                            self.termination
+                                .write()
+                                .unwrap()
+                                .replace(termination.clone());
+                        }
+                    }
+                }
+            }
+            std::task::Poll::Pending => {}
+        }
+        poll
+    }
+}
+
+impl<T, E, SM> Drop for CheckerStream<T, E, SM> {
+    fn drop(&mut self) {
+        *self.dropped.write().unwrap() = true;
     }
 }
