@@ -17,7 +17,11 @@ pub struct MergeAll<OE, OE2> {
 }
 
 impl<OE, OE2> MergeAll<OE, OE2> {
-    pub fn new(source: OE) -> Self {
+    pub fn new<'or, 'sub, T, E>(source: OE) -> Self
+    where
+        OE: Observable<'or, 'sub, OE2, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+    {
         Self {
             source,
             _marker: PhantomData,

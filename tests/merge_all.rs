@@ -990,7 +990,6 @@ fn test_clone() {
     });
     let observable = observable.merge_all();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
-    observable.subscribe_with_callback(|_| {}, |_| {});
 }
 
 #[test]
@@ -1008,7 +1007,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, Infallible> = PublishSubject::default();
-    let observable: MergeAll<_, Just<i32>> = subject.merge_all();
+    let observable = subject.merge_all();
 
     observable.buffer_with_count(1);
 }

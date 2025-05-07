@@ -97,7 +97,11 @@ pub trait ObservableExt: Sized {
         MapValueToVoid::new(self)
     }
 
-    fn merge_all<OE2>(self) -> MergeAll<Self, OE2> {
+    fn merge_all<'or, 'sub, T, E, OE2>(self) -> MergeAll<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, OE2, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+    {
         MergeAll::new(self)
     }
 
