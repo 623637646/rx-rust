@@ -8,57 +8,90 @@ use rx_rust::{
 };
 use std::time::Duration;
 use tests_utils::checker::Checker;
+use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[tokio::test]
 async fn test_completed() {
-    let source = stream::iter(vec![111, 222, 333]);
-
-    let observable = FromStream::new(source, TokioScheduler);
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let stream = UnboundedReceiverStream::new(rx);
+    let observable = FromStream::new(stream, TokioScheduler);
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
+    tx.send(111).unwrap();
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    drop(tx);
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
 }
 
 #[tokio::test]
 async fn test_unsubscribe() {
-    let source = stream::iter(vec![111, 222, 333]);
-
-    let observable = FromStream::new(source, TokioScheduler);
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let stream = UnboundedReceiverStream::new(rx);
+    let observable = FromStream::new(stream, TokioScheduler);
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
-    subscription.unsubscribe();
+    tx.send(111).unwrap();
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    subscription.unsubscribe();
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_dropped());
 }
 
 #[tokio::test]
 async fn test_async() {
-    let source = stream::iter(vec![111, 222, 333]);
-
-    let observable = FromStream::new(source, TokioScheduler);
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let stream = UnboundedReceiverStream::new(rx);
+    let observable = FromStream::new(stream, TokioScheduler);
     let (checker, observer) = Checker::new();
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let _subscription = handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222, 333]));
-    assert!(checker.is_completed());
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tx.send(111).unwrap();
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    drop(tx);
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
 }
 

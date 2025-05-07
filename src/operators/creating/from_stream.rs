@@ -6,10 +6,7 @@ use crate::{
 };
 use educe::Educe;
 use futures::Stream;
-use std::{
-    convert::Infallible,
-    sync::{Arc, Mutex},
-};
+use std::convert::Infallible;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -36,17 +33,17 @@ where
         self,
         observer: impl Observer<T, Infallible> + Send + 'static,
     ) -> Subscription<'sub> {
-        let observer = Arc::new(Mutex::new(Some(observer)));
+        let mut observer = Some(observer);
         let disposal = self
             .scheduler
             .schedule_stream(self.stream, move |result| match result {
                 Some(value) => {
-                    if let Some(observer) = observer.lock().unwrap().as_mut() {
+                    if let Some(observer) = observer.as_mut() {
                         observer.on_next(value)
                     }
                 }
                 None => {
-                    if let Some(observer) = observer.lock().unwrap().take() {
+                    if let Some(observer) = observer.take() {
                         observer.on_termination(Termination::Completed)
                     }
                 }
