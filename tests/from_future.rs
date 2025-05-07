@@ -10,12 +10,21 @@ use tests_utils::checker::Checker;
 
 #[tokio::test]
 async fn test_completed() {
-    let source = async { 111 };
+    let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let observable = FromFuture::new(source, TokioScheduler);
+    let observable = FromFuture::new(rx, TokioScheduler);
+    let observable = observable.map(|result| result.unwrap_or(-1));
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tx.send(111).unwrap();
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -25,13 +34,43 @@ async fn test_completed() {
 }
 
 #[tokio::test]
-async fn test_unsubscribe() {
-    let source = async { 111 };
+async fn test_completed_drop() {
+    let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
 
-    let observable = FromFuture::new(source, TokioScheduler);
+    let observable = FromFuture::new(rx, TokioScheduler);
+    let observable = observable.map(|result| result.unwrap_or(-1));
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    drop(tx);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(checker.is_values_matched(&[-1]));
+    assert!(checker.is_completed());
+}
+
+#[tokio::test]
+async fn test_unsubscribe() {
+    let (_tx, rx) = tokio::sync::oneshot::channel::<i32>();
+
+    let observable = FromFuture::new(rx, TokioScheduler);
+    let observable = observable.map(|result| result.unwrap_or(-1));
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
@@ -46,13 +85,23 @@ async fn test_unsubscribe() {
 
 #[tokio::test]
 async fn test_async() {
-    let source = async { 111 };
+    let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let observable = FromFuture::new(source, TokioScheduler);
+    let observable = FromFuture::new(rx, TokioScheduler);
+    let observable = observable.map(|result| result.unwrap_or(-1));
     let (checker, observer) = Checker::new();
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let _subscription = handle.await.unwrap();
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    let handle = tokio::spawn(async move { tx.send(111).unwrap() });
+    handle.await.unwrap();
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_completed());
 
