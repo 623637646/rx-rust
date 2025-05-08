@@ -45,14 +45,14 @@ where
     S: Scheduler + Send + 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'static) -> Subscription<'sub> {
-        let source_observer = Arc::new(Mutex::new(Some(observer)));
+        let observer = Arc::new(Mutex::new(Some(observer)));
         let delay_observer = DelayObserver {
-            source_observer: source_observer.clone(),
+            observer: observer.clone(),
             delay: self.delay,
             scheduler: self.scheduler,
         };
         let disposal = CallbackDisposal::new(move || {
-            source_observer.lock().unwrap().take();
+            observer.lock().unwrap().take();
         });
         let subscription = self.source.subscribe(delay_observer);
         subscription + disposal
@@ -60,7 +60,7 @@ where
 }
 
 struct DelayObserver<OR, S> {
-    source_observer: Arc<Mutex<Option<OR>>>,
+    observer: Arc<Mutex<Option<OR>>>,
     delay: Duration,
     scheduler: S,
 }
@@ -73,7 +73,7 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let observer = self.source_observer.clone();
+        let observer = self.observer.clone();
         self.scheduler.schedule(
             move || {
                 if let Some(observer) = observer.lock().unwrap().as_mut() {
@@ -89,7 +89,7 @@ where
             Termination::Completed => {
                 self.scheduler.schedule(
                     move || {
-                        if let Some(observer) = self.source_observer.lock().unwrap().take() {
+                        if let Some(observer) = self.observer.lock().unwrap().take() {
                             observer.on_termination(termination);
                         }
                     },
@@ -97,7 +97,7 @@ where
                 );
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.source_observer.lock().unwrap().take() {
+                if let Some(observer) = self.observer.lock().unwrap().take() {
                     observer.on_termination(termination);
                 }
             }
