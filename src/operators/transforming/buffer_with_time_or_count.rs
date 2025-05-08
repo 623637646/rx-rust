@@ -69,14 +69,13 @@ where
 }
 
 #[derive(Educe)]
-#[educe(Debug, Clone)]
+#[educe(Clone)]
 struct BufferWithTimeObserver<T, OR, S> {
     observer: Arc<Mutex<Option<OR>>>,
     values: Arc<Mutex<Vec<T>>>,
     count: usize,
     time_pan: Duration,
     scheduler: S,
-    #[educe(Debug(ignore))]
     timer: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
 }
 
