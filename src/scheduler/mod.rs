@@ -19,7 +19,7 @@ pub trait Scheduler {
 
     fn schedule_period(
         &self,
-        task: impl FnMut(usize) -> bool + Send + 'static, // TODO: use Future instead of FnOnce?
+        task: impl FnMut(usize) -> bool + Send + 'static,
         period: Duration,
         delay: Option<Duration>,
     ) -> impl Disposable + Send + 'static;

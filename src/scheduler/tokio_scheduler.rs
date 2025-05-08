@@ -55,7 +55,7 @@ impl Scheduler for TokioScheduler {
 
     fn schedule_period(
         &self,
-        mut task: impl FnMut(usize) -> bool + Send + 'static, // TODO: use Future instead of FnOnce?
+        mut task: impl FnMut(usize) -> bool + Send + 'static,
         period: Duration,
         delay: Option<Duration>,
     ) -> impl Disposable + Send + 'static {

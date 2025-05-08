@@ -5,7 +5,6 @@ pub enum Event<T, E> {
     Termination(Termination<E>),
 }
 
-/// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
 pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + Send + 'or>);
 

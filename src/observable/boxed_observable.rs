@@ -1,7 +1,6 @@
 use super::{Observable, Observer};
 use crate::{observer::boxed_observer::BoxedObserver, subscription::Subscription};
 
-/// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
 pub struct BoxedObservable<'or, 'sub, 'oe, T, E>(
     Box<dyn FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub> + Send + 'oe>,

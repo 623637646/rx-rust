@@ -23,7 +23,6 @@ impl<F: FnOnce()> Disposable for CallbackDisposal<F> {
     }
 }
 
-/// TODO: doc
 /// https://stackoverflow.com/a/56447952/9315497
 pub struct BoxedDisposal<'dis>(Box<dyn FnOnce() + Send + 'dis>);
 
