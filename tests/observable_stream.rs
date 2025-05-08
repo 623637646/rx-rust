@@ -3,7 +3,7 @@ mod tests_utils;
 use futures::StreamExt;
 use rx_rust::{
     observable::observable_ext::ObservableExt,
-    observer::{Event, Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, others::observable_stream::ObservableStream},
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
@@ -86,48 +86,6 @@ async fn test_completed_lazy_subscription() {
 }
 
 #[tokio::test]
-async fn test_error() {
-    let mut subject = PublishSubject::default();
-
-    // Custom operations
-    let observable = subject.clone();
-    let stream = observable.into_stream();
-
-    let (checker, _) = Checker::from_stream(stream);
-    assert!(checker.is_values_matched(&[]));
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[]));
-    assert!(checker.is_active());
-
-    subject.on_next(111);
-    assert!(checker.is_values_matched(&[]));
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
-    assert!(checker.is_active());
-
-    subject.on_next(222);
-    subject.on_next(333);
-    assert!(checker.is_values_matched(&[111]));
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
-    assert!(checker.is_active());
-
-    subject.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[111, 222, 333]));
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
-    assert!(checker.is_error("error"));
-}
-
-#[tokio::test]
 async fn test_unsubscribe() {
     let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
 
@@ -162,7 +120,7 @@ async fn test_unsubscribe() {
 
     disposal.dispose();
     assert!(checker.is_values_matched(&[111, 222, 333]));
-    assert!(checker.is_active());
+    assert!(checker.is_dropped());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
     assert!(checker.is_values_matched(&[111, 222, 333]));
@@ -172,7 +130,6 @@ async fn test_unsubscribe() {
 #[tokio::test]
 async fn test_ref() {
     let value = 111;
-    let error = 222;
     let mut subject = PublishSubject::default();
 
     // Custom operations
@@ -186,14 +143,9 @@ async fn test_ref() {
     );
 
     subject.on_next(&value);
-    assert_eq!(stream.next().await, Some(Event::Next(&value)));
+    assert_eq!(stream.next().await, Some(&value));
 
-    subject.on_termination(Termination::Error(&error));
-    assert_eq!(
-        stream.next().await,
-        Some(Event::Termination(Termination::Error(&error)))
-    );
-
+    subject.on_termination(Termination::Completed);
     assert_eq!(stream.next().await, None);
     assert_eq!(stream.next().await, None);
 }
@@ -201,33 +153,17 @@ async fn test_ref() {
 #[tokio::test]
 async fn test_mut_ref() {
     let mut value = 111;
-    let mut error = 222;
 
     let observable = Create::new(|mut observer| {
         observer.on_next(&mut value);
-        observer.on_termination(Termination::Error(&mut error));
+        observer.on_termination(Termination::Completed);
         Subscription::new_none_disposal()
     });
 
     let mut stream = observable.into_stream();
 
-    if let Some(event) = stream.next().await {
-        match event {
-            Event::Next(value) => *value *= 2,
-            Event::Termination(_) => panic!(),
-        }
-    } else {
-        panic!()
-    }
-
-    if let Some(event) = stream.next().await {
-        match event {
-            Event::Next(_) => panic!(),
-            Event::Termination(termination) => match termination {
-                Termination::Completed => panic!(),
-                Termination::Error(error) => *error *= 2,
-            },
-        }
+    if let Some(value) = stream.next().await {
+        *value *= 2
     } else {
         panic!()
     }
@@ -236,7 +172,6 @@ async fn test_mut_ref() {
     assert_eq!(stream.next().await, None);
 
     assert_eq!(value, 222);
-    assert_eq!(error, 444);
 }
 
 #[tokio::test]
@@ -285,15 +220,15 @@ async fn test_async() {
     assert!(checker.is_active());
 
     let handle = tokio::spawn(async move {
-        subject.on_termination(Termination::Error("error"));
+        subject.on_termination(Termination::Completed);
     });
     handle.await.unwrap();
     assert!(checker.is_values_matched(&[111, 222, 333]));
-    assert!(checker.is_error("error"));
+    assert!(checker.is_completed());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
     assert!(checker.is_values_matched(&[111, 222, 333]));
-    assert!(checker.is_error("error"));
+    assert!(checker.is_completed());
 }
 
 #[tokio::test]
@@ -351,7 +286,7 @@ fn test_lifetime_sub() {
     {
         let observable = Create::new(|mut observer| {
             observer.on_next(111);
-            observer.on_termination(Termination::Error("error"));
+            observer.on_termination(Termination::Completed);
             Subscription::new_with_disposal_callback(|| {
                 life_marker.consume_ref();
             })

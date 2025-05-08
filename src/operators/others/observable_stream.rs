@@ -1,44 +1,45 @@
 use crate::{
     observable::Observable,
-    observer::{Event, Observer, Termination},
+    observer::{Observer, Termination},
     subscription::Subscription,
 };
 use futures::Stream;
 use std::{
     collections::VecDeque,
+    convert::Infallible,
     sync::{Arc, Mutex},
     task::{Poll, Waker},
 };
 
-pub struct ObservableStream<'sub, T, E, OE> {
+pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,
-    context: Arc<Mutex<Context<T, E>>>,
+    context: Arc<Mutex<Context<T>>>,
 }
 
-impl<'or, 'sub, T, E, OE> ObservableStream<'sub, T, E, OE> {
+impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
     pub fn new(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, 'sub, T, Infallible>,
     {
         Self {
             source: Some(source),
             sub: None,
             context: Arc::new(Mutex::new(Context {
-                events: Some(VecDeque::new()),
+                values: VecDeque::new(),
+                terminated: false,
                 waker: None,
             })),
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE> Stream for ObservableStream<'sub, T, E, OE>
+impl<'or, 'sub, T, OE> Stream for ObservableStream<'sub, T, OE>
 where
     T: Send + 'or,
-    E: Send + 'or,
-    OE: Observable<'or, 'sub, T, E> + Unpin,
+    OE: Observable<'or, 'sub, T, Infallible> + Unpin,
 {
-    type Item = Event<T, E>;
+    type Item = T;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
@@ -52,47 +53,36 @@ where
 
         let mut context = self.context.lock().unwrap();
         context.waker = Some(cx.waker().clone());
-        if let Some(events) = context.events.as_mut() {
-            if let Some(event) = events.pop_front() {
-                match event {
-                    Event::Next(_) => {}
-                    Event::Termination(_) => {
-                        context.events = None; // Mark terminated.
-                    }
-                }
-                Poll::Ready(Some(event))
-            } else {
-                Poll::Pending
-            }
-        } else {
+        if let Some(event) = context.values.pop_front() {
+            Poll::Ready(Some(event))
+        } else if context.terminated {
             Poll::Ready(None)
+        } else {
+            Poll::Pending
         }
     }
 }
 
-struct Context<T, E> {
-    events: Option<VecDeque<Event<T, E>>>, // None means it's terminated
+struct Context<T> {
+    values: VecDeque<T>,
+    terminated: bool,
     waker: Option<Waker>,
 }
 
-struct ObservableStreamObserver<T, E>(Arc<Mutex<Context<T, E>>>);
+struct ObservableStreamObserver<T>(Arc<Mutex<Context<T>>>);
 
-impl<T, E> Observer<T, E> for ObservableStreamObserver<T, E> {
+impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
         let mut context = self.0.lock().unwrap();
-        if let Some(events) = context.events.as_mut() {
-            events.push_back(Event::Next(value));
-        }
+        context.values.push_back(value);
         if let Some(waker) = context.waker.take() {
             waker.wake();
         }
     }
 
-    fn on_termination(self, termination: Termination<E>) {
+    fn on_termination(self, _: Termination<Infallible>) {
         let mut context = self.0.lock().unwrap();
-        if let Some(events) = context.events.as_mut() {
-            events.push_back(Event::Termination(termination));
-        }
+        context.terminated = true;
         if let Some(waker) = context.waker.take() {
             waker.wake();
         }

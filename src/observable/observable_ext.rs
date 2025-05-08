@@ -16,7 +16,7 @@ use crate::{
     },
     subscription::Subscription,
 };
-use std::time::Duration;
+use std::{convert::Infallible, time::Duration};
 
 pub trait ObservableExt: Sized {
     fn buffer<OE>(self, boundary: OE) -> Buffer<Self, OE> {
@@ -82,9 +82,9 @@ pub trait ObservableExt: Sized {
         HookOnTermination::new(self, callback)
     }
 
-    fn into_stream<'or, 'sub, T, E>(self) -> ObservableStream<'sub, T, E, Self>
+    fn into_stream<'or, 'sub, T>(self) -> ObservableStream<'sub, T, Self>
     where
-        Self: Observable<'or, 'sub, T, E>,
+        Self: Observable<'or, 'sub, T, Infallible>,
     {
         ObservableStream::new(self)
     }
