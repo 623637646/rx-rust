@@ -7,14 +7,16 @@ use futures::Stream;
 use std::{
     collections::VecDeque,
     convert::Infallible,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
     task::{Poll, Waker},
 };
 
 pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,
-    context: Arc<Mutex<Context<T>>>,
+    values: Arc<Mutex<VecDeque<T>>>,
+    terminated: Arc<RwLock<bool>>,
+    waker: Arc<Mutex<Option<Waker>>>,
 }
 
 impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
@@ -25,11 +27,9 @@ impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
         Self {
             source: Some(source),
             sub: None,
-            context: Arc::new(Mutex::new(Context {
-                values: VecDeque::new(),
-                terminated: false,
-                waker: None,
-            })),
+            values: Arc::new(Mutex::new(VecDeque::new())),
+            terminated: Arc::new(RwLock::new(false)),
+            waker: Arc::new(Mutex::new(None)),
         }
     }
 }
@@ -46,16 +46,19 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
         if let Some(source) = self.source.take() {
-            let observer = ObservableStreamObserver(self.context.clone());
+            let observer = ObservableStreamObserver {
+                values: self.values.clone(),
+                terminated: self.terminated.clone(),
+                waker: self.waker.clone(),
+            };
             let sub = source.subscribe(observer);
             self.sub = Some(sub);
         }
 
-        let mut context = self.context.lock().unwrap();
-        context.waker = Some(cx.waker().clone());
-        if let Some(event) = context.values.pop_front() {
+        *self.waker.lock().unwrap() = Some(cx.waker().clone());
+        if let Some(event) = self.values.lock().unwrap().pop_front() {
             Poll::Ready(Some(event))
-        } else if context.terminated {
+        } else if *self.terminated.read().unwrap() {
             Poll::Ready(None)
         } else {
             Poll::Pending
@@ -63,27 +66,23 @@ where
     }
 }
 
-struct Context<T> {
-    values: VecDeque<T>,
-    terminated: bool,
-    waker: Option<Waker>,
+struct ObservableStreamObserver<T> {
+    values: Arc<Mutex<VecDeque<T>>>,
+    terminated: Arc<RwLock<bool>>,
+    waker: Arc<Mutex<Option<Waker>>>,
 }
-
-struct ObservableStreamObserver<T>(Arc<Mutex<Context<T>>>);
 
 impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
-        let mut context = self.0.lock().unwrap();
-        context.values.push_back(value);
-        if let Some(waker) = context.waker.take() {
+        self.values.lock().unwrap().push_back(value);
+        if let Some(waker) = self.waker.lock().unwrap().take() {
             waker.wake();
         }
     }
 
     fn on_termination(self, _: Termination<Infallible>) {
-        let mut context = self.0.lock().unwrap();
-        context.terminated = true;
-        if let Some(waker) = context.waker.take() {
+        *self.terminated.write().unwrap() = true;
+        if let Some(waker) = self.waker.lock().unwrap().take() {
             waker.wake();
         }
     }
