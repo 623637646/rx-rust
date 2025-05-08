@@ -71,10 +71,11 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if self.terminated.read().unwrap().is_some() {
+        let mut terminated = self.terminated.write().unwrap();
+        if terminated.is_some() {
             return;
         }
-        *self.terminated.write().unwrap() = Some(termination.clone());
+        *terminated = Some(termination.clone());
         for observer in self.observers.lock().unwrap().drain() {
             observer.on_termination(termination.clone());
         }

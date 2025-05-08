@@ -67,9 +67,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if self.publish_subject.terminated().is_none() {
-            self.publish_subject.on_termination(termination);
-        }
+        self.publish_subject.on_termination(termination);
     }
 }
 
