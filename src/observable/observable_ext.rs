@@ -10,7 +10,7 @@ use crate::{
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
-            buffer_with_time_or_count::BufferWithTimeOrCount, map::Map,
+            buffer_with_time_or_count::BufferWithTimeOrCount, flat_map::FlatMap, map::Map,
         },
         utility::{delay::Delay, do_on_next::DoOnNext, do_on_termination::DoOnTermination},
     },
@@ -64,6 +64,15 @@ pub trait ObservableExt: Sized {
         F: FnOnce(&Termination<E>),
     {
         DoOnTermination::new(self, callback)
+    }
+
+    fn flat_map<'or, 'sub, T0, T, E, OE2, F>(self, callback: F) -> FlatMap<T0, Self, OE2, F>
+    where
+        Self: Observable<'or, 'sub, T0, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+        F: FnMut(T0) -> OE2,
+    {
+        FlatMap::new(self, callback)
     }
 
     fn hook_on_next<'or, 'sub, T, E, F>(self, callback: F) -> HookOnNext<Self, F>
