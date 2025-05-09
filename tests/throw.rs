@@ -87,7 +87,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_1.is_values_matched(&[]));
     assert!(checker_1.is_error(111));
     assert!(checker_2.is_values_matched(&[]));
-    assert!(checker_1.is_error(111));
+    assert!(checker_2.is_error(111));
 }
 
 #[test]
