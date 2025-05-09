@@ -9,6 +9,5 @@ pub mod just;
 pub mod never;
 pub mod range;
 pub mod repeat;
-pub mod start;
 pub mod throw;
 pub mod timer;
