@@ -235,6 +235,44 @@ fn test_completed_unsubscribe() {
 }
 
 #[test]
+fn test_completed_new_from_iter() {
+    let mut subject_1 = PublishSubject::default();
+    let mut subject_2 = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Merge::new_from_iter([subject_1.clone(), subject_2.clone()]);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    subject_1.on_next(111);
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    subject_2.on_next(222);
+    assert!(checker.is_values_matched(&[111, 222]));
+    assert!(checker.is_active());
+
+    subject_1.on_next(333);
+    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert!(checker.is_active());
+
+    subject_1.on_termination(Termination::Completed);
+    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert!(checker.is_active());
+
+    subject_2.on_next(444);
+    assert!(checker.is_values_matched(&[111, 222, 333, 444]));
+    assert!(checker.is_active());
+
+    subject_2.on_termination(Termination::Completed);
+    assert!(checker.is_values_matched(&[111, 222, 333, 444]));
+    assert!(checker.is_completed());
+}
+
+#[test]
 fn test_error_inner_finish() {
     let mut subject = PublishSubject::default();
     let mut subject_1 = PublishSubject::default();
