@@ -4,7 +4,7 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{
-        combining::merge_all::MergeAll,
+        combining::merge::Merge,
         creating::{create::Create, just::Just, throw::Throw},
     },
     subject::publish_subject::PublishSubject,
@@ -22,7 +22,7 @@ fn test_completed_inner_finish() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -74,7 +74,7 @@ fn test_completed_outer_finish() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -124,7 +124,7 @@ fn test_completed_empty() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -143,7 +143,7 @@ fn test_completed_same_inner() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -187,7 +187,7 @@ fn test_completed_unsubscribe() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -243,7 +243,7 @@ fn test_error_inner_finish() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -295,7 +295,7 @@ fn test_error_outer_finish() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -345,7 +345,7 @@ fn test_error_empty() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -364,7 +364,7 @@ fn test_error_same_inner() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -408,7 +408,7 @@ fn test_error_unsubscribe() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -465,7 +465,7 @@ fn test_unsubscribe() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -548,7 +548,7 @@ fn test_ref() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -606,7 +606,7 @@ fn test_mut_ref() {
         observer.on_termination(Termination::Error(&mut error));
         Subscription::new_none_disposal()
     });
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let _subscription = observable.subscribe_with_callback(
         |value| {
@@ -633,7 +633,7 @@ async fn test_async() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
@@ -722,7 +722,7 @@ fn test_subscribe_by_different_observer() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all();
+    let observable = observable.merge();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -800,7 +800,7 @@ fn test_multiple_operation() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.merge_all().merge_all();
+    let observable = observable.merge().merge();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -860,7 +860,7 @@ fn test_without_convenient_api() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = MergeAll::new(observable);
+    let observable = Merge::new(observable);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -922,7 +922,7 @@ fn test_lifetime_sub() {
             })
         });
 
-        let observable = observable.merge_all();
+        let observable = observable.merge();
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -946,7 +946,7 @@ fn test_lifetime_or() {
                 Subscription::new_none_disposal()
             },
         );
-        let observable = observable.merge_all();
+        let observable = observable.merge();
 
         let (_, mut observer) = Checker::new();
         observer.on_next(&life_marker_2);
@@ -974,7 +974,7 @@ fn test_lifetime_or_sub() {
             },
         );
 
-        let observable = observable.merge_all();
+        let observable = observable.merge();
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
@@ -988,7 +988,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let observable = observable.merge_all();
+    let observable = observable.merge();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -996,7 +996,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, _> = PublishSubject::default();
-    let observable = subject.merge_all();
+    let observable = subject.merge();
 
     let observable = observable.buffer_with_count(1);
     let (_, observer) = Checker::new();
@@ -1007,7 +1007,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, Infallible> = PublishSubject::default();
-    let observable = subject.merge_all();
+    let observable = subject.merge();
 
     observable.buffer_with_count(1);
 }

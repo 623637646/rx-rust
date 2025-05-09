@@ -2,7 +2,7 @@ use super::Observable;
 use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
-        combining::merge_all::MergeAll,
+        combining::merge::Merge,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
             map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
@@ -105,12 +105,12 @@ pub trait ObservableExt: Sized {
         MapValueToVoid::new(self)
     }
 
-    fn merge_all<'or, 'sub, T, E, OE2>(self) -> MergeAll<Self, OE2>
+    fn merge<'or, 'sub, T, E, OE2>(self) -> Merge<Self, OE2>
     where
         Self: Observable<'or, 'sub, OE2, E>,
         OE2: Observable<'or, 'sub, T, E>,
     {
-        MergeAll::new(self)
+        Merge::new(self)
     }
 
     fn subscribe_with_callback<'or, 'sub, T, E, FN, FT>(

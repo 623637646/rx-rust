@@ -1,1 +1,1 @@
-pub mod merge_all;
+pub mod merge;
