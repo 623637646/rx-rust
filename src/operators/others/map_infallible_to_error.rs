@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -29,6 +29,8 @@ where
         self.0.subscribe(observer)
     }
 }
+
+impl<OE> ObservableExt for MapInfallibleToError<OE> {}
 
 struct MapInfallibleToErrorObserver<E, OR> {
     observer: OR,

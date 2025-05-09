@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -36,3 +36,5 @@ impl<'or, 'sub, E> Observable<'or, 'sub, Infallible, E> for Throw<E> {
         Subscription::new_none_disposal()
     }
 }
+
+impl<E> ObservableExt for Throw<E> {}

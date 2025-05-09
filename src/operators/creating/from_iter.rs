@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -34,3 +34,5 @@ where
         Subscription::new_none_disposal()
     }
 }
+
+impl<I> ObservableExt for FromIter<I> {}

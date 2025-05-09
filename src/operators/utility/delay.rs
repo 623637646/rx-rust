@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
@@ -58,6 +58,8 @@ where
         subscription + disposal
     }
 }
+
+impl<OE, S> ObservableExt for Delay<OE, S> {}
 
 struct DelayObserver<OR, S> {
     observer: Arc<Mutex<Option<OR>>>,

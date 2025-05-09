@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
@@ -63,3 +63,5 @@ where
         self.0(BoxedObserver::new(observer))
     }
 }
+
+impl<F> ObservableExt for Create<F> {}

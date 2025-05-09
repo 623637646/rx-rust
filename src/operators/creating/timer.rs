@@ -40,3 +40,5 @@ where
             .subscribe(observer)
     }
 }
+
+impl<T, S> ObservableExt for Timer<T, S> {}

@@ -128,5 +128,3 @@ pub trait ObservableExt: Sized {
         self.subscribe(CallbackObserver::new(on_next, on_termination))
     }
 }
-
-impl<OE> ObservableExt for OE {}

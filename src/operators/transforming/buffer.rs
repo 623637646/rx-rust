@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -36,6 +36,8 @@ where
         subscription_1 + subscription_2
     }
 }
+
+impl<OE, OE2> ObservableExt for Buffer<OE, OE2> {}
 
 #[derive(Educe)]
 #[educe(Clone)]

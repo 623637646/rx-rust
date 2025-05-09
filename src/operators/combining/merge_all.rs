@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::{Subscription, disposable::CallbackDisposal},
 };
@@ -50,6 +50,8 @@ where
         self.source.subscribe(observer) + disposal
     }
 }
+
+impl<OE, OE2> ObservableExt for MergeAll<OE, OE2> {}
 
 struct MergeAllObserver<'sub, T, OR> {
     observer: Arc<Mutex<Option<OR>>>,

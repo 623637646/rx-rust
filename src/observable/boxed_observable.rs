@@ -1,4 +1,4 @@
-use super::{Observable, Observer};
+use super::{Observable, Observer, observable_ext::ObservableExt};
 use crate::{observer::boxed_observer::BoxedObserver, subscription::Subscription};
 
 /// https://stackoverflow.com/a/56447952/9315497
@@ -21,3 +21,5 @@ impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BoxedObservable<'or, 'sub,
         self.0(BoxedObserver::new(observer))
     }
 }
+
+impl<T, E> ObservableExt for BoxedObservable<'_, '_, '_, T, E> {}

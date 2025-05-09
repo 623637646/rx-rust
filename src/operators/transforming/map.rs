@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -44,6 +44,8 @@ where
         self.source.subscribe(observer)
     }
 }
+
+impl<T0, OE, F> ObservableExt for Map<T0, OE, F> {}
 
 struct MapObserver<OR, F> {
     observer: OR,

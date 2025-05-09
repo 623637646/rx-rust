@@ -1,5 +1,8 @@
 use crate::{
-    observable::Observable, observer::Observer, scheduler::Scheduler, subscription::Subscription,
+    observable::{Observable, observable_ext::ObservableExt},
+    observer::Observer,
+    scheduler::Scheduler,
+    subscription::Subscription,
 };
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
@@ -41,3 +44,5 @@ where
         Subscription::new_with_disposal(disposal)
     }
 }
+
+impl<S> ObservableExt for Interval<S> {}

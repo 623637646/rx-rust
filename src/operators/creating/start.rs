@@ -1,5 +1,9 @@
 use super::just::Just;
-use crate::{observable::Observable, observer::Observer, subscription::Subscription};
+use crate::{
+    observable::{Observable, observable_ext::ObservableExt},
+    observer::Observer,
+    subscription::Subscription,
+};
 use educe::Educe;
 use std::convert::Infallible;
 
@@ -21,3 +25,5 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Start<T> {
         self.0.subscribe(observer)
     }
 }
+
+impl<T> ObservableExt for Start<T> {}
