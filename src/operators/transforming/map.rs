@@ -31,8 +31,6 @@ impl<T0, OE, F> Map<T0, OE, F> {
 
 impl<'or, 'sub, T0, T, E, OE, F> Observable<'or, 'sub, T, E> for Map<T0, OE, F>
 where
-    T: 'or,
-    E: 'or,
     OE: Observable<'or, 'sub, T0, E>,
     F: FnMut(T0) -> T + Send + 'or,
 {

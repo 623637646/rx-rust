@@ -93,6 +93,32 @@ async fn test_unsubscribe() {
 }
 
 #[test]
+fn test_unsubscribe_wrap_observable() {
+    let mut subject = PublishSubject::default();
+    let subject_cloned = subject.clone();
+    let observable = Create::new(|observer| subject_cloned.subscribe(observer));
+    let (checker, observer) = Checker::new();
+
+    let subscription = observable.clone().subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    subject.on_next(111);
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    subscription.unsubscribe();
+
+    subject.on_next(222);
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_dropped());
+
+    subject.on_termination(Termination::Error("error"));
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_dropped());
+}
+
+#[test]
 fn test_ref() {
     let value = 111;
     let error = 222;
@@ -270,32 +296,6 @@ fn test_clone() {
         Subscription::new_none_disposal()
     });
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
-}
-
-#[test]
-fn test_wrap_observable() {
-    let mut subject = PublishSubject::default();
-    let subject_cloned = subject.clone();
-    let observable = Create::new(|observer| subject_cloned.subscribe(observer));
-    let (checker, observer) = Checker::new();
-
-    let subscription = observable.clone().subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
-    assert!(checker.is_active());
-
-    subject.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
-    assert!(checker.is_active());
-
-    subscription.unsubscribe();
-
-    subject.on_next(222);
-    assert!(checker.is_values_matched(&[111]));
-    assert!(checker.is_dropped());
-
-    subject.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[111]));
-    assert!(checker.is_dropped());
 }
 
 #[test]
