@@ -2,7 +2,7 @@ use super::Observable;
 use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
-        combining::merge::Merge,
+        combining::{concat::Concat, merge::Merge},
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
             map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
@@ -44,6 +44,14 @@ pub trait ObservableExt: Sized {
         delay: Option<Duration>,
     ) -> BufferWithTimeOrCount<Self, S> {
         BufferWithTimeOrCount::new(self, count, time_pan, scheduler, delay)
+    }
+
+    fn concat<'or, 'sub, T, E, OE2>(self) -> Concat<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, OE2, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+    {
+        Concat::new(self)
     }
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
