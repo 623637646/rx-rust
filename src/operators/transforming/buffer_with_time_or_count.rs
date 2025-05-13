@@ -128,6 +128,7 @@ where
             if let Some(observer) = observer_lock.as_mut() {
                 observer.on_next(std::mem::take(&mut values));
                 drop(observer_lock);
+                drop(values);
                 self.setup_emit_timer(Some(self.time_pan));
             }
         }
@@ -144,6 +145,7 @@ where
                     if !values.is_empty() {
                         observer.on_next(std::mem::take(&mut values));
                     }
+                    drop(values);
                     observer.on_termination(Termination::Completed);
                 }
                 Termination::Error(error) => {

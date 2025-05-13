@@ -89,6 +89,7 @@ where
                     if !values.is_empty() {
                         observer.on_next(std::mem::take(&mut values));
                     }
+                    drop(values);
                     observer.on_termination(Termination::Completed);
                 }
                 Termination::Error(error) => {

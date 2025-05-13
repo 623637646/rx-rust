@@ -94,7 +94,9 @@ where
             Termination::Completed => {
                 let mut count = self.pending_termination_count.lock().unwrap();
                 *count -= 1;
-                if *count == 0 {
+                let should_terminal = *count == 0;
+                drop(count);
+                if should_terminal {
                     if let Some(observer) = self.observer.lock().unwrap().take() {
                         observer.on_termination(termination);
                     }
@@ -129,7 +131,9 @@ where
             Termination::Completed => {
                 let mut count = self.pending_termination_count.lock().unwrap();
                 *count -= 1;
-                if *count == 0 {
+                let should_terminal = *count == 0;
+                drop(count);
+                if should_terminal {
                     if let Some(observer) = self.observer.lock().unwrap().take() {
                         observer.on_termination(termination);
                     }

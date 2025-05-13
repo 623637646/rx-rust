@@ -62,6 +62,7 @@ where
                     if !values.is_empty() {
                         observer.on_next(std::mem::take(&mut values));
                     }
+                    drop(values);
                     observer.on_termination(Termination::Completed);
                 }
                 Termination::Error(error) => {
@@ -80,8 +81,7 @@ where
 {
     fn on_next(&mut self, _: ()) {
         if let Some(observer) = self.0.observer.lock().unwrap().as_mut() {
-            let mut values = self.0.values.lock().unwrap();
-            observer.on_next(std::mem::take(&mut values));
+            observer.on_next(std::mem::take(&mut self.0.values.lock().unwrap()));
         }
     }
 

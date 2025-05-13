@@ -38,7 +38,7 @@ impl<T> UniqueKeyStore<T> {
         self.0.iter_mut().filter_map(Option::as_mut)
     }
 
-    pub fn drain(&mut self) -> impl Iterator<Item = T> + '_ {
+    pub fn drain(&mut self) -> impl Iterator<Item = T> {
         self.0.drain(..).flatten()
     }
 }
