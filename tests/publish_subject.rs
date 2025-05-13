@@ -4,7 +4,9 @@ use rx_rust::observable::Observable;
 use rx_rust::observable::observable_ext::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::subscription::Subscription;
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
 
@@ -336,4 +338,34 @@ fn test_type_inference_without_subscribe() {
     let observable = subject;
 
     observable.buffer_with_count(1);
+}
+
+#[test]
+fn test_deadlock() {
+    struct MyObserver {
+        source: Option<PublishSubject<'static, (), Infallible>>,
+        sub: Arc<Mutex<Option<Subscription<'static>>>>,
+    }
+
+    impl MyObserver {
+        fn subscribe(mut self) {
+            let sub = self.sub.clone();
+            *sub.lock().unwrap() = Some(self.source.take().unwrap().subscribe(self));
+        }
+    }
+
+    impl<T, E> Observer<T, E> for MyObserver {
+        fn on_next(&mut self, _: T) {}
+
+        fn on_termination(self, _: Termination<E>) {}
+    }
+
+    // Custom operations
+    let subject = PublishSubject::default();
+    let observer = MyObserver {
+        source: Some(subject.clone()),
+        sub: Arc::new(Mutex::new(None)),
+    };
+    observer.subscribe();
+    subject.on_termination(Termination::Completed);
 }

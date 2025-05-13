@@ -78,7 +78,9 @@ where
             return;
         }
         *terminated = Some(termination.clone());
-        for observer in self.observers.lock().unwrap().drain() {
+        drop(terminated);
+        let observers = self.observers.lock().unwrap().drain().collect::<Vec<_>>();
+        for observer in observers {
             observer.on_termination(termination.clone());
         }
     }
