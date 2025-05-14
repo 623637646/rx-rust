@@ -3,6 +3,7 @@ use crate::{
     observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
+    utils::instant_lock::InstantMutLock,
 };
 use educe::Educe;
 use std::{
@@ -44,21 +45,22 @@ where
         let observer_cloned = observer.clone();
         let disposal_1 = self.scheduler.schedule_period(
             move |_| {
-                if let Some(observer) = observer_cloned.observer.lock().unwrap().as_mut() {
-                    observer.on_next(std::mem::take(
-                        observer_cloned.values.lock().unwrap().as_mut(),
-                    ));
-                    false
-                } else {
-                    true
-                }
+                observer_cloned.observer.lock_mut(|v| {
+                    if let Some(observer) = v {
+                        let values = observer_cloned.values.lock_mut(std::mem::take);
+                        observer.on_next(values);
+                        false
+                    } else {
+                        true
+                    }
+                })
             },
             self.time_pan,
             self.delay,
         );
         let observer_cloned = observer.clone();
         let disposal_2 = CallbackDisposal::new(move || {
-            observer_cloned.observer.lock().unwrap().take();
+            observer_cloned.observer.lock_mut(Option::take);
         });
         self.source.subscribe(observer) + disposal_1 + disposal_2
     }
@@ -78,18 +80,17 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.values.lock().unwrap().push(value);
+        self.values.lock_mut(|v| v.push(value));
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = self.observer.lock().unwrap().take() {
+        if let Some(mut observer) = self.observer.lock_mut(Option::take) {
             match termination {
                 Termination::Completed => {
-                    let mut values = self.values.lock().unwrap();
+                    let values = self.values.lock_mut(std::mem::take);
                     if !values.is_empty() {
-                        observer.on_next(std::mem::take(&mut values));
+                        observer.on_next(values);
                     }
-                    drop(values);
                     observer.on_termination(Termination::Completed);
                 }
                 Termination::Error(error) => {

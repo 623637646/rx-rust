@@ -3,7 +3,10 @@ use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     subscription::Subscription,
-    utils::unique_key_store::UniqueKeyStore,
+    utils::{
+        instant_lock::{InstantMutLock, InstantRefLock},
+        unique_key_store::UniqueKeyStore,
+    },
 };
 use educe::Educe;
 use std::sync::{Arc, Mutex, RwLock};
@@ -27,7 +30,7 @@ impl<T, E> PublishSubject<'_, T, E> {
     where
         E: Clone,
     {
-        self.terminated.read().unwrap().as_ref().cloned()
+        self.terminated.lock_ref(Option::clone)
     }
 }
 
@@ -44,17 +47,14 @@ where
     'or: 'sub,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        if let Some(terminated) = self.terminated.read().unwrap().as_ref().cloned() {
+        if let Some(terminated) = self.terminated.lock_ref(Option::clone) {
             observer.on_termination(terminated);
             return Subscription::new_none_disposal();
         }
         let observers = self.observers;
-        let key = observers
-            .lock()
-            .unwrap()
-            .insert(BoxedObserver::new(observer));
+        let key = observers.lock_mut(|v| v.insert(BoxedObserver::new(observer)));
         Subscription::new_with_disposal_callback(move || {
-            observers.lock().unwrap().remove(key);
+            observers.lock_mut(|v| v.remove(key));
         })
     }
 }
@@ -67,19 +67,26 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        for observer in self.observers.lock().unwrap().iter_mut() {
-            observer.on_next(value.clone());
-        }
+        self.observers.lock_mut(|v| {
+            for observer in v.iter_mut() {
+                observer.on_next(value.clone());
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut terminated = self.terminated.write().unwrap();
-        if terminated.is_some() {
+        if self.terminated.lock_mut(|v| {
+            if v.is_some() {
+                true
+            } else {
+                *v = Some(termination.clone());
+                false
+            }
+        }) {
             return;
         }
-        *terminated = Some(termination.clone());
-        drop(terminated);
-        let observers = self.observers.lock().unwrap().drain().collect::<Vec<_>>();
+
+        let observers = self.observers.lock_mut(|v| v.drain().collect::<Vec<_>>());
         for observer in observers {
             observer.on_termination(termination.clone());
         }

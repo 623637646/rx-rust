@@ -3,6 +3,7 @@ use crate::{
     observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::{Subscription, disposable::CallbackDisposal},
+    utils::instant_lock::InstantMutLock,
 };
 use educe::Educe;
 use std::{
@@ -52,7 +53,7 @@ where
             scheduler: self.scheduler,
         };
         let disposal = CallbackDisposal::new(move || {
-            observer.lock().unwrap().take();
+            observer.lock_mut(Option::take);
         });
         let subscription = self.source.subscribe(delay_observer);
         subscription + disposal
@@ -78,9 +79,11 @@ where
         let observer = self.observer.clone();
         self.scheduler.schedule(
             move || {
-                if let Some(observer) = observer.lock().unwrap().as_mut() {
-                    observer.on_next(value)
-                }
+                observer.lock_mut(|v| {
+                    if let Some(observer) = v {
+                        observer.on_next(value)
+                    }
+                })
             },
             Some(self.delay),
         );
@@ -91,7 +94,7 @@ where
             Termination::Completed => {
                 self.scheduler.schedule(
                     move || {
-                        if let Some(observer) = self.observer.lock().unwrap().take() {
+                        if let Some(observer) = self.observer.lock_mut(Option::take) {
                             observer.on_termination(termination);
                         }
                     },
@@ -99,7 +102,7 @@ where
                 );
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.lock().unwrap().take() {
+                if let Some(observer) = self.observer.lock_mut(Option::take) {
                     observer.on_termination(termination);
                 }
             }

@@ -3,6 +3,7 @@ use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
+    utils::instant_lock::{InstantMutLock, InstantRefLock},
 };
 use educe::Educe;
 use std::sync::{Arc, RwLock};
@@ -33,7 +34,7 @@ impl<T, E> BehaviorSubject<'_, T, E> {
     where
         T: Clone,
     {
-        self.value.read().unwrap().clone()
+        self.value.lock_ref(T::clone)
     }
 }
 
@@ -48,7 +49,7 @@ where
             observer.on_termination(terminated);
             Subscription::new_none_disposal()
         } else {
-            observer.on_next(self.value.read().unwrap().clone());
+            observer.on_next(self.value.lock_ref(T::clone));
             self.publish_subject.subscribe(observer)
         }
     }
@@ -63,7 +64,7 @@ where
 {
     fn on_next(&mut self, value: T) {
         if self.publish_subject.terminated().is_none() {
-            *self.value.write().unwrap() = value.clone();
+            self.value.lock_mut(|v| *v = value.clone());
             self.publish_subject.on_next(value);
         }
     }

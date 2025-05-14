@@ -3,6 +3,7 @@ use crate::{
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::CallbackDisposal},
+    utils::instant_lock::InstantMutLock,
 };
 use educe::Educe;
 use std::{
@@ -84,26 +85,25 @@ where
             observer: self.observer.clone(),
             pending_termination_count: self.pending_termination_count.clone(),
         };
-        *self.pending_termination_count.lock().unwrap() += 1;
+        self.pending_termination_count.lock_mut(|v| *v += 1);
         let sub = value.subscribe(observer);
-        self.subscriptions.lock().unwrap().push(sub);
+        self.subscriptions.lock_mut(|v| v.push(sub));
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let mut count = self.pending_termination_count.lock().unwrap();
-                *count -= 1;
-                let should_terminal = *count == 0;
-                drop(count);
-                if should_terminal {
-                    if let Some(observer) = self.observer.lock().unwrap().take() {
+                if self.pending_termination_count.lock_mut(|v| {
+                    *v -= 1;
+                    *v == 0
+                }) {
+                    if let Some(observer) = self.observer.lock_mut(Option::take) {
                         observer.on_termination(termination);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.lock().unwrap().take() {
+                if let Some(observer) = self.observer.lock_mut(Option::take) {
                     observer.on_termination(termination);
                 }
             }
@@ -121,26 +121,27 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
-            observer.on_next(value);
-        }
+        self.observer.lock_mut(|v| {
+            if let Some(observer) = v {
+                observer.on_next(value);
+            }
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let mut count = self.pending_termination_count.lock().unwrap();
-                *count -= 1;
-                let should_terminal = *count == 0;
-                drop(count);
-                if should_terminal {
-                    if let Some(observer) = self.observer.lock().unwrap().take() {
+                if self.pending_termination_count.lock_mut(|v| {
+                    *v -= 1;
+                    *v == 0
+                }) {
+                    if let Some(observer) = self.observer.lock_mut(Option::take) {
                         observer.on_termination(termination);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.lock().unwrap().take() {
+                if let Some(observer) = self.observer.lock_mut(Option::take) {
                     observer.on_termination(termination);
                 }
             }
