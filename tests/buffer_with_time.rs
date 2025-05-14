@@ -4,12 +4,11 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::create::Create, transforming::buffer_with_time::BufferWithTime},
-    scheduler::tokio_scheduler::TokioScheduler,
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
 use std::time::Duration;
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use tests_utils::{checker::Checker, test_scheduler::TestScheduler, test_struct::TestStruct};
 
 #[tokio::test]
 async fn test_completed_last_empty() {
@@ -20,7 +19,7 @@ async fn test_completed_last_empty() {
     let observable = subject.clone();
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
@@ -56,7 +55,9 @@ async fn test_completed_last_empty() {
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
 }
@@ -70,7 +71,7 @@ async fn test_completed_last_not_empty() {
     let observable = subject.clone();
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
@@ -102,7 +103,9 @@ async fn test_completed_last_not_empty() {
     assert!(checker.is_values_matched(&[vec![], vec![111]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
 }
@@ -114,7 +117,8 @@ async fn test_completed_no_delay() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_time(Duration::from_millis(100), TokioScheduler, None);
+    let observable =
+        observable.buffer_with_time(Duration::from_millis(100), TestScheduler, None);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -148,7 +152,9 @@ async fn test_completed_no_delay() {
     assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
 }
@@ -162,7 +168,7 @@ async fn test_completed_small_delay() {
     let observable = subject.clone();
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(30)),
     );
 
@@ -198,7 +204,9 @@ async fn test_completed_small_delay() {
     assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
 }
@@ -212,7 +220,7 @@ async fn test_error_last_empty() {
     let observable = subject.clone();
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
@@ -262,7 +270,7 @@ async fn test_error_last_not_empty() {
     let observable = subject.clone();
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
@@ -309,7 +317,7 @@ async fn test_unsubscribe() {
     let observable = subject.clone();
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
     let observable_1 = observable;
@@ -366,7 +374,9 @@ async fn test_unsubscribe() {
     assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker_2.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -382,7 +392,7 @@ async fn test_async() {
     let observable = subject.clone();
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
@@ -449,7 +459,7 @@ async fn test_subscribe_by_different_observer() {
     let observable = subject.clone();
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
     let observable_1 = observable;
@@ -499,7 +509,9 @@ async fn test_subscribe_by_different_observer() {
     assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
     assert!(checker_2.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker_1.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker_1.is_completed());
     assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -516,12 +528,12 @@ async fn test_multiple_operation() {
     let observable = observable
         .buffer_with_time(
             Duration::from_millis(90),
-            TokioScheduler,
+            TestScheduler,
             Some(Duration::from_millis(90)),
         )
         .buffer_with_time(
             Duration::from_millis(100),
-            TokioScheduler,
+            TestScheduler,
             Some(Duration::from_millis(100)),
         );
 
@@ -553,7 +565,9 @@ async fn test_multiple_operation() {
     assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![vec![]], vec![vec![111]], vec![vec![222, 333]]]));
     assert!(checker.is_completed());
 }
@@ -568,7 +582,7 @@ async fn test_without_convenient_api() {
     let observable = BufferWithTime::new(
         observable,
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
@@ -600,7 +614,9 @@ async fn test_without_convenient_api() {
     assert!(checker.is_values_matched(&[vec![], vec![111]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
 }
@@ -625,7 +641,7 @@ async fn test_lifetime_sub() {
 
         let observable = observable.buffer_with_time(
             Duration::from_millis(100),
-            TokioScheduler,
+            TestScheduler,
             Some(Duration::from_millis(100)),
         );
 
@@ -643,7 +659,7 @@ fn test_clone() {
     });
     let observable = observable.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
@@ -655,7 +671,7 @@ async fn test_type_inference_with_subscribe() {
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
@@ -670,7 +686,7 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject.buffer_with_time(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
 

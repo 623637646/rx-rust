@@ -3,16 +3,15 @@ mod tests_utils;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::from_future::FromFuture,
-    scheduler::tokio_scheduler::TokioScheduler,
 };
 use std::time::Duration;
-use tests_utils::checker::Checker;
+use tests_utils::{checker::Checker, test_scheduler::TestScheduler};
 
 #[tokio::test]
 async fn test_completed() {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let observable = FromFuture::new(rx, TokioScheduler);
+    let observable = FromFuture::new(rx, TestScheduler);
     let observable = observable.map(|result| result.unwrap_or(-1));
     let (checker, observer) = Checker::new();
 
@@ -37,7 +36,7 @@ async fn test_completed() {
 async fn test_completed_drop() {
     let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
 
-    let observable = FromFuture::new(rx, TokioScheduler);
+    let observable = FromFuture::new(rx, TestScheduler);
     let observable = observable.map(|result| result.unwrap_or(-1));
     let (checker, observer) = Checker::new();
 
@@ -62,7 +61,7 @@ async fn test_completed_drop() {
 async fn test_unsubscribe() {
     let (_tx, rx) = tokio::sync::oneshot::channel::<i32>();
 
-    let observable = FromFuture::new(rx, TokioScheduler);
+    let observable = FromFuture::new(rx, TestScheduler);
     let observable = observable.map(|result| result.unwrap_or(-1));
     let (checker, observer) = Checker::new();
 
@@ -87,7 +86,7 @@ async fn test_unsubscribe() {
 async fn test_async() {
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    let observable = FromFuture::new(rx, TokioScheduler);
+    let observable = FromFuture::new(rx, TestScheduler);
     let observable = observable.map(|result| result.unwrap_or(-1));
     let (checker, observer) = Checker::new();
 
@@ -114,7 +113,7 @@ async fn test_async() {
 async fn test_subscribe_by_different_observer() {
     let source = std::future::ready(111);
 
-    let observable = FromFuture::new(source, TokioScheduler);
+    let observable = FromFuture::new(source, TestScheduler);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -141,7 +140,7 @@ async fn test_subscribe_by_different_observer() {
 #[test]
 fn test_clone() {
     let source = std::future::ready(111);
-    let observable = FromFuture::new(source, TokioScheduler);
+    let observable = FromFuture::new(source, TestScheduler);
     _ = observable.clone();
 }
 
@@ -149,7 +148,7 @@ fn test_clone() {
 async fn test_type_inference_with_subscribe() {
     // Custom operations
     let source = async { 111 };
-    let observable = FromFuture::new(source, TokioScheduler);
+    let observable = FromFuture::new(source, TestScheduler);
 
     let observable = observable.buffer_with_count(1);
     let (_, observer) = Checker::new();
@@ -160,7 +159,7 @@ async fn test_type_inference_with_subscribe() {
 async fn test_type_inference_without_subscribe() {
     // Custom operations
     let source = async { 111 };
-    let observable = FromFuture::new(source, TokioScheduler);
+    let observable = FromFuture::new(source, TestScheduler);
 
     observable.buffer_with_count(1);
 }

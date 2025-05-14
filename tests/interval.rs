@@ -3,14 +3,13 @@ mod tests_utils;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
-    scheduler::tokio_scheduler::TokioScheduler,
 };
 use std::time::Duration;
-use tests_utils::checker::Checker;
+use tests_utils::{checker::Checker, test_scheduler::TestScheduler};
 
 #[tokio::test]
 async fn test_completed_no_delay() {
-    let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
+    let observable = Interval::new(Duration::from_millis(100), TestScheduler, None);
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
@@ -45,7 +44,7 @@ async fn test_completed_no_delay() {
 async fn test_completed_with_delay() {
     let observable = Interval::new(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
     let (checker, observer) = Checker::new();
@@ -92,7 +91,7 @@ async fn test_unsubscribe() {
     // Custom operations
     let observable = Interval::new(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
     let observable_1 = observable;
@@ -153,7 +152,7 @@ async fn test_unsubscribe() {
 async fn test_async() {
     let observable = Interval::new(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
     let (checker, observer) = Checker::new();
@@ -202,7 +201,7 @@ async fn test_subscribe_by_different_observer() {
     // Custom operations
     let observable = Interval::new(
         Duration::from_millis(100),
-        TokioScheduler,
+        TestScheduler,
         Some(Duration::from_millis(100)),
     );
     let observable_1 = observable;
@@ -265,14 +264,14 @@ async fn test_subscribe_by_different_observer() {
 
 #[tokio::test]
 async fn test_clone() {
-    let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
+    let observable = Interval::new(Duration::from_millis(100), TestScheduler, None);
     _ = observable.clone();
 }
 
 #[tokio::test]
 async fn test_type_inference_with_subscribe() {
     // Custom operations
-    let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
+    let observable = Interval::new(Duration::from_millis(100), TestScheduler, None);
 
     let observable = observable.buffer_with_count(1);
     let (_, observer) = Checker::new();
@@ -282,7 +281,7 @@ async fn test_type_inference_with_subscribe() {
 #[tokio::test]
 async fn test_type_inference_without_subscribe() {
     // Custom operations
-    let observable = Interval::new(Duration::from_millis(100), TokioScheduler, None);
+    let observable = Interval::new(Duration::from_millis(100), TestScheduler, None);
 
     observable.buffer_with_count(1);
 }
