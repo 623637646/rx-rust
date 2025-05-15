@@ -2,6 +2,7 @@ use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
+    utils::marker::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -10,7 +11,7 @@ use std::marker::PhantomData;
 #[educe(Debug, Clone)]
 pub struct MapValueToVoid<T, OE> {
     source: OE,
-    _marker: PhantomData<fn(T) -> T>, // Refer to `MapInfallibleToErrorObserver` for the reason of using `PhantomData<fn(T) -> T>`
+    _marker: MarkerType<T>,
 }
 
 impl<T, OE> MapValueToVoid<T, OE> {

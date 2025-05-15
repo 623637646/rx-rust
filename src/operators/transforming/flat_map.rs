@@ -3,19 +3,17 @@ use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Observer,
     subscription::Subscription,
+    utils::marker::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
-
-// Refer to `MapInfallibleToErrorObserver` for the reason of using `PhantomData<fn((T0, OE2)) -> (T0, OE2)>`
-type MarkerType<T0, OE2> = PhantomData<fn((T0, OE2)) -> (T0, OE2)>;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FlatMap<T0, OE, OE2, F> {
     source: OE,
     callback: F,
-    _marker: MarkerType<T0, OE2>,
+    _marker: MarkerType<(T0, OE2)>,
 }
 
 impl<T0, OE, OE2, F> FlatMap<T0, OE, OE2, F> {

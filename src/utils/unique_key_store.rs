@@ -1,6 +1,6 @@
-pub struct ID(usize);
+pub(crate) struct ID(usize);
 
-pub struct UniqueKeyStore<T>(Vec<Option<T>>);
+pub(crate) struct UniqueKeyStore<T>(Vec<Option<T>>);
 
 impl<T> Default for UniqueKeyStore<T> {
     fn default() -> Self {
@@ -9,11 +9,11 @@ impl<T> Default for UniqueKeyStore<T> {
 }
 
 impl<T> UniqueKeyStore<T> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self(Vec::new())
     }
 
-    pub fn insert(&mut self, value: T) -> ID {
+    pub(crate) fn insert(&mut self, value: T) -> ID {
         // Reuse empty slot if available
         for (i, slot) in self.0.iter_mut().enumerate() {
             if slot.is_none() {
@@ -26,19 +26,19 @@ impl<T> UniqueKeyStore<T> {
         ID(self.0.len() - 1)
     }
 
-    pub fn remove(&mut self, key: ID) -> Option<T> {
+    pub(crate) fn remove(&mut self, key: ID) -> Option<T> {
         self.0.get_mut(key.0).and_then(Option::take)
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &T> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
         self.0.iter().filter_map(Option::as_ref)
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+    pub(crate) fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         self.0.iter_mut().filter_map(Option::as_mut)
     }
 
-    pub fn drain(&mut self) -> impl Iterator<Item = T> {
+    pub(crate) fn drain(&mut self) -> impl Iterator<Item = T> {
         self.0.drain(..).flatten()
     }
 }

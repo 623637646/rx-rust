@@ -3,7 +3,7 @@ use crate::{
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::CallbackDisposal},
-    utils::instant_lock::InstantMutLock,
+    utils::{instant_lock::InstantMutLock, marker::MarkerType},
 };
 use educe::Educe;
 use std::{
@@ -15,7 +15,7 @@ use std::{
 #[educe(Debug, Clone)]
 pub struct Merge<OE, OE2> {
     source: OE,
-    _marker: PhantomData<fn(OE2) -> OE2>, // Refer to `MapInfallibleToErrorObserver` for the reason of using `PhantomData<fn(OE2) -> OE2>`
+    _marker: MarkerType<OE2>,
 }
 
 impl<OE, OE2> Merge<OE, OE2> {
@@ -70,7 +70,7 @@ struct MergeObserver<'sub, T, OR> {
     observer: Arc<Mutex<Option<OR>>>,
     subscriptions: Arc<Mutex<Vec<Subscription<'sub>>>>,
     pending_termination_count: Arc<Mutex<usize>>,
-    _marker: PhantomData<fn(T) -> T>, // Refer to `MapInfallibleToErrorObserver` for the reason of using `PhantomData<fn(T) -> T>`
+    _marker: MarkerType<T>,
 }
 
 impl<'or, 'sub, T, E, OR, OE2> Observer<OE2, E> for MergeObserver<'sub, T, OR>

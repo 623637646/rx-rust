@@ -3,7 +3,7 @@
 
 use std::sync::{Mutex, RwLock};
 
-pub trait InstantMutLock<T, R> {
+pub(crate) trait InstantMutLock<T, R> {
     fn lock_mut(&self, callback: impl FnOnce(&mut T) -> R) -> R;
 }
 
@@ -25,7 +25,7 @@ impl<T, R> InstantMutLock<T, R> for RwLock<T> {
     }
 }
 
-pub trait InstantRefLock<T, R> {
+pub(crate) trait InstantRefLock<T, R> {
     fn lock_ref(&self, callback: impl FnOnce(&T) -> R) -> R;
 }
 
