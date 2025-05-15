@@ -576,7 +576,7 @@ fn test_ref() {
     let value_1 = 111;
     let value_2 = 222;
     let value_3 = 333;
-    let value_4 = 333;
+    let value_4 = 444;
     let error = -1;
 
     let mut subject = PublishSubject::default();
