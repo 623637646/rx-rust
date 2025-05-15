@@ -1,8 +1,8 @@
 use super::Scheduler;
-use crate::subscription::disposable::{CallbackDisposal, Disposable};
+use crate::subscription::disposable::Disposable;
 use educe::Educe;
 use std::time::Duration;
-use tokio::time::interval;
+use tokio::{task::JoinHandle, time::interval};
 
 /// `TokioScheduler` is an implementation of the `Scheduler` trait using Tokio runtime.
 ///
@@ -44,13 +44,12 @@ impl Scheduler for TokioScheduler {
         task: impl FnOnce() + Send + 'static,
         delay: Option<Duration>,
     ) -> impl Disposable + Send + 'static {
-        let handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
             task();
-        });
-        CallbackDisposal::new(move || handle.abort())
+        })
     }
 
     fn schedule_period(
@@ -59,7 +58,7 @@ impl Scheduler for TokioScheduler {
         period: Duration,
         delay: Option<Duration>,
     ) -> impl Disposable + Send + 'static {
-        let handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
@@ -73,8 +72,7 @@ impl Scheduler for TokioScheduler {
                     break;
                 }
             }
-        });
-        CallbackDisposal::new(move || handle.abort())
+        })
     }
 
     fn schedule_future<FU>(
@@ -85,9 +83,14 @@ impl Scheduler for TokioScheduler {
     where
         FU: Future + Send + 'static,
     {
-        let handle = tokio::spawn(async {
+        tokio::spawn(async {
             result_callback(future.await);
-        });
-        CallbackDisposal::new(move || handle.abort())
+        })
+    }
+}
+
+impl<T> Disposable for JoinHandle<T> {
+    fn dispose(self) {
+        self.abort();
     }
 }
