@@ -59,9 +59,7 @@ where
             pending_termination_count: Arc::new(Mutex::new(1)),
             _marker: PhantomData,
         };
-        let disposal = CallbackDisposal::new(|| {
-            drop(subscriptions);
-        });
+        let disposal = CallbackDisposal::new(move || subscriptions.lock_mut(Vec::clear));
         self.source.subscribe(observer) + disposal
     }
 }

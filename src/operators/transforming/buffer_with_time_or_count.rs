@@ -63,7 +63,6 @@ where
             if let Some(timer) = observer_cloned.timer.lock_mut(Option::take) {
                 timer.dispose();
             }
-            observer_cloned.observer.lock_mut(Option::take);
         });
         self.source.subscribe(observer) + disposal
     }

@@ -117,8 +117,7 @@ async fn test_completed_no_delay() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable =
-        observable.buffer_with_time(Duration::from_millis(100), TestScheduler, None);
+    let observable = observable.buffer_with_time(Duration::from_millis(100), TestScheduler, None);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
@@ -355,6 +354,16 @@ async fn test_unsubscribe() {
     assert!(checker_2.is_active());
 
     subscription_1.unsubscribe();
+    assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
+    assert!(checker_1.is_active());
+    assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
+    assert!(checker_2.is_active());
+
+    tokio::time::sleep(Duration::from_millis(0)).await;
+    assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
+    assert!(checker_1.is_dropped());
+    assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
+    assert!(checker_2.is_active());
 
     subject.on_next(222);
     assert!(checker_1.is_values_matched(&[vec![], vec![111]]));

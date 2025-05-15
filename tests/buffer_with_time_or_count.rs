@@ -627,11 +627,11 @@ async fn test_unsubscribe() {
 
     subscription_1.unsubscribe();
     assert!(checker_1.is_values_matched(&[vec![111, 111], vec![222, 222]]));
-    assert!(checker_1.is_dropped());
+    assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[vec![111, 111], vec![222, 222]]));
     assert!(checker_2.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(0)).await;
     assert!(checker_1.is_values_matched(&[vec![111, 111], vec![222, 222]]));
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[vec![111, 111], vec![222, 222]]));
@@ -967,11 +967,11 @@ async fn test_subscribe_by_different_observer() {
 
     subscription_1.unsubscribe();
     assert!(checker_1.is_values_matched(&[vec![111, 111], vec![222, 222]]));
-    assert!(checker_1.is_dropped());
+    assert!(checker_1.is_active());
     assert!(checker_2.is_values_matched(&[vec![111, 111], vec![222, 222]]));
     assert!(checker_2.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(0)).await;
     assert!(checker_1.is_values_matched(&[vec![111, 111], vec![222, 222]]));
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[vec![111, 111], vec![222, 222]]));
