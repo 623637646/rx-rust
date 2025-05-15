@@ -85,7 +85,7 @@ where
         };
         self.pending_termination_count.lock_mut(|v| *v += 1);
         let sub = value.subscribe(observer);
-        self.subscriptions.lock_mut(|v| v.push(sub));
+        self.subscriptions.lock_mut(|v| v.push(sub)); // TODO: self.subscriptions never reduce. 
     }
 
     fn on_termination(self, termination: Termination<E>) {

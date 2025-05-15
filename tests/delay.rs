@@ -527,3 +527,30 @@ fn test_type_inference_without_subscribe() {
 
     observable.buffer_with_count(1);
 }
+
+// TODO: Delay doesn't cancel the scheduler now.
+// #[tokio::test]
+// async fn test_long_delay() {
+//     let mut subject: PublishSubject<'_, _, ()> = PublishSubject::default();
+//     let (checker, observer) = Checker::new();
+
+//     // Custom operations
+//     let observable = subject.clone();
+//     let observable = observable.delay(Duration::from_millis(1000), TestScheduler);
+
+//     let subscription = observable.subscribe(observer);
+//     assert!(checker.is_values_matched(&[]));
+//     assert!(checker.is_active());
+
+//     subject.on_next(111);
+//     assert!(checker.is_values_matched(&[]));
+//     assert!(checker.is_active());
+
+//     subscription.unsubscribe();
+//     assert!(checker.is_values_matched(&[]));
+//     assert!(checker.is_dropped());
+
+//     tokio::time::sleep(Duration::from_millis(0)).await;
+//     assert!(checker.is_values_matched(&[]));
+//     assert!(checker.is_dropped());
+// }
