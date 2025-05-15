@@ -30,6 +30,7 @@ impl<T> UniqueKeyStore<T> {
         self.0.get_mut(key.0).and_then(Option::take)
     }
 
+    #[cfg(test)]
     pub(crate) fn iter(&self) -> impl Iterator<Item = &T> {
         self.0.iter().filter_map(Option::as_ref)
     }
