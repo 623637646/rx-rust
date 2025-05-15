@@ -8,7 +8,7 @@ use futures::Stream;
 use std::{
     collections::VecDeque,
     convert::Infallible,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
     task::{Poll, Waker},
 };
 
@@ -16,7 +16,7 @@ pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,
     values: Arc<Mutex<VecDeque<T>>>,
-    terminated: Arc<RwLock<bool>>,
+    terminated: Arc<Mutex<bool>>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
@@ -29,7 +29,7 @@ impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
             source: Some(source),
             sub: None,
             values: Arc::new(Mutex::new(VecDeque::new())),
-            terminated: Arc::new(RwLock::new(false)),
+            terminated: Arc::new(Mutex::new(false)),
             waker: Arc::new(Mutex::new(None)),
         }
     }
@@ -69,7 +69,7 @@ where
 
 struct ObservableStreamObserver<T> {
     values: Arc<Mutex<VecDeque<T>>>,
-    terminated: Arc<RwLock<bool>>,
+    terminated: Arc<Mutex<bool>>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
 

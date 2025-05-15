@@ -45,7 +45,7 @@ where
     'or: 'sub,
 {
     fn subscribe(self, mut observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        if let Some(terminated) = self.publish_subject.terminated() {
+        if let Some(terminated) = self.terminated() {
             observer.on_termination(terminated);
             Subscription::new_none_disposal()
         } else {
@@ -63,7 +63,7 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        if self.publish_subject.terminated().is_none() {
+        if self.terminated().is_none() {
             self.value.lock_mut(|v| *v = value.clone());
             self.publish_subject.on_next(value);
         }
