@@ -79,16 +79,16 @@ impl<OE, OE2> ObservableExt for Concat<OE, OE2> {}
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-struct ConcatObserver<'sub, T, E, OR, OE2> {
+struct ConcatObserver<'sub, T, OR, OE2> {
     observer: Arc<Mutex<Option<OR>>>,
     pending_observables: Arc<Mutex<VecDeque<OE2>>>,
     on_going_sub: Arc<Mutex<Option<Subscription<'sub>>>>,
     completed: Arc<AtomicBool>,
-    _marker: MarkerType<(T, E)>,
+    _marker: MarkerType<T>,
 }
 
-impl<'or, 'sub, T, E, OR, OE2> ConcatObserver<'sub, T, E, OR, OE2> {
-    fn subscribe_next(&self)
+impl<'or, 'sub, T, OR, OE2> ConcatObserver<'sub, T, OR, OE2> {
+    fn subscribe_next<E>(&self)
     where
         T: 'or,
         E: 'or,
@@ -126,7 +126,7 @@ impl<'or, 'sub, T, E, OR, OE2> ConcatObserver<'sub, T, E, OR, OE2> {
     }
 }
 
-impl<'or, 'sub, T, E, OR, OE2> Observer<OE2, E> for ConcatObserver<'sub, T, E, OR, OE2>
+impl<'or, 'sub, T, E, OR, OE2> Observer<OE2, E> for ConcatObserver<'sub, T, OR, OE2>
 where
     T: 'or,
     E: 'or,
