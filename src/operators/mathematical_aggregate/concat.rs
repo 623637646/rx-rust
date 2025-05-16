@@ -145,7 +145,9 @@ where
         match termination {
             Termination::Completed => {
                 self.completed.store(true, Ordering::SeqCst);
-                if self.pending_observables.lock_ref(VecDeque::is_empty) {
+                if self.on_going_sub.lock_ref(Option::is_none)
+                    && self.pending_observables.lock_ref(VecDeque::is_empty)
+                {
                     if let Some(observer) = self.observer.lock_mut(Option::take) {
                         observer.on_termination(Termination::Completed);
                     }

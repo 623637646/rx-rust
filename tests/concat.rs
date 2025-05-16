@@ -162,6 +162,41 @@ fn test_completed_inner_completed_fast() {
 }
 
 #[test]
+fn test_completed_outer_completed_fast() {
+    let mut subject = PublishSubject::default();
+    let mut subject_1 = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let observable = observable.concat();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    subject.on_next(subject_1.clone());
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    subject_1.on_next(111);
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert!(checker.is_values_matched(&[111]));
+    assert!(checker.is_active());
+
+    subject_1.on_next(333);
+    assert!(checker.is_values_matched(&[111, 333]));
+    assert!(checker.is_active());
+
+    subject_1.on_termination(Termination::Completed);
+    assert!(checker.is_values_matched(&[111, 333]));
+    assert!(checker.is_completed());
+}
+
+#[test]
 fn test_completed_empty() {
     let subject: PublishSubject<'_, Just<i32>, _> = PublishSubject::default();
     let (checker, observer) = Checker::new();
