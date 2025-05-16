@@ -12,7 +12,7 @@ use crate::{
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
-            flat_map::FlatMap, map::Map,
+            flat_map::FlatMap, map::Map, switch_map::SwitchMap,
         },
         utility::{delay::Delay, do_on_next::DoOnNext, do_on_termination::DoOnTermination},
     },
@@ -162,5 +162,14 @@ pub trait ObservableExt: Sized {
         OE2: Observable<'or, 'sub, T, E>,
     {
         Switch::new(self)
+    }
+
+    fn switch_map<'or, 'sub, T0, T, E, OE2, F>(self, callback: F) -> SwitchMap<T0, Self, OE2, F>
+    where
+        Self: Observable<'or, 'sub, T0, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+        F: FnMut(T0) -> OE2,
+    {
+        SwitchMap::new(self, callback)
     }
 }
