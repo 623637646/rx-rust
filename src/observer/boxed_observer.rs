@@ -1,9 +1,4 @@
-use super::{Observer, Termination};
-
-pub enum Event<T, E> {
-    Next(T),
-    Termination(Termination<E>),
-}
+use super::{Event, Observer, Termination};
 
 /// https://stackoverflow.com/a/56447952/9315497
 pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + Send + 'or>);

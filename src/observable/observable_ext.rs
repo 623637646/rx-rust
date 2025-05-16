@@ -14,7 +14,10 @@ use crate::{
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
             flat_map::FlatMap, map::Map, switch_map::SwitchMap,
         },
-        utility::{delay::Delay, do_on_next::DoOnNext, do_on_termination::DoOnTermination},
+        utility::{
+            delay::Delay, do_on_next::DoOnNext, do_on_termination::DoOnTermination,
+            materialize::Materialize,
+        },
     },
     subscription::Subscription,
 };
@@ -131,6 +134,10 @@ pub trait ObservableExt: Sized {
 
     fn map_value_to_void<T>(self) -> MapValueToVoid<T, Self> {
         MapValueToVoid::new(self)
+    }
+
+    fn materialize(self) -> Materialize<Self> {
+        Materialize::new(self)
     }
 
     fn merge<'or, 'sub, T, E, OE2>(self) -> Merge<Self, OE2>

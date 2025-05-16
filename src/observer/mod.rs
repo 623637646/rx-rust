@@ -29,3 +29,10 @@ pub trait Observer<T, E> {
     /// * `termination` - The termination state of the operation, which can either be `Completed` or `Error`.
     fn on_termination(self, termination: Termination<E>);
 }
+
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq)]
+pub enum Event<T, E> {
+    Next(T),
+    Termination(Termination<E>),
+}
