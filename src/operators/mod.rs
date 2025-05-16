@@ -1,11 +1,11 @@
 pub mod backpressure;
 pub mod combining;
-pub mod conditional;
+pub mod conditional_boolean;
 pub mod connectable;
 pub mod creating;
 pub mod error_handling;
 pub mod filtering;
-pub mod mathematical;
+pub mod mathematical_aggregate;
 pub mod others;
 pub mod transforming;
 pub mod utility;

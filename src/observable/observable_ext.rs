@@ -2,7 +2,8 @@ use super::Observable;
 use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
-        combining::{concat::Concat, merge::Merge},
+        combining::merge::Merge,
+        mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
             map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
