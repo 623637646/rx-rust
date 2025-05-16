@@ -179,11 +179,11 @@ fn test_completed_outer_completed_fast() {
     assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
-    subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert!(checker.is_values_matched(&[]));
     assert!(checker.is_active());
 
-    subject.on_termination(Termination::<Infallible>::Completed);
+    subject_1.on_next(111);
     assert!(checker.is_values_matched(&[111]));
     assert!(checker.is_active());
 
@@ -739,6 +739,41 @@ fn test_mut_ref() {
     assert_eq!(value_2, 444);
     assert_eq!(value_3, 666);
     assert_eq!(error, -2);
+}
+
+#[test]
+fn test_mut_ref_completed() {
+    let mut value_1 = 111;
+    let mut value_2 = 222;
+    let mut value_3 = 333;
+    let mut completed = false;
+
+    // Custom operations
+    let observable = Create::new(|mut observer| {
+        observer.on_next(Just::new(&mut value_1).map_infallible_to_error());
+        observer.on_next(Just::new(&mut value_2).map_infallible_to_error());
+        observer.on_next(Just::new(&mut value_3).map_infallible_to_error());
+        observer.on_termination(Termination::<Infallible>::Completed);
+        Subscription::new_none_disposal()
+    });
+    let observable = observable.concat();
+
+    let _subscription = observable.subscribe_with_callback(
+        |value| {
+            *value *= 2;
+        },
+        |termination| match termination {
+            Termination::Completed => {
+                completed = true;
+            }
+            Termination::Error(_) => panic!(),
+        },
+    );
+
+    assert_eq!(value_1, 222);
+    assert_eq!(value_2, 444);
+    assert_eq!(value_3, 666);
+    assert!(completed);
 }
 
 #[tokio::test]
