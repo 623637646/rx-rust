@@ -13,7 +13,7 @@ pub trait Scheduler {
     /// Returns a `Disposable` that can be used to cancel the task.
     fn schedule(
         &self,
-        task: impl FnOnce() + Send + 'static, // This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497 // TODO: use Future instead of FnOnce?
+        task: impl FnOnce() + Send + 'static, // This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
         delay: Option<Duration>,
     ) -> impl Disposable + Send + 'static;
 
