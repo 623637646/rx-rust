@@ -2,7 +2,7 @@ use super::Observable;
 use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
-        combining::merge::Merge,
+        combining::{merge::Merge, switch::Switch},
         mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
@@ -154,5 +154,13 @@ pub trait ObservableExt: Sized {
         FT: FnOnce(Termination<E>) + Send + 'or,
     {
         self.subscribe(CallbackObserver::new(on_next, on_termination))
+    }
+
+    fn switch<'or, 'sub, T, E, OE2>(self) -> Switch<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, OE2, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+    {
+        Switch::new(self)
     }
 }
