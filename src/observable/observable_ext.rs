@@ -11,7 +11,8 @@ use crate::{
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
-            buffer_with_time_or_count::BufferWithTimeOrCount, flat_map::FlatMap, map::Map,
+            buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
+            flat_map::FlatMap, map::Map,
         },
         utility::{delay::Delay, do_on_next::DoOnNext, do_on_termination::DoOnTermination},
     },
@@ -53,6 +54,15 @@ pub trait ObservableExt: Sized {
         OE2: Observable<'or, 'sub, T, E>,
     {
         Concat::new(self)
+    }
+
+    fn concat_map<'or, 'sub, T0, T, E, OE2, F>(self, callback: F) -> ConcatMap<T0, Self, OE2, F>
+    where
+        Self: Observable<'or, 'sub, T0, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+        F: FnMut(T0) -> OE2,
+    {
+        ConcatMap::new(self, callback)
     }
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
