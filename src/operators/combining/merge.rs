@@ -8,7 +8,10 @@ use crate::{
 use educe::Educe;
 use std::{
     marker::PhantomData,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 #[derive(Educe)]
@@ -56,7 +59,7 @@ where
         let observer = MergeObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             subscriptions: subscriptions.clone(),
-            pending_termination_count: Arc::new(Mutex::new(1)),
+            pending_termination_count: Arc::new(AtomicUsize::new(1)),
             _marker: PhantomData,
         };
         let disposal = CallbackDisposal::new(move || subscriptions.lock_mut(Vec::clear));
@@ -69,7 +72,7 @@ impl<OE, OE2> ObservableExt for Merge<OE, OE2> {}
 struct MergeObserver<'sub, T, OR> {
     observer: Arc<Mutex<Option<OR>>>,
     subscriptions: Arc<Mutex<Vec<Subscription<'sub>>>>,
-    pending_termination_count: Arc<Mutex<usize>>,
+    pending_termination_count: Arc<AtomicUsize>,
     _marker: MarkerType<T>,
 }
 
@@ -83,7 +86,8 @@ where
             observer: self.observer.clone(),
             pending_termination_count: self.pending_termination_count.clone(),
         };
-        self.pending_termination_count.lock_mut(|v| *v += 1);
+        self.pending_termination_count
+            .fetch_add(1, Ordering::SeqCst);
         let sub = value.subscribe(observer);
         self.subscriptions.lock_mut(|v| v.push(sub)); // TODO: self.subscriptions never reduce. 
     }
@@ -91,10 +95,9 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                if self.pending_termination_count.lock_mut(|v| {
-                    *v -= 1;
-                    *v == 0
-                }) {
+                self.pending_termination_count
+                    .fetch_sub(1, Ordering::SeqCst);
+                if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
                     if let Some(observer) = self.observer.lock_mut(Option::take) {
                         observer.on_termination(termination);
                     }
@@ -111,7 +114,7 @@ where
 
 struct MergeInnerObserver<OR> {
     observer: Arc<Mutex<Option<OR>>>,
-    pending_termination_count: Arc<Mutex<usize>>,
+    pending_termination_count: Arc<AtomicUsize>,
 }
 
 impl<T, E, OR> Observer<T, E> for MergeInnerObserver<OR>
@@ -129,10 +132,9 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                if self.pending_termination_count.lock_mut(|v| {
-                    *v -= 1;
-                    *v == 0
-                }) {
+                self.pending_termination_count
+                    .fetch_sub(1, Ordering::SeqCst);
+                if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
                     if let Some(observer) = self.observer.lock_mut(Option::take) {
                         observer.on_termination(termination);
                     }

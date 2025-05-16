@@ -2,13 +2,16 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::instant_lock::{InstantMutLock, InstantRefLock},
+    utils::instant_lock::InstantMutLock,
 };
 use futures::Stream;
 use std::{
     collections::VecDeque,
     convert::Infallible,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     task::{Poll, Waker},
 };
 
@@ -16,7 +19,7 @@ pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,
     values: Arc<Mutex<VecDeque<T>>>,
-    terminated: Arc<Mutex<bool>>,
+    terminated: Arc<AtomicBool>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
@@ -29,7 +32,7 @@ impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
             source: Some(source),
             sub: None,
             values: Arc::new(Mutex::new(VecDeque::new())),
-            terminated: Arc::new(Mutex::new(false)),
+            terminated: Arc::new(AtomicBool::new(false)),
             waker: Arc::new(Mutex::new(None)),
         }
     }
@@ -59,7 +62,7 @@ where
         self.waker.lock_mut(|v| *v = Some(cx.waker().clone()));
         if let Some(event) = self.values.lock_mut(VecDeque::pop_front) {
             Poll::Ready(Some(event))
-        } else if self.terminated.lock_ref(|v| *v) {
+        } else if self.terminated.load(Ordering::SeqCst) {
             Poll::Ready(None)
         } else {
             Poll::Pending
@@ -69,7 +72,7 @@ where
 
 struct ObservableStreamObserver<T> {
     values: Arc<Mutex<VecDeque<T>>>,
-    terminated: Arc<Mutex<bool>>,
+    terminated: Arc<AtomicBool>,
     waker: Arc<Mutex<Option<Waker>>>,
 }
 
@@ -82,7 +85,7 @@ impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     }
 
     fn on_termination(self, _: Termination<Infallible>) {
-        self.terminated.lock_mut(|v| *v = true);
+        self.terminated.store(true, Ordering::SeqCst);
         if let Some(waker) = self.waker.lock_mut(Option::take) {
             waker.wake();
         }
