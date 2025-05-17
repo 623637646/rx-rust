@@ -15,8 +15,8 @@ use crate::{
             flat_map::FlatMap, map::Map, switch_map::SwitchMap,
         },
         utility::{
-            delay::Delay, do_on_next::DoOnNext, do_on_termination::DoOnTermination,
-            materialize::Materialize,
+            delay::Delay, dematerialize::Dematerialize, do_on_next::DoOnNext,
+            do_on_termination::DoOnTermination, materialize::Materialize,
         },
     },
     subscription::Subscription,
@@ -70,6 +70,10 @@ pub trait ObservableExt: Sized {
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
         Delay::new(self, delay, scheduler)
+    }
+
+    fn dematerialize(self) -> Dematerialize<Self> {
+        Dematerialize::new(self)
     }
 
     fn do_on_next<'or, 'sub, T, E, F>(self, callback: F) -> DoOnNext<Self, F>
