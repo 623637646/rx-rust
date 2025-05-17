@@ -84,7 +84,7 @@ pub trait ObservableExt: Sized {
         DoOnNext::new(self, callback)
     }
 
-    fn do_on_termination<'sub, 'or, T, E, F>(self, callback: F) -> DoOnTermination<Self, F>
+    fn do_on_termination<'or, 'sub, T, E, F>(self, callback: F) -> DoOnTermination<Self, F>
     where
         Self: Observable<'or, 'sub, T, E>,
         F: FnOnce(&Termination<E>),
@@ -124,7 +124,7 @@ pub trait ObservableExt: Sized {
         ObservableStream::new(self)
     }
 
-    fn map<'sub, 'or, T0, T, E, F>(self, callback: F) -> Map<T0, Self, F>
+    fn map<'or, 'sub, T0, T, E, F>(self, callback: F) -> Map<T0, Self, F>
     where
         Self: Observable<'or, 'sub, T0, E>,
         F: FnMut(T0) -> T,

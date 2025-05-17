@@ -17,7 +17,7 @@ pub struct Map<T0, OE, F> {
 }
 
 impl<T0, OE, F> Map<T0, OE, F> {
-    pub fn new<'sub, 'or, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, 'sub, T0, E>,
         F: FnMut(T0) -> T,
