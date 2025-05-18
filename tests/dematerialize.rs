@@ -71,44 +71,6 @@ fn test_completed_outer_finish() {
 }
 
 #[test]
-fn test_completed_concat_materialize() {
-    let mut subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = subject.clone();
-    let observable = observable.dematerialize().materialize();
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
-    assert!(checker.is_active());
-
-    subject.on_next(Event::Next(111));
-    assert!(checker.is_values_matched(&[Event::Next(111)]));
-    assert!(checker.is_active());
-
-    subject.on_next(Event::Next(222));
-    assert!(checker.is_values_matched(&[Event::Next(111), Event::Next(222)]));
-    assert!(checker.is_active());
-
-    subject.on_next(Event::Termination(Termination::<Infallible>::Completed));
-    assert!(checker.is_values_matched(&[
-        Event::Next(111),
-        Event::Next(222),
-        Event::Termination(Termination::Completed)
-    ]));
-    assert!(checker.is_completed());
-
-    subject.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[
-        Event::Next(111),
-        Event::Next(222),
-        Event::Termination(Termination::Completed)
-    ]));
-    assert!(checker.is_completed());
-}
-
-#[test]
 fn test_error_inner_finish() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
@@ -136,44 +98,6 @@ fn test_error_inner_finish() {
     subject.on_termination(Termination::Completed);
     assert!(checker.is_values_matched(&[111, 222],));
     assert!(checker.is_error("error"));
-}
-
-#[test]
-fn test_error_concat_materialize() {
-    let mut subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = subject.clone();
-    let observable = observable.dematerialize().materialize();
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
-    assert!(checker.is_active());
-
-    subject.on_next(Event::Next(111));
-    assert!(checker.is_values_matched(&[Event::Next(111)]));
-    assert!(checker.is_active());
-
-    subject.on_next(Event::Next(222));
-    assert!(checker.is_values_matched(&[Event::Next(111), Event::Next(222)]));
-    assert!(checker.is_active());
-
-    subject.on_next(Event::Termination(Termination::Error("error")));
-    assert!(checker.is_values_matched(&[
-        Event::Next(111),
-        Event::Next(222),
-        Event::Termination(Termination::Error("error"))
-    ]));
-    assert!(checker.is_completed());
-
-    subject.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[
-        Event::Next(111),
-        Event::Next(222),
-        Event::Termination(Termination::Error("error"))
-    ]));
-    assert!(checker.is_completed());
 }
 
 #[test]
@@ -426,6 +350,82 @@ fn test_without_convenient_api() {
 
     subject.on_next(Event::Termination(Termination::<&str>::Completed));
     assert!(checker.is_values_matched(&[111, 222],));
+    assert!(checker.is_completed());
+}
+
+#[test]
+fn test_revert_completed() {
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let observable = observable.dematerialize().materialize();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    subject.on_next(Event::Next(111));
+    assert!(checker.is_values_matched(&[Event::Next(111)]));
+    assert!(checker.is_active());
+
+    subject.on_next(Event::Next(222));
+    assert!(checker.is_values_matched(&[Event::Next(111), Event::Next(222)]));
+    assert!(checker.is_active());
+
+    subject.on_next(Event::Termination(Termination::<Infallible>::Completed));
+    assert!(checker.is_values_matched(&[
+        Event::Next(111),
+        Event::Next(222),
+        Event::Termination(Termination::Completed)
+    ]));
+    assert!(checker.is_completed());
+
+    subject.on_termination(Termination::Completed);
+    assert!(checker.is_values_matched(&[
+        Event::Next(111),
+        Event::Next(222),
+        Event::Termination(Termination::Completed)
+    ]));
+    assert!(checker.is_completed());
+}
+
+#[test]
+fn test_revert_error() {
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let observable = observable.dematerialize().materialize();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.is_values_matched(&[]));
+    assert!(checker.is_active());
+
+    subject.on_next(Event::Next(111));
+    assert!(checker.is_values_matched(&[Event::Next(111)]));
+    assert!(checker.is_active());
+
+    subject.on_next(Event::Next(222));
+    assert!(checker.is_values_matched(&[Event::Next(111), Event::Next(222)]));
+    assert!(checker.is_active());
+
+    subject.on_next(Event::Termination(Termination::Error("error")));
+    assert!(checker.is_values_matched(&[
+        Event::Next(111),
+        Event::Next(222),
+        Event::Termination(Termination::Error("error"))
+    ]));
+    assert!(checker.is_completed());
+
+    subject.on_termination(Termination::Completed);
+    assert!(checker.is_values_matched(&[
+        Event::Next(111),
+        Event::Next(222),
+        Event::Termination(Termination::Error("error"))
+    ]));
     assert!(checker.is_completed());
 }
 
