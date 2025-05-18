@@ -12,7 +12,7 @@ use crate::{
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
-            flat_map::FlatMap, map::Map, switch_map::SwitchMap,
+            flat_map::FlatMap, group_by::GroupBy, map::Map, switch_map::SwitchMap,
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_on_next::DoOnNext,
@@ -103,6 +103,14 @@ pub trait ObservableExt: Sized {
         F: FnMut(T0) -> OE2,
     {
         FlatMap::new(self, callback)
+    }
+
+    fn group_by<'or, 'sub, T, E, F, K>(self, callback: F) -> GroupBy<Self, F, K>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        F: FnMut(T) -> K,
+    {
+        GroupBy::new(self, callback)
     }
 
     fn hook_on_next<'or, 'sub, T, E, F>(self, callback: F) -> HookOnNext<Self, F>
