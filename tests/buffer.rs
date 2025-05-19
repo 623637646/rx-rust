@@ -2,7 +2,7 @@ mod tests_utils;
 
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, transforming::buffer::Buffer},
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
@@ -48,7 +48,9 @@ async fn test_completed_last_empty() {
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
 }
@@ -87,7 +89,9 @@ async fn test_completed_last_not_empty() {
     assert!(checker.is_values_matched(&[vec![], vec![111]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
 }
@@ -154,7 +158,9 @@ async fn test_completed_source_and_boundary_are_same() {
     assert!(checker.is_values_matched(&[vec![], vec![()]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![()], vec![()]]));
     assert!(checker.is_completed());
 }
@@ -340,7 +346,9 @@ async fn test_unsubscribe() {
     assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker_2.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker_1.is_values_matched(&[vec![], vec![111]]));
     assert!(checker_1.is_dropped());
     assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -398,14 +406,14 @@ fn test_mut_ref() {
     let mut value_3 = 333;
 
     // Custom operations
-    let observable = Create::new(|mut observer| {
+    let observable = Create::new(|mut observer: BoxedObserver<'_, _, Infallible>| {
         observer.on_next(&mut value_1);
         observer.on_next(&mut value_2);
         observer.on_next(&mut value_3);
         Subscription::new_none_disposal()
     });
 
-    let mut boundary_subject: PublishSubject<'_, (), ()> = PublishSubject::default();
+    let mut boundary_subject = PublishSubject::default();
     let observable = observable.buffer(boundary_subject.clone());
 
     let subscription = observable.subscribe_with_callback(
@@ -548,7 +556,9 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.is_values_matched(&[vec![], vec![111]]));
     assert!(checker_2.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker_1.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker_1.is_completed());
     assert!(checker_2.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
@@ -608,7 +618,9 @@ fn test_multiple_operation() {
     assert!(checker.is_values_matched(&[vec![], vec![vec![]], vec![], vec![vec![111]]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[
         vec![],
         vec![vec![]],
@@ -655,7 +667,9 @@ fn test_multiple_operation_same_boundary() {
     assert!(checker.is_values_matched(&[vec![], vec![vec![]]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![vec![]], vec![vec![111], vec![222, 333]]]));
     assert!(checker.is_completed());
 }
@@ -694,7 +708,9 @@ async fn test_without_convenient_api() {
     assert!(checker.is_values_matched(&[vec![], vec![111]]));
     assert!(checker.is_active());
 
-    subject.clone().on_termination(Termination::<&str>::Completed);
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
     assert!(checker.is_values_matched(&[vec![], vec![111], vec![222, 333]]));
     assert!(checker.is_completed());
 }
@@ -767,7 +783,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let boundary_subject: PublishSubject<'_, i32, ()> = PublishSubject::default();
+    let boundary_subject = Create::new(|_| Subscription::new_none_disposal());
     let observable = observable.buffer(boundary_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }

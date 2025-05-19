@@ -15,7 +15,11 @@ pub struct Buffer<OE, OE2> {
 }
 
 impl<OE, OE2> Buffer<OE, OE2> {
-    pub fn new(source: OE, boundary: OE2) -> Self {
+    pub fn new<'or, 'sub, T, E>(source: OE, boundary: OE2) -> Self
+    where
+        OE: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, (), E>,
+    {
         Self { source, boundary }
     }
 }
