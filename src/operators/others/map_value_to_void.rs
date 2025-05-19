@@ -15,7 +15,10 @@ pub struct MapValueToVoid<T, OE> {
 }
 
 impl<T, OE> MapValueToVoid<T, OE> {
-    pub fn new(source: OE) -> Self {
+    pub fn new<'or, 'sub, E>(source: OE) -> Self
+    where
+        OE: Observable<'or, 'sub, T, E>,
+    {
         Self {
             source,
             _marker: PhantomData,

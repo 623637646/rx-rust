@@ -136,7 +136,10 @@ pub trait ObservableExt: Sized {
         MapInfallibleToError::new(self)
     }
 
-    fn map_value_to_void<T>(self) -> MapValueToVoid<T, Self> {
+    fn map_value_to_void<'or, 'sub, T, E>(self) -> MapValueToVoid<T, Self>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+    {
         MapValueToVoid::new(self)
     }
 

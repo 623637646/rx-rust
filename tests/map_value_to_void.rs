@@ -265,7 +265,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let observable: MapValueToVoid<&str, _> = observable.map_value_to_void();
+    let observable = observable.map_value_to_void();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -284,7 +284,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-    let observable: MapValueToVoid<String, _> = subject.map_value_to_void();
+    let observable = subject.map_value_to_void();
 
     observable.buffer_with_count(1);
 }
