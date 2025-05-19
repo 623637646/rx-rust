@@ -17,7 +17,10 @@ where
     }
 }
 
-impl<F: FnOnce()> Disposable for CallbackDisposal<F> {
+impl<F> Disposable for CallbackDisposal<F>
+where
+    F: FnOnce(),
+{
     fn dispose(self) {
         self.0();
     }
