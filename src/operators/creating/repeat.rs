@@ -1,3 +1,4 @@
+use super::from_iter::FromIter;
 use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Observer,
@@ -24,7 +25,7 @@ where
     T: Clone,
 {
     fn subscribe(self, observer: impl Observer<T, Infallible> + Send + 'or) -> Subscription<'sub> {
-        std::iter::repeat_n(self.value, self.n).subscribe(observer)
+        FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
     }
 }
 

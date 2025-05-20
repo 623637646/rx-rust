@@ -320,7 +320,7 @@ fn test_completed_new_from_iter() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = [subject_1.clone(), subject_2.clone()].concat();
+    let observable = Concat::new_from_iter([subject_1.clone(), subject_2.clone()]);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.is_values_matched(&[]));
