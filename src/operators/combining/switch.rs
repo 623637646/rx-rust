@@ -36,19 +36,6 @@ impl<OE, OE2> Switch<OE, OE2> {
     }
 }
 
-impl<OE2, I> Switch<I, OE2> {
-    pub fn new_from_iter<'or, 'sub, T, E>(into_iterator: I) -> Self
-    where
-        I: IntoIterator<Item = OE2>,
-        OE2: Observable<'or, 'sub, T, E>,
-    {
-        Self {
-            source: into_iterator,
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl<'or, 'sub, T, E, OE, OE2> Observable<'or, 'sub, T, E> for Switch<OE, OE2>
 where
     T: 'or,
