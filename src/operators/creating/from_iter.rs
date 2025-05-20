@@ -3,23 +3,9 @@ use crate::{
     observer::{Observer, Termination},
     subscription::Subscription,
 };
-use educe::Educe;
 use std::convert::Infallible;
 
-#[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct FromIter<I>(I);
-
-impl<I> FromIter<I> {
-    pub fn new(into_iterator: I) -> Self
-    where
-        I: IntoIterator,
-    {
-        Self(into_iterator)
-    }
-}
-
-impl<'or, 'sub, T, I> Observable<'or, 'sub, T, Infallible> for FromIter<I>
+impl<'or, 'sub, T, I> Observable<'or, 'sub, T, Infallible> for I
 where
     I: IntoIterator<Item = T>,
 {
@@ -27,7 +13,7 @@ where
         self,
         mut observer: impl Observer<T, Infallible> + Send + 'or,
     ) -> Subscription<'sub> {
-        for value in self.0.into_iter() {
+        for value in self.into_iter() {
             observer.on_next(value);
         }
         observer.on_termination(Termination::Completed);
@@ -35,4 +21,4 @@ where
     }
 }
 
-impl<I> ObservableExt for FromIter<I> {}
+impl<I> ObservableExt for I where I: IntoIterator {}

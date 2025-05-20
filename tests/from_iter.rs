@@ -3,7 +3,6 @@ mod tests_utils;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Termination,
-    operators::creating::from_iter::FromIter,
 };
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
@@ -12,7 +11,7 @@ use tests_utils::checker::Checker;
 fn test_completed_array() {
     let source = [1, 2, 3];
 
-    let observable = FromIter::new(source);
+    let observable = source;
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -24,7 +23,7 @@ fn test_completed_array() {
 fn test_completed_array_ref() {
     let source = [1, 2, 3];
 
-    let observable = FromIter::new(&source);
+    let observable = &source;
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -36,7 +35,7 @@ fn test_completed_array_ref() {
 fn test_completed_array_mut() {
     let mut source = [1, 2, 3];
 
-    let observable = FromIter::new(&mut source);
+    let observable = &mut source;
 
     let _subscription = observable.subscribe_with_callback(
         |value| {
@@ -51,7 +50,7 @@ fn test_completed_array_mut() {
 fn test_completed_slice() {
     let source: &[i32] = &[1, 2, 3];
 
-    let observable = FromIter::new(source);
+    let observable = source;
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -64,7 +63,7 @@ fn test_completed_slice_mut() {
     let mut data = [1, 2, 3];
     let source: &mut [i32] = &mut data;
 
-    let observable = FromIter::new(source);
+    let observable = source;
 
     let _subscription = observable.subscribe_with_callback(
         |value| {
@@ -79,7 +78,7 @@ fn test_completed_slice_mut() {
 fn test_completed_vec() {
     let source = vec![1, 2, 3];
 
-    let observable = FromIter::new(source);
+    let observable = source;
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -91,7 +90,7 @@ fn test_completed_vec() {
 fn test_completed_vec_ref() {
     let source = vec![1, 2, 3];
 
-    let observable = FromIter::new(&source);
+    let observable = &source;
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -103,7 +102,7 @@ fn test_completed_vec_ref() {
 fn test_completed_vec_mut() {
     let mut source = vec![1, 2, 3];
 
-    let observable = FromIter::new(&mut source);
+    let observable = &mut source;
 
     let _subscription = observable.subscribe_with_callback(
         |value| {
@@ -118,7 +117,7 @@ fn test_completed_vec_mut() {
 fn test_completed_range() {
     let source = 100..103;
 
-    let observable = FromIter::new(source);
+    let observable = source;
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -133,7 +132,7 @@ fn test_ref() {
     let v3 = 3;
     let source = [&v1, &v2, &v3];
 
-    let observable = FromIter::new(source);
+    let observable = source;
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -148,7 +147,7 @@ fn test_mut_ref() {
     let mut v3 = 3;
     let source = [&mut v1, &mut v2, &mut v3];
 
-    let observable = FromIter::new(source);
+    let observable = source;
 
     let _subscription = observable.subscribe_with_callback(
         |value| {
@@ -164,7 +163,7 @@ fn test_mut_ref() {
 #[tokio::test]
 async fn test_async() {
     let source = vec![1, 2, 3];
-    let observable = FromIter::new(source);
+    let observable = source;
     let (checker, observer) = Checker::<i32, Infallible>::new();
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
@@ -182,9 +181,9 @@ async fn test_async() {
 fn test_subscribe_by_different_observer() {
     let source = [1, 2, 3];
 
-    let observable = FromIter::new(source);
+    let observable = source;
     let observable_1 = observable;
-    let observable_2 = observable_1.clone();
+    let observable_2 = observable;
 
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -203,15 +202,16 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_clone() {
     let source = [1, 2, 3];
-    let observable = FromIter::new(source);
-    _ = observable.clone();
+    let observable = source;
+    let _observable_1 = observable;
+    let _observable_2 = observable;
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let source = [1, 2, 3];
-    let observable = FromIter::new(source);
+    let observable = source;
 
     let observable = observable.buffer_with_count(1);
     let (_, observer) = Checker::new();
@@ -222,7 +222,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let source = [1, 2, 3];
-    let observable = FromIter::new(source);
+    let observable = source;
 
     observable.buffer_with_count(1);
 }

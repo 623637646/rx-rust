@@ -1,7 +1,6 @@
 use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
-    operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::CallbackDisposal},
     utils::{
         instant_lock::{InstantMutLock, InstantRefLock},
@@ -32,19 +31,6 @@ impl<OE, OE2> Switch<OE, OE2> {
     {
         Self {
             source,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<OE2, I> Switch<FromIter<I>, OE2> {
-    pub fn new_from_iter<'or, 'sub, T, E>(into_iterator: I) -> Self
-    where
-        I: IntoIterator<Item = OE2>,
-        OE2: Observable<'or, 'sub, T, E>,
-    {
-        Self {
-            source: FromIter::new(into_iterator),
             _marker: PhantomData,
         }
     }
