@@ -8,11 +8,6 @@ use std::ops::Add;
 pub struct Subscription<'dis>(Vec<BoxedDisposal<'dis>>);
 
 impl<'dis> Subscription<'dis> {
-    /// Create a new subscription.
-    pub fn new_with_disposals(disposables: Vec<BoxedDisposal<'dis>>) -> Self {
-        Self(disposables)
-    }
-
     /// Create a new `Subscription` with no disposal. No action will be performed when the subscription is unsubscribed or dropped.
     pub fn new_none_disposal() -> Self {
         Self(vec![])
