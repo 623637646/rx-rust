@@ -24,36 +24,36 @@ async fn test_completed() {
     let stream = observable.into_stream();
 
     let (checker, _) = Checker::from_stream(stream);
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     subject.on_next(111);
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(222);
     subject.on_next(333);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_completed());
 }
 
@@ -76,12 +76,12 @@ async fn test_completed_lazy_subscription() {
 
     let (checker, _) = Checker::<_, Infallible>::from_stream(stream);
     assert!(!*subscribed.read().unwrap());
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
     assert!(*subscribed.read().unwrap());
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
 }
 
@@ -94,36 +94,36 @@ async fn test_unsubscribe() {
     let stream = observable.into_stream();
 
     let (checker, disposal) = Checker::from_stream(stream);
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     subject.on_next(111);
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(222);
     subject.on_next(333);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     disposal.dispose();
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_dropped());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_dropped());
 }
 
@@ -187,11 +187,11 @@ async fn test_async() {
     let handle = tokio::spawn(async move { Checker::from_stream(stream) });
     let (checker, _) = handle.await.unwrap();
 
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     let mut subject_cloned = subject.clone();
@@ -199,11 +199,11 @@ async fn test_async() {
         subject_cloned.on_next(111);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     let mut subject_cloned = subject.clone();
@@ -212,22 +212,22 @@ async fn test_async() {
         subject_cloned.on_next(333);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     let handle = tokio::spawn(async move {
         subject.on_termination(Termination::Completed);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_completed());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_completed());
 }
 
@@ -240,36 +240,36 @@ async fn test_without_convenient_api() {
     let stream = ObservableStream::new(observable);
 
     let (checker, _) = Checker::from_stream(stream);
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     subject.on_next(111);
-    assert!(checker.is_values_matched(&[]));
+    assert_eq!(checker.values(), []);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(222);
     subject.on_next(333);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_completed());
 }
 
