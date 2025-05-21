@@ -13,7 +13,7 @@ fn test_error() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_error(111));
 }
 
@@ -25,7 +25,7 @@ fn test_ref() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_error(&error));
 }
 
@@ -48,7 +48,7 @@ fn test_mut_ref() {
         },
     );
 
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_error(111));
     assert_eq!(error, 222);
 }
@@ -60,12 +60,12 @@ async fn test_async() {
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_error(111));
 
     let handle = tokio::spawn(async { subscription.unsubscribe() });
     handle.await.unwrap();
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_error(111));
 }
 
@@ -84,9 +84,9 @@ fn test_subscribe_by_different_observer() {
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
-    assert_eq!(checker_1.values(), []);
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_error(111));
-    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_error(111));
 }
 

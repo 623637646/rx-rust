@@ -100,7 +100,7 @@ fn test_unsubscribe_wrap_observable() {
     let (checker, observer) = Checker::new();
 
     let subscription = observable.clone().subscribe(observer);
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(111);

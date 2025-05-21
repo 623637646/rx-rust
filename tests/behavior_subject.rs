@@ -278,7 +278,7 @@ fn test_actions_after_termination() {
     let _subscription_1 = subject.clone().subscribe(observer_1);
     assert_eq!(checker_1.values(), [-1]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(subject.terminated().is_none());
     assert_eq!(subject.value(), -1);
@@ -286,7 +286,7 @@ fn test_actions_after_termination() {
     subject.on_next(111);
     assert_eq!(checker_1.values(), [-1, 111]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(subject.terminated().is_none());
     assert_eq!(subject.value(), 111);
@@ -294,7 +294,7 @@ fn test_actions_after_termination() {
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [-1, 111]);
     assert!(checker_1.is_error("error"));
-    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(matches!(
         subject.terminated(),
@@ -305,7 +305,7 @@ fn test_actions_after_termination() {
     let _subscription_2 = subject.clone().subscribe(observer_2);
     assert_eq!(checker_1.values(), [-1, 111]);
     assert!(checker_1.is_error("error"));
-    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
@@ -316,7 +316,7 @@ fn test_actions_after_termination() {
     subject.on_next(222);
     assert_eq!(checker_1.values(), [-1, 111]);
     assert!(checker_1.is_error("error"));
-    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
@@ -327,7 +327,7 @@ fn test_actions_after_termination() {
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [-1, 111]);
     assert!(checker_1.is_error("error"));
-    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
@@ -338,7 +338,7 @@ fn test_actions_after_termination() {
     subject.clone().on_termination(Termination::Error("error2"));
     assert_eq!(checker_1.values(), [-1, 111]);
     assert!(checker_1.is_error("error"));
-    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_error("error"));
     assert!(matches!(
         subject.terminated(),
