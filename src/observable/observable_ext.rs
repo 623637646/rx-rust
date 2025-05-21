@@ -12,7 +12,7 @@ use crate::{
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
-            flat_map::FlatMap, group_by::GroupBy, map::Map, switch_map::SwitchMap,
+            flat_map::FlatMap, group_by::GroupBy, map::Map, scan::Scan, switch_map::SwitchMap,
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_on_next::DoOnNext,
@@ -165,6 +165,14 @@ pub trait ObservableExt: Sized {
         OE2: Observable<'or, 'sub, T, E>,
     {
         Merge::new(self)
+    }
+
+    fn scan<'or, 'sub, T, T1, E, F>(self, initial_value: T, callback: F) -> Scan<T, T1, Self, F>
+    where
+        Self: Observable<'or, 'sub, T1, E>,
+        F: FnMut(T, T1) -> T,
+    {
+        Scan::new(self, initial_value, callback)
     }
 
     fn subscribe_with_callback<'or, 'sub, T, E, FN, FT>(

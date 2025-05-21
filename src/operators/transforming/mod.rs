@@ -6,4 +6,5 @@ pub mod concat_map;
 pub mod flat_map;
 pub mod group_by;
 pub mod map;
+pub mod scan;
 pub mod switch_map;
