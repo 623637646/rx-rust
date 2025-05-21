@@ -27,7 +27,7 @@ fn test_completed() {
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::Completed);
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_completed());
 }
@@ -224,7 +224,6 @@ fn test_subscribe_by_different_observer() {
     let observable_2 = observable_1.clone();
 
     let _subscription_1 = observable_1.subscribe(observer_1);
-
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.values().is_empty());
