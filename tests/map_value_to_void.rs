@@ -18,15 +18,15 @@ fn test_completed() {
     let observable = subject.clone().map_value_to_void();
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(111);
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_active());
 
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_completed());
 }
 
@@ -43,33 +43,33 @@ fn test_unsubscribe() {
 
     let subscription_1 = observable_1.subscribe(observer_1);
     let _subscription_2 = observable_2.subscribe(observer_2);
-    assert!(checker_1.is_values_matched(&[]));
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[]));
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
     subject.on_next(111);
-    assert!(checker_1.is_values_matched(&[()]));
+    assert_eq!(checker_1.values(), [()]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[()]));
+    assert_eq!(checker_2.values(), [()]);
     assert!(checker_2.is_active());
 
     subscription_1.unsubscribe();
-    assert!(checker_1.is_values_matched(&[()]));
+    assert_eq!(checker_1.values(), [()]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.is_values_matched(&[()]));
+    assert_eq!(checker_2.values(), [()]);
     assert!(checker_2.is_active());
 
     subject.on_next(222);
-    assert!(checker_1.is_values_matched(&[()]));
+    assert_eq!(checker_1.values(), [()]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.is_values_matched(&[(), ()]));
+    assert_eq!(checker_2.values(), [(), ()]);
     assert!(checker_2.is_active());
 
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker_1.is_values_matched(&[()]));
+    assert_eq!(checker_1.values(), [()]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.is_values_matched(&[(), ()]));
+    assert_eq!(checker_2.values(), [(), ()]);
     assert!(checker_2.is_completed());
 }
 
@@ -84,15 +84,15 @@ fn test_ref() {
     let observable = subject.clone().map_value_to_void();
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(&value);
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_active());
 
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_completed());
 }
 
@@ -132,7 +132,7 @@ async fn test_async() {
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     let mut subject_cloned = subject.clone();
@@ -140,12 +140,12 @@ async fn test_async() {
         subject_cloned.on_next(&111);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_active());
 
     let handle = tokio::spawn(async { subscription.unsubscribe() });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_dropped());
 
     let subject_cloned = subject.clone();
@@ -153,7 +153,7 @@ async fn test_async() {
         subject_cloned.on_termination(Termination::Completed);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_dropped());
 }
 
@@ -172,21 +172,21 @@ fn test_subscribe_by_different_observer() {
 
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
-    assert!(checker_1.is_values_matched(&[]));
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[]));
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
     subject.on_next(111);
-    assert!(checker_1.is_values_matched(&[()]));
+    assert_eq!(checker_1.values(), [()]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[()]));
+    assert_eq!(checker_2.values(), [()]);
     assert!(checker_2.is_active());
 
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker_1.is_values_matched(&[()]));
+    assert_eq!(checker_1.values(), [()]);
     assert!(checker_1.is_completed());
-    assert!(checker_2.is_values_matched(&[()]));
+    assert_eq!(checker_2.values(), [()]);
     assert!(checker_2.is_completed());
 }
 
@@ -200,15 +200,15 @@ fn test_multiple_operation() {
     let observable = observable.map_value_to_void().map_value_to_void();
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(111);
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_completed());
 }
 
@@ -221,15 +221,15 @@ fn test_without_convenient_api() {
     let observable = MapValueToVoid::new(subject.clone());
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(111);
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_active());
 
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[()]));
+    assert_eq!(checker.values(), [()]);
     assert!(checker.is_completed());
 }
 

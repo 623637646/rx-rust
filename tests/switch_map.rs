@@ -31,43 +31,43 @@ fn test_completed_inner_finish() {
     });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_2.on_next(444);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_active());
 
     subject_2.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_completed());
 }
 
@@ -89,43 +89,43 @@ fn test_completed_outer_finish() {
     });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_2.on_next(444);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_active());
 
     subject_2.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_completed());
 }
 
@@ -139,11 +139,11 @@ fn test_completed_empty() {
     let observable = observable.switch_map(Just::new);
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_completed());
 }
 
@@ -163,35 +163,35 @@ fn test_completed_same_inner() {
     });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_1.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_completed());
 }
 
@@ -213,47 +213,47 @@ fn test_completed_unsubscribe() {
     });
 
     let subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subscription.unsubscribe();
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject_2.on_next(444);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject_2.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 }
 
@@ -275,43 +275,43 @@ fn test_error_inner_finish() {
     });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_2.on_next(444);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_active());
 
     subject_2.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_error("error"));
 }
 
@@ -333,43 +333,43 @@ fn test_error_outer_finish() {
     });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_2.on_next(444);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_active());
 
     subject_2.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_error("error"));
 }
 
@@ -383,11 +383,11 @@ fn test_error_empty() {
     let observable = observable.switch_map(Throw::new);
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_error("error"));
 }
 
@@ -407,35 +407,35 @@ fn test_error_same_inner() {
     });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_1.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_error("error"));
 }
 
@@ -457,47 +457,47 @@ fn test_error_unsubscribe() {
     });
 
     let subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subscription.unsubscribe();
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject_1.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject_2.on_next(444);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     subject_2.on_termination(Termination::Error("error"));
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 }
 
@@ -523,65 +523,65 @@ fn test_unsubscribe() {
 
     let subscription_1 = observable_1.subscribe(observer_1);
     let _subscription_2 = observable_2.subscribe(observer_2);
-    assert!(checker_1.is_values_matched(&[]));
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[]));
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
     subject.on_next(1);
-    assert!(checker_1.is_values_matched(&[]));
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[]));
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
     subject_1.on_next(111);
-    assert!(checker_1.is_values_matched(&[111]));
+    assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111]));
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     subject.on_next(2);
-    assert!(checker_1.is_values_matched(&[111]));
+    assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111]));
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     subject_2.on_next(222);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111, 222]));
+    assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111, 222]));
+    assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
 
     subscription_1.unsubscribe();
 
     subject_1.on_next(333);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.is_values_matched(&[111, 222]));
+    assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.is_values_matched(&[111, 222]));
+    assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
 
     subject_2.on_next(444);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker_2.values(), [111, 222, 444]);
     assert!(checker_2.is_active());
 
     subject_2.on_termination(Termination::Completed);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker_2.values(), [111, 222, 444]);
     assert!(checker_2.is_completed());
 }
 
@@ -609,43 +609,43 @@ fn test_ref() {
     });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(&value_1);
-    assert!(checker.is_values_matched(&[&value_1]));
+    assert_eq!(checker.values(), [&value_1]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[&value_1]));
+    assert_eq!(checker.values(), [&value_1]);
     assert!(checker.is_active());
 
     subject_2.on_next(&value_2);
-    assert!(checker.is_values_matched(&[&value_1, &value_2]));
+    assert_eq!(checker.values(), [&value_1, &value_2]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[&value_1, &value_2]));
+    assert_eq!(checker.values(), [&value_1, &value_2]);
     assert!(checker.is_active());
 
     subject_1.on_next(&value_3);
-    assert!(checker.is_values_matched(&[&value_1, &value_2]));
+    assert_eq!(checker.values(), [&value_1, &value_2]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[&value_1, &value_2]));
+    assert_eq!(checker.values(), [&value_1, &value_2]);
     assert!(checker.is_active());
 
     subject_2.on_next(&value_4);
-    assert!(checker.is_values_matched(&[&value_1, &value_2, &value_4]));
+    assert_eq!(checker.values(), [&value_1, &value_2, &value_4]);
     assert!(checker.is_active());
 
     subject_2.on_termination(Termination::Error(&error));
-    assert!(checker.is_values_matched(&[&value_1, &value_2, &value_4]));
+    assert_eq!(checker.values(), [&value_1, &value_2, &value_4]);
     assert!(checker.is_error(&error));
 }
 
@@ -701,7 +701,7 @@ async fn test_async() {
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     let mut subject_cloned = subject.clone();
@@ -709,7 +709,7 @@ async fn test_async() {
         subject_cloned.on_next(1);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     let mut subject_cloned = subject_1.clone();
@@ -717,7 +717,7 @@ async fn test_async() {
         subject_cloned.on_next(111);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     let mut subject_cloned = subject.clone();
@@ -725,7 +725,7 @@ async fn test_async() {
         subject_cloned.on_next(2);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     let mut subject_cloned = subject_2.clone();
@@ -733,12 +733,12 @@ async fn test_async() {
         subject_cloned.on_next(222);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     let handle = tokio::spawn(async { subscription.unsubscribe() });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     let mut subject_cloned = subject_1.clone();
@@ -746,7 +746,7 @@ async fn test_async() {
         subject_cloned.on_next(333);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     let subject_cloned = subject_1.clone();
@@ -754,7 +754,7 @@ async fn test_async() {
         subject_cloned.on_termination(Termination::Completed);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     let mut subject_cloned = subject_2.clone();
@@ -762,7 +762,7 @@ async fn test_async() {
         subject_cloned.on_next(444);
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 
     let subject_cloned = subject_2.clone();
@@ -770,7 +770,7 @@ async fn test_async() {
         subject_cloned.on_termination(Termination::Error("error"));
     });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
 }
 
@@ -797,63 +797,63 @@ fn test_subscribe_by_different_observer() {
     let _subscription_1 = observable_1.subscribe(observer_1);
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
-    assert!(checker_1.is_values_matched(&[]));
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[]));
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
     subject.on_next(1);
-    assert!(checker_1.is_values_matched(&[]));
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[]));
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
     subject_1.on_next(111);
-    assert!(checker_1.is_values_matched(&[111]));
+    assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111]));
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     subject.on_next(2);
-    assert!(checker_1.is_values_matched(&[111]));
+    assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111]));
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     subject_2.on_next(222);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111, 222]));
+    assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
 
     subject.on_termination(Termination::Completed);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111, 222]));
+    assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
 
     subject_1.on_next(333);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111, 222]));
+    assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker_1.is_values_matched(&[111, 222]));
+    assert_eq!(checker_1.values(), [111, 222]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111, 222]));
+    assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
 
     subject_2.on_next(444);
-    assert!(checker_1.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker_1.values(), [111, 222, 444]);
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker_2.values(), [111, 222, 444]);
     assert!(checker_2.is_active());
 
     subject_2.on_termination(Termination::Error("error"));
-    assert!(checker_1.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker_1.values(), [111, 222, 444]);
     assert!(checker_1.is_error("error"));
-    assert!(checker_2.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker_2.values(), [111, 222, 444]);
     assert!(checker_2.is_error("error"));
 }
 
@@ -885,55 +885,55 @@ fn test_multiple_operation() {
         });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(3);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_3.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_next(4);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_3.on_next(222);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_3.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_4.on_next(333);
-    assert!(checker.is_values_matched(&[111, 333]));
+    assert_eq!(checker.values(), [111, 333]);
     assert!(checker.is_active());
 
     subject_4.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 333]));
+    assert_eq!(checker.values(), [111, 333]);
     assert!(checker.is_completed());
 }
 
@@ -955,43 +955,43 @@ fn test_without_convenient_api() {
     });
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject.on_next(1);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     subject_1.on_next(111);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject.on_next(2);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subject_2.on_next(222);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_next(333);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_1.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222]));
+    assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
     subject_2.on_next(444);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_active());
 
     subject_2.on_termination(Termination::Completed);
-    assert!(checker.is_values_matched(&[111, 222, 444]));
+    assert_eq!(checker.values(), [111, 222, 444]);
     assert!(checker.is_completed());
 }
 

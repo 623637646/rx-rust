@@ -17,23 +17,23 @@ async fn test_completed() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     tx.send(111).unwrap();
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     drop(tx);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
 }
 
@@ -45,23 +45,23 @@ async fn test_unsubscribe() {
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     tx.send(111).unwrap();
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     subscription.unsubscribe();
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_dropped());
 }
 
@@ -74,23 +74,23 @@ async fn test_async() {
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let _subscription = handle.await.unwrap();
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     tx.send(111).unwrap();
-    assert!(checker.is_values_matched(&[]));
+    assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     drop(tx);
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
 }
 
@@ -110,15 +110,15 @@ async fn test_subscribe_by_different_observer() {
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
-    assert!(checker_1.is_values_matched(&[]));
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
-    assert!(checker_2.is_values_matched(&[]));
+    assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker_1.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker_1.values(), [111, 222, 333]);
     assert!(checker_1.is_completed());
-    assert!(checker_2.is_values_matched(&[111, 222, 333]));
+    assert_eq!(checker_2.values(), [111, 222, 333]);
     assert!(checker_2.is_completed());
 }
 

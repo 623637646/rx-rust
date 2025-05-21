@@ -14,7 +14,7 @@ fn test_completed_range() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[100, 101, 102]));
+    assert_eq!(checker.values(), [100, 101, 102]);
     assert!(checker.is_completed());
 }
 
@@ -25,7 +25,7 @@ fn test_completed_range_inclusive() {
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.is_values_matched(&[100, 101, 102, 103]));
+    assert_eq!(checker.values(), [100, 101, 102, 103]);
     assert!(checker.is_completed());
 }
 
@@ -37,12 +37,12 @@ async fn test_async() {
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
-    assert!(checker.is_values_matched(&[100, 101, 102]));
+    assert_eq!(checker.values(), [100, 101, 102]);
     assert!(checker.is_completed());
 
     let handle = tokio::spawn(async { subscription.unsubscribe() });
     handle.await.unwrap();
-    assert!(checker.is_values_matched(&[100, 101, 102]));
+    assert_eq!(checker.values(), [100, 101, 102]);
     assert!(checker.is_completed());
 }
 
@@ -61,9 +61,9 @@ fn test_subscribe_by_different_observer() {
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
-    assert!(checker_1.is_values_matched(&[100, 101, 102]));
+    assert_eq!(checker_1.values(), [100, 101, 102]);
     assert!(checker_1.is_completed());
-    assert!(checker_2.is_values_matched(&[100, 101, 102]));
+    assert_eq!(checker_2.values(), [100, 101, 102]);
     assert!(checker_2.is_completed());
 }
 

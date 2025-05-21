@@ -10,7 +10,7 @@ fn test_completed() {
     boxed_observer.on_next(111);
     boxed_observer.on_termination(Termination::<&str>::Completed);
 
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
 }
 
@@ -21,7 +21,7 @@ fn test_error() {
     boxed_observer.on_next(111);
     boxed_observer.on_termination(Termination::Error("error"));
 
-    assert!(checker.is_values_matched(&[111]));
+    assert_eq!(checker.values(), [111]);
     assert!(checker.is_error("error"));
 }
 
@@ -34,7 +34,7 @@ fn test_ref() {
     boxed_observer.on_next(&value);
     boxed_observer.on_termination(Termination::Error(&error));
 
-    assert!(checker.is_values_matched(&[&value]));
+    assert_eq!(checker.values(), [&value]);
     assert!(checker.is_error(&error));
 }
 
@@ -73,7 +73,7 @@ async fn test_async() {
     tokio::spawn(async move {
         boxed_observer.on_next(111);
         boxed_observer.on_termination(Termination::Error("error"));
-        assert!(checker.is_values_matched(&[111]));
+        assert_eq!(checker.values(), [111]);
         assert!(checker.is_error("error"));
     })
     .await
