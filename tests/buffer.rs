@@ -375,11 +375,11 @@ fn test_ref() {
     assert!(checker.is_active());
 
     boundary_subject.on_next(());
-    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.values(), [Vec::<&_>::new()]);
     assert!(checker.is_active());
 
     subject.on_next(&value_1);
-    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.values(), [Vec::<&_>::new()]);
     assert!(checker.is_active());
 
     boundary_subject.on_next(());
@@ -583,11 +583,11 @@ fn test_multiple_operation() {
     assert!(checker.is_active());
 
     boundary_subject_2.on_next(());
-    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.values(), [Vec::<Vec<_>>::new()]);
     assert!(checker.is_active());
 
     boundary_subject_1.on_next(());
-    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.values(), [Vec::<Vec<_>>::new()]);
     assert!(checker.is_active());
 
     boundary_subject_2.on_next(());
@@ -660,11 +660,11 @@ fn test_multiple_operation_same_boundary() {
     assert!(checker.is_active());
 
     boundary_subject.on_next(());
-    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.values(), [Vec::<Vec<_>>::new()]);
     assert!(checker.is_active());
 
     subject.on_next(111);
-    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.values(), [Vec::<Vec<_>>::new()]);
     assert!(checker.is_active());
 
     boundary_subject.on_next(());
