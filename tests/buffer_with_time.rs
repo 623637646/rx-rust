@@ -148,13 +148,19 @@ async fn test_completed_no_delay() {
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker.values(), [vec![], vec![], vec![111], vec![222, 333]]);
+    assert_eq!(
+        checker.values(),
+        [vec![], vec![], vec![111], vec![222, 333]]
+    );
     assert!(checker.is_active());
 
     subject
         .clone()
         .on_termination(Termination::<&str>::Completed);
-    assert_eq!(checker.values(), [vec![], vec![], vec![111], vec![222, 333]]);
+    assert_eq!(
+        checker.values(),
+        [vec![], vec![], vec![111], vec![222, 333]]
+    );
     assert!(checker.is_completed());
 }
 
@@ -200,13 +206,19 @@ async fn test_completed_small_delay() {
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker.values(), [vec![], vec![], vec![111], vec![222, 333]]);
+    assert_eq!(
+        checker.values(),
+        [vec![], vec![], vec![111], vec![222, 333]]
+    );
     assert!(checker.is_active());
 
     subject
         .clone()
         .on_termination(Termination::<&str>::Completed);
-    assert_eq!(checker.values(), [vec![], vec![], vec![111], vec![222, 333]]);
+    assert_eq!(
+        checker.values(),
+        [vec![], vec![], vec![111], vec![222, 333]]
+    );
     assert!(checker.is_completed());
 }
 
@@ -577,7 +589,10 @@ async fn test_multiple_operation() {
     subject
         .clone()
         .on_termination(Termination::<&str>::Completed);
-    assert_eq!(checker.values(), [vec![vec![]], vec![vec![111]], vec![vec![222, 333]]]);
+    assert_eq!(
+        checker.values(),
+        [vec![vec![]], vec![vec![111]], vec![vec![222, 333]]]
+    );
     assert!(checker.is_completed());
 }
 
