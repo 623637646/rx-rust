@@ -3,6 +3,7 @@ use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
         combining::{merge::Merge, switch::Switch},
+        filtering::take_until::TakeUntil,
         mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
@@ -197,5 +198,13 @@ pub trait ObservableExt: Sized {
         F: FnMut(T0) -> OE2,
     {
         SwitchMap::new(self, callback)
+    }
+
+    fn take_until<'or, 'sub, T, T2, E, OE2>(self, stop: OE2) -> TakeUntil<T2, Self, OE2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, T2, E>,
+    {
+        TakeUntil::new(self, stop)
     }
 }
