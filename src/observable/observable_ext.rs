@@ -18,6 +18,7 @@ use crate::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
             flat_map::FlatMap, group_by::GroupBy, map::Map, scan::Scan, switch_map::SwitchMap,
+            window::Window,
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_on_next::DoOnNext,
@@ -271,6 +272,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         OE2: Observable<'or, 'sub, T2, E>,
     {
         TakeUntil::new(self, stop)
+    }
+
+    fn window<OE2>(self, boundary: OE2) -> Window<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, (), E>,
+    {
+        Window::new(self, boundary)
     }
 }
 

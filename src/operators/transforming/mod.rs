@@ -8,3 +8,4 @@ pub mod group_by;
 pub mod map;
 pub mod scan;
 pub mod switch_map;
+pub mod window;
