@@ -1,7 +1,10 @@
 use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
-    subject::publish_subject::PublishSubject,
+    subject::{
+        Subject,
+        publish_subject::{PublishObservable, PublishSubject},
+    },
     subscription::Subscription,
     utils::marker::MarkerType,
 };
@@ -30,7 +33,7 @@ impl<OE, F, K> GroupBy<OE, F, K> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, F, K> Observable<'or, 'sub, GroupByInnerObservable<'or, T, E>, E>
+impl<'or, 'sub, T, E, OE, F, K> Observable<'or, 'sub, PublishObservable<'or, T, E>, E>
     for GroupBy<OE, F, K>
 where
     T: Clone + 'or,
@@ -41,7 +44,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<GroupByInnerObservable<'or, T, E>, E> + Send + 'or,
+        observer: impl Observer<PublishObservable<'or, T, E>, E> + Send + 'or,
     ) -> Subscription<'sub> {
         let observer = GroupByObserver {
             observer,
@@ -64,7 +67,7 @@ impl<'or, T, E, OR, F, K> Observer<T, E> for GroupByObserver<'or, T, E, OR, F, K
 where
     T: Clone,
     E: Clone,
-    OR: Observer<GroupByInnerObservable<'or, T, E>, E>,
+    OR: Observer<PublishObservable<'or, T, E>, E>,
     F: FnMut(T) -> K,
     K: Eq + Hash,
 {
@@ -75,8 +78,7 @@ where
             .entry(key)
             .or_insert_with(|| {
                 let subject = PublishSubject::new();
-                self.observer
-                    .on_next(GroupByInnerObservable(subject.clone()));
+                self.observer.on_next(subject.clone().into_observable());
                 subject
             })
             .clone();
@@ -90,20 +92,3 @@ where
         self.observer.on_termination(termination);
     }
 }
-
-#[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct GroupByInnerObservable<'or, T, E>(PublishSubject<'or, T, E>);
-
-impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for GroupByInnerObservable<'or, T, E>
-where
-    T: 'sub,
-    E: Clone + 'sub,
-    'or: 'sub,
-{
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        self.0.subscribe(observer)
-    }
-}
-
-impl<T, E> ObservableExt for GroupByInnerObservable<'_, T, E> {}
