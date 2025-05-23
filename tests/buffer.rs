@@ -10,8 +10,8 @@ use rx_rust::{
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
-#[tokio::test]
-async fn test_completed_last_empty() {
+#[test]
+fn test_completed_last_empty() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
@@ -55,8 +55,8 @@ async fn test_completed_last_empty() {
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_completed_last_not_empty() {
+#[test]
+fn test_completed_last_not_empty() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
@@ -96,8 +96,8 @@ async fn test_completed_last_not_empty() {
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_completed_from_boundary() {
+#[test]
+fn test_completed_from_boundary() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
@@ -137,8 +137,8 @@ async fn test_completed_from_boundary() {
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_completed_source_and_boundary_are_same() {
+#[test]
+fn test_completed_source_and_boundary_are_same() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
@@ -158,15 +158,13 @@ async fn test_completed_source_and_boundary_are_same() {
     assert_eq!(checker.values(), [vec![], vec![()]]);
     assert!(checker.is_active());
 
-    subject
-        .clone()
-        .on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<&str>::Completed);
     assert_eq!(checker.values(), [vec![], vec![()], vec![()]]);
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_error_last_empty() {
+#[test]
+fn test_error_last_empty() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
@@ -208,8 +206,8 @@ async fn test_error_last_empty() {
     assert!(checker.is_error("error"));
 }
 
-#[tokio::test]
-async fn test_error_last_not_empty() {
+#[test]
+fn test_error_last_not_empty() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
@@ -247,8 +245,8 @@ async fn test_error_last_not_empty() {
     assert!(checker.is_error("error"));
 }
 
-#[tokio::test]
-async fn test_error_from_boundary() {
+#[test]
+fn test_error_from_boundary() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
@@ -288,8 +286,8 @@ async fn test_error_from_boundary() {
     assert!(checker.is_error("error"));
 }
 
-#[tokio::test]
-async fn test_unsubscribe() {
+#[test]
+fn test_unsubscribe() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
@@ -689,8 +687,8 @@ fn test_multiple_operation_same_boundary() {
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_without_convenient_api() {
+#[test]
+fn test_without_convenient_api() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
