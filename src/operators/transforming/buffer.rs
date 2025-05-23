@@ -2,33 +2,41 @@ use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::instant_lock::InstantMutLock,
+    utils::{instant_lock::InstantMutLock, marker::MarkerType},
 };
 use educe::Educe;
-use std::sync::{Arc, Mutex};
+use std::{
+    marker::PhantomData,
+    sync::{Arc, Mutex},
+};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Buffer<OE, OE2> {
+pub struct Buffer<T2, OE, OE2> {
     source: OE,
     boundary: OE2,
+    _marker: MarkerType<T2>,
 }
 
-impl<OE, OE2> Buffer<OE, OE2> {
+impl<T2, OE, OE2> Buffer<T2, OE, OE2> {
     pub fn new<'or, 'sub, T, E>(source: OE, boundary: OE2) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, (), E>,
+        OE2: Observable<'or, 'sub, T2, E>,
     {
-        Self { source, boundary }
+        Self {
+            source,
+            boundary,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE2> Observable<'or, 'sub, Vec<T>, E> for Buffer<OE, OE2>
+impl<'or, 'sub, T, T2, E, OE, OE2> Observable<'or, 'sub, Vec<T>, E> for Buffer<T2, OE, OE2>
 where
     T: Send + 'or,
     OE: Observable<'or, 'sub, T, E>,
-    OE2: Observable<'or, 'sub, (), E>,
+    OE2: Observable<'or, 'sub, T2, E>,
 {
     fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'or) -> Subscription<'sub> {
         let observer = BufferObserver {
@@ -42,7 +50,7 @@ where
     }
 }
 
-impl<OE, OE2> ObservableExt for Buffer<OE, OE2> {}
+impl<T2, OE, OE2> ObservableExt for Buffer<T2, OE, OE2> {}
 
 #[derive(Educe)]
 #[educe(Clone)]
@@ -79,11 +87,11 @@ where
 
 struct BoundaryObserver<T, OR>(BufferObserver<T, OR>);
 
-impl<T, E, OR> Observer<(), E> for BoundaryObserver<T, OR>
+impl<T, T2, E, OR> Observer<T2, E> for BoundaryObserver<T, OR>
 where
     OR: Observer<Vec<T>, E>,
 {
-    fn on_next(&mut self, _: ()) {
+    fn on_next(&mut self, _: T2) {
         self.0.observer.lock_mut(|v| {
             if let Some(observer) = v {
                 let values = self.0.values.lock_mut(std::mem::take);
