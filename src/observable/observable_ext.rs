@@ -6,8 +6,7 @@ use crate::{
         mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
-            map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
-            observable_stream::ObservableStream,
+            map_infallible_to_error::MapInfallibleToError, observable_stream::ObservableStream,
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
@@ -146,13 +145,6 @@ pub trait ObservableExt: Sized {
 
     fn map_infallible_to_error(self) -> MapInfallibleToError<Self> {
         MapInfallibleToError::new(self)
-    }
-
-    fn map_value_to_void<'or, 'sub, T, E>(self) -> MapValueToVoid<T, Self>
-    where
-        Self: Observable<'or, 'sub, T, E>,
-    {
-        MapValueToVoid::new(self)
     }
 
     fn materialize(self) -> Materialize<Self> {
