@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, boxed_observable::BoxedObservable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     operators::creating::{create::Create, just::Just},
     subject::publish_subject::PublishSubject,
@@ -208,6 +208,29 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_1.is_error("error"));
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_error("error"));
+}
+
+#[test]
+fn test_without_convenient_api() {
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = BoxedObservable::new(subject.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+
+    subject.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_active());
+
+    subject
+        .clone()
+        .on_termination(Termination::<&str>::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_completed());
 }
 
 #[test]
