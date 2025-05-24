@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
     utils::marker::MarkerType,
@@ -9,15 +9,21 @@ use std::{convert::Infallible, marker::PhantomData};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct MapInfallibleToError<OE>(OE);
+pub struct MapInfallibleToError<E, OE> {
+    source: OE,
+    _marker: MarkerType<E>,
+}
 
-impl<OE> MapInfallibleToError<OE> {
+impl<E, OE> MapInfallibleToError<E, OE> {
     pub fn new(source: OE) -> Self {
-        Self(source)
+        Self {
+            source,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for MapInfallibleToError<OE>
+impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for MapInfallibleToError<E, OE>
 where
     E: 'or,
     OE: Observable<'or, 'sub, T, Infallible>,
@@ -27,11 +33,9 @@ where
             observer,
             _marker: PhantomData,
         };
-        self.0.subscribe(observer)
+        self.source.subscribe(observer)
     }
 }
-
-impl<OE> ObservableExt for MapInfallibleToError<OE> {}
 
 struct MapInfallibleToErrorObserver<E, OR> {
     observer: OR,

@@ -45,5 +45,3 @@ where
         observable.subscribe(observer)
     }
 }
-
-impl<T0, OE, OE2, F> ObservableExt for SwitchMap<T0, OE, OE2, F> {}

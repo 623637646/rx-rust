@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
     utils::marker::MarkerType,
@@ -46,8 +46,6 @@ where
         self.source.subscribe(observer)
     }
 }
-
-impl<T, T1, OE, F> ObservableExt for Scan<T, T1, OE, F> {}
 
 struct ScanObserver<T, OR, F> {
     observer: OR,

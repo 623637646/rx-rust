@@ -1,6 +1,6 @@
 use super::Subject;
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     subscription::Subscription,
     utils::{
@@ -58,8 +58,6 @@ where
         })
     }
 }
-
-impl<T, E> ObservableExt for PublishSubject<'_, T, E> {}
 
 impl<T, E> Observer<T, E> for PublishSubject<'_, T, E>
 where
@@ -119,5 +117,3 @@ where
         self.0.subscribe(observer)
     }
 }
-
-impl<T, E> ObservableExt for PublishObservable<'_, T, E> {}

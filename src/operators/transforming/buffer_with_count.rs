@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -32,8 +32,6 @@ where
         self.source.subscribe(observer)
     }
 }
-
-impl<OE> ObservableExt for BufferWithCount<OE> {}
 
 struct BufferWithCountObserver<T, OR> {
     observer: OR,

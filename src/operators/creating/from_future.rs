@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::Subscription,
@@ -39,5 +39,3 @@ where
         Subscription::new_with_disposal(disposal)
     }
 }
-
-impl<FU, S> ObservableExt for FromFuture<FU, S> {}

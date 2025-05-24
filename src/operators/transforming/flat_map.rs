@@ -45,5 +45,3 @@ where
         observable.subscribe(observer)
     }
 }
-
-impl<T0, OE, OE2, F> ObservableExt for FlatMap<T0, OE, OE2, F> {}

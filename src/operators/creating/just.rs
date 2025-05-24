@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -11,7 +11,7 @@ use std::convert::Infallible;
 /// # Example
 /// ```rust
 /// use rx_rust::operators::creating::just::Just;
-/// use rx_rust::observable::observable_ext::ObservableExt;
+/// use rx_rust::observable::;
 /// use std::convert::Infallible;
 /// use rx_rust::observer::Termination;
 /// let observable = Just::new(123);
@@ -45,5 +45,3 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Just<T> {
         Subscription::new_none_disposal()
     }
 }
-
-impl<T> ObservableExt for Just<T> {}

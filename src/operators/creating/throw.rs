@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -11,7 +11,7 @@ use std::convert::Infallible;
 /// # Example
 /// ```rust
 /// use rx_rust::operators::creating::throw::Throw;
-/// use rx_rust::observable::observable_ext::ObservableExt;
+/// use rx_rust::observable::;
 /// use std::convert::Infallible;
 /// use rx_rust::observer::Termination;
 /// let observable = Throw::new("My error");
@@ -36,5 +36,3 @@ impl<'or, 'sub, E> Observable<'or, 'sub, Infallible, E> for Throw<E> {
         Subscription::new_none_disposal()
     }
 }
-
-impl<E> ObservableExt for Throw<E> {}

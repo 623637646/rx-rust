@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -35,8 +35,6 @@ where
         self.source.subscribe(observer)
     }
 }
-
-impl<OE, F> ObservableExt for DoOnNext<OE, F> {}
 
 struct DoOnNextObserver<OR, F> {
     observer: OR,

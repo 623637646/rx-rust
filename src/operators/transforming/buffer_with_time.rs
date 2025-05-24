@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::Subscription,
@@ -61,8 +61,6 @@ where
         self.source.subscribe(observer) + disposal
     }
 }
-
-impl<OE, S> ObservableExt for BufferWithTime<OE, S> {}
 
 #[derive(Educe)]
 #[educe(Clone)]

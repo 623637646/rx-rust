@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
     utils::instant_lock::InstantMutLock,
@@ -41,8 +41,6 @@ where
         subscription_1 + subscription_2
     }
 }
-
-impl<OE, OE2> ObservableExt for Buffer<OE, OE2> {}
 
 #[derive(Educe)]
 #[educe(Clone)]
