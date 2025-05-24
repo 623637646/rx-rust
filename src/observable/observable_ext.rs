@@ -1,4 +1,4 @@
-use super::Observable;
+use super::{Observable, boxed_observable::BoxedObservable};
 use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
@@ -128,6 +128,15 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         F: for<'a> FnOnce(Termination<E>, Box<dyn FnOnce(Termination<E>) + 'a>),
     {
         HookOnTermination::new(self, callback)
+    }
+
+    fn into_boxed<'oe>(self) -> BoxedObservable<'or, 'sub, 'oe, T, E>
+    where
+        T: 'or,
+        E: 'or,
+        Self: Observable<'or, 'sub, T, E> + Send + 'oe,
+    {
+        BoxedObservable::new(self)
     }
 
     fn into_stream(self) -> ObservableStream<'sub, T, Self>
