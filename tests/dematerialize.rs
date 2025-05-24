@@ -503,7 +503,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+    let subject: PublishSubject<'_, Event<i32, String>, _> = PublishSubject::default();
     let observable = subject.dematerialize();
 
     observable.buffer_with_count(1);
