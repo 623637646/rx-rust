@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use rx_rust::{
-    observable::{Observable, boxed_observable::BoxedObservable, observable_ext::ObservableExt},
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     operators::creating::{create::Create, defer::Defer, just::Just},
     subject::publish_subject::PublishSubject,
@@ -309,9 +309,9 @@ fn test_boxed_observable() {
     let observable = Defer::new(|| {
         let observable = Just::new(111);
         if *switch.lock().unwrap() {
-            BoxedObservable::new(observable)
+            observable.into_boxed()
         } else {
-            BoxedObservable::new(observable.map(|value| value * 2))
+            observable.map(|value| value * 2).into_boxed()
         }
     });
     let (checker, observer) = Checker::new();

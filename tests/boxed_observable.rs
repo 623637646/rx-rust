@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use rx_rust::{
-    observable::{Observable, boxed_observable::BoxedObservable, observable_ext::ObservableExt},
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     operators::creating::{create::Create, just::Just},
     subject::publish_subject::PublishSubject,
@@ -16,7 +16,7 @@ fn test_completed() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = BoxedObservable::new(subject.clone());
+    let observable = subject.clone().into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -39,7 +39,7 @@ fn test_error() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = BoxedObservable::new(subject.clone());
+    let observable = subject.clone().into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -61,8 +61,8 @@ fn test_unsubscribe() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable_1 = BoxedObservable::new(subject.clone());
-    let observable_2 = BoxedObservable::new(subject.clone());
+    let observable_1 = subject.clone().into_boxed();
+    let observable_2 = subject.clone().into_boxed();
 
     let subscription_1 = observable_1.subscribe(observer_1);
     let _subscription_2 = observable_2.subscribe(observer_2);
@@ -105,7 +105,7 @@ fn test_ref() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = BoxedObservable::new(subject.clone());
+    let observable = subject.clone().into_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -125,7 +125,7 @@ fn test_mut_ref() {
     let mut value = 111;
 
     let observable = Just::new(&mut value);
-    let observable = BoxedObservable::new(observable);
+    let observable = observable.into_boxed();
 
     let (checker, observer) = Checker::new();
 
@@ -149,7 +149,7 @@ async fn test_async() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = BoxedObservable::new(subject.clone());
+    let observable = subject.clone().into_boxed();
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
@@ -185,8 +185,8 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable_1 = BoxedObservable::new(subject.clone());
-    let observable_2 = BoxedObservable::new(subject.clone());
+    let observable_1 = subject.clone().into_boxed();
+    let observable_2 = subject.clone().into_boxed();
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
@@ -229,7 +229,7 @@ fn test_lifetime_sub() {
             })
         });
 
-        let observable = BoxedObservable::new(observable);
+        let observable = observable.into_boxed();
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -251,7 +251,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::new_none_disposal()
         });
-        let observable = BoxedObservable::new(observable);
+        let observable = observable.into_boxed();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(&life_marker_2);
@@ -277,7 +277,7 @@ fn test_lifetime_oe() {
             Subscription::new_none_disposal()
         });
 
-        _observable = BoxedObservable::new(create);
+        _observable = create.into_boxed();
     }
 }
 
@@ -285,7 +285,7 @@ fn test_lifetime_oe() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = BoxedObservable::new(subject);
+    let observable = subject.into_boxed();
 
     let observable = observable.buffer_with_count(1);
     let (_, observer) = Checker::new();
@@ -296,7 +296,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = BoxedObservable::new(subject);
+    let observable = subject.into_boxed();
 
     observable.buffer_with_count(1);
 }
