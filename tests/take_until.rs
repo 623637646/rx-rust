@@ -171,15 +171,15 @@ fn test_same_source_stop_next() {
     assert!(checker.is_active());
 
     subject.on_next(111);
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_completed());
 
     subject.on_next(222);
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_completed());
 
     subject.on_termination(Termination::<&str>::Completed);
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_completed());
 }
 
@@ -197,7 +197,7 @@ fn test_same_source_stop_completed() {
     assert!(checker.is_active());
 
     subject.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_completed());
 }
 
@@ -215,7 +215,7 @@ fn test_same_source_stop_error() {
     assert!(checker.is_active());
 
     subject.on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), []);
+    assert!(checker.values().is_empty());
     assert!(checker.is_error("error"));
 }
 
