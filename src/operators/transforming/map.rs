@@ -7,7 +7,6 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// This is an observable that maps the values of the source observable using a callback.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Map<T0, OE, F> {

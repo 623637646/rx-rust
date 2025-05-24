@@ -3,6 +3,7 @@ use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
         combining::{merge::Merge, switch::Switch},
+        filtering::take_until::TakeUntil,
         mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
@@ -13,7 +14,7 @@ use crate::{
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
-            flat_map::FlatMap, map::Map, switch_map::SwitchMap,
+            flat_map::FlatMap, group_by::GroupBy, map::Map, scan::Scan, switch_map::SwitchMap,
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_on_next::DoOnNext,
@@ -106,6 +107,14 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         FlatMap::new(self, callback)
     }
 
+    fn group_by<'or, 'sub, T, E, F, K>(self, callback: F) -> GroupBy<Self, F, K>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        F: FnMut(T) -> K,
+    {
+        GroupBy::new(self, callback)
+    }
+
     fn hook_on_next<F>(self, callback: F) -> HookOnNext<Self, F>
     where
         Self: Observable<'or, 'sub, T, E>,
@@ -145,13 +154,6 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         MapInfallibleToValue::new(self)
     }
 
-    fn map_value_to_void(self) -> MapValueToVoid<T, Self>
-    where
-        Self: Observable<'or, 'sub, T, E>,
-    {
-        MapValueToVoid::new(self)
-    }
-
     fn materialize(self) -> Materialize<Self> {
         Materialize::new(self)
     }
@@ -162,6 +164,14 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         T: Observable<'or, 'sub, T1, E>,
     {
         Merge::new(self)
+    }
+
+    fn scan<'or, 'sub, T, T1, E, F>(self, initial_value: T, callback: F) -> Scan<T, T1, Self, F>
+    where
+        Self: Observable<'or, 'sub, T1, E>,
+        F: FnMut(T, T1) -> T,
+    {
+        Scan::new(self, initial_value, callback)
     }
 
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>
@@ -190,6 +200,14 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         F: FnMut(T) -> OE2,
     {
         SwitchMap::new(self, callback)
+    }
+
+    fn take_until<'or, 'sub, T, T2, E, OE2>(self, stop: OE2) -> TakeUntil<T2, Self, OE2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, T2, E>,
+    {
+        TakeUntil::new(self, stop)
     }
 }
 

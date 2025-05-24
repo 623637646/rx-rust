@@ -38,12 +38,11 @@ impl<T, E> Checker<T, E> {
         )
     }
 
-    pub(crate) fn is_values_matched(&self, expected: &[T]) -> bool
+    pub(crate) fn values(&self) -> Vec<T>
     where
-        T: PartialEq,
+        T: Clone,
     {
-        let values = self.values.read().unwrap();
-        *values == expected
+        self.values.read().unwrap().clone()
     }
 
     pub(crate) fn is_active(&self) -> bool {
