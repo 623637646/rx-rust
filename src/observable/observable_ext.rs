@@ -24,10 +24,10 @@ use crate::{
 use std::{convert::Infallible, time::Duration};
 
 pub trait ObservableExt: Sized {
-    fn buffer<'or, 'sub, T, T2, E, OE2>(self, boundary: OE2) -> Buffer<T2, Self, OE2>
+    fn buffer<'or, 'sub, T, E, OE2>(self, boundary: OE2) -> Buffer<Self, OE2>
     where
         Self: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T2, E>,
+        OE2: Observable<'or, 'sub, (), E>,
     {
         Buffer::new(self, boundary)
     }

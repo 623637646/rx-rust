@@ -777,7 +777,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::new_none_disposal()
         });
-        let boundary_subject = Create::new(|observer: BoxedObserver<'_, (), _>| {
+        let boundary_subject = Create::new(|observer| {
             life_marker_2 = Some(observer);
             Subscription::new_none_disposal()
         });
@@ -796,8 +796,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let boundary_subject =
-        Create::new(|_: BoxedObserver<'_, (), _>| Subscription::new_none_disposal());
+    let boundary_subject = Create::new(|_| Subscription::new_none_disposal());
     let observable = observable.buffer(boundary_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
@@ -806,7 +805,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let boundary_subject: PublishSubject<'_, (), _> = PublishSubject::default();
+    let boundary_subject = PublishSubject::default();
     let observable = subject.buffer(boundary_subject);
 
     let observable = observable.buffer_with_count(1);
