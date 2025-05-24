@@ -4,13 +4,12 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::never::Never,
 };
-use std::convert::Infallible;
 use tests_utils::checker::Checker;
 
 #[tokio::test]
 async fn test_async() {
     let observable = Never;
-    let (checker, observer) = Checker::<i32, Infallible>::new();
+    let (checker, observer) = Checker::new();
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
@@ -26,8 +25,8 @@ async fn test_async() {
 #[test]
 fn test_subscribe_by_different_observer() {
     let observable = Never;
-    let (checker_1, observer_1) = Checker::<i32, Infallible>::new();
-    let (checker_2, observer_2) = Checker::<i32, Infallible>::new();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
     let observable_1 = observable.clone();
@@ -56,7 +55,7 @@ fn test_type_inference_with_subscribe() {
     let observable = Never;
 
     let observable = observable.buffer_with_count(1);
-    let (_, observer) = Checker::<Vec<i32>, Infallible>::new();
+    let (_, observer) = Checker::new();
     observable.subscribe(observer);
 }
 
