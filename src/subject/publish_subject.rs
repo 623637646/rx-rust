@@ -117,5 +117,3 @@ where
         self.0.subscribe(observer)
     }
 }
-
-impl<T, E> ObservableExt for PublishObservable<'_, T, E> {}

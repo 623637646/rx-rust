@@ -98,5 +98,3 @@ where
         self.0.subscribe(observer)
     }
 }
-
-impl<T, E> ObservableExt for BehaviorObservable<'_, T, E> {}

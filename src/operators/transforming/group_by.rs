@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subject::{
         Subject,
@@ -54,8 +54,6 @@ where
         self.source.subscribe(observer)
     }
 }
-
-impl<T0, OE, F> ObservableExt for GroupBy<T0, OE, F> {}
 
 struct GroupByObserver<'or, T, E, OR, F, K> {
     observer: OR,

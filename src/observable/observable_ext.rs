@@ -8,8 +8,7 @@ use crate::{
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
             map_infallible_to_error::MapInfallibleToError,
-            map_infallible_to_value::MapInfallibleToValue, map_value_to_void::MapValueToVoid,
-            observable_stream::ObservableStream,
+            map_infallible_to_value::MapInfallibleToValue, observable_stream::ObservableStream,
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
@@ -107,7 +106,7 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         FlatMap::new(self, callback)
     }
 
-    fn group_by<'or, 'sub, T, E, F, K>(self, callback: F) -> GroupBy<Self, F, K>
+    fn group_by<F, K>(self, callback: F) -> GroupBy<Self, F, K>
     where
         Self: Observable<'or, 'sub, T, E>,
         F: FnMut(T) -> K,
@@ -166,10 +165,10 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         Merge::new(self)
     }
 
-    fn scan<'or, 'sub, T, T1, E, F>(self, initial_value: T, callback: F) -> Scan<T, T1, Self, F>
+    fn scan<T0, F>(self, initial_value: T0, callback: F) -> Scan<T0, T, Self, F>
     where
-        Self: Observable<'or, 'sub, T1, E>,
-        F: FnMut(T, T1) -> T,
+        Self: Observable<'or, 'sub, T, E>,
+        F: FnMut(T0, T) -> T0,
     {
         Scan::new(self, initial_value, callback)
     }
@@ -202,7 +201,7 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         SwitchMap::new(self, callback)
     }
 
-    fn take_until<'or, 'sub, T, T2, E, OE2>(self, stop: OE2) -> TakeUntil<T2, Self, OE2>
+    fn take_until<T2, OE2>(self, stop: OE2) -> TakeUntil<T2, Self, OE2>
     where
         Self: Observable<'or, 'sub, T, E>,
         OE2: Observable<'or, 'sub, T2, E>,
