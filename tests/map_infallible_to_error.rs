@@ -34,8 +34,8 @@ fn test_completed() {
 #[test]
 fn test_unsubscribe() {
     let mut subject = PublishSubject::default();
-    let (checker_1, observer_1) = Checker::<i32, String>::new();
-    let (checker_2, observer_2) = Checker::<i32, i32>::new();
+    let (checker_1, observer_1) = Checker::<_, String>::new();
+    let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
     let observable = subject.clone().map_infallible_to_error();
@@ -163,8 +163,8 @@ async fn test_async() {
 #[test]
 fn test_subscribe_by_different_observer() {
     let mut subject = PublishSubject::default();
-    let (checker_1, observer_1) = Checker::<i32, String>::new();
-    let (checker_2, observer_2) = Checker::<i32, i32>::new();
+    let (checker_1, observer_1) = Checker::<_, String>::new();
+    let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
     let observable = subject.clone().map_infallible_to_error();
@@ -292,7 +292,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let observable = observable.map_infallible_to_error();
+    let observable = observable.map_infallible_to_error::<String>();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -310,8 +310,8 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-    let observable = subject.map_infallible_to_error();
+    let subject: PublishSubject<'_, i32, _> = PublishSubject::default();
+    let observable = subject.map_infallible_to_error::<String>();
 
     observable.buffer_with_count(1);
 }

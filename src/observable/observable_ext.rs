@@ -136,7 +136,7 @@ pub trait ObservableExt<'or, 'sub, T, E, OE>: Sized {
         Map::new(self, callback)
     }
 
-    fn map_infallible_to_error(self) -> MapInfallibleToError<Self> {
+    fn map_infallible_to_error<E1>(self) -> MapInfallibleToError<E1, Self> {
         MapInfallibleToError::new(self)
     }
 
