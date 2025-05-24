@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Event, Observer, Termination},
     subscription::Subscription,
 };
@@ -24,7 +24,6 @@ where
         self.0.subscribe(DematerializeObserver(Some(observer)))
     }
 }
-
 
 struct DematerializeObserver<OR>(Option<OR>);
 

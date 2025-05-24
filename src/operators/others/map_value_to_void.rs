@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
     utils::marker::MarkerType,
@@ -35,7 +35,6 @@ where
         self.source.subscribe(observer)
     }
 }
-
 
 struct MapValueToVoidObserver<OR>(OR);
 

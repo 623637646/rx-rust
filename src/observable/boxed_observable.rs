@@ -1,4 +1,4 @@
-use super::{Observable, Observer, observable_ext::ObservableExt};
+use super::{Observable, Observer};
 use crate::{observer::boxed_observer::BoxedObserver, subscription::Subscription};
 
 /// https://stackoverflow.com/a/56447952/9315497

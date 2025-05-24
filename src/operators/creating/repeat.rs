@@ -1,9 +1,5 @@
 use super::from_iter::FromIter;
-use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
-    subscription::Subscription,
-};
+use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 use educe::Educe;
 use std::convert::Infallible;
 
@@ -28,4 +24,3 @@ where
         FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
     }
 }
-

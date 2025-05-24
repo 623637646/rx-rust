@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::CallbackDisposal},
@@ -74,7 +74,6 @@ where
         self.source.subscribe(observer) + disposal
     }
 }
-
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]

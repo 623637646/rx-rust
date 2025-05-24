@@ -1,8 +1,4 @@
-use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
-    subscription::Subscription,
-};
+use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 use educe::Educe;
 
 #[derive(Educe)]
@@ -30,4 +26,3 @@ where
         observable.subscribe(observer)
     }
 }
-

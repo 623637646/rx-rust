@@ -1,6 +1,6 @@
 use super::{Subject, publish_subject::PublishSubject};
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
     utils::instant_lock::{InstantMutLock, InstantRefLock},
@@ -54,7 +54,6 @@ where
         }
     }
 }
-
 
 impl<T, E> Observer<T, E> for BehaviorSubject<'_, T, E>
 where

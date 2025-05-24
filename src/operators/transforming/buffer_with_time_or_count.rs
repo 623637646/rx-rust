@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::{
@@ -67,7 +67,6 @@ where
         self.source.subscribe(observer) + disposal
     }
 }
-
 
 #[derive(Educe)]
 #[educe(Clone)]

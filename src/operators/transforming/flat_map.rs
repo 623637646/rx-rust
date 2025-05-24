@@ -45,4 +45,3 @@ where
         observable.subscribe(observer)
     }
 }
-

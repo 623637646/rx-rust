@@ -1,5 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::{Observer, boxed_observer::BoxedObserver},
     subscription::Subscription,
 };
@@ -19,7 +19,7 @@ use educe::Educe;
 ///
 /// # Example
 /// ```rust
-/// use rx_rust::observable::observable_ext::ObservableExt;
+/// use rx_rust::observable::;
 /// use rx_rust::observer::Observer;
 /// use rx_rust::subscription::Subscription;
 /// use rx_rust::operators::creating::create::Create;
@@ -63,4 +63,3 @@ where
         self.0(BoxedObserver::new(observer))
     }
 }
-

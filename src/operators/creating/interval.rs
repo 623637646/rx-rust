@@ -1,8 +1,5 @@
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
-    scheduler::Scheduler,
-    subscription::Subscription,
+    observable::Observable, observer::Observer, scheduler::Scheduler, subscription::Subscription,
 };
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
@@ -44,4 +41,3 @@ where
         Subscription::new_with_disposal(disposal)
     }
 }
-
