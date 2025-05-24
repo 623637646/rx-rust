@@ -64,4 +64,3 @@ where
     }
 }
 
-impl<F> ObservableExt for Create<F> {}

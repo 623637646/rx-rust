@@ -42,7 +42,6 @@ where
     }
 }
 
-impl<OE, OE2> ObservableExt for Buffer<OE, OE2> {}
 
 #[derive(Educe)]
 #[educe(Clone)]

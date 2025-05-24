@@ -31,7 +31,6 @@ where
     }
 }
 
-impl<OE> ObservableExt for MapInfallibleToError<OE> {}
 
 struct MapInfallibleToErrorObserver<E, OR> {
     observer: OR,

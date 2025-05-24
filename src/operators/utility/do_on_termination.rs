@@ -36,7 +36,6 @@ where
     }
 }
 
-impl<OE, F> ObservableExt for DoOnTermination<OE, F> {}
 
 struct DoOnTerminationObserver<OR, F> {
     observer: OR,

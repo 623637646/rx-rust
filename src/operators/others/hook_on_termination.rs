@@ -36,7 +36,6 @@ where
     }
 }
 
-impl<OE, F> ObservableExt for HookOnTermination<OE, F> {}
 
 struct HookOnTerminationObserver<OR, F> {
     observer: OR,

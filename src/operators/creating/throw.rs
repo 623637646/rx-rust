@@ -37,4 +37,3 @@ impl<'or, 'sub, E> Observable<'or, 'sub, Infallible, E> for Throw<E> {
     }
 }
 
-impl<E> ObservableExt for Throw<E> {}

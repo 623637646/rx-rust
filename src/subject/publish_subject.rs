@@ -59,7 +59,6 @@ where
     }
 }
 
-impl<T, E> ObservableExt for PublishSubject<'_, T, E> {}
 
 impl<T, E> Observer<T, E> for PublishSubject<'_, T, E>
 where

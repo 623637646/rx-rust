@@ -36,7 +36,6 @@ where
     }
 }
 
-impl<OE, F> ObservableExt for DoOnNext<OE, F> {}
 
 struct DoOnNextObserver<OR, F> {
     observer: OR,

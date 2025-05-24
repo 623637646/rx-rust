@@ -28,7 +28,6 @@ where
     }
 }
 
-impl<OE> ObservableExt for Materialize<OE> {}
 
 struct MaterializeObserver<OR>(OR);
 

@@ -29,4 +29,3 @@ where
     }
 }
 
-impl<I> ObservableExt for Range<I> {}

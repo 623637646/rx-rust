@@ -35,4 +35,3 @@ where
     }
 }
 
-impl<I> ObservableExt for FromIter<I> {}

@@ -16,4 +16,3 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Never {
     }
 }
 
-impl ObservableExt for Never {}

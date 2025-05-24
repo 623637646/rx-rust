@@ -62,7 +62,6 @@ where
     }
 }
 
-impl<OE, S> ObservableExt for BufferWithTime<OE, S> {}
 
 #[derive(Educe)]
 #[educe(Clone)]

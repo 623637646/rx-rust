@@ -31,4 +31,3 @@ where
     }
 }
 
-impl<OE, F> ObservableExt for Defer<OE, F> where F: FnOnce() -> OE {}

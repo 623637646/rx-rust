@@ -67,7 +67,6 @@ where
     }
 }
 
-impl<OE, OE2> ObservableExt for Merge<OE, OE2> {}
 
 struct MergeObserver<'sub, T, OR> {
     observer: Arc<Mutex<Option<OR>>>,

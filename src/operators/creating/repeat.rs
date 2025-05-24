@@ -29,4 +29,3 @@ where
     }
 }
 
-impl<T> ObservableExt for Repeat<T> {}

@@ -46,4 +46,3 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Just<T> {
     }
 }
 
-impl<T> ObservableExt for Just<T> {}

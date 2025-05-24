@@ -72,7 +72,6 @@ where
     }
 }
 
-impl<OE, OE2> ObservableExt for Switch<OE, OE2> {}
 
 struct SwitchObserver<'sub, T, OR> {
     observer: Arc<Mutex<Option<OR>>>,

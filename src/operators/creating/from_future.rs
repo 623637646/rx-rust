@@ -40,4 +40,3 @@ where
     }
 }
 
-impl<FU, S> ObservableExt for FromFuture<FU, S> {}

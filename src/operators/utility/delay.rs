@@ -60,7 +60,6 @@ where
     }
 }
 
-impl<OE, S> ObservableExt for Delay<OE, S> {}
 
 struct DelayObserver<OR, S> {
     observer: Arc<Mutex<Option<OR>>>,

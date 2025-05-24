@@ -33,7 +33,6 @@ where
     }
 }
 
-impl<OE> ObservableExt for BufferWithCount<OE> {}
 
 struct BufferWithCountObserver<T, OR> {
     observer: OR,

@@ -25,7 +25,6 @@ where
     }
 }
 
-impl<OE> ObservableExt for Dematerialize<OE> {}
 
 struct DematerializeObserver<OR>(Option<OR>);
 

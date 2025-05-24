@@ -21,5 +21,3 @@ impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BoxedObservable<'or, 'sub,
         self.0(BoxedObserver::new(observer))
     }
 }
-
-impl<T, E> ObservableExt for BoxedObservable<'_, '_, '_, T, E> {}

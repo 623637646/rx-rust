@@ -55,7 +55,6 @@ where
     }
 }
 
-impl<T, E> ObservableExt for BehaviorSubject<'_, T, E> {}
 
 impl<T, E> Observer<T, E> for BehaviorSubject<'_, T, E>
 where

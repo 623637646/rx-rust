@@ -36,7 +36,6 @@ where
     }
 }
 
-impl<T, OE> ObservableExt for MapValueToVoid<T, OE> {}
 
 struct MapValueToVoidObserver<OR>(OR);
 

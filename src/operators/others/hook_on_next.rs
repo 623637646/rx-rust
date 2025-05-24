@@ -36,7 +36,6 @@ where
     }
 }
 
-impl<OE, F> ObservableExt for HookOnNext<OE, F> {}
 
 struct HookOnNextObserver<OR, F> {
     observer: OR,

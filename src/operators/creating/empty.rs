@@ -17,4 +17,3 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Empty {
     }
 }
 
-impl ObservableExt for Empty {}

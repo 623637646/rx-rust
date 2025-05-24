@@ -44,7 +44,6 @@ where
     }
 }
 
-impl<T0, OE, F> ObservableExt for Map<T0, OE, F> {}
 
 struct MapObserver<OR, F> {
     observer: OR,

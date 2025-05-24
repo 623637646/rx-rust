@@ -47,4 +47,3 @@ where
     }
 }
 
-impl<T0, OE, OE2, F> ObservableExt for ConcatMap<T0, OE, OE2, F> {}

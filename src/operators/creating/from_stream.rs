@@ -52,4 +52,3 @@ where
     }
 }
 
-impl<SM, S> ObservableExt for FromStream<SM, S> {}

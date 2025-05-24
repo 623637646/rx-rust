@@ -45,4 +45,3 @@ where
     }
 }
 
-impl<S> ObservableExt for Interval<S> {}
