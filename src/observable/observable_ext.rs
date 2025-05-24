@@ -6,7 +6,8 @@ use crate::{
         mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
-            map_infallible_to_error::MapInfallibleToError, map_value_to_void::MapValueToVoid,
+            map_infallible_to_error::MapInfallibleToError,
+            map_infallible_to_value::MapInfallibleToValue, map_value_to_void::MapValueToVoid,
             observable_stream::ObservableStream,
         },
         transforming::{
