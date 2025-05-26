@@ -1,6 +1,6 @@
 use super::{Observer, Termination};
 
-pub(crate) struct CallbackObserver<'cb, T, E> {
+pub struct CallbackObserver<'cb, T, E> {
     on_next: Box<dyn FnMut(T) + Send + 'cb>,
     on_termination: Box<dyn FnOnce(Termination<E>) + Send + 'cb>,
 }
