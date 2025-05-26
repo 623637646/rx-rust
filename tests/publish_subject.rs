@@ -342,30 +342,14 @@ fn test_type_inference_without_subscribe() {
 
 #[test]
 fn test_deadlock() {
-    struct MyObserver {
-        source: Option<PublishSubject<'static, (), Infallible>>,
-        sub: Arc<Mutex<Option<Subscription<'static>>>>,
-    }
-
-    impl MyObserver {
-        fn subscribe(mut self) {
-            let sub = self.sub.clone();
-            *sub.lock().unwrap() = Some(self.source.take().unwrap().subscribe(self));
-        }
-    }
-
-    impl<T, E> Observer<T, E> for MyObserver {
-        fn on_next(&mut self, _: T) {}
-
-        fn on_termination(self, _: Termination<E>) {}
-    }
-
-    // Custom operations
-    let subject = PublishSubject::default();
-    let observer = MyObserver {
-        source: Some(subject.clone()),
-        sub: Arc::new(Mutex::new(None)),
-    };
-    observer.subscribe();
+    let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub_cloned = sub.clone();
+    *sub.lock().unwrap() = Some(subject.clone().subscribe_with_callback(
+        |_| {},
+        move |_| {
+            sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+        },
+    ));
     subject.on_termination(Termination::Completed);
 }
