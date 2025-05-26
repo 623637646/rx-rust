@@ -246,6 +246,10 @@ fn test_unsubscribe() {
     assert!(checker_2.is_active());
 
     subscription_1.unsubscribe();
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_dropped());
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_active());
 
     subject.on_next(222);
     assert_eq!(checker_1.values(), [111]);

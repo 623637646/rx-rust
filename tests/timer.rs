@@ -48,6 +48,12 @@ async fn test_unsubscribe() {
     assert!(checker_3.is_active());
 
     subscription_1.unsubscribe();
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_dropped());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(checker_3.values().is_empty());
+    assert!(checker_3.is_active());
 
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert!(checker_1.values().is_empty());
@@ -58,6 +64,12 @@ async fn test_unsubscribe() {
     assert!(checker_3.is_active());
 
     subscription_2.unsubscribe();
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_dropped());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_dropped());
+    assert!(checker_3.values().is_empty());
+    assert!(checker_3.is_active());
 
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert!(checker_1.values().is_empty());

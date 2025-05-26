@@ -27,6 +27,8 @@ async fn test_completed_no_delay() {
     assert!(checker.is_active());
 
     subscription.unsubscribe();
+    assert_eq!(checker.values(), [0, 1, 2]);
+    assert!(checker.is_active());
 
     assert_eq!(checker.values(), [0, 1, 2]);
     assert!(checker.is_active());
@@ -70,6 +72,8 @@ async fn test_completed_with_delay() {
     assert!(checker.is_active());
 
     subscription.unsubscribe();
+    assert_eq!(checker.values(), [0, 1, 2]);
+    assert!(checker.is_active());
 
     assert_eq!(checker.values(), [0, 1, 2]);
     assert!(checker.is_active());
@@ -129,6 +133,10 @@ async fn test_unsubscribe() {
     assert!(checker_2.is_active());
 
     subscription_1.unsubscribe();
+    assert_eq!(checker_1.values(), [0, 1, 2]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [0, 1, 2]);
+    assert!(checker_2.is_active());
 
     assert_eq!(checker_1.values(), [0, 1, 2]);
     assert!(checker_1.is_active());
@@ -243,6 +251,10 @@ async fn test_subscribe_by_different_observer() {
 
     subscription_1.unsubscribe();
     subscription_2.unsubscribe();
+    assert_eq!(checker_1.values(), [0, 1, 2]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [0, 1, 2]);
+    assert!(checker_2.is_active());
 
     assert_eq!(checker_1.values(), [0, 1, 2]);
     assert!(checker_1.is_active());

@@ -108,6 +108,8 @@ fn test_unsubscribe_wrap_observable() {
     assert!(checker.is_active());
 
     subscription.unsubscribe();
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_dropped());
 
     subject.on_next(222);
     assert_eq!(checker.values(), [111]);

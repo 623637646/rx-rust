@@ -269,6 +269,12 @@ async fn test_unsubscribe() {
     assert!(checker_3.is_active());
 
     subscription_2.unsubscribe();
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_dropped());
+    assert_eq!(checker_2.values(), [111, 222]);
+    assert!(checker_2.is_dropped());
+    assert_eq!(checker_3.values(), [111, 222]);
+    assert!(checker_3.is_active());
 
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(checker_1.values(), [111]);
