@@ -64,7 +64,7 @@ struct GroupByObserver<'or, T, E, OR, F, K> {
 impl<'or, T, E, OR, F, K> Observer<T, E> for GroupByObserver<'or, T, E, OR, F, K>
 where
     T: Clone,
-    E: Clone,
+    E: Clone + Send,
     OR: Observer<PublishObservable<'or, T, E>, E>,
     F: FnMut(T) -> K,
     K: Eq + Hash,

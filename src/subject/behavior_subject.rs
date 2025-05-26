@@ -41,7 +41,7 @@ impl<T, E> BehaviorSubject<'_, T, E> {
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BehaviorSubject<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + 'sub,
+    E: Clone + Send + 'sub,
     'or: 'sub,
 {
     fn subscribe(self, mut observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
@@ -76,7 +76,7 @@ impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E, BehaviorObservable<'or, T, E>>
     for BehaviorSubject<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + 'sub,
+    E: Clone + Send + 'sub,
     'or: 'sub,
 {
     fn into_observable(self) -> BehaviorObservable<'or, T, E> {
@@ -91,7 +91,7 @@ pub struct BehaviorObservable<'or, T, E>(BehaviorSubject<'or, T, E>);
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BehaviorObservable<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + 'sub,
+    E: Clone + Send + 'sub,
     'or: 'sub,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
