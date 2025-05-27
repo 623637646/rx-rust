@@ -2,8 +2,9 @@ use super::Subject;
 use crate::{
     observable::Observable,
     observer::{
-        Observer, Termination, boxed_observer::BoxedObserver,
-        observer_collection::ObserverCollection,
+        Observer, Termination,
+        boxed_observer::BoxedObserver,
+        observer_collection::{ObserverCollection, ObserverCollectionAgent},
     },
     subscription::Subscription,
     utils::instant_lock::{InstantMutLock, InstantRefLock},
@@ -73,31 +74,75 @@ where
     }
 }
 
+enum AgentState<OR> {
+    Normal(ObserverCollectionAgent<OR>),
+    Borrowed,
+    Terminated,
+}
+
 impl<T, E> Observer<T, E> for PublishSubject<'_, T, E>
 where
     T: Clone,
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        self.0.lock_mut(|v| match v {
-            State::Processing(observer_collection) => observer_collection.on_next(value),
-            State::Terminated(_) => {}
+        let agent_state = self.0.lock_mut(|v| match v {
+            State::Processing(observer_collection) => {
+                if let Some(observer_collection) = observer_collection.borrow_agent() {
+                    AgentState::Normal(observer_collection)
+                } else {
+                    AgentState::Borrowed
+                }
+            }
+            State::Terminated(_) => AgentState::Terminated,
         });
+
+        match agent_state {
+            AgentState::Normal(mut observer_collection_agent) => {
+                observer_collection_agent.on_next(value);
+                self.0.lock_mut(|v| match v {
+                    State::Processing(observer_collection) => {
+                        observer_collection.return_agent(observer_collection_agent)
+                    }
+                    State::Terminated(termination) => {
+                        observer_collection_agent.on_termination(termination.clone());
+                    }
+                });
+            }
+            AgentState::Borrowed => {
+                panic!("No support for regression calls on_next");
+            }
+            AgentState::Terminated => {}
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if self.terminated().is_some() {
-            return;
-        }
-        let state = std::mem::replace(
-            &mut *self.0.lock().unwrap(),
-            State::Terminated(termination.clone()),
-        );
-        match state {
+        let agent_state = match &mut *self.0.lock().unwrap() {
             State::Processing(observer_collection) => {
-                observer_collection.on_termination(termination)
+                if let Some(observer_collection) = observer_collection.borrow_agent() {
+                    AgentState::Normal(observer_collection)
+                } else {
+                    AgentState::Borrowed
+                }
             }
-            State::Terminated(_) => unreachable!(),
+            State::Terminated(_) => AgentState::Terminated,
+        };
+
+        match agent_state {
+            AgentState::Normal(observer_collection_agent) => {
+                _ = std::mem::replace(
+                    &mut *self.0.lock().unwrap(),
+                    State::Terminated(termination.clone()),
+                );
+                observer_collection_agent.on_termination(termination);
+            }
+            AgentState::Borrowed => {
+                _ = std::mem::replace(
+                    &mut *self.0.lock().unwrap(),
+                    State::Terminated(termination.clone()),
+                );
+            }
+            AgentState::Terminated => {}
         }
     }
 }
