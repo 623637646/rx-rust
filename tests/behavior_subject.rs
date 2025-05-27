@@ -16,7 +16,15 @@ fn test_completed() {
     // Custom operations
     let observable = subject.clone();
 
-    let _subscription = observable.subscribe(observer);
+    let _subscription = observable.clone().subscribe(observer);
+    let subject_cloned = subject.clone();
+    let _subscription = observable.subscribe_with_callback(
+        |_| {},
+        move |_| {
+            // Terminate Subject itself first. Then terminate Observers in Subject.
+            assert!(subject_cloned.terminated().is_some());
+        },
+    );
     assert_eq!(checker.values(), [-1]);
     assert!(checker.is_active());
     assert!(subject.terminated().is_none());
@@ -45,7 +53,15 @@ fn test_error() {
     // Custom operations
     let observable = subject.clone();
 
-    let _subscription = observable.subscribe(observer);
+    let _subscription = observable.clone().subscribe(observer);
+    let subject_cloned = subject.clone();
+    let _subscription = observable.subscribe_with_callback(
+        |_| {},
+        move |_| {
+            // Terminate Subject itself first. Then terminate Observers in Subject.
+            assert!(subject_cloned.terminated().is_some());
+        },
+    );
     assert_eq!(checker.values(), [-1]);
     assert!(checker.is_active());
     assert!(subject.terminated().is_none());
