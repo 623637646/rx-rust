@@ -6,19 +6,19 @@ use crate::{
     utils::instant_lock::{InstantMutLock, InstantRefLock},
 };
 use educe::Educe;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BehaviorSubject<'or, T, E> {
-    value: Arc<RwLock<T>>,
+    value: Arc<Mutex<T>>,
     publish_subject: PublishSubject<'or, T, E>,
 }
 
 impl<T, E> BehaviorSubject<'_, T, E> {
     pub fn new(value: T) -> Self {
         Self {
-            value: Arc::new(RwLock::new(value)),
+            value: Arc::new(Mutex::new(value)),
             publish_subject: PublishSubject::default(),
         }
     }

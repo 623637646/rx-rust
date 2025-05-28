@@ -10,7 +10,7 @@ use rx_rust::{
 };
 use std::{
     convert::Infallible,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
@@ -59,28 +59,28 @@ async fn test_completed() {
 
 #[tokio::test]
 async fn test_completed_lazy_subscription() {
-    let subscribed = Arc::new(RwLock::new(false));
+    let subscribed = Arc::new(Mutex::new(false));
     let subscribed_cloned = subscribed.clone();
     let observable = Create::new(move |mut observer| {
-        *subscribed_cloned.write().unwrap() = true;
+        *subscribed_cloned.lock().unwrap() = true;
         observer.on_next(111);
         observer.on_termination(Termination::Completed);
         Subscription::new_none_disposal()
     });
 
     let stream = observable.into_stream();
-    assert!(!*subscribed.read().unwrap());
+    assert!(!*subscribed.lock().unwrap());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(!*subscribed.read().unwrap());
+    assert!(!*subscribed.lock().unwrap());
 
     let (checker, _) = Checker::<_, Infallible>::from_stream(stream);
-    assert!(!*subscribed.read().unwrap());
+    assert!(!*subscribed.lock().unwrap());
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(*subscribed.read().unwrap());
+    assert!(*subscribed.lock().unwrap());
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
 }

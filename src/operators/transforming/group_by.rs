@@ -37,7 +37,7 @@ impl<'or, 'sub, T, E, OE, F, K> Observable<'or, 'sub, PublishObservable<'or, T, 
     for GroupBy<OE, F, K>
 where
     T: Clone + 'or,
-    E: Clone + Send + Sync + 'or,
+    E: Clone + Send + 'or,
     OE: Observable<'or, 'sub, T, E>,
     F: FnMut(T) -> K + Send + 'or,
     K: Eq + Hash + Send + 'or,
