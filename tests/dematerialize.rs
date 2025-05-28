@@ -8,7 +8,7 @@ use rx_rust::{
     subscription::Subscription,
 };
 use std::convert::Infallible;
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
 fn test_completed_inner_finish() {
@@ -439,6 +439,54 @@ fn test_revert_error() {
         ]
     );
     assert!(checker.is_completed());
+}
+
+#[test]
+fn test_unsub_after_completed() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.dematerialize();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(Event::Next(111));
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(Event::Termination(Termination::<Infallible>::Completed));
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_completed());
+    assert!(channel_checker.is_unsubscribed());
+}
+
+#[test]
+fn test_unsub_after_error() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.dematerialize();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(Event::Next(111));
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(Event::Termination(Termination::Error("error")));
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_error("error"));
+    assert!(channel_checker.is_unsubscribed());
 }
 
 #[test]

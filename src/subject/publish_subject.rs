@@ -4,7 +4,7 @@ use crate::{
     observer::{
         Observer, Termination,
         boxed_observer::BoxedObserver,
-        observer_collection::{ObserverCollection, ObserverCollectionAgent},
+        observer_collection::{Key, ObserverCollection, ObserverCollectionAgent},
     },
     subscription::Subscription,
     utils::instant_lock::{InstantMutLock, InstantRefLock},
@@ -52,10 +52,18 @@ where
     'or: 'sub,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        self.0.lock_mut(|v| match v {
+        enum Case<E, OR> {
+            Proceed(Key),
+            Terminated(Termination<E>, OR),
+        }
+        let case = match &mut *self.0.lock().unwrap() {
             State::Processing(observer_collection) => {
-                let key = observer_collection.insert(BoxedObserver::new(observer));
-
+                Case::Proceed(observer_collection.insert(BoxedObserver::new(observer)))
+            }
+            State::Terminated(termination) => Case::Terminated(termination.clone(), observer),
+        };
+        match case {
+            Case::Proceed(key) => {
                 let this = self.clone();
                 Subscription::new_with_disposal_callback(move || {
                     this.0.lock_mut(|v| match v {
@@ -66,11 +74,11 @@ where
                     });
                 })
             }
-            State::Terminated(termination) => {
-                observer.on_termination(termination.clone());
+            Case::Terminated(termination, observer) => {
+                observer.on_termination(termination);
                 Subscription::new_none_disposal()
             }
-        })
+        }
     }
 }
 

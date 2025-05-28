@@ -2,7 +2,10 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::{instant_lock::InstantMutLock, marker::MarkerType},
+    utils::{
+        instant_lock::InstantMutLock, marker::MarkerType,
+        unsub_after_termination::subscribe_unsub_after_termination,
+    },
 };
 use educe::Educe;
 use std::{
@@ -37,17 +40,20 @@ where
     T: 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE2: Observable<'or, 'sub, T2, E>,
+    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let observer = Arc::new(Mutex::new(Some(observer)));
-        let stop_observer = StopObserver {
-            observer: observer.clone(),
-            _marker: PhantomData,
-        };
-        let subscription_1 = self.stop.subscribe(stop_observer);
-        let observer = TakeUntilObserver(observer.clone());
-        let subscription_2 = self.source.subscribe(observer);
-        subscription_1 + subscription_2
+        subscribe_unsub_after_termination(observer, |observer| {
+            let observer = Arc::new(Mutex::new(Some(observer)));
+            let stop_observer = StopObserver {
+                observer: observer.clone(),
+                _marker: PhantomData,
+            };
+            let subscription_1 = self.stop.subscribe(stop_observer);
+            let observer = TakeUntilObserver(observer.clone());
+            let subscription_2 = self.source.subscribe(observer);
+            subscription_1 + subscription_2
+        })
     }
 }
 

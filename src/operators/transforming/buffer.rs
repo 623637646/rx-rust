@@ -2,7 +2,9 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::instant_lock::InstantMutLock,
+    utils::{
+        instant_lock::InstantMutLock, unsub_after_termination::subscribe_unsub_after_termination,
+    },
 };
 use educe::Educe;
 use std::sync::{Arc, Mutex};
@@ -29,16 +31,19 @@ where
     T: Send + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE2: Observable<'or, 'sub, (), E>,
+    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'or) -> Subscription<'sub> {
-        let observer = BufferObserver {
-            observer: Arc::new(Mutex::new(Some(observer))),
-            values: Arc::new(Mutex::new(Vec::default())),
-        };
-        let boundary = BoundaryObserver(observer.clone());
-        let subscription_1 = self.boundary.subscribe(boundary);
-        let subscription_2 = self.source.subscribe(observer);
-        subscription_1 + subscription_2
+        subscribe_unsub_after_termination(observer, |observer| {
+            let observer = BufferObserver {
+                observer: Arc::new(Mutex::new(Some(observer))),
+                values: Arc::new(Mutex::new(Vec::default())),
+            };
+            let boundary = BoundaryObserver(observer.clone());
+            let subscription_1 = self.boundary.subscribe(boundary);
+            let subscription_2 = self.source.subscribe(observer);
+            subscription_1 + subscription_2
+        })
     }
 }
 

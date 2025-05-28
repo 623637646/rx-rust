@@ -8,7 +8,7 @@ use rx_rust::{
     subscription::Subscription,
 };
 use std::{convert::Infallible, time::Duration};
-use tests_utils::{checker::Checker, test_struct::TestStruct};
+use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
@@ -25,6 +25,30 @@ fn test_completed() {
 }
 
 #[test]
+fn test_completed_from_source() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Create::new(|observer| observable.subscribe(observer));
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_completed());
+    assert!(channel_checker.is_completed());
+}
+
+#[test]
 fn test_error() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
@@ -36,6 +60,30 @@ fn test_error() {
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_error("error"));
+}
+
+#[test]
+fn test_error_from_source() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Create::new(|observer| observable.subscribe(observer));
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_termination(Termination::Error("error"));
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_error("error"));
+    assert!(channel_checker.is_error("error"));
 }
 
 #[tokio::test]

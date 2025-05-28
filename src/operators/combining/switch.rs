@@ -6,6 +6,7 @@ use crate::{
     utils::{
         instant_lock::{InstantMutLock, InstantRefLock},
         marker::MarkerType,
+        unsub_after_termination::subscribe_unsub_after_termination,
     },
 };
 use educe::Educe;
@@ -58,17 +59,19 @@ where
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let on_going_sub = Arc::new(Mutex::new(None));
-        let observer = SwitchObserver {
-            observer: Arc::new(Mutex::new(Some(observer))),
-            on_going_sub: on_going_sub.clone(),
-            completed: Arc::new(AtomicBool::new(false)),
-            _marker: PhantomData,
-        };
-        let disposal = CallbackDisposal::new(move || {
-            on_going_sub.lock_mut(Option::take);
-        });
-        self.source.subscribe(observer) + disposal
+        subscribe_unsub_after_termination(observer, |observer| {
+            let on_going_sub = Arc::new(Mutex::new(None));
+            let observer = SwitchObserver {
+                observer: Arc::new(Mutex::new(Some(observer))),
+                on_going_sub: on_going_sub.clone(),
+                completed: Arc::new(AtomicBool::new(false)),
+                _marker: PhantomData,
+            };
+            let disposal = CallbackDisposal::new(move || {
+                on_going_sub.lock_mut(Option::take);
+            });
+            self.source.subscribe(observer) + disposal
+        })
     }
 }
 
