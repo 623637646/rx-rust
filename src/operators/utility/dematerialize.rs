@@ -2,6 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Event, Observer, Termination},
     subscription::Subscription,
+    utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
 use std::convert::Infallible;
@@ -19,9 +20,12 @@ impl<OE> Dematerialize<OE> {
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for Dematerialize<OE>
 where
     OE: Observable<'or, 'sub, Event<T, E>, Infallible>,
+    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        self.0.subscribe(DematerializeObserver(Some(observer)))
+        subscribe_unsub_after_termination(observer, |observer| {
+            self.0.subscribe(DematerializeObserver(Some(observer)))
+        })
     }
 }
 
