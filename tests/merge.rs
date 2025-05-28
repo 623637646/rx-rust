@@ -946,7 +946,7 @@ fn test_without_convenient_api() {
 }
 
 #[test]
-fn test_self_error() {
+fn test_unsub_after_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
