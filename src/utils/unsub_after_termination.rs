@@ -17,7 +17,8 @@ where
         observer,
         subscription: subscription.clone(),
     };
-    *subscription.lock().unwrap() = Some(builder(observer));
+    let sub = builder(observer);
+    subscription.lock_mut(|subscription| *subscription = Some(sub));
     Subscription::new_with_disposal_callback(move || {
         if let Some(sub) = subscription.lock_mut(Option::take) {
             sub.unsubscribe();

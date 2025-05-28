@@ -56,12 +56,12 @@ where
             Proceed(Key),
             Terminated(Termination<E>, OR),
         }
-        let case = match &mut *self.0.lock().unwrap() {
+        let case = self.0.lock_mut(|state| match state {
             State::Processing(observer_collection) => {
                 Case::Proceed(observer_collection.insert(BoxedObserver::new(observer)))
             }
             State::Terminated(termination) => Case::Terminated(termination.clone(), observer),
-        };
+        });
         match case {
             Case::Proceed(key) => {
                 let this = self.clone();
@@ -125,7 +125,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let agent_state = match &mut *self.0.lock().unwrap() {
+        let agent_state = self.0.lock_mut(|state| match state {
             State::Processing(observer_collection) => {
                 if let Some(observer_collection) = observer_collection.borrow_agent() {
                     AgentState::Normal(observer_collection)
@@ -134,21 +134,19 @@ where
                 }
             }
             State::Terminated(_) => AgentState::Terminated,
-        };
+        });
 
         match agent_state {
             AgentState::Normal(observer_collection_agent) => {
-                _ = std::mem::replace(
-                    &mut *self.0.lock().unwrap(),
-                    State::Terminated(termination.clone()),
-                );
+                self.0.lock_mut(|state| {
+                    _ = std::mem::replace(state, State::Terminated(termination.clone()))
+                });
                 observer_collection_agent.on_termination(termination);
             }
             AgentState::Borrowed => {
-                _ = std::mem::replace(
-                    &mut *self.0.lock().unwrap(),
-                    State::Terminated(termination.clone()),
-                );
+                self.0.lock_mut(|state| {
+                    _ = std::mem::replace(state, State::Terminated(termination.clone()))
+                });
             }
             AgentState::Terminated => {}
         }
