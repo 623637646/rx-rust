@@ -4,6 +4,7 @@ use crate::{
     operators::{
         combining::{merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
+        filtering::take::Take,
         mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
@@ -208,6 +209,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         F: FnMut(T) -> OE2,
     {
         SwitchMap::new(self, callback)
+    }
+
+    fn take(self, count: usize) -> Take<Self> {
+        Take::new(self, count)
     }
 
     fn take_until<T2, OE2>(self, stop: OE2) -> TakeUntil<T2, Self, OE2>
