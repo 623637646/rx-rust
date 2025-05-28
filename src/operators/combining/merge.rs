@@ -3,7 +3,10 @@ use crate::{
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::CallbackDisposal},
-    utils::{instant_lock::InstantMutLock, marker::MarkerType},
+    utils::{
+        instant_lock::InstantMutLock, marker::MarkerType,
+        unsub_after_termination::subscribe_unsub_after_termination,
+    },
 };
 use educe::Educe;
 use std::{
@@ -55,15 +58,17 @@ where
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let subscriptions = Arc::new(Mutex::new(Vec::new()));
-        let observer = MergeObserver {
-            observer: Arc::new(Mutex::new(Some(observer))),
-            subscriptions: subscriptions.clone(),
-            pending_termination_count: Arc::new(AtomicUsize::new(1)),
-            _marker: PhantomData,
-        };
-        let disposal = CallbackDisposal::new(move || subscriptions.lock_mut(Vec::clear));
-        self.source.subscribe(observer) + disposal
+        subscribe_unsub_after_termination(observer, |observer| {
+            let subscriptions = Arc::new(Mutex::new(Vec::new()));
+            let observer = MergeObserver {
+                observer: Arc::new(Mutex::new(Some(observer))),
+                subscriptions: subscriptions.clone(),
+                pending_termination_count: Arc::new(AtomicUsize::new(1)),
+                _marker: PhantomData,
+            };
+            let disposal = CallbackDisposal::new(move || subscriptions.lock_mut(Vec::clear));
+            self.source.subscribe(observer) + disposal
+        })
     }
 }
 
