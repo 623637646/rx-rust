@@ -3,7 +3,7 @@ use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
         combining::{merge::Merge, switch::Switch},
-        filtering::take_until::TakeUntil,
+        conditional_boolean::take_until::TakeUntil,
         mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,

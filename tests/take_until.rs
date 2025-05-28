@@ -3,7 +3,7 @@ mod tests_utils;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    operators::{creating::create::Create, filtering::take_until::TakeUntil},
+    operators::{conditional_boolean::take_until::TakeUntil, creating::create::Create},
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
