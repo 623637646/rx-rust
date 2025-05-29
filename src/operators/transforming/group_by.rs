@@ -2,8 +2,8 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subject::{
-        Subject,
-        publish_subject::{PublishObservable, PublishSubject},
+        publish_subject::PublishSubject, subject_ext::SubjectExt,
+        subject_observable::SubjectObservable,
     },
     subscription::Subscription,
     utils::marker::MarkerType,
@@ -33,8 +33,8 @@ impl<OE, F, K> GroupBy<OE, F, K> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, F, K> Observable<'or, 'sub, PublishObservable<'or, T, E>, E>
-    for GroupBy<OE, F, K>
+impl<'or, 'sub, T, E, OE, F, K>
+    Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for GroupBy<OE, F, K>
 where
     T: Clone + 'or,
     E: Clone + Send + 'or,
@@ -44,7 +44,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<PublishObservable<'or, T, E>, E> + Send + 'or,
+        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + Send + 'or,
     ) -> Subscription<'sub> {
         let observer = GroupByObserver {
             observer,
@@ -65,7 +65,7 @@ impl<'or, T, E, OR, F, K> Observer<T, E> for GroupByObserver<'or, T, E, OR, F, K
 where
     T: Clone,
     E: Clone + Send,
-    OR: Observer<PublishObservable<'or, T, E>, E>,
+    OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
     F: FnMut(T) -> K,
     K: Eq + Hash,
 {

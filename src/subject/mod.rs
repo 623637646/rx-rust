@@ -1,8 +1,8 @@
 pub mod behavior_subject;
 pub mod publish_subject;
+pub mod subject_ext;
+pub mod subject_observable;
 
 use crate::{observable::Observable, observer::Observer};
 
-pub trait Subject<'or, 'sub, T, E, OE>: Observable<'or, 'sub, T, E> + Observer<T, E> {
-    fn into_observable(self) -> OE;
-}
+pub trait Subject<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Observer<T, E> {}

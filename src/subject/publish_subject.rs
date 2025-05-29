@@ -153,29 +153,10 @@ where
     }
 }
 
-impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E, PublishObservable<'or, T, E>>
-    for PublishSubject<'or, T, E>
+impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for PublishSubject<'or, T, E>
 where
     T: Clone + 'sub,
     E: Clone + Send + 'sub,
     'or: 'sub,
 {
-    fn into_observable(self) -> PublishObservable<'or, T, E> {
-        PublishObservable(self)
-    }
-}
-
-#[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct PublishObservable<'or, T, E>(PublishSubject<'or, T, E>);
-
-impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for PublishObservable<'or, T, E>
-where
-    T: 'sub,
-    E: Clone + Send + 'sub,
-    'or: 'sub,
-{
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        self.0.subscribe(observer)
-    }
 }
