@@ -1,4 +1,6 @@
-use super::{Observable, boxed_observable::BoxedObservable};
+use super::{
+    Observable, boxed_observable::BoxedObservable, connectable_observable::ConnectableObservable,
+};
 use crate::{
     observer::{Termination, callback_observer::CallbackObserver},
     operators::{
@@ -21,6 +23,7 @@ use crate::{
             do_on_termination::DoOnTermination, materialize::Materialize,
         },
     },
+    subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
 use std::{convert::Infallible, time::Duration};
@@ -173,6 +176,17 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         T: Observable<'or, 'sub, T1, E>,
     {
         Merge::new(self)
+    }
+
+    fn multicast<S>(self) -> ConnectableObservable<Self, S>
+    where
+        S: Default,
+    {
+        ConnectableObservable::new(self)
+    }
+
+    fn publish(self) -> ConnectableObservable<Self, PublishSubject<'or, T, E>> {
+        self.multicast()
     }
 
     fn scan<T0, F>(self, initial_value: T0, callback: F) -> Scan<T0, T, Self, F>
