@@ -3,7 +3,10 @@ mod tests_utils;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    operators::{conditional_boolean::take_until::TakeUntil, creating::create::Create},
+    operators::{
+        conditional_boolean::take_until::TakeUntil,
+        creating::{create::Create, just::Just},
+    },
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
@@ -645,6 +648,31 @@ fn test_lifetime_or() {
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(vec![&life_marker_3]);
+        let _subscription = observable.subscribe(observer);
+    }
+}
+
+#[test]
+fn test_lifetime_or_sub() {
+    // OK
+    let life_marker_sub = TestStruct;
+    let mut life_marker_or = None;
+
+    // Error
+    // let mut life_marker_or = None;
+    // let life_marker_sub = TestStruct;
+
+    {
+        let observable = Create::new(|observer: BoxedObserver<'_, &TestStruct, Infallible>| {
+            life_marker_or = Some(observer);
+            Subscription::new_with_disposal_callback(|| {
+                life_marker_sub.consume_ref();
+            })
+        });
+
+        let observable = observable.take_until(Just::new(1));
+
+        let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
     }
 }
