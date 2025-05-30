@@ -1,3 +1,4 @@
+use educe::Educe;
 use rx_rust::{
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -94,6 +95,8 @@ where
     }
 }
 
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub(crate) struct ChannelChecker<'or, T, E>(Arc<Mutex<State<'or, T, E>>>);
 
 impl<T, E> ChannelChecker<'_, T, E> {

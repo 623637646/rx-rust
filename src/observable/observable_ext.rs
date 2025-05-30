@@ -2,15 +2,15 @@ use super::{
     Observable, boxed_observable::BoxedObservable, connectable_observable::ConnectableObservable,
 };
 use crate::{
-    observer::{Termination, callback_observer::CallbackObserver},
+    observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
     operators::{
         combining::{merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
         filtering::take::Take,
         mathematical_aggregate::concat::Concat,
         others::{
-            hook_on_next::HookOnNext, hook_on_termination::HookOnTermination,
-            map_infallible_to_error::MapInfallibleToError,
+            hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
+            hook_on_termination::HookOnTermination, map_infallible_to_error::MapInfallibleToError,
             map_infallible_to_value::MapInfallibleToValue, observable_stream::ObservableStream,
         },
         transforming::{
@@ -124,6 +124,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         F: for<'a> FnMut(T, Box<dyn FnOnce(T) + 'a>),
     {
         HookOnNext::new(self, callback)
+    }
+
+    fn hook_on_subscription<F>(self, callback: F) -> HookOnSubscription<Self, F>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        F: FnOnce(Self, BoxedObserver<'or, T, E>) -> Subscription<'sub>,
+    {
+        HookOnSubscription::new(self, callback)
     }
 
     fn hook_on_termination<F>(self, callback: F) -> HookOnTermination<Self, F>
