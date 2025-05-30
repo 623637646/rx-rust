@@ -1,6 +1,6 @@
 use crate::{
-    observable::Observable,
-    observer::{Observer, Termination},
+    observable::{Observable, observable_ext::ObservableExt},
+    observer::Observer,
     subscription::Subscription,
 };
 use educe::Educe;
@@ -27,31 +27,12 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnMut(&T) + Send + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let observer = DoOnNextObserver {
-            observer,
-            callback: self.callback,
-        };
-        self.source.subscribe(observer)
-    }
-}
-
-struct DoOnNextObserver<OR, F> {
-    observer: OR,
-    callback: F,
-}
-
-impl<T, E, OR, F> Observer<T, E> for DoOnNextObserver<OR, F>
-where
-    OR: Observer<T, E>,
-    F: FnMut(&T),
-{
-    fn on_next(&mut self, value: T) {
-        (self.callback)(&value);
-        self.observer.on_next(value);
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        self.observer.on_termination(termination);
+    fn subscribe(mut self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+        self.source
+            .hook_on_next(move |value, original| {
+                (self.callback)(&value);
+                original(value)
+            })
+            .subscribe(observer)
     }
 }

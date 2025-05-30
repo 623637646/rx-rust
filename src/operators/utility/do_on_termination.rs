@@ -1,5 +1,5 @@
 use crate::{
-    observable::Observable,
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     subscription::Subscription,
 };
@@ -28,30 +28,11 @@ where
     F: FnOnce(&Termination<E>) + Send + 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let observer = DoOnTerminationObserver {
-            observer,
-            callback: self.callback,
-        };
-        self.source.subscribe(observer)
-    }
-}
-
-struct DoOnTerminationObserver<OR, F> {
-    observer: OR,
-    callback: F,
-}
-
-impl<T, E, OR, F> Observer<T, E> for DoOnTerminationObserver<OR, F>
-where
-    OR: Observer<T, E>,
-    F: FnOnce(&Termination<E>),
-{
-    fn on_next(&mut self, value: T) {
-        self.observer.on_next(value);
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        (self.callback)(&termination);
-        self.observer.on_termination(termination);
+        self.source
+            .hook_on_termination(move |termination, original| {
+                (self.callback)(&termination);
+                original(termination)
+            })
+            .subscribe(observer)
     }
 }
