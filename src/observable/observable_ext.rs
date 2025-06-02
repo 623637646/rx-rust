@@ -1,5 +1,6 @@
 use super::{
     Observable, boxed_observable::BoxedObservable, connectable_observable::ConnectableObservable,
+    ref_count_observable::RefCount,
 };
 use crate::{
     observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
@@ -203,6 +204,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         F: FnMut(T0, T) -> T0,
     {
         Scan::new(self, initial_value, callback)
+    }
+
+    fn share(self) -> RefCount<'sub, Self, PublishSubject<'or, T, E>> {
+        self.publish().ref_count()
     }
 
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>
