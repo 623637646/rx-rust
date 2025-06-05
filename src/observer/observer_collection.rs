@@ -6,7 +6,6 @@ pub struct Key(usize);
 pub struct ObserverCollection<OR> {
     map: BTreeMap<usize, Option<OR>>,
     count: usize,
-    borrowed: bool,
 }
 
 impl<OR> ObserverCollection<OR> {
@@ -14,7 +13,6 @@ impl<OR> ObserverCollection<OR> {
         Self {
             map: BTreeMap::new(),
             count: 0,
-            borrowed: false,
         }
     }
 
@@ -30,25 +28,26 @@ impl<OR> ObserverCollection<OR> {
     }
 
     pub fn borrow_agent(&mut self) -> Option<ObserverCollectionAgent<OR>> {
-        if self.borrowed {
-            None
-        } else {
-            self.borrowed = true;
-            let map = self
-                .map
-                .iter_mut()
-                .map(|(key, value)| (*key, value.take().unwrap()))
-                .collect();
-            Some(ObserverCollectionAgent(map))
+        let mut result = BTreeMap::new();
+        for (k, v) in self.map.iter_mut() {
+            match v.take() {
+                Some(or) => {
+                    result.insert(*k, or);
+                }
+                None => {
+                    return None;
+                }
+            }
         }
+        Some(ObserverCollectionAgent(result))
     }
 
     pub fn return_agent(&mut self, mut agent: ObserverCollectionAgent<OR>) {
-        assert!(self.borrowed);
-        self.map
-            .iter_mut()
-            .for_each(|(key, value)| *value = agent.0.remove(key));
-        self.borrowed = false;
+        self.map.iter_mut().for_each(|(key, value)| {
+            if let Some(agent_value) = agent.0.remove(key) {
+                *value = Some(agent_value)
+            }
+        });
     }
 }
 
