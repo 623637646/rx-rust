@@ -536,7 +536,7 @@ fn test_without_convenient_api() {
 }
 
 #[test]
-fn test_unsub_after_completed() {
+fn test_unsub_on_completed() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut stop_sender, stop_observable, stop_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
@@ -564,7 +564,7 @@ fn test_unsub_after_completed() {
 }
 
 #[test]
-fn test_unsub_after_error() {
+fn test_unsub_on_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
