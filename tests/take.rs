@@ -74,7 +74,7 @@ fn test_completed_0_count() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_completed());
-    assert!(channel_checker.is_initialized());
+    assert!(channel_checker.is_unsubscribed());
 }
 
 #[test]

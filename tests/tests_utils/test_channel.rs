@@ -95,6 +95,17 @@ where
     }
 }
 
+impl<T, E> Drop for ReceiverObservable<'_, T, E> {
+    fn drop(&mut self) {
+        let mut state = self.0.lock().unwrap();
+        match &*state {
+            State::Initialized | State::Subscribed(_) => *state = State::Unsubscribed,
+            State::Terminated(_) => {}
+            State::Unsubscribed => {}
+        }
+    }
+}
+
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub(crate) struct ChannelChecker<'or, T, E>(Arc<Mutex<State<'or, T, E>>>);
