@@ -15,146 +15,204 @@ use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::Tes
 
 #[test]
 fn test_completed_inner_finish() {
-    let mut subject = PublishSubject::default();
-    let mut subject_1 = PublishSubject::default();
-    let mut subject_2 = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
-    let subject_1_cloned = subject_1.clone();
-    let subject_2_cloned = subject_2.clone();
+    let mut observable_1_option = Some(observable_1);
+    let mut observable_2_option = Some(observable_2);
     let observable = observable.flat_map(move |value| match value {
-        1 => subject_1_cloned.clone(),
-        2 => subject_2_cloned.clone(),
+        1 => observable_1_option.take().unwrap(),
+        2 => observable_2_option.take().unwrap(),
         _ => panic!(),
     });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_initialized());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(1);
+    sender.on_next(1);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject_1.on_next(111);
+    sender_1.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(2);
+    sender.on_next(2);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(222);
+    sender_2.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject.on_termination(Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_1.on_next(333);
+    sender_1.on_next(333);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_1.on_termination(Termination::Completed);
+    sender_1.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(444);
+    sender_2.on_next(444);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_termination(Termination::Completed);
+    sender_2.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_completed());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_completed());
 }
 
 #[test]
 fn test_completed_outer_finish() {
-    let mut subject = PublishSubject::default();
-    let mut subject_1 = PublishSubject::default();
-    let mut subject_2 = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
-    let subject_1_cloned = subject_1.clone();
-    let subject_2_cloned = subject_2.clone();
+    let mut observable_1_option = Some(observable_1);
+    let mut observable_2_option = Some(observable_2);
     let observable = observable.flat_map(move |value| match value {
-        1 => subject_1_cloned.clone(),
-        2 => subject_2_cloned.clone(),
+        1 => observable_1_option.take().unwrap(),
+        2 => observable_2_option.take().unwrap(),
         _ => panic!(),
     });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_initialized());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(1);
+    sender.on_next(1);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject_1.on_next(111);
+    sender_1.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(2);
+    sender.on_next(2);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(222);
+    sender_2.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_1.on_next(333);
+    sender_1.on_next(333);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_1.on_termination(Termination::Completed);
+    sender_1.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(444);
+    sender_2.on_next(444);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_termination(Termination::Completed);
+    sender_2.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_completed());
 
-    subject.on_termination(Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_completed());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_completed());
 }
 
 #[test]
 fn test_completed_empty() {
-    let subject: PublishSubject<'_, i32, _> = PublishSubject::default();
+    let (sender, observable, channel_checker) = test_channel::<'_, Just<i32>, _>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.flat_map(Just::new);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert!(checker.values().is_empty());
     assert!(checker.is_completed());
+    assert!(channel_checker.is_completed());
 }
 
 #[test]
 fn test_completed_same_inner() {
-    let mut subject = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
     let mut subject_1 = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let subject_1_cloned = subject_1.clone();
     let observable = observable.flat_map(move |value| match value {
         1 => subject_1_cloned.clone(),
@@ -165,240 +223,244 @@ fn test_completed_same_inner() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(1);
+    sender.on_next(1);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
     subject_1.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(2);
+    sender.on_next(2);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
     subject_1.on_next(222);
     assert_eq!(checker.values(), [111, 222, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 222, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
 
     subject_1.on_next(333);
     assert_eq!(checker.values(), [111, 222, 222, 333, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
 
     subject_1.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 222, 333, 333]);
     assert!(checker.is_completed());
-}
-
-#[test]
-fn test_completed_unsubscribe() {
-    let mut subject = PublishSubject::default();
-    let mut subject_1 = PublishSubject::default();
-    let mut subject_2 = PublishSubject::default();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = subject.clone();
-    let subject_1_cloned = subject_1.clone();
-    let subject_2_cloned = subject_2.clone();
-    let observable = observable.flat_map(move |value| match value {
-        1 => subject_1_cloned.clone(),
-        2 => subject_2_cloned.clone(),
-        _ => panic!(),
-    });
-
-    let subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    subject.on_next(1);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    subject_1.on_next(111);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    subject.on_next(2);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    subject_2.on_next(222);
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_active());
-
-    subscription.unsubscribe();
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject_1.on_next(333);
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject_1.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject_2.on_next(444);
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject_2.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
+    assert!(channel_checker.is_completed());
 }
 
 #[test]
 fn test_error_inner_finish() {
-    let mut subject = PublishSubject::default();
-    let mut subject_1 = PublishSubject::default();
-    let mut subject_2 = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
-    let subject_1_cloned = subject_1.clone();
-    let subject_2_cloned = subject_2.clone();
+    let mut observable_1_option = Some(observable_1);
+    let mut observable_2_option = Some(observable_2);
     let observable = observable.flat_map(move |value| match value {
-        1 => subject_1_cloned.clone(),
-        2 => subject_2_cloned.clone(),
+        1 => observable_1_option.take().unwrap(),
+        2 => observable_2_option.take().unwrap(),
         _ => panic!(),
     });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_initialized());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(1);
+    sender.on_next(1);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject_1.on_next(111);
+    sender_1.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(2);
+    sender.on_next(2);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(222);
+    sender_2.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject.on_termination(Termination::Completed);
+    sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_1.on_next(333);
+    sender_1.on_next(333);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_1.on_termination(Termination::Completed);
+    sender_1.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(444);
+    sender_2.on_next(444);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_termination(Termination::Error("error"));
+    sender_2.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_error("error"));
+    assert!(channel_checker.is_completed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_error("error"));
 }
 
 #[test]
 fn test_error_outer_finish() {
-    let mut subject = PublishSubject::default();
-    let mut subject_1 = PublishSubject::default();
-    let mut subject_2 = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
-    let subject_1_cloned = subject_1.clone();
-    let subject_2_cloned = subject_2.clone();
+    let mut observable_1_option = Some(observable_1);
+    let mut observable_2_option = Some(observable_2);
     let observable = observable.flat_map(move |value| match value {
-        1 => subject_1_cloned.clone(),
-        2 => subject_2_cloned.clone(),
+        1 => observable_1_option.take().unwrap(),
+        2 => observable_2_option.take().unwrap(),
         _ => panic!(),
     });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_initialized());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(1);
+    sender.on_next(1);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject_1.on_next(111);
+    sender_1.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(2);
+    sender.on_next(2);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(222);
+    sender_2.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_1.on_next(333);
+    sender_1.on_next(333);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_1.on_termination(Termination::Completed);
+    sender_1.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(444);
+    sender_2.on_next(444);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_termination(Termination::Completed);
+    sender_2.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_completed());
 
-    subject.on_termination(Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_error("error"));
+    assert!(channel_checker.is_error("error"));
+    assert!(channel_checker_1.is_completed());
+    assert!(channel_checker_2.is_completed());
 }
 
 #[test]
 fn test_error_empty() {
-    let subject = PublishSubject::default();
+    let (sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.flat_map(Throw::new);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert!(checker.values().is_empty());
     assert!(checker.is_error("error"));
+    assert!(channel_checker.is_error("error"));
 }
 
 #[test]
 fn test_error_same_inner() {
-    let mut subject = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
     let mut subject_1 = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let subject_1_cloned = subject_1.clone();
     let observable = observable.flat_map(move |value| match value {
         1 => subject_1_cloned.clone(),
@@ -409,100 +471,105 @@ fn test_error_same_inner() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(1);
+    sender.on_next(1);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
     subject_1.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(2);
+    sender.on_next(2);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
     subject_1.on_next(222);
     assert_eq!(checker.values(), [111, 222, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::Completed);
+    sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
 
     subject_1.on_next(333);
     assert_eq!(checker.values(), [111, 222, 222, 333, 333]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_completed());
 
     subject_1.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 222, 222, 333, 333]);
     assert!(checker.is_error("error"));
+    assert!(channel_checker.is_completed());
 }
 
 #[test]
-fn test_error_unsubscribe() {
-    let mut subject = PublishSubject::default();
-    let mut subject_1 = PublishSubject::default();
-    let mut subject_2 = PublishSubject::default();
+fn test_unsubscribe() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
-    let subject_1_cloned = subject_1.clone();
-    let subject_2_cloned = subject_2.clone();
+    let mut observable_1_option = Some(observable_1);
+    let mut observable_2_option = Some(observable_2);
     let observable = observable.flat_map(move |value| match value {
-        1 => subject_1_cloned.clone(),
-        2 => subject_2_cloned.clone(),
+        1 => observable_1_option.take().unwrap(),
+        2 => observable_2_option.take().unwrap(),
         _ => panic!(),
     });
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_initialized());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(1);
+    sender.on_next(1);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject_1.on_next(111);
+    sender_1.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_initialized());
 
-    subject.on_next(2);
+    sender.on_next(2);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
-    subject_2.on_next(222);
+    sender_2.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(channel_checker_1.is_subscribed());
+    assert!(channel_checker_2.is_subscribed());
 
     subscription.unsubscribe();
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
-
-    subject.on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject_1.on_next(333);
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject_1.on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject_2.on_next(444);
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
-
-    subject_2.on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_dropped());
+    assert!(channel_checker.is_unsubscribed());
+    assert!(channel_checker_1.is_unsubscribed());
+    assert!(channel_checker_2.is_unsubscribed());
 }
 
 #[test]
-fn test_unsubscribe() {
+fn test_unsubscribe_with_publish_subject() {
     let mut subject = PublishSubject::default();
     let mut subject_1 = PublishSubject::default();
     let mut subject_2 = PublishSubject::default();
@@ -993,36 +1060,6 @@ fn test_without_convenient_api() {
     subject_2.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_completed());
-}
-
-#[test]
-fn test_unsub_on_error() {
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = observable.flat_map(|v| {
-        if v {
-            Just::new(111).map_infallible_to_error().into_boxed()
-        } else {
-            Throw::new("error").map_infallible_to_value().into_boxed()
-        }
-    });
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    sender.on_next(true);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    sender.on_next(false);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_error("error"));
-    assert!(channel_checker.is_unsubscribed());
 }
 
 #[test]

@@ -12,92 +12,89 @@ use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::Tes
 
 #[test]
 fn test_completed_inner_finish() {
-    let mut subject = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.dematerialize();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(Event::Next(111));
+    sender.on_next(Event::Next(111));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(Event::Next(222));
+    sender.on_next(Event::Next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(Event::Termination(Termination::<Infallible>::Completed));
+    sender.on_next(Event::Termination(Termination::<Infallible>::Completed));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_completed());
-
-    subject.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 222],);
-    assert!(checker.is_completed());
+    assert!(channel_checker.is_unsubscribed());
 }
 
 #[test]
 fn test_completed_outer_finish() {
-    let mut subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::<_, Infallible>::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.dematerialize();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(Event::Next(111));
+    sender.on_next(Event::Next(111));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(Event::Next(222));
+    sender.on_next(Event::Next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.clone().on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 222],);
-    assert!(checker.is_completed());
-
-    subject.on_next(Event::Termination(Termination::<Infallible>::Completed));
+    sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_completed());
+    assert!(channel_checker.is_completed());
 }
 
 #[test]
 fn test_error_inner_finish() {
-    let mut subject = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.dematerialize();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(Event::Next(111));
+    sender.on_next(Event::Next(111));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(Event::Next(222));
+    sender.on_next(Event::Next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(Event::Termination(Termination::Error("error")));
+    sender.on_next(Event::Termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_error("error"));
-
-    subject.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 222],);
-    assert!(checker.is_error("error"));
+    assert!(channel_checker.is_unsubscribed());
 }
 
 #[test]
@@ -439,54 +436,6 @@ fn test_revert_error() {
         ]
     );
     assert!(checker.is_completed());
-}
-
-#[test]
-fn test_unsub_on_completed() {
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = observable.dematerialize();
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    sender.on_next(Event::Next(111));
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    sender.on_next(Event::Termination(Termination::<Infallible>::Completed));
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_completed());
-    assert!(channel_checker.is_unsubscribed());
-}
-
-#[test]
-fn test_unsub_on_error() {
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = observable.dematerialize();
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    sender.on_next(Event::Next(111));
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    sender.on_next(Event::Termination(Termination::Error("error")));
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_error("error"));
-    assert!(channel_checker.is_unsubscribed());
 }
 
 #[test]
