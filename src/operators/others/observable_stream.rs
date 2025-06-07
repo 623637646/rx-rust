@@ -2,7 +2,6 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::instant_lock::InstantMutLock,
 };
 use futures::Stream;
 use std::{
@@ -59,8 +58,8 @@ where
             self.sub = Some(sub);
         }
 
-        self.waker.lock_mut(|v| *v = Some(cx.waker().clone()));
-        if let Some(event) = self.values.lock_mut(VecDeque::pop_front) {
+        *self.waker.lock().unwrap() = Some(cx.waker().clone());
+        if let Some(event) = { self.values.lock().unwrap().pop_front() } {
             Poll::Ready(Some(event))
         } else if self.terminated.load(Ordering::SeqCst) {
             Poll::Ready(None)
@@ -78,15 +77,15 @@ struct ObservableStreamObserver<T> {
 
 impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
-        self.values.lock_mut(|v| v.push_back(value));
-        if let Some(waker) = self.waker.lock_mut(Option::take) {
+        self.values.lock().unwrap().push_back(value);
+        if let Some(waker) = { self.waker.lock().unwrap().take() } {
             waker.wake();
         }
     }
 
     fn on_termination(self, _: Termination<Infallible>) {
         self.terminated.store(true, Ordering::SeqCst);
-        if let Some(waker) = self.waker.lock_mut(Option::take) {
+        if let Some(waker) = { self.waker.lock().unwrap().take() } {
             waker.wake();
         }
     }

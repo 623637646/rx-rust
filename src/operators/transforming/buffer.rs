@@ -2,9 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::{
-        instant_lock::InstantMutLock, unsub_after_termination::subscribe_unsub_after_termination,
-    },
+    utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
 use std::sync::{Arc, Mutex};
@@ -59,14 +57,14 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.values.lock_mut(|v| v.push(value));
+        self.values.lock().unwrap().push(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = self.observer.lock_mut(Option::take) {
+        if let Some(mut observer) = { self.observer.lock().unwrap().take() } {
             match termination {
                 Termination::Completed => {
-                    let values = self.values.lock_mut(std::mem::take);
+                    let values = std::mem::take(&mut *self.values.lock().unwrap());
                     if !values.is_empty() {
                         observer.on_next(values);
                     }
@@ -87,12 +85,10 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, _: ()) {
-        self.0.observer.lock_mut(|v| {
-            if let Some(observer) = v {
-                let values = self.0.values.lock_mut(std::mem::take);
-                observer.on_next(values)
-            }
-        })
+        if let Some(observer) = self.0.observer.lock().unwrap().as_mut() {
+            let values = std::mem::take(&mut *self.0.values.lock().unwrap());
+            observer.on_next(values);
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {

@@ -3,11 +3,7 @@ use crate::{
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::CallbackDisposal},
-    utils::{
-        instant_lock::{InstantMutLock, InstantRefLock},
-        marker::MarkerType,
-        unsub_after_termination::subscribe_unsub_after_termination,
-    },
+    utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
 use std::{
@@ -68,7 +64,7 @@ where
                 _marker: PhantomData,
             };
             let disposal = CallbackDisposal::new(move || {
-                on_going_sub.lock_mut(Option::take);
+                on_going_sub.lock().unwrap().take();
             });
             self.source.subscribe(observer) + disposal
         })
@@ -102,15 +98,15 @@ where
                 match termination {
                     Termination::Completed => {
                         if completed.load(Ordering::SeqCst) {
-                            if let Some(observer) = observer.lock_mut(Option::take) {
+                            if let Some(observer) = { observer.lock().unwrap().take() } {
                                 observer.on_termination(Termination::Completed);
                             }
                         } else {
-                            on_going_sub.lock_mut(Option::take);
+                            on_going_sub.lock().unwrap().take();
                         }
                     }
                     Termination::Error(_) => {
-                        if let Some(observer) = observer.lock_mut(Option::take) {
+                        if let Some(observer) = { observer.lock().unwrap().take() } {
                             observer.on_termination(termination);
                         }
                     }
@@ -119,10 +115,10 @@ where
         };
         let sub = value.subscribe(observer);
         if !terminated.load(Ordering::SeqCst) {
-            if let Some(sub) = self.on_going_sub.lock_mut(|v| v.replace(sub)) {
+            if let Some(sub) = { self.on_going_sub.lock().unwrap().replace(sub) } {
                 sub.unsubscribe();
             }
-        } else if let Some(sub) = self.on_going_sub.lock_mut(Option::take) {
+        } else if let Some(sub) = { self.on_going_sub.lock().unwrap().take() } {
             sub.unsubscribe();
         }
     }
@@ -131,14 +127,14 @@ where
         match termination {
             Termination::Completed => {
                 self.completed.store(true, Ordering::SeqCst);
-                if self.on_going_sub.lock_ref(Option::is_none) {
-                    if let Some(observer) = self.observer.lock_mut(Option::take) {
+                if self.on_going_sub.lock().unwrap().is_none() {
+                    if let Some(observer) = { self.observer.lock().unwrap().take() } {
                         observer.on_termination(Termination::Completed);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.lock_mut(Option::take) {
+                if let Some(observer) = { self.observer.lock().unwrap().take() } {
                     observer.on_termination(termination);
                 }
             }
@@ -157,11 +153,9 @@ where
     F: FnOnce(Termination<E>),
 {
     fn on_next(&mut self, value: T) {
-        self.observer.lock_mut(|v| {
-            if let Some(observer) = v {
-                observer.on_next(value);
-            }
-        });
+        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+            observer.on_next(value);
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {

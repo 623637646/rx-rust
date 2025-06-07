@@ -1,5 +1,5 @@
 use super::{Observable, ref_count_observable::RefCount};
-use crate::{observer::Observer, subscription::Subscription, utils::instant_lock::InstantMutLock};
+use crate::{observer::Observer, subscription::Subscription};
 use educe::Educe;
 use std::sync::{Arc, Mutex};
 
@@ -27,7 +27,9 @@ impl<OE, S> ConnectableObservable<OE, S> {
         S: Observer<T, E> + Send + 'or,
     {
         self.source
-            .lock_mut(Option::take)
+            .lock()
+            .unwrap()
+            .take()
             .expect("Already connected")
             .subscribe(self.subject)
     }

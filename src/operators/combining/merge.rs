@@ -3,10 +3,7 @@ use crate::{
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::CallbackDisposal},
-    utils::{
-        instant_lock::InstantMutLock, marker::MarkerType,
-        unsub_after_termination::subscribe_unsub_after_termination,
-    },
+    utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
 use std::{
@@ -66,7 +63,7 @@ where
                 pending_termination_count: Arc::new(AtomicUsize::new(1)),
                 _marker: PhantomData,
             };
-            let disposal = CallbackDisposal::new(move || subscriptions.lock_mut(Vec::clear));
+            let disposal = CallbackDisposal::new(move || subscriptions.lock().unwrap().clear());
             self.source.subscribe(observer) + disposal
         })
     }
@@ -92,7 +89,7 @@ where
         self.pending_termination_count
             .fetch_add(1, Ordering::SeqCst);
         let sub = value.subscribe(observer);
-        self.subscriptions.lock_mut(|v| v.push(sub)); // TODO: self.subscriptions never reduce. 
+        self.subscriptions.lock().unwrap().push(sub); // TODO: self.subscriptions never reduce.
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -101,13 +98,13 @@ where
                 self.pending_termination_count
                     .fetch_sub(1, Ordering::SeqCst);
                 if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
-                    if let Some(observer) = self.observer.lock_mut(Option::take) {
+                    if let Some(observer) = { self.observer.lock().unwrap().take() } {
                         observer.on_termination(termination);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.lock_mut(Option::take) {
+                if let Some(observer) = { self.observer.lock().unwrap().take() } {
                     observer.on_termination(termination);
                 }
             }
@@ -125,11 +122,9 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.observer.lock_mut(|v| {
-            if let Some(observer) = v {
-                observer.on_next(value);
-            }
-        })
+        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+            observer.on_next(value);
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -138,13 +133,13 @@ where
                 self.pending_termination_count
                     .fetch_sub(1, Ordering::SeqCst);
                 if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
-                    if let Some(observer) = self.observer.lock_mut(Option::take) {
+                    if let Some(observer) = { self.observer.lock().unwrap().take() } {
                         observer.on_termination(termination);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.lock_mut(Option::take) {
+                if let Some(observer) = { self.observer.lock().unwrap().take() } {
                     observer.on_termination(termination);
                 }
             }

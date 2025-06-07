@@ -2,12 +2,10 @@ use super::Subject;
 use crate::{
     observable::Observable,
     observer::{
-        Observer, Termination,
-        boxed_observer::BoxedObserver,
-        observer_collection::{Key, ObserverCollection, ObserverCollectionAgent},
+        Observer, Termination, boxed_observer::BoxedObserver,
+        observer_collection::ObserverCollection,
     },
     subscription::Subscription,
-    utils::instant_lock::{InstantMutLock, InstantRefLock},
 };
 use educe::Educe;
 use std::sync::{Arc, Mutex};
@@ -32,10 +30,10 @@ impl<T, E> PublishSubject<'_, T, E> {
     where
         E: Clone,
     {
-        self.0.lock_ref(|v| match v {
+        match &*self.0.lock().unwrap() {
             State::Processing(_) => None,
             State::Terminated(termination) => Some(termination.clone()),
-        })
+        }
     }
 }
 
@@ -52,40 +50,29 @@ where
     'or: 'sub,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        enum Case<E, OR> {
-            Proceed(Key),
-            Terminated(Termination<E>, OR),
-        }
-        let case = self.0.lock_mut(|state| match state {
+        let mut lock = self.0.lock().unwrap();
+        match &mut *lock {
             State::Processing(observer_collection) => {
-                Case::Proceed(observer_collection.insert(BoxedObserver::new(observer)))
-            }
-            State::Terminated(termination) => Case::Terminated(termination.clone(), observer),
-        });
-        match case {
-            Case::Proceed(key) => {
+                let key = observer_collection.insert(BoxedObserver::new(observer));
+                drop(lock);
                 let this = self.clone();
                 Subscription::new_with_disposal_callback(move || {
-                    this.0.lock_mut(|v| match v {
+                    match &mut *this.0.lock().unwrap() {
                         State::Processing(observer_collection) => {
                             observer_collection.remove(key);
                         }
                         State::Terminated(_) => {}
-                    });
+                    };
                 })
             }
-            Case::Terminated(termination, observer) => {
+            State::Terminated(termination) => {
+                let termination = termination.clone();
+                drop(lock);
                 observer.on_termination(termination);
                 Subscription::new_none_disposal()
             }
         }
     }
-}
-
-enum AgentState<OR> {
-    Normal(ObserverCollectionAgent<OR>),
-    Borrowed,
-    Terminated,
 }
 
 impl<T, E> Observer<T, E> for PublishSubject<'_, T, E>
@@ -94,61 +81,51 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        let agent_state = self.0.lock_mut(|v| match v {
+        let mut lock = self.0.lock().unwrap();
+        match &mut *lock {
             State::Processing(observer_collection) => {
-                if let Some(observer_collection) = observer_collection.borrow_agent() {
-                    AgentState::Normal(observer_collection)
+                if let Some(mut observer_collection_agent) = observer_collection.borrow_agent() {
+                    drop(lock);
+                    observer_collection_agent.on_next(value);
+                    let mut lock = self.0.lock().unwrap();
+                    match &mut *lock {
+                        State::Processing(observer_collection) => {
+                            observer_collection.return_agent(observer_collection_agent)
+                        }
+                        State::Terminated(termination) => {
+                            let termination = termination.clone();
+                            drop(lock);
+                            observer_collection_agent.on_termination(termination);
+                        }
+                    };
                 } else {
-                    AgentState::Borrowed
+                    panic!("No support for regression calls on_next");
                 }
             }
-            State::Terminated(_) => AgentState::Terminated,
-        });
-
-        match agent_state {
-            AgentState::Normal(mut observer_collection_agent) => {
-                observer_collection_agent.on_next(value);
-                self.0.lock_mut(|v| match v {
-                    State::Processing(observer_collection) => {
-                        observer_collection.return_agent(observer_collection_agent)
-                    }
-                    State::Terminated(termination) => {
-                        observer_collection_agent.on_termination(termination.clone());
-                    }
-                });
-            }
-            AgentState::Borrowed => {
-                panic!("No support for regression calls on_next");
-            }
-            AgentState::Terminated => {}
+            State::Terminated(_) => {}
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let agent_state = self.0.lock_mut(|state| match state {
+        let mut lock = self.0.lock().unwrap();
+        match &mut *lock {
             State::Processing(observer_collection) => {
-                if let Some(observer_collection) = observer_collection.borrow_agent() {
-                    AgentState::Normal(observer_collection)
+                if let Some(observer_collection_agent) = observer_collection.borrow_agent() {
+                    drop(lock);
+                    _ = std::mem::replace(
+                        &mut *self.0.lock().unwrap(),
+                        State::Terminated(termination.clone()),
+                    );
+                    observer_collection_agent.on_termination(termination);
                 } else {
-                    AgentState::Borrowed
+                    drop(lock);
+                    _ = std::mem::replace(
+                        &mut *self.0.lock().unwrap(),
+                        State::Terminated(termination.clone()),
+                    );
                 }
             }
-            State::Terminated(_) => AgentState::Terminated,
-        });
-
-        match agent_state {
-            AgentState::Normal(observer_collection_agent) => {
-                self.0.lock_mut(|state| {
-                    _ = std::mem::replace(state, State::Terminated(termination.clone()))
-                });
-                observer_collection_agent.on_termination(termination);
-            }
-            AgentState::Borrowed => {
-                self.0.lock_mut(|state| {
-                    _ = std::mem::replace(state, State::Terminated(termination.clone()))
-                });
-            }
-            AgentState::Terminated => {}
+            State::Terminated(_) => {}
         }
     }
 }

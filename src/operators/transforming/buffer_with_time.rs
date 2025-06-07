@@ -3,7 +3,6 @@ use crate::{
     observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::Subscription,
-    utils::instant_lock::InstantMutLock,
 };
 use educe::Educe;
 use std::{
@@ -45,15 +44,13 @@ where
         let observer_cloned = observer.clone();
         let disposal = self.scheduler.schedule_period(
             move |_| {
-                observer_cloned.observer.lock_mut(|v| {
-                    if let Some(observer) = v {
-                        let values = observer_cloned.values.lock_mut(std::mem::take);
-                        observer.on_next(values);
-                        false
-                    } else {
-                        true
-                    }
-                })
+                if let Some(observer) = observer_cloned.observer.lock().unwrap().as_mut() {
+                    let values = std::mem::take(&mut *observer_cloned.values.lock().unwrap());
+                    observer.on_next(values);
+                    false
+                } else {
+                    true
+                }
             },
             self.time_pan,
             self.delay,
@@ -74,14 +71,14 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.values.lock_mut(|v| v.push(value));
+        self.values.lock().unwrap().push(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = self.observer.lock_mut(Option::take) {
+        if let Some(mut observer) = { self.observer.lock().unwrap().take() } {
             match termination {
                 Termination::Completed => {
-                    let values = self.values.lock_mut(std::mem::take);
+                    let values = std::mem::take(&mut *self.values.lock().unwrap());
                     if !values.is_empty() {
                         observer.on_next(values);
                     }

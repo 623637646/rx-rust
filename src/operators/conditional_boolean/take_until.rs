@@ -2,10 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::{
-        instant_lock::InstantMutLock, marker::MarkerType,
-        unsub_after_termination::subscribe_unsub_after_termination,
-    },
+    utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
 use std::{
@@ -64,15 +61,13 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.0.lock_mut(|v| {
-            if let Some(observer) = v {
-                observer.on_next(value);
-            }
-        })
+        if let Some(observer) = self.0.lock().unwrap().as_mut() {
+            observer.on_next(value);
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = self.0.lock_mut(Option::take) {
+        if let Some(observer) = { self.0.lock().unwrap().take() } {
             observer.on_termination(termination);
         }
     }
@@ -88,7 +83,7 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, _: T2) {
-        if let Some(observer) = self.observer.lock_mut(Option::take) {
+        if let Some(observer) = { self.observer.lock().unwrap().take() } {
             observer.on_termination(Termination::Completed);
         }
     }
@@ -97,7 +92,7 @@ where
         match termination {
             Termination::Completed => {}
             Termination::Error(error) => {
-                if let Some(observer) = self.observer.lock_mut(Option::take) {
+                if let Some(observer) = { self.observer.lock().unwrap().take() } {
                     observer.on_termination(Termination::Error(error));
                 }
             }

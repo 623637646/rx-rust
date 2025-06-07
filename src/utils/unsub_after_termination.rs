@@ -1,7 +1,6 @@
 use crate::{
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::instant_lock::InstantMutLock,
 };
 use std::sync::{Arc, Mutex};
 
@@ -18,9 +17,9 @@ where
         subscription: subscription.clone(),
     };
     let sub = builder(observer);
-    subscription.lock_mut(|subscription| *subscription = Some(sub));
+    *subscription.lock().unwrap() = Some(sub);
     Subscription::new_with_disposal_callback(move || {
-        if let Some(sub) = subscription.lock_mut(Option::take) {
+        if let Some(sub) = { subscription.lock().unwrap().take() } {
             sub.unsubscribe();
         }
     })
@@ -41,7 +40,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
-        if let Some(sub) = self.subscription.lock_mut(Option::take) {
+        if let Some(sub) = { self.subscription.lock().unwrap().take() } {
             sub.unsubscribe()
         }
     }
