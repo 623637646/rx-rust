@@ -22,13 +22,6 @@ impl<T, E> BehaviorSubject<'_, T, E> {
         }
     }
 
-    pub fn terminated(&self) -> Option<Termination<E>>
-    where
-        E: Clone,
-    {
-        self.publish_subject.terminated()
-    }
-
     pub fn value(&self) -> T
     where
         T: Clone,
@@ -57,7 +50,7 @@ where
 impl<T, E> Observer<T, E> for BehaviorSubject<'_, T, E>
 where
     T: Clone,
-    E: Clone,
+    E: Clone + Send,
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
@@ -77,4 +70,10 @@ where
     E: Clone + Send + 'sub,
     'or: 'sub,
 {
+    fn terminated(&self) -> Option<Termination<E>>
+    where
+        E: Clone,
+    {
+        self.publish_subject.terminated()
+    }
 }

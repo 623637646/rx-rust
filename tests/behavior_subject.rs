@@ -3,6 +3,7 @@ mod tests_utils;
 use rx_rust::observable::Observable;
 use rx_rust::observable::observable_ext::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
+use rx_rust::subject::Subject;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::subscription::Subscription;
 use std::convert::Infallible;

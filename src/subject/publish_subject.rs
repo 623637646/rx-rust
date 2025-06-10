@@ -25,16 +25,6 @@ impl<T, E> PublishSubject<'_, T, E> {
             ObserverCollection::new(),
         ))))
     }
-
-    pub fn terminated(&self) -> Option<Termination<E>>
-    where
-        E: Clone,
-    {
-        match &*self.0.lock().unwrap() {
-            State::Processing(_) => None,
-            State::Terminated(termination) => Some(termination.clone()),
-        }
-    }
 }
 
 impl<T, E> Default for PublishSubject<'_, T, E> {
@@ -136,4 +126,13 @@ where
     E: Clone + Send + 'sub,
     'or: 'sub,
 {
+    fn terminated(&self) -> Option<Termination<E>>
+    where
+        E: Clone,
+    {
+        match &*self.0.lock().unwrap() {
+            State::Processing(_) => None,
+            State::Terminated(termination) => Some(termination.clone()),
+        }
+    }
 }
