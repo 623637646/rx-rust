@@ -214,6 +214,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         self.publish().ref_count()
     }
 
+    fn share_last(self) -> RefCount<'sub, Self, AsyncSubject<'or, T, E>> {
+        self.publish_last().ref_count()
+    }
+
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>
     where
         T: 'or,
