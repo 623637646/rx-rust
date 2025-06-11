@@ -24,7 +24,7 @@ use crate::{
             do_on_termination::DoOnTermination, materialize::Materialize,
         },
     },
-    subject::publish_subject::PublishSubject,
+    subject::{async_subject::AsyncSubject, publish_subject::PublishSubject},
     subscription::Subscription,
 };
 use std::{convert::Infallible, time::Duration};
@@ -195,6 +195,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
     }
 
     fn publish(self) -> ConnectableObservable<Self, PublishSubject<'or, T, E>> {
+        self.multicast()
+    }
+
+    fn publish_last(self) -> ConnectableObservable<Self, AsyncSubject<'or, T, E>> {
         self.multicast()
     }
 
