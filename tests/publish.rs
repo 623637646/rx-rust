@@ -529,7 +529,10 @@ fn test_without_convenient_api() {
         counter += 1;
         counter
     });
-    let observable = ConnectableObservable::<_, PublishSubject<'_, _, _>>::new(observable);
+    let observable = ConnectableObservable::<_, PublishSubject<'_, _, _>>::new(
+        observable,
+        PublishSubject::default(),
+    );
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 

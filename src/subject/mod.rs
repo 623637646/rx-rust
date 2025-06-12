@@ -1,6 +1,7 @@
 pub mod async_subject;
 pub mod behavior_subject;
 pub mod publish_subject;
+pub mod replay_subject;
 pub mod subject_ext;
 pub mod subject_observable;
 

@@ -6,7 +6,7 @@ use rx_rust::{
     },
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
-    subject::async_subject::AsyncSubject,
+    subject::replay_subject::ReplaySubject,
     subscription::Subscription,
 };
 use std::convert::Infallible;
@@ -25,7 +25,7 @@ fn test_completed() {
             counter += 1;
             counter
         })
-        .publish_last();
+        .replay(None);
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -50,30 +50,169 @@ fn test_completed() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     let _subscription = observable_2.subscribe(observer_2);
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [1]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_completed());
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert!(checker_2.is_completed());
+    assert!(channel_checker.is_completed());
+}
+
+#[test]
+fn test_completed_with_buffer_0() {
+    let mut counter = 0;
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .replay(Some(0));
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_initialized());
+
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_initialized());
+
+    let _subscription_2 = observable.connect();
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    let _subscription = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), []);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [2]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
     sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker_1.values(), [2]);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_completed());
     assert_eq!(checker_2.values(), [2]);
+    assert!(checker_2.is_completed());
+    assert!(channel_checker.is_completed());
+}
+
+#[test]
+fn test_completed_with_buffer_1() {
+    let mut counter = 0;
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .replay(Some(1));
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_initialized());
+
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_initialized());
+
+    let _subscription_2 = observable.connect();
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1]);
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    let _subscription = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [2]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2, 3]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [2, 3]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker_1.values(), [1, 2, 3]);
+    assert!(checker_1.is_completed());
+    assert_eq!(checker_2.values(), [2, 3]);
     assert!(checker_2.is_completed());
     assert!(channel_checker.is_completed());
 }
@@ -91,7 +230,7 @@ fn test_error() {
             counter += 1;
             counter
         })
-        .publish_last();
+        .replay(None);
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -116,30 +255,169 @@ fn test_error() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     let _subscription_2 = observable_2.subscribe(observer_2);
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [1]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_termination(Termination::Error("error"));
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_error("error"));
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert!(checker_2.is_error("error"));
+    assert!(channel_checker.is_error("error"));
+}
+
+#[test]
+fn test_error_with_buffer_0() {
+    let mut counter = 0;
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .replay(Some(0));
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_initialized());
+
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_initialized());
+
+    let _subscription_2 = observable.connect();
+    assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    let _subscription = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), []);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [2]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
     sender.on_termination(Termination::Error("error"));
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_error("error"));
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [2]);
+    assert!(checker_2.is_error("error"));
+    assert!(channel_checker.is_error("error"));
+}
+
+#[test]
+fn test_error_with_buffer_1() {
+    let mut counter = 0;
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .replay(Some(1));
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_initialized());
+
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_initialized());
+
+    let _subscription_2 = observable.connect();
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1]);
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    let _subscription = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [2]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2, 3]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [2, 3]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_termination(Termination::Error("error"));
+    assert_eq!(checker_1.values(), [1, 2, 3]);
+    assert!(checker_1.is_error("error"));
+    assert_eq!(checker_2.values(), [2, 3]);
     assert!(checker_2.is_error("error"));
     assert!(channel_checker.is_error("error"));
 }
@@ -157,7 +435,7 @@ fn test_unsubscribe() {
             counter += 1;
             counter
         })
-        .publish_last();
+        .replay(None);
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -182,51 +460,51 @@ fn test_unsubscribe() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     let subscription_2 = observable_2.subscribe(observer_2);
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [1]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     subscription_2.unsubscribe();
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_dropped());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2, 3]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_dropped());
     assert!(channel_checker.is_subscribed());
 
     subscription.unsubscribe();
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2, 3]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_dropped());
     assert!(channel_checker.is_unsubscribed());
 
     subscription_1.unsubscribe();
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2, 3]);
     assert!(checker_1.is_dropped());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_dropped());
     assert!(channel_checker.is_unsubscribed());
 }
@@ -251,7 +529,7 @@ fn test_ref() {
                 _ => panic!(),
             }
         })
-        .publish_last();
+        .replay(None);
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -276,30 +554,30 @@ fn test_ref() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.values(), [&value_1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     let _subscription_2 = observable_2.subscribe(observer_2);
-    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.values(), [&value_1]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [&value_1]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.values(), [&value_1, &value_2]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [&value_1, &value_2]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker_1.values(), [&value_2]);
+    assert_eq!(checker_1.values(), [&value_1, &value_2]);
     assert!(checker_1.is_completed());
-    assert_eq!(checker_2.values(), [&value_2]);
+    assert_eq!(checker_2.values(), [&value_1, &value_2]);
     assert!(checker_2.is_completed());
     assert!(channel_checker.is_completed());
 }
@@ -317,7 +595,7 @@ async fn test_async() {
             counter += 1;
             counter
         })
-        .publish_last();
+        .replay(None);
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -348,7 +626,7 @@ async fn test_async() {
         sender
     });
     let mut sender = handle.await.unwrap();
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
@@ -356,9 +634,9 @@ async fn test_async() {
 
     let handle = tokio::spawn(async move { observable_2.subscribe(observer_2) });
     let _subscription_2 = handle.await.unwrap();
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [1]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
@@ -367,18 +645,18 @@ async fn test_async() {
         sender
     });
     let sender = handle.await.unwrap();
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     let handle =
         tokio::spawn(async { sender.on_termination(Termination::<Infallible>::Completed) });
     handle.await.unwrap();
-    assert_eq!(checker_1.values(), [2]);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_completed());
-    assert_eq!(checker_2.values(), [2]);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_completed());
     assert!(channel_checker.is_completed());
 }
@@ -396,7 +674,7 @@ fn test_subscribe_by_different_observer() {
             counter += 1;
             counter
         })
-        .publish_last();
+        .replay(None);
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -421,7 +699,7 @@ fn test_subscribe_by_different_observer() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
@@ -429,23 +707,23 @@ fn test_subscribe_by_different_observer() {
 
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [1]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker_1.values(), [2]);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_completed());
-    assert_eq!(checker_2.values(), [2]);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_completed());
     assert!(channel_checker.is_completed());
 }
@@ -462,8 +740,8 @@ fn test_multiple_operation() {
         counter += 1;
         counter
     });
-    let co_1 = observable.publish_last();
-    let co_2 = co_1.clone().publish_last();
+    let co_1 = observable.replay(None);
+    let co_2 = co_1.clone().replay(None);
     let observable_1 = co_2.clone();
     let observable_2 = co_2.clone();
 
@@ -489,30 +767,30 @@ fn test_multiple_operation() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     let _subscription_2 = observable_2.subscribe(observer_2);
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [1]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker_1.values(), [2]);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_completed());
-    assert_eq!(checker_2.values(), [2]);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_completed());
     assert!(channel_checker.is_completed());
 }
@@ -529,9 +807,9 @@ fn test_without_convenient_api() {
         counter += 1;
         counter
     });
-    let observable = ConnectableObservable::<_, AsyncSubject<'_, _, _>>::new(
+    let observable = ConnectableObservable::<_, ReplaySubject<'_, _, _>>::new(
         observable,
-        AsyncSubject::default(),
+        ReplaySubject::new(None),
     );
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
@@ -557,30 +835,30 @@ fn test_without_convenient_api() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     let _subscription = observable_2.subscribe(observer_2);
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [1]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker_1.values(), [2]);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_completed());
-    assert_eq!(checker_2.values(), [2]);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_completed());
     assert!(channel_checker.is_completed());
 }
@@ -598,7 +876,7 @@ fn test_share_api() {
             counter += 1;
             counter
         })
-        .share_last();
+        .share_replay(None);
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -616,37 +894,44 @@ fn test_share_api() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     let _subscription_2 = observable_2.subscribe(observer_2);
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [1]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(());
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     subscription_1.unsubscribe();
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert!(checker_1.is_dropped());
+    assert_eq!(checker_2.values(), [1, 2, 3]);
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
     sender.on_termination(Termination::Completed);
-    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
-    assert_eq!(checker_2.values(), [2]);
+    assert_eq!(checker_2.values(), [1, 2, 3]);
     assert!(checker_2.is_completed());
     assert!(channel_checker.is_completed());
 }
@@ -668,7 +953,7 @@ fn test_lifetime_sub() {
                 life_marker.consume_ref();
             })
         });
-        let observable = observable.publish_last();
+        let observable = observable.replay(None);
         _subscription_1 = observable.clone().connect();
 
         let (_, observer) = Checker::<_, ()>::new();
@@ -691,7 +976,7 @@ fn test_lifetime_or() {
             life_marker = Some(observer);
             Subscription::new_none_disposal()
         });
-        let observable = observable.publish_last();
+        let observable = observable.replay(None);
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(vec![&life_marker_2]);
@@ -716,7 +1001,7 @@ fn test_lifetime_or_sub() {
         let observable = Create::new(|_: BoxedObserver<'_, &TestStruct, Infallible>| {
             Subscription::new_none_disposal()
         });
-        let observable = observable.publish_last();
+        let observable = observable.replay(None);
         _subscription = observable.subscribe(observer);
     }
 }
@@ -728,7 +1013,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let observable = observable.publish_last();
+    let observable = observable.replay(None);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -736,7 +1021,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let observable = observable.publish_last();
+    let observable = observable.replay(None);
 
     let observable = observable.buffer_with_count(1);
     let (_, observer) = Checker::new();
@@ -747,7 +1032,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let observable = observable.publish_last();
+    let observable = observable.replay(None);
 
     observable.buffer_with_count(1);
 }

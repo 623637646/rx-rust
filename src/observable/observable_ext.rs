@@ -24,7 +24,9 @@ use crate::{
             do_on_termination::DoOnTermination, materialize::Materialize,
         },
     },
-    subject::{async_subject::AsyncSubject, publish_subject::PublishSubject},
+    subject::{
+        async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
+    },
     subscription::Subscription,
 };
 use std::{convert::Infallible, time::Duration};
@@ -187,19 +189,26 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         Merge::new(self)
     }
 
-    fn multicast<S>(self) -> ConnectableObservable<Self, S>
+    fn multicast<S, F>(self, subject_maker: F) -> ConnectableObservable<Self, S>
     where
-        S: Default,
+        F: FnOnce() -> S,
     {
-        ConnectableObservable::new(self)
+        ConnectableObservable::new(self, subject_maker())
     }
 
     fn publish(self) -> ConnectableObservable<Self, PublishSubject<'or, T, E>> {
-        self.multicast()
+        self.multicast(PublishSubject::default)
     }
 
     fn publish_last(self) -> ConnectableObservable<Self, AsyncSubject<'or, T, E>> {
-        self.multicast()
+        self.multicast(AsyncSubject::default)
+    }
+
+    fn replay(
+        self,
+        buffer_size: Option<usize>,
+    ) -> ConnectableObservable<Self, ReplaySubject<'or, T, E>> {
+        self.multicast(|| ReplaySubject::new(buffer_size))
     }
 
     fn scan<T0, F>(self, initial_value: T0, callback: F) -> Scan<T0, T, Self, F>
@@ -216,6 +225,12 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn share_last(self) -> RefCount<'sub, Self, AsyncSubject<'or, T, E>> {
         self.publish_last().ref_count()
+    }
+    fn share_replay(
+        self,
+        buffer_size: Option<usize>,
+    ) -> RefCount<'sub, Self, ReplaySubject<'or, T, E>> {
+        self.replay(buffer_size).ref_count()
     }
 
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>

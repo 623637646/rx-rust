@@ -11,13 +11,10 @@ pub struct ConnectableObservable<OE, S> {
 }
 
 impl<OE, S> ConnectableObservable<OE, S> {
-    pub fn new(source: OE) -> Self
-    where
-        S: Default,
-    {
+    pub fn new(source: OE, subject: S) -> Self {
         Self {
             source: Arc::new(Mutex::new(Some(source))),
-            subject: <_>::default(),
+            subject,
         }
     }
 
