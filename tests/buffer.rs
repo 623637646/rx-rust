@@ -11,7 +11,7 @@ use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
-fn test_completed_last_empty() {
+fn test_completed_first_and_last_empty() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
@@ -69,7 +69,7 @@ fn test_completed_last_empty() {
 }
 
 #[test]
-fn test_completed_last_not_empty() {
+fn test_completed_first_and_last_not_empty() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
@@ -83,38 +83,44 @@ fn test_completed_last_not_empty() {
     assert!(channel_checker.is_subscribed());
     assert!(boundary_channel_checker.is_subscribed());
 
+    sender.on_next(0);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+    assert!(boundary_channel_checker.is_subscribed());
+
     boundary_sender.on_next(());
-    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.values(), [vec![0]]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
     assert!(boundary_channel_checker.is_subscribed());
 
     sender.on_next(111);
-    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.values(), [vec![0]]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
     assert!(boundary_channel_checker.is_subscribed());
 
     boundary_sender.on_next(());
-    assert_eq!(checker.values(), [vec![], vec![111]]);
+    assert_eq!(checker.values(), [vec![0], vec![111]]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
     assert!(boundary_channel_checker.is_subscribed());
 
     sender.on_next(222);
-    assert_eq!(checker.values(), [vec![], vec![111]]);
+    assert_eq!(checker.values(), [vec![0], vec![111]]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
     assert!(boundary_channel_checker.is_subscribed());
 
     sender.on_next(333);
-    assert_eq!(checker.values(), [vec![], vec![111]]);
+    assert_eq!(checker.values(), [vec![0], vec![111]]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
     assert!(boundary_channel_checker.is_subscribed());
 
     sender.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
+    assert_eq!(checker.values(), [vec![0], vec![111], vec![222, 333]]);
     assert!(checker.is_completed());
     assert!(channel_checker.is_completed());
     assert!(boundary_channel_checker.is_unsubscribed());
