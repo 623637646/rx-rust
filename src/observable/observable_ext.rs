@@ -7,7 +7,7 @@ use crate::{
     operators::{
         combining::{merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
-        filtering::take::Take,
+        filtering::{take::Take, take_last::TakeLast},
         mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
@@ -264,6 +264,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn take(self, count: usize) -> Take<Self> {
         Take::new(self, count)
+    }
+
+    fn take_last(self, count: usize) -> TakeLast<Self> {
+        TakeLast::new(self, count)
     }
 
     fn take_until<T2, OE2>(self, stop: OE2) -> TakeUntil<T2, Self, OE2>

@@ -1,0 +1,71 @@
+use crate::{
+    observable::Observable,
+    observer::{Observer, Termination},
+    subscription::Subscription,
+    utils::unsub_after_termination::subscribe_unsub_after_termination,
+};
+use educe::Educe;
+use std::collections::VecDeque;
+
+#[derive(Educe)]
+#[educe(Debug, Clone)]
+pub struct TakeLast<OE> {
+    source: OE,
+    count: usize,
+}
+
+impl<OE> TakeLast<OE> {
+    pub fn new(source: OE, count: usize) -> Self {
+        Self { source, count }
+    }
+}
+
+impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for TakeLast<OE>
+where
+    T: Send + 'or,
+    OE: Observable<'or, 'sub, T, E>,
+    'sub: 'or,
+{
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+        subscribe_unsub_after_termination(observer, |observer| {
+            self.source.subscribe(TakeLastObserver {
+                observer,
+                buffer: VecDeque::default(),
+                count: self.count,
+            })
+        })
+    }
+}
+
+struct TakeLastObserver<T, OR> {
+    observer: OR,
+    buffer: VecDeque<T>,
+    count: usize,
+}
+
+impl<T, E, OR> Observer<T, E> for TakeLastObserver<T, OR>
+where
+    OR: Observer<T, E>,
+{
+    fn on_next(&mut self, value: T) {
+        if self.count == 0 {
+            return;
+        }
+        self.buffer.push_back(value);
+        if self.buffer.len() > self.count {
+            self.buffer.pop_front();
+        }
+    }
+
+    fn on_termination(mut self, termination: Termination<E>) {
+        match termination {
+            Termination::Completed => {
+                for value in self.buffer.into_iter() {
+                    self.observer.on_next(value);
+                }
+            }
+            Termination::Error(_) => {}
+        }
+        self.observer.on_termination(termination);
+    }
+}
