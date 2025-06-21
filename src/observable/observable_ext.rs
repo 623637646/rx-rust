@@ -5,10 +5,10 @@ use super::{
 use crate::{
     observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
     operators::{
-        combining::concat::Concat,
-        combining::{merge::Merge, switch::Switch},
+        combining::{concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
         filtering::{take::Take, take_last::TakeLast},
+        mathematical_aggregate::reduce::Reduce,
         others::{
             hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination, map_infallible_to_error::MapInfallibleToError,
@@ -203,6 +203,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn publish_last(self) -> ConnectableObservable<Self, AsyncSubject<'or, T, E>> {
         self.multicast(AsyncSubject::default)
+    }
+
+    fn reduce<T0, F>(self, initial_value: T0, callback: F) -> Reduce<T0, T, Self, F>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        F: FnMut(T0, T) -> T0,
+    {
+        Reduce::new(self, initial_value, callback)
     }
 
     fn replay(
