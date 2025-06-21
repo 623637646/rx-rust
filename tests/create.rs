@@ -357,7 +357,7 @@ fn test_type_inference_with_subscribe() {
         Subscription::new_none_disposal()
     });
 
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
     observable.subscribe(observer);
 }
@@ -371,5 +371,5 @@ fn test_type_inference_without_subscribe() {
         Subscription::new_none_disposal()
     });
 
-    observable.buffer_with_count(1);
+    observable.filter(|_| true);
 }

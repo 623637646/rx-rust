@@ -4,16 +4,17 @@ use crate::{
     subscription::Subscription,
 };
 use educe::Educe;
+use std::num::NonZeroUsize;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BufferWithCount<OE> {
     source: OE,
-    count: usize,
+    count: NonZeroUsize,
 }
 
 impl<OE> BufferWithCount<OE> {
-    pub fn new(source: OE, count: usize) -> Self {
+    pub fn new(source: OE, count: NonZeroUsize) -> Self {
         Self { source, count }
     }
 }
@@ -36,7 +37,7 @@ where
 struct BufferWithCountObserver<T, OR> {
     observer: OR,
     values: Vec<T>,
-    count: usize,
+    count: NonZeroUsize,
 }
 
 impl<T, E, OR> Observer<T, E> for BufferWithCountObserver<T, OR>
@@ -45,7 +46,7 @@ where
 {
     fn on_next(&mut self, value: T) {
         self.values.push(value);
-        if self.values.len() >= self.count {
+        if self.values.len() >= self.count.get() {
             self.observer.on_next(std::mem::take(&mut self.values));
         }
     }

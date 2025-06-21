@@ -7,7 +7,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
-use std::convert::Infallible;
+use std::{convert::Infallible, num::NonZeroUsize};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -17,7 +17,7 @@ fn test_completed_last_empty() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(3);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -61,7 +61,7 @@ fn test_completed_last_not_empty() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(3);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -95,13 +95,41 @@ fn test_completed_last_not_empty() {
 }
 
 #[test]
+fn test_completed_count_1() {
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let observable = observable.buffer_with_count(NonZeroUsize::new(1).unwrap());
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+
+    subject.on_next(111);
+    assert_eq!(checker.values(), [vec![111]]);
+    assert!(checker.is_active());
+
+    subject.on_next(222);
+    assert_eq!(checker.values(), [vec![111], vec![222]]);
+    assert!(checker.is_active());
+
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [vec![111], vec![222]]);
+    assert!(checker.is_completed());
+}
+
+#[test]
 fn test_error_last_empty() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(3);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -143,7 +171,7 @@ fn test_error_last_not_empty() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(3);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -175,13 +203,13 @@ fn test_error_last_not_empty() {
 }
 
 #[test]
-fn test_error_one_count() {
+fn test_error_count_1() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(1).unwrap());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -208,7 +236,7 @@ fn test_unsubscribe() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(3);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -276,7 +304,7 @@ fn test_ref() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(2);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -313,7 +341,7 @@ fn test_mut_ref() {
         observer.on_termination(Termination::Error("error"));
         Subscription::new_none_disposal()
     });
-    let observable = observable.buffer_with_count(2);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
 
     let _subscription = observable.subscribe_with_callback(
         |value| {
@@ -336,7 +364,7 @@ async fn test_async() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(2);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
@@ -389,7 +417,7 @@ fn test_subscribe_by_different_observer() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(2);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -433,7 +461,9 @@ fn test_multiple_operation() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.buffer_with_count(2).buffer_with_count(2);
+    let observable = observable
+        .buffer_with_count(NonZeroUsize::new(2).unwrap())
+        .buffer_with_count(NonZeroUsize::new(2).unwrap());
 
     let _subscription = observable.clone().subscribe(observer);
     assert!(checker.values().is_empty());
@@ -485,7 +515,7 @@ fn test_without_convenient_api() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = BufferWithCount::new(observable, 3);
+    let observable = BufferWithCount::new(observable, NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -536,7 +566,9 @@ fn test_lifetime_sub() {
                 life_marker.consume_ref();
             })
         });
-        let observable = observable.buffer_with_count(2).buffer_with_count(2);
+        let observable = observable
+            .buffer_with_count(NonZeroUsize::new(2).unwrap())
+            .buffer_with_count(NonZeroUsize::new(2).unwrap());
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -558,7 +590,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::new_none_disposal()
         });
-        let observable = observable.buffer_with_count(2);
+        let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(vec![&life_marker_2]);
@@ -573,7 +605,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let observable = observable.buffer_with_count(3);
+    let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -581,9 +613,9 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.buffer_with_count(3);
+    let observable = subject.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
     observable.subscribe(observer);
 }
@@ -592,7 +624,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.buffer_with_count(3);
+    let observable = subject.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
-    observable.buffer_with_count(1);
+    observable.filter(|_| true);
 }

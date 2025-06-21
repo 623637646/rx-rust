@@ -571,7 +571,7 @@ fn test_type_inference_with_subscribe() {
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject;
 
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
     observable.subscribe(observer);
 }
@@ -582,5 +582,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject;
 
-    observable.buffer_with_count(1);
+    observable.filter(|_| true);
 }

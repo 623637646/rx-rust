@@ -150,7 +150,7 @@ async fn test_type_inference_with_subscribe() {
     let source = async { 111 };
     let observable = FromFuture::new(source, TestScheduler);
 
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
     observable.subscribe(observer);
 }
@@ -161,5 +161,5 @@ async fn test_type_inference_without_subscribe() {
     let source = async { 111 };
     let observable = FromFuture::new(source, TestScheduler);
 
-    observable.buffer_with_count(1);
+    observable.filter(|_| true);
 }

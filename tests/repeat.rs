@@ -18,6 +18,16 @@ fn test_completed() {
 }
 
 #[test]
+fn test_completed_n_0() {
+    let observable = Repeat::new(3, 0);
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), []);
+    assert!(checker.is_completed());
+}
+
+#[test]
 fn test_ref() {
     let value = 1;
     let observable = Repeat::new(&value, 4);
@@ -75,7 +85,7 @@ fn test_type_inference_with_subscribe() {
     // Custom operations
     let observable = Repeat::new(3, 4);
 
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
     observable.subscribe(observer);
 }
@@ -85,5 +95,5 @@ fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Repeat::new(3, 4);
 
-    observable.buffer_with_count(1);
+    observable.filter(|_| true);
 }

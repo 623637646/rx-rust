@@ -276,7 +276,7 @@ fn test_type_inference_with_subscribe() {
     let subject = PublishSubject::default();
     let observable = subject.map_infallible_to_value();
 
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.filter(|_| true);
     let (_, observer) = Checker::<Vec<i32>, String>::new();
     observable.subscribe(observer);
 }
@@ -287,5 +287,5 @@ fn test_type_inference_without_subscribe() {
     let subject: PublishSubject<'_, _, String> = PublishSubject::default();
     let observable = subject.map_infallible_to_value::<String>();
 
-    observable.buffer_with_count(1);
+    observable.filter(|_| true);
 }

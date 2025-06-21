@@ -9,7 +9,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
-use std::time::Duration;
+use std::{num::NonZeroUsize, time::Duration};
 use tests_utils::{checker::Checker, test_scheduler::TestScheduler, test_struct::TestStruct};
 
 #[tokio::test]
@@ -20,7 +20,7 @@ async fn test_completed_time_last_empty() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        100,
+        NonZeroUsize::new(100).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -73,7 +73,7 @@ async fn test_completed_time_last_not_empty() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        100,
+        NonZeroUsize::new(100).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -121,8 +121,12 @@ async fn test_completed_time_no_delay() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable =
-        observable.buffer_with_time_or_count(100, Duration::from_millis(100), TestScheduler, None);
+    let observable = observable.buffer_with_time_or_count(
+        NonZeroUsize::new(100).unwrap(),
+        Duration::from_millis(100),
+        TestScheduler,
+        None,
+    );
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -177,7 +181,7 @@ async fn test_completed_time_small_delay() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        100,
+        NonZeroUsize::new(100).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(30)),
@@ -236,7 +240,7 @@ async fn test_completed_count_last_empty() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        3,
+        NonZeroUsize::new(3).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(30)),
@@ -285,7 +289,7 @@ async fn test_completed_count_last_not_empty() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        3,
+        NonZeroUsize::new(3).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(30)),
@@ -330,7 +334,7 @@ async fn test_completed_time_and_count() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -489,7 +493,7 @@ async fn test_error_time_and_count() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -646,7 +650,7 @@ async fn test_unsubscribe() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -846,7 +850,7 @@ async fn test_async() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -1035,7 +1039,7 @@ async fn test_subscribe_by_different_observer() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer_with_time_or_count(
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -1237,13 +1241,13 @@ async fn test_multiple_operation() {
     let observable = subject.clone();
     let observable = observable
         .buffer_with_time_or_count(
-            2,
+            NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(90),
             TestScheduler,
             Some(Duration::from_millis(90)),
         )
         .buffer_with_time_or_count(
-            2,
+            NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
             TestScheduler,
             Some(Duration::from_millis(100)),
@@ -1379,7 +1383,7 @@ async fn test_without_convenient_api() {
     let observable = subject.clone();
     let observable = BufferWithTimeOrCount::new(
         observable,
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -1546,7 +1550,7 @@ async fn test_lifetime_sub() {
         });
 
         let observable = observable.buffer_with_time_or_count(
-            2,
+            NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
             TestScheduler,
             Some(Duration::from_millis(100)),
@@ -1565,7 +1569,7 @@ fn test_clone() {
         Subscription::new_none_disposal()
     });
     let observable = observable.buffer_with_time_or_count(
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
@@ -1578,13 +1582,13 @@ async fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject.buffer_with_time_or_count(
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
     observable.subscribe(observer);
 }
@@ -1594,11 +1598,11 @@ fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
     let observable = subject.buffer_with_time_or_count(
-        2,
+        NonZeroUsize::new(2).unwrap(),
         Duration::from_millis(100),
         TestScheduler,
         Some(Duration::from_millis(100)),
     );
 
-    observable.buffer_with_count(1);
+    observable.filter(|_| true);
 }

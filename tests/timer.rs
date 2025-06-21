@@ -142,7 +142,7 @@ async fn test_type_inference_with_subscribe() {
     // Custom operations
     let observable = Timer::new(111, Duration::from_millis(10), TestScheduler);
 
-    let observable = observable.buffer_with_count(1);
+    let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
     observable.subscribe(observer);
 
@@ -154,5 +154,5 @@ async fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
 
-    observable.buffer_with_count(1);
+    observable.filter(|_| true);
 }

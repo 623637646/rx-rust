@@ -9,6 +9,7 @@ use crate::{
 };
 use educe::Educe;
 use std::{
+    num::NonZeroUsize,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -17,7 +18,7 @@ use std::{
 #[educe(Debug, Clone)]
 pub struct BufferWithTimeOrCount<OE, S> {
     source: OE,
-    count: usize,
+    count: NonZeroUsize,
     time_pan: Duration,
     scheduler: S,
     delay: Option<Duration>,
@@ -26,7 +27,7 @@ pub struct BufferWithTimeOrCount<OE, S> {
 impl<OE, S> BufferWithTimeOrCount<OE, S> {
     pub fn new(
         source: OE,
-        count: usize,
+        count: NonZeroUsize,
         time_pan: Duration,
         scheduler: S,
         delay: Option<Duration>,
@@ -72,7 +73,7 @@ where
 struct BufferWithTimeObserver<T, OR, S> {
     observer: Arc<Mutex<Option<OR>>>,
     values: Arc<Mutex<Vec<T>>>,
-    count: usize,
+    count: NonZeroUsize,
     time_pan: Duration,
     scheduler: S,
     timer: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
@@ -121,7 +122,7 @@ where
     fn on_next(&mut self, value: T) {
         let mut values_lock = self.values.lock().unwrap();
         values_lock.push(value);
-        if values_lock.len() >= self.count {
+        if values_lock.len() >= self.count.get() {
             let mut observer_lock = self.observer.lock().unwrap();
             if let Some(observer) = &mut *observer_lock {
                 let values = std::mem::take(&mut *values_lock);

@@ -30,7 +30,7 @@ use crate::{
     },
     subscription::Subscription,
 };
-use std::{convert::Infallible, time::Duration};
+use std::{convert::Infallible, num::NonZeroUsize, time::Duration};
 
 pub trait ObservableExt<'or, 'sub, T, E>: Sized {
     fn buffer<OE2>(self, boundary: OE2) -> Buffer<Self, OE2>
@@ -41,7 +41,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         Buffer::new(self, boundary)
     }
 
-    fn buffer_with_count(self, count: usize) -> BufferWithCount<Self> {
+    fn buffer_with_count(self, count: NonZeroUsize) -> BufferWithCount<Self> {
         BufferWithCount::new(self, count)
     }
 
@@ -56,7 +56,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn buffer_with_time_or_count<S>(
         self,
-        count: usize,
+        count: NonZeroUsize,
         time_pan: Duration,
         scheduler: S,
         delay: Option<Duration>,
