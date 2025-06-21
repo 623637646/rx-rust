@@ -5,10 +5,10 @@ use super::{
 use crate::{
     observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
     operators::{
+        combining::concat::Concat,
         combining::{merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
         filtering::{take::Take, take_last::TakeLast},
-        mathematical_aggregate::concat::Concat,
         others::{
             hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination, map_infallible_to_error::MapInfallibleToError,

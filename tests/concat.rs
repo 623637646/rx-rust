@@ -4,8 +4,8 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{
+        combining::concat::Concat,
         creating::{create::Create, just::Just, throw::Throw},
-        mathematical_aggregate::concat::Concat,
     },
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
