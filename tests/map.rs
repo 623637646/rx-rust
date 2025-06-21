@@ -1,9 +1,13 @@
 mod tests_utils;
 
+use crate::tests_utils::test_channel::test_channel;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
-    operators::{creating::create::Create, transforming::map::Map},
+    operators::{
+        creating::{create::Create, just::Just},
+        transforming::map::Map,
+    },
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
@@ -12,46 +16,50 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.map(|value| value.to_string());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(111);
+    sender.on_next(111);
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::Completed);
+    sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_completed());
+    assert!(channel_checker.is_completed());
 }
 
 #[test]
 fn test_error() {
-    let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.map(|value| value.to_string());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(111);
+    sender.on_next(111);
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_error("error"));
+    assert!(channel_checker.is_error("error"));
 }
 
 #[test]
@@ -108,10 +116,9 @@ fn test_ref() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, &str>::new();
 
-    let mut subject = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.map(move |value| {
         observer_2.on_next(value);
         value_2_ref
@@ -122,18 +129,21 @@ fn test_ref() {
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(&value_1);
+    sender.on_next(&value_1);
     assert_eq!(checker_1.values(), [&value_2]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [&value_1]);
     assert!(checker_2.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::Error(&error));
+    sender.on_termination(Termination::Error(&error));
     assert_eq!(checker_1.values(), [&value_2]);
     assert!(checker_1.is_error(&error));
     assert_eq!(checker_2.values(), [&value_1]);
     assert!(checker_2.is_dropped());
+    assert!(channel_checker.is_error(&error));
 }
 
 #[test]
@@ -177,38 +187,32 @@ fn test_mut_ref() {
 
 #[tokio::test]
 async fn test_async() {
-    let subject: PublishSubject<'_, i32, _> = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.map(|value| value.to_string());
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    let mut subject_cloned = subject.clone();
     let handle = tokio::spawn(async move {
-        subject_cloned.on_next(111);
+        sender.on_next(111);
+        sender
     });
-    handle.await.unwrap();
+    let _sender = handle.await.unwrap();
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
     let handle = tokio::spawn(async { subscription.unsubscribe() });
     handle.await.unwrap();
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_dropped());
-
-    let subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_termination(Termination::Error("error"));
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), ["111".to_owned()]);
-    assert!(checker.is_dropped());
+    assert!(channel_checker.is_unsubscribed());
 }
 
 #[test]
@@ -246,11 +250,10 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_multiple_operation() {
-    let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable
         .map(|value| value.to_string())
         .map(|value| value + "?");
@@ -258,36 +261,41 @@ fn test_multiple_operation() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(111);
+    sender.on_next(111);
     assert_eq!(checker.values(), ["111?".to_owned()]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), ["111?".to_owned()]);
     assert!(checker.is_error("error"));
+    assert!(channel_checker.is_error("error"));
 }
 
 #[test]
 fn test_without_convenient_api() {
-    let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = Map::new(observable, |value| value.to_string());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_next(111);
+    sender.on_next(111);
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-    subject.on_termination(Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), ["111".to_owned()]);
     assert!(checker.is_error("error"));
+    assert!(channel_checker.is_error("error"));
 }
 
 #[test]
@@ -343,11 +351,8 @@ fn test_lifetime_or() {
 fn test_fn() {
     let mut s = TestStruct;
 
-    let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
-
     // Custom operations
-    let observable = subject.clone();
-    let observable = observable.map(|value| {
+    let observable = Just::new(1).map(|value| {
         s.consume_mut();
         value.to_string()
     });
@@ -369,8 +374,7 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.map(|value| value.to_string());
+    let observable = Just::new(1).map(|value| value.to_string());
 
     let observable = observable.buffer_with_count(1);
     let (_, observer) = Checker::new();
@@ -380,8 +384,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.map(|value| value.to_string());
+    let observable = Just::new(1).map(|value| value.to_string());
 
     observable.buffer_with_count(1);
 }
