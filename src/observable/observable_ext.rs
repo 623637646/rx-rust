@@ -7,7 +7,7 @@ use crate::{
     operators::{
         combining::{concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
-        filtering::{take::Take, take_last::TakeLast},
+        filtering::{filter::Filter, take::Take, take_last::TakeLast},
         mathematical_aggregate::reduce::Reduce,
         others::{
             hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
@@ -103,6 +103,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         F: FnOnce(&Termination<E>),
     {
         DoOnTermination::new(self, callback)
+    }
+
+    fn filter<F>(self, callback: F) -> Filter<Self, F>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        F: FnMut(&T) -> bool,
+    {
+        Filter::new(self, callback)
     }
 
     fn flat_map<T1, OE2, F>(self, callback: F) -> FlatMap<T, Self, OE2, F>
