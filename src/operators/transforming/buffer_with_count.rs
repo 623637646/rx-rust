@@ -57,11 +57,9 @@ where
                 if !self.values.is_empty() {
                     self.observer.on_next(std::mem::take(&mut self.values));
                 }
-                self.observer.on_termination(Termination::Completed);
             }
-            Termination::Error(error) => {
-                self.observer.on_termination(Termination::Error(error));
-            }
+            Termination::Error(_) => {}
         }
+        self.observer.on_termination(termination);
     }
 }

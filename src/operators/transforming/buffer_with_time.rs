@@ -82,12 +82,10 @@ where
                     if !values.is_empty() {
                         observer.on_next(values);
                     }
-                    observer.on_termination(Termination::Completed);
                 }
-                Termination::Error(error) => {
-                    observer.on_termination(Termination::Error(error));
-                }
+                Termination::Error(_) => {}
             }
+            observer.on_termination(termination);
         }
     }
 }
