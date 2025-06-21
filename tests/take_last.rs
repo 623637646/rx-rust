@@ -271,7 +271,7 @@ fn test_mut_ref() {
     sender.on_next(&mut value_3);
     assert!(channel_checker.is_subscribed());
 
-    sender.on_termination(Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::Completed);
     assert!(channel_checker.is_completed());
 
     drop(channel_checker);
