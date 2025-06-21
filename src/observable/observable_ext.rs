@@ -18,7 +18,7 @@ use crate::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
             buffer_with_time_or_count::BufferWithTimeOrCount, concat_map::ConcatMap,
             flat_map::FlatMap, group_by::GroupBy, map::Map, scan::Scan, switch_map::SwitchMap,
-            window::Window,
+            window::Window, window_with_count::WindowWithCount,
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_on_next::DoOnNext,
@@ -300,6 +300,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         OE2: Observable<'or, 'sub, (), E>,
     {
         Window::new(self, boundary)
+    }
+
+    fn window_with_count(self, count: NonZeroUsize) -> WindowWithCount<Self> {
+        WindowWithCount::new(self, count)
     }
 }
 

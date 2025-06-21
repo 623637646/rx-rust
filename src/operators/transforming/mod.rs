@@ -9,3 +9,4 @@ pub mod map;
 pub mod scan;
 pub mod switch_map;
 pub mod window;
+pub mod window_with_count;
