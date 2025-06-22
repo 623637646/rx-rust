@@ -47,21 +47,21 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn buffer_with_time<S>(
         self,
-        time_pan: Duration,
+        time_span: Duration,
         scheduler: S,
         delay: Option<Duration>,
     ) -> BufferWithTime<Self, S> {
-        BufferWithTime::new(self, time_pan, scheduler, delay)
+        BufferWithTime::new(self, time_span, scheduler, delay)
     }
 
     fn buffer_with_time_or_count<S>(
         self,
         count: NonZeroUsize,
-        time_pan: Duration,
+        time_span: Duration,
         scheduler: S,
         delay: Option<Duration>,
     ) -> BufferWithTimeOrCount<Self, S> {
-        BufferWithTimeOrCount::new(self, count, time_pan, scheduler, delay)
+        BufferWithTimeOrCount::new(self, count, time_span, scheduler, delay)
     }
 
     fn concat<T1>(self) -> Concat<Self, T>

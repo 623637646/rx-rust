@@ -14,16 +14,16 @@ use std::{
 #[educe(Debug, Clone)]
 pub struct BufferWithTime<OE, S> {
     source: OE,
-    time_pan: Duration,
+    time_span: Duration,
     scheduler: S,
     delay: Option<Duration>,
 }
 
 impl<OE, S> BufferWithTime<OE, S> {
-    pub fn new(source: OE, time_pan: Duration, scheduler: S, delay: Option<Duration>) -> Self {
+    pub fn new(source: OE, time_span: Duration, scheduler: S, delay: Option<Duration>) -> Self {
         Self {
             source,
-            time_pan,
+            time_span,
             scheduler,
             delay,
         }
@@ -52,7 +52,7 @@ where
                     true
                 }
             },
-            self.time_pan,
+            self.time_span,
             self.delay,
         );
         self.source.subscribe(observer) + disposal

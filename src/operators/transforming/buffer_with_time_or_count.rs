@@ -19,7 +19,7 @@ use std::{
 pub struct BufferWithTimeOrCount<OE, S> {
     source: OE,
     count: NonZeroUsize,
-    time_pan: Duration,
+    time_span: Duration,
     scheduler: S,
     delay: Option<Duration>,
 }
@@ -28,14 +28,14 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
     pub fn new(
         source: OE,
         count: NonZeroUsize,
-        time_pan: Duration,
+        time_span: Duration,
         scheduler: S,
         delay: Option<Duration>,
     ) -> Self {
         Self {
             source,
             count,
-            time_pan,
+            time_span,
             scheduler,
             delay,
         }
@@ -53,7 +53,7 @@ where
             observer: Arc::new(Mutex::new(Some(observer))),
             values: Arc::new(Mutex::new(Vec::default())),
             count: self.count,
-            time_pan: self.time_pan,
+            time_span: self.time_span,
             scheduler: self.scheduler,
             timer: Arc::new(Mutex::new(None)),
         };
@@ -74,7 +74,7 @@ struct BufferWithTimeObserver<T, OR, S> {
     observer: Arc<Mutex<Option<OR>>>,
     values: Arc<Mutex<Vec<T>>>,
     count: NonZeroUsize,
-    time_pan: Duration,
+    time_span: Duration,
     scheduler: S,
     timer: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
 }
@@ -97,7 +97,7 @@ impl<T, OR, S> BufferWithTimeObserver<T, OR, S> {
                     let values = std::mem::take(&mut *self_cloned.values.lock().unwrap());
                     observer.on_next(values);
                     drop(lock);
-                    self_cloned.setup_emit_timer(Some(self_cloned.time_pan));
+                    self_cloned.setup_emit_timer(Some(self_cloned.time_span));
                 }
             },
             delay,
@@ -129,7 +129,7 @@ where
                 drop(values_lock);
                 observer.on_next(values);
                 drop(observer_lock);
-                self.setup_emit_timer(Some(self.time_pan));
+                self.setup_emit_timer(Some(self.time_span));
             }
         }
     }
