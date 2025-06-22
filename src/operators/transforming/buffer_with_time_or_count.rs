@@ -50,16 +50,17 @@ where
 {
     fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'static) -> Subscription<'sub> {
         let timer = Arc::new(Mutex::new(None));
-        let observer = BufferWithTimeOrCountObserver {
-            observer: Arc::new(Mutex::new(Some(observer))),
+        let observer = Arc::new(Mutex::new(Some(observer)));
+        let buffer_observer = BufferWithTimeOrCountObserver {
+            observer: observer.clone(),
             values: Arc::new(Mutex::new(Vec::default())),
             count: self.count,
             time_span: self.time_span,
             scheduler: self.scheduler,
             timer: timer.clone(),
         };
-        observer.setup_emit_timer(self.delay);
-        self.source.subscribe(observer) + BufferWithTimeOrCountDisposal { timer }
+        buffer_observer.setup_emit_timer(self.delay);
+        self.source.subscribe(buffer_observer) + BufferWithTimeOrCountDisposal { observer, timer }
     }
 }
 
@@ -115,6 +116,10 @@ where
     S: Scheduler + Clone + Send + 'static,
 {
     fn on_next(&mut self, value: T) {
+        if self.observer.lock().unwrap().is_none() {
+            return;
+        }
+
         let mut values_lock = self.values.lock().unwrap();
         values_lock.push(value);
         if values_lock.len() >= self.count.get() {
@@ -148,14 +153,16 @@ where
     }
 }
 
-struct BufferWithTimeOrCountDisposal {
+struct BufferWithTimeOrCountDisposal<OR> {
+    observer: Arc<Mutex<Option<OR>>>,
     timer: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
 }
 
-impl Disposable for BufferWithTimeOrCountDisposal {
+impl<OR> Disposable for BufferWithTimeOrCountDisposal<OR> {
     fn dispose(self) {
         if let Some(timer) = { self.timer.lock().unwrap().take() } {
             timer.dispose();
         }
+        self.observer.lock().unwrap().take();
     }
 }
