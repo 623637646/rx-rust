@@ -2,7 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
-    subscription::{Subscription, disposable::CallbackDisposal},
+    subscription::{Subscription, disposable::Disposable},
 };
 use educe::Educe;
 use std::{
@@ -51,11 +51,7 @@ where
             delay: self.delay,
             scheduler: self.scheduler,
         };
-        let disposal = CallbackDisposal::new(move || {
-            observer.lock().unwrap().take();
-        });
-        let subscription = self.source.subscribe(delay_observer);
-        subscription + disposal
+        self.source.subscribe(delay_observer) + DelayDisposal { observer }
     }
 }
 
@@ -102,5 +98,15 @@ where
                 }
             }
         }
+    }
+}
+
+struct DelayDisposal<OR> {
+    observer: Arc<Mutex<Option<OR>>>,
+}
+
+impl<OR> Disposable for DelayDisposal<OR> {
+    fn dispose(self) {
+        self.observer.lock().unwrap().take();
     }
 }

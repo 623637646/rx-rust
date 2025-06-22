@@ -2,7 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
-    subscription::{Subscription, disposable::CallbackDisposal},
+    subscription::{Subscription, disposable::Disposable},
     utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
@@ -66,10 +66,7 @@ where
                 completed: Arc::new(AtomicBool::new(false)),
                 _marker: PhantomData,
             };
-            let disposal = CallbackDisposal::new(move || {
-                on_going_sub.lock().unwrap().take();
-            });
-            self.source.subscribe(observer) + disposal
+            self.source.subscribe(observer) + ConcatDisposal { on_going_sub }
         })
     }
 }
@@ -177,5 +174,15 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         (self.termination_callback)(termination);
+    }
+}
+
+struct ConcatDisposal<'sub> {
+    on_going_sub: Arc<Mutex<Option<Subscription<'sub>>>>,
+}
+
+impl Disposable for ConcatDisposal<'_> {
+    fn dispose(self) {
+        self.on_going_sub.lock().unwrap().take();
     }
 }

@@ -4,7 +4,7 @@ use crate::{
     scheduler::Scheduler,
     subscription::{
         Subscription,
-        disposable::{BoxedDisposal, CallbackDisposal, Disposable},
+        disposable::{BoxedDisposal, Disposable},
     },
 };
 use educe::Educe;
@@ -49,22 +49,17 @@ where
     S: Scheduler + Clone + Send + 'static,
 {
     fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'static) -> Subscription<'sub> {
+        let timer = Arc::new(Mutex::new(None));
         let observer = BufferWithTimeOrCountObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             values: Arc::new(Mutex::new(Vec::default())),
             count: self.count,
             time_span: self.time_span,
             scheduler: self.scheduler,
-            timer: Arc::new(Mutex::new(None)),
+            timer: timer.clone(),
         };
         observer.setup_emit_timer(self.delay);
-        let observer_cloned = observer.clone();
-        let disposal = CallbackDisposal::new(move || {
-            if let Some(timer) = { observer_cloned.timer.lock().unwrap().take() } {
-                timer.dispose();
-            }
-        });
-        self.source.subscribe(observer) + disposal
+        self.source.subscribe(observer) + BufferWithTimeOrCountDisposal { timer }
     }
 }
 
@@ -149,6 +144,18 @@ where
                 Termination::Error(_) => {}
             }
             observer.on_termination(termination);
+        }
+    }
+}
+
+struct BufferWithTimeOrCountDisposal {
+    timer: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
+}
+
+impl Disposable for BufferWithTimeOrCountDisposal {
+    fn dispose(self) {
+        if let Some(timer) = { self.timer.lock().unwrap().take() } {
+            timer.dispose();
         }
     }
 }

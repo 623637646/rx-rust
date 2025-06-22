@@ -2,7 +2,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
-    subscription::{Subscription, disposable::CallbackDisposal},
+    subscription::{Subscription, disposable::Disposable},
     utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
@@ -63,8 +63,7 @@ where
                 pending_termination_count: Arc::new(AtomicUsize::new(1)),
                 _marker: PhantomData,
             };
-            let disposal = CallbackDisposal::new(move || subscriptions.lock().unwrap().clear());
-            self.source.subscribe(observer) + disposal
+            self.source.subscribe(observer) + MergeDisposal { subscriptions }
         })
     }
 }
@@ -144,5 +143,15 @@ where
                 }
             }
         }
+    }
+}
+
+struct MergeDisposal<'sub> {
+    subscriptions: Arc<Mutex<Vec<Subscription<'sub>>>>,
+}
+
+impl Disposable for MergeDisposal<'_> {
+    fn dispose(self) {
+        self.subscriptions.lock().unwrap().clear();
     }
 }
