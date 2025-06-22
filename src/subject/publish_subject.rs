@@ -2,10 +2,11 @@ use super::Subject;
 use crate::{
     observable::Observable,
     observer::{
-        Observer, Termination, boxed_observer::BoxedObserver,
-        observer_collection::ObserverCollection,
+        Observer, Termination,
+        boxed_observer::BoxedObserver,
+        observer_collection::{Key, ObserverCollection},
     },
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use educe::Educe;
 use std::sync::{Arc, Mutex};
@@ -45,15 +46,7 @@ where
             State::Processing(observer_collection) => {
                 let key = observer_collection.insert(BoxedObserver::new(observer));
                 drop(lock);
-                let this = self.clone();
-                Subscription::new_with_disposal_callback(move || {
-                    match &mut *this.0.lock().unwrap() {
-                        State::Processing(observer_collection) => {
-                            observer_collection.remove(key);
-                        }
-                        State::Terminated(_) => {}
-                    };
-                })
+                Subscription::new_with_disposal(PublishSubjectDisposal { state: self.0, key })
             }
             State::Terminated(termination) => {
                 let termination = termination.clone();
@@ -134,5 +127,21 @@ where
             State::Processing(_) => None,
             State::Terminated(termination) => Some(termination.clone()),
         }
+    }
+}
+
+struct PublishSubjectDisposal<'or, T, E> {
+    state: Arc<Mutex<State<'or, T, E>>>,
+    key: Key,
+}
+
+impl<T, E> Disposable for PublishSubjectDisposal<'_, T, E> {
+    fn dispose(self) {
+        match &mut *self.state.lock().unwrap() {
+            State::Processing(observer_collection) => {
+                observer_collection.remove(self.key);
+            }
+            State::Terminated(_) => {}
+        };
     }
 }
