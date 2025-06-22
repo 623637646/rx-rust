@@ -49,7 +49,7 @@ async fn test_unsubscribe() {
 
     subscription_1.unsubscribe();
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_dropped());
+    assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
     assert!(checker_3.values().is_empty());
@@ -67,7 +67,7 @@ async fn test_unsubscribe() {
     assert!(checker_1.values().is_empty());
     assert!(checker_1.is_dropped());
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_dropped());
+    assert!(checker_2.is_active());
     assert!(checker_3.values().is_empty());
     assert!(checker_3.is_active());
 

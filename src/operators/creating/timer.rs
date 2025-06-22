@@ -1,7 +1,6 @@
-use super::just::Just;
 use crate::{
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
+    observable::Observable,
+    observer::{Observer, Termination},
     scheduler::Scheduler,
     subscription::Subscription,
 };
@@ -29,14 +28,19 @@ impl<T, S> Timer<T, S> {
 impl<'sub, T, S> Observable<'static, 'sub, T, Infallible> for Timer<T, S>
 where
     T: Send + 'static,
-    S: Scheduler + Send,
+    S: Scheduler,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, Infallible> + Send + 'static,
+        mut observer: impl Observer<T, Infallible> + Send + 'static,
     ) -> Subscription<'sub> {
-        Just::new(self.value)
-            .delay(self.delay, self.scheduler)
-            .subscribe(observer)
+        let disposal = self.scheduler.schedule(
+            || {
+                observer.on_next(self.value);
+                observer.on_termination(Termination::Completed);
+            },
+            Some(self.delay),
+        );
+        Subscription::new_with_disposal(disposal)
     }
 }
