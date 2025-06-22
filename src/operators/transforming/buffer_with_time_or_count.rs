@@ -49,7 +49,7 @@ where
     S: Scheduler + Clone + Send + 'static,
 {
     fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'static) -> Subscription<'sub> {
-        let observer = BufferWithTimeObserver {
+        let observer = BufferWithTimeOrCountObserver {
             observer: Arc::new(Mutex::new(Some(observer))),
             values: Arc::new(Mutex::new(Vec::default())),
             count: self.count,
@@ -70,7 +70,7 @@ where
 
 #[derive(Educe)]
 #[educe(Clone)]
-struct BufferWithTimeObserver<T, OR, S> {
+struct BufferWithTimeOrCountObserver<T, OR, S> {
     observer: Arc<Mutex<Option<OR>>>,
     values: Arc<Mutex<Vec<T>>>,
     count: NonZeroUsize,
@@ -79,7 +79,7 @@ struct BufferWithTimeObserver<T, OR, S> {
     timer: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
 }
 
-impl<T, OR, S> BufferWithTimeObserver<T, OR, S> {
+impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
     fn setup_emit_timer<E>(&self, delay: Option<Duration>)
     where
         T: Send + 'static,
@@ -113,7 +113,7 @@ impl<T, OR, S> BufferWithTimeObserver<T, OR, S> {
     }
 }
 
-impl<T, E, OR, S> Observer<T, E> for BufferWithTimeObserver<T, OR, S>
+impl<T, E, OR, S> Observer<T, E> for BufferWithTimeOrCountObserver<T, OR, S>
 where
     T: Send + 'static,
     OR: Observer<Vec<T>, E> + Send + 'static,
