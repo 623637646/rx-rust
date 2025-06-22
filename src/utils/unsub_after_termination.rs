@@ -1,6 +1,6 @@
 use crate::{
     observer::{Observer, Termination},
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use std::sync::{Arc, Mutex};
 
@@ -18,11 +18,7 @@ where
     };
     let sub = builder(observer);
     *subscription.lock().unwrap() = Some(sub);
-    Subscription::new_with_disposal_callback(move || {
-        if let Some(sub) = { subscription.lock().unwrap().take() } {
-            sub.unsubscribe();
-        }
-    })
+    Subscription::new_with_disposal(UnsubAfterTerminationDisposal { subscription })
 }
 
 pub struct UnsubAfterTerminationObserver<'sub, OR> {
@@ -42,6 +38,18 @@ where
         self.observer.on_termination(termination);
         if let Some(sub) = { self.subscription.lock().unwrap().take() } {
             sub.unsubscribe()
+        }
+    }
+}
+
+struct UnsubAfterTerminationDisposal<'sub> {
+    subscription: Arc<Mutex<Option<Subscription<'sub>>>>,
+}
+
+impl Disposable for UnsubAfterTerminationDisposal<'_> {
+    fn dispose(self) {
+        if let Some(sub) = { self.subscription.lock().unwrap().take() } {
+            sub.unsubscribe();
         }
     }
 }
