@@ -32,12 +32,12 @@ async fn test_completed() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
@@ -48,12 +48,12 @@ async fn test_completed() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
@@ -64,12 +64,12 @@ async fn test_completed() {
     assert!(checker.is_active());
     assert!(channel_checker.is_completed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
     assert!(channel_checker.is_completed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_completed());
     assert!(channel_checker.is_completed());
@@ -92,11 +92,11 @@ async fn test_completed_then_error() {
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
@@ -105,11 +105,11 @@ async fn test_completed_then_error() {
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
@@ -124,11 +124,11 @@ async fn test_completed_then_error() {
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert!(checker.is_completed());
 }
@@ -151,12 +151,12 @@ async fn test_error() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
@@ -167,12 +167,12 @@ async fn test_error() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
@@ -183,12 +183,12 @@ async fn test_error() {
     assert!(checker.is_error("error"));
     assert!(channel_checker.is_error("error"));
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_error("error"));
     assert!(channel_checker.is_error("error"));
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_error("error"));
     assert!(channel_checker.is_error("error"));
@@ -226,7 +226,7 @@ async fn test_unsubscribe() {
     assert!(checker_3.values().is_empty());
     assert!(checker_3.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
@@ -234,7 +234,7 @@ async fn test_unsubscribe() {
     assert!(checker_3.values().is_empty());
     assert!(checker_3.is_active());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [111]);
@@ -258,7 +258,7 @@ async fn test_unsubscribe() {
     assert_eq!(checker_3.values(), [111]);
     assert!(checker_3.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111]);
@@ -266,7 +266,7 @@ async fn test_unsubscribe() {
     assert_eq!(checker_3.values(), [111]);
     assert!(checker_3.is_active());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111, 222]);
@@ -282,7 +282,7 @@ async fn test_unsubscribe() {
     assert_eq!(checker_3.values(), [111, 222]);
     assert!(checker_3.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111, 222]);
@@ -298,7 +298,7 @@ async fn test_unsubscribe() {
     assert_eq!(checker_3.values(), [111, 222]);
     assert!(checker_3.is_active());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111, 222]);
@@ -338,12 +338,12 @@ async fn test_async() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [&111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
@@ -382,13 +382,13 @@ async fn test_subscribe_by_different_observer() {
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [111]);
@@ -421,12 +421,12 @@ async fn test_multiple_operation() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
@@ -436,12 +436,12 @@ async fn test_multiple_operation() {
     assert!(checker.is_active());
     assert!(channel_checker.is_completed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_completed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
     assert!(channel_checker.is_completed());
@@ -465,12 +465,12 @@ async fn test_without_convenient_api() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
@@ -481,12 +481,12 @@ async fn test_without_convenient_api() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
@@ -497,12 +497,12 @@ async fn test_without_convenient_api() {
     assert!(checker.is_error("error"));
     assert!(channel_checker.is_error("error"));
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::sleep(Duration::from_millis(90)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_error("error"));
     assert!(channel_checker.is_error("error"));
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_error("error"));
     assert!(channel_checker.is_error("error"));
@@ -533,7 +533,7 @@ async fn test_lifetime_sub() {
         _subscription = observable.subscribe(observer);
     }
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_millis(20)).await;
 }
 
 #[tokio::test]
