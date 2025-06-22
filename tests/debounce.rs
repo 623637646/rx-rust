@@ -27,6 +27,14 @@ async fn test_completed() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
+    for _ in 0..10 {
+        sender.on_next(0);
+        tokio::time::sleep(Duration::from_millis(80)).await;
+    }
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
     sender.on_next(111);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
@@ -131,6 +139,14 @@ async fn test_error() {
     let observable = observable.debounce(Duration::from_millis(100), TestScheduler);
 
     let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    for _ in 0..10 {
+        sender.on_next(0);
+        tokio::time::sleep(Duration::from_millis(80)).await;
+    }
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
