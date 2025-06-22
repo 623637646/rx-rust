@@ -119,7 +119,9 @@ impl Drop for Boom {
         // Then the tests will be passed. Only show some logs in terminal.
 
         // assert!(self.0); // Not working
-        if !self.0 {
+
+        // Only when self.0 is false and not panicking, abort.
+        if !self.0 && !std::thread::panicking() {
             std::process::abort();
         }
     }
