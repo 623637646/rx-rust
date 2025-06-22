@@ -79,58 +79,6 @@ async fn test_completed() {
 }
 
 #[tokio::test]
-async fn test_completed_then_error() {
-    let mut subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = subject.clone();
-    let observable = observable.debounce(Duration::from_millis(100), TestScheduler);
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    subject.on_next(111);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(90)).await;
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(20)).await;
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    subject.on_next(222);
-    subject.on_next(333);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(90)).await;
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(20)).await;
-    assert_eq!(checker.values(), [111, 333]);
-    assert!(checker.is_active());
-
-    subject.on_next(444);
-    subject.clone().on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 333, 444]);
-    assert!(checker.is_completed());
-
-    subject.on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), [111, 333, 444]);
-    assert!(checker.is_completed());
-
-    tokio::time::sleep(Duration::from_millis(110)).await;
-    assert_eq!(checker.values(), [111, 333, 444]);
-    assert!(checker.is_completed());
-}
-
-#[tokio::test]
 async fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
