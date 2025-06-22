@@ -7,7 +7,7 @@ use crate::{
     operators::{
         combining::{concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
-        filtering::{filter::Filter, take::Take, take_last::TakeLast},
+        filtering::{debounce::Debounce, filter::Filter, take::Take, take_last::TakeLast},
         mathematical_aggregate::reduce::Reduce,
         others::{
             hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
@@ -79,6 +79,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         F: FnMut(T) -> OE2,
     {
         ConcatMap::new(self, callback)
+    }
+
+    fn debounce<S>(self, time_span: Duration, scheduler: S) -> Debounce<Self, S> {
+        Debounce::new(self, time_span, scheduler)
     }
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
