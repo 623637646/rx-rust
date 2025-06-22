@@ -1,5 +1,8 @@
 use super::{Observable, connectable_observable::ConnectableObservable};
-use crate::{observer::Observer, subscription::Subscription};
+use crate::{
+    observer::Observer,
+    subscription::{Subscription, disposable::Disposable},
+};
 use educe::Educe;
 use std::sync::{Arc, Mutex};
 
@@ -31,40 +34,45 @@ where
     S: Observable<'or, 'sub, T, E> + Observer<T, E> + Send + 'or + Clone,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let source_cloned = self.source.clone();
-        let sub = self.source.subscribe(observer);
         let mut state_lock = self.state.lock().unwrap();
         match &mut *state_lock {
             State::Initialized => {
                 _ = std::mem::replace(
                     &mut *state_lock,
-                    State::Subscribed(1, source_cloned.connect()),
+                    State::Subscribed(1, self.source.clone().connect()),
                 );
             }
             State::Subscribed(count, _) => *count += 1,
             State::Unsubscribed => panic!("Already Unsubscribed"),
         };
+        drop(state_lock);
+        self.source.subscribe(observer) + RefCountDisposal { state: self.state }
+    }
+}
 
-        let state_cloned = self.state.clone();
-        sub + Subscription::new_with_disposal_callback(move || {
-            let mut state_lock = state_cloned.lock().unwrap();
-            match &mut *state_lock {
-                State::Initialized => unreachable!(),
-                State::Subscribed(count, _) => {
-                    *count -= 1;
-                    if *count == 0 {
-                        let state = std::mem::replace(&mut *state_lock, State::Unsubscribed);
-                        match state {
-                            State::Initialized => unreachable!(),
-                            State::Subscribed(_, subscription) => {
-                                subscription.unsubscribe();
-                            }
-                            State::Unsubscribed => unreachable!(),
+struct RefCountDisposal<'sub> {
+    state: Arc<Mutex<State<'sub>>>,
+}
+
+impl Disposable for RefCountDisposal<'_> {
+    fn dispose(self) {
+        let mut state_lock = self.state.lock().unwrap();
+        match &mut *state_lock {
+            State::Initialized => unreachable!(),
+            State::Subscribed(count, _) => {
+                *count -= 1;
+                if *count == 0 {
+                    let state = std::mem::replace(&mut *state_lock, State::Unsubscribed);
+                    match state {
+                        State::Initialized => unreachable!(),
+                        State::Subscribed(_, subscription) => {
+                            subscription.unsubscribe();
                         }
+                        State::Unsubscribed => unreachable!(),
                     }
                 }
-                State::Unsubscribed => unreachable!(),
-            };
-        })
+            }
+            State::Unsubscribed => unreachable!(),
+        };
     }
 }
