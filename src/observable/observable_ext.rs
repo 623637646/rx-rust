@@ -7,7 +7,9 @@ use crate::{
     operators::{
         combining::{concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
-        filtering::{debounce::Debounce, filter::Filter, take::Take, take_last::TakeLast},
+        filtering::{
+            debounce::Debounce, filter::Filter, take::Take, take_last::TakeLast, throttle::Throttle,
+        },
         mathematical_aggregate::reduce::Reduce,
         others::{
             hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
@@ -296,6 +298,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         OE2: Observable<'or, 'sub, T2, E>,
     {
         TakeUntil::new(self, stop)
+    }
+
+    fn throttle<S>(self, time_span: Duration, scheduler: S) -> Throttle<Self, S> {
+        Throttle::new(self, time_span, scheduler)
     }
 
     fn window<OE2>(self, boundary: OE2) -> Window<Self, OE2>
