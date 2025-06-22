@@ -122,6 +122,19 @@ async fn test_subscribe_by_different_observer() {
     assert!(checker_2.is_completed());
 }
 
+#[tokio::test]
+async fn test_undisposed_schedule() {
+    let source = stream::iter(vec![111, 222, 333]);
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = FromStream::new(source, TestScheduler);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+}
+
 #[test]
 fn test_clone() {
     let source = stream::iter(vec![111, 222, 333]);

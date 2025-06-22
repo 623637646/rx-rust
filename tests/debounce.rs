@@ -472,6 +472,25 @@ async fn test_without_convenient_api() {
 }
 
 #[tokio::test]
+async fn test_undisposed_schedule() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.debounce(Duration::from_millis(100), TestScheduler);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(111);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+}
+
+#[tokio::test]
 async fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;

@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_channel::test_channel;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -1529,6 +1530,30 @@ async fn test_without_convenient_api() {
         ]
     );
     assert!(checker.is_error("error"));
+}
+
+#[tokio::test]
+async fn test_undisposed_schedule() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.buffer_with_time_or_count(
+        NonZeroUsize::new(2).unwrap(),
+        Duration::from_millis(100),
+        TestScheduler,
+        Some(Duration::from_millis(100)),
+    );
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+
+    sender.on_next(111);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 }
 
 #[tokio::test]

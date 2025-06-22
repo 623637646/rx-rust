@@ -275,6 +275,16 @@ async fn test_subscribe_by_different_observer() {
 }
 
 #[tokio::test]
+async fn test_undisposed_schedule() {
+    let observable = Interval::new(Duration::from_millis(100), TestScheduler, None);
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+}
+
+#[tokio::test]
 async fn test_clone() {
     let observable = Interval::new(Duration::from_millis(100), TestScheduler, None);
     _ = observable.clone();

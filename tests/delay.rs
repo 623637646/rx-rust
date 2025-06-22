@@ -506,6 +506,26 @@ async fn test_without_convenient_api() {
     assert!(channel_checker.is_error("error"));
 }
 
+// TODO: Delay doesn't cancel the scheduler so far.
+// #[tokio::test]
+// async fn test_undisposed_schedule() {
+//     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+//     let (checker, observer) = Checker::new();
+
+//     // Custom operations
+//     let observable = observable.delay(Duration::from_millis(100), TestScheduler);
+
+//     let _subscription = observable.subscribe(observer);
+//     assert!(checker.values().is_empty());
+//     assert!(checker.is_active());
+//     assert!(channel_checker.is_subscribed());
+
+//     sender.on_next(111);
+//     assert!(checker.values().is_empty());
+//     assert!(checker.is_active());
+//     assert!(channel_checker.is_subscribed());
+// }
+
 #[tokio::test]
 async fn test_lifetime_sub() {
     // OK
@@ -562,33 +582,3 @@ async fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
-
-// TODO: Delay doesn't cancel the scheduler now.
-// #[tokio::test]
-// async fn test_long_delay() {
-//     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-//     let (checker, observer) = Checker::new();
-
-//     // Custom operations
-//     let observable = observable.delay(Duration::from_millis(1000), TestScheduler);
-
-//     let subscription = observable.subscribe(observer);
-//     assert!(checker.values().is_empty());
-//     assert!(checker.is_active());
-//     assert!(channel_checker.is_subscribed());
-
-//     sender.on_next(111);
-//     assert!(checker.values().is_empty());
-//     assert!(checker.is_active());
-//     assert!(channel_checker.is_subscribed());
-
-//     subscription.unsubscribe();
-//     assert!(checker.values().is_empty());
-//     assert!(checker.is_dropped());
-//     assert!(channel_checker.is_unsubscribed());
-
-//     tokio::time::sleep(Duration::from_millis(0)).await;
-//     assert!(checker.values().is_empty());
-//     assert!(checker.is_dropped());
-//     assert!(channel_checker.is_unsubscribed());
-// }
