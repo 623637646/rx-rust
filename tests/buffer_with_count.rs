@@ -49,7 +49,7 @@ fn test_completed_last_empty() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![111, 222, 333], vec![444, 555, 666]]);
     assert!(checker.is_completed());
 }
@@ -89,7 +89,7 @@ fn test_completed_last_not_empty() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![111, 222, 333], vec![444, 555]]);
     assert!(checker.is_completed());
 }
@@ -285,7 +285,7 @@ fn test_unsubscribe() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [vec![111, 222, 333]]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [vec![111, 222, 333], vec![444, 555]]);
@@ -497,7 +497,7 @@ fn test_multiple_operation() {
     assert_eq!(checker.values(), [vec![vec![111, 222], vec![333, 444]]]);
     assert!(checker.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [
@@ -543,7 +543,7 @@ fn test_without_convenient_api() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![111, 222, 333], vec![444, 555]]);
     assert!(checker.is_completed());
 }

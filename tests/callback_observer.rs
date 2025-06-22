@@ -1,5 +1,7 @@
 mod tests_utils;
 
+use std::convert::Infallible;
+
 use rx_rust::{
     observable::observable_ext::ObservableExt,
     observer::{Observer, Termination},
@@ -26,7 +28,7 @@ fn test_completed() {
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
 }

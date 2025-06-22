@@ -7,7 +7,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::Subscription,
 };
-use std::time::Duration;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_scheduler::TestScheduler, test_struct::TestStruct};
 
 #[tokio::test]
@@ -57,7 +57,7 @@ async fn test_completed_last_empty() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
     assert!(checker.is_completed());
 }
@@ -105,7 +105,7 @@ async fn test_completed_last_not_empty() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
     assert!(checker.is_completed());
 }
@@ -156,7 +156,7 @@ async fn test_completed_no_delay() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [vec![], vec![], vec![111], vec![222, 333]]
@@ -214,7 +214,7 @@ async fn test_completed_small_delay() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [vec![], vec![], vec![111], vec![222, 333]]
@@ -397,7 +397,7 @@ async fn test_unsubscribe() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [vec![], vec![111], vec![222, 333]]);
@@ -532,7 +532,7 @@ async fn test_subscribe_by_different_observer() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [vec![], vec![111], vec![222, 333]]);
     assert!(checker_1.is_completed());
     assert_eq!(checker_2.values(), [vec![], vec![111], vec![222, 333]]);
@@ -588,7 +588,7 @@ async fn test_multiple_operation() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [vec![vec![]], vec![vec![111]], vec![vec![222, 333]]]
@@ -640,7 +640,7 @@ async fn test_without_convenient_api() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
     assert!(checker.is_completed());
 }

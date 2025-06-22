@@ -15,7 +15,7 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
@@ -38,7 +38,7 @@ fn test_completed() {
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [222]);
     assert!(checker_1.is_completed());
     assert_eq!(checker_2.values(), [111]);
@@ -47,7 +47,7 @@ fn test_completed() {
 
 #[test]
 fn test_completed_no_call_original() {
-    let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
@@ -69,7 +69,7 @@ fn test_completed_no_call_original() {
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<Infallible>::Completed);
     assert!(checker_1.values().is_empty());
     assert!(checker_1.is_completed());
     assert_eq!(checker_2.values(), [111]);

@@ -28,7 +28,7 @@ fn test_completed() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
 }
@@ -228,7 +228,7 @@ fn test_without_convenient_api() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
 }

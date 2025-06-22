@@ -39,7 +39,7 @@ fn test_completed() {
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_error("error"));
     assert!(checker_2.values().is_empty());
@@ -70,7 +70,7 @@ fn test_completed_no_call_original() {
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert!(checker_2.values().is_empty());

@@ -345,7 +345,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
 
-    subject.on_next(Event::Termination(Termination::<&str>::Completed));
+    subject.on_next(Event::Termination(Termination::<Infallible>::Completed));
     assert_eq!(checker.values(), [111, 222],);
     assert!(checker.is_completed());
 }

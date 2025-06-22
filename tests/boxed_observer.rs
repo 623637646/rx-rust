@@ -1,5 +1,7 @@
 mod tests_utils;
 
+use std::convert::Infallible;
+
 use rx_rust::observer::{Observer, Termination, boxed_observer::BoxedObserver};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -8,7 +10,7 @@ fn test_completed() {
     let (checker, observer) = Checker::new();
     let mut boxed_observer = BoxedObserver::new(observer);
     boxed_observer.on_next(111);
-    boxed_observer.on_termination(Termination::<&str>::Completed);
+    boxed_observer.on_termination(Termination::<Infallible>::Completed);
 
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());

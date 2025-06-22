@@ -37,7 +37,7 @@ fn test_completed() {
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_completed());
     assert_eq!(checker_2.values(), [111]);

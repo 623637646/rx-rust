@@ -59,7 +59,7 @@ async fn test_completed() {
     assert!(channel_checker.is_subscribed());
 
     sender.on_next(444);
-    sender.on_termination(Termination::<&str>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
     assert!(channel_checker.is_completed());
@@ -114,9 +114,7 @@ async fn test_completed_then_error() {
     assert!(checker.is_active());
 
     subject.on_next(444);
-    subject
-        .clone()
-        .on_termination(Termination::<&str>::Completed);
+    subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
 
@@ -431,7 +429,7 @@ async fn test_multiple_operation() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    sender.on_termination(Termination::<&str>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
     assert!(channel_checker.is_completed());

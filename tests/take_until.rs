@@ -210,7 +210,7 @@ fn test_same_source_stop_next() {
     assert!(checker.values().is_empty());
     assert!(checker.is_completed());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<Infallible>::Completed);
     assert!(checker.values().is_empty());
     assert!(checker.is_completed());
 }

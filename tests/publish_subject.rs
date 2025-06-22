@@ -37,9 +37,7 @@ fn test_completed() {
     assert!(checker.is_active());
     assert!(subject.terminated().is_none());
 
-    subject
-        .clone()
-        .on_termination(Termination::<&str>::Completed);
+    subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
@@ -306,7 +304,7 @@ fn test_complete_on_next() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));

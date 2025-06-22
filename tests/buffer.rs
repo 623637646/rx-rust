@@ -199,7 +199,7 @@ fn test_completed_source_and_boundary_are_same() {
     assert_eq!(checker.values(), [vec![], vec![()]]);
     assert!(checker.is_active());
 
-    subject.on_termination(Termination::<&str>::Completed);
+    subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![], vec![()], vec![()]]);
     assert!(checker.is_completed());
 }
@@ -430,7 +430,7 @@ fn test_unsubscribe() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [vec![], vec![111], vec![222, 333]]);
@@ -640,7 +640,7 @@ fn test_subscribe_by_different_observer() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [vec![], vec![111], vec![222, 333]]);
     assert!(checker_1.is_completed());
     assert_eq!(checker_2.values(), [vec![], vec![111], vec![222, 333]]);
@@ -711,7 +711,7 @@ fn test_multiple_operation() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [
@@ -763,7 +763,7 @@ fn test_multiple_operation_same_boundary() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [vec![], vec![vec![]], vec![vec![111], vec![222, 333]]]
@@ -807,7 +807,7 @@ fn test_without_convenient_api() {
 
     subject
         .clone()
-        .on_termination(Termination::<&str>::Completed);
+        .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
     assert!(checker.is_completed());
 }
