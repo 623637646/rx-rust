@@ -8,7 +8,8 @@ use crate::{
         combining::{concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
         filtering::{
-            debounce::Debounce, filter::Filter, take::Take, take_last::TakeLast, throttle::Throttle,
+            debounce::Debounce, filter::Filter, sample::Sample, take::Take, take_last::TakeLast,
+            throttle::Throttle,
         },
         mathematical_aggregate::reduce::Reduce,
         others::{
@@ -232,6 +233,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         buffer_size: Option<usize>,
     ) -> ConnectableObservable<Self, ReplaySubject<'or, T, E>> {
         self.multicast(|| ReplaySubject::new(buffer_size))
+    }
+
+    fn sample<OE2>(self, sampler: OE2) -> Sample<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, (), E>,
+    {
+        Sample::new(self, sampler)
     }
 
     fn scan<T0, F>(self, initial_value: T0, callback: F) -> Scan<T0, T, Self, F>
