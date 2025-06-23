@@ -874,6 +874,44 @@ fn test_lifetime_or() {
 }
 
 #[test]
+fn test_lifetime_or_sub() {
+    // OK
+    let life_marker_sub_1 = TestStruct;
+    let life_marker_sub_2 = TestStruct;
+
+    let mut life_marker_or_1 = None;
+    let mut life_marker_or_2 = None;
+
+    // Error
+    // let mut life_marker_or_1 = None;
+    // let mut life_marker_or_2 = None;
+
+    // let life_marker_sub_1 = TestStruct;
+    // let life_marker_sub_2 = TestStruct;
+
+    {
+        let observable = Create::new(|observer: BoxedObserver<'_, &TestStruct, Infallible>| {
+            life_marker_or_1 = Some(observer);
+            Subscription::new_with_disposal_callback(|| {
+                life_marker_sub_1.consume_ref();
+            })
+        });
+
+        let boundary = Create::new(|observer: BoxedObserver<'_, (), Infallible>| {
+            life_marker_or_2 = Some(observer);
+            Subscription::new_with_disposal_callback(|| {
+                life_marker_sub_2.consume_ref();
+            })
+        });
+
+        let observable = observable.buffer(boundary);
+
+        let (_, observer) = Checker::new();
+        let _subscription = observable.subscribe(observer);
+    }
+}
+
+#[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
