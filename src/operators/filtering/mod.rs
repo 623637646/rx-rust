@@ -1,6 +1,7 @@
 pub mod debounce;
 pub mod distinct;
 pub mod distinct_until_changed;
+pub mod element_at;
 pub mod filter;
 pub mod sample;
 pub mod take;

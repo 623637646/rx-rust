@@ -1,0 +1,66 @@
+use crate::{
+    observable::Observable,
+    observer::{Observer, Termination},
+    subscription::Subscription,
+    utils::unsub_after_termination::subscribe_unsub_after_termination,
+};
+use educe::Educe;
+
+#[derive(Educe)]
+#[educe(Debug, Clone)]
+pub struct ElementAt<OE> {
+    source: OE,
+    index: usize,
+}
+
+impl<OE> ElementAt<OE> {
+    pub fn new(source: OE, index: usize) -> Self {
+        Self { source, index }
+    }
+}
+
+impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for ElementAt<OE>
+where
+    OE: Observable<'or, 'sub, T, E>,
+    'sub: 'or,
+{
+    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+        subscribe_unsub_after_termination(observer, |observer| {
+            self.source.subscribe(ElementAtObserver {
+                observer: Some(observer),
+                index: self.index,
+                current_index: 0,
+            })
+        })
+    }
+}
+
+struct ElementAtObserver<OR> {
+    observer: Option<OR>,
+    index: usize,
+    current_index: usize,
+}
+
+impl<T, E, OR> Observer<T, E> for ElementAtObserver<OR>
+where
+    OR: Observer<T, E>,
+{
+    fn on_next(&mut self, value: T) {
+        if self.observer.is_none() {
+            return;
+        }
+        if self.index == self.current_index {
+            if let Some(mut observer) = self.observer.take() {
+                observer.on_next(value);
+                observer.on_termination(Termination::Completed);
+            }
+        }
+        self.current_index += 1;
+    }
+
+    fn on_termination(mut self, termination: Termination<E>) {
+        if let Some(observer) = self.observer.take() {
+            observer.on_termination(termination);
+        }
+    }
+}
