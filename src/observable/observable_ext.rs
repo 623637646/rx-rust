@@ -9,8 +9,8 @@ use crate::{
         conditional_boolean::take_until::TakeUntil,
         filtering::{
             debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
-            element_at::ElementAt, filter::Filter, sample::Sample, take::Take, take_last::TakeLast,
-            throttle::Throttle,
+            element_at::ElementAt, filter::Filter, first::First, sample::Sample, take::Take,
+            take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::reduce::Reduce,
         others::{
@@ -158,6 +158,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         F: FnMut(&T) -> bool,
     {
         Filter::new(self, callback)
+    }
+
+    fn first(self) -> First<Self> {
+        First::new(self)
     }
 
     fn flat_map<T1, OE2, F>(self, callback: F) -> FlatMap<T, Self, OE2, F>
