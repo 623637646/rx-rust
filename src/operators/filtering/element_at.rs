@@ -29,7 +29,6 @@ where
             self.source.subscribe(ElementAtObserver {
                 observer: Some(observer),
                 index: self.index,
-                current_index: 0,
             })
         })
     }
@@ -38,7 +37,6 @@ where
 struct ElementAtObserver<OR> {
     observer: Option<OR>,
     index: usize,
-    current_index: usize,
 }
 
 impl<T, E, OR> Observer<T, E> for ElementAtObserver<OR>
@@ -49,13 +47,14 @@ where
         if self.observer.is_none() {
             return;
         }
-        if self.index == self.current_index {
+        if self.index == 0 {
             if let Some(mut observer) = self.observer.take() {
                 observer.on_next(value);
                 observer.on_termination(Termination::Completed);
             }
+        } else {
+            self.index -= 1;
         }
-        self.current_index += 1;
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
