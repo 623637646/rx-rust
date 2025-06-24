@@ -54,15 +54,12 @@ fn test_completed() {
 }
 
 #[test]
-fn test_completed_with_key_selector_and_equals() {
+fn test_completed_with_key_selector() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, &str, _>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.distinct_until_changed_with_key_selector_and_equals(
-        |value| value.len(),
-        |key_1, key_2| key_1 == key_2,
-    );
+    let observable = observable.distinct_until_changed_with_key_selector(|value| value.len());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -244,10 +241,7 @@ fn test_mut_ref() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.distinct_until_changed_with_key_selector_and_equals(
-        |value| **value,
-        |key_1, key_2| key_1 == key_2,
-    );
+    let observable = observable.distinct_until_changed_with_key_selector(|value| **value);
 
     let (mut on_next, on_termination) = observer.into_callbacks();
     let subscription = observable.subscribe_with_callback(
@@ -475,8 +469,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::new_none_disposal()
         });
-        let observable =
-            observable.distinct_until_changed_with_key_selector_and_equals(|_| (), |_, _| true);
+        let observable = observable.distinct_until_changed_with_key_selector(|_| ());
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(Some(&life_marker_2));
@@ -486,19 +479,12 @@ fn test_lifetime_or() {
 
 #[test]
 fn test_fn() {
-    let mut s1 = TestStruct;
-    let mut s2 = TestStruct;
+    let mut s = TestStruct;
 
     // Custom operations
-    let observable = Just::new(1).distinct_until_changed_with_key_selector_and_equals(
-        |_| {
-            s1.consume_mut();
-        },
-        |_, _| {
-            s2.consume_mut();
-            true
-        },
-    );
+    let observable = Just::new(1).distinct_until_changed_with_key_selector(|_| {
+        s.consume_mut();
+    });
 
     observable.subscribe_with_callback(|_| {}, |_| {});
 }
@@ -510,8 +496,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let observable =
-        observable.distinct_until_changed_with_key_selector_and_equals(|_| (), |_, _| true);
+    let observable = observable.distinct_until_changed_with_key_selector(|_| ());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 

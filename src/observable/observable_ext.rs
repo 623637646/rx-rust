@@ -8,13 +8,8 @@ use crate::{
         combining::{concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
         filtering::{
-            debounce::Debounce,
-            distinct_until_changed::{DistinctUntilChanged, DistinctUntilChangedConvenientType},
-            filter::Filter,
-            sample::Sample,
-            take::Take,
-            take_last::TakeLast,
-            throttle::Throttle,
+            debounce::Debounce, distinct_until_changed::DistinctUntilChanged, filter::Filter,
+            sample::Sample, take::Take, take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::reduce::Reduce,
         others::{
@@ -101,25 +96,23 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         Dematerialize::new(self)
     }
 
-    fn distinct_until_changed(self) -> DistinctUntilChangedConvenientType<T, Self>
+    fn distinct_until_changed(self) -> DistinctUntilChanged<Self, fn(&T) -> T>
     where
-        T: Clone + Eq,
+        T: Clone,
         Self: Observable<'or, 'sub, T, E>,
     {
-        DistinctUntilChangedConvenientType::new(self)
+        DistinctUntilChanged::new(self)
     }
 
-    fn distinct_until_changed_with_key_selector_and_equals<F1, F2, K>(
+    fn distinct_until_changed_with_key_selector<F, K>(
         self,
-        key_selector: F1,
-        equals: F2,
-    ) -> DistinctUntilChanged<Self, F1, F2>
+        key_selector: F,
+    ) -> DistinctUntilChanged<Self, F>
     where
         Self: Observable<'or, 'sub, T, E>,
-        F1: FnMut(&T) -> K,
-        F2: FnMut(&K, &K) -> bool,
+        F: FnMut(&T) -> K,
     {
-        DistinctUntilChanged::new_with_key_selector_and_equals(self, key_selector, equals)
+        DistinctUntilChanged::new_with_key_selector(self, key_selector)
     }
 
     fn do_on_next<F>(self, callback: F) -> DoOnNext<Self, F>

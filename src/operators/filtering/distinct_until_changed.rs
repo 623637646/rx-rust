@@ -7,84 +7,69 @@ use educe::Educe;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct DistinctUntilChanged<OE, F1, F2> {
+pub struct DistinctUntilChanged<OE, F> {
     source: OE,
-    key_selector: F1,
-    equals: F2,
+    key_selector: F,
 }
 
-impl<OE, F1, F2> DistinctUntilChanged<OE, F1, F2> {
-    pub fn new_with_key_selector_and_equals<'or, 'sub, T, E, K>(
-        source: OE,
-        key_selector: F1,
-        equals: F2,
-    ) -> Self
+impl<OE, F> DistinctUntilChanged<OE, F> {
+    pub fn new_with_key_selector<'or, 'sub, T, E, K>(source: OE, key_selector: F) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
-        F1: FnMut(&T) -> K,
-        F2: FnMut(&K, &K) -> bool,
+        F: FnMut(&T) -> K,
     {
         Self {
             source,
             key_selector,
-            equals,
         }
     }
 }
 
-pub type DistinctUntilChangedConvenientType<T, OE> =
-    DistinctUntilChanged<OE, fn(&T) -> T, fn(&T, &T) -> bool>;
-
-impl<T, OE> DistinctUntilChangedConvenientType<T, OE> {
+impl<T, OE> DistinctUntilChanged<OE, fn(&T) -> T> {
     pub fn new<'or, 'sub, E>(source: OE) -> Self
     where
-        T: Clone + Eq,
+        T: Clone,
         OE: Observable<'or, 'sub, T, E>,
     {
         Self {
             source,
             key_selector: |x| x.clone(),
-            equals: |x, y| x == y,
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, F1, F2, K> Observable<'or, 'sub, T, E>
-    for DistinctUntilChanged<OE, F1, F2>
+impl<'or, 'sub, T, E, OE, F, K> Observable<'or, 'sub, T, E> for DistinctUntilChanged<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F1: FnMut(&T) -> K + Send + 'or,
-    F2: FnMut(&K, &K) -> bool + Send + 'or,
-    K: Send + 'or,
+    F: FnMut(&T) -> K + Send + 'or,
+    K: Eq + Send + 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observer = DistinctUntilChangedObserver {
             observer,
             key_selector: self.key_selector,
-            equals: self.equals,
             previous_key: None,
         };
         self.source.subscribe(observer)
     }
 }
 
-struct DistinctUntilChangedObserver<OR, F1, F2, K> {
+struct DistinctUntilChangedObserver<OR, F, K> {
     observer: OR,
-    key_selector: F1,
-    equals: F2,
+    key_selector: F,
     previous_key: Option<K>,
 }
 
-impl<T, E, OR, F1, F2, K> Observer<T, E> for DistinctUntilChangedObserver<OR, F1, F2, K>
+impl<T, E, OR, F, K> Observer<T, E> for DistinctUntilChangedObserver<OR, F, K>
 where
     OR: Observer<T, E>,
-    F1: FnMut(&T) -> K,
-    F2: FnMut(&K, &K) -> bool,
+    F: FnMut(&T) -> K,
+    K: Eq,
 {
     fn on_next(&mut self, value: T) {
         let key = (self.key_selector)(&value);
         if let Some(previous_key) = self.previous_key.as_ref() {
-            if (self.equals)(previous_key, &key) {
+            if previous_key == &key {
                 return;
             }
         }
