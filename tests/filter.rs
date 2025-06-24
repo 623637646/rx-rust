@@ -16,7 +16,7 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -47,7 +47,7 @@ fn test_completed() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    sender.on_termination(Termination::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [222, 444]);
     assert!(checker.is_completed());
     assert!(channel_checker.is_completed());
