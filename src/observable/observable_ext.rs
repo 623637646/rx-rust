@@ -9,8 +9,8 @@ use crate::{
         conditional_boolean::take_until::TakeUntil,
         filtering::{
             debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
-            element_at::ElementAt, filter::Filter, first::First, sample::Sample, take::Take,
-            take_last::TakeLast, throttle::Throttle,
+            element_at::ElementAt, filter::Filter, first::First, ignore_elements::IgnoreElements,
+            sample::Sample, take::Take, take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::reduce::Reduce,
         others::{
@@ -203,6 +203,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         F: for<'a> FnOnce(Termination<E>, Box<dyn FnOnce(Termination<E>) + 'a>),
     {
         HookOnTermination::new(self, callback)
+    }
+
+    fn ignore_elements(self) -> IgnoreElements<Self> {
+        IgnoreElements::new(self)
     }
 
     fn into_boxed<'oe>(self) -> BoxedObservable<'or, 'sub, 'oe, T, E>
