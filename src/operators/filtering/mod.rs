@@ -1,4 +1,5 @@
 pub mod debounce;
+pub mod distinct;
 pub mod distinct_until_changed;
 pub mod filter;
 pub mod sample;

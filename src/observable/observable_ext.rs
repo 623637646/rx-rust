@@ -8,8 +8,8 @@ use crate::{
         combining::{concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
         filtering::{
-            debounce::Debounce, distinct_until_changed::DistinctUntilChanged, filter::Filter,
-            sample::Sample, take::Take, take_last::TakeLast, throttle::Throttle,
+            debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
+            filter::Filter, sample::Sample, take::Take, take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::reduce::Reduce,
         others::{
@@ -94,6 +94,22 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn dematerialize(self) -> Dematerialize<Self> {
         Dematerialize::new(self)
+    }
+
+    fn distinct(self) -> Distinct<Self, fn(&T) -> T>
+    where
+        T: Clone,
+        Self: Observable<'or, 'sub, T, E>,
+    {
+        Distinct::new(self)
+    }
+
+    fn distinct_with_key_selector<F, K>(self, key_selector: F) -> Distinct<Self, F>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        F: FnMut(&T) -> K,
+    {
+        Distinct::new_with_key_selector(self, key_selector)
     }
 
     fn distinct_until_changed(self) -> DistinctUntilChanged<Self, fn(&T) -> T>
