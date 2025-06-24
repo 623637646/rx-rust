@@ -8,7 +8,12 @@ use crate::{
         combining::{concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
         filtering::{
-            debounce::Debounce, filter::Filter, sample::Sample, take::Take, take_last::TakeLast,
+            debounce::Debounce,
+            distinct_until_changed::{DistinctUntilChanged, DistinctUntilChangedConvenientType},
+            filter::Filter,
+            sample::Sample,
+            take::Take,
+            take_last::TakeLast,
             throttle::Throttle,
         },
         mathematical_aggregate::reduce::Reduce,
@@ -94,6 +99,27 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn dematerialize(self) -> Dematerialize<Self> {
         Dematerialize::new(self)
+    }
+
+    fn distinct_until_changed(self) -> DistinctUntilChangedConvenientType<T, Self>
+    where
+        T: Clone + Eq,
+        Self: Observable<'or, 'sub, T, E>,
+    {
+        DistinctUntilChangedConvenientType::new(self)
+    }
+
+    fn distinct_until_changed_with_key_selector_and_equals<F1, F2, K>(
+        self,
+        key_selector: F1,
+        equals: F2,
+    ) -> DistinctUntilChanged<Self, F1, F2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        F1: FnMut(&T) -> K,
+        F2: FnMut(&K, &K) -> bool,
+    {
+        DistinctUntilChanged::new_with_key_selector_and_equals(self, key_selector, equals)
     }
 
     fn do_on_next<F>(self, callback: F) -> DoOnNext<Self, F>
