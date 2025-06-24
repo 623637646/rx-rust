@@ -10,8 +10,8 @@ use crate::{
         filtering::{
             debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
             element_at::ElementAt, filter::Filter, first::First, ignore_elements::IgnoreElements,
-            last::Last, sample::Sample, skip::Skip, take::Take, take_last::TakeLast,
-            throttle::Throttle,
+            last::Last, sample::Sample, skip::Skip, skip_last::SkipLast, take::Take,
+            take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::reduce::Reduce,
         others::{
@@ -320,6 +320,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn skip(self, count: usize) -> Skip<Self> {
         Skip::new(self, count)
+    }
+
+    fn skip_last(self, count: usize) -> SkipLast<Self> {
+        SkipLast::new(self, count)
     }
 
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>
