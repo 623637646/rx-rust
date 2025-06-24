@@ -10,7 +10,7 @@ use crate::{
         filtering::{
             debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
             element_at::ElementAt, filter::Filter, first::First, ignore_elements::IgnoreElements,
-            sample::Sample, take::Take, take_last::TakeLast, throttle::Throttle,
+            last::Last, sample::Sample, take::Take, take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::reduce::Reduce,
         others::{
@@ -223,6 +223,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         Self: Observable<'or, 'sub, T, Infallible>,
     {
         ObservableStream::new(self)
+    }
+
+    fn last(self) -> Last<Self> {
+        Last::new(self)
     }
 
     fn map<T1, F>(self, callback: F) -> Map<T, Self, F>

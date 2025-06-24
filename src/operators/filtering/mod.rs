@@ -5,6 +5,7 @@ pub mod element_at;
 pub mod filter;
 pub mod first;
 pub mod ignore_elements;
+pub mod last;
 pub mod sample;
 pub mod take;
 pub mod take_last;
