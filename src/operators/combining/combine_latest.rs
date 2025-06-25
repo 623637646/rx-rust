@@ -1,0 +1,111 @@
+use crate::{
+    observable::Observable,
+    observer::{Observer, Termination},
+    subscription::Subscription,
+    utils::unsub_after_termination::subscribe_unsub_after_termination,
+};
+use educe::Educe;
+use std::sync::{Arc, Mutex};
+
+#[derive(Educe)]
+#[educe(Debug, Clone)]
+pub struct CombineLatest<OE1, OE2> {
+    source_1: OE1,
+    source_2: OE2,
+}
+
+impl<OE1, OE2> CombineLatest<OE1, OE2> {
+    pub fn new<'or, 'sub, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
+    where
+        OE1: Observable<'or, 'sub, T1, E>,
+        OE2: Observable<'or, 'sub, T2, E>,
+    {
+        Self { source_1, source_2 }
+    }
+}
+
+impl<'or, 'sub, T1, T2, E, OE1, OE2> Observable<'or, 'sub, (T1, T2), E> for CombineLatest<OE1, OE2>
+where
+    T1: Clone + Send + 'or,
+    T2: Clone + Send + 'or,
+    OE1: Observable<'or, 'sub, T1, E>,
+    OE2: Observable<'or, 'sub, T2, E>,
+    'sub: 'or,
+{
+    fn subscribe(self, observer: impl Observer<(T1, T2), E> + Send + 'or) -> Subscription<'sub> {
+        subscribe_unsub_after_termination(observer, |observer| {
+            let observer = Arc::new(Mutex::new(Some(observer)));
+            let latest_1 = Arc::new(Mutex::new(None));
+            let latest_2 = Arc::new(Mutex::new(None));
+            let observer_1 = CombineLatestObserver1 {
+                observer: observer.clone(),
+                latest_1: latest_1.clone(),
+                latest_2: latest_2.clone(),
+            };
+            let observer_2 = CombineLatestObserver2 {
+                observer,
+                latest_1,
+                latest_2,
+            };
+            let subscription_1 = self.source_1.subscribe(observer_1);
+            let subscription_2 = self.source_2.subscribe(observer_2);
+            subscription_1 + subscription_2
+        })
+    }
+}
+
+struct CombineLatestObserver1<T1, T2, OR> {
+    observer: Arc<Mutex<Option<OR>>>,
+    latest_1: Arc<Mutex<Option<T1>>>,
+    latest_2: Arc<Mutex<Option<T2>>>,
+}
+
+impl<T1, T2, E, OR> Observer<T1, E> for CombineLatestObserver1<T1, T2, OR>
+where
+    T1: Clone,
+    T2: Clone,
+    OR: Observer<(T1, T2), E>,
+{
+    fn on_next(&mut self, latest_1: T1) {
+        *self.latest_1.lock().unwrap() = Some(latest_1.clone());
+        if let Some(latest_2) = { self.latest_2.lock().unwrap().clone() } {
+            if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+                observer.on_next((latest_1, latest_2))
+            }
+        }
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+            observer.on_termination(termination);
+        }
+    }
+}
+
+struct CombineLatestObserver2<T1, T2, OR> {
+    observer: Arc<Mutex<Option<OR>>>,
+    latest_1: Arc<Mutex<Option<T1>>>,
+    latest_2: Arc<Mutex<Option<T2>>>,
+}
+
+impl<T1, T2, E, OR> Observer<T2, E> for CombineLatestObserver2<T1, T2, OR>
+where
+    T1: Clone,
+    T2: Clone,
+    OR: Observer<(T1, T2), E>,
+{
+    fn on_next(&mut self, latest_2: T2) {
+        *self.latest_2.lock().unwrap() = Some(latest_2.clone());
+        if let Some(latest_1) = { self.latest_1.lock().unwrap().clone() } {
+            if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+                observer.on_next((latest_1, latest_2))
+            }
+        }
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+            observer.on_termination(termination);
+        }
+    }
+}

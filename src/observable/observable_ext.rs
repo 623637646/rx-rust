@@ -5,7 +5,7 @@ use super::{
 use crate::{
     observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
     operators::{
-        combining::{concat::Concat, merge::Merge, switch::Switch},
+        combining::{combine_latest::CombineLatest, concat::Concat, merge::Merge, switch::Switch},
         conditional_boolean::take_until::TakeUntil,
         filtering::{
             debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
@@ -67,6 +67,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         delay: Option<Duration>,
     ) -> BufferWithTimeOrCount<Self, S> {
         BufferWithTimeOrCount::new(self, count, time_span, scheduler, delay)
+    }
+
+    fn combine_latest<T1, OE2>(self, another_source: OE2) -> CombineLatest<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, T1, E>,
+    {
+        CombineLatest::new(self, another_source)
     }
 
     fn concat<T1>(self) -> Concat<Self, T>
