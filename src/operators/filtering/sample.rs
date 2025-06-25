@@ -9,26 +9,26 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Sample<OE, OE2> {
+pub struct Sample<OE, OE1> {
     source: OE,
-    sampler: OE2,
+    sampler: OE1,
 }
 
-impl<OE, OE2> Sample<OE, OE2> {
-    pub fn new<'or, 'sub, T, E>(source: OE, sampler: OE2) -> Self
+impl<OE, OE1> Sample<OE, OE1> {
+    pub fn new<'or, 'sub, T, E>(source: OE, sampler: OE1) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, (), E>,
+        OE1: Observable<'or, 'sub, (), E>,
     {
         Self { source, sampler }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE2> Observable<'or, 'sub, T, E> for Sample<OE, OE2>
+impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Sample<OE, OE1>
 where
     T: Send + 'or,
     OE: Observable<'or, 'sub, T, E>,
-    OE2: Observable<'or, 'sub, (), E>,
+    OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {

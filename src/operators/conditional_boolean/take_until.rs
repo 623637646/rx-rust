@@ -12,17 +12,17 @@ use std::{
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct TakeUntil<T1, OE, OE2> {
+pub struct TakeUntil<T1, OE, OE1> {
     source: OE,
-    stop: OE2,
+    stop: OE1,
     _marker: MarkerType<T1>,
 }
 
-impl<T1, OE, OE2> TakeUntil<T1, OE, OE2> {
-    pub fn new<'or, 'sub, T, E>(source: OE, stop: OE2) -> Self
+impl<T1, OE, OE1> TakeUntil<T1, OE, OE1> {
+    pub fn new<'or, 'sub, T, E>(source: OE, stop: OE1) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T1, E>,
+        OE1: Observable<'or, 'sub, T1, E>,
     {
         Self {
             source,
@@ -32,11 +32,11 @@ impl<T1, OE, OE2> TakeUntil<T1, OE, OE2> {
     }
 }
 
-impl<'or, 'sub, T, T1, E, OE, OE2> Observable<'or, 'sub, T, E> for TakeUntil<T1, OE, OE2>
+impl<'or, 'sub, T, T1, E, OE, OE1> Observable<'or, 'sub, T, E> for TakeUntil<T1, OE, OE1>
 where
     T: 'or,
     OE: Observable<'or, 'sub, T, E>,
-    OE2: Observable<'or, 'sub, T1, E>,
+    OE1: Observable<'or, 'sub, T1, E>,
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {

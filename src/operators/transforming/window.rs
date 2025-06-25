@@ -10,28 +10,28 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Window<OE, OE2> {
+pub struct Window<OE, OE1> {
     source: OE,
-    boundary: OE2,
+    boundary: OE1,
 }
 
-impl<OE, OE2> Window<OE, OE2> {
-    pub fn new<'or, 'sub, T, E>(source: OE, boundary: OE2) -> Self
+impl<OE, OE1> Window<OE, OE1> {
+    pub fn new<'or, 'sub, T, E>(source: OE, boundary: OE1) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, (), E>,
+        OE1: Observable<'or, 'sub, (), E>,
     {
         Self { source, boundary }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE2>
-    Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for Window<OE, OE2>
+impl<'or, 'sub, T, E, OE, OE1>
+    Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for Window<OE, OE1>
 where
     T: Clone + 'or,
     E: Clone + Send + 'or,
     OE: Observable<'or, 'sub, T, E>,
-    OE2: Observable<'or, 'sub, (), E>,
+    OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
     fn subscribe(

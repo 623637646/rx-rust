@@ -38,10 +38,10 @@ use crate::{
 use std::{convert::Infallible, num::NonZeroUsize, time::Duration};
 
 pub trait ObservableExt<'or, 'sub, T, E>: Sized {
-    fn buffer<OE2>(self, boundary: OE2) -> Buffer<Self, OE2>
+    fn buffer<OE1>(self, boundary: OE1) -> Buffer<Self, OE1>
     where
         Self: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, (), E>,
+        OE1: Observable<'or, 'sub, (), E>,
     {
         Buffer::new(self, boundary)
     }
@@ -77,11 +77,11 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         Concat::new(self)
     }
 
-    fn concat_map<T1, OE2, F>(self, callback: F) -> ConcatMap<T, Self, OE2, F>
+    fn concat_map<T1, OE1, F>(self, callback: F) -> ConcatMap<T, Self, OE1, F>
     where
         Self: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T1, E>,
-        F: FnMut(T) -> OE2,
+        OE1: Observable<'or, 'sub, T1, E>,
+        F: FnMut(T) -> OE1,
     {
         ConcatMap::new(self, callback)
     }
@@ -165,11 +165,11 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         First::new(self)
     }
 
-    fn flat_map<T1, OE2, F>(self, callback: F) -> FlatMap<T, Self, OE2, F>
+    fn flat_map<T1, OE1, F>(self, callback: F) -> FlatMap<T, Self, OE1, F>
     where
         Self: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T1, E>,
-        F: FnMut(T) -> OE2,
+        OE1: Observable<'or, 'sub, T1, E>,
+        F: FnMut(T) -> OE1,
     {
         FlatMap::new(self, callback)
     }
@@ -288,10 +288,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         self.multicast(|| ReplaySubject::new(buffer_size))
     }
 
-    fn sample<OE2>(self, sampler: OE2) -> Sample<Self, OE2>
+    fn sample<OE1>(self, sampler: OE1) -> Sample<Self, OE1>
     where
         Self: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, (), E>,
+        OE1: Observable<'or, 'sub, (), E>,
     {
         Sample::new(self, sampler)
     }
@@ -345,11 +345,11 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         Switch::new(self)
     }
 
-    fn switch_map<T1, OE2, F>(self, callback: F) -> SwitchMap<T, Self, OE2, F>
+    fn switch_map<T1, OE1, F>(self, callback: F) -> SwitchMap<T, Self, OE1, F>
     where
         Self: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T1, E>,
-        F: FnMut(T) -> OE2,
+        OE1: Observable<'or, 'sub, T1, E>,
+        F: FnMut(T) -> OE1,
     {
         SwitchMap::new(self, callback)
     }
@@ -362,10 +362,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         TakeLast::new(self, count)
     }
 
-    fn take_until<T1, OE2>(self, stop: OE2) -> TakeUntil<T1, Self, OE2>
+    fn take_until<T1, OE1>(self, stop: OE1) -> TakeUntil<T1, Self, OE1>
     where
         Self: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T1, E>,
+        OE1: Observable<'or, 'sub, T1, E>,
     {
         TakeUntil::new(self, stop)
     }
@@ -374,10 +374,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         Throttle::new(self, time_span, scheduler)
     }
 
-    fn window<OE2>(self, boundary: OE2) -> Window<Self, OE2>
+    fn window<OE1>(self, boundary: OE1) -> Window<Self, OE1>
     where
         Self: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, (), E>,
+        OE1: Observable<'or, 'sub, (), E>,
     {
         Window::new(self, boundary)
     }

@@ -16,16 +16,16 @@ use std::{
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Merge<OE, OE2> {
+pub struct Merge<OE, OE1> {
     source: OE,
-    _marker: MarkerType<OE2>,
+    _marker: MarkerType<OE1>,
 }
 
-impl<OE, OE2> Merge<OE, OE2> {
+impl<OE, OE1> Merge<OE, OE1> {
     pub fn new<'or, 'sub, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, OE2, E>,
-        OE2: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, 'sub, OE1, E>,
+        OE1: Observable<'or, 'sub, T, E>,
     {
         Self {
             source,
@@ -34,11 +34,11 @@ impl<OE, OE2> Merge<OE, OE2> {
     }
 }
 
-impl<OE2, I> Merge<FromIter<I>, OE2> {
+impl<OE1, I> Merge<FromIter<I>, OE1> {
     pub fn new_from_iter<'or, 'sub, T, E>(into_iterator: I) -> Self
     where
-        I: IntoIterator<Item = OE2>,
-        OE2: Observable<'or, 'sub, T, E>,
+        I: IntoIterator<Item = OE1>,
+        OE1: Observable<'or, 'sub, T, E>,
     {
         Self {
             source: FromIter::new(into_iterator),
@@ -47,11 +47,11 @@ impl<OE2, I> Merge<FromIter<I>, OE2> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE2> Observable<'or, 'sub, T, E> for Merge<OE, OE2>
+impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Merge<OE, OE1>
 where
     T: 'or,
-    OE: Observable<'or, 'sub, OE2, E>,
-    OE2: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, 'sub, OE1, E>,
+    OE1: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
@@ -75,12 +75,12 @@ struct MergeObserver<'sub, T, OR> {
     _marker: MarkerType<T>,
 }
 
-impl<'or, 'sub, T, E, OR, OE2> Observer<OE2, E> for MergeObserver<'sub, T, OR>
+impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for MergeObserver<'sub, T, OR>
 where
     OR: Observer<T, E> + Send + 'or,
-    OE2: Observable<'or, 'sub, T, E>,
+    OE1: Observable<'or, 'sub, T, E>,
 {
-    fn on_next(&mut self, value: OE2) {
+    fn on_next(&mut self, value: OE1) {
         let observer = MergeInnerObserver {
             observer: self.observer.clone(),
             pending_termination_count: self.pending_termination_count.clone(),

@@ -17,16 +17,16 @@ use std::{
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Concat<OE, OE2> {
+pub struct Concat<OE, OE1> {
     source: OE,
-    _marker: MarkerType<OE2>,
+    _marker: MarkerType<OE1>,
 }
 
-impl<OE, OE2> Concat<OE, OE2> {
+impl<OE, OE1> Concat<OE, OE1> {
     pub fn new<'or, 'sub, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, OE2, E>,
-        OE2: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, 'sub, OE1, E>,
+        OE1: Observable<'or, 'sub, T, E>,
     {
         Self {
             source,
@@ -35,11 +35,11 @@ impl<OE, OE2> Concat<OE, OE2> {
     }
 }
 
-impl<OE2, I> Concat<FromIter<I>, OE2> {
+impl<OE1, I> Concat<FromIter<I>, OE1> {
     pub fn new_from_iter<'or, 'sub, T, E>(into_iterator: I) -> Self
     where
-        I: IntoIterator<Item = OE2>,
-        OE2: Observable<'or, 'sub, T, E>,
+        I: IntoIterator<Item = OE1>,
+        OE1: Observable<'or, 'sub, T, E>,
     {
         Self {
             source: FromIter::new(into_iterator),
@@ -48,12 +48,12 @@ impl<OE2, I> Concat<FromIter<I>, OE2> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE2> Observable<'or, 'sub, T, E> for Concat<OE, OE2>
+impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Concat<OE, OE1>
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, 'sub, OE2, E>,
-    OE2: Observable<'or, 'sub, T, E> + Send + 'or,
+    OE: Observable<'or, 'sub, OE1, E>,
+    OE1: Observable<'or, 'sub, T, E> + Send + 'or,
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
@@ -73,21 +73,21 @@ where
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-struct ConcatObserver<'sub, T, OR, OE2> {
+struct ConcatObserver<'sub, T, OR, OE1> {
     observer: Arc<Mutex<Option<OR>>>,
-    pending_observables: Arc<Mutex<VecDeque<OE2>>>,
+    pending_observables: Arc<Mutex<VecDeque<OE1>>>,
     on_going_sub: Arc<Mutex<Option<Subscription<'sub>>>>,
     completed: Arc<AtomicBool>,
     _marker: MarkerType<T>,
 }
 
-impl<'or, 'sub, T, OR, OE2> ConcatObserver<'sub, T, OR, OE2> {
+impl<'or, 'sub, T, OR, OE1> ConcatObserver<'sub, T, OR, OE1> {
     fn subscribe_next<E>(&self)
     where
         T: 'or,
         E: 'or,
         OR: Observer<T, E> + Send + 'or,
-        OE2: Observable<'or, 'sub, T, E> + Send + 'or,
+        OE1: Observable<'or, 'sub, T, E> + Send + 'or,
         'sub: 'or,
     {
         if let Some(observable) = { self.pending_observables.lock().unwrap().pop_front() } {
@@ -120,15 +120,15 @@ impl<'or, 'sub, T, OR, OE2> ConcatObserver<'sub, T, OR, OE2> {
     }
 }
 
-impl<'or, 'sub, T, E, OR, OE2> Observer<OE2, E> for ConcatObserver<'sub, T, OR, OE2>
+impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for ConcatObserver<'sub, T, OR, OE1>
 where
     T: 'or,
     E: 'or,
     OR: Observer<T, E> + Send + 'or,
-    OE2: Observable<'or, 'sub, T, E> + Send + 'or,
+    OE1: Observable<'or, 'sub, T, E> + Send + 'or,
     'sub: 'or,
 {
-    fn on_next(&mut self, value: OE2) {
+    fn on_next(&mut self, value: OE1) {
         self.pending_observables.lock().unwrap().push_back(value);
         if self.on_going_sub.lock().unwrap().is_none() {
             self.subscribe_next();
