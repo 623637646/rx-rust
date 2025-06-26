@@ -17,12 +17,12 @@ use std::{
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Concat<OE, OE1> {
+pub struct ConcatAll<OE, OE1> {
     source: OE,
     _marker: MarkerType<OE1>,
 }
 
-impl<OE, OE1> Concat<OE, OE1> {
+impl<OE, OE1> ConcatAll<OE, OE1> {
     pub fn new<'or, 'sub, T, E>(source: OE) -> Self
     where
         OE: Observable<'or, 'sub, OE1, E>,
@@ -35,7 +35,7 @@ impl<OE, OE1> Concat<OE, OE1> {
     }
 }
 
-impl<OE1, I> Concat<FromIter<I>, OE1> {
+impl<OE1, I> ConcatAll<FromIter<I>, OE1> {
     pub fn new_from_iter<'or, 'sub, T, E>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
@@ -48,7 +48,7 @@ impl<OE1, I> Concat<FromIter<I>, OE1> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Concat<OE, OE1>
+impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for ConcatAll<OE, OE1>
 where
     T: 'or,
     E: 'or,
@@ -59,21 +59,21 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let on_going_sub = Arc::new(Mutex::new(None));
-            let observer = ConcatObserver {
+            let observer = ConcatAllObserver {
                 observer: Arc::new(Mutex::new(Some(observer))),
                 pending_observables: Arc::new(Mutex::new(VecDeque::new())),
                 on_going_sub: on_going_sub.clone(),
                 completed: Arc::new(AtomicBool::new(false)),
                 _marker: PhantomData,
             };
-            self.source.subscribe(observer) + ConcatDisposal { on_going_sub }
+            self.source.subscribe(observer) + ConcatAllDisposal { on_going_sub }
         })
     }
 }
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-struct ConcatObserver<'sub, T, OR, OE1> {
+struct ConcatAllObserver<'sub, T, OR, OE1> {
     observer: Arc<Mutex<Option<OR>>>,
     pending_observables: Arc<Mutex<VecDeque<OE1>>>,
     on_going_sub: Arc<Mutex<Option<Subscription<'sub>>>>,
@@ -81,7 +81,7 @@ struct ConcatObserver<'sub, T, OR, OE1> {
     _marker: MarkerType<T>,
 }
 
-impl<'or, 'sub, T, OR, OE1> ConcatObserver<'sub, T, OR, OE1> {
+impl<'or, 'sub, T, OR, OE1> ConcatAllObserver<'sub, T, OR, OE1> {
     fn subscribe_next<E>(&self)
     where
         T: 'or,
@@ -94,7 +94,7 @@ impl<'or, 'sub, T, OR, OE1> ConcatObserver<'sub, T, OR, OE1> {
             let this = self.clone();
             let terminated = Arc::new(AtomicBool::new(false));
             let terminated_cloned = terminated.clone();
-            let observer = ConcatInnerObserver {
+            let observer = ConcatAllInnerObserver {
                 observer: this.observer.clone(),
                 termination_callback: move |termination| {
                     terminated_cloned.store(true, Ordering::SeqCst);
@@ -120,7 +120,7 @@ impl<'or, 'sub, T, OR, OE1> ConcatObserver<'sub, T, OR, OE1> {
     }
 }
 
-impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for ConcatObserver<'sub, T, OR, OE1>
+impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for ConcatAllObserver<'sub, T, OR, OE1>
 where
     T: 'or,
     E: 'or,
@@ -156,12 +156,12 @@ where
     }
 }
 
-struct ConcatInnerObserver<OR, F> {
+struct ConcatAllInnerObserver<OR, F> {
     observer: Arc<Mutex<Option<OR>>>,
     termination_callback: F,
 }
 
-impl<T, E, OR, F> Observer<T, E> for ConcatInnerObserver<OR, F>
+impl<T, E, OR, F> Observer<T, E> for ConcatAllInnerObserver<OR, F>
 where
     OR: Observer<T, E>,
     F: FnOnce(Termination<E>),
@@ -177,11 +177,11 @@ where
     }
 }
 
-struct ConcatDisposal<'sub> {
+struct ConcatAllDisposal<'sub> {
     on_going_sub: Arc<Mutex<Option<Subscription<'sub>>>>,
 }
 
-impl Disposable for ConcatDisposal<'_> {
+impl Disposable for ConcatAllDisposal<'_> {
     fn dispose(self) {
         self.on_going_sub.lock().unwrap().take();
     }

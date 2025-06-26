@@ -4,7 +4,7 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{
-        combining::concat::Concat,
+        combining::concat_all::ConcatAll,
         creating::{create::Create, just::Just, throw::Throw},
     },
     subject::publish_subject::PublishSubject,
@@ -21,7 +21,7 @@ fn test_completed_inner_finish() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -95,7 +95,7 @@ fn test_completed_outer_finish() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -169,7 +169,7 @@ fn test_completed_inner_completed_fast() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -235,7 +235,7 @@ fn test_completed_outer_completed_fast() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -280,7 +280,7 @@ fn test_completed_empty() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -300,7 +300,7 @@ fn test_completed_same_inner() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -350,7 +350,7 @@ fn test_completed_new_from_iter() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = Concat::new_from_iter([observable_1, observable_2]);
+    let observable = ConcatAll::new_from_iter([observable_1, observable_2]);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -397,7 +397,7 @@ fn test_error_inner_finish() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -471,7 +471,7 @@ fn test_error_outer_finish() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -543,7 +543,7 @@ fn test_error_empty() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -563,7 +563,7 @@ fn test_error_same_inner() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -614,7 +614,7 @@ fn test_unsubscribe() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -662,7 +662,7 @@ fn test_unsubscribe_with_publish_subject() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.concat();
+    let observable = observable.concat_all();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -749,7 +749,7 @@ fn test_ref() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -807,7 +807,7 @@ fn test_mut_ref() {
         observer.on_termination(Termination::Error(&mut error));
         Subscription::new_none_disposal()
     });
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe_with_callback(
         |value| {
@@ -840,7 +840,7 @@ fn test_mut_ref_completed() {
         observer.on_termination(Termination::<Infallible>::Completed);
         Subscription::new_none_disposal()
     });
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let _subscription = observable.subscribe_with_callback(
         |value| {
@@ -869,7 +869,7 @@ async fn test_async() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.concat();
+    let observable = observable.concat_all();
 
     let handle = tokio::spawn(async move { observable.subscribe(observer) });
     let subscription = handle.await.unwrap();
@@ -958,7 +958,7 @@ fn test_subscribe_by_different_observer() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.concat();
+    let observable = observable.concat_all();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -1036,7 +1036,7 @@ fn test_multiple_operation() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.concat().concat();
+    let observable = observable.concat_all().concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1100,7 +1100,7 @@ fn test_without_convenient_api() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = Concat::new(observable);
+    let observable = ConcatAll::new(observable);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1162,7 +1162,7 @@ fn test_lifetime_sub() {
             })
         });
 
-        let observable = observable.concat();
+        let observable = observable.concat_all();
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -1186,7 +1186,7 @@ fn test_lifetime_or() {
                 Subscription::new_none_disposal()
             },
         );
-        let observable = observable.concat();
+        let observable = observable.concat_all();
 
         let (_, mut observer) = Checker::new();
         observer.on_next(&life_marker_2);
@@ -1214,7 +1214,7 @@ fn test_lifetime_or_sub() {
             },
         );
 
-        let observable = observable.concat();
+        let observable = observable.concat_all();
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
@@ -1228,7 +1228,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let observable = observable.concat();
+    let observable = observable.concat_all();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -1236,7 +1236,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, _> = PublishSubject::default();
-    let observable = subject.concat();
+    let observable = subject.concat_all();
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -1247,7 +1247,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, Infallible> = PublishSubject::default();
-    let observable = subject.concat();
+    let observable = subject.concat_all();
 
     observable.filter(|_| true);
 }

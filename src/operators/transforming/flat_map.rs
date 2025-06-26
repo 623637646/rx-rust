@@ -41,7 +41,7 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         let observable = Map::new(self.source, self.callback);
-        let observable = observable.merge();
+        let observable = observable.merge_all();
         observable.subscribe(observer)
     }
 }

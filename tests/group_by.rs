@@ -366,8 +366,8 @@ fn test_revert_completed() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.group_by(|value| value % 2);
-    let observable_1 = observable.clone().merge();
-    let observable_2 = observable.clone().concat();
+    let observable_1 = observable.clone().merge_all();
+    let observable_2 = observable.clone().concat_all();
     let observable_3 = observable.switch();
 
     let _subscription_1 = observable_1.subscribe(observer_1);
@@ -410,8 +410,8 @@ fn test_revert_error() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.group_by(|value| value % 2);
-    let observable_1 = observable.clone().merge();
-    let observable_2 = observable.clone().concat();
+    let observable_1 = observable.clone().merge_all();
+    let observable_2 = observable.clone().concat_all();
     let observable_3 = observable.switch();
 
     let _subscription_1 = observable_1.subscribe(observer_1);
@@ -485,7 +485,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::new_none_disposal()
         });
-        let observable = observable.group_by(|v: i32| v).merge().map(|_| None);
+        let observable = observable.group_by(|v: i32| v).merge_all().map(|_| None);
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(Some(&life_marker_2));

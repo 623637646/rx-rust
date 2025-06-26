@@ -6,7 +6,8 @@ use crate::{
     observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
     operators::{
         combining::{
-            combine_latest::CombineLatest, concat::Concat, merge::Merge, switch::Switch, zip::Zip,
+            combine_latest::CombineLatest, concat_all::ConcatAll, merge_all::MergeAll,
+            switch::Switch, zip::Zip,
         },
         conditional_boolean::take_until::TakeUntil,
         filtering::{
@@ -79,12 +80,12 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         CombineLatest::new(self, another_source)
     }
 
-    fn concat<T1>(self) -> Concat<Self, T>
+    fn concat_all<T1>(self) -> ConcatAll<Self, T>
     where
         Self: Observable<'or, 'sub, T, E>,
         T: Observable<'or, 'sub, T1, E>,
     {
-        Concat::new(self)
+        ConcatAll::new(self)
     }
 
     fn concat_map<T1, OE1, F>(self, callback: F) -> ConcatMap<T, Self, OE1, F>
@@ -260,12 +261,12 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         Materialize::new(self)
     }
 
-    fn merge<T1>(self) -> Merge<Self, T>
+    fn merge_all<T1>(self) -> MergeAll<Self, T>
     where
         Self: Observable<'or, 'sub, T, E>,
         T: Observable<'or, 'sub, T1, E>,
     {
-        Merge::new(self)
+        MergeAll::new(self)
     }
 
     fn multicast<S, F>(self, subject_maker: F) -> ConnectableObservable<Self, S>
