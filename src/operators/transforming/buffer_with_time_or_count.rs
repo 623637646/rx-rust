@@ -116,15 +116,11 @@ where
     S: Scheduler + Clone + Send + 'static,
 {
     fn on_next(&mut self, value: T) {
-        if self.observer.lock().unwrap().is_none() {
-            return;
-        }
-
-        let mut values_lock = self.values.lock().unwrap();
-        values_lock.push(value);
-        if values_lock.len() >= self.count.get() {
-            let mut observer_lock = self.observer.lock().unwrap();
-            if let Some(observer) = &mut *observer_lock {
+        let mut observer_lock = self.observer.lock().unwrap();
+        if let Some(observer) = &mut *observer_lock {
+            let mut values_lock = self.values.lock().unwrap();
+            values_lock.push(value);
+            if values_lock.len() >= self.count.get() {
                 let values = std::mem::take(&mut *values_lock);
                 drop(values_lock);
                 observer.on_next(values);
