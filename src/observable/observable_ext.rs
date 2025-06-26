@@ -6,8 +6,8 @@ use crate::{
     observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
     operators::{
         combining::{
-            combine_latest::CombineLatest, concat_all::ConcatAll, merge_all::MergeAll,
-            switch::Switch, zip::Zip,
+            combine_latest::CombineLatest, concat_all::ConcatAll, merge::Merge,
+            merge_all::MergeAll, switch::Switch, zip::Zip,
         },
         conditional_boolean::take_until::TakeUntil,
         filtering::{
@@ -267,6 +267,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         T: Observable<'or, 'sub, T1, E>,
     {
         MergeAll::new(self)
+    }
+
+    fn merge_with<OE2>(self, source_2: OE2) -> Merge<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+    {
+        Merge::new(self, source_2)
     }
 
     fn multicast<S, F>(self, subject_maker: F) -> ConnectableObservable<Self, S>
