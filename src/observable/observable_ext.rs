@@ -5,7 +5,9 @@ use super::{
 use crate::{
     observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
     operators::{
-        combining::{combine_latest::CombineLatest, concat::Concat, merge::Merge, switch::Switch},
+        combining::{
+            combine_latest::CombineLatest, concat::Concat, merge::Merge, switch::Switch, zip::Zip,
+        },
         conditional_boolean::take_until::TakeUntil,
         filtering::{
             debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
@@ -392,6 +394,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn window_with_count(self, count: NonZeroUsize) -> WindowWithCount<Self> {
         WindowWithCount::new(self, count)
+    }
+
+    fn zip<T1, OE2>(self, another_source: OE2) -> Zip<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, T1, E>,
+    {
+        Zip::new(self, another_source)
     }
 }
 
