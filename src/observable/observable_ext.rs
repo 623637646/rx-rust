@@ -6,7 +6,7 @@ use crate::{
     observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
     operators::{
         combining::{
-            combine_latest::CombineLatest, concat_all::ConcatAll, merge::Merge,
+            combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll, merge::Merge,
             merge_all::MergeAll, switch::Switch, zip::Zip,
         },
         conditional_boolean::take_until::TakeUntil,
@@ -95,6 +95,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         F: FnMut(T) -> OE1,
     {
         ConcatMap::new(self, callback)
+    }
+
+    fn concat_with<OE2>(self, source_2: OE2) -> Concat<Self, OE2>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE2: Observable<'or, 'sub, T, E>,
+    {
+        Concat::new(self, source_2)
     }
 
     fn debounce<S>(self, time_span: Duration, scheduler: S) -> Debounce<Self, S> {
