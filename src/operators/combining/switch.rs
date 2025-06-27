@@ -2,7 +2,10 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
-    subscription::{Subscription, disposable::Disposable},
+    subscription::{
+        Subscription,
+        disposable::{Disposable, SharedDisposal},
+    },
     utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
@@ -63,7 +66,7 @@ where
                 completed: Arc::new(AtomicBool::new(false)),
                 _marker: PhantomData,
             };
-            self.source.subscribe(observer) + SwitchDisposal { on_going_sub }
+            self.source.subscribe(observer) + SharedDisposal::new(on_going_sub)
         })
     }
 }
@@ -157,15 +160,5 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         (self.termination_callback)(termination);
-    }
-}
-
-struct SwitchDisposal<'sub> {
-    on_going_sub: Arc<Mutex<Option<Subscription<'sub>>>>,
-}
-
-impl Disposable for SwitchDisposal<'_> {
-    fn dispose(self) {
-        self.on_going_sub.lock().unwrap().take();
     }
 }

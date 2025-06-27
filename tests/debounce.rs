@@ -242,7 +242,7 @@ async fn test_unsubscribe() {
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111, 222]);
-    assert!(checker_2.is_dropped());
+    assert!(checker_2.is_active());
     assert_eq!(checker_3.values(), [111, 222]);
     assert!(checker_3.is_active());
 

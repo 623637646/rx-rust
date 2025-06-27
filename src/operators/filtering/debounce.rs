@@ -4,7 +4,7 @@ use crate::{
     scheduler::Scheduler,
     subscription::{
         Subscription,
-        disposable::{BoxedDisposal, Disposable},
+        disposable::{BoxedDisposal, Disposable, SharedDisposal},
     },
 };
 use educe::Educe;
@@ -39,14 +39,13 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'static) -> Subscription<'sub> {
         let disposal = Arc::new(Mutex::new(None));
-        let observer = Arc::new(Mutex::new(Some(observer)));
         self.source.subscribe(DebounceObserver {
-            observer: observer.clone(),
+            observer: Arc::new(Mutex::new(Some(observer))),
             time_span: self.time_span,
             scheduler: self.scheduler,
             current_value: Arc::new(Mutex::new(None)),
             disposal: disposal.clone(),
-        }) + DebounceDisposable { observer, disposal }
+        }) + SharedDisposal::new(disposal)
     }
 }
 
@@ -108,19 +107,5 @@ where
             }
             observer.on_termination(termination);
         }
-    }
-}
-
-struct DebounceDisposable<OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    disposal: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
-}
-
-impl<OR> Disposable for DebounceDisposable<OR> {
-    fn dispose(self) {
-        if let Some(disposal) = self.disposal.lock().unwrap().take() {
-            disposal.dispose();
-        }
-        self.observer.lock().unwrap().take();
     }
 }

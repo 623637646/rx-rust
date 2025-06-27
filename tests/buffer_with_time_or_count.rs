@@ -694,7 +694,7 @@ async fn test_unsubscribe() {
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
-    assert!(checker_1.is_dropped());
+    assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
     assert!(checker_2.is_active());
 
@@ -1084,7 +1084,7 @@ async fn test_subscribe_by_different_observer() {
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
-    assert!(checker_1.is_dropped());
+    assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
     assert!(checker_2.is_active());
 

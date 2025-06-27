@@ -4,7 +4,7 @@ use crate::{
     scheduler::Scheduler,
     subscription::{
         Subscription,
-        disposable::{BoxedDisposal, Disposable},
+        disposable::{BoxedDisposal, SharedDisposal},
     },
 };
 use educe::Educe;
@@ -43,7 +43,7 @@ where
             time_span: self.time_span,
             scheduler: self.scheduler,
             disposal: disposal.clone(),
-        }) + ThrottleDisposable { disposal }
+        }) + SharedDisposal::new(disposal)
     }
 }
 
@@ -77,17 +77,5 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
-    }
-}
-
-struct ThrottleDisposable {
-    disposal: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
-}
-
-impl Disposable for ThrottleDisposable {
-    fn dispose(self) {
-        if let Some(disposal) = self.disposal.lock().unwrap().take() {
-            disposal.dispose();
-        }
     }
 }

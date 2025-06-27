@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 /// A trait that represents a disposable resource.
 pub trait Disposable {
     /// Disposes of the resource.
@@ -54,6 +56,25 @@ impl Disposable for AutoDisposal<'_> {
 impl Drop for AutoDisposal<'_> {
     fn drop(&mut self) {
         if let Some(disposal) = self.0.take() {
+            disposal.dispose();
+        }
+    }
+}
+
+pub struct SharedDisposal<D>(Arc<Mutex<Option<D>>>);
+
+impl<D> SharedDisposal<D> {
+    pub fn new(shared_disposal: Arc<Mutex<Option<D>>>) -> Self {
+        Self(shared_disposal)
+    }
+}
+
+impl<D> Disposable for SharedDisposal<D>
+where
+    D: Disposable,
+{
+    fn dispose(self) {
+        if let Some(disposal) = { self.0.lock().unwrap().take() } {
             disposal.dispose();
         }
     }

@@ -1,7 +1,7 @@
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
-    subscription::{Subscription, disposable::Disposable},
+    subscription::{Subscription, disposable::SharedDisposal},
 };
 use educe::Educe;
 use std::sync::{Arc, Mutex};
@@ -37,7 +37,7 @@ where
             source_2: self.source_2,
             sub_2: sub_2.clone(),
         };
-        self.source_1.subscribe(onserver) + ConcatDisposal { sub_2 }
+        self.source_1.subscribe(onserver) + SharedDisposal::new(sub_2)
     }
 }
 
@@ -67,15 +67,5 @@ where
                 self.observer.on_termination(termination);
             }
         }
-    }
-}
-
-struct ConcatDisposal<'sub> {
-    sub_2: Arc<Mutex<Option<Subscription<'sub>>>>,
-}
-
-impl Disposable for ConcatDisposal<'_> {
-    fn dispose(self) {
-        self.sub_2.lock().unwrap().take();
     }
 }
