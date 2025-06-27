@@ -3,6 +3,7 @@ mod tests_utils;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::timer::Timer,
+    subscription::disposable::Disposable,
 };
 use std::time::Duration;
 use tests_utils::{checker::Checker, test_scheduler::TestScheduler};
@@ -47,7 +48,7 @@ async fn test_unsubscribe() {
     assert!(checker_3.values().is_empty());
     assert!(checker_3.is_active());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert!(checker_1.values().is_empty());
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
@@ -63,7 +64,7 @@ async fn test_unsubscribe() {
     assert!(checker_3.values().is_empty());
     assert!(checker_3.is_active());
 
-    subscription_2.unsubscribe();
+    subscription_2.dispose();
     assert!(checker_1.values().is_empty());
     assert!(checker_1.is_dropped());
     assert!(checker_2.values().is_empty());

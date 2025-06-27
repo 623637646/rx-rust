@@ -8,7 +8,7 @@ use rx_rust::{
         creating::{create::Create, just::Just, throw::Throw},
     },
     subject::publish_subject::PublishSubject,
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
@@ -644,7 +644,7 @@ fn test_unsubscribe() {
     assert!(channel_checker_1.is_subscribed());
     assert!(channel_checker_2.is_initialized());
 
-    subscription.unsubscribe();
+    subscription.dispose();
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_dropped());
     assert!(channel_checker.is_unsubscribed());
@@ -703,7 +703,7 @@ fn test_unsubscribe_with_publish_subject() {
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111]);
@@ -910,7 +910,7 @@ async fn test_async() {
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
-    let handle = tokio::spawn(async { subscription.unsubscribe() });
+    let handle = tokio::spawn(async { subscription.dispose() });
     handle.await.unwrap();
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_dropped());

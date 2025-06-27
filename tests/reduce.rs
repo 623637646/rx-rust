@@ -9,7 +9,7 @@ use rx_rust::{
         mathematical_aggregate::reduce::Reduce,
     },
     subject::publish_subject::PublishSubject,
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
@@ -119,7 +119,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), []);
     assert!(checker_2.is_active());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), []);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), []);
@@ -260,7 +260,7 @@ async fn test_async() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    let handle = tokio::spawn(async { subscription.unsubscribe() });
+    let handle = tokio::spawn(async { subscription.dispose() });
     handle.await.unwrap();
     assert_eq!(checker.values(), []);
     assert!(checker.is_dropped());

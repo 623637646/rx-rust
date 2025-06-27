@@ -4,6 +4,7 @@ use futures::stream;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::from_stream::FromStream,
+    subscription::disposable::Disposable,
 };
 use std::time::Duration;
 use tests_utils::{checker::Checker, test_scheduler::TestScheduler};
@@ -56,7 +57,7 @@ async fn test_unsubscribe() {
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
-    subscription.unsubscribe();
+    subscription.dispose();
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 

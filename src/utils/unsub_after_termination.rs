@@ -37,7 +37,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
         if let Some(sub) = { self.subscription.lock().unwrap().take() } {
-            sub.unsubscribe()
+            sub.dispose()
         }
     }
 }
@@ -49,7 +49,7 @@ struct UnsubAfterTerminationDisposal<'sub> {
 impl Disposable for UnsubAfterTerminationDisposal<'_> {
     fn dispose(self) {
         if let Some(sub) = { self.subscription.lock().unwrap().take() } {
-            sub.unsubscribe();
+            sub.dispose();
         }
     }
 }

@@ -5,7 +5,7 @@ use rx_rust::{
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
     subject::publish_subject::PublishSubject,
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use std::{
     convert::Infallible,
@@ -65,7 +65,7 @@ fn test_completed() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [2]);
@@ -132,7 +132,7 @@ fn test_error() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [2]);
@@ -199,7 +199,7 @@ fn test_unsubscribe() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [2]);
@@ -213,7 +213,7 @@ fn test_unsubscribe() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_2.unsubscribe();
+    subscription_2.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [2, 3]);
@@ -281,7 +281,7 @@ fn test_ref() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [&value_1, &value_2]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [&value_2]);
@@ -358,7 +358,7 @@ async fn test_async() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    let handle = tokio::spawn(async move { subscription_1.unsubscribe() });
+    let handle = tokio::spawn(async move { subscription_1.dispose() });
     handle.await.unwrap();
     assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
@@ -428,7 +428,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [2]);
@@ -497,7 +497,7 @@ fn test_multiple_operation() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [2]);
@@ -564,7 +564,7 @@ fn test_without_convenient_api() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [2]);
@@ -696,7 +696,7 @@ fn test_unsub_on_next() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_next(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -709,7 +709,7 @@ fn test_unsub_on_next() {
         observable_3
             .hook_on_next(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -731,7 +731,7 @@ fn test_unsub_on_next() {
     assert!(checker_3.is_dropped());
     assert!(channel_checker.is_subscribed());
 
-    subscription.unsubscribe();
+    subscription.dispose();
     assert_eq!(checker_1.values(), [1]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [1]);
@@ -778,7 +778,7 @@ fn test_unsub_on_completed() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_termination(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -791,7 +791,7 @@ fn test_unsub_on_completed() {
         observable_3
             .hook_on_termination(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -860,7 +860,7 @@ fn test_unsub_on_error() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_termination(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -873,7 +873,7 @@ fn test_unsub_on_error() {
         observable_3
             .hook_on_termination(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
             })
             .subscribe(observer_3),
     );

@@ -5,7 +5,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::creating::{create::Create, defer::Defer, just::Just},
     subject::publish_subject::PublishSubject,
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use std::{
     convert::Infallible,
@@ -82,7 +82,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111]);
@@ -184,7 +184,7 @@ async fn test_async() {
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
 
-    let handle = tokio::spawn(async { subscription.unsubscribe() });
+    let handle = tokio::spawn(async { subscription.dispose() });
     handle.await.unwrap();
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_dropped());

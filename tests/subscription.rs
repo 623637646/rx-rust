@@ -25,7 +25,7 @@ fn test_disposal_unsubscribe() {
     };
     let subscription = Subscription::new_with_disposal(test_disposal);
     assert!(!disposed.load(Ordering::SeqCst));
-    subscription.unsubscribe();
+    subscription.dispose();
     assert!(disposed.load(Ordering::SeqCst));
 }
 
@@ -51,7 +51,7 @@ fn test_callback_unsubscribe() {
         disposed_clone.store(true, Ordering::SeqCst);
     });
     assert!(!disposed.load(Ordering::SeqCst));
-    subscription.unsubscribe();
+    subscription.dispose();
     assert!(disposed.load(Ordering::SeqCst));
 }
 
@@ -83,7 +83,7 @@ fn test_append_disposable() {
     subscription.append_disposable(test_disposal_2);
     assert!(!disposed_1.load(Ordering::SeqCst));
     assert!(!disposed_2.load(Ordering::SeqCst));
-    subscription.unsubscribe();
+    subscription.dispose();
     assert!(disposed_1.load(Ordering::SeqCst));
     assert!(disposed_2.load(Ordering::SeqCst));
 }
@@ -102,27 +102,7 @@ fn test_add_disposable() {
     let subscription = subscription + test_disposal_2;
     assert!(!disposed_1.load(Ordering::SeqCst));
     assert!(!disposed_2.load(Ordering::SeqCst));
-    subscription.unsubscribe();
-    assert!(disposed_1.load(Ordering::SeqCst));
-    assert!(disposed_2.load(Ordering::SeqCst));
-}
-
-#[test]
-fn test_append_subscription() {
-    let disposed_1 = Arc::new(AtomicBool::new(false));
-    let disposed_2 = Arc::new(AtomicBool::new(false));
-    let test_disposal_1 = TestDisposal {
-        disposed: disposed_1.clone(),
-    };
-    let test_disposal_2 = TestDisposal {
-        disposed: disposed_2.clone(),
-    };
-    let mut subscription_1 = Subscription::new_with_disposal(test_disposal_1);
-    let subscription_2 = Subscription::new_with_disposal(test_disposal_2);
-    subscription_1.append_subscription(subscription_2);
-    assert!(!disposed_1.load(Ordering::SeqCst));
-    assert!(!disposed_2.load(Ordering::SeqCst));
-    subscription_1.unsubscribe();
+    subscription.dispose();
     assert!(disposed_1.load(Ordering::SeqCst));
     assert!(disposed_2.load(Ordering::SeqCst));
 }
@@ -142,7 +122,7 @@ fn test_add_subscription() {
     let subscription = subscription_1 + subscription_2;
     assert!(!disposed_1.load(Ordering::SeqCst));
     assert!(!disposed_2.load(Ordering::SeqCst));
-    subscription.unsubscribe();
+    subscription.dispose();
     assert!(disposed_1.load(Ordering::SeqCst));
     assert!(disposed_2.load(Ordering::SeqCst));
 }

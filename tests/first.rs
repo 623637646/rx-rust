@@ -5,7 +5,7 @@ use rx_rust::{
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, filtering::first::First},
     subject::publish_subject::PublishSubject,
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
@@ -80,7 +80,7 @@ fn test_unsubscribe() {
     assert!(checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription.unsubscribe();
+    subscription.dispose();
     assert_eq!(checker.values(), []);
     assert!(checker.is_dropped());
     assert!(channel_checker.is_unsubscribed());

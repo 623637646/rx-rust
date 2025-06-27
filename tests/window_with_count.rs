@@ -5,7 +5,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::{creating::create::Create, transforming::window_with_count::WindowWithCount},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use std::{
     convert::Infallible,
@@ -375,7 +375,7 @@ fn test_unsubscribe() {
     assert!(termination_checker.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription.unsubscribe();
+    subscription.dispose();
     assert_eq!(checker_sub_vec.lock().unwrap().len(), 3);
     for (index, (checker, sub)) in checker_sub_vec.lock().unwrap().drain(..).enumerate() {
         match index {
@@ -390,7 +390,7 @@ fn test_unsubscribe() {
             2 => {
                 assert_eq!(checker.values(), []);
                 assert!(checker.is_active());
-                sub.unsubscribe();
+                sub.dispose();
                 assert!(checker.is_dropped());
             }
             _ => panic!(),

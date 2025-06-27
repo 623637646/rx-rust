@@ -4,6 +4,7 @@ use rx_rust::observable::Observable;
 use rx_rust::observable::observable_ext::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::subscription::Subscription;
+use rx_rust::subscription::disposable::Disposable;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
 use tests_utils::checker::Checker;
@@ -27,7 +28,7 @@ fn test_unsub_on_next() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_next(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -40,7 +41,7 @@ fn test_unsub_on_next() {
         observable_3
             .hook_on_next(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -87,7 +88,7 @@ fn test_unsub_on_completed() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_termination(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -100,7 +101,7 @@ fn test_unsub_on_completed() {
         observable_3
             .hook_on_termination(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -160,7 +161,7 @@ fn test_unsub_on_error() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_termination(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -173,7 +174,7 @@ fn test_unsub_on_error() {
         observable_3
             .hook_on_termination(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().unsubscribe();
+                sub_cloned.lock().unwrap().take().unwrap().dispose();
             })
             .subscribe(observer_3),
     );

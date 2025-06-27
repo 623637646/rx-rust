@@ -4,6 +4,7 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Termination,
     operators::creating::throw::Throw,
+    subscription::disposable::Disposable,
 };
 use tests_utils::checker::Checker;
 
@@ -63,7 +64,7 @@ async fn test_async() {
     assert!(checker.values().is_empty());
     assert!(checker.is_error(111));
 
-    let handle = tokio::spawn(async { subscription.unsubscribe() });
+    let handle = tokio::spawn(async { subscription.dispose() });
     handle.await.unwrap();
     assert!(checker.values().is_empty());
     assert!(checker.is_error(111));

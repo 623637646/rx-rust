@@ -7,7 +7,7 @@ use rx_rust::{
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
     subject::async_subject::AsyncSubject,
-    subscription::Subscription,
+    subscription::{Subscription, disposable::Disposable},
 };
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
@@ -202,7 +202,7 @@ fn test_unsubscribe() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_2.unsubscribe();
+    subscription_2.dispose();
     assert_eq!(checker_1.values(), []);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), []);
@@ -216,14 +216,14 @@ fn test_unsubscribe() {
     assert!(checker_2.is_dropped());
     assert!(channel_checker.is_subscribed());
 
-    subscription.unsubscribe();
+    subscription.dispose();
     assert_eq!(checker_1.values(), []);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), []);
     assert!(checker_2.is_dropped());
     assert!(channel_checker.is_unsubscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), []);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), []);
@@ -636,7 +636,7 @@ fn test_share_api() {
     assert!(checker_2.is_active());
     assert!(channel_checker.is_subscribed());
 
-    subscription_1.unsubscribe();
+    subscription_1.dispose();
     assert_eq!(checker_1.values(), []);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), []);

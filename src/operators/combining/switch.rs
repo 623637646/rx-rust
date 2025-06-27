@@ -113,10 +113,10 @@ where
         let sub = value.subscribe(observer);
         if !terminated.load(Ordering::SeqCst) {
             if let Some(sub) = { self.on_going_sub.lock().unwrap().replace(sub) } {
-                sub.unsubscribe();
+                sub.dispose();
             }
         } else if let Some(sub) = { self.on_going_sub.lock().unwrap().take() } {
-            sub.unsubscribe();
+            sub.dispose();
         }
     }
 

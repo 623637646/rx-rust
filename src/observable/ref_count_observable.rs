@@ -66,7 +66,7 @@ impl Disposable for RefCountDisposal<'_> {
                     match state {
                         State::Initialized => unreachable!(),
                         State::Subscribed(_, subscription) => {
-                            subscription.unsubscribe();
+                            subscription.dispose();
                         }
                         State::Unsubscribed => unreachable!(),
                     }
