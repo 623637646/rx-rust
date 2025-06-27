@@ -353,6 +353,14 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         SkipLast::new(self, count)
     }
 
+    fn start_with<OE0>(self, start: OE0) -> Concat<OE0, Self>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE0: Observable<'or, 'sub, T, E>,
+    {
+        start.concat_with(self)
+    }
+
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>
     where
         T: 'or,
