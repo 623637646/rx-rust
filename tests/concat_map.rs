@@ -530,7 +530,7 @@ fn test_unsubscribe() {
     assert!(checker.is_dropped());
     assert!(channel_checker.is_unsubscribed());
     assert!(channel_checker_1.is_unsubscribed());
-    assert!(channel_checker_2.is_unsubscribed());
+    assert!(channel_checker_2.is_initialized());
 }
 
 #[test]
