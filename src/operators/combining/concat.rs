@@ -30,7 +30,6 @@ where
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        // TODO: no need subscribe_unsub_after_termination?
         let sub_2 = Arc::new(Mutex::new(None));
         let onserver = ConcatObserver {
             observer,
@@ -56,7 +55,6 @@ where
         self.observer.on_next(value);
     }
 
-    // TODO: 用sub lock？
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
