@@ -292,7 +292,7 @@ async fn test_unsubscribe() {
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111, 222]);
-    assert!(checker_2.is_dropped());
+    assert!(checker_2.is_active());
     assert_eq!(checker_3.values(), [111, 222]);
     assert!(checker_3.is_active());
 
@@ -506,25 +506,24 @@ async fn test_without_convenient_api() {
     assert!(channel_checker.is_error("error"));
 }
 
-// TODO: Delay doesn't cancel the scheduler so far.
-// #[tokio::test]
-// async fn test_undisposed_schedule() {
-//     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-//     let (checker, observer) = Checker::new();
+#[tokio::test]
+async fn test_undisposed_schedule() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
 
-//     // Custom operations
-//     let observable = observable.delay(Duration::from_millis(100), TestScheduler);
+    // Custom operations
+    let observable = observable.delay(Duration::from_millis(100), TestScheduler);
 
-//     let _subscription = observable.subscribe(observer);
-//     assert!(checker.values().is_empty());
-//     assert!(checker.is_active());
-//     assert!(channel_checker.is_subscribed());
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
 
-//     sender.on_next(111);
-//     assert!(checker.values().is_empty());
-//     assert!(checker.is_active());
-//     assert!(channel_checker.is_subscribed());
-// }
+    sender.on_next(111);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+    assert!(channel_checker.is_subscribed());
+}
 
 #[tokio::test]
 async fn test_lifetime_sub() {

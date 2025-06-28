@@ -1,7 +1,7 @@
 use educe::Educe;
 use rx_rust::{
     scheduler::Scheduler,
-    subscription::disposable::{CallbackDisposal, Disposable},
+    subscription::disposable::{AutoDisposal, CallbackDisposal},
 };
 use std::{
     sync::{Arc, Mutex},
@@ -18,7 +18,7 @@ impl Scheduler for TestScheduler {
         &self,
         task: impl FnOnce() + Send + 'static,
         delay: Option<Duration>,
-    ) -> impl Disposable + Send + 'static {
+    ) -> AutoDisposal<'static> {
         let entry = EntryExitChecker::enter();
 
         let entry_cloned = entry.clone();
@@ -31,10 +31,10 @@ impl Scheduler for TestScheduler {
         });
 
         let entry_cloned = entry.clone();
-        CallbackDisposal::new(move || {
+        AutoDisposal::new(CallbackDisposal::new(move || {
             handle.abort();
             entry_cloned.exit();
-        })
+        }))
     }
 
     fn schedule_period(
@@ -42,7 +42,7 @@ impl Scheduler for TestScheduler {
         mut task: impl FnMut(usize) -> bool + Send + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> impl Disposable + Send + 'static {
+    ) -> AutoDisposal<'static> {
         let entry = EntryExitChecker::enter();
 
         let entry_cloned = entry.clone();
@@ -64,17 +64,17 @@ impl Scheduler for TestScheduler {
         });
 
         let entry_cloned = entry.clone();
-        CallbackDisposal::new(move || {
+        AutoDisposal::new(CallbackDisposal::new(move || {
             handle.abort();
             entry_cloned.exit();
-        })
+        }))
     }
 
     fn schedule_future<FU>(
         &self,
         future: FU,
         result_callback: impl FnOnce(FU::Output) + Send + 'static,
-    ) -> impl Disposable + Send + 'static
+    ) -> AutoDisposal<'static>
     where
         FU: Future + Send + 'static,
     {
@@ -87,10 +87,10 @@ impl Scheduler for TestScheduler {
         });
 
         let entry_cloned = entry.clone();
-        CallbackDisposal::new(move || {
+        AutoDisposal::new(CallbackDisposal::new(move || {
             handle.abort();
             entry_cloned.exit();
-        })
+        }))
     }
 }
 

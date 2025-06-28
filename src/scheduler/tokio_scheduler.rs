@@ -1,5 +1,5 @@
 use super::Scheduler;
-use crate::subscription::disposable::Disposable;
+use crate::subscription::disposable::{AutoDisposal, Disposable};
 use educe::Educe;
 use std::time::Duration;
 use tokio::{task::JoinHandle, time::interval};
@@ -43,13 +43,14 @@ impl Scheduler for TokioScheduler {
         &self,
         task: impl FnOnce() + Send + 'static,
         delay: Option<Duration>,
-    ) -> impl Disposable + Send + 'static {
-        tokio::spawn(async move {
+    ) -> AutoDisposal<'static> {
+        let handle = tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
             task();
-        })
+        });
+        AutoDisposal::new(handle)
     }
 
     fn schedule_period(
@@ -57,8 +58,8 @@ impl Scheduler for TokioScheduler {
         mut task: impl FnMut(usize) -> bool + Send + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> impl Disposable + Send + 'static {
-        tokio::spawn(async move {
+    ) -> AutoDisposal<'static> {
+        let handle = tokio::spawn(async move {
             if let Some(delay) = delay {
                 tokio::time::sleep(delay).await;
             }
@@ -72,20 +73,22 @@ impl Scheduler for TokioScheduler {
                     break;
                 }
             }
-        })
+        });
+        AutoDisposal::new(handle)
     }
 
     fn schedule_future<FU>(
         &self,
         future: FU,
         result_callback: impl FnOnce(FU::Output) + Send + 'static,
-    ) -> impl Disposable + Send + 'static
+    ) -> AutoDisposal<'static>
     where
         FU: Future + Send + 'static,
     {
-        tokio::spawn(async {
+        let handle = tokio::spawn(async {
             result_callback(future.await);
-        })
+        });
+        AutoDisposal::new(handle)
     }
 }
 

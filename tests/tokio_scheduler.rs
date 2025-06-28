@@ -13,7 +13,7 @@ async fn test_schedule_without_delay() {
         tx.send(()).unwrap();
     };
     let start_time = tokio::time::Instant::now();
-    scheduler.schedule(task, None);
+    let _disposal = scheduler.schedule(task, None);
     assert!(rx.await.is_ok());
     let elapsed_time = start_time.elapsed();
     assert!(elapsed_time < Duration::from_millis(10));
@@ -27,7 +27,7 @@ async fn test_schedule_with_delay() {
         tx.send(()).unwrap();
     };
     let start_time = tokio::time::Instant::now();
-    scheduler.schedule(task, Some(Duration::from_millis(100)));
+    let _disposal = scheduler.schedule(task, Some(Duration::from_millis(100)));
     assert!(rx.await.is_ok());
     let elapsed_time = start_time.elapsed();
     assert!(elapsed_time >= Duration::from_millis(100));
@@ -127,7 +127,7 @@ async fn test_schedule_period_stop() {
         counter_cloned.lock().unwrap().push(count);
         count == 2
     };
-    scheduler.schedule_period(task, Duration::from_millis(100), None);
+    let _disposal = scheduler.schedule_period(task, Duration::from_millis(100), None);
     assert_eq!(counter.lock().unwrap().as_ref(), vec![]);
 
     tokio::time::sleep(Duration::from_millis(50)).await;

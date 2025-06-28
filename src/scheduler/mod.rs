@@ -1,4 +1,4 @@
-use crate::subscription::disposable::Disposable;
+use crate::subscription::disposable::AutoDisposal;
 use futures::{Stream, stream::StreamExt};
 use std::time::Duration;
 
@@ -15,20 +15,20 @@ pub trait Scheduler {
         &self,
         task: impl FnOnce() + Send + 'static, // This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
         delay: Option<Duration>,
-    ) -> impl Disposable + Send + 'static;
+    ) -> AutoDisposal<'static>;
 
     fn schedule_period(
         &self,
         task: impl FnMut(usize) -> bool + Send + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> impl Disposable + Send + 'static;
+    ) -> AutoDisposal<'static>;
 
     fn schedule_future<FU>(
         &self,
         future: FU,
         result_callback: impl FnOnce(FU::Output) + Send + 'static,
-    ) -> impl Disposable + Send + 'static
+    ) -> AutoDisposal<'static>
     where
         FU: Future + Send + 'static;
 
@@ -36,7 +36,7 @@ pub trait Scheduler {
         &self,
         mut stream: SM,
         mut result_callback: impl FnMut(Option<SM::Item>) + Send + 'static,
-    ) -> impl Disposable + Send + 'static
+    ) -> AutoDisposal<'static>
     where
         SM: Stream + Send + Unpin + 'static,
     {
