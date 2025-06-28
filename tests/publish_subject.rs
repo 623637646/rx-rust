@@ -408,6 +408,68 @@ fn test_unsub_on_next() {
 }
 
 #[test]
+fn test_sub_on_next() {
+    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_next(move |value, callback| {
+                // subscribe before on_next
+                if let Some(observer) = observer_2.take() {
+                    *subscription_2_cloned.lock().unwrap() =
+                        Some(observable.clone().subscribe(observer));
+                }
+                callback(value);
+                // subscribe after on_next
+                if let Some(observer) = observer_3.take() {
+                    *subscription_3_cloned.lock().unwrap() =
+                        Some(observable.clone().subscribe(observer));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(checker_3.values().is_empty());
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.is_active());
+    assert_eq!(checker_3.values(), []);
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(222);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [222]);
+    assert!(checker_2.is_active());
+    assert_eq!(checker_3.values(), [222]);
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+}
+
+#[test]
 fn test_unsub_on_completed() {
     let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
@@ -473,6 +535,77 @@ fn test_unsub_on_completed() {
 }
 
 #[test]
+fn test_sub_on_completed() {
+    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_termination(move |value, callback| {
+                // subscribe before on_next
+                if let Some(observer) = observer_2.take() {
+                    *subscription_2_cloned.lock().unwrap() =
+                        Some(observable.clone().subscribe(observer));
+                }
+                callback(value);
+                // subscribe after on_next
+                if let Some(observer) = observer_3.take() {
+                    *subscription_3_cloned.lock().unwrap() =
+                        Some(observable.clone().subscribe(observer));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(checker_3.values().is_empty());
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.is_active());
+    assert_eq!(checker_3.values(), []);
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(222);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.is_active());
+    assert_eq!(checker_3.values(), []);
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+
+    subject.clone().on_termination(Termination::Completed);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert!(checker_1.is_completed());
+    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.is_completed());
+    assert_eq!(checker_3.values(), []);
+    assert!(checker_3.is_completed());
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
+}
+
+#[test]
 fn test_unsub_on_error() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
@@ -533,6 +666,80 @@ fn test_unsub_on_error() {
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_error("error"));
     assert_eq!(checker_3.values(), [111]);
+    assert!(checker_3.is_error("error"));
+    assert!(matches!(
+        subject.terminated(),
+        Some(Termination::Error("error"))
+    ));
+}
+
+#[test]
+fn test_sub_on_error() {
+    let mut subject = PublishSubject::default();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_termination(move |value, callback| {
+                // subscribe before on_next
+                if let Some(observer) = observer_2.take() {
+                    *subscription_2_cloned.lock().unwrap() =
+                        Some(observable.clone().subscribe(observer));
+                }
+                callback(value);
+                // subscribe after on_next
+                if let Some(observer) = observer_3.take() {
+                    *subscription_3_cloned.lock().unwrap() =
+                        Some(observable.clone().subscribe(observer));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(checker_3.values().is_empty());
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.is_active());
+    assert_eq!(checker_3.values(), []);
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(222);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.is_active());
+    assert_eq!(checker_3.values(), []);
+    assert!(checker_3.is_active());
+    assert!(subject.terminated().is_none());
+
+    subject.clone().on_termination(Termination::Error("error"));
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert!(checker_1.is_error("error"));
+    assert_eq!(checker_2.values(), []);
+    assert!(checker_2.is_error("error"));
+    assert_eq!(checker_3.values(), []);
     assert!(checker_3.is_error("error"));
     assert!(matches!(
         subject.terminated(),

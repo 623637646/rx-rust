@@ -7,6 +7,7 @@ edition = "2024"
 # Using this to fix the issue: https://github.com/rust-lang/rust/issues/26925 
 # Refer to: https://stackoverflow.com/a/79571732/9315497
 educe = "0.6.0"
+slotmap = "1.0.7"
 
 # TODO: Dependent below crates in some features instead of in all.
 tokio = { version = "1.40.0", optional = true, features = ["full"] }
