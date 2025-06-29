@@ -10,7 +10,7 @@ use std::{
     marker::PhantomData,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 
@@ -68,9 +68,11 @@ where
     }
 }
 
+type SubscriptionsType<'sub> = Arc<Mutex<Vec<(Subscription<'sub>, Arc<AtomicBool>)>>>;
+
 struct MergeAllObserver<'sub, T, OR> {
     observer: Arc<Mutex<Option<OR>>>,
-    subscriptions: Arc<Mutex<Vec<Subscription<'sub>>>>,
+    subscriptions: SubscriptionsType<'sub>,
     pending_termination_count: Arc<AtomicUsize>,
     _marker: MarkerType<T>,
 }
@@ -81,14 +83,21 @@ where
     OE1: Observable<'or, 'sub, T, E>,
 {
     fn on_next(&mut self, value: OE1) {
+        let terminated = Arc::new(AtomicBool::new(false));
         let observer = MergeAllInnerObserver {
             observer: self.observer.clone(),
             pending_termination_count: self.pending_termination_count.clone(),
+            terminated: terminated.clone(),
         };
         self.pending_termination_count
             .fetch_add(1, Ordering::SeqCst);
         let sub = value.subscribe(observer);
-        self.subscriptions.lock().unwrap().push(sub); // TODO: self.subscriptions never reduce.
+
+        let mut lock = self.subscriptions.lock().unwrap();
+        // clean up terminated subscriptions
+        lock.retain(|(_, terminated)| !terminated.load(Ordering::SeqCst));
+        // add new subscription
+        lock.push((sub, terminated));
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -114,6 +123,7 @@ where
 struct MergeAllInnerObserver<OR> {
     observer: Arc<Mutex<Option<OR>>>,
     pending_termination_count: Arc<AtomicUsize>,
+    terminated: Arc<AtomicBool>,
 }
 
 impl<T, E, OR> Observer<T, E> for MergeAllInnerObserver<OR>
@@ -127,6 +137,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
+        self.terminated.store(true, Ordering::SeqCst);
         match termination {
             Termination::Completed => {
                 self.pending_termination_count
@@ -147,7 +158,7 @@ where
 }
 
 struct MergeAllDisposal<'sub> {
-    subscriptions: Arc<Mutex<Vec<Subscription<'sub>>>>,
+    subscriptions: SubscriptionsType<'sub>,
 }
 
 impl Disposable for MergeAllDisposal<'_> {
