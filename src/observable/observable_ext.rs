@@ -10,7 +10,10 @@ use crate::{
             merge_all::MergeAll, switch::Switch, zip::Zip,
         },
         conditional_boolean::take_until::TakeUntil,
-        error_handling::catch_error::CatchError,
+        error_handling::{
+            catch_error::CatchError,
+            retry::{Retry, RetryAction},
+        },
         filtering::{
             debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
             element_at::ElementAt, filter::Filter, first::First, ignore_elements::IgnoreElements,
@@ -323,6 +326,15 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         buffer_size: Option<usize>,
     ) -> ConnectableObservable<Self, ReplaySubject<'or, T, E>> {
         self.multicast(|| ReplaySubject::new(buffer_size))
+    }
+
+    fn retry<OE1, F>(self, callback: F) -> Retry<Self, F>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE1: Observable<'or, 'sub, T, E>,
+        F: FnMut(E) -> RetryAction<E, OE1>,
+    {
+        Retry::new(self, callback)
     }
 
     fn sample<OE1>(self, sampler: OE1) -> Sample<Self, OE1>
