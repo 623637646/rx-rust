@@ -10,6 +10,7 @@ use crate::{
             merge_all::MergeAll, switch::Switch, zip::Zip,
         },
         conditional_boolean::take_until::TakeUntil,
+        error_handling::catch_error::CatchError,
         filtering::{
             debounce::Debounce, distinct::Distinct, distinct_until_changed::DistinctUntilChanged,
             element_at::ElementAt, filter::Filter, first::First, ignore_elements::IgnoreElements,
@@ -70,6 +71,15 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         delay: Option<Duration>,
     ) -> BufferWithTimeOrCount<Self, S> {
         BufferWithTimeOrCount::new(self, count, time_span, scheduler, delay)
+    }
+
+    fn catch_error<E1, OE1, F>(self, callback: F) -> CatchError<E, Self, F>
+    where
+        Self: Observable<'or, 'sub, T, E>,
+        OE1: Observable<'or, 'sub, T, E1>,
+        F: FnOnce(E) -> OE1,
+    {
+        CatchError::new(self, callback)
     }
 
     fn combine_latest<T1, OE2>(self, another_source: OE2) -> CombineLatest<Self, OE2>
