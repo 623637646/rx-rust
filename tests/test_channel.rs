@@ -28,7 +28,7 @@ fn test_unsub_on_next() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_next(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().dispose();
+                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -41,7 +41,7 @@ fn test_unsub_on_next() {
         observable_3
             .hook_on_next(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().dispose();
+                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -88,7 +88,7 @@ fn test_unsub_on_completed() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_termination(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().dispose();
+                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -101,7 +101,7 @@ fn test_unsub_on_completed() {
         observable_3
             .hook_on_termination(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().dispose();
+                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -161,7 +161,7 @@ fn test_unsub_on_error() {
     *sub.lock().unwrap() = Some(
         observable_2
             .hook_on_termination(move |value, callback| {
-                sub_cloned.lock().unwrap().take().unwrap().dispose();
+                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
                 callback(value);
             })
             .subscribe(observer_2),
@@ -174,7 +174,7 @@ fn test_unsub_on_error() {
         observable_3
             .hook_on_termination(move |value, callback| {
                 callback(value);
-                sub_cloned.lock().unwrap().take().unwrap().dispose();
+                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
     );

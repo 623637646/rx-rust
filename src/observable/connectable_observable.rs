@@ -23,10 +23,7 @@ impl<OE, S> ConnectableObservable<OE, S> {
         OE: Observable<'or, 'sub, T, E>,
         S: Observer<T, E> + Send + 'or,
     {
-        self.source
-            .lock()
-            .unwrap()
-            .take()
+        { self.source.lock().unwrap().take() }
             .expect("Already connected")
             .subscribe(self.subject)
     }
