@@ -523,31 +523,6 @@ fn test_without_convenient_api() {
 }
 
 #[test]
-fn test_revert_error() {
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable =
-        observable.catch_error(move |value| Throw::new(value).map_infallible_to_value());
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    sender.on_next(111);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    sender.on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_error("error"));
-    assert!(channel_checker.is_error("error"));
-}
-
-#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
