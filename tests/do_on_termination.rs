@@ -46,6 +46,43 @@ fn test_completed() {
 }
 
 #[test]
+fn test_completed_order() {
+    let mut subject = PublishSubject::default();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::<(), _>::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let checker_1_cloned = checker_1.clone();
+    let checker_2_cloned = checker_2.clone();
+    let observable = observable.do_on_termination(move |termination| {
+        assert!(checker_1_cloned.is_active());
+        assert!(checker_2_cloned.is_active());
+        observer_2.on_termination(termination.clone());
+        assert!(checker_1_cloned.is_active());
+        assert!(checker_2_cloned.is_completed());
+    });
+
+    let _subscription = observable.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_completed());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_completed());
+}
+
+#[test]
 fn test_error() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();

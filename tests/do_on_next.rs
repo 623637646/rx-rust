@@ -45,6 +45,49 @@ fn test_completed() {
 }
 
 #[test]
+fn test_completed_order() {
+    let mut subject = PublishSubject::default();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, mut observer_2) = Checker::<_, String>::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let checker_1_cloned = checker_1.clone();
+    let checker_2_cloned = checker_2.clone();
+    let observable = observable.do_on_next(move |value| {
+        assert_eq!(checker_1_cloned.values(), checker_2_cloned.values());
+        observer_2.on_next(*value);
+        assert_eq!(
+            checker_1_cloned
+                .values()
+                .iter()
+                .cloned()
+                .chain(std::iter::once(*value))
+                .collect::<Vec<_>>(),
+            checker_2_cloned.values(),
+        );
+    });
+
+    let _subscription = observable.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_active());
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_completed());
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_dropped());
+}
+
+#[test]
 fn test_error() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
