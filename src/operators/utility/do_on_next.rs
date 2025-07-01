@@ -29,9 +29,9 @@ where
 {
     fn subscribe(mut self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         self.source
-            .hook_on_next(move |value, original| {
+            .hook_on_next(move |observer, value| {
                 (self.callback)(&value);
-                original(value)
+                observer.on_next(value);
             })
             .subscribe(observer)
     }

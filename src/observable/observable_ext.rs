@@ -3,7 +3,9 @@ use super::{
     ref_count_observable::RefCount,
 };
 use crate::{
-    observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
+    observer::{
+        Observer, Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver,
+    },
     operators::{
         combining::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll, merge::Merge,
@@ -217,7 +219,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
     fn hook_on_next<F>(self, callback: F) -> HookOnNext<Self, F>
     where
         Self: Observable<'or, 'sub, T, E>,
-        F: for<'a> FnMut(T, Box<dyn FnOnce(T) + 'a>),
+        F: FnMut(&mut dyn Observer<T, E>, T),
     {
         HookOnNext::new(self, callback)
     }

@@ -21,9 +21,9 @@ fn test_completed() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_next(move |value, original| {
+    let observable = observable.hook_on_next(move |observer, value| {
         observer_2.on_next(value);
-        original(value * 2);
+        observer.on_next(value * 2);
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -53,7 +53,7 @@ fn test_completed_no_call_original() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_next(move |value, _| {
+    let observable = observable.hook_on_next(move |_, value| {
         observer_2.on_next(value);
     });
 
@@ -84,9 +84,9 @@ fn test_error() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_next(move |value, original| {
+    let observable = observable.hook_on_next(move |observer, value| {
         observer_2.on_next(value);
-        original(value * 2);
+        observer.on_next(value * 2);
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -118,9 +118,9 @@ fn test_unsubscribe() {
     // Custom operations
     let observable = subject.clone();
     let observer_3 = Arc::new(Mutex::new(observer_3));
-    let observable = observable.hook_on_next(move |value, original| {
+    let observable = observable.hook_on_next(move |observer, value| {
         observer_3.lock().unwrap().on_next(value);
-        original(value * 2);
+        observer.on_next(value * 2);
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -181,9 +181,9 @@ fn test_ref() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_next(move |value, original| {
+    let observable = observable.hook_on_next(move |observer, value| {
         observer_2.on_next(value);
-        original(value_2_ref);
+        observer.on_next(value_2_ref);
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -218,9 +218,9 @@ fn test_mut_ref() {
     let (checker, mut observer) = Checker::<_, String>::new();
 
     // Custom operations
-    let observable = observable.hook_on_next(move |value, original| {
+    let observable = observable.hook_on_next(move |or, value| {
         observer.on_next(*value);
-        original(value);
+        or.on_next(value);
     });
 
     let _subscription = observable.subscribe_with_callback(
@@ -249,9 +249,9 @@ async fn test_async() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_next(move |value, original| {
+    let observable = observable.hook_on_next(move |observer, value| {
         observer_2.on_next(value);
-        original(value * 2);
+        observer.on_next(value * 2);
     });
 
     let handle = tokio::spawn(async move { observable.subscribe(observer_1) });
@@ -299,9 +299,9 @@ fn test_subscribe_by_different_observer() {
     // Custom operations
     let observable = subject.clone();
     let observer_3 = Arc::new(Mutex::new(observer_3));
-    let observable = observable.hook_on_next(move |value, original| {
+    let observable = observable.hook_on_next(move |observer, value| {
         observer_3.lock().unwrap().on_next(value);
-        original(value * 2);
+        observer.on_next(value * 2);
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -344,13 +344,13 @@ fn test_multiple_operation() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable
-        .hook_on_next(move |value, original| {
+        .hook_on_next(move |observer, value| {
             observer_2.on_next(value);
-            original(value * 2);
+            observer.on_next(value * 2);
         })
-        .hook_on_next(move |value, original| {
+        .hook_on_next(move |observer, value| {
             observer_3.on_next(value);
-            original(value * 2);
+            observer.on_next(value * 2);
         });
 
     let _subscription = observable.subscribe(observer_1);
@@ -386,9 +386,9 @@ fn test_without_convenient_api() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = HookOnNext::new(observable, move |value, original| {
+    let observable = HookOnNext::new(observable, move |observer, value| {
         observer_2.on_next(value);
-        original(value * 2);
+        observer.on_next(value * 2);
     });
 
     let _subscription = observable.subscribe(observer_1);
