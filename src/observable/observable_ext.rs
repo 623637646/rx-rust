@@ -37,6 +37,7 @@ use crate::{
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_after_next::DoAfterNext,
             do_after_termination::DoAfterTermination, do_before_next::DoBeforeNext,
+            do_before_subscription::DoBeforeSubscription,
             do_before_termination::DoBeforeTermination, materialize::Materialize,
         },
     },
@@ -177,6 +178,13 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         F: FnMut(&T),
     {
         DoBeforeNext::new(self, callback)
+    }
+
+    fn do_before_subscription<F>(self, callback: F) -> DoBeforeSubscription<Self, F>
+    where
+        F: FnOnce(),
+    {
+        DoBeforeSubscription::new(self, callback)
     }
 
     fn do_before_termination<F>(self, callback: F) -> DoBeforeTermination<Self, F>

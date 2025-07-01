@@ -3,5 +3,6 @@ pub mod dematerialize;
 pub mod do_after_next;
 pub mod do_after_termination;
 pub mod do_before_next;
+pub mod do_before_subscription;
 pub mod do_before_termination;
 pub mod materialize;
