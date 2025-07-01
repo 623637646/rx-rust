@@ -46,10 +46,9 @@ use crate::{
 };
 use std::{convert::Infallible, num::NonZeroUsize, time::Duration};
 
-pub trait ObservableExt<'or, 'sub, T, E>: Sized {
+pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     fn buffer<OE1>(self, boundary: OE1) -> Buffer<Self, OE1>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, (), E>,
     {
         Buffer::new(self, boundary)
@@ -80,7 +79,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn catch_error<E1, OE1, F>(self, callback: F) -> CatchError<E, Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, T, E1>,
         F: FnOnce(E) -> OE1,
     {
@@ -89,7 +87,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn combine_latest<T1, OE2>(self, another_source: OE2) -> CombineLatest<Self, OE2>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE2: Observable<'or, 'sub, T1, E>,
     {
         CombineLatest::new(self, another_source)
@@ -97,7 +94,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn concat_all<T1>(self) -> ConcatAll<Self, T>
     where
-        Self: Observable<'or, 'sub, T, E>,
         T: Observable<'or, 'sub, T1, E>,
     {
         ConcatAll::new(self)
@@ -105,7 +101,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn concat_map<T1, OE1, F>(self, callback: F) -> ConcatMap<T, Self, OE1, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, T1, E>,
         F: FnMut(T) -> OE1,
     {
@@ -114,7 +109,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn concat_with<OE2>(self, source_2: OE2) -> Concat<Self, OE2>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE2: Observable<'or, 'sub, T, E>,
     {
         Concat::new(self, source_2)
@@ -135,14 +129,12 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
     fn distinct(self) -> Distinct<Self, fn(&T) -> T>
     where
         T: Clone,
-        Self: Observable<'or, 'sub, T, E>,
     {
         Distinct::new(self)
     }
 
     fn distinct_with_key_selector<F, K>(self, key_selector: F) -> Distinct<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(&T) -> K,
     {
         Distinct::new_with_key_selector(self, key_selector)
@@ -151,7 +143,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
     fn distinct_until_changed(self) -> DistinctUntilChanged<Self, fn(&T) -> T>
     where
         T: Clone,
-        Self: Observable<'or, 'sub, T, E>,
     {
         DistinctUntilChanged::new(self)
     }
@@ -161,7 +152,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
         key_selector: F,
     ) -> DistinctUntilChanged<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(&T) -> K,
     {
         DistinctUntilChanged::new_with_key_selector(self, key_selector)
@@ -169,7 +159,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn do_on_next<F>(self, callback: F) -> DoOnNext<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(&T),
     {
         DoOnNext::new(self, callback)
@@ -177,7 +166,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn do_on_termination<F>(self, callback: F) -> DoOnTermination<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnOnce(&Termination<E>),
     {
         DoOnTermination::new(self, callback)
@@ -189,7 +177,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn filter<F>(self, callback: F) -> Filter<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(&T) -> bool,
     {
         Filter::new(self, callback)
@@ -201,7 +188,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn flat_map<T1, OE1, F>(self, callback: F) -> FlatMap<T, Self, OE1, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, T1, E>,
         F: FnMut(T) -> OE1,
     {
@@ -210,7 +196,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn group_by<F, K>(self, callback: F) -> GroupBy<Self, F, K>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(T) -> K,
     {
         GroupBy::new(self, callback)
@@ -218,7 +203,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn hook_on_next<F>(self, callback: F) -> HookOnNext<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(&mut dyn Observer<T, E>, T),
     {
         HookOnNext::new(self, callback)
@@ -226,7 +210,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn hook_on_subscription<F>(self, callback: F) -> HookOnSubscription<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnOnce(Self, BoxedObserver<'or, T, E>) -> Subscription<'sub>,
     {
         HookOnSubscription::new(self, callback)
@@ -234,7 +217,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn hook_on_termination<F>(self, callback: F) -> HookOnTermination<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>),
     {
         HookOnTermination::new(self, callback)
@@ -248,7 +230,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
     where
         T: 'or,
         E: 'or,
-        Self: Observable<'or, 'sub, T, E> + Send + 'oe,
+        Self: Send + 'oe,
     {
         BoxedObservable::new(self)
     }
@@ -266,7 +248,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn map<T1, F>(self, callback: F) -> Map<T, Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(T) -> T1,
     {
         Map::new(self, callback)
@@ -286,7 +267,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn merge_all<T1>(self) -> MergeAll<Self, T>
     where
-        Self: Observable<'or, 'sub, T, E>,
         T: Observable<'or, 'sub, T1, E>,
     {
         MergeAll::new(self)
@@ -294,7 +274,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn merge_with<OE2>(self, source_2: OE2) -> Merge<Self, OE2>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE2: Observable<'or, 'sub, T, E>,
     {
         Merge::new(self, source_2)
@@ -317,7 +296,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn reduce<T0, F>(self, initial_value: T0, callback: F) -> Reduce<T0, T, Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(T0, T) -> T0,
     {
         Reduce::new(self, initial_value, callback)
@@ -332,7 +310,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn retry<OE1, F>(self, callback: F) -> Retry<Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, T, E>,
         F: FnMut(E) -> RetryAction<E, OE1>,
     {
@@ -341,7 +318,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn sample<OE1>(self, sampler: OE1) -> Sample<Self, OE1>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, (), E>,
     {
         Sample::new(self, sampler)
@@ -349,7 +325,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn scan<T0, F>(self, initial_value: T0, callback: F) -> Scan<T0, T, Self, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         F: FnMut(T0, T) -> T0,
     {
         Scan::new(self, initial_value, callback)
@@ -379,7 +354,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn start_with<OE0>(self, start: OE0) -> Concat<OE0, Self>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE0: Observable<'or, 'sub, T, E>,
     {
         start.concat_with(self)
@@ -389,7 +363,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
     where
         T: 'or,
         E: 'or,
-        Self: Observable<'or, 'sub, T, E>,
         FN: FnMut(T) + Send + 'or,
         FT: FnOnce(Termination<E>) + Send + 'or,
     {
@@ -398,7 +371,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn switch<T1>(self) -> Switch<Self, T>
     where
-        Self: Observable<'or, 'sub, T, E>,
         T: Observable<'or, 'sub, T1, E>,
     {
         Switch::new(self)
@@ -406,7 +378,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn switch_map<T1, OE1, F>(self, callback: F) -> SwitchMap<T, Self, OE1, F>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, T1, E>,
         F: FnMut(T) -> OE1,
     {
@@ -423,7 +394,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn take_until<T1, OE1>(self, stop: OE1) -> TakeUntil<T1, Self, OE1>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, T1, E>,
     {
         TakeUntil::new(self, stop)
@@ -435,7 +405,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn window<OE1>(self, boundary: OE1) -> Window<Self, OE1>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE1: Observable<'or, 'sub, (), E>,
     {
         Window::new(self, boundary)
@@ -447,7 +416,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
 
     fn zip<T1, OE2>(self, another_source: OE2) -> Zip<Self, OE2>
     where
-        Self: Observable<'or, 'sub, T, E>,
         OE2: Observable<'or, 'sub, T1, E>,
     {
         Zip::new(self, another_source)
