@@ -7,12 +7,12 @@ use educe::Educe;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct DoOnNext<OE, F> {
+pub struct DoBeforeNext<OE, F> {
     source: OE,
     callback: F,
 }
 
-impl<OE, F> DoOnNext<OE, F> {
+impl<OE, F> DoBeforeNext<OE, F> {
     pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
@@ -22,7 +22,7 @@ impl<OE, F> DoOnNext<OE, F> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoOnNext<OE, F>
+impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoBeforeNext<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
     F: FnMut(&T) + Send + 'or,

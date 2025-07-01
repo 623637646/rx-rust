@@ -7,12 +7,12 @@ use educe::Educe;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct DoOnTermination<OE, F> {
+pub struct DoBeforeTermination<OE, F> {
     source: OE,
     callback: F,
 }
 
-impl<OE, F> DoOnTermination<OE, F> {
+impl<OE, F> DoBeforeTermination<OE, F> {
     pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
@@ -22,7 +22,7 @@ impl<OE, F> DoOnTermination<OE, F> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoOnTermination<OE, F>
+impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoBeforeTermination<OE, F>
 where
     T: 'or,
     E: 'or,

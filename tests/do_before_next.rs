@@ -3,13 +3,12 @@ mod tests_utils;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
-    operators::{creating::create::Create, utility::do_on_termination::DoOnTermination},
+    operators::{creating::create::Create, utility::do_before_next::DoBeforeNext},
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
 };
 use std::{
     convert::Infallible,
-    ops::Deref,
     sync::{Arc, Mutex},
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
@@ -18,12 +17,12 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 fn test_completed() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
-    let (checker_2, observer_2) = Checker::<(), _>::new();
+    let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.do_on_termination(move |termination| {
-        observer_2.on_termination(termination.clone());
+    let observable = observable.do_before_next(move |value| {
+        observer_2.on_next(*value);
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -35,32 +34,38 @@ fn test_completed() {
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_completed());
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_dropped());
 }
 
 #[test]
 fn test_completed_order() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
-    let (checker_2, observer_2) = Checker::<(), _>::new();
+    let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
     let checker_1_cloned = checker_1.clone();
     let checker_2_cloned = checker_2.clone();
-    let observable = observable.do_on_termination(move |termination| {
-        assert!(checker_1_cloned.is_active());
-        assert!(checker_2_cloned.is_active());
-        observer_2.on_termination(termination.clone());
-        assert!(checker_1_cloned.is_active());
-        assert!(checker_2_cloned.is_completed());
+    let observable = observable.do_before_next(move |value| {
+        assert_eq!(checker_1_cloned.values(), checker_2_cloned.values());
+        observer_2.on_next(*value);
+        assert_eq!(
+            checker_1_cloned
+                .values()
+                .iter()
+                .cloned()
+                .chain(std::iter::once(*value))
+                .collect::<Vec<_>>(),
+            checker_2_cloned.values(),
+        );
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -72,26 +77,26 @@ fn test_completed_order() {
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_completed());
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_dropped());
 }
 
 #[test]
 fn test_error() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
-    let (checker_2, observer_2) = Checker::<(), _>::new();
+    let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.do_on_termination(move |termination| {
-        observer_2.on_termination(termination.clone());
+    let observable = observable.do_before_next(move |value| {
+        observer_2.on_next(*value);
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -103,27 +108,28 @@ fn test_error() {
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_error("error"));
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_error("error"));
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_dropped());
 }
 
 #[test]
 fn test_unsubscribe() {
-    let terminations = Arc::new(Mutex::new(Vec::new()));
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.do_on_termination(|termination| {
-        terminations.lock().unwrap().push(termination.clone());
+    let observer_3 = Arc::new(Mutex::new(observer_3));
+    let observable = observable.do_before_next(move |value| {
+        observer_3.lock().unwrap().on_next(*value);
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -134,38 +140,40 @@ fn test_unsubscribe() {
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
-    assert!(terminations.lock().unwrap().is_empty());
+    assert!(checker_3.values().is_empty());
+    assert!(checker_3.is_active());
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
-    assert!(terminations.lock().unwrap().is_empty());
+    assert_eq!(checker_3.values(), [111, 111]);
+    assert!(checker_3.is_active());
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
-    assert!(terminations.lock().unwrap().is_empty());
+    assert_eq!(checker_3.values(), [111, 111]);
+    assert!(checker_3.is_active());
 
     subject.on_next(222);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_active());
-    assert!(terminations.lock().unwrap().is_empty());
+    assert_eq!(checker_3.values(), [111, 111, 222]);
+    assert!(checker_3.is_active());
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
     assert_eq!(checker_2.values(), [111, 222]);
     assert!(checker_2.is_error("error"));
-    assert_eq!(
-        terminations.lock().unwrap().deref(),
-        &[Termination::Error("error")]
-    );
+    assert_eq!(checker_3.values(), [111, 111, 222]);
+    assert!(checker_3.is_dropped());
 }
 
 #[test]
@@ -174,14 +182,14 @@ fn test_ref() {
     let error = 222;
 
     let (checker_1, observer_1) = Checker::new();
-    let (checker_2, observer_2) = Checker::<(), _>::new();
+    let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
     let mut subject = PublishSubject::default();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.do_on_termination(|termination| {
-        observer_2.on_termination(termination.clone());
+    let observable = observable.do_before_next(move |value| {
+        observer_2.on_next(*value);
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -193,14 +201,14 @@ fn test_ref() {
     subject.on_next(&value);
     assert_eq!(checker_1.values(), [&value]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [&value]);
     assert!(checker_2.is_active());
 
     subject.on_termination(Termination::Error(&error));
     assert_eq!(checker_1.values(), [&value]);
     assert!(checker_1.is_error(&error));
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_error(&error));
+    assert_eq!(checker_2.values(), [&value]);
+    assert!(checker_2.is_dropped());
 }
 
 #[test]
@@ -213,15 +221,11 @@ fn test_mut_ref() {
         observer.on_termination(Termination::Error(&mut error));
         Subscription::new_none_disposal()
     });
-    let (checker, observer) = Checker::<(), _>::new();
-    let (_, on_termination) = observer.into_callbacks();
+    let (checker, mut observer) = Checker::<_, String>::new();
 
     // Custom operations
-    let observable = observable.do_on_termination(|termination| match termination {
-        Termination::Completed => panic!(),
-        Termination::Error(error) => {
-            on_termination(Termination::Error(**error));
-        }
+    let observable = observable.do_before_next(move |value| {
+        observer.on_next(**value);
     });
 
     let _subscription = observable.subscribe_with_callback(
@@ -236,8 +240,8 @@ fn test_mut_ref() {
         },
     );
 
-    assert!(checker.values().is_empty());
-    assert!(checker.is_error(222));
+    assert_eq!(checker.values(), [111]);
+    assert!(checker.is_dropped());
     assert_eq!(value, 222);
     assert_eq!(error, 444);
 }
@@ -246,12 +250,12 @@ fn test_mut_ref() {
 async fn test_async() {
     let subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
-    let (checker_2, observer_2) = Checker::<(), _>::new();
+    let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.do_on_termination(|termination| {
-        observer_2.on_termination(termination.clone());
+    let observable = observable.do_before_next(move |value| {
+        observer_2.on_next(*value);
     });
 
     let handle = tokio::spawn(async move { observable.subscribe(observer_1) });
@@ -268,14 +272,14 @@ async fn test_async() {
     handle.await.unwrap();
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     let handle = tokio::spawn(async { subscription.dispose() });
     handle.await.unwrap();
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_dropped());
 
     let subject_cloned = subject.clone();
@@ -285,7 +289,7 @@ async fn test_async() {
     handle.await.unwrap();
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_dropped());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_dropped());
 }
 
@@ -294,16 +298,13 @@ fn test_subscribe_by_different_observer() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
-    let terminations = Arc::new(Mutex::new(Vec::new()));
+    let (checker_3, observer_3) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
-    let terminations_cloned = terminations.clone();
-    let observable = observable.do_on_termination(move |termination| {
-        terminations_cloned
-            .lock()
-            .unwrap()
-            .push(termination.clone());
+    let observer_3 = Arc::new(Mutex::new(observer_3));
+    let observable = observable.do_before_next(move |value| {
+        observer_3.lock().unwrap().on_next(*value);
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -316,79 +317,78 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
-    assert!(terminations.lock().unwrap().is_empty());
+    assert!(checker_3.values().is_empty());
+    assert!(checker_3.is_active());
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
-    assert!(terminations.lock().unwrap().is_empty());
+    assert_eq!(checker_3.values(), [111, 111]);
+    assert!(checker_3.is_active());
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_error("error"));
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_error("error"));
-    assert_eq!(
-        terminations.lock().unwrap().as_ref(),
-        vec![Termination::Error("error"), Termination::Error("error")]
-    );
+    assert_eq!(checker_3.values(), [111, 111]);
+    assert!(checker_3.is_dropped());
 }
 
 #[test]
 fn test_multiple_operation() {
-    let mut subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
-    let terminations = Arc::new(Mutex::new(Vec::new()));
+    let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, mut observer_2) = Checker::<_, String>::new();
+    let (checker_3, mut observer_3) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
-    let terminations_cloned_1 = terminations.clone();
-    let terminations_cloned_2 = terminations.clone();
     let observable = observable
-        .do_on_termination(move |termination| {
-            terminations_cloned_1
-                .lock()
-                .unwrap()
-                .push(termination.clone());
+        .do_before_next(move |value| {
+            observer_2.on_next(*value);
         })
-        .do_on_termination(move |termination| {
-            terminations_cloned_2
-                .lock()
-                .unwrap()
-                .push(termination.clone());
+        .do_before_next(move |value| {
+            observer_3.on_next(*value);
         });
 
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(terminations.lock().unwrap().is_empty());
+    let _subscription = observable.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert!(checker_1.is_active());
+    assert!(checker_2.values().is_empty());
+    assert!(checker_2.is_active());
+    assert!(checker_3.values().is_empty());
+    assert!(checker_3.is_active());
 
     subject.on_next(111);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(terminations.lock().unwrap().is_empty());
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_active());
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_active());
+    assert_eq!(checker_3.values(), [111]);
+    assert!(checker_3.is_active());
 
     subject.on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_error("error"));
-    assert_eq!(
-        terminations.lock().unwrap().as_ref(),
-        vec![Termination::Error("error"), Termination::Error("error")]
-    );
+    assert_eq!(checker_1.values(), [111]);
+    assert!(checker_1.is_error("error"));
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_dropped());
+    assert_eq!(checker_3.values(), [111]);
+    assert!(checker_3.is_dropped());
 }
 
 #[test]
 fn test_without_convenient_api() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
-    let (checker_2, observer_2) = Checker::<(), _>::new();
+    let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = DoOnTermination::new(observable, move |termination| {
-        observer_2.on_termination(termination.clone());
+    let observable = DoBeforeNext::new(observable, move |value| {
+        observer_2.on_next(*value);
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -400,14 +400,14 @@ fn test_without_convenient_api() {
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_error("error"));
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_error("error"));
+    assert_eq!(checker_2.values(), [111]);
+    assert!(checker_2.is_dropped());
 }
 
 #[test]
@@ -429,7 +429,7 @@ fn test_lifetime_sub() {
             })
         });
 
-        let observable = observable.do_on_termination(|_| {});
+        let observable = observable.do_before_next(|_| {});
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -451,7 +451,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::new_none_disposal()
         });
-        let observable = observable.do_on_termination(|_| {});
+        let observable = observable.do_before_next(|_| {});
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(&life_marker_2);
@@ -461,14 +461,14 @@ fn test_lifetime_or() {
 
 #[test]
 fn test_fn() {
-    let s = TestStruct;
+    let mut s = TestStruct;
 
     let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.do_on_termination(|_| {
-        s.consume();
+    let observable = observable.do_before_next(|_| {
+        s.consume_mut();
     });
 
     observable.subscribe_with_callback(|_| {}, |_| {});
@@ -481,7 +481,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::new_none_disposal()
     });
-    let observable = observable.do_on_termination(|_| {});
+    let observable = observable.do_before_next(|_| {});
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -489,7 +489,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.do_on_termination(|_| {});
+    let observable = subject.do_before_next(|_| {});
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -500,7 +500,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.do_on_termination(|_| {});
+    let observable = subject.do_before_next(|_| {});
 
     observable.filter(|_| true);
 }

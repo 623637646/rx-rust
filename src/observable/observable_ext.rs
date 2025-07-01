@@ -36,8 +36,8 @@ use crate::{
         },
         utility::{
             delay::Delay, dematerialize::Dematerialize, do_after_next::DoAfterNext,
-            do_after_termination::DoAfterTermination, do_on_next::DoOnNext,
-            do_on_termination::DoOnTermination, materialize::Materialize,
+            do_after_termination::DoAfterTermination, do_before_next::DoBeforeNext,
+            do_before_termination::DoBeforeTermination, materialize::Materialize,
         },
     },
     subject::{
@@ -172,18 +172,18 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         DoAfterTermination::new(self, callback)
     }
 
-    fn do_on_next<F>(self, callback: F) -> DoOnNext<Self, F>
+    fn do_before_next<F>(self, callback: F) -> DoBeforeNext<Self, F>
     where
         F: FnMut(&T),
     {
-        DoOnNext::new(self, callback)
+        DoBeforeNext::new(self, callback)
     }
 
-    fn do_on_termination<F>(self, callback: F) -> DoOnTermination<Self, F>
+    fn do_before_termination<F>(self, callback: F) -> DoBeforeTermination<Self, F>
     where
         F: FnOnce(&Termination<E>),
     {
-        DoOnTermination::new(self, callback)
+        DoBeforeTermination::new(self, callback)
     }
 
     fn element_at(self, index: usize) -> ElementAt<Self> {
