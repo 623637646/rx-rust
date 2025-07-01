@@ -77,6 +77,31 @@ fn test_completed_no_call_original() {
 }
 
 #[test]
+fn test_completed_resend_values() {
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let observable = observable.hook_on_next(move |observer, value| {
+        observer.on_next(value);
+        observer.on_next(value);
+    });
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert!(checker.is_active());
+
+    subject.on_next(111);
+    assert_eq!(checker.values(), [111, 111]);
+    assert!(checker.is_active());
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [111, 111]);
+    assert!(checker.is_completed());
+}
+
+#[test]
 fn test_error() {
     let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
