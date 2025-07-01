@@ -488,9 +488,9 @@ fn test_unsub_on_completed() {
     *sub.lock().unwrap() = Some(
         observable
             .clone()
-            .hook_on_termination(move |value, callback| {
+            .hook_on_termination(move |observer, value| {
                 { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
-                callback(value);
+                observer.on_termination(value);
             })
             .subscribe(observer_2),
     );
@@ -500,8 +500,8 @@ fn test_unsub_on_completed() {
     let sub_cloned = sub.clone();
     *sub.lock().unwrap() = Some(
         observable
-            .hook_on_termination(move |value, callback| {
-                callback(value);
+            .hook_on_termination(move |observer, value| {
+                observer.on_termination(value);
                 { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
@@ -554,13 +554,13 @@ fn test_sub_on_completed() {
     let _subscription = Some(
         observable
             .clone()
-            .hook_on_termination(move |value, callback| {
+            .hook_on_termination(move |observer, value| {
                 // subscribe before on_next
                 if let Some(observer) = observer_2.take() {
                     *subscription_2_cloned.lock().unwrap() =
                         Some(observable.clone().subscribe(observer));
                 }
-                callback(value);
+                observer.on_termination(value);
                 // subscribe after on_next
                 if let Some(observer) = observer_3.take() {
                     *subscription_3_cloned.lock().unwrap() =
@@ -624,9 +624,9 @@ fn test_unsub_on_error() {
     *sub.lock().unwrap() = Some(
         observable
             .clone()
-            .hook_on_termination(move |value, callback| {
+            .hook_on_termination(move |observer, value| {
                 { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
-                callback(value);
+                observer.on_termination(value);
             })
             .subscribe(observer_2),
     );
@@ -636,8 +636,8 @@ fn test_unsub_on_error() {
     let sub_cloned = sub.clone();
     *sub.lock().unwrap() = Some(
         observable
-            .hook_on_termination(move |value, callback| {
-                callback(value);
+            .hook_on_termination(move |observer, value| {
+                observer.on_termination(value);
                 { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
@@ -693,13 +693,13 @@ fn test_sub_on_error() {
     let _subscription = Some(
         observable
             .clone()
-            .hook_on_termination(move |value, callback| {
+            .hook_on_termination(move |observer, value| {
                 // subscribe before on_next
                 if let Some(observer) = observer_2.take() {
                     *subscription_2_cloned.lock().unwrap() =
                         Some(observable.clone().subscribe(observer));
                 }
-                callback(value);
+                observer.on_termination(value);
                 // subscribe after on_next
                 if let Some(observer) = observer_3.take() {
                     *subscription_3_cloned.lock().unwrap() =

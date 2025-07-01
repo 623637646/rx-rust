@@ -24,14 +24,16 @@ impl<OE, F> DoOnTermination<OE, F> {
 
 impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoOnTermination<OE, F>
 where
+    T: 'or,
+    E: 'or,
     OE: Observable<'or, 'sub, T, E>,
     F: FnOnce(&Termination<E>) + Send + 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
         self.source
-            .hook_on_termination(move |termination, original| {
+            .hook_on_termination(move |observer, termination| {
                 (self.callback)(&termination);
-                original(termination)
+                observer.on_termination(termination)
             })
             .subscribe(observer)
     }

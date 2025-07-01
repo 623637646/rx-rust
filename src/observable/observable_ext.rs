@@ -235,7 +235,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Sized {
     fn hook_on_termination<F>(self, callback: F) -> HookOnTermination<Self, F>
     where
         Self: Observable<'or, 'sub, T, E>,
-        F: for<'a> FnOnce(Termination<E>, Box<dyn FnOnce(Termination<E>) + 'a>),
+        F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>),
     {
         HookOnTermination::new(self, callback)
     }

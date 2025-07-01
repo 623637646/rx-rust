@@ -22,9 +22,9 @@ fn test_completed() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_termination(move |termination, original| {
+    let observable = observable.hook_on_termination(move |observer, termination| {
         observer_2.on_termination(termination);
-        original(Termination::Error("error"));
+        observer.on_termination(Termination::Error("error"));
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -54,7 +54,7 @@ fn test_completed_no_call_original() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_termination(move |termination, _| {
+    let observable = observable.hook_on_termination(move |_, termination| {
         observer_2.on_termination(termination);
     });
 
@@ -85,9 +85,9 @@ fn test_error() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_termination(move |termination, original| {
+    let observable = observable.hook_on_termination(move |observer, termination| {
         observer_2.on_termination(termination);
-        original(Termination::Completed);
+        observer.on_termination(Termination::Completed);
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -118,12 +118,12 @@ fn test_unsubscribe() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_termination(|termination, original| {
+    let observable = observable.hook_on_termination(|observer, termination| {
         match termination {
             Termination::Completed => panic!(),
             Termination::Error(error) => {
                 assert_eq!(error, "error");
-                original(Termination::Error("hooked"));
+                observer.on_termination(Termination::Error("hooked"));
             }
         }
         terminations.lock().unwrap().push(termination);
@@ -184,9 +184,9 @@ fn test_ref() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_termination(|termination, original| {
+    let observable = observable.hook_on_termination(|observer, termination| {
         observer_2.on_termination(termination);
-        original(Termination::Error(&error_2));
+        observer.on_termination(Termination::Error(&error_2));
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -223,7 +223,7 @@ fn test_mut_ref() {
     let (_, on_termination) = observer.into_callbacks();
 
     // Custom operations
-    let observable = observable.hook_on_termination(|mut termination, original| {
+    let observable = observable.hook_on_termination(|observer, mut termination| {
         match &mut termination {
             Termination::Completed => panic!(),
             Termination::Error(error) => {
@@ -231,7 +231,7 @@ fn test_mut_ref() {
                 **error *= 2;
             }
         }
-        original(Termination::Error(&mut error_2));
+        observer.on_termination(Termination::Error(&mut error_2));
     });
 
     let _subscription = observable.subscribe_with_callback(
@@ -261,9 +261,9 @@ async fn test_async() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.hook_on_termination(move |termination, original| {
+    let observable = observable.hook_on_termination(move |observer, termination| {
         observer_2.on_termination(termination);
-        original(Termination::Completed);
+        observer.on_termination(Termination::Completed);
         panic!()
     });
 
@@ -312,9 +312,9 @@ fn test_subscribe_by_different_observer() {
     // Custom operations
     let observable = subject.clone();
     let terminations_cloned = terminations.clone();
-    let observable = observable.hook_on_termination(move |termination, original| {
+    let observable = observable.hook_on_termination(move |observer, termination| {
         terminations_cloned.lock().unwrap().push(termination);
-        original(Termination::Completed);
+        observer.on_termination(Termination::Completed);
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -357,13 +357,13 @@ fn test_multiple_operation() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable
-        .hook_on_termination(move |termination, original| {
+        .hook_on_termination(move |observer, termination| {
             observer_2.on_termination(termination);
-            original(Termination::Error("222"));
+            observer.on_termination(Termination::Error("222"));
         })
-        .hook_on_termination(move |termination, original| {
+        .hook_on_termination(move |observer, termination| {
             observer_3.on_termination(termination);
-            original(Termination::Error("333"));
+            observer.on_termination(Termination::Error("333"));
         });
 
     let _subscription = observable.subscribe(observer_1);
@@ -399,9 +399,9 @@ fn test_without_convenient_api() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = HookOnTermination::new(observable, move |termination, original| {
+    let observable = HookOnTermination::new(observable, move |observer, termination| {
         observer_2.on_termination(termination);
-        original(Termination::Completed);
+        observer.on_termination(Termination::Completed);
     });
 
     let _subscription = observable.subscribe(observer_1);
