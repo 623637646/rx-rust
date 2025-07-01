@@ -35,8 +35,8 @@ use crate::{
             window::Window, window_with_count::WindowWithCount,
         },
         utility::{
-            delay::Delay, dematerialize::Dematerialize, do_on_next::DoOnNext,
-            do_on_termination::DoOnTermination, materialize::Materialize,
+            delay::Delay, dematerialize::Dematerialize, do_after_next::DoAfterNext,
+            do_on_next::DoOnNext, do_on_termination::DoOnTermination, materialize::Materialize,
         },
     },
     subject::{
@@ -155,6 +155,13 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         F: FnMut(&T) -> K,
     {
         DistinctUntilChanged::new_with_key_selector(self, key_selector)
+    }
+
+    fn do_after_next<F>(self, callback: F) -> DoAfterNext<Self, F>
+    where
+        F: FnMut(T),
+    {
+        DoAfterNext::new(self, callback)
     }
 
     fn do_on_next<F>(self, callback: F) -> DoOnNext<Self, F>
