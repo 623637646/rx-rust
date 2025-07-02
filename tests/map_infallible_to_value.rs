@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -122,31 +123,33 @@ fn test_mut_ref() {
     assert_eq!(error, 222);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let subject = PublishSubject::default();
-    let (checker, observer) = Checker::<&i32, String>::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let subject = PublishSubject::default();
+        let (checker, observer) = Checker::<&i32, String>::new();
 
-    // Custom operations
-    let observable = subject.clone().map_infallible_to_value();
+        // Custom operations
+        let observable = subject.clone().map_infallible_to_value();
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        let handle = spawn(async move { observable.subscribe(observer) });
+        let subscription = handle.await.unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
 
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_dropped());
+        let handle = spawn(async { subscription.dispose() });
+        handle.await.unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_dropped());
 
-    let subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_termination(Termination::Completed);
+        let subject_cloned = subject.clone();
+        let handle = spawn(async move {
+            subject_cloned.on_termination(Termination::Completed);
+        });
+        handle.await.unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_dropped());
     });
-    handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_dropped());
 }
 
 #[test]

@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Termination,
@@ -54,20 +55,22 @@ fn test_mut_ref() {
     assert_eq!(error, 222);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let observable = Throw::new(111);
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let observable = Throw::new(111);
+        let (checker, observer) = Checker::new();
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_error(111));
+        let handle = spawn(async move { observable.subscribe(observer) });
+        let subscription = handle.await.unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_error(111));
 
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_error(111));
+        let handle = spawn(async { subscription.dispose() });
+        handle.await.unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_error(111));
+    });
 }
 
 #[test]

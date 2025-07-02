@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::empty::Empty,
@@ -17,20 +18,22 @@ fn test_completed() {
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_async() {
-    let observable = Empty;
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let observable = Empty;
+        let (checker, observer) = Checker::new();
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_completed());
+        let handle = spawn(async move { observable.subscribe(observer) });
+        let subscription = handle.await.unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_completed());
 
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_completed());
+        let handle = spawn(async { subscription.dispose() });
+        handle.await.unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_completed());
+    });
 }
 
 #[test]

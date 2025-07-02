@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use rx_rust::{
     observable::{
         Observable, connectable_observable::ConnectableObservable, observable_ext::ObservableExt,
@@ -304,83 +305,84 @@ fn test_ref() {
     assert!(channel_checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_async() {
-    let mut counter = 0;
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker_1, observer_1) = Checker::new();
-    let (checker_2, observer_2) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let mut counter = 0;
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
-    let observable = observable
-        .map(move |_| {
-            counter += 1;
-            counter
-        })
-        .publish_last();
-    let observable_1 = observable.clone();
-    let observable_2 = observable.clone();
+        // Custom operations
+        let observable = observable
+            .map(move |_| {
+                counter += 1;
+                counter
+            })
+            .publish_last();
+        let observable_1 = observable.clone();
+        let observable_2 = observable.clone();
 
-    assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+        assert!(checker_1.values().is_empty());
+        assert!(checker_1.is_active());
+        assert!(checker_2.values().is_empty());
+        assert!(checker_2.is_active());
+        assert!(channel_checker.is_initialized());
 
-    let handle = tokio::spawn(async move { observable_1.subscribe(observer_1) });
-    let _subscription_1 = handle.await.unwrap();
-    assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+        let handle = spawn(async move { observable_1.subscribe(observer_1) });
+        let _subscription_1 = handle.await.unwrap();
+        assert!(checker_1.values().is_empty());
+        assert!(checker_1.is_active());
+        assert!(checker_2.values().is_empty());
+        assert!(checker_2.is_active());
+        assert!(channel_checker.is_initialized());
 
-    let handle = tokio::spawn(async move { observable.connect() });
-    let _subscription = handle.await.unwrap();
-    assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+        let handle = spawn(async move { observable.connect() });
+        let _subscription = handle.await.unwrap();
+        assert!(checker_1.values().is_empty());
+        assert!(checker_1.is_active());
+        assert!(checker_2.values().is_empty());
+        assert!(checker_2.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    let handle = tokio::spawn(async move {
-        sender.on_next(());
-        sender
+        let handle = spawn(async move {
+            sender.on_next(());
+            sender
+        });
+        let mut sender = handle.await.unwrap();
+        assert_eq!(checker_1.values(), []);
+        assert!(checker_1.is_active());
+        assert!(checker_2.values().is_empty());
+        assert!(checker_2.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        let handle = spawn(async move { observable_2.subscribe(observer_2) });
+        let _subscription_2 = handle.await.unwrap();
+        assert_eq!(checker_1.values(), []);
+        assert!(checker_1.is_active());
+        assert!(checker_2.values().is_empty());
+        assert!(checker_2.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        let handle = spawn(async move {
+            sender.on_next(());
+            sender
+        });
+        let sender = handle.await.unwrap();
+        assert_eq!(checker_1.values(), []);
+        assert!(checker_1.is_active());
+        assert_eq!(checker_2.values(), []);
+        assert!(checker_2.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        let handle = spawn(async { sender.on_termination(Termination::<Infallible>::Completed) });
+        handle.await.unwrap();
+        assert_eq!(checker_1.values(), [2]);
+        assert!(checker_1.is_completed());
+        assert_eq!(checker_2.values(), [2]);
+        assert!(checker_2.is_completed());
+        assert!(channel_checker.is_completed());
     });
-    let mut sender = handle.await.unwrap();
-    assert_eq!(checker_1.values(), []);
-    assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move { observable_2.subscribe(observer_2) });
-    let _subscription_2 = handle.await.unwrap();
-    assert_eq!(checker_1.values(), []);
-    assert!(checker_1.is_active());
-    assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move {
-        sender.on_next(());
-        sender
-    });
-    let sender = handle.await.unwrap();
-    assert_eq!(checker_1.values(), []);
-    assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), []);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle =
-        tokio::spawn(async { sender.on_termination(Termination::<Infallible>::Completed) });
-    handle.await.unwrap();
-    assert_eq!(checker_1.values(), [2]);
-    assert!(checker_1.is_completed());
-    assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_completed());
-    assert!(channel_checker.is_completed());
 }
 
 #[test]

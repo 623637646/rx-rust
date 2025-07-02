@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::range::Range,
@@ -30,21 +31,23 @@ fn test_completed_range_inclusive() {
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_async() {
-    let source = 100..103;
-    let observable = Range::new(source);
-    let (checker, observer) = Checker::<i32, Infallible>::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let source = 100..103;
+        let observable = Range::new(source);
+        let (checker, observer) = Checker::<i32, Infallible>::new();
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert_eq!(checker.values(), [100, 101, 102]);
-    assert!(checker.is_completed());
+        let handle = spawn(async move { observable.subscribe(observer) });
+        let subscription = handle.await.unwrap();
+        assert_eq!(checker.values(), [100, 101, 102]);
+        assert!(checker.is_completed());
 
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [100, 101, 102]);
-    assert!(checker.is_completed());
+        let handle = spawn(async { subscription.dispose() });
+        handle.await.unwrap();
+        assert_eq!(checker.values(), [100, 101, 102]);
+        assert!(checker.is_completed());
+    });
 }
 
 #[test]

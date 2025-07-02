@@ -1,3 +1,4 @@
+use crate::tests_utils::test_runtime::spawn;
 use educe::Educe;
 use futures::Stream;
 use futures::stream::StreamExt;
@@ -136,14 +137,14 @@ impl<T> Checker<T, Infallible> {
 
         let values_cloned = values.clone();
         let termination_cloned = termination.clone();
-        let handle = tokio::spawn(async move {
+        let handle = spawn(async move {
             while let Some(value) = stream.next().await {
                 values_cloned.lock().unwrap().push(value);
             }
             termination_cloned
                 .lock()
                 .unwrap()
-                .replace(Termination::Completed)
+                .replace(Termination::Completed);
         });
         let dropped_cloned = dropped.clone();
         let disposal = CallbackDisposal::new(move || {

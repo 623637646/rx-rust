@@ -1,3 +1,4 @@
+use crate::tests_utils::test_runtime::spawn;
 use educe::Educe;
 use rx_rust::{
     scheduler::Scheduler,
@@ -81,7 +82,7 @@ impl Scheduler for TestScheduler {
         let entry = EntryExitChecker::enter();
 
         let entry_cloned = entry.clone();
-        let handle = tokio::spawn(async move {
+        let handle = spawn(async move {
             result_callback(future.await);
             entry_cloned.exit();
         });
