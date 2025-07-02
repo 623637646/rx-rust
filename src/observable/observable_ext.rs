@@ -35,10 +35,10 @@ use crate::{
             window::Window, window_with_count::WindowWithCount,
         },
         utility::{
-            delay::Delay, dematerialize::Dematerialize, do_after_next::DoAfterNext,
-            do_after_subscription::DoAfterSubscription, do_after_termination::DoAfterTermination,
-            do_before_disposal::DoBeforeDisposal, do_before_next::DoBeforeNext,
-            do_before_subscription::DoBeforeSubscription,
+            delay::Delay, dematerialize::Dematerialize, do_after_disposal::DoAfterDisposal,
+            do_after_next::DoAfterNext, do_after_subscription::DoAfterSubscription,
+            do_after_termination::DoAfterTermination, do_before_disposal::DoBeforeDisposal,
+            do_before_next::DoBeforeNext, do_before_subscription::DoBeforeSubscription,
             do_before_termination::DoBeforeTermination, materialize::Materialize,
         },
     },
@@ -158,6 +158,13 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         F: FnMut(&T) -> K,
     {
         DistinctUntilChanged::new_with_key_selector(self, key_selector)
+    }
+
+    fn do_after_disposal<F>(self, callback: F) -> DoAfterDisposal<Self, F>
+    where
+        F: FnOnce(),
+    {
+        DoAfterDisposal::new(self, callback)
     }
 
     fn do_after_next<F>(self, callback: F) -> DoAfterNext<Self, F>
