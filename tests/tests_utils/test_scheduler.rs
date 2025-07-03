@@ -126,9 +126,3 @@ impl Drop for Boom {
         }
     }
 }
-
-// This Test should abort.
-// #[tokio::test]
-// async fn test_abort() {
-//     TestScheduler.schedule_period(|_| false, Duration::from_millis(10), None);
-// }
