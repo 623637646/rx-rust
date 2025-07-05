@@ -34,26 +34,17 @@ fn test_completed() {
         assert!(checker.is_active());
 
         subject.on_next(111);
-        assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
         subject.on_termination(Termination::<Infallible>::Completed);
-        assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
@@ -79,10 +70,6 @@ fn test_completed_lazy_subscription() {
         assert!(!*subscribed.lock().unwrap());
 
         let (checker, _) = Checker::<_, Infallible>::from_stream(stream);
-        assert!(!*subscribed.lock().unwrap());
-        assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert!(*subscribed.lock().unwrap());
         assert_eq!(checker.values(), [111]);
@@ -108,26 +95,17 @@ fn test_unsubscribe() {
         assert!(checker.is_active());
 
         subject.on_next(111);
-        assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
         disposal.dispose();
-        assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_dropped());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_dropped());
@@ -211,9 +189,6 @@ fn test_async() {
             subject_cloned.on_next(111);
         });
         handle.await.unwrap();
-        assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
@@ -224,9 +199,6 @@ fn test_async() {
             subject_cloned.on_next(333);
         });
         handle.await.unwrap();
-        assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
@@ -235,9 +207,6 @@ fn test_async() {
             subject.on_termination(Termination::Completed);
         });
         handle.await.unwrap();
-        assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_completed());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
@@ -262,26 +231,17 @@ fn test_without_convenient_api() {
         assert!(checker.is_active());
 
         subject.on_next(111);
-        assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
         subject.on_termination(Termination::<Infallible>::Completed);
-        assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());

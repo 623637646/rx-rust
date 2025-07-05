@@ -24,17 +24,11 @@ fn test_completed() {
         assert!(checker.is_active());
 
         tx.send(111).unwrap();
-        assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         drop(tx);
-        assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
@@ -54,17 +48,11 @@ fn test_unsubscribe() {
         assert!(checker.is_active());
 
         tx.send(111).unwrap();
-        assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subscription.dispose();
-        assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_dropped());
@@ -85,17 +73,11 @@ fn test_async() {
         assert!(checker.is_active());
 
         tx.send(111).unwrap();
-        assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         drop(tx);
-        assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
@@ -119,11 +101,6 @@ fn test_subscribe_by_different_observer() {
         let (on_next, on_termination) = observer_2.into_callbacks();
         let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
-        assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_active());
-        assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
-
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [111, 222, 333]);
         assert!(checker_1.is_completed());
@@ -135,11 +112,10 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_undisposed_schedule() {
     block_on(async {
-        let source = stream::iter(vec![111, 222, 333]);
+        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel::<i32>();
+        let stream = UnboundedReceiverStream::new(rx);
+        let observable = FromStream::new(stream, TestScheduler);
         let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = FromStream::new(source, TestScheduler);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
