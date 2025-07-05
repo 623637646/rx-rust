@@ -368,8 +368,7 @@ fn test_async() {
         assert!(checker_2.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle =
-            spawn(async move { sender.on_termination(Termination::Error("error")) });
+        let handle = spawn(async move { sender.on_termination(Termination::Error("error")) });
         handle.await.unwrap();
         assert_eq!(checker_1.values(), [1, 2]);
         assert!(checker_1.is_dropped());

@@ -298,9 +298,7 @@ fn test_async() {
         assert!(!disposed.load(Ordering::SeqCst));
         assert!(!called.load(Ordering::SeqCst));
 
-        let handle = spawn(async move {
-            subscription.dispose();
-        });
+        let handle = spawn(async move { subscription.dispose() });
         handle.await.unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());

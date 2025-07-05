@@ -71,9 +71,7 @@ fn test_mut_ref() {
 fn test_async() {
     block_on(async {
         let (checker, observer) = Checker::new();
-        let mut boxed_observer = spawn(async { BoxedObserver::new(observer) })
-            .await
-            .unwrap();
+        let mut boxed_observer = spawn(async { BoxedObserver::new(observer) }).await.unwrap();
         spawn(async move {
             boxed_observer.on_next(111);
             boxed_observer.on_termination(Termination::Error("error"));
