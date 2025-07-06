@@ -8,7 +8,7 @@ use tokio::time::Duration;
 #[tokio::test]
 async fn test_schedule_without_delay() {
     let scheduler = TokioScheduler;
-    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (tx, rx) = futures::channel::oneshot::channel();
     let task = || {
         tx.send(()).unwrap();
     };
@@ -22,7 +22,7 @@ async fn test_schedule_without_delay() {
 #[tokio::test]
 async fn test_schedule_with_delay() {
     let scheduler = TokioScheduler;
-    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (tx, rx) = futures::channel::oneshot::channel();
     let task = || {
         tx.send(()).unwrap();
     };
@@ -36,7 +36,7 @@ async fn test_schedule_with_delay() {
 #[tokio::test]
 async fn test_schedule_with_abort() {
     let scheduler = TokioScheduler;
-    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (tx, rx) = futures::channel::oneshot::channel();
     let task = || {
         tx.send(()).unwrap();
     };
@@ -51,7 +51,7 @@ async fn test_schedule_with_abort() {
 #[tokio::test]
 async fn test_schedule_with_late_abort() {
     let scheduler = TokioScheduler;
-    let (tx, rx) = tokio::sync::oneshot::channel();
+    let (tx, rx) = futures::channel::oneshot::channel();
     let task = || {
         tx.send(()).unwrap();
     };

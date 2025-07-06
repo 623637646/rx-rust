@@ -12,7 +12,7 @@ use tests_utils::{checker::Checker, test_scheduler::TestScheduler};
 #[test]
 fn test_completed() {
     block_on(async {
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (tx, rx) = futures::channel::oneshot::channel();
 
         let observable = FromFuture::new(rx, TestScheduler);
         let observable = observable.map(|result| result.unwrap_or(-1));
@@ -36,7 +36,7 @@ fn test_completed() {
 #[test]
 fn test_completed_drop() {
     block_on(async {
-        let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
+        let (tx, rx) = futures::channel::oneshot::channel::<i32>();
 
         let observable = FromFuture::new(rx, TestScheduler);
         let observable = observable.map(|result| result.unwrap_or(-1));
@@ -60,7 +60,7 @@ fn test_completed_drop() {
 #[test]
 fn test_unsubscribe() {
     block_on(async {
-        let (_tx, rx) = tokio::sync::oneshot::channel::<i32>();
+        let (_tx, rx) = futures::channel::oneshot::channel::<i32>();
 
         let observable = FromFuture::new(rx, TestScheduler);
         let observable = observable.map(|result| result.unwrap_or(-1));
@@ -84,7 +84,7 @@ fn test_unsubscribe() {
 #[test]
 fn test_async() {
     block_on(async {
-        let (tx, rx) = tokio::sync::oneshot::channel();
+        let (tx, rx) = futures::channel::oneshot::channel();
 
         let observable = FromFuture::new(rx, TestScheduler);
         let observable = observable.map(|result| result.unwrap_or(-1));
@@ -135,7 +135,7 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_undisposed_schedule() {
     block_on(async {
-        let (_tx, rx) = tokio::sync::oneshot::channel::<i32>();
+        let (_tx, rx) = futures::channel::oneshot::channel::<i32>();
 
         let observable = FromFuture::new(rx, TestScheduler);
         let observable = observable.map(|result| result.unwrap_or(-1));
