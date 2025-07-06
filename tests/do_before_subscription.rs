@@ -185,26 +185,29 @@ fn test_async() {
             assert!(channel_checker_cloned.is_initialized());
         });
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let _subscription = handle.await.unwrap();
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(called.load(Ordering::SeqCst));
         assert_eq!(checker.values(), []);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let sender = spawn(async move {
             sender.on_next(111);
             sender
-        });
-        let sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        spawn(async move {
             sender.on_termination(Termination::<Infallible>::Completed);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());

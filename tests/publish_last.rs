@@ -329,54 +329,58 @@ fn test_async() {
         assert!(checker_2.is_active());
         assert!(channel_checker.is_initialized());
 
-        let handle = spawn(async move { observable_1.subscribe(observer_1) });
-        let _subscription_1 = handle.await.unwrap();
+        let _subscription_1 = spawn(async move { observable_1.subscribe(observer_1) })
+            .await
+            .unwrap();
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
         assert!(channel_checker.is_initialized());
 
-        let handle = spawn(async move { observable.connect() });
-        let _subscription = handle.await.unwrap();
+        let _subscription = spawn(async move { observable.connect() }).await.unwrap();
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let mut sender = spawn(async move {
             sender.on_next(());
             sender
-        });
-        let mut sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker_1.values(), []);
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move { observable_2.subscribe(observer_2) });
-        let _subscription_2 = handle.await.unwrap();
+        let _subscription_2 = spawn(async move { observable_2.subscribe(observer_2) })
+            .await
+            .unwrap();
         assert_eq!(checker_1.values(), []);
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let sender = spawn(async move {
             sender.on_next(());
             sender
-        });
-        let sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker_1.values(), []);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), []);
         assert!(checker_2.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async { sender.on_termination(Termination::<Infallible>::Completed) });
-        handle.await.unwrap();
+        spawn(async { sender.on_termination(Termination::<Infallible>::Completed) })
+            .await
+            .unwrap();
         assert_eq!(checker_1.values(), [2]);
         assert!(checker_1.is_completed());
         assert_eq!(checker_2.values(), [2]);

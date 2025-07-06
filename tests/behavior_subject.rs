@@ -223,35 +223,37 @@ fn test_async() {
         // Custom operations
         let observable = subject.clone();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [&-1]);
         assert!(checker.is_active());
         assert!(subject.terminated().is_none());
         assert_eq!(subject.value(), &-1);
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(&111);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [&-1, &111]);
         assert!(checker.is_active());
         assert!(subject.terminated().is_none());
         assert_eq!(subject.value(), &111);
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [&-1, &111]);
         assert!(checker.is_dropped());
         assert!(subject.terminated().is_none());
         assert_eq!(subject.value(), &111);
 
         let subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_termination(Termination::Error("error"));
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [&-1, &111]);
         assert!(checker.is_dropped());
         assert!(matches!(

@@ -196,7 +196,7 @@ fn test_async() {
         let observable = subject.clone();
         let observable = observable.group_by(|value| value % 2);
 
-        let handle = spawn(async {
+        let subscription = spawn(async {
             let mut index = -1;
             observable
                 .flat_map(move |v| {
@@ -205,31 +205,33 @@ fn test_async() {
                     v.map(move |v| 10 * i + v)
                 })
                 .subscribe(observer)
-        });
-        let subscription = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             for i in 0..=9 {
                 subject_cloned.on_next(i);
             }
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
         assert!(checker.is_active());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
         assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_termination(Termination::Error("error"));
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
         assert!(checker.is_dropped());
     });

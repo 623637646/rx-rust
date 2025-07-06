@@ -946,8 +946,9 @@ fn test_async() {
             }
         });
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let _subscription = handle.await.unwrap();
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(
@@ -960,11 +961,12 @@ fn test_async() {
         );
         assert!(errors.lock().unwrap().is_empty());
 
-        let handle = spawn(async move {
+        let sender = spawn(async move {
             sender.lock().unwrap().as_mut().unwrap().on_next(111);
             sender
-        });
-        let sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(
@@ -977,13 +979,14 @@ fn test_async() {
         );
         assert!(errors.lock().unwrap().is_empty());
 
-        let handle = spawn(async move {
+        let sender = spawn(async move {
             { sender.lock().unwrap().take() }
                 .unwrap()
                 .on_termination(Termination::Error("error"));
             sender
-        });
-        let sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(
@@ -996,11 +999,12 @@ fn test_async() {
         );
         assert_eq!(*errors.lock().unwrap(), ["error"]);
 
-        let handle = spawn(async move {
+        let sender = spawn(async move {
             sender.lock().unwrap().as_mut().unwrap().on_next(222);
             sender
-        });
-        let sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_active());
         assert!(
@@ -1013,13 +1017,14 @@ fn test_async() {
         );
         assert_eq!(*errors.lock().unwrap(), ["error"]);
 
-        let handle = spawn(async move {
+        let _sender = spawn(async move {
             { sender.lock().unwrap().take() }
                 .unwrap()
                 .on_termination(Termination::Error("error2"));
             sender
-        });
-        let _sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_error("error2"));
         assert!(

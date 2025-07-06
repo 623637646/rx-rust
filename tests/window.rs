@@ -1049,7 +1049,7 @@ fn test_async() {
         let observable = observable.window(boundary_observable);
 
         let checker_sub_vec_cloned = checker_sub_vec.clone();
-        let handle = spawn(async move {
+        let _subscription = spawn(async move {
             observable.subscribe_with_callback(
                 move |value| {
                     let (checker, observer) = Checker::new();
@@ -1060,8 +1060,9 @@ fn test_async() {
                     termination_observer.on_termination(termination);
                 },
             )
-        });
-        let _subscription = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker_sub_vec.lock().unwrap().len(), 1);
         for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
             match index {
@@ -1076,11 +1077,12 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
         assert!(boundary_channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let mut sender = spawn(async move {
             sender.on_next(111);
             sender
-        });
-        let mut sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker_sub_vec.lock().unwrap().len(), 1);
         for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
             match index {
@@ -1095,11 +1097,12 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
         assert!(boundary_channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let mut boundary_sender = spawn(async move {
             boundary_sender.on_next(());
             boundary_sender
-        });
-        let mut boundary_sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
         for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
             match index {
@@ -1118,11 +1121,12 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
         assert!(boundary_channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let mut sender = spawn(async move {
             sender.on_next(222);
             sender
-        });
-        let mut sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
         for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
             match index {
@@ -1141,11 +1145,12 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
         assert!(boundary_channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let sender = spawn(async move {
             sender.on_next(333);
             sender
-        });
-        let sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
         for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
             match index {
@@ -1164,11 +1169,12 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
         assert!(boundary_channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let _boundary_sender = spawn(async move {
             boundary_sender.on_next(());
             boundary_sender
-        });
-        let _boundary_sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker_sub_vec.lock().unwrap().len(), 3);
         for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
             match index {
@@ -1191,8 +1197,9 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
         assert!(boundary_channel_checker.is_subscribed());
 
-        let handle = spawn(async move { sender.on_termination(Termination::Completed) });
-        handle.await.unwrap();
+        spawn(async move { sender.on_termination(Termination::Completed) })
+            .await
+            .unwrap();
         assert_eq!(checker_sub_vec.lock().unwrap().len(), 3);
         for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
             match index {

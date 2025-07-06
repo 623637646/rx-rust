@@ -317,46 +317,51 @@ fn test_async() {
             observable_1
         });
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let _subscription = handle.await.unwrap();
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
         assert!(channel_checker_1.is_initialized());
 
-        let handle = spawn(async move {
+        let sender = spawn(async move {
             sender.on_next(111);
             sender
-        });
-        let sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
         assert!(channel_checker_1.is_initialized());
 
-        let handle = spawn(async move {
+        spawn(async move {
             sender.on_termination(Termination::Error("error"));
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_error("error"));
         assert!(channel_checker_1.is_subscribed());
 
-        let handle = spawn(async move {
+        let sender_1 = spawn(async move {
             sender_1.on_next(222);
             sender_1
-        });
-        let sender_1 = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_active());
         assert!(channel_checker.is_error("error"));
         assert!(channel_checker_1.is_subscribed());
 
-        let handle = spawn(async move {
+        spawn(async move {
             sender_1.on_termination(Termination::<Infallible>::Completed);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_error("error"));

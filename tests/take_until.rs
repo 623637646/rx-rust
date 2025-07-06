@@ -381,44 +381,48 @@ fn test_async() {
         let observable = subject.clone();
         let observable = observable.take_until(stop_subject.clone());
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(111);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(222);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_active());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
 
-        let handle = spawn(async move {
+        spawn(async move {
             stop_subject.on_next(());
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_termination(Termination::Error("error"));
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
     });

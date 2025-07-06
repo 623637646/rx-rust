@@ -171,11 +171,13 @@ fn test_async() {
         // Custom operations
         let observable = subject.clone();
 
-        let handle = spawn(async move { observable.into_stream() });
-        let stream = handle.await.unwrap();
+        let stream = spawn(async move { observable.into_stream() })
+            .await
+            .unwrap();
 
-        let handle = spawn(async move { Checker::from_stream(stream) });
-        let (checker, _) = handle.await.unwrap();
+        let (checker, _) = spawn(async move { Checker::from_stream(stream) })
+            .await
+            .unwrap();
 
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
@@ -185,28 +187,31 @@ fn test_async() {
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(111);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(222);
             subject_cloned.on_next(333);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
-        let handle = spawn(async move {
+        spawn(async move {
             subject.on_termination(Termination::Completed);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());

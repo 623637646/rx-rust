@@ -276,14 +276,15 @@ fn test_async() {
             called_cloned.store(true, Ordering::SeqCst);
         });
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), []);
         assert!(checker.is_active());
         assert!(!disposed.load(Ordering::SeqCst));
         assert!(!called.load(Ordering::SeqCst));
 
-        let handle = spawn(async move {
+        let boxed_observer = spawn(async move {
             boxed_observer
                 .lock()
                 .unwrap()
@@ -291,29 +292,30 @@ fn test_async() {
                 .unwrap()
                 .on_next(111);
             boxed_observer
-        });
-        let boxed_observer = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(!disposed.load(Ordering::SeqCst));
         assert!(!called.load(Ordering::SeqCst));
 
-        let handle = spawn(async move { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async move { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(disposed.load(Ordering::SeqCst));
         assert!(called.load(Ordering::SeqCst));
 
-        let handle = spawn(async move {
+        spawn(async move {
             boxed_observer
                 .lock()
                 .unwrap()
                 .take()
                 .unwrap()
                 .on_termination(Termination::<Infallible>::Completed);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
         assert!(disposed.load(Ordering::SeqCst));

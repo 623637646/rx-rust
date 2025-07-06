@@ -147,16 +147,18 @@ fn test_async() {
         // Custom operations
         let observable = observable.first();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let _subscription = handle.await.unwrap();
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        spawn(async move {
             sender.on_next(111);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_unsubscribed());

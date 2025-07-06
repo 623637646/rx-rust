@@ -255,23 +255,24 @@ fn test_async() {
         // Custom operations
         let observable = observable.throttle(Duration::from_millis(100), TestScheduler);
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let _sender = spawn(async move {
             sender.on_next(&111);
             sender
-        });
-        let _sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [&111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [&111]);
         assert!(checker.is_dropped()); // This assert is ok in multi-thread because the scheduler is finished.
         assert!(channel_checker.is_unsubscribed());

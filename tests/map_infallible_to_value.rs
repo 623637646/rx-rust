@@ -132,21 +132,22 @@ fn test_async() {
         // Custom operations
         let observable = subject.clone().map_infallible_to_value();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_termination(Termination::Completed);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_dropped());
     });

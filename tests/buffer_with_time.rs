@@ -435,8 +435,9 @@ fn test_async() {
             Some(Duration::from_millis(100)),
         );
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -449,10 +450,11 @@ fn test_async() {
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(111);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
@@ -461,31 +463,33 @@ fn test_async() {
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(222);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(333);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_active());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
         // assert!(checker.is_dropped()); // This assert may be failed in multi-thread.
 
         let subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_termination(Termination::Error("error"));
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_dropped()); // TODO: occasional failure in multi-thread
     });

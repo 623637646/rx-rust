@@ -331,17 +331,19 @@ fn test_async() {
         // Custom operations
         let observable = observable.delay(Duration::from_millis(100), TestScheduler);
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        let _sender = spawn(async move {
             sender.on_next(&111);
             sender
-        });
-        let _sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
@@ -356,8 +358,7 @@ fn test_async() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [&111]);
         assert!(checker.is_dropped());

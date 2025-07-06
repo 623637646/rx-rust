@@ -236,8 +236,9 @@ fn test_async() {
         });
         let (checker, observer) = Checker::new();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [1]);
         assert!(checker.is_active());
 
@@ -249,8 +250,7 @@ fn test_async() {
         assert_eq!(checker.values(), [1, 2]);
         assert!(checker.is_active());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [1, 2]);
         assert!(checker.is_dropped());
 

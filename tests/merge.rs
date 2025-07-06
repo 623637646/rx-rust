@@ -501,35 +501,37 @@ fn test_async() {
         // Custom operations
         let observable = observable.merge_with(observable_1);
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
         assert!(channel_checker_1.is_subscribed());
 
-        let handle = spawn(async move {
+        let _sender = spawn(async move {
             sender.on_next(111);
             sender
-        });
-        let _sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
         assert!(channel_checker_1.is_subscribed());
 
-        let handle = spawn(async move {
+        let _another_source_sender = spawn(async move {
             sender_1.on_next(222);
             sender_1
-        });
-        let _another_source_sender = handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
         assert!(channel_checker_1.is_subscribed());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());

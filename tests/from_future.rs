@@ -90,8 +90,9 @@ fn test_async() {
         let observable = observable.map(|result| result.unwrap_or(-1));
         let (checker, observer) = Checker::new();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let _subscription = handle.await.unwrap();
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -99,8 +100,7 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        let handle = spawn(async move { tx.send(111).unwrap() });
-        handle.await.unwrap();
+        spawn(async move { tx.send(111).unwrap() }).await.unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());

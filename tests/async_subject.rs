@@ -217,26 +217,29 @@ fn test_async() {
         // Custom operations
         let observable = subject.clone();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let _subscription = handle.await.unwrap();
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(subject.terminated().is_none());
 
         let mut subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_next(&111);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(subject.terminated().is_none());
 
         let subject_cloned = subject.clone();
-        let handle = spawn(async move {
+        spawn(async move {
             subject_cloned.on_termination(Termination::<Infallible>::Completed);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [&111]);
         assert!(checker.is_completed());
         assert!(matches!(subject.terminated(), Some(Termination::Completed)));

@@ -24,13 +24,13 @@ fn test_async() {
         let observable = Empty;
         let (checker, observer) = Checker::new();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_completed());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_completed());
     });

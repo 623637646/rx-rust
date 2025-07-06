@@ -92,8 +92,9 @@ fn test_async() {
         let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
         let (checker, observer) = Checker::new();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let _subscription = handle.await.unwrap();
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 

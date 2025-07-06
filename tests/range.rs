@@ -38,13 +38,13 @@ fn test_async() {
         let observable = Range::new(source);
         let (checker, observer) = Checker::<i32, Infallible>::new();
 
-        let handle = spawn(async move { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [100, 101, 102]);
         assert!(checker.is_completed());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [100, 101, 102]);
         assert!(checker.is_completed());
     });

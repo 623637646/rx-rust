@@ -194,22 +194,23 @@ fn test_async() {
             })
         });
 
-        let handle = spawn(async { observable.subscribe(observer) });
-        let subscription = handle.await.unwrap();
+        let subscription = spawn(async { observable.subscribe(observer) })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async move {
+        spawn(async move {
             sender.on_next(111);
-        });
-        handle.await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let handle = spawn(async { subscription.dispose() });
-        handle.await.unwrap();
+        spawn(async { subscription.dispose() }).await.unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());
