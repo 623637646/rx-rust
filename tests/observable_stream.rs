@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::test_runtime::{block_on, spawn};
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use rx_rust::{
     observable::observable_ext::ObservableExt,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -123,9 +123,9 @@ fn test_ref() {
         let mut stream = observable.into_stream();
 
         // Subscribe in the first time of poll.
-        tokio::select!(
-            _ = stream.next() => {},
-            _ = crate::tests_utils::test_runtime::sleep(Duration::from_millis(10))=>{}
+        futures::select!(
+            _ = stream.next().fuse() => {},
+            _ = crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).fuse()=>{}
         );
 
         subject.on_next(&value);
