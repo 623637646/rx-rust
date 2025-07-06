@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::test_runtime::{block_on, spawn};
-use futures::stream;
+use futures::{SinkExt, stream};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::from_stream::FromStream,
@@ -9,13 +9,12 @@ use rx_rust::{
 };
 use std::time::Duration;
 use tests_utils::{checker::Checker, test_scheduler::TestScheduler};
-use tokio_stream::wrappers::UnboundedReceiverStream;
 
 #[test]
 fn test_completed() {
     block_on(async {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let stream = UnboundedReceiverStream::new(rx);
+        let (mut tx, rx) = futures::channel::mpsc::unbounded();
+        let stream = rx;
         let observable = FromStream::new(stream, TestScheduler);
         let (checker, observer) = Checker::new();
 
@@ -23,7 +22,7 @@ fn test_completed() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        tx.send(111).unwrap();
+        tx.send(111).await.unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
@@ -38,8 +37,8 @@ fn test_completed() {
 #[test]
 fn test_unsubscribe() {
     block_on(async {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let stream = UnboundedReceiverStream::new(rx);
+        let (mut tx, rx) = futures::channel::mpsc::unbounded();
+        let stream = rx;
         let observable = FromStream::new(stream, TestScheduler);
         let (checker, observer) = Checker::new();
 
@@ -47,7 +46,7 @@ fn test_unsubscribe() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        tx.send(111).unwrap();
+        tx.send(111).await.unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
@@ -62,8 +61,8 @@ fn test_unsubscribe() {
 #[test]
 fn test_async() {
     block_on(async {
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        let stream = UnboundedReceiverStream::new(rx);
+        let (mut tx, rx) = futures::channel::mpsc::unbounded();
+        let stream = rx;
         let observable = FromStream::new(stream, TestScheduler);
         let (checker, observer) = Checker::new();
 
@@ -73,7 +72,7 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        tx.send(111).unwrap();
+        tx.send(111).await.unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
@@ -113,8 +112,8 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_undisposed_schedule() {
     block_on(async {
-        let (_tx, rx) = tokio::sync::mpsc::unbounded_channel::<i32>();
-        let stream = UnboundedReceiverStream::new(rx);
+        let (_tx, rx) = futures::channel::mpsc::unbounded::<i32>();
+        let stream = rx;
         let observable = FromStream::new(stream, TestScheduler);
         let (checker, observer) = Checker::new();
 
