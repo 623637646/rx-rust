@@ -308,6 +308,7 @@ fn test_async() {
 
         spawn(async { subscription.dispose() }).await.unwrap();
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [&111]);
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());

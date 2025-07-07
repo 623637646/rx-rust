@@ -14,6 +14,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
+    time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -301,6 +302,7 @@ fn test_async() {
         assert!(!called.load(Ordering::SeqCst));
 
         spawn(async move { subscription.dispose() }).await.unwrap();
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(disposed.load(Ordering::SeqCst));

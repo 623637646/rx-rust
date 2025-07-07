@@ -11,6 +11,7 @@ use rx_rust::{
 use std::{
     convert::Infallible,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -301,6 +302,7 @@ fn test_async() {
         assert!(checker_2.is_active());
 
         spawn(async { subscription.dispose() }).await.unwrap();
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [222]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [111]);

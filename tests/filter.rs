@@ -13,6 +13,7 @@ use rx_rust::{
     subscription::{Subscription, disposable::Disposable},
 };
 use std::convert::Infallible;
+use std::time::Duration;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -233,6 +234,7 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
 
         spawn(async { subscription.dispose() }).await.unwrap();
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());

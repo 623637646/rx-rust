@@ -12,6 +12,7 @@ use std::{
     convert::Infallible,
     ops::Deref,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -276,6 +277,7 @@ fn test_async() {
         assert!(checker_2.is_active());
 
         spawn(async { subscription.dispose() }).await.unwrap();
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_dropped());
         assert!(checker_2.values().is_empty());

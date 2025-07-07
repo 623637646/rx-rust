@@ -185,8 +185,9 @@ fn test_async() {
         assert!(checker.is_active());
 
         spawn(async { subscription.dispose() }).await.unwrap();
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
-        // assert!(checker.is_dropped()); // This assert may be failed in multi-thread.
+        assert!(checker.is_dropped());
 
         crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);

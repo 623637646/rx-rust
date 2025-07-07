@@ -7,7 +7,7 @@ use rx_rust::{
     operators::creating::from_iter::FromIter,
     subscription::disposable::Disposable,
 };
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::checker::Checker;
 
 #[test]
@@ -177,6 +177,7 @@ fn test_async() {
         assert!(checker.is_completed());
 
         spawn(async { subscription.dispose() }).await.unwrap();
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [1, 2, 3]);
         assert!(checker.is_completed());
     });

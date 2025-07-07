@@ -10,6 +10,7 @@ use rx_rust::subscription::Subscription;
 use rx_rust::subscription::disposable::Disposable;
 use std::convert::Infallible;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
 
@@ -243,6 +244,7 @@ fn test_async() {
         assert_eq!(subject.value(), &111);
 
         spawn(async { subscription.dispose() }).await.unwrap();
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [&-1, &111]);
         assert!(checker.is_dropped());
         assert!(subject.terminated().is_none());

@@ -6,6 +6,7 @@ use rx_rust::{
     operators::creating::never::Never,
     subscription::disposable::Disposable,
 };
+use std::time::Duration;
 use tests_utils::checker::Checker;
 
 #[test]
@@ -21,6 +22,7 @@ fn test_async() {
         assert!(checker.is_dropped());
 
         spawn(async { subscription.dispose() }).await.unwrap();
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_dropped());
     });
