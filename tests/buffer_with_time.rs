@@ -491,7 +491,11 @@ fn test_async() {
         .await
         .unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
-        assert!(checker.is_dropped()); // TODO: occasional failure in multi-thread
+        // assert!(checker.is_dropped()); // This assert may be failed in multi-thread.
+
+        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [vec![], vec![111]]);
+        assert!(checker.is_dropped());
     });
 }
 
