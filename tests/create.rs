@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -93,11 +93,11 @@ fn test_unsubscribe() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             let handle = spawn(async {
-                crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+                sleep(Duration::from_millis(100)).await;
                 observer.on_next(2);
-                crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+                sleep(Duration::from_millis(100)).await;
                 observer.on_next(3);
-                crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+                sleep(Duration::from_millis(100)).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
@@ -115,13 +115,13 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [1]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [1]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [1]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [1, 2]);
@@ -129,13 +129,13 @@ fn test_unsubscribe() {
 
         subscription_1.dispose(); // unsubscribe
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [1, 2, 3]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [1, 2, 3]);
@@ -227,9 +227,9 @@ fn test_async() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             let handle = spawn(async {
-                crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+                sleep(Duration::from_millis(100)).await;
                 observer.on_next(2);
-                crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+                sleep(Duration::from_millis(100)).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
@@ -242,20 +242,20 @@ fn test_async() {
         assert_eq!(checker.values(), [1]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [1]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert!(checker.is_active());
 
         spawn(async { subscription.dispose() }).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert!(checker.is_dropped());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert!(checker.is_dropped());
     });

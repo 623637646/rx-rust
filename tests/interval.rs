@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
@@ -16,15 +16,15 @@ fn test_completed_no_delay() {
         let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(observer);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [0]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_active());
 
@@ -32,11 +32,11 @@ fn test_completed_no_delay() {
         assert_eq!(checker.values(), [0, 1, 2]);
         // assert!(checker.is_active()); // This assert may be failed in multi-thread.
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_dropped());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_dropped());
     });
@@ -56,19 +56,19 @@ fn test_completed_with_delay() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_active());
 
@@ -76,11 +76,11 @@ fn test_completed_with_delay() {
         assert_eq!(checker.values(), [0, 1, 2]);
         // assert!(checker.is_active()); // This assert may be failed in multi-thread.
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_dropped());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_dropped());
     });
@@ -108,25 +108,25 @@ fn test_unsubscribe() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [0]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0, 1]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [0, 1]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [0, 1, 2]);
@@ -138,13 +138,13 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [0, 1, 2]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [0, 1, 2, 3]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [0, 1, 2, 3, 4]);
@@ -168,32 +168,32 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_active());
 
         spawn(async { subscription.dispose() }).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_dropped());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_dropped());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert!(checker.is_dropped());
     });
@@ -224,25 +224,25 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [0]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0, 1]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [0, 1]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [0, 1, 2]);
@@ -255,13 +255,13 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [0, 1, 2]);
         // assert!(checker_2.is_active()); // This assert may be failed in multi-thread.
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [0, 1, 2]);
         assert!(checker_2.is_dropped());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [0, 1, 2]);

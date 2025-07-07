@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::observable::Observable;
 use rx_rust::observable::observable_ext::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
@@ -244,7 +244,7 @@ fn test_async() {
         assert_eq!(subject.value(), &111);
 
         spawn(async { subscription.dispose() }).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [&-1, &111]);
         assert!(checker.is_dropped());
         assert!(subject.terminated().is_none());

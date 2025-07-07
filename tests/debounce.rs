@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -31,7 +31,7 @@ fn test_completed() {
 
         for _ in 0..10 {
             sender.on_next(0);
-            crate::tests_utils::test_runtime::sleep(Duration::from_millis(80)).await;
+            sleep(Duration::from_millis(80)).await;
         }
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
@@ -42,12 +42,12 @@ fn test_completed() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
@@ -58,12 +58,12 @@ fn test_completed() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [111, 333]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
@@ -74,7 +74,7 @@ fn test_completed() {
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(110)).await;
+        sleep(Duration::from_millis(110)).await;
         assert_eq!(checker.values(), [111, 333, 444]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
@@ -97,7 +97,7 @@ fn test_error() {
 
         for _ in 0..10 {
             sender.on_next(0);
-            crate::tests_utils::test_runtime::sleep(Duration::from_millis(80)).await;
+            sleep(Duration::from_millis(80)).await;
         }
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
@@ -108,12 +108,12 @@ fn test_error() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
@@ -124,12 +124,12 @@ fn test_error() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [111, 333]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
@@ -140,7 +140,7 @@ fn test_error() {
         assert!(checker.is_error("error"));
         assert!(channel_checker.is_error("error"));
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(110)).await;
+        sleep(Duration::from_millis(110)).await;
         assert_eq!(checker.values(), [111, 333]);
         assert!(checker.is_error("error"));
         assert!(channel_checker.is_error("error"));
@@ -180,7 +180,7 @@ fn test_unsubscribe() {
         assert!(checker_3.values().is_empty());
         assert!(checker_3.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
@@ -188,7 +188,7 @@ fn test_unsubscribe() {
         assert!(checker_3.values().is_empty());
         assert!(checker_3.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [111]);
@@ -212,7 +212,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.values(), [111]);
         assert!(checker_3.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [111]);
@@ -220,7 +220,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.values(), [111]);
         assert!(checker_3.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [111, 222]);
@@ -236,7 +236,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.values(), [111, 222]);
         assert!(checker_3.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [111, 222]);
@@ -252,7 +252,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.values(), [111, 222]);
         assert!(checker_3.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [111, 222]);
@@ -296,19 +296,19 @@ fn test_async() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [&111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         spawn(async { subscription.dispose() }).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [&111]);
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());
@@ -343,13 +343,13 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [111]);
@@ -384,42 +384,42 @@ fn test_multiple_operation() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(190)).await;
+        sleep(Duration::from_millis(190)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_next(0);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(25)).await;
+        sleep(Duration::from_millis(25)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_next(0);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(75)).await;
+        sleep(Duration::from_millis(75)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_next(0);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(125)).await;
+        sleep(Duration::from_millis(125)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_next(222);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(175)).await;
+        sleep(Duration::from_millis(175)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_next(333);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(225)).await;
+        sleep(Duration::from_millis(225)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
@@ -450,12 +450,12 @@ fn test_without_convenient_api() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
@@ -466,12 +466,12 @@ fn test_without_convenient_api() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(90)).await;
+        sleep(Duration::from_millis(90)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [111, 333]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
@@ -482,7 +482,7 @@ fn test_without_convenient_api() {
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(110)).await;
+        sleep(Duration::from_millis(110)).await;
         assert_eq!(checker.values(), [111, 333, 444]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
@@ -536,7 +536,7 @@ fn test_lifetime_sub() {
             _subscription = observable.subscribe(observer);
         }
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(20)).await;
+        sleep(Duration::from_millis(20)).await;
     });
 }
 

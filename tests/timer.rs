@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::timer::Timer,
@@ -19,11 +19,11 @@ fn test_completed() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
     });
@@ -60,7 +60,7 @@ fn test_unsubscribe() {
         assert!(checker_3.values().is_empty());
         assert!(checker_3.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_dropped());
         assert!(checker_2.values().is_empty());
@@ -76,7 +76,7 @@ fn test_unsubscribe() {
         assert!(checker_3.values().is_empty());
         assert!(checker_3.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_dropped());
         assert!(checker_2.values().is_empty());
@@ -98,11 +98,11 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
     });
@@ -128,13 +128,13 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_completed());
         assert_eq!(checker_2.values(), [111]);
@@ -172,7 +172,7 @@ fn test_type_inference_with_subscribe() {
         let (_, observer) = Checker::new();
         observable.subscribe(observer);
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
     });
 }
 

@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -302,7 +302,7 @@ fn test_async() {
         assert!(!called.load(Ordering::SeqCst));
 
         spawn(async move { subscription.dispose() }).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(disposed.load(Ordering::SeqCst));

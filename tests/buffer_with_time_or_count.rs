@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -33,11 +33,11 @@ fn test_completed_time_last_empty() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
@@ -45,7 +45,7 @@ fn test_completed_time_last_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_active());
 
@@ -57,7 +57,7 @@ fn test_completed_time_last_empty() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
         assert!(checker.is_active());
 
@@ -88,11 +88,11 @@ fn test_completed_time_last_not_empty() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
@@ -100,7 +100,7 @@ fn test_completed_time_last_not_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_active());
 
@@ -139,11 +139,11 @@ fn test_completed_time_no_delay() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert!(checker.is_active());
 
@@ -151,7 +151,7 @@ fn test_completed_time_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert!(checker.is_active());
 
@@ -163,7 +163,7 @@ fn test_completed_time_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![], vec![], vec![111], vec![222, 333]]
@@ -200,11 +200,11 @@ fn test_completed_time_small_delay() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert!(checker.is_active());
 
@@ -212,7 +212,7 @@ fn test_completed_time_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert!(checker.is_active());
 
@@ -224,7 +224,7 @@ fn test_completed_time_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![], vec![], vec![111], vec![222, 333]]
@@ -359,7 +359,7 @@ fn test_completed_time_and_count() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -368,7 +368,7 @@ fn test_completed_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
@@ -377,7 +377,7 @@ fn test_completed_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
@@ -389,7 +389,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -403,7 +403,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -424,7 +424,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -437,7 +437,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -451,7 +451,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -520,7 +520,7 @@ fn test_error_time_and_count() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -529,7 +529,7 @@ fn test_error_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
@@ -538,7 +538,7 @@ fn test_error_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
@@ -550,7 +550,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -564,7 +564,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -585,7 +585,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -598,7 +598,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -612,7 +612,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -684,7 +684,7 @@ fn test_unsubscribe() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
@@ -697,7 +697,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![111, 111]]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111]]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [vec![111, 111]]);
@@ -716,7 +716,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
@@ -732,7 +732,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -750,7 +750,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -775,7 +775,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -790,7 +790,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -806,7 +806,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -883,7 +883,7 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -897,7 +897,7 @@ fn test_async() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
@@ -911,7 +911,7 @@ fn test_async() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
@@ -928,7 +928,7 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -947,7 +947,7 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -973,7 +973,7 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -986,7 +986,7 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1000,7 +1000,7 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1036,7 +1036,7 @@ fn test_async() {
         assert!(checker.is_active());
 
         spawn(async { subscription.dispose() }).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
 
         let subject_cloned = subject.clone();
         spawn(async move {
@@ -1045,7 +1045,7 @@ fn test_async() {
         .await
         .unwrap();
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1088,7 +1088,7 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
@@ -1101,7 +1101,7 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![111, 111]]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111]]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [vec![111, 111]]);
@@ -1120,7 +1120,7 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
@@ -1136,7 +1136,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1154,7 +1154,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1179,7 +1179,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1194,7 +1194,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1210,7 +1210,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1292,7 +1292,7 @@ fn test_multiple_operation() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -1303,7 +1303,7 @@ fn test_multiple_operation() {
         assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
         assert!(checker.is_active());
 
@@ -1320,7 +1320,7 @@ fn test_multiple_operation() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1344,7 +1344,7 @@ fn test_multiple_operation() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1367,7 +1367,7 @@ fn test_multiple_operation() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1430,7 +1430,7 @@ fn test_without_convenient_api() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -1439,7 +1439,7 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
@@ -1448,7 +1448,7 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
@@ -1460,7 +1460,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -1474,7 +1474,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -1495,7 +1495,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(50)).await;
+        sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1508,7 +1508,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1522,7 +1522,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(100)).await;
+        sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [

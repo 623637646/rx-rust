@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -234,7 +234,7 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
 
         spawn(async { subscription.dispose() }).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), []);
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());

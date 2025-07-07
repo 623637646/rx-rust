@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use futures::{SinkExt, stream};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -23,12 +23,12 @@ fn test_completed() {
         assert!(checker.is_active());
 
         tx.send(111).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         drop(tx);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
     });
@@ -47,12 +47,12 @@ fn test_unsubscribe() {
         assert!(checker.is_active());
 
         tx.send(111).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subscription.dispose();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_dropped());
     });
@@ -73,12 +73,12 @@ fn test_async() {
         assert!(checker.is_active());
 
         tx.send(111).await.unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         drop(tx);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
     });
@@ -101,7 +101,7 @@ fn test_subscribe_by_different_observer() {
         let (on_next, on_termination) = observer_2.into_callbacks();
         let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [111, 222, 333]);
         assert!(checker_1.is_completed());
         assert_eq!(checker_2.values(), [111, 222, 333]);

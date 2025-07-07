@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use futures::{FutureExt, StreamExt};
 use rx_rust::{
     observable::observable_ext::ObservableExt,
@@ -29,23 +29,23 @@ fn test_completed() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         subject.on_next(111);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
         subject.on_termination(Termination::<Infallible>::Completed);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
     });
@@ -66,11 +66,11 @@ fn test_completed_lazy_subscription() {
         let stream = observable.into_stream();
         assert!(!*subscribed.lock().unwrap());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert!(!*subscribed.lock().unwrap());
 
         let (checker, _) = Checker::<_, Infallible>::from_stream(stream);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert!(*subscribed.lock().unwrap());
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
@@ -90,23 +90,23 @@ fn test_unsubscribe() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         subject.on_next(111);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
         disposal.dispose();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_dropped());
     });
@@ -125,7 +125,7 @@ fn test_ref() {
         // Subscribe in the first time of poll.
         futures::select!(
             _ = stream.next().fuse() => {},
-            _ = crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).fuse()=>{}
+            _ = sleep(Duration::from_millis(10)).fuse()=>{}
         );
 
         subject.on_next(&value);
@@ -182,7 +182,7 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -192,7 +192,7 @@ fn test_async() {
         })
         .await
         .unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
@@ -203,7 +203,7 @@ fn test_async() {
         })
         .await
         .unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
@@ -212,7 +212,7 @@ fn test_async() {
         })
         .await
         .unwrap();
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
     });
@@ -231,23 +231,23 @@ fn test_without_convenient_api() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         subject.on_next(111);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
         subject.on_termination(Termination::<Infallible>::Completed);
-        crate::tests_utils::test_runtime::sleep(Duration::from_millis(10)).await;
+        sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
     });

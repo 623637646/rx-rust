@@ -1,4 +1,4 @@
-use crate::tests_utils::test_runtime::spawn;
+use crate::tests_utils::test_runtime::{sleep, spawn};
 use educe::Educe;
 use rx_rust::{
     scheduler::Scheduler,
@@ -38,7 +38,7 @@ impl Scheduler for TestScheduler {
     }
 
     fn sleep(duration: Duration) -> impl Future + Send {
-        crate::tests_utils::test_runtime::sleep(duration)
+        sleep(duration)
     }
 }
 
