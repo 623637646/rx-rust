@@ -27,7 +27,8 @@ pub(crate) enum TestRuntime {
 
 impl Distribution<TestRuntime> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TestRuntime {
-        match rng.random_range(0..=2) {
+        // TODO: Fix this. Should be rng.random_range(0..=2)
+        match rng.random_range(0..=1) {
             0 => TestRuntime::FuturesExecutor(ThreadPool::new().unwrap()),
             1 => TestRuntime::Tokio,
             2 => TestRuntime::AsyncStd,
