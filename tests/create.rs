@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -86,58 +87,60 @@ fn test_error_from_source() {
     assert!(channel_checker.is_error("error"));
 }
 
-#[tokio::test]
-async fn test_unsubscribe() {
-    let observable = Create::new(|mut observer| {
-        observer.on_next(1);
-        let handle = tokio::spawn(async {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            observer.on_next(2);
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            observer.on_next(3);
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            observer.on_termination(Termination::<String>::Completed);
+#[test]
+fn test_unsubscribe() {
+    block_on(async {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(1);
+            let handle = spawn(async {
+                sleep(Duration::from_millis(100)).await;
+                observer.on_next(2);
+                sleep(Duration::from_millis(100)).await;
+                observer.on_next(3);
+                sleep(Duration::from_millis(100)).await;
+                observer.on_termination(Termination::<String>::Completed);
+            });
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
-        Subscription::new_with_disposal_callback(move || handle.abort())
+        let (checker_1, observer_1) = Checker::new();
+        let (checker_2, observer_2) = Checker::new();
+
+        let observable_1 = observable;
+        let observable_2 = observable_1.clone();
+
+        let subscription_1 = observable_1.subscribe(observer_1);
+        let _subscription_2 = observable_2.subscribe(observer_2);
+        assert_eq!(checker_1.values(), [1]);
+        assert!(checker_1.is_active());
+        assert_eq!(checker_2.values(), [1]);
+        assert!(checker_2.is_active());
+
+        sleep(Duration::from_millis(50)).await;
+        assert_eq!(checker_1.values(), [1]);
+        assert!(checker_1.is_active());
+        assert_eq!(checker_2.values(), [1]);
+        assert!(checker_2.is_active());
+
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker_1.values(), [1, 2]);
+        assert!(checker_1.is_active());
+        assert_eq!(checker_2.values(), [1, 2]);
+        assert!(checker_2.is_active());
+
+        subscription_1.dispose(); // unsubscribe
+
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker_1.values(), [1, 2]);
+        assert!(checker_1.is_dropped());
+        assert_eq!(checker_2.values(), [1, 2, 3]);
+        assert!(checker_2.is_active());
+
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker_1.values(), [1, 2]);
+        assert!(checker_1.is_dropped());
+        assert_eq!(checker_2.values(), [1, 2, 3]);
+        assert!(checker_2.is_completed());
     });
-    let (checker_1, observer_1) = Checker::new();
-    let (checker_2, observer_2) = Checker::new();
-
-    let observable_1 = observable;
-    let observable_2 = observable_1.clone();
-
-    let subscription_1 = observable_1.subscribe(observer_1);
-    let _subscription_2 = observable_2.subscribe(observer_2);
-    assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), [1]);
-    assert!(checker_2.is_active());
-
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), [1]);
-    assert!(checker_2.is_active());
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_active());
-    assert_eq!(checker_2.values(), [1, 2]);
-    assert!(checker_2.is_active());
-
-    subscription_1.dispose(); // unsubscribe
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
-    assert_eq!(checker_2.values(), [1, 2, 3]);
-    assert!(checker_2.is_active());
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
-    assert_eq!(checker_2.values(), [1, 2, 3]);
-    assert!(checker_2.is_completed());
 }
 
 #[test]
@@ -218,41 +221,44 @@ fn test_mut_ref() {
     assert_eq!(error, 444);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let observable = Create::new(|mut observer| {
-        observer.on_next(1);
-        let handle = tokio::spawn(async {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            observer.on_next(2);
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            observer.on_termination(Termination::<String>::Completed);
+#[test]
+fn test_async() {
+    block_on(async {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(1);
+            let handle = spawn(async {
+                sleep(Duration::from_millis(100)).await;
+                observer.on_next(2);
+                sleep(Duration::from_millis(100)).await;
+                observer.on_termination(Termination::<String>::Completed);
+            });
+            Subscription::new_with_disposal_callback(move || handle.abort())
         });
-        Subscription::new_with_disposal_callback(move || handle.abort())
+        let (checker, observer) = Checker::new();
+
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert_eq!(checker.values(), [1]);
+        assert!(checker.is_active());
+
+        sleep(Duration::from_millis(50)).await;
+        assert_eq!(checker.values(), [1]);
+        assert!(checker.is_active());
+
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker.values(), [1, 2]);
+        assert!(checker.is_active());
+
+        spawn(async { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [1, 2]);
+        assert!(checker.is_dropped());
+
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker.values(), [1, 2]);
+        assert!(checker.is_dropped());
     });
-    let (checker, observer) = Checker::new();
-
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert_eq!(checker.values(), [1]);
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(50)).await;
-    assert_eq!(checker.values(), [1]);
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker.values(), [1, 2]);
-    assert!(checker.is_active());
-
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [1, 2]);
-    assert!(checker.is_dropped());
-
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker.values(), [1, 2]);
-    assert!(checker.is_dropped());
 }
 
 #[test]

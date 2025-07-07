@@ -1,11 +1,12 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::repeat::Repeat,
     subscription::disposable::Disposable,
 };
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::checker::Checker;
 
 #[test]
@@ -39,20 +40,23 @@ fn test_ref() {
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_async() {
-    let observable = Repeat::new(3, 4);
-    let (checker, observer) = Checker::<i32, Infallible>::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let observable = Repeat::new(3, 4);
+        let (checker, observer) = Checker::<i32, Infallible>::new();
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert_eq!(checker.values(), [3, 3, 3, 3]);
-    assert!(checker.is_completed());
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert_eq!(checker.values(), [3, 3, 3, 3]);
+        assert!(checker.is_completed());
 
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [3, 3, 3, 3]);
-    assert!(checker.is_completed());
+        spawn(async { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [3, 3, 3, 3]);
+        assert!(checker.is_completed());
+    });
 }
 
 #[test]

@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use crate::tests_utils::test_scheduler::TestScheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -172,59 +173,61 @@ fn test_completed_source_and_sampler_are_same() {
     assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_completed_with_interval() {
-    let (mut sender, observable, channel_checker) = test_channel();
-    let sampler = Interval::new(Duration::from_millis(100), TestScheduler, None);
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_completed_with_interval() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let sampler = Interval::new(Duration::from_millis(100), TestScheduler, None);
+        let (checker, observer) = Checker::new();
 
-    // Custom operations
-    let observable = observable.sample(sampler.map(|_| ()));
+        // Custom operations
+        let observable = observable.sample(sampler.map(|_| ()));
 
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(20)).await;
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        sleep(Duration::from_millis(20)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    sender.on_next(111);
-    assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        sender.on_next(111);
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    sender.on_next(222);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        sender.on_next(222);
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    sender.on_next(333);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        sender.on_next(333);
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(checker.values(), [111, 333]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker.values(), [111, 333]);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    sender.on_next(444);
-    assert_eq!(checker.values(), [111, 333]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        sender.on_next(444);
+        assert_eq!(checker.values(), [111, 333]);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [111, 333]);
-    assert!(checker.is_completed());
-    assert!(channel_checker.is_completed());
+        sender.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.values(), [111, 333]);
+        assert!(checker.is_completed());
+        assert!(channel_checker.is_completed());
+    });
 }
 
 #[test]
@@ -547,58 +550,64 @@ fn test_mut_ref() {
     assert_eq!(value_3, 666);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-    let (mut sampler_sender, sampler_observable, sampler_channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (mut sampler_sender, sampler_observable, sampler_channel_checker) = test_channel();
+        let (checker, observer) = Checker::new();
 
-    // Custom operations
-    let observable = observable.sample(sampler_observable);
+        // Custom operations
+        let observable = observable.sample(sampler_observable);
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(sampler_channel_checker.is_subscribed());
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+        assert!(sampler_channel_checker.is_subscribed());
 
-    let handle = tokio::spawn(async move {
-        sampler_sender.on_next(());
-        sampler_sender
+        let mut sampler_sender = spawn(async move {
+            sampler_sender.on_next(());
+            sampler_sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+        assert!(sampler_channel_checker.is_subscribed());
+
+        let _sender = spawn(async move {
+            sender.on_next(111);
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+        assert!(sampler_channel_checker.is_subscribed());
+
+        let _sampler_sender = spawn(async move {
+            sampler_sender.on_next(());
+            sampler_sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+        assert!(sampler_channel_checker.is_subscribed());
+
+        spawn(async { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+        assert!(channel_checker.is_unsubscribed());
+        assert!(sampler_channel_checker.is_unsubscribed());
     });
-    let mut sampler_sender = handle.await.unwrap();
-    assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(sampler_channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move {
-        sender.on_next(111);
-        sender
-    });
-    let _sender = handle.await.unwrap();
-    assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(sampler_channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move {
-        sampler_sender.on_next(());
-        sampler_sender
-    });
-    let _sampler_sender = handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(sampler_channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_dropped());
-    assert!(channel_checker.is_unsubscribed());
-    assert!(sampler_channel_checker.is_unsubscribed());
 }
 
 #[test]

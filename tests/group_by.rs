@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -7,7 +8,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
 };
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -185,51 +186,56 @@ fn test_ref() {
     assert!(checker.is_error(&error));
 }
 
-#[tokio::test]
-async fn test_async() {
-    let subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let subject = PublishSubject::default();
+        let (checker, observer) = Checker::new();
 
-    // Custom operations
-    let observable = subject.clone();
-    let observable = observable.group_by(|value| value % 2);
+        // Custom operations
+        let observable = subject.clone();
+        let observable = observable.group_by(|value| value % 2);
 
-    let handle = tokio::spawn(async {
-        let mut index = -1;
-        observable
-            .flat_map(move |v| {
-                index += 1;
-                let i = index;
-                v.map(move |v| 10 * i + v)
-            })
-            .subscribe(observer)
+        let subscription = spawn(async {
+            let mut index = -1;
+            observable
+                .flat_map(move |v| {
+                    index += 1;
+                    let i = index;
+                    v.map(move |v| 10 * i + v)
+                })
+                .subscribe(observer)
+        })
+        .await
+        .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        let mut subject_cloned = subject.clone();
+        spawn(async move {
+            for i in 0..=9 {
+                subject_cloned.on_next(i);
+            }
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
+        assert!(checker.is_active());
+
+        spawn(async { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
+        assert!(checker.is_dropped());
+
+        let subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_termination(Termination::Error("error"));
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
+        assert!(checker.is_dropped());
     });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    let mut subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        for i in 0..=9 {
-            subject_cloned.on_next(i);
-        }
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_active());
-
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_dropped());
-
-    let subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_termination(Termination::Error("error"));
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_dropped());
 }
 
 #[test]

@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -507,122 +508,129 @@ fn test_ref() {
     assert!(channel_checker.is_error(&error));
 }
 
-#[tokio::test]
-async fn test_async() {
-    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
+#[test]
+fn test_async() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+        let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
-    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+        // Custom operations
+        let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
-    let checker_sub_vec_cloned = checker_sub_vec.clone();
-    let handle = tokio::spawn(async move {
-        observable.subscribe_with_callback(
-            move |value| {
-                let (checker, observer) = Checker::new();
-                let sub = value.subscribe(observer);
-                checker_sub_vec_cloned.lock().unwrap().push((checker, sub));
-            },
-            |termination| {
-                termination_observer.on_termination(termination);
-            },
-        )
+        let checker_sub_vec_cloned = checker_sub_vec.clone();
+        let _subscription = spawn(async move {
+            observable.subscribe_with_callback(
+                move |value| {
+                    let (checker, observer) = Checker::new();
+                    let sub = value.subscribe(observer);
+                    checker_sub_vec_cloned.lock().unwrap().push((checker, sub));
+                },
+                |termination| {
+                    termination_observer.on_termination(termination);
+                },
+            )
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker_sub_vec.lock().unwrap().len(), 1);
+        for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
+            match index {
+                0 => {
+                    assert_eq!(checker.values(), []);
+                    assert!(checker.is_active());
+                }
+                _ => panic!(),
+            }
+        }
+        assert!(termination_checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        let mut sender = spawn(async move {
+            sender.on_next(111);
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker_sub_vec.lock().unwrap().len(), 1);
+        for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
+            match index {
+                0 => {
+                    assert_eq!(checker.values(), [111]);
+                    assert!(checker.is_active());
+                }
+                _ => panic!(),
+            }
+        }
+        assert!(termination_checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        let mut sender = spawn(async move {
+            sender.on_next(222);
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
+        for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
+            match index {
+                0 => {
+                    assert_eq!(checker.values(), [111, 222]);
+                    assert!(checker.is_completed());
+                }
+                1 => {
+                    assert_eq!(checker.values(), []);
+                    assert!(checker.is_active());
+                }
+                _ => panic!(),
+            }
+        }
+        assert!(termination_checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        let sender = spawn(async move {
+            sender.on_next(333);
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
+        for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
+            match index {
+                0 => {
+                    assert_eq!(checker.values(), [111, 222]);
+                    assert!(checker.is_completed());
+                }
+                1 => {
+                    assert_eq!(checker.values(), [333]);
+                    assert!(checker.is_active());
+                }
+                _ => panic!(),
+            }
+        }
+        assert!(termination_checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        spawn(async move { sender.on_termination(Termination::Completed) })
+            .await
+            .unwrap();
+        assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
+        for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
+            match index {
+                0 => {
+                    assert_eq!(checker.values(), [111, 222]);
+                    assert!(checker.is_completed());
+                }
+                1 => {
+                    assert_eq!(checker.values(), [333]);
+                    assert!(checker.is_completed());
+                }
+                _ => panic!(),
+            }
+        }
+        assert!(termination_checker.is_completed());
+        assert!(channel_checker.is_completed());
     });
-    let _subscription = handle.await.unwrap();
-    assert_eq!(checker_sub_vec.lock().unwrap().len(), 1);
-    for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
-        match index {
-            0 => {
-                assert_eq!(checker.values(), []);
-                assert!(checker.is_active());
-            }
-            _ => panic!(),
-        }
-    }
-    assert!(termination_checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move {
-        sender.on_next(111);
-        sender
-    });
-    let mut sender = handle.await.unwrap();
-    assert_eq!(checker_sub_vec.lock().unwrap().len(), 1);
-    for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
-        match index {
-            0 => {
-                assert_eq!(checker.values(), [111]);
-                assert!(checker.is_active());
-            }
-            _ => panic!(),
-        }
-    }
-    assert!(termination_checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move {
-        sender.on_next(222);
-        sender
-    });
-    let mut sender = handle.await.unwrap();
-    assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
-    for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
-        match index {
-            0 => {
-                assert_eq!(checker.values(), [111, 222]);
-                assert!(checker.is_completed());
-            }
-            1 => {
-                assert_eq!(checker.values(), []);
-                assert!(checker.is_active());
-            }
-            _ => panic!(),
-        }
-    }
-    assert!(termination_checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move {
-        sender.on_next(333);
-        sender
-    });
-    let sender = handle.await.unwrap();
-    assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
-    for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
-        match index {
-            0 => {
-                assert_eq!(checker.values(), [111, 222]);
-                assert!(checker.is_completed());
-            }
-            1 => {
-                assert_eq!(checker.values(), [333]);
-                assert!(checker.is_active());
-            }
-            _ => panic!(),
-        }
-    }
-    assert!(termination_checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move { sender.on_termination(Termination::Completed) });
-    handle.await.unwrap();
-    assert_eq!(checker_sub_vec.lock().unwrap().len(), 2);
-    for (index, (checker, _)) in checker_sub_vec.lock().unwrap().iter().enumerate() {
-        match index {
-            0 => {
-                assert_eq!(checker.values(), [111, 222]);
-                assert!(checker.is_completed());
-            }
-            1 => {
-                assert_eq!(checker.values(), [333]);
-                assert!(checker.is_completed());
-            }
-            _ => panic!(),
-        }
-    }
-    assert!(termination_checker.is_completed());
-    assert!(channel_checker.is_completed());
 }
 
 #[test]

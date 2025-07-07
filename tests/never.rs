@@ -1,26 +1,31 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::never::Never,
     subscription::disposable::Disposable,
 };
+use std::time::Duration;
 use tests_utils::checker::Checker;
 
-#[tokio::test]
-async fn test_async() {
-    let observable = Never;
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let observable = Never;
+        let (checker, observer) = Checker::new();
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_dropped());
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_dropped());
 
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_dropped());
+        spawn(async { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_dropped());
+    });
 }
 
 #[test]

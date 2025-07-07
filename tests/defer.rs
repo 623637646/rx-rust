@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -10,6 +11,7 @@ use rx_rust::{
 use std::{
     convert::Infallible,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -162,40 +164,45 @@ fn test_mut_ref() {
     assert_eq!(error, 444);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let subject = PublishSubject::default();
+        let (checker, observer) = Checker::new();
 
-    // Custom operations
-    let observable = subject.clone();
-    let observable = Defer::new(|| observable);
+        // Custom operations
+        let observable = subject.clone();
+        let observable = Defer::new(|| observable);
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
 
-    let mut subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_next(111);
+        let mut subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_next(111);
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+
+        spawn(async { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+
+        let subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_termination(Termination::Error("error"));
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
     });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_dropped());
-
-    let subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_termination(Termination::Error("error"));
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_dropped());
 }
 
 #[test]

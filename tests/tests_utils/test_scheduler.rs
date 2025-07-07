@@ -1,3 +1,4 @@
+use crate::tests_utils::test_runtime::{sleep, spawn};
 use educe::Educe;
 use rx_rust::{
     scheduler::Scheduler,
@@ -7,69 +8,12 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
-use tokio::time::interval;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub(crate) struct TestScheduler;
 
 impl Scheduler for TestScheduler {
-    fn schedule(
-        &self,
-        task: impl FnOnce() + Send + 'static,
-        delay: Option<Duration>,
-    ) -> AutoDisposal<'static> {
-        let entry = EntryExitChecker::enter();
-
-        let entry_cloned = entry.clone();
-        let handle = tokio::spawn(async move {
-            if let Some(delay) = delay {
-                tokio::time::sleep(delay).await;
-            }
-            task();
-            entry_cloned.exit();
-        });
-
-        let entry_cloned = entry.clone();
-        AutoDisposal::new(CallbackDisposal::new(move || {
-            handle.abort();
-            entry_cloned.exit();
-        }))
-    }
-
-    fn schedule_period(
-        &self,
-        mut task: impl FnMut(usize) -> bool + Send + 'static,
-        period: Duration,
-        delay: Option<Duration>,
-    ) -> AutoDisposal<'static> {
-        let entry = EntryExitChecker::enter();
-
-        let entry_cloned = entry.clone();
-        let handle = tokio::spawn(async move {
-            if let Some(delay) = delay {
-                tokio::time::sleep(delay).await;
-            }
-            let mut ticker = interval(period);
-            let mut count = 0;
-            loop {
-                ticker.tick().await;
-                let stop = task(count);
-                count += 1;
-                if stop {
-                    break;
-                }
-            }
-            entry_cloned.exit();
-        });
-
-        let entry_cloned = entry.clone();
-        AutoDisposal::new(CallbackDisposal::new(move || {
-            handle.abort();
-            entry_cloned.exit();
-        }))
-    }
-
     fn schedule_future<FU>(
         &self,
         future: FU,
@@ -81,7 +25,7 @@ impl Scheduler for TestScheduler {
         let entry = EntryExitChecker::enter();
 
         let entry_cloned = entry.clone();
-        let handle = tokio::spawn(async move {
+        let handle = spawn(async move {
             result_callback(future.await);
             entry_cloned.exit();
         });
@@ -91,6 +35,10 @@ impl Scheduler for TestScheduler {
             handle.abort();
             entry_cloned.exit();
         }))
+    }
+
+    fn sleep(duration: Duration) -> impl Future + Send {
+        sleep(duration)
     }
 }
 

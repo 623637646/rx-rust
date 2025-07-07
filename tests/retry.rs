@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::test_channel::{ChannelChecker, ReceiverObservable, SenderObserver};
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -922,113 +923,120 @@ fn test_mut_ref() {
     assert_eq!(value_2, 444);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
-    let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+#[test]
+fn test_async() {
+    block_on(async {
+        let sender = Arc::new(Mutex::new(None));
+        let channel_checker = Arc::new(Mutex::new(None));
+        let (checker, observer) = Checker::new();
+        let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
-    let errors_cloned = errors.clone();
-    let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
-        if errors_cloned.lock().unwrap().len() <= 1 {
-            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
-            RetryAction::Retry(observable)
-        } else {
-            RetryAction::Stop(error)
-        }
+        // Custom operations
+        let observable = new_channel(sender.clone(), channel_checker.clone());
+        let sender_cloned = sender.clone();
+        let channel_checker_cloned = channel_checker.clone();
+        let errors_cloned = errors.clone();
+        let observable = observable.retry(move |error| {
+            errors_cloned.lock().unwrap().push(error);
+            if errors_cloned.lock().unwrap().len() <= 1 {
+                let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+                RetryAction::Retry(observable)
+            } else {
+                RetryAction::Stop(error)
+            }
+        });
+
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(
+            channel_checker
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .is_subscribed()
+        );
+        assert!(errors.lock().unwrap().is_empty());
+
+        let sender = spawn(async move {
+            sender.lock().unwrap().as_mut().unwrap().on_next(111);
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(
+            channel_checker
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .is_subscribed()
+        );
+        assert!(errors.lock().unwrap().is_empty());
+
+        let sender = spawn(async move {
+            { sender.lock().unwrap().take() }
+                .unwrap()
+                .on_termination(Termination::Error("error"));
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(
+            channel_checker
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .is_subscribed()
+        );
+        assert_eq!(*errors.lock().unwrap(), ["error"]);
+
+        let sender = spawn(async move {
+            sender.lock().unwrap().as_mut().unwrap().on_next(222);
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111, 222]);
+        assert!(checker.is_active());
+        assert!(
+            channel_checker
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .is_subscribed()
+        );
+        assert_eq!(*errors.lock().unwrap(), ["error"]);
+
+        let _sender = spawn(async move {
+            { sender.lock().unwrap().take() }
+                .unwrap()
+                .on_termination(Termination::Error("error2"));
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111, 222]);
+        assert!(checker.is_error("error2"));
+        assert!(
+            channel_checker
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .is_error("error2")
+        );
+        assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
     });
-
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let _subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
-
-    let handle = tokio::spawn(async move {
-        sender.lock().unwrap().as_mut().unwrap().on_next(111);
-        sender
-    });
-    let sender = handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
-
-    let handle = tokio::spawn(async move {
-        { sender.lock().unwrap().take() }
-            .unwrap()
-            .on_termination(Termination::Error("error"));
-        sender
-    });
-    let sender = handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
-
-    let handle = tokio::spawn(async move {
-        sender.lock().unwrap().as_mut().unwrap().on_next(222);
-        sender
-    });
-    let sender = handle.await.unwrap();
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
-
-    let handle = tokio::spawn(async move {
-        { sender.lock().unwrap().take() }
-            .unwrap()
-            .on_termination(Termination::Error("error2"));
-        sender
-    });
-    let _sender = handle.await.unwrap();
-    assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_error("error2"));
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_error("error2")
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
 }
 
 #[test]

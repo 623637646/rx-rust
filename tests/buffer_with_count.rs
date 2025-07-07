@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -7,7 +8,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
 };
-use std::{convert::Infallible, num::NonZeroUsize};
+use std::{convert::Infallible, num::NonZeroUsize, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -357,56 +358,63 @@ fn test_mut_ref() {
     assert_eq!(value_3, 333);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let subject = PublishSubject::default();
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let subject = PublishSubject::default();
+        let (checker, observer) = Checker::new();
 
-    // Custom operations
-    let observable = subject.clone();
-    let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
+        // Custom operations
+        let observable = subject.clone();
+        let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
 
-    let mut subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_next(111);
+        let mut subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_next(111);
+        })
+        .await
+        .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        let mut subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_next(222);
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [vec![111, 222]]);
+        assert!(checker.is_active());
+
+        let mut subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_next(333);
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [vec![111, 222]]);
+        assert!(checker.is_active());
+
+        spawn(async { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [vec![111, 222]]);
+        assert!(checker.is_dropped());
+
+        let subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_termination(Termination::Error("error"));
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [vec![111, 222]]);
+        assert!(checker.is_dropped());
     });
-    handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    let mut subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_next(222);
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [vec![111, 222]]);
-    assert!(checker.is_active());
-
-    let mut subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_next(333);
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [vec![111, 222]]);
-    assert!(checker.is_active());
-
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [vec![111, 222]]);
-    assert!(checker.is_dropped());
-
-    let subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_termination(Termination::Error("error"));
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [vec![111, 222]]);
-    assert!(checker.is_dropped());
 }
 
 #[test]

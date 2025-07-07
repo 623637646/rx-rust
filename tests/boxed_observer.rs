@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use std::convert::Infallible;
 
 use rx_rust::observer::{Observer, Termination, boxed_observer::BoxedObserver};
@@ -66,20 +67,20 @@ fn test_mut_ref() {
     assert_eq!(error, 444);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let (checker, observer) = Checker::new();
-    let mut boxed_observer = tokio::spawn(async { BoxedObserver::new(observer) })
+#[test]
+fn test_async() {
+    block_on(async {
+        let (checker, observer) = Checker::new();
+        let mut boxed_observer = spawn(async { BoxedObserver::new(observer) }).await.unwrap();
+        spawn(async move {
+            boxed_observer.on_next(111);
+            boxed_observer.on_termination(Termination::Error("error"));
+            assert_eq!(checker.values(), [111]);
+            assert!(checker.is_error("error"));
+        })
         .await
         .unwrap();
-    tokio::spawn(async move {
-        boxed_observer.on_next(111);
-        boxed_observer.on_termination(Termination::Error("error"));
-        assert_eq!(checker.values(), [111]);
-        assert!(checker.is_error("error"));
-    })
-    .await
-    .unwrap();
+    });
 }
 
 #[test]

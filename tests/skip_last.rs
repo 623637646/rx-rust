@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -7,7 +8,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
 };
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -234,42 +235,47 @@ fn test_mut_ref() {
     assert_eq!(value_3, 333);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
 
-    // Custom operations
-    let observable = observable.skip_last(1);
+        // Custom operations
+        let observable = observable.skip_last(1);
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
 
-    let handle = tokio::spawn(async move {
-        sender.on_next(111);
-        sender
+        let mut sender = spawn(async move {
+            sender.on_next(111);
+            sender
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        spawn(async move {
+            sender.on_next(222);
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        spawn(async { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+        assert!(channel_checker.is_unsubscribed());
     });
-    let mut sender = handle.await.unwrap();
-    assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async move {
-        sender.on_next(222);
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-
-    let handle = tokio::spawn(async { subscription.dispose() });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_dropped());
-    assert!(channel_checker.is_unsubscribed());
 }
 
 #[test]

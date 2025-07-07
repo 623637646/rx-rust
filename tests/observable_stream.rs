@@ -1,6 +1,7 @@
 mod tests_utils;
 
-use futures::StreamExt;
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use futures::{FutureExt, StreamExt};
 use rx_rust::{
     observable::observable_ext::ObservableExt,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -15,262 +16,241 @@ use std::{
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
-#[tokio::test]
-async fn test_completed() {
-    let mut subject = PublishSubject::default();
+#[test]
+fn test_completed() {
+    block_on(async {
+        let mut subject = PublishSubject::default();
 
-    // Custom operations
-    let observable = subject.clone();
-    let stream = observable.into_stream();
+        // Custom operations
+        let observable = subject.clone();
+        let stream = observable.into_stream();
 
-    let (checker, _) = Checker::from_stream(stream);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        let (checker, _) = Checker::from_stream(stream);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
 
-    subject.on_next(111);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        subject.on_next(111);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+        subject.on_next(222);
+        subject.on_next(333);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert!(checker.is_active());
 
-    subject.on_next(222);
-    subject.on_next(333);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_active());
-
-    subject.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_completed());
-}
-
-#[tokio::test]
-async fn test_completed_lazy_subscription() {
-    let subscribed = Arc::new(Mutex::new(false));
-    let subscribed_cloned = subscribed.clone();
-    let observable = Create::new(move |mut observer| {
-        *subscribed_cloned.lock().unwrap() = true;
-        observer.on_next(111);
-        observer.on_termination(Termination::Completed);
-        Subscription::new_none_disposal()
+        subject.on_termination(Termination::<Infallible>::Completed);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert!(checker.is_completed());
     });
-
-    let stream = observable.into_stream();
-    assert!(!*subscribed.lock().unwrap());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(!*subscribed.lock().unwrap());
-
-    let (checker, _) = Checker::<_, Infallible>::from_stream(stream);
-    assert!(!*subscribed.lock().unwrap());
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(*subscribed.lock().unwrap());
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_unsubscribe() {
-    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+#[test]
+fn test_completed_lazy_subscription() {
+    block_on(async {
+        let subscribed = Arc::new(Mutex::new(false));
+        let subscribed_cloned = subscribed.clone();
+        let observable = Create::new(move |mut observer| {
+            *subscribed_cloned.lock().unwrap() = true;
+            observer.on_next(111);
+            observer.on_termination(Termination::Completed);
+            Subscription::new_none_disposal()
+        });
 
-    // Custom operations
-    let observable = subject.clone();
-    let stream = observable.into_stream();
+        let stream = observable.into_stream();
+        assert!(!*subscribed.lock().unwrap());
 
-    let (checker, disposal) = Checker::from_stream(stream);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        sleep(Duration::from_millis(10)).await;
+        assert!(!*subscribed.lock().unwrap());
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    subject.on_next(111);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    subject.on_next(222);
-    subject.on_next(333);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_active());
-
-    disposal.dispose();
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_dropped());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_dropped());
-}
-
-#[tokio::test]
-async fn test_ref() {
-    let value = 111;
-    let mut subject = PublishSubject::default();
-
-    // Custom operations
-    let observable = subject.clone();
-    let mut stream = observable.into_stream();
-
-    // Subscribe in the first time of poll.
-    tokio::select!(
-        _ = stream.next() => {},
-        _ = tokio::time::sleep(Duration::from_millis(10))=>{}
-    );
-
-    subject.on_next(&value);
-    assert_eq!(stream.next().await, Some(&value));
-
-    subject.on_termination(Termination::Completed);
-    assert_eq!(stream.next().await, None);
-    assert_eq!(stream.next().await, None);
-}
-
-#[tokio::test]
-async fn test_mut_ref() {
-    let mut value = 111;
-
-    let observable = Create::new(|mut observer| {
-        observer.on_next(&mut value);
-        observer.on_termination(Termination::Completed);
-        Subscription::new_none_disposal()
+        let (checker, _) = Checker::<_, Infallible>::from_stream(stream);
+        sleep(Duration::from_millis(10)).await;
+        assert!(*subscribed.lock().unwrap());
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
     });
-
-    let mut stream = observable.into_stream();
-
-    if let Some(value) = stream.next().await {
-        *value *= 2
-    } else {
-        panic!()
-    }
-
-    assert_eq!(stream.next().await, None);
-    assert_eq!(stream.next().await, None);
-
-    assert_eq!(value, 222);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let subject = PublishSubject::default();
+#[test]
+fn test_unsubscribe() {
+    block_on(async {
+        let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
 
-    // Custom operations
-    let observable = subject.clone();
+        // Custom operations
+        let observable = subject.clone();
+        let stream = observable.into_stream();
 
-    let handle = tokio::spawn(async move { observable.into_stream() });
-    let stream = handle.await.unwrap();
+        let (checker, disposal) = Checker::from_stream(stream);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
 
-    let handle = tokio::spawn(async move { Checker::from_stream(stream) });
-    let (checker, _) = handle.await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
 
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        subject.on_next(111);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        subject.on_next(222);
+        subject.on_next(333);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert!(checker.is_active());
 
-    let mut subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_next(111);
+        disposal.dispose();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert!(checker.is_dropped());
     });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+}
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+#[test]
+fn test_ref() {
+    block_on(async {
+        let value = 111;
+        let mut subject = PublishSubject::default();
 
-    let mut subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_next(222);
-        subject_cloned.on_next(333);
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_active());
+        // Custom operations
+        let observable = subject.clone();
+        let mut stream = observable.into_stream();
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_active());
+        // Subscribe in the first time of poll.
+        futures::select!(
+            _ = stream.next().fuse() => {},
+            _ = sleep(Duration::from_millis(10)).fuse()=>{}
+        );
 
-    let handle = tokio::spawn(async move {
+        subject.on_next(&value);
+        assert_eq!(stream.next().await, Some(&value));
+
         subject.on_termination(Termination::Completed);
+        assert_eq!(stream.next().await, None);
+        assert_eq!(stream.next().await, None);
     });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_completed());
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_completed());
 }
 
-#[tokio::test]
-async fn test_without_convenient_api() {
-    let mut subject = PublishSubject::default();
+#[test]
+fn test_mut_ref() {
+    block_on(async {
+        let mut value = 111;
 
-    // Custom operations
-    let observable = subject.clone();
-    let stream = ObservableStream::new(observable);
+        let observable = Create::new(|mut observer| {
+            observer.on_next(&mut value);
+            observer.on_termination(Termination::Completed);
+            Subscription::new_none_disposal()
+        });
 
-    let (checker, _) = Checker::from_stream(stream);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        let mut stream = observable.into_stream();
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        if let Some(value) = stream.next().await {
+            *value *= 2
+        } else {
+            panic!()
+        }
 
-    subject.on_next(111);
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+        assert_eq!(stream.next().await, None);
+        assert_eq!(stream.next().await, None);
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+        assert_eq!(value, 222);
+    });
+}
 
-    subject.on_next(222);
-    subject.on_next(333);
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+#[test]
+fn test_async() {
+    block_on(async {
+        let subject = PublishSubject::default();
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_active());
+        // Custom operations
+        let observable = subject.clone();
 
-    subject.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_active());
+        let stream = spawn(async move { observable.into_stream() })
+            .await
+            .unwrap();
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    assert_eq!(checker.values(), [111, 222, 333]);
-    assert!(checker.is_completed());
+        let (checker, _) = spawn(async move { Checker::from_stream(stream) })
+            .await
+            .unwrap();
+
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        let mut subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_next(111);
+        })
+        .await
+        .unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+
+        let mut subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_next(222);
+            subject_cloned.on_next(333);
+        })
+        .await
+        .unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert!(checker.is_active());
+
+        spawn(async move {
+            subject.on_termination(Termination::Completed);
+        })
+        .await
+        .unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert!(checker.is_completed());
+    });
+}
+
+#[test]
+fn test_without_convenient_api() {
+    block_on(async {
+        let mut subject = PublishSubject::default();
+
+        // Custom operations
+        let observable = subject.clone();
+        let stream = ObservableStream::new(observable);
+
+        let (checker, _) = Checker::from_stream(stream);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        subject.on_next(111);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+
+        subject.on_next(222);
+        subject.on_next(333);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert!(checker.is_active());
+
+        subject.on_termination(Termination::<Infallible>::Completed);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111, 222, 333]);
+        assert!(checker.is_completed());
+    });
 }
 
 #[test]

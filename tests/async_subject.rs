@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, spawn};
 use rx_rust::observable::Observable;
 use rx_rust::observable::observable_ext::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
@@ -207,37 +208,42 @@ fn test_ref() {
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
 
-#[tokio::test]
-async fn test_async() {
-    let subject = AsyncSubject::default();
-    let (checker, observer) = Checker::new();
+#[test]
+fn test_async() {
+    block_on(async {
+        let subject = AsyncSubject::default();
+        let (checker, observer) = Checker::new();
 
-    // Custom operations
-    let observable = subject.clone();
+        // Custom operations
+        let observable = subject.clone();
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let _subscription = handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(subject.terminated().is_none());
+        let _subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(subject.terminated().is_none());
 
-    let mut subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_next(&111);
+        let mut subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_next(&111);
+        })
+        .await
+        .unwrap();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(subject.terminated().is_none());
+
+        let subject_cloned = subject.clone();
+        spawn(async move {
+            subject_cloned.on_termination(Termination::<Infallible>::Completed);
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [&111]);
+        assert!(checker.is_completed());
+        assert!(matches!(subject.terminated(), Some(Termination::Completed)));
     });
-    handle.await.unwrap();
-    assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(subject.terminated().is_none());
-
-    let subject_cloned = subject.clone();
-    let handle = tokio::spawn(async move {
-        subject_cloned.on_termination(Termination::<Infallible>::Completed);
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [&111]);
-    assert!(checker.is_completed());
-    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
 
 #[test]

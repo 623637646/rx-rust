@@ -5,25 +5,8 @@ use std::time::Duration;
 #[cfg(feature = "tokio-scheduler")]
 pub mod tokio_scheduler;
 
-/// A `Scheduler` is a type that can schedule tasks.
+/// This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
 pub trait Scheduler {
-    /// Schedule a task to be executed.
-    /// task: The task to be executed. The task must be Send and 'static, because the task will be executed in a different thread.
-    /// delay: The delay before the task is executed.
-    /// Returns a `Disposable` that can be used to cancel the task.
-    fn schedule(
-        &self,
-        task: impl FnOnce() + Send + 'static, // This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
-        delay: Option<Duration>,
-    ) -> AutoDisposal<'static>;
-
-    fn schedule_period(
-        &self,
-        task: impl FnMut(usize) -> bool + Send + 'static,
-        period: Duration,
-        delay: Option<Duration>,
-    ) -> AutoDisposal<'static>;
-
     fn schedule_future<FU>(
         &self,
         future: FU,
@@ -31,6 +14,59 @@ pub trait Scheduler {
     ) -> AutoDisposal<'static>
     where
         FU: Future + Send + 'static;
+
+    fn sleep(duration: Duration) -> impl Future + Send;
+
+    fn schedule(
+        &self,
+        task: impl FnOnce() + Send + 'static,
+        delay: Option<Duration>,
+    ) -> AutoDisposal<'static> {
+        self.schedule_future(
+            async move {
+                if let Some(delay) = delay {
+                    Self::sleep(delay).await;
+                }
+                task();
+            },
+            |_| {},
+        )
+    }
+
+    fn schedule_recursive(
+        &self,
+        mut task: impl FnMut(usize) -> Option<Duration> + Send + 'static,
+        delay: Option<Duration>,
+    ) -> AutoDisposal<'static> {
+        self.schedule_future(
+            async move {
+                if let Some(delay) = delay {
+                    Self::sleep(delay).await;
+                }
+                let mut count = 0;
+                while let Some(delay) = task(count) {
+                    Self::sleep(delay).await;
+                    count += 1;
+                }
+            },
+            |_| {},
+        )
+    }
+
+    fn schedule_period(
+        &self,
+        mut task: impl FnMut(usize) -> bool + Send + 'static,
+        period: Duration,
+        delay: Option<Duration>,
+    ) -> AutoDisposal<'static> {
+        self.schedule_recursive(
+            move |count| {
+                task(count);
+                Some(period)
+            },
+            delay,
+        )
+    }
 
     fn schedule_stream<SM>(
         &self,

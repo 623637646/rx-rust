@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -13,6 +14,7 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
+    time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -250,74 +252,77 @@ fn test_mut_ref() {
     assert_eq!(error, 444);
 }
 
-#[tokio::test]
-async fn test_async() {
-    let disposed = Arc::new(AtomicBool::new(false));
-    let called = Arc::new(AtomicBool::new(false));
-    let boxed_observer = Arc::new(Mutex::new(None));
+#[test]
+fn test_async() {
+    block_on(async {
+        let disposed = Arc::new(AtomicBool::new(false));
+        let called = Arc::new(AtomicBool::new(false));
+        let boxed_observer = Arc::new(Mutex::new(None));
 
-    let disposed_cloned = disposed.clone();
-    let boxed_observer_cloned = boxed_observer.clone();
-    let observable = Create::new(move |observer| {
-        *boxed_observer_cloned.lock().unwrap() = Some(observer);
-        Subscription::new_with_disposal_callback(move || {
-            disposed_cloned.store(true, Ordering::SeqCst);
+        let disposed_cloned = disposed.clone();
+        let boxed_observer_cloned = boxed_observer.clone();
+        let observable = Create::new(move |observer| {
+            *boxed_observer_cloned.lock().unwrap() = Some(observer);
+            Subscription::new_with_disposal_callback(move || {
+                disposed_cloned.store(true, Ordering::SeqCst);
+            })
+        });
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let disposed_cloned = disposed.clone();
+        let called_cloned = called.clone();
+        let observable = observable.do_after_disposal(move || {
+            assert!(disposed_cloned.load(Ordering::SeqCst));
+            called_cloned.store(true, Ordering::SeqCst);
+        });
+
+        let subscription = spawn(async move { observable.subscribe(observer) })
+            .await
+            .unwrap();
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_active());
+        assert!(!disposed.load(Ordering::SeqCst));
+        assert!(!called.load(Ordering::SeqCst));
+
+        let boxed_observer = spawn(async move {
+            boxed_observer
+                .lock()
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .on_next(111);
+            boxed_observer
         })
-    });
-    let (checker, observer) = Checker::new();
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(!disposed.load(Ordering::SeqCst));
+        assert!(!called.load(Ordering::SeqCst));
 
-    // Custom operations
-    let disposed_cloned = disposed.clone();
-    let called_cloned = called.clone();
-    let observable = observable.do_after_disposal(move || {
-        assert!(disposed_cloned.load(Ordering::SeqCst));
-        called_cloned.store(true, Ordering::SeqCst);
-    });
+        spawn(async move { subscription.dispose() }).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(disposed.load(Ordering::SeqCst));
+        assert!(called.load(Ordering::SeqCst));
 
-    let handle = tokio::spawn(async move { observable.subscribe(observer) });
-    let subscription = handle.await.unwrap();
-    assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
-    assert!(!disposed.load(Ordering::SeqCst));
-    assert!(!called.load(Ordering::SeqCst));
-
-    let handle = tokio::spawn(async move {
-        boxed_observer
-            .lock()
-            .unwrap()
-            .as_mut()
-            .unwrap()
-            .on_next(111);
-        boxed_observer
+        spawn(async move {
+            boxed_observer
+                .lock()
+                .unwrap()
+                .take()
+                .unwrap()
+                .on_termination(Termination::<Infallible>::Completed);
+        })
+        .await
+        .unwrap();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+        assert!(disposed.load(Ordering::SeqCst));
+        assert!(called.load(Ordering::SeqCst));
     });
-    let boxed_observer = handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(!disposed.load(Ordering::SeqCst));
-    assert!(!called.load(Ordering::SeqCst));
-
-    let handle = tokio::spawn(async move {
-        subscription.dispose();
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
-    assert!(disposed.load(Ordering::SeqCst));
-    assert!(called.load(Ordering::SeqCst));
-
-    let handle = tokio::spawn(async move {
-        boxed_observer
-            .lock()
-            .unwrap()
-            .take()
-            .unwrap()
-            .on_termination(Termination::<Infallible>::Completed);
-    });
-    handle.await.unwrap();
-    assert_eq!(checker.values(), [111]);
-    assert!(checker.is_completed());
-    assert!(disposed.load(Ordering::SeqCst));
-    assert!(called.load(Ordering::SeqCst));
 }
 
 #[test]
