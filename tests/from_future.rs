@@ -1,9 +1,10 @@
 mod tests_utils;
 
 use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use futures::channel::oneshot::Canceled;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
-    operators::creating::from_future::FromFuture,
+    operators::creating::{from_future::FromFuture, from_result::FromResult},
     subscription::disposable::Disposable,
 };
 use std::time::Duration;
@@ -129,6 +130,70 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_1.is_completed());
         assert_eq!(checker_2.values(), [111]);
         assert!(checker_2.is_completed());
+    });
+}
+
+#[test]
+fn test_unsub_after_completed() {
+    block_on(async {
+        let (tx, rx) = futures::channel::oneshot::channel();
+
+        let observable = FromFuture::new(rx, TestScheduler);
+        let observable = observable
+            .map_infallible_to_error()
+            .flat_map(FromResult::new);
+        let (checker, observer) = Checker::new();
+
+        let subscription = observable.subscribe(observer);
+        sleep(Duration::from_millis(10)).await; // make sure it's subscribed
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        tx.send(111).unwrap(); // completed after next
+        sleep(Duration::from_millis(10)).await;
+        subscription.dispose();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+
+        sleep(Duration::from_millis(90)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+    });
+}
+
+#[test]
+fn test_unsub_after_completed_drop() {
+    block_on(async {
+        let (tx, rx) = futures::channel::oneshot::channel::<i32>();
+
+        let observable = FromFuture::new(rx, TestScheduler);
+        let observable = observable
+            .map_infallible_to_error()
+            .flat_map(FromResult::new);
+        let (checker, observer) = Checker::new();
+
+        let subscription = observable.subscribe(observer);
+        sleep(Duration::from_millis(10)).await; // make sure it's subscribed
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        drop(tx);
+        sleep(Duration::from_millis(10)).await;
+        subscription.dispose();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_error(Canceled));
+
+        sleep(Duration::from_millis(90)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_error(Canceled));
+
+        sleep(Duration::from_millis(20)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_error(Canceled));
     });
 }
 

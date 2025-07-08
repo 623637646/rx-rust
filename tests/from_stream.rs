@@ -35,6 +35,25 @@ fn test_completed() {
 }
 
 #[test]
+fn test_completed_without_next() {
+    block_on(async {
+        let (tx, rx) = futures::channel::mpsc::unbounded::<i32>();
+        let stream = rx;
+        let observable = FromStream::new(stream, TestScheduler);
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        drop(tx);
+        sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_completed());
+    });
+}
+
+#[test]
 fn test_unsubscribe() {
     block_on(async {
         let (mut tx, rx) = futures::channel::mpsc::unbounded();
@@ -106,6 +125,95 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_1.is_completed());
         assert_eq!(checker_2.values(), [111, 222, 333]);
         assert!(checker_2.is_completed());
+    });
+}
+
+#[test]
+fn test_complete_after_next() {
+    block_on(async {
+        let (mut tx, rx) = futures::channel::mpsc::unbounded();
+        let stream = rx;
+        let observable = FromStream::new(stream, TestScheduler);
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable.subscribe(observer);
+        sleep(Duration::from_millis(10)).await; // make sure it's subscribed
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        tx.send(111).await.unwrap();
+        drop(tx);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+
+        sleep(Duration::from_millis(90)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+    });
+}
+
+#[test]
+fn test_unsub_after_next() {
+    block_on(async {
+        let (mut tx, rx) = futures::channel::mpsc::unbounded();
+        let stream = rx;
+        let observable = FromStream::new(stream, TestScheduler);
+        let (checker, observer) = Checker::new();
+
+        let subscription = observable.subscribe(observer);
+        sleep(Duration::from_millis(10)).await; // make sure it's subscribed
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        tx.send(111).await.unwrap();
+        sleep(Duration::from_millis(10)).await;
+        subscription.dispose();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+
+        sleep(Duration::from_millis(90)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+    });
+}
+
+#[test]
+fn test_unsub_after_completed() {
+    block_on(async {
+        let (tx, rx) = futures::channel::mpsc::unbounded::<i32>();
+        let stream = rx;
+        let observable = FromStream::new(stream, TestScheduler);
+        let (checker, observer) = Checker::new();
+
+        let subscription = observable.subscribe(observer);
+        sleep(Duration::from_millis(10)).await; // make sure it's subscribed
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+
+        drop(tx);
+        sleep(Duration::from_millis(10)).await;
+        subscription.dispose();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_completed());
+
+        sleep(Duration::from_millis(90)).await;
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_completed());
+
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_completed());
     });
 }
 

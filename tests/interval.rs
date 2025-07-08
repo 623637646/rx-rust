@@ -4,9 +4,12 @@ use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
-    subscription::disposable::Disposable,
+    subscription::{Subscription, disposable::Disposable},
 };
-use std::time::Duration;
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tests_utils::{checker::Checker, test_scheduler::TestScheduler};
 
 #[test]
@@ -266,6 +269,40 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [0, 1, 2]);
         assert!(checker_2.is_dropped());
+    });
+}
+
+#[test]
+fn test_unsub_after_next() {
+    block_on(async {
+        let observable = Interval::new(Duration::from_millis(100), TestScheduler, None);
+        let (checker, observer) = Checker::new();
+
+        let subscription = Arc::new(Mutex::new(None::<Subscription<'_>>));
+        let subscription_cloned = subscription.clone();
+        let (mut on_next, on_termination) = observer.into_callbacks();
+        *subscription.lock().unwrap() = Some(observable.subscribe_with_callback(
+            move |value| {
+                on_next(value);
+                subscription_cloned
+                    .lock()
+                    .unwrap()
+                    .take()
+                    .unwrap()
+                    .dispose();
+            },
+            |termination| {
+                on_termination(termination);
+            },
+        ));
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_active());
+        assert!(subscription.lock().unwrap().is_some());
+
+        sleep(Duration::from_millis(110)).await;
+        assert_eq!(checker.values(), [0]);
+        assert!(checker.is_dropped());
+        assert!(subscription.lock().unwrap().is_none());
     });
 }
 

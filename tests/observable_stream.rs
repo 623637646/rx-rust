@@ -1,6 +1,9 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::{
+    test_channel::test_channel,
+    test_runtime::{block_on, sleep, spawn},
+};
 use futures::{FutureExt, StreamExt};
 use rx_rust::{
     observable::observable_ext::ObservableExt,
@@ -74,6 +77,27 @@ fn test_completed_lazy_subscription() {
         assert!(*subscribed.lock().unwrap());
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
+    });
+}
+
+#[test]
+fn test_completed_without_next() {
+    block_on(async {
+        let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+
+        // Custom operations
+        let stream = observable.into_stream();
+        let (checker, _) = Checker::from_stream(stream);
+        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_termination(Termination::Completed);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_completed());
+        assert!(channel_checker.is_completed());
     });
 }
 
@@ -250,6 +274,91 @@ fn test_without_convenient_api() {
         sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
+    });
+}
+#[test]
+fn test_complete_after_next() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+
+        // Custom operations
+        let stream = observable.into_stream();
+        let (checker, _) = Checker::from_stream(stream);
+        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_next(111);
+        sender.on_termination(Termination::Completed);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+    });
+}
+
+#[test]
+fn test_unsub_after_next() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+
+        // Custom operations
+        let stream = observable.into_stream();
+        let (checker, subscription) = Checker::from_stream(stream);
+        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_next(111);
+        sleep(Duration::from_millis(10)).await;
+        subscription.dispose();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+    });
+}
+
+#[test]
+fn test_unsub_after_completed() {
+    block_on(async {
+        let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+
+        // Custom operations
+        let stream = observable.into_stream();
+        let (checker, subscription) = Checker::from_stream(stream);
+        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_termination(Termination::Completed);
+        sleep(Duration::from_millis(10)).await;
+        subscription.dispose();
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), []);
+        assert!(checker.is_completed());
+    });
+}
+
+#[test]
+fn test_undisposed_schedule() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+
+        // Custom operations
+        let stream = observable.into_stream();
+        let (checker, _) = Checker::from_stream(stream);
+        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_next(111);
+        sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
     });
 }
 

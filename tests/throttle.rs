@@ -419,6 +419,166 @@ fn test_without_convenient_api() {
 }
 
 #[test]
+fn test_complete_after_next() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.throttle(Duration::from_millis(100), TestScheduler);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_next(111);
+        sender.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+        assert!(channel_checker.is_completed());
+
+        sleep(Duration::from_millis(90)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+        assert!(channel_checker.is_completed());
+
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_completed());
+        assert!(channel_checker.is_completed());
+    });
+}
+
+#[test]
+fn test_error_after_next() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.throttle(Duration::from_millis(100), TestScheduler);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_next(111);
+        sender.on_termination(Termination::Error("error"));
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_error("error"));
+        assert!(channel_checker.is_error("error"));
+
+        sleep(Duration::from_millis(90)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_error("error"));
+        assert!(channel_checker.is_error("error"));
+
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_error("error"));
+        assert!(channel_checker.is_error("error"));
+    });
+}
+
+#[test]
+fn test_unsub_after_next() {
+    block_on(async {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.throttle(Duration::from_millis(100), TestScheduler);
+
+        let subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_next(111);
+        subscription.dispose();
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+        assert!(channel_checker.is_unsubscribed());
+
+        sleep(Duration::from_millis(90)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+        assert!(channel_checker.is_unsubscribed());
+
+        sleep(Duration::from_millis(20)).await;
+        assert_eq!(checker.values(), [111]);
+        assert!(checker.is_dropped());
+        assert!(channel_checker.is_unsubscribed());
+    });
+}
+
+#[test]
+fn test_unsub_after_completed() {
+    block_on(async {
+        let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.throttle(Duration::from_millis(100), TestScheduler);
+
+        let subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_termination(Termination::Completed);
+        subscription.dispose();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_completed());
+        assert!(channel_checker.is_completed());
+
+        sleep(Duration::from_millis(90)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_completed());
+        assert!(channel_checker.is_completed());
+
+        sleep(Duration::from_millis(20)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_completed());
+        assert!(channel_checker.is_completed());
+    });
+}
+
+#[test]
+fn test_unsub_after_error() {
+    block_on(async {
+        let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.throttle(Duration::from_millis(100), TestScheduler);
+
+        let subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert!(checker.is_active());
+        assert!(channel_checker.is_subscribed());
+
+        sender.on_termination(Termination::Error("error"));
+        subscription.dispose();
+        assert!(checker.values().is_empty());
+        assert!(checker.is_error("error"));
+        assert!(channel_checker.is_error("error"));
+
+        sleep(Duration::from_millis(90)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_error("error"));
+        assert!(channel_checker.is_error("error"));
+
+        sleep(Duration::from_millis(20)).await;
+        assert!(checker.values().is_empty());
+        assert!(checker.is_error("error"));
+        assert!(channel_checker.is_error("error"));
+    });
+}
+
+#[test]
 fn test_undisposed_schedule() {
     block_on(async {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
