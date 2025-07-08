@@ -3,6 +3,7 @@ pub mod defer;
 pub mod empty;
 pub mod from_future;
 pub mod from_iter;
+pub mod from_result;
 pub mod from_stream;
 pub mod interval;
 pub mod just;
