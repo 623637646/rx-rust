@@ -275,7 +275,11 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_after_next() {
     block_on(async {
-        let observable = Interval::new(Duration::from_millis(100), TestScheduler, None);
+        let observable = Interval::new(
+            Duration::from_millis(100),
+            TestScheduler,
+            Some(Duration::from_millis(100)),
+        );
         let (checker, observer) = Checker::new();
 
         let subscription = Arc::new(Mutex::new(None::<Subscription<'_>>));
