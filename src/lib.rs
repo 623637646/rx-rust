@@ -11,4 +11,4 @@ pub mod operators;
 pub mod scheduler;
 pub mod subject;
 pub mod subscription;
-pub(crate) mod utils;
+pub mod utils;
