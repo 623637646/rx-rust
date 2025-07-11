@@ -86,13 +86,7 @@ where
     }
 }
 
-#[cfg(feature = "tokio-scheduler")]
-impl<T> Disposable for tokio::task::JoinHandle<T> {
-    fn dispose(self) {
-        self.abort();
-    }
-}
-
+#[cfg(feature = "futures")]
 impl Disposable for futures::stream::AbortHandle {
     fn dispose(self) {
         self.abort();

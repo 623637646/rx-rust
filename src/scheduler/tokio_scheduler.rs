@@ -1,5 +1,8 @@
 use super::Scheduler;
-use crate::{subscription::disposable::AutoDisposal, utils::types::NecessarySend};
+use crate::{
+    subscription::disposable::{AutoDisposal, Disposable},
+    utils::types::NecessarySend,
+};
 use std::time::Duration;
 
 impl Scheduler for tokio::runtime::Handle {
@@ -36,5 +39,11 @@ impl Scheduler for tokio::runtime::Handle {
 
     fn sleep(&self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
         tokio::time::sleep(duration)
+    }
+}
+
+impl<T> Disposable for tokio::task::JoinHandle<T> {
+    fn dispose(self) {
+        self.abort();
     }
 }
