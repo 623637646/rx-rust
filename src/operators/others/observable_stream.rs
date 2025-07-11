@@ -2,24 +2,22 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
+    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 use futures::Stream;
 use std::{
     collections::VecDeque,
     convert::Infallible,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
     task::{Poll, Waker},
 };
 
 pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,
-    values: Arc<Mutex<VecDeque<T>>>,
-    terminated: Arc<AtomicBool>,
-    waker: Arc<Mutex<Option<Waker>>>,
+    values: Shared<Mutable<VecDeque<T>>>,
+    terminated: Shared<AtomicBool>,
+    waker: Shared<Mutable<Option<Waker>>>,
 }
 
 impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
@@ -30,16 +28,16 @@ impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
         Self {
             source: Some(source),
             sub: None,
-            values: Arc::new(Mutex::new(VecDeque::new())),
-            terminated: Arc::new(AtomicBool::new(false)),
-            waker: Arc::new(Mutex::new(None)),
+            values: Shared::new(Mutable::new(VecDeque::new())),
+            terminated: Shared::new(AtomicBool::new(false)),
+            waker: Shared::new(Mutable::new(None)),
         }
     }
 }
 
 impl<'or, 'sub, T, OE> Stream for ObservableStream<'sub, T, OE>
 where
-    T: Send + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, Infallible> + Unpin,
 {
     type Item = T;
@@ -58,8 +56,8 @@ where
             self.sub = Some(sub);
         }
 
-        *self.waker.lock().unwrap() = Some(cx.waker().clone());
-        if let Some(event) = { self.values.lock().unwrap().pop_front() } {
+        *self.waker.lock_mut() = Some(cx.waker().clone());
+        if let Some(event) = { self.values.lock_mut().pop_front() } {
             Poll::Ready(Some(event))
         } else if self.terminated.load(Ordering::SeqCst) {
             Poll::Ready(None)
@@ -70,22 +68,22 @@ where
 }
 
 struct ObservableStreamObserver<T> {
-    values: Arc<Mutex<VecDeque<T>>>,
-    terminated: Arc<AtomicBool>,
-    waker: Arc<Mutex<Option<Waker>>>,
+    values: Shared<Mutable<VecDeque<T>>>,
+    terminated: Shared<AtomicBool>,
+    waker: Shared<Mutable<Option<Waker>>>,
 }
 
 impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
-        self.values.lock().unwrap().push_back(value);
-        if let Some(waker) = { self.waker.lock().unwrap().take() } {
+        self.values.lock_mut().push_back(value);
+        if let Some(waker) = { self.waker.lock_mut().take() } {
             waker.wake();
         }
     }
 
     fn on_termination(self, _: Termination<Infallible>) {
         self.terminated.store(true, Ordering::SeqCst);
-        if let Some(waker) = { self.waker.lock().unwrap().take() } {
+        if let Some(waker) = { self.waker.lock_mut().take() } {
             waker.wake();
         }
     }

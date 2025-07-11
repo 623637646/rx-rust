@@ -1,6 +1,7 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -10,10 +11,7 @@ use rx_rust::{
 };
 use std::{
     convert::Infallible,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -172,10 +170,10 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
-        let called = Arc::new(AtomicBool::new(false));
+        let called = Shared::new(AtomicBool::new(false));
 
         // Custom operations
         let called_cloned = called.clone();
@@ -185,7 +183,8 @@ fn test_async() {
             assert!(channel_checker_cloned.is_subscribed());
         });
 
-        let _subscription = spawn(async move { observable.subscribe(observer) })
+        let _subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(called.load(Ordering::SeqCst));
@@ -193,21 +192,23 @@ fn test_async() {
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        let sender = spawn(async move {
-            sender.on_next(111);
-            sender
-        })
-        .await
-        .unwrap();
+        let sender = runtime
+            .spawn(async move {
+                sender.on_next(111);
+                sender
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        spawn(async move {
-            sender.on_termination(Termination::<Infallible>::Completed);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                sender.on_termination(Termination::<Infallible>::Completed);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());

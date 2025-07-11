@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -17,7 +18,7 @@ pub struct FromFuture<FU, S> {
 impl<FU, S> FromFuture<FU, S> {
     pub fn new(future: FU, scheduler: S) -> Self
     where
-        FU: Future + Send + 'static,
+        FU: Future + NecessarySend + 'static,
     {
         Self { future, scheduler }
     }
@@ -25,14 +26,15 @@ impl<FU, S> FromFuture<FU, S> {
 
 impl<'sub, T, FU, S> Observable<'static, 'sub, T, Infallible> for FromFuture<FU, S>
 where
-    FU: Future<Output = T> + Send + 'static,
+    FU: Future<Output = T> + NecessarySend + 'static,
     S: Scheduler,
 {
     fn subscribe(
         self,
-        mut observer: impl Observer<T, Infallible> + Send + 'static,
+        mut observer: impl Observer<T, Infallible> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let disposal = self.scheduler.schedule_future(self.future, |result| {
+        let disposal = self.scheduler.schedule_future(async {
+            let result = self.future.await;
             observer.on_next(result);
             observer.on_termination(Termination::Completed);
         });

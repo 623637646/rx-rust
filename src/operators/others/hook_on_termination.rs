@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -27,9 +28,9 @@ where
     T: 'or,
     E: 'or,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>) + Send + 'or,
+    F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>) + NecessarySend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = HookOnTerminationObserver {
             observer: BoxedObserver::new(observer),
             callback: self.callback,

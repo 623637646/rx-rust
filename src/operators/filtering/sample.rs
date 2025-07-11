@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -5,7 +6,6 @@ use crate::{
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
-use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -26,15 +26,15 @@ impl<OE, OE1> Sample<OE, OE1> {
 
 impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Sample<OE, OE1>
 where
-    T: Send + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Arc::new(Mutex::new(Some(observer)));
-            let last_value = Arc::new(Mutex::new(None));
+            let observer = Shared::new(Mutable::new(Some(observer)));
+            let last_value = Shared::new(Mutable::new(None));
             let sample_observer = SampleObserver {
                 observer: observer.clone(),
                 last_value: last_value.clone(),
@@ -52,8 +52,8 @@ where
 }
 
 struct SampleObserver<T, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    last_value: Arc<Mutex<Option<T>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    last_value: Shared<Mutable<Option<T>>>,
 }
 
 impl<T, E, OR> Observer<T, E> for SampleObserver<T, OR>
@@ -61,19 +61,19 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.last_value.lock().unwrap().replace(value);
+        self.last_value.lock_mut().replace(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(observer) = { self.observer.lock_mut().take() } {
             observer.on_termination(termination);
         }
     }
 }
 
 struct SamplerObserver<T, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    last_value: Arc<Mutex<Option<T>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    last_value: Shared<Mutable<Option<T>>>,
 }
 
 impl<T, E, OR> Observer<(), E> for SamplerObserver<T, OR>
@@ -81,15 +81,15 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, _: ()) {
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
-            if let Some(last_value) = { self.last_value.lock().unwrap().take() } {
+        if let Some(observer) = self.observer.lock_mut().as_mut() {
+            if let Some(last_value) = { self.last_value.lock_mut().take() } {
                 observer.on_next(last_value);
             }
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(observer) = { self.observer.lock_mut().take() } {
             observer.on_termination(termination);
         }
     }

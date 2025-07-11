@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -42,10 +43,10 @@ impl<T, OE> Distinct<OE, fn(&T) -> T> {
 impl<'or, 'sub, T, E, OE, F, K> Observable<'or, 'sub, T, E> for Distinct<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&T) -> K + Send + 'or,
-    K: Eq + Hash + Send + 'or,
+    F: FnMut(&T) -> K + NecessarySend + 'or,
+    K: Eq + Hash + NecessarySend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = DistinctObserver {
             observer,
             key_selector: self.key_selector,

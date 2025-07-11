@@ -4,8 +4,8 @@ use crate::{
         Subscription,
         disposable::{Disposable, SharedDisposal},
     },
+    utils::types::{Mutable, MutableHelper, Shared},
 };
-use std::sync::{Arc, Mutex};
 
 pub fn subscribe_unsub_after_termination<'sub, OR, F>(
     observer: OR,
@@ -14,19 +14,19 @@ pub fn subscribe_unsub_after_termination<'sub, OR, F>(
 where
     F: FnOnce(UnsubAfterTerminationObserver<'sub, OR>) -> Subscription<'sub>,
 {
-    let subscription = Arc::new(Mutex::new(None));
+    let subscription = Shared::new(Mutable::new(None));
     let observer = UnsubAfterTerminationObserver {
         observer,
         subscription: subscription.clone(),
     };
     let sub = builder(observer);
-    *subscription.lock().unwrap() = Some(sub);
+    *subscription.lock_mut() = Some(sub);
     Subscription::new_with_disposal(SharedDisposal::new(subscription))
 }
 
 pub struct UnsubAfterTerminationObserver<'sub, OR> {
     observer: OR,
-    subscription: Arc<Mutex<Option<Subscription<'sub>>>>,
+    subscription: Shared<Mutable<Option<Subscription<'sub>>>>,
 }
 
 impl<T, E, OR> Observer<T, E> for UnsubAfterTerminationObserver<'_, OR>
@@ -39,7 +39,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
-        if let Some(sub) = { self.subscription.lock().unwrap().take() } {
+        if let Some(sub) = { self.subscription.lock_mut().take() } {
             sub.dispose()
         }
     }

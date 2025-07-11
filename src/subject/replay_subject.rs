@@ -1,19 +1,17 @@
 use super::{Subject, publish_subject::PublishSubject};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::collections::VecDeque;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ReplaySubject<'or, T, E> {
-    values: Arc<Mutex<VecDeque<T>>>,
+    values: Shared<Mutable<VecDeque<T>>>,
     buffer_size: Option<usize>,
     publish_subject: PublishSubject<'or, T, E>,
 }
@@ -25,7 +23,7 @@ impl<T, E> ReplaySubject<'_, T, E> {
             None => VecDeque::new(),
         };
         Self {
-            values: Arc::new(Mutex::new(vec)),
+            values: Shared::new(Mutable::new(vec)),
             buffer_size,
             publish_subject: PublishSubject::default(),
         }
@@ -35,14 +33,17 @@ impl<T, E> ReplaySubject<'_, T, E> {
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for ReplaySubject<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + Send + 'sub,
+    E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
-    fn subscribe(self, mut observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, E> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated() {
             match &terminated {
                 Termination::Completed => {
-                    let values: Vec<_> = self.values.lock().unwrap().iter().cloned().collect();
+                    let values: Vec<_> = self.values.lock_ref().iter().cloned().collect();
                     for value in values {
                         observer.on_next(value);
                     }
@@ -52,10 +53,10 @@ where
             observer.on_termination(terminated);
             Subscription::new_none_disposal()
         } else {
-            let values: Vec<_> = self.values.lock().unwrap().iter().cloned().collect();
+            let values: Vec<_> = self.values.lock_ref().iter().cloned().collect();
             for value in values {
                 observer.on_next(value);
-                let _a = self.values.lock().unwrap();
+                let _a = self.values.lock_mut();
             }
             self.publish_subject.subscribe(observer)
         }
@@ -65,11 +66,11 @@ where
 impl<T, E> Observer<T, E> for ReplaySubject<'_, T, E>
 where
     T: Clone,
-    E: Clone + Send,
+    E: Clone + NecessarySend,
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
-            let mut lock = self.values.lock().unwrap();
+            let mut lock = self.values.lock_mut();
             if let Some(buffer_size) = self.buffer_size {
                 if lock.len() == buffer_size {
                     if lock.pop_front().is_some() {
@@ -94,7 +95,7 @@ where
 impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for ReplaySubject<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + Send + 'sub,
+    E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
     fn terminated(&self) -> Option<Termination<E>>

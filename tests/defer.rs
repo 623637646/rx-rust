@@ -1,6 +1,8 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::scheduler::Scheduler;
+use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -8,11 +10,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
 };
-use std::{
-    convert::Infallible,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -166,7 +164,7 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -174,32 +172,38 @@ fn test_async() {
         let observable = subject.clone();
         let observable = Defer::new(|| observable);
 
-        let subscription = spawn(async move { observable.subscribe(observer) })
+        let subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(111);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(111);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
-        spawn(async { subscription.dispose() }).await.unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async { subscription.dispose() })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_dropped());
 
         let subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_termination(Termination::Error("error"));
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_termination(Termination::Error("error"));
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_dropped());
     });
@@ -312,10 +316,10 @@ fn test_clone() {
 #[test]
 fn test_boxed_observable() {
     // Custom operations
-    let switch = Arc::new(Mutex::new(false));
+    let switch = Shared::new(Mutable::new(false));
     let observable = Defer::new(|| {
         let observable = Just::new(111);
-        if *switch.lock().unwrap() {
+        if *switch.lock_ref() {
             observable.into_boxed()
         } else {
             observable.map(|value| value * 2).into_boxed()
@@ -326,7 +330,7 @@ fn test_boxed_observable() {
     assert_eq!(checker.values(), [222]);
     assert!(checker.is_completed());
 
-    *switch.lock().unwrap() = true;
+    *switch.lock_mut() = true;
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);

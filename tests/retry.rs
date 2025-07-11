@@ -1,7 +1,8 @@
 mod tests_utils;
 
 use crate::tests_utils::test_channel::{ChannelChecker, ReceiverObservable, SenderObserver};
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -12,28 +13,25 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
 };
-use std::{
-    convert::Infallible,
-    sync::{Arc, Mutex},
-};
+use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 fn new_channel<'or, T, E>(
-    sender: Arc<Mutex<Option<SenderObserver<'or, T, E>>>>,
-    channel_checker: Arc<Mutex<Option<ChannelChecker<'or, T, E>>>>,
+    sender: Shared<Mutable<Option<SenderObserver<'or, T, E>>>>,
+    channel_checker: Shared<Mutable<Option<ChannelChecker<'or, T, E>>>>,
 ) -> ReceiverObservable<'or, T, E> {
     let (sender_1, observable, channel_checker_1) = test_channel();
-    *sender.lock().unwrap() = Some(sender_1);
-    *channel_checker.lock().unwrap() = Some(channel_checker_1);
+    *sender.lock_mut() = Some(sender_1);
+    *channel_checker.lock_mut() = Some(channel_checker_1);
     observable
 }
 
 #[test]
 fn test_completed_no_retry() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -41,7 +39,7 @@ fn test_completed_no_retry() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
+        errors_cloned.lock_mut().push(error);
         let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
         RetryAction::Retry(observable)
     });
@@ -49,51 +47,30 @@ fn test_completed_no_retry() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_completed());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_completed()
-    );
-    assert_eq!(*errors.lock().unwrap(), []);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_completed());
+    assert_eq!(*errors.lock_ref(), []);
 }
 
 #[test]
 fn test_completed_retry_once() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -101,7 +78,7 @@ fn test_completed_retry_once() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
+        errors_cloned.lock_mut().push(error);
         let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
         RetryAction::Retry(observable)
     });
@@ -109,79 +86,44 @@ fn test_completed_retry_once() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(222);
+    sender.lock_mut().as_mut().unwrap().on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_completed());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_completed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_completed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 }
 
 #[test]
 fn test_completed_retry_twice() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -189,7 +131,7 @@ fn test_completed_retry_twice() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
+        errors_cloned.lock_mut().push(error);
         let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
         RetryAction::Retry(observable)
     });
@@ -197,99 +139,50 @@ fn test_completed_retry_twice() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(222);
+    sender.lock_mut().as_mut().unwrap().on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(333);
+    sender.lock_mut().as_mut().unwrap().on_next(333);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_completed());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_completed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_completed());
+    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 }
 
 #[test]
@@ -328,8 +221,8 @@ fn test_completed_different_retry_observable() {
 
 #[test]
 fn test_erryr_no_retry() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -339,36 +232,21 @@ fn test_erryr_no_retry() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_error("error"));
     assert!(
         channel_checker
-            .lock()
-            .unwrap()
+            .lock_ref()
             .as_ref()
             .unwrap()
             .is_error("error")
@@ -377,10 +255,10 @@ fn test_erryr_no_retry() {
 
 #[test]
 fn test_error_retry_once() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -388,8 +266,8 @@ fn test_error_retry_once() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
-        if errors_cloned.lock().unwrap().len() <= 1 {
+        errors_cloned.lock_mut().push(error);
+        if errors_cloned.lock_ref().len() <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -400,79 +278,50 @@ fn test_error_retry_once() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(222);
+    sender.lock_mut().as_mut().unwrap().on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_error("error2"));
     assert!(
         channel_checker
-            .lock()
-            .unwrap()
+            .lock_ref()
             .as_ref()
             .unwrap()
             .is_error("error2")
     );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
+    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 }
 
 #[test]
 fn test_error_retry_twice() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -480,8 +329,8 @@ fn test_error_retry_twice() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
-        if errors_cloned.lock().unwrap().len() <= 2 {
+        errors_cloned.lock_mut().push(error);
+        if errors_cloned.lock_ref().len() <= 2 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -492,113 +341,70 @@ fn test_error_retry_twice() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(222);
+    sender.lock_mut().as_mut().unwrap().on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(333);
+    sender.lock_mut().as_mut().unwrap().on_next(333);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error3"));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_error("error3"));
     assert!(
         channel_checker
-            .lock()
-            .unwrap()
+            .lock_ref()
             .as_ref()
             .unwrap()
             .is_error("error3")
     );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2", "error3"]);
+    assert_eq!(*errors.lock_ref(), ["error", "error2", "error3"]);
 }
 
 #[test]
 fn test_error_source_and_retry_are_same() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let subject_cloned = subject.clone();
     let errors_cloned = errors.clone();
     let observable = subject.clone().retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
-        if errors_cloned.lock().unwrap().len() <= 3 {
+        errors_cloned.lock_mut().push(error);
+        if errors_cloned.lock_ref().len() <= 3 {
             RetryAction::Retry(subject_cloned.clone())
         } else {
             RetryAction::Stop(error)
@@ -608,28 +414,25 @@ fn test_error_source_and_retry_are_same() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(errors.lock_ref().is_empty());
 
     subject.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(errors.lock_ref().is_empty());
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_error("error"));
-    assert_eq!(
-        *errors.lock().unwrap(),
-        ["error", "error", "error", "error"]
-    );
+    assert_eq!(*errors.lock_ref(), ["error", "error", "error", "error"]);
 }
 
 #[test]
 fn test_unsubscribe_before_retry() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -637,8 +440,8 @@ fn test_unsubscribe_before_retry() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error: String| {
-        errors_cloned.lock().unwrap().push(error.clone());
-        if errors_cloned.lock().unwrap().len() <= 1 {
+        errors_cloned.lock_mut().push(error.clone());
+        if errors_cloned.lock_ref().len() <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -649,49 +452,34 @@ fn test_unsubscribe_before_retry() {
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_dropped());
     assert!(
         channel_checker
-            .lock()
-            .unwrap()
+            .lock_ref()
             .as_ref()
             .unwrap()
             .is_unsubscribed()
     );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(errors.lock_ref().is_empty());
 }
 
 #[test]
 fn test_unsubscribe_after_retry() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -699,8 +487,8 @@ fn test_unsubscribe_after_retry() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
-        if errors_cloned.lock().unwrap().len() <= 1 {
+        errors_cloned.lock_mut().push(error);
+        if errors_cloned.lock_ref().len() <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -711,69 +499,40 @@ fn test_unsubscribe_after_retry() {
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(222);
+    sender.lock_mut().as_mut().unwrap().on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
     subscription.dispose();
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_dropped());
     assert!(
         channel_checker
-            .lock()
-            .unwrap()
+            .lock_ref()
             .as_ref()
             .unwrap()
             .is_unsubscribed()
     );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert_eq!(*errors.lock_ref(), ["error"]);
 }
 
 #[test]
@@ -782,10 +541,10 @@ fn test_ref() {
     let value_2 = 222;
     let error = -1;
 
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -793,8 +552,8 @@ fn test_ref() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
-        if errors_cloned.lock().unwrap().len() <= 1 {
+        errors_cloned.lock_mut().push(error);
+        if errors_cloned.lock_ref().len() <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -805,71 +564,42 @@ fn test_ref() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(&value_1);
+    sender.lock_mut().as_mut().unwrap().on_next(&value_1);
     assert_eq!(checker.values(), [&value_1]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [&value_1]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), [&error]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), [&error]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(&value_2);
+    sender.lock_mut().as_mut().unwrap().on_next(&value_2);
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), [&error]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), [&error]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert!(checker.is_error(&error));
     assert!(
         channel_checker
-            .lock()
-            .unwrap()
+            .lock_ref()
             .as_ref()
             .unwrap()
             .is_error(&error)
     );
-    assert_eq!(*errors.lock().unwrap(), [&error, &error]);
+    assert_eq!(*errors.lock_ref(), [&error, &error]);
 }
 
 #[test]
@@ -877,8 +607,8 @@ fn test_mut_ref() {
     let mut value_1 = 111;
     let mut value_2 = 222;
 
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -897,22 +627,12 @@ fn test_mut_ref() {
         |_| {},
     );
 
-    sender
-        .lock()
-        .unwrap()
-        .as_mut()
-        .unwrap()
-        .on_next(&mut value_1);
-    { sender.lock().unwrap().take() }
+    sender.lock_mut().as_mut().unwrap().on_next(&mut value_1);
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
-    sender
-        .lock()
-        .unwrap()
-        .as_mut()
-        .unwrap()
-        .on_next(&mut value_2);
-    { sender.lock().unwrap().take() }
+    sender.lock_mut().as_mut().unwrap().on_next(&mut value_2);
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Completed);
     drop(sender);
@@ -925,11 +645,11 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
-        let sender = Arc::new(Mutex::new(None));
-        let channel_checker = Arc::new(Mutex::new(None));
+    block_on(|runtime| async move {
+        let sender = Shared::new(Mutable::new(None));
+        let channel_checker = Shared::new(Mutable::new(None));
         let (checker, observer) = Checker::new();
-        let errors = Arc::new(Mutex::new(Vec::new()));
+        let errors = Shared::new(Mutable::new(Vec::new()));
 
         // Custom operations
         let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -937,8 +657,8 @@ fn test_async() {
         let channel_checker_cloned = channel_checker.clone();
         let errors_cloned = errors.clone();
         let observable = observable.retry(move |error| {
-            errors_cloned.lock().unwrap().push(error);
-            if errors_cloned.lock().unwrap().len() <= 1 {
+            errors_cloned.lock_mut().push(error);
+            if errors_cloned.lock_ref().len() <= 1 {
                 let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
                 RetryAction::Retry(observable)
             } else {
@@ -946,96 +666,72 @@ fn test_async() {
             }
         });
 
-        let _subscription = spawn(async move { observable.subscribe(observer) })
+        let _subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
-        assert!(
-            channel_checker
-                .lock()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .is_subscribed()
-        );
-        assert!(errors.lock().unwrap().is_empty());
+        assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+        assert!(errors.lock_ref().is_empty());
 
-        let sender = spawn(async move {
-            sender.lock().unwrap().as_mut().unwrap().on_next(111);
-            sender
-        })
-        .await
-        .unwrap();
+        let sender = runtime
+            .spawn(async move {
+                sender.lock_mut().as_mut().unwrap().on_next(111);
+                sender
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
-        assert!(
-            channel_checker
-                .lock()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .is_subscribed()
-        );
-        assert!(errors.lock().unwrap().is_empty());
+        assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+        assert!(errors.lock_ref().is_empty());
 
-        let sender = spawn(async move {
-            { sender.lock().unwrap().take() }
-                .unwrap()
-                .on_termination(Termination::Error("error"));
-            sender
-        })
-        .await
-        .unwrap();
+        let sender = runtime
+            .spawn(async move {
+                { sender.lock_mut().take() }
+                    .unwrap()
+                    .on_termination(Termination::Error("error"));
+                sender
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
-        assert!(
-            channel_checker
-                .lock()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .is_subscribed()
-        );
-        assert_eq!(*errors.lock().unwrap(), ["error"]);
+        assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+        assert_eq!(*errors.lock_ref(), ["error"]);
 
-        let sender = spawn(async move {
-            sender.lock().unwrap().as_mut().unwrap().on_next(222);
-            sender
-        })
-        .await
-        .unwrap();
+        let sender = runtime
+            .spawn(async move {
+                sender.lock_mut().as_mut().unwrap().on_next(222);
+                sender
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_active());
-        assert!(
-            channel_checker
-                .lock()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .is_subscribed()
-        );
-        assert_eq!(*errors.lock().unwrap(), ["error"]);
+        assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+        assert_eq!(*errors.lock_ref(), ["error"]);
 
-        let _sender = spawn(async move {
-            { sender.lock().unwrap().take() }
-                .unwrap()
-                .on_termination(Termination::Error("error2"));
-            sender
-        })
-        .await
-        .unwrap();
+        let _sender = runtime
+            .spawn(async move {
+                { sender.lock_mut().take() }
+                    .unwrap()
+                    .on_termination(Termination::Error("error2"));
+                sender
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_error("error2"));
         assert!(
             channel_checker
-                .lock()
-                .unwrap()
+                .lock_ref()
                 .as_ref()
                 .unwrap()
                 .is_error("error2")
         );
-        assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
+        assert_eq!(*errors.lock_ref(), ["error", "error2"]);
     });
 }
 
@@ -1044,15 +740,15 @@ fn test_subscribe_by_different_observer() {
     let mut subject = PublishSubject::default();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = subject.clone();
     let observable_cloned = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.lock().unwrap().push(error);
-        if errors_cloned.lock().unwrap().len() <= 2 {
+        errors_cloned.lock_mut().push(error);
+        if errors_cloned.lock_ref().len() <= 2 {
             RetryAction::Retry(observable_cloned.clone())
         } else {
             RetryAction::Stop(error)
@@ -1068,33 +764,30 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_1.is_active());
     assert!(checker_2.values().is_empty());
     assert!(checker_2.is_active());
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(errors.lock_ref().is_empty());
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_active());
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(errors.lock_ref().is_empty());
 
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_error("error"));
     assert_eq!(checker_2.values(), [111]);
     assert!(checker_2.is_error("error"));
-    assert_eq!(
-        *errors.lock().unwrap(),
-        ["error", "error", "error", "error"]
-    );
+    assert_eq!(*errors.lock_ref(), ["error", "error", "error", "error"]);
 }
 
 #[test]
 fn test_multiple_operation() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors_1 = Arc::new(Mutex::new(Vec::new()));
-    let errors_2 = Arc::new(Mutex::new(Vec::new()));
+    let errors_1 = Shared::new(Mutable::new(Vec::new()));
+    let errors_2 = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -1106,8 +799,8 @@ fn test_multiple_operation() {
     let errors_cloned_2 = errors_2.clone();
     let observable = observable
         .retry(move |error| {
-            errors_cloned_1.lock().unwrap().push(error);
-            if errors_cloned_1.lock().unwrap().len() <= 1 {
+            errors_cloned_1.lock_mut().push(error);
+            if errors_cloned_1.lock_ref().len() <= 1 {
                 let observable =
                     new_channel(sender_cloned_1.clone(), channel_checker_cloned_1.clone());
                 RetryAction::Retry(observable)
@@ -1116,8 +809,8 @@ fn test_multiple_operation() {
             }
         })
         .retry(move |error| {
-            errors_cloned_2.lock().unwrap().push(error);
-            if errors_cloned_2.lock().unwrap().len() <= 1 {
+            errors_cloned_2.lock_mut().push(error);
+            if errors_cloned_2.lock_ref().len() <= 1 {
                 let observable =
                     new_channel(sender_cloned_2.clone(), channel_checker_cloned_2.clone());
                 RetryAction::Retry(observable)
@@ -1129,114 +822,71 @@ fn test_multiple_operation() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors_1.lock().unwrap().is_empty());
-    assert!(errors_2.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors_1.lock_ref().is_empty());
+    assert!(errors_2.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors_1.lock().unwrap().is_empty());
-    assert!(errors_2.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors_1.lock_ref().is_empty());
+    assert!(errors_2.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors_1.lock().unwrap(), ["error"]);
-    assert!(errors_2.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors_1.lock_ref(), ["error"]);
+    assert!(errors_2.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(222);
+    sender.lock_mut().as_mut().unwrap().on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors_1.lock().unwrap(), ["error"]);
-    assert!(errors_2.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors_1.lock_ref(), ["error"]);
+    assert!(errors_2.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors_1.lock().unwrap(), ["error", "error2"]);
-    assert_eq!(*errors_2.lock().unwrap(), ["error2"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors_2.lock_ref(), ["error2"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(333);
+    sender.lock_mut().as_mut().unwrap().on_next(333);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors_1.lock().unwrap(), ["error", "error2"]);
-    assert_eq!(*errors_2.lock().unwrap(), ["error2"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors_2.lock_ref(), ["error2"]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error3"));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert!(checker.is_error("error3"));
     assert!(
         channel_checker
-            .lock()
-            .unwrap()
+            .lock_ref()
             .as_ref()
             .unwrap()
             .is_error("error3")
     );
-    assert_eq!(*errors_1.lock().unwrap(), ["error", "error2"]);
-    assert_eq!(*errors_2.lock().unwrap(), ["error2", "error3"]);
+    assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors_2.lock_ref(), ["error2", "error3"]);
 }
 
 #[test]
 fn test_without_convenient_api() {
-    let sender = Arc::new(Mutex::new(None));
-    let channel_checker = Arc::new(Mutex::new(None));
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Arc::new(Mutex::new(Vec::new()));
+    let errors = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
     let observable = new_channel(sender.clone(), channel_checker.clone());
@@ -1244,8 +894,8 @@ fn test_without_convenient_api() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = Retry::new(observable, move |error| {
-        errors_cloned.lock().unwrap().push(error);
-        if errors_cloned.lock().unwrap().len() <= 1 {
+        errors_cloned.lock_mut().push(error);
+        if errors_cloned.lock_ref().len() <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -1256,71 +906,42 @@ fn test_without_convenient_api() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(111);
+    sender.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert!(errors.lock().unwrap().is_empty());
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert!(errors.lock_ref().is_empty());
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender.lock().unwrap().as_mut().unwrap().on_next(222);
+    sender.lock_mut().as_mut().unwrap().on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_active());
-    assert!(
-        channel_checker
-            .lock()
-            .unwrap()
-            .as_ref()
-            .unwrap()
-            .is_subscribed()
-    );
-    assert_eq!(*errors.lock().unwrap(), ["error"]);
+    assert!(channel_checker.lock_ref().as_ref().unwrap().is_subscribed());
+    assert_eq!(*errors.lock_ref(), ["error"]);
 
-    { sender.lock().unwrap().take() }
+    { sender.lock_mut().take() }
         .unwrap()
         .on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert!(checker.is_error("error2"));
     assert!(
         channel_checker
-            .lock()
-            .unwrap()
+            .lock_ref()
             .as_ref()
             .unwrap()
             .is_error("error2")
     );
-    assert_eq!(*errors.lock().unwrap(), ["error", "error2"]);
+    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 }
 
 #[test]

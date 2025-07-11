@@ -1,8 +1,9 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::marker::MarkerType,
+    utils::types::MarkerType,
 };
 use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
@@ -28,7 +29,7 @@ where
     E: 'or,
     OE: Observable<'or, 'sub, T, Infallible>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = MapInfallibleToErrorObserver {
             observer,
             _marker: PhantomData,

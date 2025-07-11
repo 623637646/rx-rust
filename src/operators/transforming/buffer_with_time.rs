@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -5,10 +6,7 @@ use crate::{
     subscription::Subscription,
 };
 use educe::Educe;
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::time::Duration;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -32,20 +30,23 @@ impl<OE, S> BufferWithTime<OE, S> {
 
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTime<OE, S>
 where
-    T: Send + 'static,
+    T: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler,
 {
-    fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'static) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<Vec<T>, E> + NecessarySend + 'static,
+    ) -> Subscription<'sub> {
         let observer = BufferWithTimeObserver {
-            observer: Arc::new(Mutex::new(Some(observer))),
-            values: Arc::new(Mutex::new(Vec::default())),
+            observer: Shared::new(Mutable::new(Some(observer))),
+            values: Shared::new(Mutable::new(Vec::default())),
         };
         let observer_cloned = observer.clone();
         let disposal = self.scheduler.schedule_period(
             move |_| {
-                if let Some(observer) = observer_cloned.observer.lock().unwrap().as_mut() {
-                    let values = std::mem::take(&mut *observer_cloned.values.lock().unwrap());
+                if let Some(observer) = observer_cloned.observer.lock_mut().as_mut() {
+                    let values = std::mem::take(&mut *observer_cloned.values.lock_mut());
                     observer.on_next(values);
                     false
                 } else {
@@ -62,8 +63,8 @@ where
 #[derive(Educe)]
 #[educe(Clone)]
 struct BufferWithTimeObserver<T, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    values: Arc<Mutex<Vec<T>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    values: Shared<Mutable<Vec<T>>>,
 }
 
 impl<T, E, OR> Observer<T, E> for BufferWithTimeObserver<T, OR>
@@ -71,14 +72,14 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.values.lock().unwrap().push(value);
+        self.values.lock_mut().push(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(mut observer) = { self.observer.lock_mut().take() } {
             match termination {
                 Termination::Completed => {
-                    let values = std::mem::take(&mut *self.values.lock().unwrap());
+                    let values = std::mem::take(&mut *self.values.lock_mut());
                     if !values.is_empty() {
                         observer.on_next(values);
                     }

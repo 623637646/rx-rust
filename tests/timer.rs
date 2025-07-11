@@ -1,29 +1,30 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::timer::Timer,
     subscription::disposable::Disposable,
 };
 use std::time::Duration;
-use tests_utils::{checker::Checker, test_scheduler::TestScheduler};
+use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed() {
-    block_on(async {
-        let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
+    block_on(|runtime| async move {
+        let observable = Timer::new(111, Duration::from_millis(100), runtime.clone());
         let (checker, observer) = Checker::new();
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
     });
@@ -31,8 +32,8 @@ fn test_completed() {
 
 #[test]
 fn test_unsubscribe() {
-    block_on(async {
-        let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
+    block_on(|runtime| async move {
+        let observable = Timer::new(111, Duration::from_millis(100), runtime.clone());
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
         let (checker_3, observer_3) = Checker::new();
@@ -60,7 +61,7 @@ fn test_unsubscribe() {
         assert!(checker_3.values().is_empty());
         assert!(checker_3.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_dropped());
         assert!(checker_2.values().is_empty());
@@ -76,7 +77,7 @@ fn test_unsubscribe() {
         assert!(checker_3.values().is_empty());
         assert!(checker_3.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_dropped());
         assert!(checker_2.values().is_empty());
@@ -88,21 +89,22 @@ fn test_unsubscribe() {
 
 #[test]
 fn test_async() {
-    block_on(async {
-        let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
+    block_on(|runtime| async move {
+        let observable = Timer::new(111, Duration::from_millis(100), runtime.clone());
         let (checker, observer) = Checker::new();
 
-        let _subscription = spawn(async move { observable.subscribe(observer) })
+        let _subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
     });
@@ -110,8 +112,8 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    block_on(async {
-        let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
+    block_on(|runtime| async move {
+        let observable = Timer::new(111, Duration::from_millis(100), runtime.clone());
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
@@ -128,13 +130,13 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_completed());
         assert_eq!(checker_2.values(), [111]);
@@ -144,8 +146,8 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_undisposed_schedule() {
-    block_on(async {
-        let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
+    block_on(|runtime| async move {
+        let observable = Timer::new(111, Duration::from_millis(100), runtime.clone());
         let (checker, observer) = Checker::new();
 
         let _subscription = observable.subscribe(observer);
@@ -156,31 +158,31 @@ fn test_undisposed_schedule() {
 
 #[test]
 fn test_clone() {
-    block_on(async {
-        let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
+    block_on(|runtime| async move {
+        let observable = Timer::new(111, Duration::from_millis(100), runtime.clone());
         _ = observable.clone();
     });
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    block_on(async {
+    block_on(|runtime| async move {
         // Custom operations
-        let observable = Timer::new(111, Duration::from_millis(10), TestScheduler);
+        let observable = Timer::new(111, Duration::from_millis(10), runtime.clone());
 
         let observable = observable.filter(|_| true);
         let (_, observer) = Checker::new();
         observable.subscribe(observer);
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
     });
 }
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    block_on(async {
+    block_on(|runtime| async move {
         // Custom operations
-        let observable = Timer::new(111, Duration::from_millis(100), TestScheduler);
+        let observable = Timer::new(111, Duration::from_millis(100), runtime.clone());
 
         observable.filter(|_| true);
     });

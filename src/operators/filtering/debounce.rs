@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -8,10 +9,7 @@ use crate::{
     },
 };
 use educe::Educe;
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::time::Duration;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -33,48 +31,51 @@ impl<OE, S> Debounce<OE, S> {
 
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Debounce<OE, S>
 where
-    T: Send + 'static,
+    T: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler + Send + 'or,
+    S: Scheduler + NecessarySend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'static) -> Subscription<'sub> {
-        let disposal = Arc::new(Mutex::new(None));
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySend + 'static,
+    ) -> Subscription<'sub> {
+        let disposal = Shared::new(Mutable::new(None));
         self.source.subscribe(DebounceObserver {
-            observer: Arc::new(Mutex::new(Some(observer))),
+            observer: Shared::new(Mutable::new(Some(observer))),
             time_span: self.time_span,
             scheduler: self.scheduler,
-            current_value: Arc::new(Mutex::new(None)),
+            current_value: Shared::new(Mutable::new(None)),
             disposal: disposal.clone(),
         }) + SharedDisposal::new(disposal)
     }
 }
 
 struct DebounceObserver<T, OR, S> {
-    observer: Arc<Mutex<Option<OR>>>,
+    observer: Shared<Mutable<Option<OR>>>,
     time_span: Duration,
     scheduler: S,
-    current_value: Arc<Mutex<Option<T>>>,
-    disposal: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
+    current_value: Shared<Mutable<Option<T>>>,
+    disposal: Shared<Mutable<Option<BoxedDisposal<'static>>>>,
 }
 
 impl<T, E, OR, S> Observer<T, E> for DebounceObserver<T, OR, S>
 where
-    T: Send + 'static,
-    OR: Observer<T, E> + Send + 'static,
+    T: NecessarySend + 'static,
+    OR: Observer<T, E> + NecessarySend + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        if self.observer.lock().unwrap().is_none() {
+        if self.observer.lock_ref().is_none() {
             return;
         }
-        *self.current_value.lock().unwrap() = Some(value);
+        *self.current_value.lock_mut() = Some(value);
 
         let current_value = self.current_value.clone();
         let observer = self.observer.clone();
         let disposal = self.scheduler.schedule(
             move || {
-                if let Some(value) = { current_value.lock().unwrap().take() } {
-                    if let Some(observer) = observer.lock().unwrap().as_mut() {
+                if let Some(value) = { current_value.lock_mut().take() } {
+                    if let Some(observer) = observer.lock_mut().as_mut() {
                         observer.on_next(value);
                     }
                 }
@@ -84,8 +85,7 @@ where
 
         if let Some(disposal) = {
             self.disposal
-                .lock()
-                .unwrap()
+                .lock_mut()
                 .replace(BoxedDisposal::new(disposal))
         } {
             disposal.dispose();
@@ -93,13 +93,13 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(disposal) = { self.disposal.lock().unwrap().take() } {
+        if let Some(disposal) = { self.disposal.lock_mut().take() } {
             disposal.dispose();
         }
-        if let Some(mut observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(mut observer) = { self.observer.lock_mut().take() } {
             match termination {
                 Termination::Completed => {
-                    if let Some(value) = { self.current_value.lock().unwrap().take() } {
+                    if let Some(value) = { self.current_value.lock_mut().take() } {
                         observer.on_next(value);
                     }
                 }

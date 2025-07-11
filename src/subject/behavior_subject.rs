@@ -1,23 +1,23 @@
 use super::{Subject, publish_subject::PublishSubject};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
-use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BehaviorSubject<'or, T, E> {
-    value: Arc<Mutex<T>>,
+    value: Shared<Mutable<T>>,
     publish_subject: PublishSubject<'or, T, E>,
 }
 
 impl<T, E> BehaviorSubject<'_, T, E> {
     pub fn new(value: T) -> Self {
         Self {
-            value: Arc::new(Mutex::new(value)),
+            value: Shared::new(Mutable::new(value)),
             publish_subject: PublishSubject::default(),
         }
     }
@@ -26,22 +26,25 @@ impl<T, E> BehaviorSubject<'_, T, E> {
     where
         T: Clone,
     {
-        self.value.lock().unwrap().clone()
+        self.value.lock_ref().clone()
     }
 }
 
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BehaviorSubject<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + Send + 'sub,
+    E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
-    fn subscribe(self, mut observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, E> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated() {
             observer.on_termination(terminated);
             Subscription::new_none_disposal()
         } else {
-            observer.on_next(self.value.lock().unwrap().clone());
+            observer.on_next(self.value.lock_ref().clone());
             self.publish_subject.subscribe(observer)
         }
     }
@@ -50,11 +53,11 @@ where
 impl<T, E> Observer<T, E> for BehaviorSubject<'_, T, E>
 where
     T: Clone,
-    E: Clone + Send,
+    E: Clone + NecessarySend,
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
-            *self.value.lock().unwrap() = value.clone();
+            *self.value.lock_mut() = value.clone();
             self.publish_subject.on_next(value);
         }
     }
@@ -67,7 +70,7 @@ where
 impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for BehaviorSubject<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + Send + 'sub,
+    E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
     fn terminated(&self) -> Option<Termination<E>>

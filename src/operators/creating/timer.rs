@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -27,12 +28,12 @@ impl<T, S> Timer<T, S> {
 
 impl<'sub, T, S> Observable<'static, 'sub, T, Infallible> for Timer<T, S>
 where
-    T: Send + 'static,
+    T: NecessarySend + 'static,
     S: Scheduler,
 {
     fn subscribe(
         self,
-        mut observer: impl Observer<T, Infallible> + Send + 'static,
+        mut observer: impl Observer<T, Infallible> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
         let disposal = self.scheduler.schedule(
             || {

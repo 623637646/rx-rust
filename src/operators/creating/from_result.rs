@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -16,7 +17,10 @@ impl<T, E> FromResult<T, E> {
 }
 
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for FromResult<T, E> {
-    fn subscribe(self, mut observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, E> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         match self.0 {
             Ok(value) => {
                 observer.on_next(value);

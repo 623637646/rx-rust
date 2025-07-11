@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -6,7 +7,6 @@ use crate::{
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
-use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -29,21 +29,21 @@ impl<'or, 'sub, T, E, OE, OE1>
     Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for Window<OE, OE1>
 where
     T: Clone + 'or,
-    E: Clone + Send + 'or,
+    E: Clone + NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + Send + 'or,
+        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |mut observer| {
             let subject = PublishSubject::default();
             observer.on_next(SubjectObservable::new(subject.clone()));
 
-            let subject = Arc::new(Mutex::new(subject));
-            let observer = Arc::new(Mutex::new(Some(observer)));
+            let subject = Shared::new(Mutable::new(subject));
+            let observer = Shared::new(Mutable::new(Some(observer)));
             let window_observer = WindowObserver {
                 observer: observer.clone(),
                 subject: subject.clone(),
@@ -57,8 +57,8 @@ where
 }
 
 struct WindowObserver<'or, T, E, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    subject: Arc<Mutex<PublishSubject<'or, T, E>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    subject: Shared<Mutable<PublishSubject<'or, T, E>>>,
 }
 
 impl<'or, T, E, OR> Observer<T, E> for WindowObserver<'or, T, E, OR>
@@ -68,24 +68,23 @@ where
     OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.subject.lock().unwrap().on_next(value);
+        self.subject.lock_mut().on_next(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
         self.subject
-            .lock()
-            .unwrap()
+            .lock_ref()
             .clone()
             .on_termination(termination.clone());
-        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(observer) = { self.observer.lock_mut().take() } {
             observer.on_termination(termination);
         }
     }
 }
 
 struct BoundaryObserver<'or, T, E, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    subject: Arc<Mutex<PublishSubject<'or, T, E>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    subject: Shared<Mutable<PublishSubject<'or, T, E>>>,
 }
 
 impl<'or, T, E, OR> Observer<(), E> for BoundaryObserver<'or, T, E, OR>
@@ -96,21 +95,19 @@ where
 {
     fn on_next(&mut self, _: ()) {
         let new_subject = PublishSubject::default();
-        let old_subject =
-            std::mem::replace(&mut *self.subject.lock().unwrap(), new_subject.clone());
+        let old_subject = std::mem::replace(&mut *self.subject.lock_mut(), new_subject.clone());
         old_subject.on_termination(Termination::Completed);
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+        if let Some(observer) = self.observer.lock_mut().as_mut() {
             observer.on_next(SubjectObservable::new(new_subject));
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
         self.subject
-            .lock()
-            .unwrap()
+            .lock_ref()
             .clone()
             .on_termination(termination.clone());
-        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(observer) = { self.observer.lock_mut().take() } {
             observer.on_termination(termination);
         }
     }

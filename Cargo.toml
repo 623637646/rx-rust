@@ -4,21 +4,25 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-futures = { version = "0.3.31", features = ["thread-pool"] }
-# Using this to fix the issue: https://github.com/rust-lang/rust/issues/26925 
-# Refer to: https://stackoverflow.com/a/79571732/9315497
-educe = "0.6.0"
+educe = "0.6.0" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
 slotmap = "1.0.7"
-
-# TODO: Dependent below crates in some features instead of in all.
-tokio = { version = "1.40.0", optional = true, features = ["full"] }
+cfg-if = "1.0.1"
+futures = { version = "0.3.31", optional = true }
+tokio = { version = "1.40.0", optional = true }
+async-std = { version = "1.13.1", optional = true }
+futures-timer = { version = "3.0.3", optional = true }
 
 [dev-dependencies]
-tokio-stream = "0.1.17" #TODO: Remove this. 
+rx-rust = { path = ".", features = ["futures-thread-pool", "tokio-scheduler", "async-std-scheduler"] }
+# rx-rust = { path = ".", features = ["futures-local-pool"] }
 rand = "0.9.1"
 pin-project = "1.1.10"
-async-std = "1.13.1"
+tokio = { version = "1.40.0", features = ["rt-multi-thread"] }
 
 [features]
-default = ["tokio-scheduler"] #TODO: default without "tokio-scheduler"
-tokio-scheduler = ["tokio"]
+default = []
+single-threaded = []
+futures-local-pool = ["single-threaded", "futures", "futures-timer"]
+futures-thread-pool = ["futures/thread-pool", "futures-timer"]
+tokio-scheduler = ["tokio/rt", "tokio/time"]
+async-std-scheduler = ["async-std"]

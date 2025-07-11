@@ -1,5 +1,6 @@
 pub mod disposable;
 
+use crate::utils::types::NecessarySend;
 use disposable::{AutoDisposal, CallbackDisposal, Disposable};
 use std::ops::Add;
 
@@ -13,15 +14,15 @@ impl<'dis> Subscription<'dis> {
         Self(vec![])
     }
 
-    pub fn new_with_disposal(disposable: impl Disposable + Send + 'dis) -> Self {
+    pub fn new_with_disposal(disposable: impl Disposable + NecessarySend + 'dis) -> Self {
         Self(vec![AutoDisposal::new(disposable)])
     }
 
-    pub fn new_with_disposal_callback(callback: impl FnOnce() + Send + 'dis) -> Self {
+    pub fn new_with_disposal_callback(callback: impl FnOnce() + NecessarySend + 'dis) -> Self {
         Self(vec![AutoDisposal::new(CallbackDisposal::new(callback))])
     }
 
-    pub fn append_disposable(&mut self, disposable: impl Disposable + Send + 'dis) {
+    pub fn append_disposable(&mut self, disposable: impl Disposable + NecessarySend + 'dis) {
         self.0.push(AutoDisposal::new(disposable));
     }
 }
@@ -34,7 +35,7 @@ impl Disposable for Subscription<'_> {
 
 impl<'dis, T> Add<T> for Subscription<'dis>
 where
-    T: Disposable + Send + 'dis,
+    T: Disposable + NecessarySend + 'dis,
 {
     type Output = Subscription<'dis>;
 

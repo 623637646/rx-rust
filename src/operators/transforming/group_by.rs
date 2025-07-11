@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -6,7 +7,7 @@ use crate::{
         subject_observable::SubjectObservable,
     },
     subscription::Subscription,
-    utils::marker::MarkerType,
+    utils::types::MarkerType,
 };
 use educe::Educe;
 use std::{collections::HashMap, hash::Hash, marker::PhantomData};
@@ -37,14 +38,14 @@ impl<'or, 'sub, T, E, OE, F, K>
     Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for GroupBy<OE, F, K>
 where
     T: Clone + 'or,
-    E: Clone + Send + 'or,
+    E: Clone + NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(T) -> K + Send + 'or,
-    K: Eq + Hash + Send + 'or,
+    F: FnMut(T) -> K + NecessarySend + 'or,
+    K: Eq + Hash + NecessarySend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + Send + 'or,
+        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let observer = GroupByObserver {
             observer,
@@ -64,7 +65,7 @@ struct GroupByObserver<'or, T, E, OR, F, K> {
 impl<'or, T, E, OR, F, K> Observer<T, E> for GroupByObserver<'or, T, E, OR, F, K>
 where
     T: Clone,
-    E: Clone + Send,
+    E: Clone + NecessarySend,
     OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
     F: FnMut(T) -> K,
     K: Eq + Hash,

@@ -1,9 +1,10 @@
 use super::map::Map;
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Observer,
     subscription::Subscription,
-    utils::marker::MarkerType,
+    utils::types::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -36,11 +37,11 @@ where
     T: 'or,
     E: 'or,
     OE: Observable<'or, 'sub, T0, E>,
-    OE1: Observable<'or, 'sub, T, E> + Send + 'or,
-    F: FnMut(T0) -> OE1 + Send + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
+    F: FnMut(T0) -> OE1 + NecessarySend + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observable = Map::new(self.source, self.callback);
         let observable = observable.concat_all();
         observable.subscribe(observer)

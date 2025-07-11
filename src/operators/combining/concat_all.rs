@@ -1,18 +1,16 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::SharedDisposal},
-    utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
+    utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
 use std::{
     collections::VecDeque,
     marker::PhantomData,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 #[derive(Educe)]
@@ -53,17 +51,17 @@ where
     T: 'or,
     E: 'or,
     OE: Observable<'or, 'sub, OE1, E>,
-    OE1: Observable<'or, 'sub, T, E> + Send + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let on_going_sub = Arc::new(Mutex::new(None));
+            let on_going_sub = Shared::new(Mutable::new(None));
             let observer = ConcatAllObserver {
-                observer: Arc::new(Mutex::new(Some(observer))),
-                pending_observables: Arc::new(Mutex::new(VecDeque::new())),
+                observer: Shared::new(Mutable::new(Some(observer))),
+                pending_observables: Shared::new(Mutable::new(VecDeque::new())),
                 on_going_sub: on_going_sub.clone(),
-                completed: Arc::new(AtomicBool::new(false)),
+                completed: Shared::new(AtomicBool::new(false)),
                 _marker: PhantomData,
             };
             self.source.subscribe(observer) + SharedDisposal::new(on_going_sub)
@@ -74,10 +72,10 @@ where
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 struct ConcatAllObserver<'sub, T, OR, OE1> {
-    observer: Arc<Mutex<Option<OR>>>,
-    pending_observables: Arc<Mutex<VecDeque<OE1>>>,
-    on_going_sub: Arc<Mutex<Option<Subscription<'sub>>>>,
-    completed: Arc<AtomicBool>,
+    observer: Shared<Mutable<Option<OR>>>,
+    pending_observables: Shared<Mutable<VecDeque<OE1>>>,
+    on_going_sub: Shared<Mutable<Option<Subscription<'sub>>>>,
+    completed: Shared<AtomicBool>,
     _marker: MarkerType<T>,
 }
 
@@ -86,13 +84,13 @@ impl<'or, 'sub, T, OR, OE1> ConcatAllObserver<'sub, T, OR, OE1> {
     where
         T: 'or,
         E: 'or,
-        OR: Observer<T, E> + Send + 'or,
-        OE1: Observable<'or, 'sub, T, E> + Send + 'or,
+        OR: Observer<T, E> + NecessarySend + 'or,
+        OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
         'sub: 'or,
     {
-        if let Some(observable) = { self.pending_observables.lock().unwrap().pop_front() } {
+        if let Some(observable) = { self.pending_observables.lock_mut().pop_front() } {
             let this = self.clone();
-            let terminated = Arc::new(AtomicBool::new(false));
+            let terminated = Shared::new(AtomicBool::new(false));
             let terminated_cloned = terminated.clone();
             let observer = ConcatAllInnerObserver {
                 observer: this.observer.clone(),
@@ -108,14 +106,14 @@ impl<'or, 'sub, T, OR, OE1> ConcatAllObserver<'sub, T, OR, OE1> {
             };
             let sub = observable.subscribe(observer);
             if !terminated.load(Ordering::SeqCst) {
-                self.on_going_sub.lock().unwrap().replace(sub);
+                self.on_going_sub.lock_mut().replace(sub);
             }
         } else if self.completed.load(Ordering::SeqCst) {
-            if let Some(observer) = { self.observer.lock().unwrap().take() } {
+            if let Some(observer) = { self.observer.lock_mut().take() } {
                 observer.on_termination(Termination::Completed);
             }
         } else {
-            self.on_going_sub.lock().unwrap().take();
+            self.on_going_sub.lock_mut().take();
         }
     }
 }
@@ -124,13 +122,13 @@ impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for ConcatAllObserver<'sub, T, O
 where
     T: 'or,
     E: 'or,
-    OR: Observer<T, E> + Send + 'or,
-    OE1: Observable<'or, 'sub, T, E> + Send + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
     'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        self.pending_observables.lock().unwrap().push_back(value);
-        if self.on_going_sub.lock().unwrap().is_none() {
+        self.pending_observables.lock_mut().push_back(value);
+        if self.on_going_sub.lock_ref().is_none() {
             self.subscribe_next();
         }
     }
@@ -139,16 +137,16 @@ where
         match termination {
             Termination::Completed => {
                 self.completed.store(true, Ordering::SeqCst);
-                if self.on_going_sub.lock().unwrap().is_none()
-                    && self.pending_observables.lock().unwrap().is_empty()
+                if self.on_going_sub.lock_ref().is_none()
+                    && self.pending_observables.lock_ref().is_empty()
                 {
-                    if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                    if let Some(observer) = { self.observer.lock_mut().take() } {
                         observer.on_termination(Termination::Completed);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                if let Some(observer) = { self.observer.lock_mut().take() } {
                     observer.on_termination(termination);
                 }
             }
@@ -157,7 +155,7 @@ where
 }
 
 struct ConcatAllInnerObserver<OR, F> {
-    observer: Arc<Mutex<Option<OR>>>,
+    observer: Shared<Mutable<Option<OR>>>,
     termination_callback: F,
 }
 
@@ -167,7 +165,7 @@ where
     F: FnOnce(Termination<E>),
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+        if let Some(observer) = self.observer.lock_mut().as_mut() {
             observer.on_next(value);
         }
     }

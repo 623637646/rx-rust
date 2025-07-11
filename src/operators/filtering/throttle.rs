@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -8,10 +9,7 @@ use crate::{
     },
 };
 use educe::Educe;
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::time::Duration;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -34,10 +32,13 @@ impl<OE, S> Throttle<OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Throttle<OE, S>
 where
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler + Send + 'or,
+    S: Scheduler + NecessarySend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'static) -> Subscription<'sub> {
-        let disposal = Arc::new(Mutex::new(None));
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySend + 'static,
+    ) -> Subscription<'sub> {
+        let disposal = Shared::new(Mutable::new(None));
         self.source.subscribe(ThrottleObserver {
             observer,
             time_span: self.time_span,
@@ -51,7 +52,7 @@ struct ThrottleObserver<OR, S> {
     observer: OR,
     time_span: Duration,
     scheduler: S,
-    disposal: Arc<Mutex<Option<BoxedDisposal<'static>>>>, // Non-Null means is cooling down.
+    disposal: Shared<Mutable<Option<BoxedDisposal<'static>>>>, // Non-Null means is cooling down.
 }
 
 impl<T, E, OR, S> Observer<T, E> for ThrottleObserver<OR, S>
@@ -60,14 +61,14 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let mut lock = self.disposal.lock().unwrap();
+        let mut lock = self.disposal.lock_mut();
         if lock.is_some() {
             return;
         }
         let disposal = self.disposal.clone();
         *lock = Some(BoxedDisposal::new(self.scheduler.schedule(
             move || {
-                disposal.lock().unwrap().take();
+                disposal.lock_mut().take();
             },
             Some(self.time_span),
         )));

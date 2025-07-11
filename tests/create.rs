@@ -1,6 +1,7 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -89,15 +90,17 @@ fn test_error_from_source() {
 
 #[test]
 fn test_unsubscribe() {
-    block_on(async {
-        let observable = Create::new(|mut observer| {
+    block_on(|runtime| async move {
+        let runtime_cloned = runtime.clone();
+        let observable = Create::new(move |mut observer| {
             observer.on_next(1);
-            let handle = spawn(async {
-                sleep(Duration::from_millis(100)).await;
+            let runtime = runtime_cloned.clone();
+            let handle = runtime_cloned.spawn(async move {
+                runtime.sleep(Duration::from_millis(100)).await;
                 observer.on_next(2);
-                sleep(Duration::from_millis(100)).await;
+                runtime.sleep(Duration::from_millis(100)).await;
                 observer.on_next(3);
-                sleep(Duration::from_millis(100)).await;
+                runtime.sleep(Duration::from_millis(100)).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
@@ -115,13 +118,13 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [1]);
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [1]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [1]);
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [1, 2]);
@@ -129,13 +132,13 @@ fn test_unsubscribe() {
 
         subscription_1.dispose(); // unsubscribe
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [1, 2, 3]);
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [1, 2, 3]);
@@ -223,39 +226,45 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
-        let observable = Create::new(|mut observer| {
+    block_on(|runtime| async move {
+        let runtime_cloned = runtime.clone();
+        let observable = Create::new(move |mut observer| {
             observer.on_next(1);
-            let handle = spawn(async {
-                sleep(Duration::from_millis(100)).await;
+            let runtime = runtime_cloned.clone();
+            let handle = runtime_cloned.spawn(async move {
+                runtime.sleep(Duration::from_millis(100)).await;
                 observer.on_next(2);
-                sleep(Duration::from_millis(100)).await;
+                runtime.sleep(Duration::from_millis(100)).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
         });
         let (checker, observer) = Checker::new();
 
-        let subscription = spawn(async move { observable.subscribe(observer) })
+        let subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert_eq!(checker.values(), [1]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [1]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert!(checker.is_active());
 
-        spawn(async { subscription.dispose() }).await.unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async { subscription.dispose() })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert!(checker.is_dropped());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert!(checker.is_dropped());
     });

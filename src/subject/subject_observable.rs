@@ -1,4 +1,5 @@
 use super::Subject;
+use crate::utils::types::NecessarySend;
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 use educe::Educe;
 
@@ -16,7 +17,7 @@ impl<'or, 'sub, T, E, S> Observable<'or, 'sub, T, E> for SubjectObservable<S>
 where
     S: Subject<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
 }
