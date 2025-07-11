@@ -1,6 +1,8 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::scheduler::Scheduler;
+use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -8,11 +10,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
 };
-use std::{
-    convert::Infallible,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -144,9 +142,9 @@ fn test_unsubscribe() {
 
     // Custom operations
     let observable = subject.clone();
-    let observer_3 = Arc::new(Mutex::new(observer_3));
+    let observer_3 = Shared::new(Mutable::new(observer_3));
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_3.lock().unwrap().on_next(value);
+        observer_3.lock_mut().on_next(value);
         observer.on_next(value * 2);
     });
     let observable_1 = observable;
@@ -270,7 +268,7 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, mut observer_2) = Checker::<_, String>::new();
@@ -282,7 +280,8 @@ fn test_async() {
             observer.on_next(value * 2);
         });
 
-        let subscription = spawn(async move { observable.subscribe(observer_1) })
+        let subscription = runtime
+            .spawn(async move { observable.subscribe(observer_1) })
             .await
             .unwrap();
         assert!(checker_1.values().is_empty());
@@ -291,29 +290,34 @@ fn test_async() {
         assert!(checker_2.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(111);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(111);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker_1.values(), [222]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [111]);
         assert!(checker_2.is_active());
 
-        spawn(async { subscription.dispose() }).await.unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async { subscription.dispose() })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [222]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [111]);
         assert!(checker_2.is_dropped());
 
         let subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_termination(Termination::Error("error"));
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_termination(Termination::Error("error"));
+            })
+            .await
+            .unwrap();
         assert_eq!(checker_1.values(), [222]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [111]);
@@ -330,9 +334,9 @@ fn test_subscribe_by_different_observer() {
 
     // Custom operations
     let observable = subject.clone();
-    let observer_3 = Arc::new(Mutex::new(observer_3));
+    let observer_3 = Shared::new(Mutable::new(observer_3));
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_3.lock().unwrap().on_next(value);
+        observer_3.lock_mut().on_next(value);
         observer.on_next(value * 2);
     });
     let observable_1 = observable;

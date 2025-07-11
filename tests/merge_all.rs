@@ -1,6 +1,7 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -756,7 +757,7 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let subject = PublishSubject::default();
         let subject_1 = PublishSubject::default();
         let subject_2 = PublishSubject::default();
@@ -766,7 +767,8 @@ fn test_async() {
         let observable = subject.clone();
         let observable = observable.merge_all();
 
-        let subscription = spawn(async move { observable.subscribe(observer) })
+        let subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
@@ -774,80 +776,91 @@ fn test_async() {
 
         let mut subject_cloned = subject.clone();
         let subject_1_cloned = subject_1.clone();
-        spawn(async move {
-            subject_cloned.on_next(subject_1_cloned.clone());
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(subject_1_cloned.clone());
+            })
+            .await
+            .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         let mut subject_cloned = subject_1.clone();
-        spawn(async move {
-            subject_cloned.on_next(111);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(111);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
         let subject_2_cloned = subject_2.clone();
-        spawn(async move {
-            subject_cloned.on_next(subject_2_cloned.clone());
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(subject_2_cloned.clone());
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         let mut subject_cloned = subject_2.clone();
-        spawn(async move {
-            subject_cloned.on_next(222);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(222);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_active());
 
-        spawn(async { subscription.dispose() }).await.unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async { subscription.dispose() })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
 
         let mut subject_cloned = subject_1.clone();
-        spawn(async move {
-            subject_cloned.on_next(333);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(333);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
 
         let subject_cloned = subject_1.clone();
-        spawn(async move {
-            subject_cloned.on_termination(Termination::Completed);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_termination(Termination::Completed);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
 
         let mut subject_cloned = subject_2.clone();
-        spawn(async move {
-            subject_cloned.on_next(444);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(444);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
 
         let subject_cloned = subject_2.clone();
-        spawn(async move {
-            subject_cloned.on_termination(Termination::Error("error"));
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_termination(Termination::Error("error"));
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111, 222]);
         assert!(checker.is_dropped());
     });

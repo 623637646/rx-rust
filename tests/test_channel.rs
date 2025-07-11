@@ -5,8 +5,8 @@ use rx_rust::observable::observable_ext::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::subscription::Subscription;
 use rx_rust::subscription::disposable::Disposable;
+use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
 use tests_utils::checker::Checker;
 use tests_utils::test_channel::test_channel;
 
@@ -23,25 +23,25 @@ fn test_unsub_on_next() {
     let _subscription = Some(observable_1.subscribe(observer_1));
 
     // unsubscribe before on_next
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable_2
             .hook_on_next(move |observer, value| {
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
                 observer.on_next(value);
             })
             .subscribe(observer_2),
     );
 
     // unsubscribe after on_next
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable_3
             .hook_on_next(move |observer, value| {
                 observer.on_next(value);
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -83,25 +83,25 @@ fn test_unsub_on_completed() {
     let _subscription = Some(observable_1.subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable_2
             .hook_on_termination(move |observer, value| {
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
     );
 
     // unsubscribe after on_termination
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable_3
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -156,25 +156,25 @@ fn test_unsub_on_error() {
     let _subscription = Some(observable_1.subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable_2
             .hook_on_termination(move |observer, value| {
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
     );
 
     // unsubscribe after on_termination
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable_3
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
     );

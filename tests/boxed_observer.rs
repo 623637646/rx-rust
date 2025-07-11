@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::block_on;
 use std::convert::Infallible;
 
 use rx_rust::observer::{Observer, Termination, boxed_observer::BoxedObserver};
@@ -69,17 +69,21 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (checker, observer) = Checker::new();
-        let mut boxed_observer = spawn(async { BoxedObserver::new(observer) }).await.unwrap();
-        spawn(async move {
-            boxed_observer.on_next(111);
-            boxed_observer.on_termination(Termination::Error("error"));
-            assert_eq!(checker.values(), [111]);
-            assert!(checker.is_error("error"));
-        })
-        .await
-        .unwrap();
+        let mut boxed_observer = runtime
+            .spawn(async { BoxedObserver::new(observer) })
+            .await
+            .unwrap();
+        runtime
+            .spawn(async move {
+                boxed_observer.on_next(111);
+                boxed_observer.on_termination(Termination::Error("error"));
+                assert_eq!(checker.values(), [111]);
+                assert!(checker.is_error("error"));
+            })
+            .await
+            .unwrap();
     });
 }
 

@@ -1,7 +1,8 @@
 mod tests_utils;
 
 use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -12,11 +13,11 @@ use rx_rust::{
     subscription::{Subscription, disposable::Disposable},
 };
 use std::{convert::Infallible, num::NonZeroUsize, time::Duration};
-use tests_utils::{checker::Checker, test_scheduler::TestScheduler, test_struct::TestStruct};
+use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed_time_last_empty() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -25,7 +26,7 @@ fn test_completed_time_last_empty() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -33,11 +34,11 @@ fn test_completed_time_last_empty() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
@@ -45,7 +46,7 @@ fn test_completed_time_last_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_active());
 
@@ -57,7 +58,7 @@ fn test_completed_time_last_empty() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
         assert!(checker.is_active());
 
@@ -71,7 +72,7 @@ fn test_completed_time_last_empty() {
 
 #[test]
 fn test_completed_time_last_not_empty() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -80,7 +81,7 @@ fn test_completed_time_last_not_empty() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -88,11 +89,11 @@ fn test_completed_time_last_not_empty() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
@@ -100,7 +101,7 @@ fn test_completed_time_last_not_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert!(checker.is_active());
 
@@ -122,7 +123,7 @@ fn test_completed_time_last_not_empty() {
 
 #[test]
 fn test_completed_time_no_delay() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -131,7 +132,7 @@ fn test_completed_time_no_delay() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             None,
         );
 
@@ -139,11 +140,11 @@ fn test_completed_time_no_delay() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert!(checker.is_active());
 
@@ -151,7 +152,7 @@ fn test_completed_time_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert!(checker.is_active());
 
@@ -163,7 +164,7 @@ fn test_completed_time_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![], vec![], vec![111], vec![222, 333]]
@@ -183,7 +184,7 @@ fn test_completed_time_no_delay() {
 
 #[test]
 fn test_completed_time_small_delay() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -192,7 +193,7 @@ fn test_completed_time_small_delay() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(30)),
         );
 
@@ -200,11 +201,11 @@ fn test_completed_time_small_delay() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert!(checker.is_active());
 
@@ -212,7 +213,7 @@ fn test_completed_time_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert!(checker.is_active());
 
@@ -224,7 +225,7 @@ fn test_completed_time_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![], vec![], vec![111], vec![222, 333]]
@@ -244,7 +245,7 @@ fn test_completed_time_small_delay() {
 
 #[test]
 fn test_completed_count_last_empty() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -253,7 +254,7 @@ fn test_completed_count_last_empty() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(3).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(30)),
         );
 
@@ -295,7 +296,7 @@ fn test_completed_count_last_empty() {
 
 #[test]
 fn test_completed_count_last_not_empty() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -304,7 +305,7 @@ fn test_completed_count_last_not_empty() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(3).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(30)),
         );
 
@@ -342,7 +343,7 @@ fn test_completed_count_last_not_empty() {
 
 #[test]
 fn test_completed_time_and_count() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -351,7 +352,7 @@ fn test_completed_time_and_count() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -359,7 +360,7 @@ fn test_completed_time_and_count() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -368,7 +369,7 @@ fn test_completed_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
@@ -377,7 +378,7 @@ fn test_completed_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
@@ -389,7 +390,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -403,7 +404,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -424,7 +425,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -437,7 +438,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -451,7 +452,7 @@ fn test_completed_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -503,7 +504,7 @@ fn test_completed_time_and_count() {
 
 #[test]
 fn test_error_time_and_count() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -512,7 +513,7 @@ fn test_error_time_and_count() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -520,7 +521,7 @@ fn test_error_time_and_count() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -529,7 +530,7 @@ fn test_error_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
@@ -538,7 +539,7 @@ fn test_error_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
@@ -550,7 +551,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -564,7 +565,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -585,7 +586,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -598,7 +599,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -612,7 +613,7 @@ fn test_error_time_and_count() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -661,7 +662,7 @@ fn test_error_time_and_count() {
 
 #[test]
 fn test_unsubscribe() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
@@ -671,7 +672,7 @@ fn test_unsubscribe() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
         let observable_1 = observable;
@@ -684,7 +685,7 @@ fn test_unsubscribe() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
@@ -697,7 +698,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![111, 111]]);
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111]]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [vec![111, 111]]);
@@ -716,7 +717,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
@@ -732,7 +733,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -750,7 +751,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -775,7 +776,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -790,7 +791,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -806,7 +807,7 @@ fn test_unsubscribe() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -864,7 +865,7 @@ fn test_unsubscribe() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -873,62 +874,66 @@ fn test_async() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
-        let subscription = spawn(async move { observable.subscribe(observer) })
+        let subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(111);
-            subject_cloned.on_next(111);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(111);
+                subject_cloned.on_next(111);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(222);
-            subject_cloned.on_next(222);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(222);
+                subject_cloned.on_next(222);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(333);
-            subject_cloned.on_next(333);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(333);
+                subject_cloned.on_next(333);
+            })
+            .await
+            .unwrap();
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -936,18 +941,19 @@ fn test_async() {
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(444);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(444);
+            })
+            .await
+            .unwrap();
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -955,12 +961,13 @@ fn test_async() {
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(555);
-            subject_cloned.on_next(666);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(555);
+                subject_cloned.on_next(666);
+            })
+            .await
+            .unwrap();
         assert_eq!(
             checker.values(),
             [
@@ -973,7 +980,7 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -986,7 +993,7 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1000,7 +1007,7 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1016,11 +1023,12 @@ fn test_async() {
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(777);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(777);
+            })
+            .await
+            .unwrap();
         assert_eq!(
             checker.values(),
             [
@@ -1035,17 +1043,21 @@ fn test_async() {
         );
         assert!(checker.is_active());
 
-        spawn(async { subscription.dispose() }).await.unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async { subscription.dispose() })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
 
         let subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_termination(Termination::Error("error"));
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_termination(Termination::Error("error"));
+            })
+            .await
+            .unwrap();
 
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1064,7 +1076,7 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
@@ -1074,7 +1086,7 @@ fn test_subscribe_by_different_observer() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
         let observable_1 = observable;
@@ -1088,7 +1100,7 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert!(checker_1.is_active());
         assert!(checker_2.values().is_empty());
@@ -1101,7 +1113,7 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![111, 111]]);
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111]]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [vec![111, 111]]);
@@ -1120,7 +1132,7 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
@@ -1136,7 +1148,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1154,7 +1166,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1179,7 +1191,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1194,7 +1206,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1210,7 +1222,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert!(checker_2.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker_1.is_dropped());
         assert_eq!(
@@ -1268,7 +1280,7 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_multiple_operation() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -1278,13 +1290,13 @@ fn test_multiple_operation() {
             .buffer_with_time_or_count(
                 NonZeroUsize::new(2).unwrap(),
                 Duration::from_millis(90),
-                TestScheduler,
+                runtime.clone(),
                 Some(Duration::from_millis(90)),
             )
             .buffer_with_time_or_count(
                 NonZeroUsize::new(2).unwrap(),
                 Duration::from_millis(100),
-                TestScheduler,
+                runtime.clone(),
                 Some(Duration::from_millis(100)),
             );
 
@@ -1292,7 +1304,7 @@ fn test_multiple_operation() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -1303,7 +1315,7 @@ fn test_multiple_operation() {
         assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
         assert!(checker.is_active());
 
@@ -1320,7 +1332,7 @@ fn test_multiple_operation() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1344,7 +1356,7 @@ fn test_multiple_operation() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1367,7 +1379,7 @@ fn test_multiple_operation() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1412,7 +1424,7 @@ fn test_multiple_operation() {
 
 #[test]
 fn test_without_convenient_api() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -1422,7 +1434,7 @@ fn test_without_convenient_api() {
             observable,
             NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -1430,7 +1442,7 @@ fn test_without_convenient_api() {
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
@@ -1439,7 +1451,7 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert!(checker.is_active());
 
@@ -1448,7 +1460,7 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert!(checker.is_active());
 
@@ -1460,7 +1472,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -1474,7 +1486,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -1495,7 +1507,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1508,7 +1520,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1522,7 +1534,7 @@ fn test_without_convenient_api() {
         );
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [
@@ -1571,7 +1583,7 @@ fn test_without_convenient_api() {
 
 #[test]
 fn test_complete_after_next() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
@@ -1579,7 +1591,7 @@ fn test_complete_after_next() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -1594,12 +1606,12 @@ fn test_complete_after_next() {
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
 
-        sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert_eq!(checker.values(), [vec![111]]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
 
-        sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [vec![111]]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
@@ -1608,7 +1620,7 @@ fn test_complete_after_next() {
 
 #[test]
 fn test_error_after_next() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
@@ -1616,7 +1628,7 @@ fn test_error_after_next() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -1631,12 +1643,12 @@ fn test_error_after_next() {
         assert!(checker.is_error("error"));
         assert!(channel_checker.is_error("error"));
 
-        sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_error("error"));
         assert!(channel_checker.is_error("error"));
 
-        sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_error("error"));
         assert!(channel_checker.is_error("error"));
@@ -1645,7 +1657,7 @@ fn test_error_after_next() {
 
 #[test]
 fn test_unsub_after_next() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -1653,7 +1665,7 @@ fn test_unsub_after_next() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -1664,17 +1676,17 @@ fn test_unsub_after_next() {
 
         sender.on_next(111);
         subscription.dispose();
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());
 
-        sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());
 
-        sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());
@@ -1683,7 +1695,7 @@ fn test_unsub_after_next() {
 
 #[test]
 fn test_unsub_after_completed() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -1691,7 +1703,7 @@ fn test_unsub_after_completed() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -1706,12 +1718,12 @@ fn test_unsub_after_completed() {
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
 
-        sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
 
-        sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
@@ -1720,7 +1732,7 @@ fn test_unsub_after_completed() {
 
 #[test]
 fn test_unsub_after_error() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
@@ -1728,7 +1740,7 @@ fn test_unsub_after_error() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -1743,12 +1755,12 @@ fn test_unsub_after_error() {
         assert!(checker.is_error("error"));
         assert!(channel_checker.is_error("error"));
 
-        sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_error("error"));
         assert!(channel_checker.is_error("error"));
 
-        sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_error("error"));
         assert!(channel_checker.is_error("error"));
@@ -1757,7 +1769,7 @@ fn test_unsub_after_error() {
 
 #[test]
 fn test_undisposed_schedule() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -1765,7 +1777,7 @@ fn test_undisposed_schedule() {
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -1783,7 +1795,7 @@ fn test_undisposed_schedule() {
 
 #[test]
 fn test_lifetime_sub() {
-    block_on(async {
+    block_on(|runtime| async move {
         // OK
         let life_marker = TestStruct;
         let _subscription;
@@ -1803,7 +1815,7 @@ fn test_lifetime_sub() {
             let observable = observable.buffer_with_time_or_count(
                 NonZeroUsize::new(2).unwrap(),
                 Duration::from_millis(100),
-                TestScheduler,
+                runtime.clone(),
                 Some(Duration::from_millis(100)),
             );
 
@@ -1815,29 +1827,31 @@ fn test_lifetime_sub() {
 
 #[test]
 fn test_clone() {
-    let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
-        observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+    block_on(|runtime| async move {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(TestStruct);
+            observer.on_termination(Termination::Error(TestStruct));
+            Subscription::new_none_disposal()
+        });
+        let observable = observable.buffer_with_time_or_count(
+            NonZeroUsize::new(2).unwrap(),
+            Duration::from_millis(100),
+            runtime.clone(),
+            Some(Duration::from_millis(100)),
+        );
+        _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
     });
-    let observable = observable.buffer_with_time_or_count(
-        NonZeroUsize::new(2).unwrap(),
-        Duration::from_millis(100),
-        TestScheduler,
-        Some(Duration::from_millis(100)),
-    );
-    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    block_on(async {
+    block_on(|runtime| async move {
         // Custom operations
         let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
         let observable = subject.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             Duration::from_millis(100),
-            TestScheduler,
+            runtime.clone(),
             Some(Duration::from_millis(100)),
         );
 
@@ -1849,14 +1863,16 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.buffer_with_time_or_count(
-        NonZeroUsize::new(2).unwrap(),
-        Duration::from_millis(100),
-        TestScheduler,
-        Some(Duration::from_millis(100)),
-    );
+    block_on(|runtime| async move {
+        // Custom operations
+        let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+        let observable = subject.buffer_with_time_or_count(
+            NonZeroUsize::new(2).unwrap(),
+            Duration::from_millis(100),
+            runtime.clone(),
+            Some(Duration::from_millis(100)),
+        );
 
-    observable.filter(|_| true);
+        observable.filter(|_| true);
+    });
 }

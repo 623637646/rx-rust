@@ -1,6 +1,8 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::scheduler::Scheduler;
+use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -10,18 +12,15 @@ use rx_rust::{
 };
 use std::{
     convert::Infallible,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
     time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    let disposed = Arc::new(AtomicBool::new(false));
-    let called = Arc::new(AtomicBool::new(false));
+    let disposed = Shared::new(AtomicBool::new(false));
+    let called = Shared::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
     let observable = Create::new(|observer| {
@@ -62,8 +61,8 @@ fn test_completed() {
 
 #[test]
 fn test_error() {
-    let disposed = Arc::new(AtomicBool::new(false));
-    let called = Arc::new(AtomicBool::new(false));
+    let disposed = Shared::new(AtomicBool::new(false));
+    let called = Shared::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
     let observable = Create::new(|observer| {
@@ -104,8 +103,8 @@ fn test_error() {
 
 #[test]
 fn test_unsubscribe() {
-    let disposed = Arc::new(AtomicBool::new(false));
-    let called = Arc::new(AtomicBool::new(false));
+    let disposed = Shared::new(AtomicBool::new(false));
+    let called = Shared::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
     let observable = Create::new(|observer| {
@@ -155,8 +154,8 @@ fn test_ref() {
     let value = 111;
     let error = 222;
 
-    let disposed = Arc::new(AtomicBool::new(false));
-    let called = Arc::new(AtomicBool::new(false));
+    let disposed = Shared::new(AtomicBool::new(false));
+    let called = Shared::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
     let observable = Create::new(|observer| {
@@ -206,8 +205,8 @@ fn test_mut_ref() {
     let mut value = 111;
     let mut error = 222;
 
-    let disposed = Arc::new(AtomicBool::new(false));
-    let called = Arc::new(AtomicBool::new(false));
+    let disposed = Shared::new(AtomicBool::new(false));
+    let called = Shared::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
     let observable = Create::new(|observer: BoxedObserver<'_, &mut i32, &mut i32>| {
@@ -254,15 +253,15 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
-        let disposed = Arc::new(AtomicBool::new(false));
-        let called = Arc::new(AtomicBool::new(false));
-        let boxed_observer = Arc::new(Mutex::new(None));
+    block_on(|runtime| async move {
+        let disposed = Shared::new(AtomicBool::new(false));
+        let called = Shared::new(AtomicBool::new(false));
+        let boxed_observer = Shared::new(Mutable::new(None));
 
         let disposed_cloned = disposed.clone();
         let boxed_observer_cloned = boxed_observer.clone();
         let observable = Create::new(move |observer| {
-            *boxed_observer_cloned.lock().unwrap() = Some(observer);
+            *boxed_observer_cloned.lock_mut() = Some(observer);
             Subscription::new_with_disposal_callback(move || {
                 disposed_cloned.store(true, Ordering::SeqCst);
             })
@@ -277,7 +276,8 @@ fn test_async() {
             called_cloned.store(true, Ordering::SeqCst);
         });
 
-        let subscription = spawn(async move { observable.subscribe(observer) })
+        let subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert_eq!(checker.values(), []);
@@ -285,39 +285,38 @@ fn test_async() {
         assert!(!disposed.load(Ordering::SeqCst));
         assert!(!called.load(Ordering::SeqCst));
 
-        let boxed_observer = spawn(async move {
-            boxed_observer
-                .lock()
-                .unwrap()
-                .as_mut()
-                .unwrap()
-                .on_next(111);
-            boxed_observer
-        })
-        .await
-        .unwrap();
+        let boxed_observer = runtime
+            .spawn(async move {
+                boxed_observer.lock_mut().as_mut().unwrap().on_next(111);
+                boxed_observer
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(!disposed.load(Ordering::SeqCst));
         assert!(!called.load(Ordering::SeqCst));
 
-        spawn(async move { subscription.dispose() }).await.unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async move { subscription.dispose() })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(disposed.load(Ordering::SeqCst));
         assert!(called.load(Ordering::SeqCst));
 
-        spawn(async move {
-            boxed_observer
-                .lock()
-                .unwrap()
-                .take()
-                .unwrap()
-                .on_termination(Termination::<Infallible>::Completed);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                boxed_observer
+                    .lock_mut()
+                    .take()
+                    .unwrap()
+                    .on_termination(Termination::<Infallible>::Completed);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
         assert!(disposed.load(Ordering::SeqCst));
@@ -327,21 +326,21 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let disposed_1 = Arc::new(AtomicBool::new(false));
-    let disposed_2 = Arc::new(AtomicBool::new(false));
-    let called_1 = Arc::new(AtomicBool::new(false));
-    let called_2 = Arc::new(AtomicBool::new(false));
-    let boxed_observer_1 = Arc::new(Mutex::new(None));
-    let boxed_observer_2 = Arc::new(Mutex::new(None));
+    let disposed_1 = Shared::new(AtomicBool::new(false));
+    let disposed_2 = Shared::new(AtomicBool::new(false));
+    let called_1 = Shared::new(AtomicBool::new(false));
+    let called_2 = Shared::new(AtomicBool::new(false));
+    let boxed_observer_1 = Shared::new(Mutable::new(None));
+    let boxed_observer_2 = Shared::new(Mutable::new(None));
 
     let observable = Create::new(|observer| {
-        if boxed_observer_1.lock().unwrap().is_none() {
-            *boxed_observer_1.lock().unwrap() = Some(observer);
+        if boxed_observer_1.lock_ref().is_none() {
+            *boxed_observer_1.lock_mut() = Some(observer);
             Subscription::new_with_disposal_callback(|| {
                 disposed_1.store(true, Ordering::SeqCst);
             })
         } else {
-            *boxed_observer_2.lock().unwrap() = Some(observer);
+            *boxed_observer_2.lock_mut() = Some(observer);
             Subscription::new_with_disposal_callback(|| {
                 disposed_2.store(true, Ordering::SeqCst);
             })
@@ -353,7 +352,7 @@ fn test_subscribe_by_different_observer() {
     // Custom operations
     let called_1_cloned = called_1.clone();
     let called_2_cloned = called_2.clone();
-    let first_call = Arc::new(AtomicBool::new(true));
+    let first_call = Shared::new(AtomicBool::new(true));
     let observable = observable.do_before_disposal(|| {
         if first_call.load(Ordering::SeqCst) {
             first_call.store(false, Ordering::SeqCst);
@@ -381,18 +380,8 @@ fn test_subscribe_by_different_observer() {
     assert!(!called_1.load(Ordering::SeqCst));
     assert!(!called_2.load(Ordering::SeqCst));
 
-    boxed_observer_1
-        .lock()
-        .unwrap()
-        .as_mut()
-        .unwrap()
-        .on_next(111);
-    boxed_observer_2
-        .lock()
-        .unwrap()
-        .as_mut()
-        .unwrap()
-        .on_next(111);
+    boxed_observer_1.lock_mut().as_mut().unwrap().on_next(111);
+    boxed_observer_2.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert!(checker_1.is_active());
     assert_eq!(checker_2.values(), [111]);
@@ -414,14 +403,12 @@ fn test_subscribe_by_different_observer() {
     assert!(called_2.load(Ordering::SeqCst));
 
     boxed_observer_1
-        .lock()
-        .unwrap()
+        .lock_mut()
         .take()
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     boxed_observer_2
-        .lock()
-        .unwrap()
+        .lock_mut()
         .take()
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
@@ -437,9 +424,9 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_multiple_operation() {
-    let disposed = Arc::new(AtomicBool::new(false));
-    let called_1 = Arc::new(AtomicBool::new(false));
-    let called_2 = Arc::new(AtomicBool::new(false));
+    let disposed = Shared::new(AtomicBool::new(false));
+    let called_1 = Shared::new(AtomicBool::new(false));
+    let called_2 = Shared::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
     let observable = Create::new(|observer| {
@@ -496,8 +483,8 @@ fn test_multiple_operation() {
 
 #[test]
 fn test_without_convenient_api() {
-    let disposed = Arc::new(AtomicBool::new(false));
-    let called = Arc::new(AtomicBool::new(false));
+    let disposed = Shared::new(AtomicBool::new(false));
+    let called = Shared::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
     let observable = Create::new(|observer| {

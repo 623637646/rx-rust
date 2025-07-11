@@ -1,33 +1,31 @@
-use crate::tests_utils::test_runtime::spawn;
+use crate::tests_utils::test_runtime::TestRuntime;
 use educe::Educe;
 use futures::Stream;
 use futures::stream::StreamExt;
 use rx_rust::{
     observer::{Observer, Termination},
-    subscription::disposable::{CallbackDisposal, Disposable},
+    subscription::Subscription,
+    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 use std::{
     convert::Infallible,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 /// A helper struct for testing observables.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub(crate) struct Checker<T, E> {
-    values: Arc<Mutex<Vec<T>>>,
-    termination: Arc<Mutex<Option<Termination<E>>>>,
-    dropped: Arc<AtomicBool>,
+    values: Shared<Mutable<Vec<T>>>,
+    termination: Shared<Mutable<Option<Termination<E>>>>,
+    dropped: Shared<AtomicBool>,
 }
 
 impl<T, E> Checker<T, E> {
     pub(crate) fn new() -> (Self, CheckerObserver<T, E>) {
-        let values = Arc::new(Mutex::new(Vec::new()));
-        let termination = Arc::new(Mutex::new(None));
-        let dropped = Arc::new(AtomicBool::new(false));
+        let values = Shared::new(Mutable::new(Vec::new()));
+        let termination = Shared::new(Mutable::new(None));
+        let dropped = Shared::new(AtomicBool::new(false));
         (
             Self {
                 values: values.clone(),
@@ -46,17 +44,17 @@ impl<T, E> Checker<T, E> {
     where
         T: Clone,
     {
-        self.values.lock().unwrap().clone()
+        self.values.lock_ref().clone()
     }
 
     pub(crate) fn is_active(&self) -> bool {
-        let termination = self.termination.lock().unwrap();
+        let termination = self.termination.lock_ref();
         let dropped = self.dropped.load(Ordering::SeqCst);
         termination.is_none() && !dropped
     }
 
     pub(crate) fn is_dropped(&self) -> bool {
-        let termination = self.termination.lock().unwrap();
+        let termination = self.termination.lock_ref();
         let dropped = self.dropped.load(Ordering::SeqCst);
         termination.is_none() && dropped
     }
@@ -65,12 +63,12 @@ impl<T, E> Checker<T, E> {
     where
         E: PartialEq,
     {
-        let termination = self.termination.lock().unwrap();
+        let termination = self.termination.lock_ref();
         matches!(*termination, Some(Termination::Error(ref e)) if *e == expected)
     }
 
     pub(crate) fn is_completed(&self) -> bool {
-        let termination = self.termination.lock().unwrap();
+        let termination = self.termination.lock_ref();
         matches!(*termination, Some(Termination::Completed))
     }
 }
@@ -78,26 +76,26 @@ impl<T, E> Checker<T, E> {
 #[derive(Educe)]
 #[educe(Debug)]
 pub(crate) struct CheckerObserver<T, E> {
-    values: Arc<Mutex<Vec<T>>>,
-    termination: Arc<Mutex<Option<Termination<E>>>>,
-    dropped: Arc<AtomicBool>,
+    values: Shared<Mutable<Vec<T>>>,
+    termination: Shared<Mutable<Option<Termination<E>>>>,
+    dropped: Shared<AtomicBool>,
 }
 
 impl<T, E> CheckerObserver<T, E> {
     pub(crate) fn into_callbacks(
         self,
     ) -> (
-        impl FnMut(T) + Send + use<T, E>,
-        impl FnOnce(Termination<E>) + Send + use<T, E>,
+        impl FnMut(T) + NecessarySend + use<T, E>,
+        impl FnOnce(Termination<E>) + NecessarySend + use<T, E>,
     )
     where
-        T: Send,
-        E: Send,
+        T: NecessarySend,
+        E: NecessarySend,
     {
         let values = self.values.clone();
         (
             move |value| {
-                let mut values = values.lock().unwrap();
+                let mut values = values.lock_mut();
                 values.push(value);
             },
             |termination| self.on_termination(termination),
@@ -113,12 +111,12 @@ impl<T, E> Drop for CheckerObserver<T, E> {
 
 impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
     fn on_next(&mut self, value: T) {
-        let mut values = self.values.lock().unwrap();
+        let mut values = self.values.lock_mut();
         values.push(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut termination_lock = self.termination.lock().unwrap();
+        let mut termination_lock = self.termination.lock_mut();
         assert!(termination_lock.is_none());
         *termination_lock = Some(termination);
     }
@@ -126,39 +124,37 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
 
 impl<T> Checker<T, Infallible> {
     pub(crate) fn from_stream(
-        mut stream: impl Stream<Item = T> + Send + Unpin + 'static,
-    ) -> (Self, impl Disposable + Send + 'static)
+        mut stream: impl Stream<Item = T> + NecessarySend + Unpin + 'static,
+        runtime: TestRuntime,
+    ) -> (Self, Subscription<'static>)
     where
-        T: Send + 'static,
+        T: NecessarySend + 'static,
     {
-        let values = Arc::new(Mutex::new(Vec::new()));
-        let termination = Arc::new(Mutex::new(None));
-        let dropped = Arc::new(AtomicBool::new(false));
+        let values = Shared::new(Mutable::new(Vec::new()));
+        let termination = Shared::new(Mutable::new(None));
+        let dropped = Shared::new(AtomicBool::new(false));
 
         let values_cloned = values.clone();
         let termination_cloned = termination.clone();
-        let handle = spawn(async move {
+        let handle = runtime.spawn(async move {
             while let Some(value) = stream.next().await {
-                values_cloned.lock().unwrap().push(value);
+                values_cloned.lock_mut().push(value);
             }
             termination_cloned
-                .lock()
-                .unwrap()
+                .lock_mut()
                 .replace(Termination::Completed);
         });
         let dropped_cloned = dropped.clone();
-        let disposal = CallbackDisposal::new(move || {
-            handle.abort();
-            dropped_cloned.store(true, Ordering::SeqCst);
-        });
-
         (
             Self {
                 values,
                 termination,
                 dropped,
             },
-            disposal,
+            Subscription::new_with_disposal_callback(move || {
+                handle.abort();
+                dropped_cloned.store(true, Ordering::SeqCst);
+            }),
         )
     }
 }

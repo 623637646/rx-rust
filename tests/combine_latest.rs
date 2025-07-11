@@ -1,6 +1,7 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, sleep, spawn};
+use crate::tests_utils::test_runtime::block_on;
+use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -564,7 +565,7 @@ fn test_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (mut sender_1, observable_1, channel_checker_1) = test_channel();
         let (checker, observer) = Checker::new();
@@ -572,7 +573,8 @@ fn test_async() {
         // Custom operations
         let observable = observable.combine_latest(observable_1);
 
-        let subscription = spawn(async move { observable.subscribe(observer) })
+        let subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
@@ -580,30 +582,35 @@ fn test_async() {
         assert!(channel_checker.is_subscribed());
         assert!(channel_checker_1.is_subscribed());
 
-        let _sender = spawn(async move {
-            sender.on_next(111);
-            sender
-        })
-        .await
-        .unwrap();
+        let _sender = runtime
+            .spawn(async move {
+                sender.on_next(111);
+                sender
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), []);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
         assert!(channel_checker_1.is_subscribed());
 
-        let _another_source_sender = spawn(async move {
-            sender_1.on_next("111");
-            sender_1
-        })
-        .await
-        .unwrap();
+        let _another_source_sender = runtime
+            .spawn(async move {
+                sender_1.on_next("111");
+                sender_1
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [(111, "111")]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
         assert!(channel_checker_1.is_subscribed());
 
-        spawn(async { subscription.dispose() }).await.unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async { subscription.dispose() })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [(111, "111")]);
         assert!(checker.is_dropped());
         assert!(channel_checker.is_unsubscribed());

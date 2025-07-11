@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::block_on;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -140,25 +140,27 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = observable.first();
 
-        let _subscription = spawn(async move { observable.subscribe(observer) })
+        let _subscription = runtime
+            .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
-        spawn(async move {
-            sender.on_next(111);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                sender.on_next(111);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
         assert!(channel_checker.is_unsubscribed());

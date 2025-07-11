@@ -1,10 +1,9 @@
 mod tests_utils;
 
-use crate::tests_utils::{
-    test_channel::test_channel,
-    test_runtime::{block_on, sleep, spawn},
-};
+use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};
 use futures::{FutureExt, StreamExt};
+use rx_rust::scheduler::Scheduler;
+use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::observable_ext::ObservableExt,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -12,43 +11,39 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
     subscription::{Subscription, disposable::Disposable},
 };
-use std::{
-    convert::Infallible,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
 
         // Custom operations
         let observable = subject.clone();
         let stream = observable.into_stream();
 
-        let (checker, _) = Checker::from_stream(stream);
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         subject.on_next(111);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
         subject.on_termination(Termination::<Infallible>::Completed);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
     });
@@ -56,25 +51,26 @@ fn test_completed() {
 
 #[test]
 fn test_completed_lazy_subscription() {
-    block_on(async {
-        let subscribed = Arc::new(Mutex::new(false));
+    block_on(|runtime| async move {
+        let subscribed = Shared::new(Mutable::new(false));
         let subscribed_cloned = subscribed.clone();
         let observable = Create::new(move |mut observer| {
-            *subscribed_cloned.lock().unwrap() = true;
+            *subscribed_cloned.lock_mut() = true;
             observer.on_next(111);
             observer.on_termination(Termination::Completed);
             Subscription::new_none_disposal()
         });
 
         let stream = observable.into_stream();
-        assert!(!*subscribed.lock().unwrap());
+        assert!(!*subscribed.lock_ref());
 
-        sleep(Duration::from_millis(10)).await;
-        assert!(!*subscribed.lock().unwrap());
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert!(!*subscribed.lock_ref());
 
-        let (checker, _) = Checker::<_, Infallible>::from_stream(stream);
-        sleep(Duration::from_millis(10)).await;
-        assert!(*subscribed.lock().unwrap());
+        let (checker, _subscription) =
+            Checker::<_, Infallible>::from_stream(stream, runtime.clone());
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert!(*subscribed.lock_ref());
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
     });
@@ -82,19 +78,19 @@ fn test_completed_lazy_subscription() {
 
 #[test]
 fn test_completed_without_next() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
 
         // Custom operations
         let stream = observable.into_stream();
-        let (checker, _) = Checker::from_stream(stream);
-        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
+        runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_termination(Termination::Completed);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), []);
         assert!(checker.is_completed());
         assert!(channel_checker.is_completed());
@@ -103,34 +99,34 @@ fn test_completed_without_next() {
 
 #[test]
 fn test_unsubscribe() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
 
         // Custom operations
         let observable = subject.clone();
         let stream = observable.into_stream();
 
-        let (checker, disposal) = Checker::from_stream(stream);
+        let (checker, subscription) = Checker::from_stream(stream, runtime.clone());
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         subject.on_next(111);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
-        disposal.dispose();
-        sleep(Duration::from_millis(10)).await;
+        subscription.dispose();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_dropped());
     });
@@ -138,7 +134,7 @@ fn test_unsubscribe() {
 
 #[test]
 fn test_ref() {
-    block_on(async {
+    block_on(|runtime| async move {
         let value = 111;
         let mut subject = PublishSubject::default();
 
@@ -149,7 +145,7 @@ fn test_ref() {
         // Subscribe in the first time of poll.
         futures::select!(
             _ = stream.next().fuse() => {},
-            _ = sleep(Duration::from_millis(10)).fuse()=>{}
+            _ = runtime.sleep(Duration::from_millis(10)).fuse()=>{}
         );
 
         subject.on_next(&value);
@@ -163,7 +159,7 @@ fn test_ref() {
 
 #[test]
 fn test_mut_ref() {
-    block_on(async {
+    block_on(|_| async move {
         let mut value = 111;
 
         let observable = Create::new(|mut observer| {
@@ -189,54 +185,60 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let subject = PublishSubject::default();
 
         // Custom operations
         let observable = subject.clone();
 
-        let stream = spawn(async move { observable.into_stream() })
+        let stream = runtime
+            .spawn(async move { observable.into_stream() })
             .await
             .unwrap();
 
-        let (checker, _) = spawn(async move { Checker::from_stream(stream) })
+        let runtime_cloned = runtime.clone();
+        let (checker, _subscription) = runtime
+            .spawn(async move { Checker::from_stream(stream, runtime_cloned) })
             .await
             .unwrap();
 
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(111);
-        })
-        .await
-        .unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(111);
+            })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(222);
-            subject_cloned.on_next(333);
-        })
-        .await
-        .unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(222);
+                subject_cloned.on_next(333);
+            })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
-        spawn(async move {
-            subject.on_termination(Termination::Completed);
-        })
-        .await
-        .unwrap();
-        sleep(Duration::from_millis(10)).await;
+        runtime
+            .spawn(async move {
+                subject.on_termination(Termination::Completed);
+            })
+            .await
+            .unwrap();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
     });
@@ -244,54 +246,54 @@ fn test_async() {
 
 #[test]
 fn test_without_convenient_api() {
-    block_on(async {
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
 
         // Custom operations
         let observable = subject.clone();
         let stream = ObservableStream::new(observable);
 
-        let (checker, _) = Checker::from_stream(stream);
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
 
         subject.on_next(111);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
 
         subject.on_next(222);
         subject.on_next(333);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_active());
 
         subject.on_termination(Termination::<Infallible>::Completed);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert!(checker.is_completed());
     });
 }
 #[test]
 fn test_complete_after_next() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
 
         // Custom operations
         let stream = observable.into_stream();
-        let (checker, _) = Checker::from_stream(stream);
-        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
+        runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_next(111);
         sender.on_termination(Termination::Completed);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_completed());
     });
@@ -299,21 +301,21 @@ fn test_complete_after_next() {
 
 #[test]
 fn test_unsub_after_next() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
 
         // Custom operations
         let stream = observable.into_stream();
-        let (checker, subscription) = Checker::from_stream(stream);
-        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        let (checker, subscription) = Checker::from_stream(stream, runtime.clone());
+        runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_next(111);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         subscription.dispose();
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_dropped());
     });
@@ -321,21 +323,21 @@ fn test_unsub_after_next() {
 
 #[test]
 fn test_unsub_after_completed() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
 
         // Custom operations
         let stream = observable.into_stream();
-        let (checker, subscription) = Checker::from_stream(stream);
-        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        let (checker, subscription) = Checker::from_stream(stream, runtime.clone());
+        runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_termination(Termination::Completed);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         subscription.dispose();
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), []);
         assert!(checker.is_completed());
     });
@@ -343,19 +345,19 @@ fn test_unsub_after_completed() {
 
 #[test]
 fn test_undisposed_schedule() {
-    block_on(async {
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
 
         // Custom operations
         let stream = observable.into_stream();
-        let (checker, _) = Checker::from_stream(stream);
-        sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
+        runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());
 
         sender.on_next(111);
-        sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert!(checker.is_active());
         assert!(channel_checker.is_subscribed());

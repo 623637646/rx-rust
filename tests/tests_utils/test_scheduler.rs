@@ -1,58 +1,59 @@
-use crate::tests_utils::test_runtime::{sleep, spawn};
+use crate::tests_utils::test_runtime::TestRuntime;
 use educe::Educe;
 use rx_rust::{
     scheduler::Scheduler,
     subscription::disposable::{AutoDisposal, CallbackDisposal},
+    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::time::Duration;
 
-#[derive(Educe)]
-#[educe(Debug, Clone)]
-pub(crate) struct TestScheduler;
-
-impl Scheduler for TestScheduler {
-    fn schedule_future<FU>(
+impl Scheduler for TestRuntime {
+    fn schedule_future(
         &self,
-        future: FU,
-        result_callback: impl FnOnce(FU::Output) + Send + 'static,
-    ) -> AutoDisposal<'static>
-    where
-        FU: Future + Send + 'static,
-    {
+        future: impl Future<Output = ()> + NecessarySend + 'static,
+    ) -> AutoDisposal<'static> {
         let entry = EntryExitChecker::enter();
-
         let entry_cloned = entry.clone();
-        let handle = spawn(async move {
-            result_callback(future.await);
+        let future = async move {
+            future.await;
             entry_cloned.exit();
-        });
-
-        let entry_cloned = entry.clone();
+        };
+        let handle = self.spawn(future);
         AutoDisposal::new(CallbackDisposal::new(move || {
             handle.abort();
-            entry_cloned.exit();
+            entry.exit();
         }))
     }
 
-    fn sleep(duration: Duration) -> impl Future + Send {
-        sleep(duration)
+    async fn sleep(&self, duration: Duration) {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "single-threaded")] {
+                match &self {
+                    TestRuntime::FuturesLocalPool(_, spawner) => spawner.sleep(duration).await,
+                };
+            } else {
+                use rx_rust::scheduler::async_std_scheduler::AsyncStdScheduler;
+                match &self {
+                    TestRuntime::FuturesThreadPool(pool) => pool.sleep(duration).await,
+                    TestRuntime::Tokio => tokio::runtime::Handle::current().sleep(duration).await,
+                    TestRuntime::AsyncStd => AsyncStdScheduler.sleep(duration).await,
+                };
+            }
+        }
     }
 }
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-struct EntryExitChecker(Arc<Mutex<Boom>>);
+struct EntryExitChecker(Shared<Mutable<Boom>>);
 
 impl EntryExitChecker {
     fn enter() -> Self {
-        Self(Arc::new(Mutex::new(Boom(false))))
+        Self(Shared::new(Mutable::new(Boom(false))))
     }
 
     fn exit(&self) {
-        self.0.lock().unwrap().0 = true;
+        self.0.lock_mut().0 = true;
     }
 }
 

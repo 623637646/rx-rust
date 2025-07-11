@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::test_runtime::{block_on, spawn};
+use crate::tests_utils::test_runtime::block_on;
 use rx_rust::observable::Observable;
 use rx_rust::observable::observable_ext::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
@@ -8,8 +8,8 @@ use rx_rust::subject::Subject;
 use rx_rust::subject::replay_subject::ReplaySubject;
 use rx_rust::subscription::Subscription;
 use rx_rust::subscription::disposable::Disposable;
+use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use std::convert::Infallible;
-use std::sync::{Arc, Mutex};
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
 
@@ -614,7 +614,7 @@ fn test_ref() {
 
 #[test]
 fn test_async() {
-    block_on(async {
+    block_on(|runtime| async move {
         let subject = ReplaySubject::new(None);
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
@@ -623,7 +623,8 @@ fn test_async() {
         let observable = subject.clone();
 
         let observable_cloned = observable.clone();
-        let _subscription_1 = spawn(async move { observable_cloned.subscribe(observer_1) })
+        let _subscription_1 = runtime
+            .spawn(async move { observable_cloned.subscribe(observer_1) })
             .await
             .unwrap();
         let subject_cloned = subject.clone();
@@ -641,18 +642,20 @@ fn test_async() {
         assert!(subject.terminated().is_none());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(111);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(111);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker_1.values(), [111]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), []);
         assert!(checker_2.is_active());
         assert!(subject.terminated().is_none());
 
-        let _subscription_2 = spawn(async move { observable.subscribe(observer_2) })
+        let _subscription_2 = runtime
+            .spawn(async move { observable.subscribe(observer_2) })
             .await
             .unwrap();
         assert_eq!(checker_1.values(), [111]);
@@ -662,11 +665,12 @@ fn test_async() {
         assert!(subject.terminated().is_none());
 
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(222);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(222);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker_1.values(), [111, 222]);
         assert!(checker_1.is_active());
         assert_eq!(checker_2.values(), [111, 222]);
@@ -674,11 +678,12 @@ fn test_async() {
         assert!(subject.terminated().is_none());
 
         let subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_termination(Termination::Completed);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_termination(Termination::Completed);
+            })
+            .await
+            .unwrap();
         assert_eq!(checker_1.values(), [111, 222]);
         assert!(checker_1.is_completed());
         assert_eq!(checker_2.values(), [111, 222]);
@@ -687,17 +692,19 @@ fn test_async() {
 
         // on_next and on_termination after termination
         let mut subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_next(333);
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(333);
+            })
+            .await
+            .unwrap();
         let subject_cloned = subject.clone();
-        spawn(async move {
-            subject_cloned.on_termination(Termination::Error("error"));
-        })
-        .await
-        .unwrap();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_termination(Termination::Error("error"));
+            })
+            .await
+            .unwrap();
         assert_eq!(checker_1.values(), [111, 222]);
         assert!(checker_1.is_completed());
         assert_eq!(checker_2.values(), [111, 222]);
@@ -707,7 +714,8 @@ fn test_async() {
         // subscribe after termination
         let (checker, observer) = Checker::new();
         let subject_cloned = subject.clone();
-        let _subscription = spawn(async move { subject_cloned.subscribe(observer) })
+        let _subscription = runtime
+            .spawn(async move { subject_cloned.subscribe(observer) })
             .await
             .unwrap();
         assert_eq!(checker.values(), [111, 222]);
@@ -836,13 +844,13 @@ fn test_unsub_on_next() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_next
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable
             .clone()
             .hook_on_next(move |observer, value| {
-                if let Some(sub) = { sub_cloned.lock().unwrap().take() } {
+                if let Some(sub) = { sub_cloned.lock_mut().take() } {
                     sub.dispose();
                 }
                 observer.on_next(value);
@@ -851,13 +859,13 @@ fn test_unsub_on_next() {
     );
 
     // unsubscribe after on_next
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable
             .hook_on_next(move |observer, value| {
                 observer.on_next(value);
-                if let Some(sub) = { sub_cloned.lock().unwrap().take() } {
+                if let Some(sub) = { sub_cloned.lock_mut().take() } {
                     sub.dispose();
                 }
             })
@@ -905,26 +913,26 @@ fn test_unsub_on_completed() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
     );
 
     // unsubscribe after on_termination
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
     );
@@ -970,26 +978,26 @@ fn test_unsub_on_error() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
     );
 
     // unsubscribe after on_termination
-    let sub = Arc::new(Mutex::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock().unwrap() = Some(
+    *sub.lock_mut() = Some(
         observable
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                { sub_cloned.lock().unwrap().take() }.unwrap().dispose();
+                { sub_cloned.lock_mut().take() }.unwrap().dispose();
             })
             .subscribe(observer_3),
     );
