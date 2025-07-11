@@ -7,20 +7,6 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// This is an observable that emits a single value then completes.
-///
-/// # Example
-/// ```rust
-/// use rx_rust::operators::creating::just::Just;
-/// use rx_rust::observable::;
-/// use std::convert::Infallible;
-/// use rx_rust::observer::Termination;
-/// let observable = Just::new(123);
-/// observable.subscribe_with_callback(
-///     |value| println!("Next value: {}", value),
-///     |termination| println!("Termination event: {:?}", termination)
-/// );
-/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Just<T>(T);

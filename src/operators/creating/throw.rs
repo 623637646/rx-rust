@@ -7,20 +7,6 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// This is an observable that emits an error.
-///
-/// # Example
-/// ```rust
-/// use rx_rust::operators::creating::throw::Throw;
-/// use rx_rust::observable::;
-/// use std::convert::Infallible;
-/// use rx_rust::observer::Termination;
-/// let observable = Throw::new("My error");
-/// observable.subscribe_with_callback(
-///     |_| {},
-///     |termination| println!("Termination event: {:?}", termination)
-/// );
-/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Throw<E>(E);

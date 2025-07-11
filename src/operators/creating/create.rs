@@ -6,37 +6,6 @@ use crate::{
 };
 use educe::Educe;
 
-/// The `Create` struct is an implementation of the `Observable` trait that allows creating an observable
-/// from a custom subscription function. The subscription function is provided by the user and is responsible
-/// for emitting values and termination events to the observer.
-///
-/// # Type Parameters
-///
-/// * `F` - The type of the subscription function.
-///
-/// The `builder` function is called when an observer subscribes to the observable. It receives
-/// a `BoxedObserver` which it can use to emit values and termination events. The function should return a
-/// `Subscription` which can be used to manage the subscription.
-///
-/// # Example
-/// ```rust
-/// use rx_rust::observable::;
-/// use rx_rust::observer::Observer;
-/// use rx_rust::subscription::Subscription;
-/// use rx_rust::operators::creating::create::Create;
-/// use rx_rust::observer::Termination;
-/// let observable = Create::new(|mut observer| {
-///     observer.on_next(1);
-///     observer.on_next(2);
-///     observer.on_next(3);
-///     observer.on_termination(Termination::Completed);
-///     Subscription::new_none_disposal()
-/// });
-/// observable.subscribe_with_callback(
-///     |value| println!("value: {}", value),
-///     |termination: Termination<String>| println!("termination: {:?}", termination),
-/// );
-/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Create<F>(F);
