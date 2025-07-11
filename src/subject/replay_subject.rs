@@ -56,7 +56,6 @@ where
             let values: Vec<_> = self.values.lock_ref().iter().cloned().collect();
             for value in values {
                 observer.on_next(value);
-                let _a = self.values.lock_mut();
             }
             self.publish_subject.subscribe(observer)
         }
