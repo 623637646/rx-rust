@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -6,15 +7,12 @@ use crate::{
         Subscription,
         disposable::{Disposable, SharedDisposal},
     },
-    utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
+    utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
 use std::{
     marker::PhantomData,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 #[derive(Educe)]
@@ -57,13 +55,13 @@ where
     OE1: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let on_going_sub = Arc::new(Mutex::new(None));
+            let on_going_sub = Shared::new(Mutable::new(None));
             let observer = SwitchObserver {
-                observer: Arc::new(Mutex::new(Some(observer))),
+                observer: Shared::new(Mutable::new(Some(observer))),
                 on_going_sub: on_going_sub.clone(),
-                completed: Arc::new(AtomicBool::new(false)),
+                completed: Shared::new(AtomicBool::new(false)),
                 _marker: PhantomData,
             };
             self.source.subscribe(observer) + SharedDisposal::new(on_going_sub)
@@ -72,15 +70,15 @@ where
 }
 
 struct SwitchObserver<'sub, T, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    on_going_sub: Arc<Mutex<Option<Subscription<'sub>>>>,
-    completed: Arc<AtomicBool>,
+    observer: Shared<Mutable<Option<OR>>>,
+    on_going_sub: Shared<Mutable<Option<Subscription<'sub>>>>,
+    completed: Shared<AtomicBool>,
     _marker: MarkerType<T>,
 }
 
 impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for SwitchObserver<'sub, T, OR>
 where
-    OR: Observer<T, E> + Send + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
@@ -88,7 +86,7 @@ where
         let observer = self.observer.clone();
         let completed = self.completed.clone();
         let on_going_sub = self.on_going_sub.clone();
-        let terminated = Arc::new(AtomicBool::new(false));
+        let terminated = Shared::new(AtomicBool::new(false));
         let terminated_cloned = terminated.clone();
 
         let observer = SwitchInnerObserver {
@@ -98,15 +96,15 @@ where
                 match termination {
                     Termination::Completed => {
                         if completed.load(Ordering::SeqCst) {
-                            if let Some(observer) = { observer.lock().unwrap().take() } {
+                            if let Some(observer) = { observer.lock_mut().take() } {
                                 observer.on_termination(Termination::Completed);
                             }
                         } else {
-                            on_going_sub.lock().unwrap().take();
+                            on_going_sub.lock_mut().take();
                         }
                     }
                     Termination::Error(_) => {
-                        if let Some(observer) = { observer.lock().unwrap().take() } {
+                        if let Some(observer) = { observer.lock_mut().take() } {
                             observer.on_termination(termination);
                         }
                     }
@@ -115,10 +113,10 @@ where
         };
         let sub = value.subscribe(observer);
         if !terminated.load(Ordering::SeqCst) {
-            if let Some(sub) = { self.on_going_sub.lock().unwrap().replace(sub) } {
+            if let Some(sub) = { self.on_going_sub.lock_mut().replace(sub) } {
                 sub.dispose();
             }
-        } else if let Some(sub) = { self.on_going_sub.lock().unwrap().take() } {
+        } else if let Some(sub) = { self.on_going_sub.lock_mut().take() } {
             sub.dispose();
         }
     }
@@ -127,14 +125,14 @@ where
         match termination {
             Termination::Completed => {
                 self.completed.store(true, Ordering::SeqCst);
-                if self.on_going_sub.lock().unwrap().is_none() {
-                    if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                if self.on_going_sub.lock_ref().is_none() {
+                    if let Some(observer) = { self.observer.lock_mut().take() } {
                         observer.on_termination(Termination::Completed);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                if let Some(observer) = { self.observer.lock_mut().take() } {
                     observer.on_termination(termination);
                 }
             }
@@ -143,7 +141,7 @@ where
 }
 
 struct SwitchInnerObserver<OR, F> {
-    observer: Arc<Mutex<Option<OR>>>,
+    observer: Shared<Mutable<Option<OR>>>,
     termination_callback: F,
 }
 
@@ -153,7 +151,7 @@ where
     F: FnOnce(Termination<E>),
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+        if let Some(observer) = self.observer.lock_mut().as_mut() {
             observer.on_next(value);
         }
     }

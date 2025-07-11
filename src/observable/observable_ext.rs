@@ -26,7 +26,7 @@ use crate::{
         others::{
             hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination, map_infallible_to_error::MapInfallibleToError,
-            map_infallible_to_value::MapInfallibleToValue, observable_stream::ObservableStream,
+            map_infallible_to_value::MapInfallibleToValue,
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
@@ -46,8 +46,11 @@ use crate::{
         async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
     },
     subscription::Subscription,
+    utils::types::NecessarySend,
 };
-use std::{convert::Infallible, num::NonZeroUsize, time::Duration};
+use std::{num::NonZeroUsize, time::Duration};
+#[cfg(feature = "futures")]
+use {crate::operators::others::observable_stream::ObservableStream, std::convert::Infallible};
 
 pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     fn buffer<OE1>(self, boundary: OE1) -> Buffer<Self, OE1>
@@ -275,11 +278,12 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        Self: Send + 'oe,
+        Self: NecessarySend + 'oe,
     {
         BoxedObservable::new(self)
     }
 
+    #[cfg(feature = "futures")]
     fn into_stream(self) -> ObservableStream<'sub, T, Self>
     where
         Self: Observable<'or, 'sub, T, Infallible>,
@@ -408,8 +412,8 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        FN: FnMut(T) + Send + 'or,
-        FT: FnOnce(Termination<E>) + Send + 'or,
+        FN: FnMut(T) + NecessarySend + 'or,
+        FT: FnOnce(Termination<E>) + NecessarySend + 'or,
     {
         self.subscribe(CallbackObserver::new(on_next, on_termination))
     }

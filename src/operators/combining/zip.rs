@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -5,10 +6,7 @@ use crate::{
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-};
+use std::collections::VecDeque;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -29,16 +27,19 @@ impl<OE1, OE2> Zip<OE1, OE2> {
 
 impl<'or, 'sub, T1, T2, E, OE1, OE2> Observable<'or, 'sub, (T1, T2), E> for Zip<OE1, OE2>
 where
-    T1: Send + 'or,
-    T2: Send + 'or,
+    T1: NecessarySend + 'or,
+    T2: NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T1, E>,
     OE2: Observable<'or, 'sub, T2, E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<(T1, T2), E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<(T1, T2), E> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Arc::new(Mutex::new(Some(observer)));
-            let buffer = Arc::new(Mutex::new(ZipObserverBufferState::None));
+            let observer = Shared::new(Mutable::new(Some(observer)));
+            let buffer = Shared::new(Mutable::new(ZipObserverBufferState::None));
             let observer_1 = ZipObserver1 {
                 observer: observer.clone(),
                 buffer: buffer.clone(),
@@ -58,8 +59,8 @@ enum ZipObserverBufferState<T1, T2> {
 }
 
 struct ZipObserver1<T1, T2, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    buffer: Arc<Mutex<ZipObserverBufferState<T1, T2>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    buffer: Shared<Mutable<ZipObserverBufferState<T1, T2>>>,
 }
 
 impl<T1, T2, E, OR> Observer<T1, E> for ZipObserver1<T1, T2, OR>
@@ -67,8 +68,8 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, value: T1) {
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
-            let mut lock = self.buffer.lock().unwrap();
+        if let Some(observer) = self.observer.lock_mut().as_mut() {
+            let mut lock = self.buffer.lock_mut();
             match &mut *lock {
                 ZipObserverBufferState::None => {
                     *lock = ZipObserverBufferState::One(VecDeque::from([value]))
@@ -89,15 +90,15 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(observer) = { self.observer.lock_mut().take() } {
             observer.on_termination(termination);
         }
     }
 }
 
 struct ZipObserver2<T1, T2, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    buffer: Arc<Mutex<ZipObserverBufferState<T1, T2>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    buffer: Shared<Mutable<ZipObserverBufferState<T1, T2>>>,
 }
 
 impl<T1, T2, E, OR> Observer<T2, E> for ZipObserver2<T1, T2, OR>
@@ -105,8 +106,8 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, value: T2) {
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
-            let mut lock = self.buffer.lock().unwrap();
+        if let Some(observer) = self.observer.lock_mut().as_mut() {
+            let mut lock = self.buffer.lock_mut();
             match &mut *lock {
                 ZipObserverBufferState::None => {
                     *lock = ZipObserverBufferState::Two(VecDeque::from([value]))
@@ -127,7 +128,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(observer) = { self.observer.lock_mut().take() } {
             observer.on_termination(termination);
         }
     }

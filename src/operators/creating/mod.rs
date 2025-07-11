@@ -4,6 +4,7 @@ pub mod empty;
 pub mod from_future;
 pub mod from_iter;
 pub mod from_result;
+#[cfg(feature = "futures")]
 pub mod from_stream;
 pub mod interval;
 pub mod just;

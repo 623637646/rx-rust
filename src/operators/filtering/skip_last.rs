@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -21,10 +22,10 @@ impl<OE> SkipLast<OE> {
 
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for SkipLast<OE>
 where
-    T: Send + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.source.subscribe(SkipLastObserver {
             observer,
             count: self.count,

@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -21,10 +22,13 @@ impl<OE> BufferWithCount<OE> {
 
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, Vec<T>, E> for BufferWithCount<OE>
 where
-    T: Send + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<Vec<T>, E> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         let observer = BufferWithCountObserver {
             observer,
             values: Vec::default(),

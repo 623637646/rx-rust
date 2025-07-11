@@ -1,4 +1,5 @@
 use super::from_iter::FromIter;
+use crate::utils::types::NecessarySend;
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 use educe::Educe;
 use std::convert::Infallible;
@@ -20,7 +21,10 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Repeat<T>
 where
     T: Clone,
 {
-    fn subscribe(self, observer: impl Observer<T, Infallible> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, Infallible> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
     }
 }

@@ -1,4 +1,5 @@
 use super::from_iter::FromIter;
+use crate::utils::types::NecessarySend;
 use crate::{observable::Observable, observer::Observer, subscription::Subscription};
 use educe::Educe;
 use std::{convert::Infallible, ops::RangeBounds};
@@ -20,7 +21,10 @@ impl<'or, 'sub, T, I> Observable<'or, 'sub, T, Infallible> for Range<I>
 where
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, observer: impl Observer<T, Infallible> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, Infallible> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         FromIter::new(self.0).subscribe(observer)
     }
 }

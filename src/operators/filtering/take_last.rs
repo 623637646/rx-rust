@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -22,11 +23,11 @@ impl<OE> TakeLast<OE> {
 
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for TakeLast<OE>
 where
-    T: Send + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             self.source.subscribe(TakeLastObserver {
                 observer,

@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -5,7 +6,6 @@ use crate::{
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
-use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -26,16 +26,19 @@ impl<OE, OE1> Buffer<OE, OE1> {
 
 impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, Vec<T>, E> for Buffer<OE, OE1>
 where
-    T: Send + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<Vec<T>, E> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = BufferObserver {
-                observer: Arc::new(Mutex::new(Some(observer))),
-                values: Arc::new(Mutex::new(Vec::default())),
+                observer: Shared::new(Mutable::new(Some(observer))),
+                values: Shared::new(Mutable::new(Vec::default())),
             };
             let boundary = BoundaryObserver(observer.clone());
             let subscription_1 = self.boundary.subscribe(boundary);
@@ -48,8 +51,8 @@ where
 #[derive(Educe)]
 #[educe(Clone)]
 struct BufferObserver<T, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    values: Arc<Mutex<Vec<T>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    values: Shared<Mutable<Vec<T>>>,
 }
 
 impl<T, E, OR> Observer<T, E> for BufferObserver<T, OR>
@@ -57,14 +60,14 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.values.lock().unwrap().push(value);
+        self.values.lock_mut().push(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(mut observer) = { self.observer.lock_mut().take() } {
             match termination {
                 Termination::Completed => {
-                    let values = std::mem::take(&mut *self.values.lock().unwrap());
+                    let values = std::mem::take(&mut *self.values.lock_mut());
                     if !values.is_empty() {
                         observer.on_next(values);
                     }
@@ -83,8 +86,8 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, _: ()) {
-        if let Some(observer) = self.0.observer.lock().unwrap().as_mut() {
-            let values = std::mem::take(&mut *self.0.values.lock().unwrap());
+        if let Some(observer) = self.0.observer.lock_mut().as_mut() {
+            let values = std::mem::take(&mut *self.0.values.lock_mut());
             observer.on_next(values);
         }
     }

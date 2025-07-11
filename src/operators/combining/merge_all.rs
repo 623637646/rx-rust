@@ -1,17 +1,15 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     subscription::{Subscription, disposable::Disposable},
-    utils::{marker::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
+    utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
 use std::{
     marker::PhantomData,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
-    },
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 #[derive(Educe)]
@@ -54,13 +52,13 @@ where
     OE1: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let subscriptions = Arc::new(Mutex::new(Vec::new()));
+            let subscriptions = Shared::new(Mutable::new(Vec::new()));
             let observer = MergeAllObserver {
-                observer: Arc::new(Mutex::new(Some(observer))),
+                observer: Shared::new(Mutable::new(Some(observer))),
                 subscriptions: subscriptions.clone(),
-                pending_termination_count: Arc::new(AtomicUsize::new(1)),
+                pending_termination_count: Shared::new(AtomicUsize::new(1)),
                 _marker: PhantomData,
             };
             self.source.subscribe(observer) + MergeAllDisposal { subscriptions }
@@ -68,22 +66,22 @@ where
     }
 }
 
-type SubscriptionsType<'sub> = Arc<Mutex<Vec<(Subscription<'sub>, Arc<AtomicBool>)>>>;
+type SubscriptionsType<'sub> = Shared<Mutable<Vec<(Subscription<'sub>, Shared<AtomicBool>)>>>;
 
 struct MergeAllObserver<'sub, T, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
+    observer: Shared<Mutable<Option<OR>>>,
     subscriptions: SubscriptionsType<'sub>,
-    pending_termination_count: Arc<AtomicUsize>,
+    pending_termination_count: Shared<AtomicUsize>,
     _marker: MarkerType<T>,
 }
 
 impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for MergeAllObserver<'sub, T, OR>
 where
-    OR: Observer<T, E> + Send + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
 {
     fn on_next(&mut self, value: OE1) {
-        let terminated = Arc::new(AtomicBool::new(false));
+        let terminated = Shared::new(AtomicBool::new(false));
         let observer = MergeAllInnerObserver {
             observer: self.observer.clone(),
             pending_termination_count: self.pending_termination_count.clone(),
@@ -93,7 +91,7 @@ where
             .fetch_add(1, Ordering::SeqCst);
         let sub = value.subscribe(observer);
 
-        let mut lock = self.subscriptions.lock().unwrap();
+        let mut lock = self.subscriptions.lock_mut();
         // clean up terminated subscriptions
         lock.retain(|(_, terminated)| !terminated.load(Ordering::SeqCst));
         // add new subscription
@@ -106,13 +104,13 @@ where
                 self.pending_termination_count
                     .fetch_sub(1, Ordering::SeqCst);
                 if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
-                    if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                    if let Some(observer) = { self.observer.lock_mut().take() } {
                         observer.on_termination(termination);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                if let Some(observer) = { self.observer.lock_mut().take() } {
                     observer.on_termination(termination);
                 }
             }
@@ -121,9 +119,9 @@ where
 }
 
 struct MergeAllInnerObserver<OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    pending_termination_count: Arc<AtomicUsize>,
-    terminated: Arc<AtomicBool>,
+    observer: Shared<Mutable<Option<OR>>>,
+    pending_termination_count: Shared<AtomicUsize>,
+    terminated: Shared<AtomicBool>,
 }
 
 impl<T, E, OR> Observer<T, E> for MergeAllInnerObserver<OR>
@@ -131,7 +129,7 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+        if let Some(observer) = self.observer.lock_mut().as_mut() {
             observer.on_next(value);
         }
     }
@@ -143,13 +141,13 @@ where
                 self.pending_termination_count
                     .fetch_sub(1, Ordering::SeqCst);
                 if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
-                    if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                    if let Some(observer) = { self.observer.lock_mut().take() } {
                         observer.on_termination(termination);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                if let Some(observer) = { self.observer.lock_mut().take() } {
                     observer.on_termination(termination);
                 }
             }
@@ -163,6 +161,6 @@ struct MergeAllDisposal<'sub> {
 
 impl Disposable for MergeAllDisposal<'_> {
     fn dispose(self) {
-        self.subscriptions.lock().unwrap().clear();
+        self.subscriptions.lock_mut().clear();
     }
 }

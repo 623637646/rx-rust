@@ -1,61 +1,62 @@
-use crate::subscription::disposable::AutoDisposal;
-use futures::{Stream, stream::StreamExt};
-use std::time::Duration;
-
+#[cfg(feature = "async-std-scheduler")]
+pub mod async_std_scheduler;
+#[cfg(feature = "futures-local-pool")]
+pub mod local_pool_scheduler;
+#[cfg(feature = "futures-thread-pool")]
+pub mod thread_pool_scheduler;
 #[cfg(feature = "tokio-scheduler")]
 pub mod tokio_scheduler;
 
-/// This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
-pub trait Scheduler {
-    fn schedule_future<FU>(
-        &self,
-        future: FU,
-        result_callback: impl FnOnce(FU::Output) + Send + 'static,
-    ) -> AutoDisposal<'static>
-    where
-        FU: Future + Send + 'static;
+use crate::subscription::disposable::AutoDisposal;
+use crate::utils::types::NecessarySend;
+#[cfg(feature = "futures")]
+use futures::{Stream, stream::StreamExt};
+use std::time::Duration;
 
-    fn sleep(duration: Duration) -> impl Future + Send;
+/// This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
+pub trait Scheduler: Clone + NecessarySend + 'static {
+    fn schedule_future(
+        &self,
+        future: impl Future<Output = ()> + NecessarySend + 'static,
+    ) -> AutoDisposal<'static>;
+
+    fn sleep(&self, duration: Duration) -> impl Future<Output = ()> + NecessarySend;
 
     fn schedule(
         &self,
-        task: impl FnOnce() + Send + 'static,
+        task: impl FnOnce() + NecessarySend + 'static,
         delay: Option<Duration>,
     ) -> AutoDisposal<'static> {
-        self.schedule_future(
-            async move {
-                if let Some(delay) = delay {
-                    Self::sleep(delay).await;
-                }
-                task();
-            },
-            |_| {},
-        )
+        let this = self.clone();
+        self.schedule_future(async move {
+            if let Some(delay) = delay {
+                this.sleep(delay).await;
+            }
+            task();
+        })
     }
 
     fn schedule_recursive(
         &self,
-        mut task: impl FnMut(usize) -> Option<Duration> + Send + 'static,
+        mut task: impl FnMut(usize) -> Option<Duration> + NecessarySend + 'static,
         delay: Option<Duration>,
     ) -> AutoDisposal<'static> {
-        self.schedule_future(
-            async move {
-                if let Some(delay) = delay {
-                    Self::sleep(delay).await;
-                }
-                let mut count = 0;
-                while let Some(delay) = task(count) {
-                    Self::sleep(delay).await;
-                    count += 1;
-                }
-            },
-            |_| {},
-        )
+        let this = self.clone();
+        self.schedule_future(async move {
+            if let Some(delay) = delay {
+                this.sleep(delay).await;
+            }
+            let mut count = 0;
+            while let Some(delay) = task(count) {
+                this.sleep(delay).await;
+                count += 1;
+            }
+        })
     }
 
     fn schedule_period(
         &self,
-        mut task: impl FnMut(usize) -> bool + Send + 'static,
+        mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
         period: Duration,
         delay: Option<Duration>,
     ) -> AutoDisposal<'static> {
@@ -68,22 +69,20 @@ pub trait Scheduler {
         )
     }
 
+    #[cfg(feature = "futures")]
     fn schedule_stream<SM>(
         &self,
         mut stream: SM,
-        mut result_callback: impl FnMut(Option<SM::Item>) + Send + 'static,
+        mut result_callback: impl FnMut(Option<SM::Item>) + NecessarySend + 'static,
     ) -> AutoDisposal<'static>
     where
-        SM: Stream + Send + Unpin + 'static,
+        SM: Stream + NecessarySend + Unpin + 'static,
     {
-        self.schedule_future(
-            async move {
-                while let Some(item) = stream.next().await {
-                    result_callback(Some(item));
-                }
-                result_callback(None);
-            },
-            |_| {},
-        )
+        self.schedule_future(async move {
+            while let Some(item) = stream.next().await {
+                result_callback(Some(item));
+            }
+            result_callback(None);
+        })
     }
 }

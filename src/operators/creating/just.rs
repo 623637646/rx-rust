@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -38,7 +39,7 @@ impl<T> Just<T> {
 impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Just<T> {
     fn subscribe(
         self,
-        mut observer: impl Observer<T, Infallible> + Send + 'or,
+        mut observer: impl Observer<T, Infallible> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         observer.on_next(self.0);
         observer.on_termination(Termination::Completed);

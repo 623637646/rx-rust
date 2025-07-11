@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -13,7 +14,7 @@ pub struct Empty;
 impl<'or, 'sub> Observable<'or, 'sub, Infallible, Infallible> for Empty {
     fn subscribe(
         self,
-        observer: impl Observer<Infallible, Infallible> + Send + 'or,
+        observer: impl Observer<Infallible, Infallible> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         observer.on_termination(Termination::Completed);
         Subscription::new_none_disposal()

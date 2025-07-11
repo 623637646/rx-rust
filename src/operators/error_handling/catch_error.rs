@@ -1,14 +1,12 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::{Subscription, disposable::SharedDisposal},
-    utils::marker::MarkerType,
+    utils::types::MarkerType,
 };
 use educe::Educe;
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::marker::PhantomData;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -38,11 +36,11 @@ where
     E: 'or,
     OE: Observable<'or, 'sub, T, E0>,
     OE1: Observable<'or, 'sub, T, E>,
-    F: FnOnce(E0) -> OE1 + Send + 'or,
+    F: FnOnce(E0) -> OE1 + NecessarySend + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let sub = Arc::new(Mutex::new(None));
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+        let sub = Shared::new(Mutable::new(None));
         let onserver = CatchErrorObserver {
             observer,
             callback: self.callback,
@@ -56,13 +54,13 @@ where
 struct CatchErrorObserver<'sub, E, OR, F> {
     observer: OR,
     callback: F,
-    sub: Arc<Mutex<Option<Subscription<'sub>>>>,
+    sub: Shared<Mutable<Option<Subscription<'sub>>>>,
     _marker: MarkerType<E>,
 }
 
 impl<'or, 'sub, T, E0, E, OR, OE1, F> Observer<T, E0> for CatchErrorObserver<'sub, E, OR, F>
 where
-    OR: Observer<T, E> + Send + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
     F: FnOnce(E0) -> OE1,
 {
@@ -76,7 +74,7 @@ where
             Termination::Error(error) => {
                 let observable = (self.callback)(error);
                 let sub = observable.subscribe(self.observer);
-                self.sub.lock().unwrap().replace(sub);
+                self.sub.lock_mut().replace(sub);
             }
         }
     }

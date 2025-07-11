@@ -1,19 +1,19 @@
 use super::{Observable, ref_count_observable::RefCount};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{observer::Observer, subscription::Subscription};
 use educe::Educe;
-use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ConnectableObservable<OE, S> {
-    source: Arc<Mutex<Option<OE>>>,
+    source: Shared<Mutable<Option<OE>>>,
     subject: S,
 }
 
 impl<OE, S> ConnectableObservable<OE, S> {
     pub fn new(source: OE, subject: S) -> Self {
         Self {
-            source: Arc::new(Mutex::new(Some(source))),
+            source: Shared::new(Mutable::new(Some(source))),
             subject,
         }
     }
@@ -21,9 +21,9 @@ impl<OE, S> ConnectableObservable<OE, S> {
     pub fn connect<'or, 'sub, T, E>(self) -> Subscription<'sub>
     where
         OE: Observable<'or, 'sub, T, E>,
-        S: Observer<T, E> + Send + 'or,
+        S: Observer<T, E> + NecessarySend + 'or,
     {
-        { self.source.lock().unwrap().take() }
+        { self.source.lock_mut().take() }
             .expect("Already connected")
             .subscribe(self.subject)
     }
@@ -37,7 +37,7 @@ impl<'or, 'sub, T, E, OE, S> Observable<'or, 'sub, T, E> for ConnectableObservab
 where
     S: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.subject.subscribe(observer)
     }
 }

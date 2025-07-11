@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -25,9 +26,9 @@ impl<OE, F> Filter<OE, F> {
 impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for Filter<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&T) -> bool + Send + 'or,
+    F: FnMut(&T) -> bool + NecessarySend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = FilterObserver {
             observer,
             callback: self.callback,

@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -5,7 +6,6 @@ use crate::{
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
-use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -26,17 +26,20 @@ impl<OE1, OE2> CombineLatest<OE1, OE2> {
 
 impl<'or, 'sub, T1, T2, E, OE1, OE2> Observable<'or, 'sub, (T1, T2), E> for CombineLatest<OE1, OE2>
 where
-    T1: Clone + Send + 'or,
-    T2: Clone + Send + 'or,
+    T1: Clone + NecessarySend + 'or,
+    T2: Clone + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T1, E>,
     OE2: Observable<'or, 'sub, T2, E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<(T1, T2), E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<(T1, T2), E> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Arc::new(Mutex::new(Some(observer)));
-            let latest_1 = Arc::new(Mutex::new(None));
-            let latest_2 = Arc::new(Mutex::new(None));
+            let observer = Shared::new(Mutable::new(Some(observer)));
+            let latest_1 = Shared::new(Mutable::new(None));
+            let latest_2 = Shared::new(Mutable::new(None));
             let observer_1 = CombineLatestObserver1 {
                 observer: observer.clone(),
                 latest_1: latest_1.clone(),
@@ -55,9 +58,9 @@ where
 }
 
 struct CombineLatestObserver1<T1, T2, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    latest_1: Arc<Mutex<Option<T1>>>,
-    latest_2: Arc<Mutex<Option<T2>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    latest_1: Shared<Mutable<Option<T1>>>,
+    latest_2: Shared<Mutable<Option<T2>>>,
 }
 
 impl<T1, T2, E, OR> Observer<T1, E> for CombineLatestObserver1<T1, T2, OR>
@@ -67,25 +70,25 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, latest_1: T1) {
-        *self.latest_1.lock().unwrap() = Some(latest_1.clone());
-        if let Some(latest_2) = { self.latest_2.lock().unwrap().clone() } {
-            if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+        *self.latest_1.lock_mut() = Some(latest_1.clone());
+        if let Some(latest_2) = { self.latest_2.lock_ref().clone() } {
+            if let Some(observer) = self.observer.lock_mut().as_mut() {
                 observer.on_next((latest_1, latest_2))
             }
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(observer) = { self.observer.lock_mut().take() } {
             observer.on_termination(termination);
         }
     }
 }
 
 struct CombineLatestObserver2<T1, T2, OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    latest_1: Arc<Mutex<Option<T1>>>,
-    latest_2: Arc<Mutex<Option<T2>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    latest_1: Shared<Mutable<Option<T1>>>,
+    latest_2: Shared<Mutable<Option<T2>>>,
 }
 
 impl<T1, T2, E, OR> Observer<T2, E> for CombineLatestObserver2<T1, T2, OR>
@@ -95,16 +98,16 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, latest_2: T2) {
-        *self.latest_2.lock().unwrap() = Some(latest_2.clone());
-        if let Some(latest_1) = { self.latest_1.lock().unwrap().clone() } {
-            if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+        *self.latest_2.lock_mut() = Some(latest_2.clone());
+        if let Some(latest_1) = { self.latest_1.lock_ref().clone() } {
+            if let Some(observer) = self.observer.lock_mut().as_mut() {
                 observer.on_next((latest_1, latest_2))
             }
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(observer) = { self.observer.lock_mut().take() } {
             observer.on_termination(termination);
         }
     }

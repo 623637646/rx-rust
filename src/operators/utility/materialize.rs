@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Event, Observer, Termination},
@@ -22,7 +23,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<Event<T, E>, Infallible> + Send + 'or,
+        observer: impl Observer<Event<T, E>, Infallible> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         self.0.subscribe(MaterializeObserver(observer))
     }

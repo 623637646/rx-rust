@@ -1,10 +1,10 @@
 use super::{Observable, connectable_observable::ConnectableObservable};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observer::Observer,
     subscription::{Subscription, disposable::Disposable},
 };
 use educe::Educe;
-use std::sync::{Arc, Mutex};
 
 enum State<'sub> {
     Initialized,
@@ -16,14 +16,14 @@ enum State<'sub> {
 #[educe(Debug, Clone)]
 pub struct RefCount<'sub, OE, S> {
     source: ConnectableObservable<OE, S>,
-    state: Arc<Mutex<State<'sub>>>,
+    state: Shared<Mutable<State<'sub>>>,
 }
 
 impl<OE, S> RefCount<'_, OE, S> {
     pub fn new(source: ConnectableObservable<OE, S>) -> Self {
         Self {
             source,
-            state: Arc::new(Mutex::new(State::Initialized)),
+            state: Shared::new(Mutable::new(State::Initialized)),
         }
     }
 }
@@ -31,10 +31,10 @@ impl<OE, S> RefCount<'_, OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'or, 'sub, T, E> for RefCount<'sub, OE, S>
 where
     OE: Observable<'or, 'sub, T, E>,
-    S: Observable<'or, 'sub, T, E> + Observer<T, E> + Send + 'or + Clone,
+    S: Observable<'or, 'sub, T, E> + Observer<T, E> + NecessarySend + 'or + Clone,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
-        let mut state_lock = self.state.lock().unwrap();
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+        let mut state_lock = self.state.lock_mut();
         match &mut *state_lock {
             State::Initialized => {
                 _ = std::mem::replace(
@@ -51,12 +51,12 @@ where
 }
 
 struct RefCountDisposal<'sub> {
-    state: Arc<Mutex<State<'sub>>>,
+    state: Shared<Mutable<State<'sub>>>,
 }
 
 impl Disposable for RefCountDisposal<'_> {
     fn dispose(self) {
-        let mut state_lock = self.state.lock().unwrap();
+        let mut state_lock = self.state.lock_mut();
         match &mut *state_lock {
             State::Initialized => unreachable!(),
             State::Subscribed(count, _) => {

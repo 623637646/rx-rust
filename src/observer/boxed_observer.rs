@@ -1,10 +1,17 @@
 use super::{Event, Observer, Termination};
+use crate::utils::types::NecessarySend;
 
-/// https://stackoverflow.com/a/56447952/9315497
-pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + Send + 'or>);
+cfg_if::cfg_if! {
+    if #[cfg(feature = "single-threaded")] {
+        pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + 'or>);
+    } else {
+        /// https://stackoverflow.com/a/56447952/9315497
+        pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + Send + 'or>);
+    }
+}
 
 impl<'or, T, E> BoxedObserver<'or, T, E> {
-    pub fn new(observer: impl Observer<T, E> + Send + 'or) -> Self {
+    pub fn new(observer: impl Observer<T, E> + NecessarySend + 'or) -> Self {
         let mut observer = Some(observer);
         Self(Box::new(move |event| match event {
             Event::Next(value) => {

@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, boxed_observer::BoxedObserver},
@@ -27,7 +28,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnOnce(OE, BoxedObserver<'or, T, E>) -> Subscription<'sub>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         (self.callback)(self.source, BoxedObserver::new(observer))
     }
 }

@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::Observer,
@@ -19,11 +20,11 @@ impl<OE> Last<OE> {
 
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for Last<OE>
 where
-    T: Send + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.source.take_last(1).subscribe(observer)
     }
 }

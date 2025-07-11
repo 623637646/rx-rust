@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -8,11 +9,7 @@ use crate::{
     },
 };
 use educe::Educe;
-use std::{
-    num::NonZeroUsize,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{num::NonZeroUsize, time::Duration};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -44,15 +41,18 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
 
 impl<'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTimeOrCount<OE, S>
 where
-    T: Send + 'static,
+    T: NecessarySend + 'static,
     OE: Observable<'static, 'sub, T, E>,
-    S: Scheduler + Clone + Send + 'static,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
-    fn subscribe(self, observer: impl Observer<Vec<T>, E> + Send + 'static) -> Subscription<'sub> {
-        let timer = Arc::new(Mutex::new(None));
+    fn subscribe(
+        self,
+        observer: impl Observer<Vec<T>, E> + NecessarySend + 'static,
+    ) -> Subscription<'sub> {
+        let timer = Shared::new(Mutable::new(None));
         let buffer_observer = BufferWithTimeOrCountObserver {
-            observer: Arc::new(Mutex::new(Some(observer))),
-            values: Arc::new(Mutex::new(Vec::default())),
+            observer: Shared::new(Mutable::new(Some(observer))),
+            values: Shared::new(Mutable::new(Vec::default())),
             count: self.count,
             time_span: self.time_span,
             scheduler: self.scheduler,
@@ -66,30 +66,30 @@ where
 #[derive(Educe)]
 #[educe(Clone)]
 struct BufferWithTimeOrCountObserver<T, OR, S> {
-    observer: Arc<Mutex<Option<OR>>>,
-    values: Arc<Mutex<Vec<T>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    values: Shared<Mutable<Vec<T>>>,
     count: NonZeroUsize,
     time_span: Duration,
     scheduler: S,
-    timer: Arc<Mutex<Option<BoxedDisposal<'static>>>>,
+    timer: Shared<Mutable<Option<BoxedDisposal<'static>>>>,
 }
 
 impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
     fn setup_emit_timer<E>(&self, delay: Option<Duration>)
     where
-        T: Send + 'static,
-        OR: Observer<Vec<T>, E> + Send + 'static,
-        S: Scheduler + Clone + Send + 'static,
+        T: NecessarySend + 'static,
+        OR: Observer<Vec<T>, E> + NecessarySend + 'static,
+        S: Scheduler + Clone + NecessarySend + 'static,
     {
-        if self.observer.lock().unwrap().is_none() {
+        if self.observer.lock_ref().is_none() {
             return;
         }
         let self_cloned = self.clone();
         let disposal = self.scheduler.schedule(
             move || {
-                let mut lock = self_cloned.observer.lock().unwrap();
+                let mut lock = self_cloned.observer.lock_mut();
                 if let Some(observer) = &mut *lock {
-                    let values = std::mem::take(&mut *self_cloned.values.lock().unwrap());
+                    let values = std::mem::take(&mut *self_cloned.values.lock_mut());
                     observer.on_next(values);
                     drop(lock);
                     self_cloned.setup_emit_timer(Some(self_cloned.time_span));
@@ -97,11 +97,7 @@ impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
             },
             delay,
         );
-        let timer = self
-            .timer
-            .lock()
-            .unwrap()
-            .replace(BoxedDisposal::new(disposal));
+        let timer = self.timer.lock_mut().replace(BoxedDisposal::new(disposal));
         if let Some(timer) = timer {
             timer.dispose();
         }
@@ -110,14 +106,14 @@ impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
 
 impl<T, E, OR, S> Observer<T, E> for BufferWithTimeOrCountObserver<T, OR, S>
 where
-    T: Send + 'static,
-    OR: Observer<Vec<T>, E> + Send + 'static,
-    S: Scheduler + Clone + Send + 'static,
+    T: NecessarySend + 'static,
+    OR: Observer<Vec<T>, E> + NecessarySend + 'static,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let mut observer_lock = self.observer.lock().unwrap();
+        let mut observer_lock = self.observer.lock_mut();
         if let Some(observer) = &mut *observer_lock {
-            let mut values_lock = self.values.lock().unwrap();
+            let mut values_lock = self.values.lock_mut();
             values_lock.push(value);
             if values_lock.len() >= self.count.get() {
                 let values = std::mem::take(&mut *values_lock);
@@ -130,13 +126,13 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(timer) = { self.timer.lock().unwrap().take() } {
+        if let Some(timer) = { self.timer.lock_mut().take() } {
             timer.dispose();
         }
-        if let Some(mut observer) = { self.observer.lock().unwrap().take() } {
+        if let Some(mut observer) = { self.observer.lock_mut().take() } {
             match termination {
                 Termination::Completed => {
-                    let values = std::mem::take(&mut *self.values.lock().unwrap());
+                    let values = std::mem::take(&mut *self.values.lock_mut());
                     if !values.is_empty() {
                         observer.on_next(values);
                     }

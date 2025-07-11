@@ -1,8 +1,9 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
-    utils::marker::MarkerType,
+    utils::types::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -33,11 +34,11 @@ impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
 
 impl<'or, 'sub, T, T1, E, OE, F> Observable<'or, 'sub, T, E> for Reduce<T, T1, OE, F>
 where
-    T: Send + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T1, E>,
-    F: FnMut(T, T1) -> T + Send + 'or,
+    F: FnMut(T, T1) -> T + NecessarySend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = ReduceObserver {
             observer,
             value: Some(self.initial_value),

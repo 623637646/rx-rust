@@ -1,3 +1,4 @@
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -27,9 +28,9 @@ where
     T: 'or,
     E: Clone + 'or,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnOnce(Termination<E>) + Send + 'or,
+    F: FnOnce(Termination<E>) + NecessarySend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.source
             .hook_on_termination(move |observer, termination| {
                 observer.on_termination(termination.clone());

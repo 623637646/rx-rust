@@ -1,23 +1,23 @@
 use super::{Subject, publish_subject::PublishSubject};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subscription::Subscription,
 };
 use educe::Educe;
-use std::sync::{Arc, Mutex};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct AsyncSubject<'or, T, E> {
-    value: Arc<Mutex<Option<T>>>,
+    value: Shared<Mutable<Option<T>>>,
     publish_subject: PublishSubject<'or, T, E>,
 }
 
 impl<T, E> AsyncSubject<'_, T, E> {
     pub fn new() -> Self {
         Self {
-            value: Arc::new(Mutex::new(None)),
+            value: Shared::new(Mutable::new(None)),
             publish_subject: PublishSubject::default(),
         }
     }
@@ -32,14 +32,17 @@ impl<T, E> Default for AsyncSubject<'_, T, E> {
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for AsyncSubject<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + Send + 'sub,
+    E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
-    fn subscribe(self, mut observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, E> + NecessarySend + 'or,
+    ) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated() {
             match &terminated {
                 Termination::Completed => {
-                    if let Some(value) = { self.value.lock().unwrap().clone() } {
+                    if let Some(value) = { self.value.lock_ref().clone() } {
                         observer.on_next(value);
                     }
                 }
@@ -56,18 +59,18 @@ where
 impl<T, E> Observer<T, E> for AsyncSubject<'_, T, E>
 where
     T: Clone,
-    E: Clone + Send,
+    E: Clone + NecessarySend,
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
-            *self.value.lock().unwrap() = Some(value);
+            *self.value.lock_mut() = Some(value);
         }
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
         match &termination {
             Termination::Completed => {
-                if let Some(value) = { self.value.lock().unwrap().clone() } {
+                if let Some(value) = { self.value.lock_ref().clone() } {
                     self.publish_subject.on_next(value);
                 }
             }
@@ -80,7 +83,7 @@ where
 impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for AsyncSubject<'or, T, E>
 where
     T: Clone + 'sub,
-    E: Clone + Send + 'sub,
+    E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
     fn terminated(&self) -> Option<Termination<E>>

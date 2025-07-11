@@ -3,7 +3,7 @@ pub mod connectable_observable;
 pub mod observable_ext;
 pub mod ref_count_observable;
 
-use crate::{observer::Observer, subscription::Subscription};
+use crate::{observer::Observer, subscription::Subscription, utils::types::NecessarySend};
 
 /// The `Observable` trait represents a source of events that can be observed by an `Observer`.
 ///
@@ -15,7 +15,7 @@ use crate::{observer::Observer, subscription::Subscription};
 ///   We use `OR` generic type instead of this code:
 ///   ```text
 ///   pub trait Observable<T, E> {
-///       fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription;
+///       fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription;
 ///   }
 ///   ```
 ///   Because `Create` operator (or others) needs the `OR` generic type in the callback function.
@@ -34,5 +34,5 @@ pub trait Observable<'or, 'sub, T, E> {
     ///
     /// A `Subscription` which can be used to unsubscribe the observer.
     /// We use `Subscription` struct instead of trait like `impl Cancellable`, because we need to cancel the subscription when the `Subscription` is dropped. It's not possible to implement Drop for a trait object.
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub>;
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub>;
 }

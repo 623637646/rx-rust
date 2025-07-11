@@ -1,3 +1,4 @@
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -5,10 +6,7 @@ use crate::{
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -33,10 +31,10 @@ where
     OE2: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + Send + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Arc::new(Mutex::new(Some(observer)));
-            let one_is_completed = Arc::new(AtomicBool::new(false));
+            let observer = Shared::new(Mutable::new(Some(observer)));
+            let one_is_completed = Shared::new(AtomicBool::new(false));
             let onserver_1 = MergeObserver {
                 observer: observer.clone(),
                 one_is_completed: one_is_completed.clone(),
@@ -53,8 +51,8 @@ where
 }
 
 struct MergeObserver<OR> {
-    observer: Arc<Mutex<Option<OR>>>,
-    one_is_completed: Arc<AtomicBool>,
+    observer: Shared<Mutable<Option<OR>>>,
+    one_is_completed: Shared<AtomicBool>,
 }
 
 impl<T, E, OR> Observer<T, E> for MergeObserver<OR>
@@ -62,7 +60,7 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.observer.lock().unwrap().as_mut() {
+        if let Some(observer) = self.observer.lock_mut().as_mut() {
             observer.on_next(value);
         }
     }
@@ -71,7 +69,7 @@ where
         match termination {
             Termination::Completed => {
                 if self.one_is_completed.load(Ordering::SeqCst) {
-                    if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                    if let Some(observer) = { self.observer.lock_mut().take() } {
                         observer.on_termination(termination);
                     }
                 } else {
@@ -79,7 +77,7 @@ where
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock().unwrap().take() } {
+                if let Some(observer) = { self.observer.lock_mut().take() } {
                     observer.on_termination(termination);
                 }
             }
