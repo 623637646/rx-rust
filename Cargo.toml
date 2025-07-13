@@ -14,7 +14,6 @@ futures-timer = { version = "3.0.3", optional = true }
 
 [dev-dependencies]
 pin-project = "1.1.10"
-automod = "1.0.15"
 futures = { version = "0.3.31", features = ["thread-pool"] }
 tokio = { version = "1.40.0", features = ["rt-multi-thread"] }
 
