@@ -1,12 +1,12 @@
+use crate::disposable::Disposable;
+use crate::disposable::boxed_disposal::BoxedDisposal;
+use crate::disposable::shared_disposal::SharedDisposal;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
-    subscription::{
-        Subscription,
-        disposable::{BoxedDisposal, Disposable, SharedDisposal},
-    },
 };
 use educe::Educe;
 use std::time::Duration;

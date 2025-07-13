@@ -1,12 +1,12 @@
 use crate::utils::types::NecessarySend;
 use crate::{
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
     subject::{
         publish_subject::PublishSubject, subject_ext::SubjectExt,
         subject_observable::SubjectObservable,
     },
-    subscription::Subscription,
     utils::types::MarkerType,
 };
 use educe::Educe;

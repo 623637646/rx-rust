@@ -1,9 +1,9 @@
 use super::map::Map;
 use crate::utils::types::NecessarySend;
 use crate::{
+    disposable::subscription::Subscription,
     observable::{Observable, observable_ext::ObservableExt},
     observer::Observer,
-    subscription::Subscription,
     utils::types::MarkerType,
 };
 use educe::Educe;

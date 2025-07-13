@@ -1,8 +1,8 @@
 use crate::tests_utils::test_runtime::TestRuntime;
 use educe::Educe;
 use rx_rust::{
+    disposable::{auto_disposal::AutoDisposal, callback_disposal::CallbackDisposal},
     scheduler::Scheduler,
-    subscription::disposable::{AutoDisposal, CallbackDisposal},
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 use std::time::Duration;

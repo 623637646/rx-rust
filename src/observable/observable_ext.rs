@@ -3,6 +3,7 @@ use super::{
     ref_count_observable::RefCount,
 };
 use crate::{
+    disposable::subscription::Subscription,
     observer::{
         Observer, Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver,
     },
@@ -45,7 +46,6 @@ use crate::{
     subject::{
         async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
     },
-    subscription::Subscription,
     utils::types::NecessarySend,
 };
 use std::{num::NonZeroUsize, time::Duration};

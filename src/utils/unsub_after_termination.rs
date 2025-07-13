@@ -1,9 +1,6 @@
 use crate::{
+    disposable::{Disposable, shared_disposal::SharedDisposal, subscription::Subscription},
     observer::{Observer, Termination},
-    subscription::{
-        Subscription,
-        disposable::{Disposable, SharedDisposal},
-    },
     utils::types::{Mutable, MutableHelper, Shared},
 };
 

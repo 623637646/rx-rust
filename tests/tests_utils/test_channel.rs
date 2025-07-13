@@ -1,8 +1,8 @@
 use educe::Educe;
 use rx_rust::{
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    subscription::Subscription,
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 

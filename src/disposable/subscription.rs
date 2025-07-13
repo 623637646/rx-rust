@@ -1,7 +1,7 @@
-pub mod disposable;
-
-use crate::utils::types::NecessarySend;
-use disposable::{AutoDisposal, CallbackDisposal, Disposable};
+use crate::{
+    disposable::{Disposable, auto_disposal::AutoDisposal, callback_disposal::CallbackDisposal},
+    utils::types::NecessarySend,
+};
 use std::ops::Add;
 
 /// Subscription is from Observable pattern, it is used to unsubscribe the observable.

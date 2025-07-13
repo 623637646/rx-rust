@@ -118,7 +118,7 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
 #[cfg(feature = "futures")]
 use {
     crate::tests_utils::test_runtime::TestRuntime, futures::Stream, futures::stream::StreamExt,
-    rx_rust::subscription::Subscription, std::convert::Infallible,
+    rx_rust::disposable::subscription::Subscription, std::convert::Infallible,
 };
 
 #[cfg(feature = "futures")]

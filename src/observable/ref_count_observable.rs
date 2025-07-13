@@ -1,9 +1,8 @@
 use super::{Observable, connectable_observable::ConnectableObservable};
+use crate::disposable::Disposable;
+use crate::disposable::subscription::Subscription;
+use crate::observer::Observer;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
-use crate::{
-    observer::Observer,
-    subscription::{Subscription, disposable::Disposable},
-};
 use educe::Educe;
 
 enum State<'sub> {

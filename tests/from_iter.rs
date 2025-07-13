@@ -3,10 +3,10 @@ mod tests_utils;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
+    disposable::Disposable,
     observable::{Observable, observable_ext::ObservableExt},
     observer::Termination,
     operators::creating::from_iter::FromIter,
-    subscription::disposable::Disposable,
 };
 use std::{convert::Infallible, time::Duration};
 use tests_utils::checker::Checker;

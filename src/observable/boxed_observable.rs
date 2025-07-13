@@ -1,6 +1,6 @@
 use super::{Observable, Observer};
 use crate::{
-    observer::boxed_observer::BoxedObserver, subscription::Subscription,
+    disposable::subscription::Subscription, observer::boxed_observer::BoxedObserver,
     utils::types::NecessarySend,
 };
 

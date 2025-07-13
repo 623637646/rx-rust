@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use rx_rust::subscription::{Subscription, disposable::Disposable};
+use rx_rust::disposable::{Disposable, subscription::Subscription};
 use rx_rust::utils::types::Shared;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tests_utils::test_struct::TestStruct;

@@ -1,5 +1,5 @@
 use super::Scheduler;
-use crate::subscription::disposable::AutoDisposal;
+use crate::disposable::auto_disposal::AutoDisposal;
 use crate::utils::types::NecessarySend;
 use educe::Educe;
 use futures::stream::{AbortHandle, Abortable};

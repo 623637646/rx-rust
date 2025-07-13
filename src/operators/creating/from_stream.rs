@@ -1,9 +1,9 @@
 use crate::utils::types::NecessarySend;
 use crate::{
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
-    subscription::Subscription,
 };
 use educe::Educe;
 use futures::Stream;

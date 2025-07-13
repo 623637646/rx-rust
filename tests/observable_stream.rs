@@ -4,6 +4,8 @@ mod tests_utils;
 
 use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};
 use futures::{FutureExt, StreamExt};
+use rx_rust::disposable::Disposable;
+use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
@@ -11,7 +13,6 @@ use rx_rust::{
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, others::observable_stream::ObservableStream},
     subject::publish_subject::PublishSubject,
-    subscription::{Subscription, disposable::Disposable},
 };
 use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};

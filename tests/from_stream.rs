@@ -6,9 +6,9 @@ use crate::tests_utils::test_runtime::block_on;
 use futures::{SinkExt, stream};
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
+    disposable::Disposable,
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::from_stream::FromStream,
-    subscription::disposable::Disposable,
 };
 use std::time::Duration;
 use tests_utils::checker::Checker;

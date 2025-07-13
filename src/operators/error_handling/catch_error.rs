@@ -1,8 +1,9 @@
+use crate::disposable::shared_disposal::SharedDisposal;
+use crate::disposable::subscription::Subscription;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
-    subscription::{Subscription, disposable::SharedDisposal},
     utils::types::MarkerType,
 };
 use educe::Educe;

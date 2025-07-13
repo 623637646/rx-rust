@@ -1,7 +1,7 @@
 use crate::{
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    subscription::Subscription,
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 use futures::Stream;

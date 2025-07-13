@@ -1,9 +1,9 @@
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
-    subscription::Subscription,
 };
 use educe::Educe;
 use std::{cmp::Ordering, num::NonZeroUsize};

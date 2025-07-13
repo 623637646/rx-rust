@@ -7,8 +7,7 @@ pub mod thread_pool_scheduler;
 #[cfg(feature = "tokio-scheduler")]
 pub mod tokio_scheduler;
 
-use crate::subscription::disposable::AutoDisposal;
-use crate::utils::types::NecessarySend;
+use crate::{disposable::auto_disposal::AutoDisposal, utils::types::NecessarySend};
 #[cfg(feature = "futures")]
 use futures::{Stream, stream::StreamExt};
 use std::time::Duration;

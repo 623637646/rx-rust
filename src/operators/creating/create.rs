@@ -1,8 +1,8 @@
 use crate::utils::types::NecessarySend;
 use crate::{
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, boxed_observer::BoxedObserver},
-    subscription::Subscription,
 };
 use educe::Educe;
 

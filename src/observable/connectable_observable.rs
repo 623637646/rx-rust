@@ -1,6 +1,6 @@
 use super::{Observable, ref_count_observable::RefCount};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
-use crate::{observer::Observer, subscription::Subscription};
+use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
 
 #[derive(Educe)]

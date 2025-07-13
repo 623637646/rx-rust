@@ -1,9 +1,9 @@
 use super::{Subject, publish_subject::PublishSubject};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    subscription::Subscription,
 };
 use educe::Educe;
 use std::collections::VecDeque;

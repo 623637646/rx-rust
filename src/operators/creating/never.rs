@@ -1,5 +1,5 @@
 use crate::utils::types::NecessarySend;
-use crate::{observable::Observable, observer::Observer, subscription::Subscription};
+use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
 use educe::Educe;
 use std::convert::Infallible;
 

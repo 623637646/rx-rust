@@ -1,10 +1,10 @@
 mod tests_utils;
 
+use rx_rust::disposable::Disposable;
+use rx_rust::disposable::subscription::Subscription;
 use rx_rust::observable::Observable;
 use rx_rust::observable::observable_ext::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
-use rx_rust::subscription::Subscription;
-use rx_rust::subscription::disposable::Disposable;
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use std::convert::Infallible;
 use tests_utils::checker::Checker;

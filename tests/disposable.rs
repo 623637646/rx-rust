@@ -1,6 +1,8 @@
 mod tests_utils;
 
-use rx_rust::subscription::disposable::{BoxedDisposal, CallbackDisposal, Disposable};
+use rx_rust::disposable::{
+    Disposable, boxed_disposal::BoxedDisposal, callback_disposal::CallbackDisposal,
+};
 use tests_utils::test_struct::TestStruct;
 
 #[test]

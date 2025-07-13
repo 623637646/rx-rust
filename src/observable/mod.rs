@@ -3,7 +3,9 @@ pub mod connectable_observable;
 pub mod observable_ext;
 pub mod ref_count_observable;
 
-use crate::{observer::Observer, subscription::Subscription, utils::types::NecessarySend};
+use crate::{
+    disposable::subscription::Subscription, observer::Observer, utils::types::NecessarySend,
+};
 
 /// The `Observable` trait represents a source of events that can be observed by an `Observer`.
 ///

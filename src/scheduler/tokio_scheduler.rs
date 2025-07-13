@@ -1,6 +1,6 @@
 use super::Scheduler;
 use crate::{
-    subscription::disposable::{AutoDisposal, Disposable},
+    disposable::{Disposable, auto_disposal::AutoDisposal},
     utils::types::NecessarySend,
 };
 use std::time::Duration;

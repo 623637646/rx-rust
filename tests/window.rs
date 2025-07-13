@@ -1,13 +1,14 @@
 mod tests_utils;
 
 use crate::tests_utils::test_runtime::block_on;
+use rx_rust::disposable::Disposable;
+use rx_rust::disposable::subscription::Subscription;
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, transforming::window::Window},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
-    subscription::{Subscription, disposable::Disposable},
 };
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};

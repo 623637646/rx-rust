@@ -4,12 +4,13 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::scheduler::Scheduler;
 use std::{convert::Infallible, time::Duration};
 
+use rx_rust::disposable::Disposable;
+use rx_rust::disposable::subscription::Subscription;
 use rx_rust::{
     observable::observable_ext::ObservableExt,
     observer::{Observer, Termination},
     operators::creating::{create::Create, just::Just},
     subject::publish_subject::PublishSubject,
-    subscription::{Subscription, disposable::Disposable},
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 

@@ -2,6 +2,8 @@ mod tests_utils;
 
 use crate::tests_utils::test_channel::test_channel;
 use crate::tests_utils::test_runtime::block_on;
+use rx_rust::disposable::Disposable;
+use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -11,7 +13,6 @@ use rx_rust::{
         filtering::ignore_elements::IgnoreElements,
     },
     subject::publish_subject::PublishSubject,
-    subscription::{Subscription, disposable::Disposable},
 };
 use std::convert::Infallible;
 use std::time::Duration;

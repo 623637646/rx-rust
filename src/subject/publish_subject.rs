@@ -1,9 +1,10 @@
 use super::Subject;
+use crate::disposable::Disposable;
+use crate::disposable::subscription::Subscription;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    subscription::{Subscription, disposable::Disposable},
 };
 use educe::Educe;
 use slotmap::{DefaultKey, DenseSlotMap};
