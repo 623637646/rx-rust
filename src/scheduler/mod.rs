@@ -1,8 +1,8 @@
 #[cfg(feature = "async-std-scheduler")]
 pub mod async_std_scheduler;
-#[cfg(feature = "futures-local-pool")]
+#[cfg(feature = "local-pool-scheduler")]
 pub mod local_pool_scheduler;
-#[cfg(feature = "futures-thread-pool")]
+#[cfg(feature = "thread-pool-scheduler")]
 pub mod thread_pool_scheduler;
 #[cfg(feature = "tokio-scheduler")]
 pub mod tokio_scheduler;

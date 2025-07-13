@@ -1,3 +1,5 @@
+#![cfg(feature = "futures")]
+
 mod tests_utils;
 
 use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};

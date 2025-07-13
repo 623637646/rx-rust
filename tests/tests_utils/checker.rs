@@ -1,16 +1,9 @@
-use crate::tests_utils::test_runtime::TestRuntime;
 use educe::Educe;
-use futures::Stream;
-use futures::stream::StreamExt;
 use rx_rust::{
     observer::{Observer, Termination},
-    subscription::Subscription,
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
-use std::{
-    convert::Infallible,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A helper struct for testing observables.
 #[derive(Educe)]
@@ -122,6 +115,13 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
     }
 }
 
+#[cfg(feature = "futures")]
+use {
+    crate::tests_utils::test_runtime::TestRuntime, futures::Stream, futures::stream::StreamExt,
+    rx_rust::subscription::Subscription, std::convert::Infallible,
+};
+
+#[cfg(feature = "futures")]
 impl<T> Checker<T, Infallible> {
     pub(crate) fn from_stream(
         mut stream: impl Stream<Item = T> + NecessarySend + Unpin + 'static,

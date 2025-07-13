@@ -5,56 +5,49 @@ use futures::{
     stream::AbortHandle,
 };
 use pin_project::pin_project;
-use rand::{
-    Rng,
-    distr::{Distribution, StandardUniform},
-    random,
-};
 use rx_rust::utils::types::NecessarySend;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "single-threaded")] {
+    if #[cfg(feature = "local-pool-scheduler")] {
+        use rx_rust::utils::types::{Shared, Mutable};
         use futures::executor::{LocalPool, LocalSpawner};
-        use rx_rust::utils::types::{Mutable, Shared, MutableHelper};
         #[derive(Educe)]
         #[educe(Debug, Clone)]
-        pub(crate) enum TestRuntime {
-            FuturesLocalPool(Shared<Mutable<LocalPool>>, LocalSpawner),
+        pub(crate) struct TestRuntime {
+            pool: Shared<Mutable<LocalPool>>,
+            pub(crate) spawner: LocalSpawner,
         }
-    } else {
-        use futures::executor::ThreadPool;
-        #[derive(Educe)]
-        #[educe(Debug, Clone)]
-        pub(crate) enum TestRuntime {
-            FuturesThreadPool(ThreadPool),
-            Tokio,
-            AsyncStd,
-        }
-    }
-}
-
-impl Distribution<TestRuntime> for StandardUniform {
-    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> TestRuntime {
-        cfg_if::cfg_if! {
-            if #[cfg(feature = "single-threaded")] {
-                match rng.random_range(0..=0) {
-                    0 => {
-                        let pool = LocalPool::new();
-                        let spawner = pool.spawner();
-                        TestRuntime::FuturesLocalPool(Shared::new(Mutable::new(pool)), spawner)
-                    }
-                    _ => unreachable!(),
-                }
-            } else {
-                match rng.random_range(0..=2) {
-                    0 => TestRuntime::FuturesThreadPool(ThreadPool::new().unwrap()),
-                    1 => TestRuntime::Tokio,
-                    2 => TestRuntime::AsyncStd,
-                    _ => unreachable!(),
+        impl Default for TestRuntime {
+            fn default() -> Self {
+                let pool = LocalPool::new();
+                let spawner = pool.spawner();
+                Self {
+                    pool: Shared::new(Mutable::new(pool)),
+                    spawner,
                 }
             }
         }
+    } else if #[cfg(feature = "thread-pool-scheduler")] {
+        use futures::executor::ThreadPool;
+        #[derive(Educe)]
+        #[educe(Debug, Clone)]
+        pub(crate) struct TestRuntime(pub(crate) ThreadPool);
+        impl Default for TestRuntime {
+            fn default() -> Self {
+                Self(ThreadPool::new().unwrap())
+            }
+        }
+    } else {
+        #[derive(Educe)]
+        #[educe(Debug, Clone)]
+        pub(crate) struct TestRuntime;
+        impl Default for TestRuntime {
+            fn default() -> Self {
+                Self
+            }
+        }
     }
+
 }
 
 impl TestRuntime {
@@ -74,26 +67,18 @@ impl TestRuntime {
         };
 
         cfg_if::cfg_if! {
-            if #[cfg(feature = "single-threaded")] {
-                match &self {
-                    TestRuntime::FuturesLocalPool(_, spawner) => {
-                        use futures::task::LocalSpawnExt;
-                        spawner.spawn_local(future).unwrap()
-                    }
-                }
-            } else {
+            if #[cfg(feature = "local-pool-scheduler")] {
+                use futures::task::LocalSpawnExt;
+                self.spawner.spawn_local(future).unwrap();
+            } else if #[cfg(feature = "thread-pool-scheduler")] {
                 use futures::task::SpawnExt;
-                match &self {
-                    TestRuntime::FuturesThreadPool(pool) => {
-                        pool.spawn(future).unwrap();
-                    }
-                    TestRuntime::Tokio => {
-                        tokio::runtime::Handle::current().spawn(future);
-                    }
-                    TestRuntime::AsyncStd => {
-                        async_std::task::spawn(future);
-                    }
-                };
+                self.0.spawn(future).unwrap();
+            } else if #[cfg(feature = "tokio-scheduler")] {
+                tokio::runtime::Handle::current().spawn(future);
+            } else if #[cfg(feature = "async-std-scheduler")] {
+                async_std::task::spawn(future);
+            } else {
+                _ = future;
             }
         }
 
@@ -101,42 +86,30 @@ impl TestRuntime {
     }
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "single-threaded")] {
-        pub(crate) fn block_on<FU>(body: impl FnOnce(TestRuntime) -> FU)
-        where
-            FU: Future<Output = ()> + 'static,
-        {
-            let runtime = random::<TestRuntime>();
+pub(crate) fn block_on<FU>(body: impl FnOnce(TestRuntime) -> FU)
+where
+    FU: Future<Output = ()> + 'static,
+{
+    let runtime: TestRuntime = Default::default();
 
-            match &runtime {
-                TestRuntime::FuturesLocalPool(local_pool, spawner) => {
-                    use futures::task::LocalSpawnExt;
-                    spawner.spawn_local(body(runtime.clone())).unwrap();
-                    local_pool.lock_mut().run();
-                }
-            }
-        }
-    } else {
-        pub(crate) fn block_on<FU>(body: impl FnOnce(TestRuntime) -> FU)
-        where
-            FU: Future<Output = ()>,
-        {
-            let runtime = random::<TestRuntime>();
-
-            match &runtime {
-                TestRuntime::FuturesThreadPool(_) => futures::executor::block_on(body(runtime)),
-                TestRuntime::Tokio => if random() {
-                    tokio::runtime::Builder::new_current_thread()
-                } else {
-                    tokio::runtime::Builder::new_multi_thread()
-                }
-                .enable_all()
-                .build()
-                .expect("Failed building the Runtime")
-                .block_on(body(runtime)),
-                TestRuntime::AsyncStd => async_std::task::block_on(body(runtime)),
-            }
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "local-pool-scheduler")] {
+            use futures::task::LocalSpawnExt;
+            use rx_rust::utils::types::MutableHelper;
+            runtime.spawner.spawn_local(body(runtime.clone())).unwrap();
+            runtime.pool.lock_mut().run();
+        } else if #[cfg(feature = "thread-pool-scheduler")] {
+            futures::executor::block_on(body(runtime));
+        } else if #[cfg(feature = "tokio-scheduler")] {
+            tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed building the Runtime")
+            .block_on(body(runtime));
+        } else if #[cfg(feature = "async-std-scheduler")] {
+            async_std::task::block_on(body(runtime));
+        } else {
+            _ = body(runtime);
         }
     }
 }
