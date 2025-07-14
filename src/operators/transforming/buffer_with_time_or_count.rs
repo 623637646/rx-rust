@@ -85,16 +85,19 @@ impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
             return;
         }
         let self_cloned = self.clone();
-        let disposal = self.scheduler.schedule(
-            move || {
+        let disposal = self.scheduler.schedule_period(
+            move |_| {
                 let mut lock = self_cloned.observer.lock_mut();
                 if let Some(observer) = &mut *lock {
                     let values = std::mem::take(&mut *self_cloned.values.lock_mut());
                     observer.on_next(values);
                     drop(lock);
-                    self_cloned.setup_emit_timer(Some(self_cloned.time_span));
+                    false
+                } else {
+                    true
                 }
             },
+            self.time_span,
             delay,
         );
         let timer = self.timer.lock_mut().replace(BoxedDisposal::new(disposal));
