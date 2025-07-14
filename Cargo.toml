@@ -29,6 +29,3 @@ local-pool-scheduler = ["single-threaded", "futures", "futures-timer"] # single-
 thread-pool-scheduler = ["futures/thread-pool", "futures-timer"] # multi-threaded mode with thread-pool scheduler
 tokio-scheduler = ["futures", "tokio/rt", "tokio/time"] # multi-threaded mode with tokio scheduler
 async-std-scheduler = ["futures", "async-std"] # multi-threaded mode with async-std scheduler
-
-[lints.rust]
-warnings = "deny"
