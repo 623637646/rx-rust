@@ -5,7 +5,6 @@ use futures::{
     stream::{AbortHandle, Abortable},
     task::SpawnExt,
 };
-use futures_timer::Delay;
 use std::time::Duration;
 
 impl Scheduler for ThreadPool {
@@ -23,6 +22,6 @@ impl Scheduler for ThreadPool {
     }
 
     fn sleep(self, duration: Duration) -> impl Future + NecessarySend {
-        Delay::new(duration)
+        async_io::Timer::after(duration)
     }
 }

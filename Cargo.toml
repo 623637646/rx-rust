@@ -10,7 +10,7 @@ cfg-if = "1.0.1"
 futures = { version = "0.3.31", optional = true }
 tokio = { version = "1.40.0", optional = true }
 async-std = { version = "1.13.1", optional = true }
-futures-timer = { version = "3.0.3", optional = true }
+async-io = { version = "2.4.1", optional = true } # TODO: Use the Timer of it. But it's too heavy.
 
 [dev-dependencies]
 pin-project = "1.1.10"
@@ -25,7 +25,7 @@ multi-threaded = [] # multi-threaded mode without scheduler.
 single-threaded = [] # single-threaded mode without scheduler.
 
 # scheduler
-local-pool-scheduler = ["single-threaded", "futures", "futures-timer"] # single-threaded mode with local-pool scheduler
-thread-pool-scheduler = ["futures/thread-pool", "futures-timer"] # multi-threaded mode with thread-pool scheduler
+local-pool-scheduler = ["single-threaded", "futures", "async-io"] # single-threaded mode with local-pool scheduler
+thread-pool-scheduler = ["futures/thread-pool", "async-io"] # multi-threaded mode with thread-pool scheduler
 tokio-scheduler = ["futures", "tokio/rt", "tokio/time"] # multi-threaded mode with tokio scheduler
 async-std-scheduler = ["futures", "async-std"] # multi-threaded mode with async-std scheduler
