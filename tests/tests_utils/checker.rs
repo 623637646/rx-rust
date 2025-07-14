@@ -3,33 +3,34 @@ use rx_rust::{
     observer::{Observer, Termination},
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
-use std::sync::atomic::{AtomicBool, Ordering};
+
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq)]
+pub(crate) enum State<E> {
+    Active,
+    Dropped,
+    Completed,
+    Error(E),
+}
 
 /// A helper struct for testing observables.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub(crate) struct Checker<T, E> {
     values: Shared<Mutable<Vec<T>>>,
-    termination: Shared<Mutable<Option<Termination<E>>>>,
-    dropped: Shared<AtomicBool>,
+    state: Shared<Mutable<State<E>>>,
 }
 
 impl<T, E> Checker<T, E> {
     pub(crate) fn new() -> (Self, CheckerObserver<T, E>) {
         let values = Shared::new(Mutable::new(Vec::new()));
-        let termination = Shared::new(Mutable::new(None));
-        let dropped = Shared::new(AtomicBool::new(false));
+        let state = Shared::new(Mutable::new(State::Active));
         (
             Self {
                 values: values.clone(),
-                termination: termination.clone(),
-                dropped: dropped.clone(),
+                state: state.clone(),
             },
-            CheckerObserver {
-                values,
-                termination,
-                dropped,
-            },
+            CheckerObserver { values, state },
         )
     }
 
@@ -40,29 +41,11 @@ impl<T, E> Checker<T, E> {
         self.values.lock_ref().clone()
     }
 
-    pub(crate) fn is_active(&self) -> bool {
-        let termination = self.termination.lock_ref();
-        let dropped = self.dropped.load(Ordering::SeqCst);
-        termination.is_none() && !dropped
-    }
-
-    pub(crate) fn is_dropped(&self) -> bool {
-        let termination = self.termination.lock_ref();
-        let dropped = self.dropped.load(Ordering::SeqCst);
-        termination.is_none() && dropped
-    }
-
-    pub(crate) fn is_error(&self, expected: E) -> bool
+    pub(crate) fn state(&self) -> State<E>
     where
-        E: PartialEq,
+        E: Clone,
     {
-        let termination = self.termination.lock_ref();
-        matches!(*termination, Some(Termination::Error(ref e)) if *e == expected)
-    }
-
-    pub(crate) fn is_completed(&self) -> bool {
-        let termination = self.termination.lock_ref();
-        matches!(*termination, Some(Termination::Completed))
+        self.state.lock_ref().clone()
     }
 }
 
@@ -70,8 +53,7 @@ impl<T, E> Checker<T, E> {
 #[educe(Debug)]
 pub(crate) struct CheckerObserver<T, E> {
     values: Shared<Mutable<Vec<T>>>,
-    termination: Shared<Mutable<Option<Termination<E>>>>,
-    dropped: Shared<AtomicBool>,
+    state: Shared<Mutable<State<E>>>,
 }
 
 impl<T, E> CheckerObserver<T, E> {
@@ -98,7 +80,12 @@ impl<T, E> CheckerObserver<T, E> {
 
 impl<T, E> Drop for CheckerObserver<T, E> {
     fn drop(&mut self) {
-        self.dropped.store(true, Ordering::SeqCst);
+        let mut state = self.state.lock_mut();
+        match &mut *state {
+            State::Active => *state = State::Dropped,
+            State::Completed | State::Error(_) => {}
+            State::Dropped => panic!(),
+        }
     }
 }
 
@@ -109,9 +96,16 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut termination_lock = self.termination.lock_mut();
-        assert!(termination_lock.is_none());
-        *termination_lock = Some(termination);
+        let mut state = self.state.lock_mut();
+        match &mut *state {
+            State::Active => {
+                *state = match termination {
+                    Termination::Completed => State::Completed,
+                    Termination::Error(error) => State::Error(error),
+                };
+            }
+            State::Completed | State::Error(_) | State::Dropped => panic!(),
+        }
     }
 }
 
@@ -131,29 +125,33 @@ impl<T> Checker<T, Infallible> {
         T: NecessarySend + 'static,
     {
         let values = Shared::new(Mutable::new(Vec::new()));
-        let termination = Shared::new(Mutable::new(None));
-        let dropped = Shared::new(AtomicBool::new(false));
+        let state = Shared::new(Mutable::new(State::Active));
 
         let values_cloned = values.clone();
-        let termination_cloned = termination.clone();
+        let state_cloned = state.clone();
         let handle = runtime.spawn(async move {
             while let Some(value) = stream.next().await {
                 values_cloned.lock_mut().push(value);
             }
-            termination_cloned
-                .lock_mut()
-                .replace(Termination::Completed);
+            let mut state = state_cloned.lock_mut();
+            match &mut *state {
+                State::Active => *state = State::Completed,
+                State::Completed | State::Error(_) | State::Dropped => panic!(),
+            }
         });
-        let dropped_cloned = dropped.clone();
         (
             Self {
                 values,
-                termination,
-                dropped,
+                state: state.clone(),
             },
             Subscription::new_with_disposal_callback(move || {
                 handle.abort();
-                dropped_cloned.store(true, Ordering::SeqCst);
+                let mut state = state.lock_mut();
+                match &mut *state {
+                    State::Active => *state = State::Dropped,
+                    State::Completed | State::Error(_) => {}
+                    State::Dropped => panic!(),
+                }
             }),
         )
     }

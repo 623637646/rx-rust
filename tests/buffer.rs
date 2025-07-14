@@ -1,5 +1,7 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
+use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
@@ -24,51 +26,51 @@ fn test_completed_first_and_last_empty() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker.is_completed());
-    assert!(channel_checker.is_completed());
-    assert!(boundary_channel_checker.is_unsubscribed());
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -82,51 +84,51 @@ fn test_completed_first_and_last_not_empty() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(0);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![0]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
     assert_eq!(checker.values(), [vec![0]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![0], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
     assert_eq!(checker.values(), [vec![0], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
     assert_eq!(checker.values(), [vec![0], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [vec![0], vec![111], vec![222, 333]]);
-    assert!(checker.is_completed());
-    assert!(channel_checker.is_completed());
-    assert!(boundary_channel_checker.is_unsubscribed());
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -140,45 +142,45 @@ fn test_completed_from_boundary() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker.is_completed());
-    assert!(channel_checker.is_unsubscribed());
-    assert!(boundary_channel_checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
@@ -192,19 +194,19 @@ fn test_completed_source_and_boundary_are_same() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(());
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(());
     assert_eq!(checker.values(), [vec![], vec![()]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![], vec![()], vec![()]]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -218,51 +220,51 @@ fn test_error_last_empty() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker.is_error("error"));
-    assert!(channel_checker.is_error("error"));
-    assert!(boundary_channel_checker.is_unsubscribed());
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -276,45 +278,45 @@ fn test_error_last_not_empty() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_error("error"));
-    assert!(channel_checker.is_error("error"));
-    assert!(boundary_channel_checker.is_unsubscribed());
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -328,45 +330,48 @@ fn test_error_from_boundary() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_next(());
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
-    assert!(channel_checker.is_subscribed());
-    assert!(boundary_channel_checker.is_subscribed());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
     boundary_sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_error("error"));
-    assert!(channel_checker.is_unsubscribed());
-    assert!(boundary_channel_checker.is_error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(
+        boundary_channel_checker.state(),
+        ChannelState::Error("error")
+    );
 }
 
 #[test]
@@ -385,59 +390,59 @@ fn test_unsubscribe() {
     let subscription_1 = observable_1.subscribe(observer_1);
     let _subscription_2 = observable_2.subscribe(observer_2);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker_1.values(), [vec![]]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [vec![]]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![], vec![111]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![], vec![111]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![], vec![111]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(333);
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![], vec![111]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]
@@ -457,31 +462,31 @@ fn test_ref() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker.values(), [Vec::<&_>::new()]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(&value_1);
     assert_eq!(checker.values(), [Vec::<&_>::new()]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker.values(), [vec![], vec![&value_1]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(&value_2);
     assert_eq!(checker.values(), [vec![], vec![&value_1]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(&value_3);
     assert_eq!(checker.values(), [vec![], vec![&value_1]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.clone().on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [vec![], vec![&value_1]]);
-    assert!(checker.is_error(&error));
+    assert_eq!(checker.state(), State::Error(&error));
 }
 
 #[test]
@@ -536,7 +541,7 @@ fn test_async() {
             .await
             .unwrap();
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut boundary_subject_cloned = boundary_subject.clone();
         runtime
@@ -546,7 +551,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [vec![]]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
@@ -556,7 +561,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [vec![]]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut boundary_subject_cloned = boundary_subject.clone();
         runtime
@@ -566,7 +571,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
@@ -576,7 +581,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
@@ -586,7 +591,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime
             .spawn(async { subscription.dispose() })
@@ -594,7 +599,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
-        assert!(checker.is_dropped());
+        assert_eq!(checker.state(), State::Dropped);
 
         let subject_cloned = subject.clone();
         runtime
@@ -604,7 +609,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [vec![], vec![111]]);
-        assert!(checker.is_dropped());
+        assert_eq!(checker.state(), State::Dropped);
     });
 }
 
@@ -626,47 +631,47 @@ fn test_subscribe_by_different_observer() {
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker_1.values(), [vec![]]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [vec![]]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![], vec![111]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![], vec![111]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(333);
     assert_eq!(checker_1.values(), [vec![], vec![111]]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![], vec![111]]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker_1.is_completed());
+    assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]
@@ -684,52 +689,52 @@ fn test_multiple_operation() {
 
     let _subscription = observable.clone().subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject_2.on_next(());
     assert_eq!(checker.values(), [Vec::<Vec<_>>::new()]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject_1.on_next(());
     assert_eq!(checker.values(), [Vec::<Vec<_>>::new()]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject_2.on_next(());
     assert_eq!(checker.values(), [vec![], vec![vec![]]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker.values(), [vec![], vec![vec![]]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject_2.on_next(());
     assert_eq!(checker.values(), [vec![], vec![vec![]], vec![]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject_1.on_next(());
     assert_eq!(checker.values(), [vec![], vec![vec![]], vec![]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject_2.on_next(());
     assert_eq!(
         checker.values(),
         [vec![], vec![vec![]], vec![], vec![vec![111]]]
     );
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(
         checker.values(),
         [vec![], vec![vec![]], vec![], vec![vec![111]]]
     );
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(333);
     assert_eq!(
         checker.values(),
         [vec![], vec![vec![]], vec![], vec![vec![111]]]
     );
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject
         .clone()
@@ -744,7 +749,7 @@ fn test_multiple_operation() {
             vec![vec![222, 333]]
         ]
     );
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -761,27 +766,27 @@ fn test_multiple_operation_same_boundary() {
 
     let _subscription = observable.clone().subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker.values(), [Vec::<Vec<_>>::new()]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker.values(), [Vec::<Vec<_>>::new()]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker.values(), [vec![], vec![vec![]]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker.values(), [vec![], vec![vec![]]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(333);
     assert_eq!(checker.values(), [vec![], vec![vec![]]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject
         .clone()
@@ -790,7 +795,7 @@ fn test_multiple_operation_same_boundary() {
         checker.values(),
         [vec![], vec![vec![]], vec![vec![111], vec![222, 333]]]
     );
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -805,33 +810,33 @@ fn test_without_convenient_api() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker.values(), [vec![]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     boundary_subject.on_next(());
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(333);
     assert_eq!(checker.values(), [vec![], vec![111]]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]

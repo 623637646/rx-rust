@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
@@ -41,13 +42,13 @@ fn test_completed() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
     boxed_observer.as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
@@ -55,7 +56,7 @@ fn test_completed() {
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 }
@@ -83,13 +84,13 @@ fn test_error() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
     boxed_observer.as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
@@ -97,7 +98,7 @@ fn test_error() {
         .unwrap()
         .on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 }
@@ -125,19 +126,19 @@ fn test_unsubscribe() {
 
     let subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
     boxed_observer.as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(disposed.load(Ordering::SeqCst));
     assert!(called.load(Ordering::SeqCst));
 
@@ -145,7 +146,7 @@ fn test_unsubscribe() {
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
     assert!(disposed.load(Ordering::SeqCst));
     assert!(called.load(Ordering::SeqCst));
 }
@@ -176,19 +177,19 @@ fn test_ref() {
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
     boxed_observer.as_mut().unwrap().on_next(&value);
     assert_eq!(checker.values(), [&value]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
     subscription.dispose();
     assert_eq!(checker.values(), [&value]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(disposed.load(Ordering::SeqCst));
     assert!(called.load(Ordering::SeqCst));
 
@@ -196,7 +197,7 @@ fn test_ref() {
         .unwrap()
         .on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [&value]);
-    assert!(checker.is_error(&error));
+    assert_eq!(checker.state(), State::Error(&error));
     assert!(disposed.load(Ordering::SeqCst));
     assert!(called.load(Ordering::SeqCst));
 }
@@ -282,7 +283,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), []);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
         assert!(!disposed.load(Ordering::SeqCst));
         assert!(!called.load(Ordering::SeqCst));
 
@@ -294,7 +295,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
         assert!(!disposed.load(Ordering::SeqCst));
         assert!(!called.load(Ordering::SeqCst));
 
@@ -304,7 +305,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
         assert!(disposed.load(Ordering::SeqCst));
         assert!(called.load(Ordering::SeqCst));
 
@@ -319,7 +320,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
         assert!(disposed.load(Ordering::SeqCst));
         assert!(called.load(Ordering::SeqCst));
     });
@@ -373,9 +374,9 @@ fn test_subscribe_by_different_observer() {
     let (on_next, on_termination) = observer_2.into_callbacks();
     let subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert_eq!(checker_1.values(), []);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(!disposed_1.load(Ordering::SeqCst));
     assert!(!disposed_2.load(Ordering::SeqCst));
     assert!(!called_1.load(Ordering::SeqCst));
@@ -384,9 +385,9 @@ fn test_subscribe_by_different_observer() {
     boxed_observer_1.lock_mut().as_mut().unwrap().on_next(111);
     boxed_observer_2.lock_mut().as_mut().unwrap().on_next(111);
     assert_eq!(checker_1.values(), [111]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(!disposed_1.load(Ordering::SeqCst));
     assert!(!disposed_2.load(Ordering::SeqCst));
     assert!(!called_1.load(Ordering::SeqCst));
@@ -395,9 +396,9 @@ fn test_subscribe_by_different_observer() {
     subscription_1.dispose();
     subscription_2.dispose();
     assert_eq!(checker_1.values(), [111]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(disposed_1.load(Ordering::SeqCst));
     assert!(disposed_2.load(Ordering::SeqCst));
     assert!(called_1.load(Ordering::SeqCst));
@@ -414,9 +415,9 @@ fn test_subscribe_by_different_observer() {
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [111]);
-    assert!(checker_1.is_completed());
+    assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [111]);
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
     assert!(disposed_1.load(Ordering::SeqCst));
     assert!(disposed_2.load(Ordering::SeqCst));
     assert!(called_1.load(Ordering::SeqCst));
@@ -453,21 +454,21 @@ fn test_multiple_operation() {
 
     let subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called_1.load(Ordering::SeqCst));
     assert!(!called_2.load(Ordering::SeqCst));
 
     boxed_observer.as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called_1.load(Ordering::SeqCst));
     assert!(!called_2.load(Ordering::SeqCst));
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(disposed.load(Ordering::SeqCst));
     assert!(called_1.load(Ordering::SeqCst));
     assert!(called_2.load(Ordering::SeqCst));
@@ -476,7 +477,7 @@ fn test_multiple_operation() {
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
     assert!(disposed.load(Ordering::SeqCst));
     assert!(called_1.load(Ordering::SeqCst));
     assert!(called_2.load(Ordering::SeqCst));
@@ -505,19 +506,19 @@ fn test_without_convenient_api() {
 
     let subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), []);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
     boxed_observer.as_mut().unwrap().on_next(111);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(!disposed.load(Ordering::SeqCst));
     assert!(!called.load(Ordering::SeqCst));
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
     assert!(disposed.load(Ordering::SeqCst));
     assert!(called.load(Ordering::SeqCst));
 
@@ -525,7 +526,7 @@ fn test_without_convenient_api() {
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
     assert!(disposed.load(Ordering::SeqCst));
     assert!(called.load(Ordering::SeqCst));
 }

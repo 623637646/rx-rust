@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
@@ -18,15 +19,15 @@ fn test_completed() {
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -47,43 +48,43 @@ fn test_unsubscribe() {
         let subscription_2 = observable_2.subscribe(observer_2);
         let _subscription_3 = observable_3.subscribe(observer_3);
         assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_active());
+        assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
+        assert_eq!(checker_2.state(), State::Active);
         assert!(checker_3.values().is_empty());
-        assert!(checker_3.is_active());
+        assert_eq!(checker_3.state(), State::Active);
 
         subscription_1.dispose();
         assert!(checker_1.values().is_empty());
-        // assert!(checker_1.is_active()); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-thread.
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
+        assert_eq!(checker_2.state(), State::Active);
         assert!(checker_3.values().is_empty());
-        assert!(checker_3.is_active());
+        assert_eq!(checker_3.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_dropped());
+        assert_eq!(checker_1.state(), State::Dropped);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
+        assert_eq!(checker_2.state(), State::Active);
         assert!(checker_3.values().is_empty());
-        assert!(checker_3.is_active());
+        assert_eq!(checker_3.state(), State::Active);
 
         subscription_2.dispose();
         assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_dropped());
+        assert_eq!(checker_1.state(), State::Dropped);
         assert!(checker_2.values().is_empty());
-        // assert!(checker_2.is_active()); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-thread.
         assert!(checker_3.values().is_empty());
-        assert!(checker_3.is_active());
+        assert_eq!(checker_3.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_dropped());
+        assert_eq!(checker_1.state(), State::Dropped);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_dropped());
+        assert_eq!(checker_2.state(), State::Dropped);
         assert_eq!(checker_3.values(), [111]);
-        assert!(checker_3.is_completed());
+        assert_eq!(checker_3.state(), State::Completed);
     });
 }
 
@@ -98,15 +99,15 @@ fn test_async() {
             .await
             .unwrap();
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -126,21 +127,21 @@ fn test_subscribe_by_different_observer() {
         let (on_next, on_termination) = observer_2.into_callbacks();
         let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
         assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_active());
+        assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
+        assert_eq!(checker_2.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_active());
+        assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
+        assert_eq!(checker_2.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [111]);
-        assert!(checker_1.is_completed());
+        assert_eq!(checker_1.state(), State::Completed);
         assert_eq!(checker_2.values(), [111]);
-        assert!(checker_2.is_completed());
+        assert_eq!(checker_2.state(), State::Completed);
     });
 }
 
@@ -152,7 +153,7 @@ fn test_undisposed_schedule() {
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
     });
 }
 

@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
@@ -18,7 +19,7 @@ fn test_error() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_error(111));
+    assert_eq!(checker.state(), State::Error(111));
 }
 
 #[test]
@@ -30,7 +31,7 @@ fn test_ref() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_error(&error));
+    assert_eq!(checker.state(), State::Error(&error));
 }
 
 #[test]
@@ -53,7 +54,7 @@ fn test_mut_ref() {
     );
 
     assert!(checker.values().is_empty());
-    assert!(checker.is_error(111));
+    assert_eq!(checker.state(), State::Error(111));
     assert_eq!(error, 222);
 }
 
@@ -68,7 +69,7 @@ fn test_async() {
             .await
             .unwrap();
         assert!(checker.values().is_empty());
-        assert!(checker.is_error(111));
+        assert_eq!(checker.state(), State::Error(111));
 
         runtime
             .spawn(async { subscription.dispose() })
@@ -76,7 +77,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
-        assert!(checker.is_error(111));
+        assert_eq!(checker.state(), State::Error(111));
     });
 }
 
@@ -96,9 +97,9 @@ fn test_subscribe_by_different_observer() {
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_error(111));
+    assert_eq!(checker_1.state(), State::Error(111));
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_error(111));
+    assert_eq!(checker_2.state(), State::Error(111));
 }
 
 #[test]

@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
@@ -24,15 +25,15 @@ fn test_completed() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker.values(), [Event::Next(111)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker.values(), [Event::Next(111), Event::Next(222)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
@@ -43,7 +44,7 @@ fn test_completed() {
             Event::Termination(Termination::Completed)
         ],
     );
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -57,15 +58,15 @@ fn test_error() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker.values(), [Event::Next(111)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker.values(), [Event::Next(111), Event::Next(222)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(
@@ -76,7 +77,7 @@ fn test_error() {
             Event::Termination(Termination::Error("error"))
         ],
     );
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -94,31 +95,31 @@ fn test_unsubscribe() {
     let subscription_1 = observable_1.subscribe(observer_1);
     let _subscription_2 = observable_2.subscribe(observer_2);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [Event::Next(111)]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [Event::Next(111)]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [Event::Next(111)]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [Event::Next(111)]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker_1.values(), [Event::Next(111)]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [Event::Next(111), Event::Next(222)]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [Event::Next(111)]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(
         checker_2.values(),
         [
@@ -127,7 +128,7 @@ fn test_unsubscribe() {
             Event::Termination(Termination::Error("error"))
         ]
     );
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]
@@ -145,18 +146,18 @@ fn test_ref() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(&value_1);
     assert_eq!(checker.values(), [Event::Next(&value_1)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(&value_2);
     assert_eq!(
         checker.values(),
         [Event::Next(&value_1), Event::Next(&value_2)]
     );
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::Error(&error));
     assert_eq!(
@@ -167,7 +168,7 @@ fn test_ref() {
             Event::Termination(Termination::Error(&error))
         ],
     );
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -210,7 +211,7 @@ fn test_mut_ref() {
             Event::Termination(Termination::Error(222))
         ]
     );
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
     assert_eq!(value, 222);
     assert_eq!(error, 444);
 }
@@ -230,7 +231,7 @@ fn test_async() {
             .await
             .unwrap();
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
@@ -240,7 +241,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [Event::Next(111)]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime
             .spawn(async { subscription.dispose() })
@@ -248,7 +249,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [Event::Next(111)]);
-        assert!(checker.is_dropped());
+        assert_eq!(checker.state(), State::Dropped);
 
         let subject_cloned = subject.clone();
         runtime
@@ -258,7 +259,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [Event::Next(111)]);
-        assert!(checker.is_dropped());
+        assert_eq!(checker.state(), State::Dropped);
     });
 }
 
@@ -279,15 +280,15 @@ fn test_subscribe_by_different_observer() {
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [Event::Next(111)]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [Event::Next(111)]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(
@@ -297,7 +298,7 @@ fn test_subscribe_by_different_observer() {
             Event::Termination(Termination::Error("error"))
         ]
     );
-    assert!(checker_1.is_completed());
+    assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(
         checker_2.values(),
         [
@@ -305,7 +306,7 @@ fn test_subscribe_by_different_observer() {
             Event::Termination(Termination::Error("error"))
         ]
     );
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]
@@ -319,12 +320,12 @@ fn test_multiple_operation() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
 
     assert_eq!(checker.values(), [Event::Next(Event::Next(111))]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
@@ -335,7 +336,7 @@ fn test_multiple_operation() {
             Event::Termination(Termination::Completed)
         ]
     );
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -349,15 +350,15 @@ fn test_without_convenient_api() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker.values(), [Event::Next(111)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker.values(), [Event::Next(111), Event::Next(222)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
@@ -368,7 +369,7 @@ fn test_without_convenient_api() {
             Event::Termination(Termination::Completed)
         ],
     );
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -382,19 +383,19 @@ fn test_revert_completed() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 222],);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -408,19 +409,19 @@ fn test_revert_error() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 222],);
-    assert!(checker.is_error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]

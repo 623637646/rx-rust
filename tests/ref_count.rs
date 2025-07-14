@@ -1,5 +1,7 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
+use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
@@ -33,52 +35,52 @@ fn test_completed() {
     let observable_2 = observable.clone();
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     let _subscription_2 = observable_2.subscribe(observer_2);
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_completed());
-    assert!(channel_checker.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
@@ -100,52 +102,52 @@ fn test_error() {
     let observable_2 = observable.clone();
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     let _subscription_2 = observable_2.subscribe(observer_2);
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_error("error"));
-    assert!(channel_checker.is_error("error"));
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
 #[test]
@@ -167,59 +169,59 @@ fn test_unsubscribe() {
     let observable_2 = observable.clone();
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     let subscription_2 = observable_2.subscribe(observer_2);
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2, 3]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription_2.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2, 3]);
-    assert!(checker_2.is_dropped());
-    assert!(channel_checker.is_unsubscribed());
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -249,52 +251,52 @@ fn test_ref() {
     let observable_2 = observable.clone();
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [&value_1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     let _subscription_2 = observable_2.subscribe(observer_2);
     assert_eq!(checker_1.values(), [&value_1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [&value_1, &value_2]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [&value_2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [&value_1, &value_2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [&value_2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error(&error));
     assert_eq!(checker_1.values(), [&value_1, &value_2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [&value_2]);
-    assert!(checker_2.is_error(&error));
-    assert!(channel_checker.is_error(&error));
+    assert_eq!(checker_2.state(), State::Error(&error));
+    assert_eq!(channel_checker.state(), ChannelState::Error(&error));
 }
 
 #[test]
@@ -317,20 +319,20 @@ fn test_async() {
         let observable_2 = observable.clone();
 
         assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_active());
+        assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
-        assert!(channel_checker.is_initialized());
+        assert_eq!(checker_2.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
         let subscription_1 = runtime
             .spawn(async move { observable_1.subscribe(observer_1) })
             .await
             .unwrap();
         assert!(checker_1.values().is_empty());
-        assert!(checker_1.is_active());
+        assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker_2.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let mut sender = runtime
             .spawn(async move {
@@ -340,20 +342,20 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker_1.values(), [1]);
-        assert!(checker_1.is_active());
+        assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker_2.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let _subscription_2 = runtime
             .spawn(async move { observable_2.subscribe(observer_2) })
             .await
             .unwrap();
         assert_eq!(checker_1.values(), [1]);
-        assert!(checker_1.is_active());
+        assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
-        assert!(checker_2.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker_2.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let sender = runtime
             .spawn(async move {
@@ -363,10 +365,10 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker_1.values(), [1, 2]);
-        assert!(checker_1.is_active());
+        assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [2]);
-        assert!(checker_2.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker_2.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         runtime
             .spawn(async move { subscription_1.dispose() })
@@ -374,20 +376,20 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [1, 2]);
-        assert!(checker_1.is_dropped());
+        assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [2]);
-        assert!(checker_2.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker_2.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         runtime
             .spawn(async move { sender.on_termination(Termination::Error("error")) })
             .await
             .unwrap();
         assert_eq!(checker_1.values(), [1, 2]);
-        assert!(checker_1.is_dropped());
+        assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [2]);
-        assert!(checker_2.is_error("error"));
-        assert!(channel_checker.is_error("error"));
+        assert_eq!(checker_2.state(), State::Error("error"));
+        assert_eq!(channel_checker.state(), ChannelState::Error("error"));
     });
 }
 
@@ -410,53 +412,53 @@ fn test_subscribe_by_different_observer() {
     let observable_2 = observable.clone();
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     let (on_next, on_termination) = observer_2.into_callbacks();
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_error("error"));
-    assert!(channel_checker.is_error("error"));
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
 #[test]
@@ -480,52 +482,52 @@ fn test_multiple_operation() {
     let observable_2 = observable.clone();
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     let _subscription_2 = observable_2.subscribe(observer_2);
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_error("error"));
-    assert!(channel_checker.is_error("error"));
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
 #[test]
@@ -547,52 +549,52 @@ fn test_without_convenient_api() {
     let observable_2 = observable.clone();
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     let _subscription_2 = observable_2.subscribe(observer_2);
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [1, 2]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
-    assert!(checker_2.is_error("error"));
-    assert!(channel_checker.is_error("error"));
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
 #[test]
@@ -623,17 +625,17 @@ fn test_complete_on_next() {
         move |_| {},
     );
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(());
     assert_eq!(checker.values(), [1]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [1]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -664,15 +666,15 @@ fn test_error_on_next() {
         move |_| {},
     );
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(());
     assert_eq!(checker.values(), [1]);
-    assert!(checker.is_error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
 
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker.values(), [1]);
-    assert!(checker.is_error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]
@@ -696,12 +698,12 @@ fn test_unsub_on_next() {
     let observable_3 = observable;
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
-    assert!(checker_3.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     // no unsubscribe
     let subscription = observable_1.subscribe(observer_1);
@@ -731,30 +733,30 @@ fn test_unsub_on_next() {
     );
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
-    assert!(checker_3.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [1]);
-    assert!(checker_2.is_dropped());
+    assert_eq!(checker_2.state(), State::Dropped);
     assert_eq!(checker_3.values(), [1]);
-    assert!(checker_3.is_dropped());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_3.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription.dispose();
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [1]);
-    assert!(checker_2.is_dropped());
+    assert_eq!(checker_2.state(), State::Dropped);
     assert_eq!(checker_3.values(), [1]);
-    assert!(checker_3.is_dropped());
-    assert!(channel_checker.is_unsubscribed());
+    assert_eq!(checker_3.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -778,12 +780,12 @@ fn test_unsub_on_completed() {
     let observable_3 = observable;
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
-    assert!(checker_3.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     // no unsubscribe
     let _subscription = observable_1.subscribe(observer_1);
@@ -813,30 +815,30 @@ fn test_unsub_on_completed() {
     );
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
-    assert!(checker_3.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [1]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert_eq!(checker_3.values(), [1]);
-    assert!(checker_3.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_completed());
+    assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [1]);
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
     assert_eq!(checker_3.values(), [1]);
-    assert!(checker_3.is_completed());
-    assert!(channel_checker.is_completed());
+    assert_eq!(checker_3.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
@@ -860,12 +862,12 @@ fn test_unsub_on_error() {
     let observable_3 = observable;
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
-    assert!(checker_3.is_active());
-    assert!(channel_checker.is_initialized());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
     // no unsubscribe
     let _subscription = observable_1.subscribe(observer_1);
@@ -895,30 +897,30 @@ fn test_unsub_on_error() {
     );
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
-    assert!(checker_3.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [1]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert_eq!(checker_3.values(), [1]);
-    assert!(checker_3.is_active());
-    assert!(channel_checker.is_subscribed());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [1]);
-    assert!(checker_1.is_error("error"));
+    assert_eq!(checker_1.state(), State::Error("error"));
     assert_eq!(checker_2.values(), [1]);
-    assert!(checker_2.is_error("error"));
+    assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(checker_3.values(), [1]);
-    assert!(checker_3.is_error("error"));
-    assert!(channel_checker.is_error("error"));
+    assert_eq!(checker_3.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
 #[test]

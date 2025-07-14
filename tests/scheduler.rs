@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::{checker::Checker, test_runtime::block_on};
 use rx_rust::{
     disposable::Disposable,
@@ -95,31 +96,31 @@ fn test_schedule_recursive() {
         );
         runtime.sleep(Duration::from_millis(5)).await;
         assert_eq!(checker.values(), [0]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [0, 1]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(30)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(40)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -146,31 +147,31 @@ fn test_schedule_period_without_delay() {
         );
         runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [0]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -196,34 +197,34 @@ fn test_schedule_period_with_delay() {
             Some(Duration::from_millis(20)),
         );
         assert_eq!(checker.values(), []);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [0]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
 
         runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }

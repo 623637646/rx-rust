@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
@@ -20,7 +21,7 @@ fn test_completed_array() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [1, 2, 3]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -32,7 +33,7 @@ fn test_completed_array_ref() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [&1, &2, &3]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -59,7 +60,7 @@ fn test_completed_slice() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [&1, &2, &3]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -87,7 +88,7 @@ fn test_completed_vec() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [1, 2, 3]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -99,7 +100,7 @@ fn test_completed_vec_ref() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [&1, &2, &3]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -126,7 +127,7 @@ fn test_completed_range() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [100, 101, 102]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -141,7 +142,7 @@ fn test_ref() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [&v1, &v2, &v3]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -176,7 +177,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [1, 2, 3]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
 
         runtime
             .spawn(async { subscription.dispose() })
@@ -184,7 +185,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [1, 2, 3]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -205,9 +206,9 @@ fn test_subscribe_by_different_observer() {
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
     assert_eq!(checker_1.values(), [1, 2, 3]);
-    assert!(checker_1.is_completed());
+    assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [1, 2, 3]);
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]

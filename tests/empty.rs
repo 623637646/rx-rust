@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
@@ -17,7 +18,7 @@ fn test_completed() {
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -31,7 +32,7 @@ fn test_async() {
             .await
             .unwrap();
         assert!(checker.values().is_empty());
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
 
         runtime
             .spawn(async { subscription.dispose() })
@@ -39,7 +40,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -59,9 +60,9 @@ fn test_subscribe_by_different_observer() {
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_completed());
+    assert_eq!(checker_1.state(), State::Completed);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]

@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use std::convert::Infallible;
 
@@ -14,7 +15,7 @@ fn test_completed() {
     boxed_observer.on_termination(Termination::<Infallible>::Completed);
 
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -25,7 +26,7 @@ fn test_error() {
     boxed_observer.on_termination(Termination::Error("error"));
 
     assert_eq!(checker.values(), [111]);
-    assert!(checker.is_error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]
@@ -38,7 +39,7 @@ fn test_ref() {
     boxed_observer.on_termination(Termination::Error(&error));
 
     assert_eq!(checker.values(), [&value]);
-    assert!(checker.is_error(&error));
+    assert_eq!(checker.state(), State::Error(&error));
 }
 
 #[test]
@@ -80,7 +81,7 @@ fn test_async() {
                 boxed_observer.on_next(111);
                 boxed_observer.on_termination(Termination::Error("error"));
                 assert_eq!(checker.values(), [111]);
-                assert!(checker.is_error("error"));
+                assert_eq!(checker.state(), State::Error("error"));
             })
             .await
             .unwrap();

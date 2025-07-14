@@ -99,33 +99,29 @@ where
 #[educe(Debug, Clone)]
 pub(crate) struct ChannelChecker<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq)]
+pub(crate) enum ChannelState<E> {
+    Initialized,
+    Subscribed,
+    Completed,
+    Error(E),
+    Unsubscribed,
+}
+
 impl<T, E> ChannelChecker<'_, T, E> {
-    pub(crate) fn is_initialized(&self) -> bool {
-        matches!(&*self.0.lock_ref(), State::Initialized)
-    }
-
-    pub(crate) fn is_subscribed(&self) -> bool {
-        matches!(&*self.0.lock_ref(), State::Subscribed(_))
-    }
-
-    pub(crate) fn is_completed(&self) -> bool {
-        matches!(
-            &*self.0.lock_ref(),
-            State::Terminated(Termination::Completed)
-        )
-    }
-
-    pub(crate) fn is_error(&self, expected: E) -> bool
+    pub(crate) fn state(&self) -> ChannelState<E>
     where
-        E: PartialEq,
+        E: Clone,
     {
-        matches!(
-            &*self.0.lock_ref(),
-            State::Terminated(Termination::Error(e)) if *e == expected
-        )
-    }
-
-    pub(crate) fn is_unsubscribed(&self) -> bool {
-        matches!(&*self.0.lock_ref(), State::Unsubscribed)
+        match &*self.0.lock_ref() {
+            State::Initialized => ChannelState::Initialized,
+            State::Subscribed(_) => ChannelState::Subscribed,
+            State::Terminated(termination) => match termination {
+                Termination::Completed => ChannelState::Completed,
+                Termination::Error(error) => ChannelState::Error(error.clone()),
+            },
+            State::Unsubscribed => ChannelState::Unsubscribed,
+        }
     }
 }

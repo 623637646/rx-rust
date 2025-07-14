@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
@@ -31,18 +32,18 @@ fn test_completed() {
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     for i in 0..=9 {
         subject.on_next(i);
     }
 
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -63,18 +64,18 @@ fn test_error() {
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     for i in 0..=9 {
         subject.on_next(i);
     }
 
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]
@@ -108,36 +109,36 @@ fn test_unsubscribe() {
         .subscribe(observer_2);
 
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     for i in 0..=9 {
         subject.on_next(i);
     }
 
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19, 121]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_1.is_dropped());
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19, 121]);
-    assert!(checker_2.is_error("error"));
+    assert_eq!(checker_2.state(), State::Error("error"));
 }
 
 #[test]
@@ -163,29 +164,29 @@ fn test_ref() {
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(&value_1);
     assert_eq!(checker.values(), [(0, &value_1)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(&value_2);
     assert_eq!(checker.values(), [(0, &value_1), (1, &value_2)]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_next(&value_3);
     assert_eq!(
         checker.values(),
         [(0, &value_1), (1, &value_2), (0, &value_3)]
     );
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::Error(&error));
     assert_eq!(
         checker.values(),
         [(0, &value_1), (1, &value_2), (0, &value_3)]
     );
-    assert!(checker.is_error(&error));
+    assert_eq!(checker.state(), State::Error(&error));
 }
 
 #[test]
@@ -212,7 +213,7 @@ fn test_async() {
             .await
             .unwrap();
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
@@ -224,7 +225,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime
             .spawn(async { subscription.dispose() })
@@ -232,7 +233,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-        assert!(checker.is_dropped());
+        assert_eq!(checker.state(), State::Dropped);
 
         let subject_cloned = subject.clone();
         runtime
@@ -242,7 +243,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-        assert!(checker.is_dropped());
+        assert_eq!(checker.state(), State::Dropped);
     });
 }
 
@@ -276,23 +277,23 @@ fn test_subscribe_by_different_observer() {
         })
         .subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     for i in 0..=9 {
         subject.on_next(i);
     }
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_1.is_error("error"));
+    assert_eq!(checker_1.state(), State::Error("error"));
     assert_eq!(checker_2.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker_2.is_error("error"));
+    assert_eq!(checker_2.state(), State::Error("error"));
 }
 
 #[test]
@@ -324,18 +325,18 @@ fn test_multiple_operation() {
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     for i in 0..=9 {
         subject.on_next(i);
     }
 
     assert_eq!(checker.values(), [0, 111, 22, 133, 4, 115, 26, 137, 8, 119]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [0, 111, 22, 133, 4, 115, 26, 137, 8, 119]);
-    assert!(checker.is_completed());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
@@ -356,18 +357,18 @@ fn test_without_convenient_api() {
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     for i in 0..=9 {
         subject.on_next(i);
     }
 
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_active());
+    assert_eq!(checker.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
-    assert!(checker.is_error("error"));
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]
@@ -388,30 +389,30 @@ fn test_revert_completed() {
     let _subscription_2 = observable_2.subscribe(observer_2);
     let _subscription_3 = observable_3.subscribe(observer_3);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
-    assert!(checker_3.is_active());
+    assert_eq!(checker_3.state(), State::Active);
 
     for i in 0..=9 {
         subject.on_next(i);
     }
 
     assert_eq!(checker_1.values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [0, 2, 4, 6, 8]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert_eq!(checker_3.values(), [0, 1, 3, 5, 7, 9]);
-    assert!(checker_3.is_active());
+    assert_eq!(checker_3.state(), State::Active);
 
     subject.on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    assert!(checker_1.is_completed());
+    assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [0, 2, 4, 6, 8]);
-    assert!(checker_2.is_completed());
+    assert_eq!(checker_2.state(), State::Completed);
     assert_eq!(checker_3.values(), [0, 1, 3, 5, 7, 9]);
-    assert!(checker_3.is_completed());
+    assert_eq!(checker_3.state(), State::Completed);
 }
 
 #[test]
@@ -432,30 +433,30 @@ fn test_revert_error() {
     let _subscription_2 = observable_2.subscribe(observer_2);
     let _subscription_3 = observable_3.subscribe(observer_3);
     assert!(checker_1.values().is_empty());
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
-    assert!(checker_3.is_active());
+    assert_eq!(checker_3.state(), State::Active);
 
     for i in 0..=9 {
         subject.on_next(i);
     }
 
     assert_eq!(checker_1.values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    assert!(checker_1.is_active());
+    assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [0, 2, 4, 6, 8]);
-    assert!(checker_2.is_active());
+    assert_eq!(checker_2.state(), State::Active);
     assert_eq!(checker_3.values(), [0, 1, 3, 5, 7, 9]);
-    assert!(checker_3.is_active());
+    assert_eq!(checker_3.state(), State::Active);
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-    assert!(checker_1.is_error("error"));
+    assert_eq!(checker_1.state(), State::Error("error"));
     assert_eq!(checker_2.values(), [0, 2, 4, 6, 8]);
-    assert!(checker_2.is_error("error"));
+    assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(checker_3.values(), [0, 1, 3, 5, 7, 9]);
-    assert!(checker_3.is_error("error"));
+    assert_eq!(checker_3.state(), State::Error("error"));
 }
 
 #[test]

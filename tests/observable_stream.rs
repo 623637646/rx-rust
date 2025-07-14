@@ -2,6 +2,8 @@
 
 mod tests_utils;
 
+use crate::tests_utils::checker::State;
+use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};
 use futures::{FutureExt, StreamExt};
 use rx_rust::disposable::Disposable;
@@ -28,27 +30,27 @@ fn test_completed() {
 
         let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subject.on_next(111);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subject.on_next(222);
         subject.on_next(333);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subject.on_termination(Termination::<Infallible>::Completed);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -75,7 +77,7 @@ fn test_completed_lazy_subscription() {
         runtime.sleep(Duration::from_millis(10)).await;
         assert!(*subscribed.lock_ref());
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -89,14 +91,14 @@ fn test_completed_without_next() {
         let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
         runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         sender.on_termination(Termination::Completed);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), []);
-        assert!(checker.is_completed());
-        assert!(channel_checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
     });
 }
 
@@ -111,27 +113,27 @@ fn test_unsubscribe() {
 
         let (checker, subscription) = Checker::from_stream(stream, runtime.clone());
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subject.on_next(111);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subject.on_next(222);
         subject.on_next(333);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subscription.dispose();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_dropped());
+        assert_eq!(checker.state(), State::Dropped);
     });
 }
 
@@ -206,11 +208,11 @@ fn test_async() {
             .unwrap();
 
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
@@ -221,7 +223,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
@@ -233,7 +235,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime
             .spawn(async move {
@@ -243,7 +245,7 @@ fn test_async() {
             .unwrap();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -258,27 +260,27 @@ fn test_without_convenient_api() {
 
         let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subject.on_next(111);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subject.on_next(222);
         subject.on_next(333);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_active());
+        assert_eq!(checker.state(), State::Active);
 
         subject.on_termination(Termination::<Infallible>::Completed);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222, 333]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 #[test]
@@ -291,14 +293,14 @@ fn test_complete_after_next() {
         let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
         runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         sender.on_next(111);
         sender.on_termination(Termination::Completed);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -312,15 +314,15 @@ fn test_unsub_after_next() {
         let (checker, subscription) = Checker::from_stream(stream, runtime.clone());
         runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         sender.on_next(111);
         runtime.sleep(Duration::from_millis(10)).await;
         subscription.dispose();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_dropped());
+        assert_eq!(checker.state(), State::Dropped);
     });
 }
 
@@ -334,15 +336,15 @@ fn test_unsub_after_completed() {
         let (checker, subscription) = Checker::from_stream(stream, runtime.clone());
         runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         sender.on_termination(Termination::Completed);
         runtime.sleep(Duration::from_millis(10)).await;
         subscription.dispose();
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), []);
-        assert!(checker.is_completed());
+        assert_eq!(checker.state(), State::Completed);
     });
 }
 
@@ -356,14 +358,14 @@ fn test_undisposed_schedule() {
         let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
         runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
         assert!(checker.values().is_empty());
-        assert!(checker.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         sender.on_next(111);
         runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
-        assert!(checker.is_active());
-        assert!(channel_checker.is_subscribed());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     });
 }
 
