@@ -25,17 +25,17 @@ impl Scheduler for TestRuntime {
         }))
     }
 
-    async fn sleep(self, duration: Duration) {
+    fn sleep(self, duration: Duration) -> impl Future + NecessarySend {
         cfg_if::cfg_if! {
             if #[cfg(feature = "local-pool-scheduler")] {
-                self.spawner.sleep(duration).await;
+                self.spawner.sleep(duration)
             } else if #[cfg(feature = "thread-pool-scheduler")] {
-                self.0.sleep(duration).await;
+                self.0.sleep(duration)
             } else if #[cfg(feature = "tokio-scheduler")] {
-                tokio::runtime::Handle::current().sleep(duration).await;
+                tokio::runtime::Handle::current().sleep(duration)
             } else if #[cfg(feature = "async-std-scheduler")] {
                 use rx_rust::scheduler::async_std_scheduler::AsyncStdScheduler;
-                AsyncStdScheduler.sleep(duration).await;
+                AsyncStdScheduler.sleep(duration)
             } else {
                 _ = duration;
             }

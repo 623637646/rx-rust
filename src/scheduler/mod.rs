@@ -19,7 +19,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> AutoDisposal<'static>;
 
-    fn sleep(self, duration: Duration) -> impl Future<Output = ()> + NecessarySend;
+    fn sleep(self, duration: Duration) -> impl Future + NecessarySend;
 
     fn schedule(
         self,

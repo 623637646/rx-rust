@@ -20,7 +20,7 @@ impl Scheduler for AsyncStdScheduler {
         AutoDisposal::new(abort_handle)
     }
 
-    fn sleep(self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
+    fn sleep(self, duration: Duration) -> impl Future + NecessarySend {
         async_std::task::sleep(duration)
     }
 }

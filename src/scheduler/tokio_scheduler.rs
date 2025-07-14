@@ -37,7 +37,7 @@ impl Scheduler for tokio::runtime::Handle {
         AutoDisposal::new(self.spawn(future))
     }
 
-    fn sleep(self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
+    fn sleep(self, duration: Duration) -> impl Future + NecessarySend {
         tokio::time::sleep(duration)
     }
 }
