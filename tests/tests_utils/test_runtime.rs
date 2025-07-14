@@ -110,6 +110,7 @@ where
             async_std::task::block_on(body(runtime));
         } else {
             _ = body(runtime);
+            panic!("You need to specify a feature to run tests.");
         }
     }
 }
