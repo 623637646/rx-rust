@@ -61,8 +61,8 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
     ) -> AutoDisposal<'static> {
         self.schedule_recursive(
             move |count| {
-                task(count);
-                Some(period)
+                let stop = task(count);
+                if stop { None } else { Some(period) }
             },
             delay,
         )
