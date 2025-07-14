@@ -11,7 +11,7 @@ pub struct AsyncStdScheduler;
 
 impl Scheduler for AsyncStdScheduler {
     fn schedule_future(
-        &self,
+        self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> AutoDisposal<'static> {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
@@ -20,7 +20,7 @@ impl Scheduler for AsyncStdScheduler {
         AutoDisposal::new(abort_handle)
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
+    fn sleep(self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
         async_std::task::sleep(duration)
     }
 }

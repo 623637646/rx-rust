@@ -76,7 +76,7 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
         let values = self.values.clone();
         let observer = self.observer.clone();
         let timer = self.timer.clone();
-        *self.timer.lock_mut() = Some(self.scheduler.schedule_recursive(
+        *self.timer.lock_mut() = Some(self.scheduler.clone().schedule_recursive(
             move |_| {
                 if let Some((instant, value)) = { values.lock_mut().pop_front() } {
                     if let Some(value) = value {

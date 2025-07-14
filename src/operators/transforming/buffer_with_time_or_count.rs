@@ -85,7 +85,7 @@ impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
             return;
         }
         let self_cloned = self.clone();
-        let disposal = self.scheduler.schedule_period(
+        let disposal = self.scheduler.clone().schedule_period(
             move |_| {
                 let mut lock = self_cloned.observer.lock_mut();
                 if let Some(observer) = &mut *lock {

@@ -15,14 +15,14 @@ use std::time::Duration;
 /// This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
 pub trait Scheduler: Clone + NecessarySend + 'static {
     fn schedule_future(
-        &self,
+        self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> AutoDisposal<'static>;
 
-    fn sleep(&self, duration: Duration) -> impl Future<Output = ()> + NecessarySend;
+    fn sleep(self, duration: Duration) -> impl Future<Output = ()> + NecessarySend;
 
     fn schedule(
-        &self,
+        self,
         task: impl FnOnce() + NecessarySend + 'static,
         delay: Option<Duration>,
     ) -> AutoDisposal<'static> {
@@ -36,25 +36,25 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
     }
 
     fn schedule_recursive(
-        &self,
+        self,
         mut task: impl FnMut(usize) -> Option<Duration> + NecessarySend + 'static,
         delay: Option<Duration>,
     ) -> AutoDisposal<'static> {
         let this = self.clone();
         self.schedule_future(async move {
             if let Some(delay) = delay {
-                this.sleep(delay).await;
+                this.clone().sleep(delay).await;
             }
             let mut count = 0;
             while let Some(delay) = task(count) {
-                this.sleep(delay).await;
+                this.clone().sleep(delay).await;
                 count += 1;
             }
         })
     }
 
     fn schedule_period(
-        &self,
+        self,
         mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
         period: Duration,
         delay: Option<Duration>,
@@ -70,7 +70,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
 
     #[cfg(feature = "futures")]
     fn schedule_stream<SM>(
-        &self,
+        self,
         mut stream: SM,
         mut result_callback: impl FnMut(Option<SM::Item>) + NecessarySend + 'static,
     ) -> AutoDisposal<'static>

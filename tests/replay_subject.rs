@@ -625,6 +625,7 @@ fn test_async() {
 
         let observable_cloned = observable.clone();
         let _subscription_1 = runtime
+            .clone()
             .spawn(async move { observable_cloned.subscribe(observer_1) })
             .await
             .unwrap();
@@ -644,6 +645,7 @@ fn test_async() {
 
         let mut subject_cloned = subject.clone();
         runtime
+            .clone()
             .spawn(async move {
                 subject_cloned.on_next(111);
             })
@@ -656,6 +658,7 @@ fn test_async() {
         assert!(subject.terminated().is_none());
 
         let _subscription_2 = runtime
+            .clone()
             .spawn(async move { observable.subscribe(observer_2) })
             .await
             .unwrap();
@@ -667,6 +670,7 @@ fn test_async() {
 
         let mut subject_cloned = subject.clone();
         runtime
+            .clone()
             .spawn(async move {
                 subject_cloned.on_next(222);
             })
@@ -680,6 +684,7 @@ fn test_async() {
 
         let subject_cloned = subject.clone();
         runtime
+            .clone()
             .spawn(async move {
                 subject_cloned.on_termination(Termination::Completed);
             })
@@ -694,6 +699,7 @@ fn test_async() {
         // on_next and on_termination after termination
         let mut subject_cloned = subject.clone();
         runtime
+            .clone()
             .spawn(async move {
                 subject_cloned.on_next(333);
             })
@@ -701,6 +707,7 @@ fn test_async() {
             .unwrap();
         let subject_cloned = subject.clone();
         runtime
+            .clone()
             .spawn(async move {
                 subject_cloned.on_termination(Termination::Error("error"));
             })
@@ -716,6 +723,7 @@ fn test_async() {
         let (checker, observer) = Checker::new();
         let subject_cloned = subject.clone();
         let _subscription = runtime
+            .clone()
             .spawn(async move { subject_cloned.subscribe(observer) })
             .await
             .unwrap();

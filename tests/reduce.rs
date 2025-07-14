@@ -253,6 +253,7 @@ fn test_async() {
         let observable = observable.reduce(0, |last, value| last + value);
 
         let subscription = runtime
+            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
@@ -261,6 +262,7 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let _sender = runtime
+            .clone()
             .spawn(async move {
                 sender.on_next(1);
                 sender
@@ -272,10 +274,11 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         runtime
+            .clone()
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.clone().sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

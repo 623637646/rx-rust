@@ -520,6 +520,7 @@ fn test_async() {
 
         let checker_sub_vec_cloned = checker_sub_vec.clone();
         let _subscription = runtime
+            .clone()
             .spawn(async move {
                 observable.subscribe_with_callback(
                     move |value| {
@@ -548,6 +549,7 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let mut sender = runtime
+            .clone()
             .spawn(async move {
                 sender.on_next(111);
                 sender
@@ -568,6 +570,7 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let mut sender = runtime
+            .clone()
             .spawn(async move {
                 sender.on_next(222);
                 sender
@@ -592,6 +595,7 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let sender = runtime
+            .clone()
             .spawn(async move {
                 sender.on_next(333);
                 sender
@@ -616,6 +620,7 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         runtime
+            .clone()
             .spawn(async move { sender.on_termination(Termination::Completed) })
             .await
             .unwrap();

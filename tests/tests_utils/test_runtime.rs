@@ -96,7 +96,7 @@ where
         if #[cfg(feature = "local-pool-scheduler")] {
             use futures::task::LocalSpawnExt;
             use rx_rust::utils::types::MutableHelper;
-            runtime.spawner.spawn_local(body(runtime.clone())).unwrap();
+            runtime.clone().spawner.spawn_local(body(runtime.clone())).unwrap();
             runtime.pool.lock_mut().run();
         } else if #[cfg(feature = "thread-pool-scheduler")] {
             futures::executor::block_on(body(runtime));

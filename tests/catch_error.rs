@@ -321,6 +321,7 @@ fn test_async() {
         });
 
         let _subscription = runtime
+            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
@@ -330,6 +331,7 @@ fn test_async() {
         assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
 
         let sender = runtime
+            .clone()
             .spawn(async move {
                 sender.on_next(111);
                 sender
@@ -342,6 +344,7 @@ fn test_async() {
         assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
 
         runtime
+            .clone()
             .spawn(async move {
                 sender.on_termination(Termination::Error("error"));
             })
@@ -353,6 +356,7 @@ fn test_async() {
         assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
         let sender_1 = runtime
+            .clone()
             .spawn(async move {
                 sender_1.on_next(222);
                 sender_1
@@ -365,6 +369,7 @@ fn test_async() {
         assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
         runtime
+            .clone()
             .spawn(async move {
                 sender_1.on_termination(Termination::<Infallible>::Completed);
             })

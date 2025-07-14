@@ -10,7 +10,7 @@ use std::time::Duration;
 
 impl Scheduler for LocalSpawner {
     fn schedule_future(
-        &self,
+        self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> AutoDisposal<'static> {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
@@ -22,7 +22,7 @@ impl Scheduler for LocalSpawner {
         AutoDisposal::new(abort_handle)
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
+    fn sleep(self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
         Delay::new(duration)
     }
 }

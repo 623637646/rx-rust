@@ -159,6 +159,7 @@ fn test_async() {
         let observable = subject.clone();
 
         let subscription = runtime
+            .clone()
             .spawn(async move {
                 let (on_next, on_termination) = observer.into_callbacks();
                 observable.subscribe_with_callback(on_next, on_termination)
@@ -170,6 +171,7 @@ fn test_async() {
 
         let mut subject_cloned = subject.clone();
         runtime
+            .clone()
             .spawn(async move {
                 subject_cloned.on_next(&111);
             })
@@ -179,15 +181,17 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
 
         runtime
+            .clone()
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.clone().sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Dropped);
 
         let subject_cloned = subject.clone();
         runtime
+            .clone()
             .spawn(async move {
                 subject_cloned.on_termination(Termination::Error("error"));
             })

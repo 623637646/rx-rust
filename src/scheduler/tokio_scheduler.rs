@@ -7,7 +7,7 @@ use std::time::Duration;
 
 impl Scheduler for tokio::runtime::Handle {
     fn schedule_period(
-        &self,
+        self,
         mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
         period: Duration,
         delay: Option<Duration>,
@@ -31,13 +31,13 @@ impl Scheduler for tokio::runtime::Handle {
     }
 
     fn schedule_future(
-        &self,
+        self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> AutoDisposal<'static> {
         AutoDisposal::new(self.spawn(future))
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
+    fn sleep(self, duration: Duration) -> impl Future<Output = ()> + NecessarySend {
         tokio::time::sleep(duration)
     }
 }

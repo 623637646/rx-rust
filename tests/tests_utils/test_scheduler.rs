@@ -9,7 +9,7 @@ use std::time::Duration;
 
 impl Scheduler for TestRuntime {
     fn schedule_future(
-        &self,
+        self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> AutoDisposal<'static> {
         let entry = EntryExitChecker::enter();
@@ -25,7 +25,7 @@ impl Scheduler for TestRuntime {
         }))
     }
 
-    async fn sleep(&self, duration: Duration) {
+    async fn sleep(self, duration: Duration) {
         cfg_if::cfg_if! {
             if #[cfg(feature = "local-pool-scheduler")] {
                 self.spawner.sleep(duration).await;

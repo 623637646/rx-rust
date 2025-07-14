@@ -129,7 +129,7 @@ impl<T> Checker<T, Infallible> {
 
         let values_cloned = values.clone();
         let state_cloned = state.clone();
-        let handle = runtime.spawn(async move {
+        let handle = runtime.clone().spawn(async move {
             while let Some(value) = stream.next().await {
                 values_cloned.lock_mut().push(value);
             }

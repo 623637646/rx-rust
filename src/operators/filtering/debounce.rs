@@ -72,7 +72,7 @@ where
 
         let current_value = self.current_value.clone();
         let observer = self.observer.clone();
-        let disposal = self.scheduler.schedule(
+        let disposal = self.scheduler.clone().schedule(
             move || {
                 if let Some(value) = { current_value.lock_mut().take() } {
                     if let Some(observer) = observer.lock_mut().as_mut() {

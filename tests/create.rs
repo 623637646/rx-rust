@@ -99,11 +99,11 @@ fn test_unsubscribe() {
             observer.on_next(1);
             let runtime = runtime_cloned.clone();
             let handle = runtime_cloned.spawn(async move {
-                runtime.sleep(Duration::from_millis(100)).await;
+                runtime.clone().sleep(Duration::from_millis(100)).await;
                 observer.on_next(2);
-                runtime.sleep(Duration::from_millis(100)).await;
+                runtime.clone().sleep(Duration::from_millis(100)).await;
                 observer.on_next(3);
-                runtime.sleep(Duration::from_millis(100)).await;
+                runtime.clone().sleep(Duration::from_millis(100)).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
@@ -121,13 +121,13 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [1]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(Duration::from_millis(50)).await;
+        runtime.clone().sleep(Duration::from_millis(50)).await;
         assert_eq!(checker_1.values(), [1]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [1]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(Duration::from_millis(100)).await;
+        runtime.clone().sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [1, 2]);
@@ -135,13 +135,13 @@ fn test_unsubscribe() {
 
         subscription_1.dispose(); // unsubscribe
 
-        runtime.sleep(Duration::from_millis(100)).await;
+        runtime.clone().sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [1, 2, 3]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(Duration::from_millis(100)).await;
+        runtime.clone().sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [1, 2, 3]);
@@ -235,9 +235,9 @@ fn test_async() {
             observer.on_next(1);
             let runtime = runtime_cloned.clone();
             let handle = runtime_cloned.spawn(async move {
-                runtime.sleep(Duration::from_millis(100)).await;
+                runtime.clone().sleep(Duration::from_millis(100)).await;
                 observer.on_next(2);
-                runtime.sleep(Duration::from_millis(100)).await;
+                runtime.clone().sleep(Duration::from_millis(100)).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.abort())
@@ -245,29 +245,31 @@ fn test_async() {
         let (checker, observer) = Checker::new();
 
         let subscription = runtime
+            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert_eq!(checker.values(), [1]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(Duration::from_millis(50)).await;
+        runtime.clone().sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [1]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(Duration::from_millis(100)).await;
+        runtime.clone().sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert_eq!(checker.state(), State::Active);
 
         runtime
+            .clone()
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.clone().sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert_eq!(checker.state(), State::Dropped);
 
-        runtime.sleep(Duration::from_millis(100)).await;
+        runtime.clone().sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [1, 2]);
         assert_eq!(checker.state(), State::Dropped);
     });
