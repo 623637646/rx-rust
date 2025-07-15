@@ -6,7 +6,7 @@ use crate::{
 use std::time::Duration;
 
 impl Scheduler for tokio::runtime::Handle {
-    fn schedule_period(
+    fn schedule_periodically(
         self,
         mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
         period: Duration,

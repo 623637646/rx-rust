@@ -43,7 +43,7 @@ where
             values: Shared::new(Mutable::new(Vec::default())),
         };
         let observer_cloned = observer.clone();
-        let disposal = self.scheduler.schedule_period(
+        let disposal = self.scheduler.schedule_periodically(
             move |_| {
                 if let Some(observer) = observer_cloned.observer.lock_mut().as_mut() {
                     let values = std::mem::take(&mut *observer_cloned.values.lock_mut());

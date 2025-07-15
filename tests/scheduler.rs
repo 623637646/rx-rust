@@ -1,16 +1,14 @@
 mod tests_utils;
 
-use crate::tests_utils::checker::State;
-use crate::tests_utils::{checker::Checker, test_runtime::block_on};
-use rx_rust::{
-    disposable::Disposable,
-    observer::{Observer, Termination},
-    scheduler::Scheduler,
-};
-use std::{
-    convert::Infallible,
-    time::{Duration, Instant},
-};
+use crate::tests_utils::test_runtime::block_on;
+use futures::StreamExt;
+use rx_rust::scheduler::RecursionAction;
+use rx_rust::{disposable::Disposable, scheduler::Scheduler};
+use std::time::{Duration, Instant};
+
+const RECURSION_EXECUTION_TIMES: usize = 200;
+const RECURSION_EXPECTED_DIFF: u128 = 8_000;
+const RECURSION_SLEEP_TIME: u64 = 10;
 
 #[test]
 fn test_schedule_without_delay() {
@@ -41,6 +39,7 @@ fn test_schedule_with_delay() {
         assert!(rx.await.is_ok());
         let elapsed_time = start_time.elapsed();
         assert!(elapsed_time >= Duration::from_millis(100));
+        assert!(elapsed_time < Duration::from_millis(110));
     });
 }
 
@@ -77,158 +76,168 @@ fn test_schedule_with_late_abort() {
 }
 
 #[test]
-fn test_schedule_recursive() {
+fn test_schedule_recursively_without_delay() {
     block_on(|runtime| async move {
-        let (checker, observer) = Checker::new();
-        let mut observer = Some(observer);
-        let _disposal = runtime.clone().schedule_recursive(
+        let start_instant = Instant::now();
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let mut tx = Some(tx);
+        let _disposal = runtime.clone().schedule_recursively(
             move |index| {
-                observer.as_mut().unwrap().on_next(index);
-                if index == 5 {
-                    observer
-                        .take()
-                        .unwrap()
-                        .on_termination(Termination::<Infallible>::Completed);
-                    None
+                if index == RECURSION_EXECUTION_TIMES {
+                    tx.take().unwrap();
+                    RecursionAction::Stop
                 } else {
-                    Some(Duration::from_millis(
-                        ((index + 1) * 10).try_into().unwrap(),
+                    tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
+                    RecursionAction::ContinueAfterRevisedDelay(Duration::from_millis(
+                        RECURSION_SLEEP_TIME,
                     ))
                 }
             },
             None,
         );
-        runtime.clone().sleep(Duration::from_millis(5)).await;
-        assert_eq!(checker.values(), [0]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(10)).await;
-        assert_eq!(checker.values(), [0, 1]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(20)).await;
-        assert_eq!(checker.values(), [0, 1, 2]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(30)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(40)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(50)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert_eq!(checker.state(), State::Completed);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert_eq!(checker.state(), State::Completed);
+        let mut count = 0;
+        while let Some(call_instant) = rx.next().await {
+            let duration = call_instant - start_instant;
+            let diff = duration.as_micros() - (count * RECURSION_SLEEP_TIME * 1000) as u128;
+            assert!(
+                diff < RECURSION_EXPECTED_DIFF,
+                "diff: {}, count: {}",
+                diff,
+                count
+            );
+            count += 1;
+        }
+        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
     });
 }
 
 #[test]
+fn test_schedule_recursively_with_delay() {
+    block_on(|runtime| async move {
+        let start_instant = Instant::now();
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let mut tx = Some(tx);
+        let _disposal = runtime.clone().schedule_recursively(
+            move |index| {
+                if index == RECURSION_EXECUTION_TIMES {
+                    tx.take().unwrap();
+                    RecursionAction::Stop
+                } else {
+                    tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
+                    RecursionAction::ContinueAfterRevisedDelay(Duration::from_millis(
+                        RECURSION_SLEEP_TIME,
+                    ))
+                }
+            },
+            Some(Duration::from_millis(RECURSION_SLEEP_TIME)),
+        );
+        let mut count = 0;
+        while let Some(call_instant) = rx.next().await {
+            let duration = call_instant - start_instant;
+            let diff = duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME * 1000) as u128;
+            assert!(
+                diff < RECURSION_EXPECTED_DIFF,
+                "diff: {}, count: {}",
+                diff,
+                count
+            );
+            count += 1;
+        }
+        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
+    });
+}
+
+// For panic `overflow when subtracting durations` in `let delay = delay - diff`.
+#[test]
+fn test_schedule_recursively_small_delay() {
+    block_on(|runtime| async move {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let mut tx = Some(tx);
+        let _disposal = runtime.clone().schedule_recursively(
+            move |index| {
+                if index == RECURSION_EXECUTION_TIMES {
+                    tx.take().unwrap();
+                    RecursionAction::Stop
+                } else {
+                    tx.as_ref().unwrap().unbounded_send(()).unwrap();
+                    RecursionAction::ContinueAfterRevisedDelay(Duration::from_millis(1))
+                }
+            },
+            Some(Duration::from_millis(1)),
+        );
+        let mut count = 0;
+        while (rx.next().await).is_some() {
+            count += 1;
+        }
+        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
+    });
+}
+#[test]
 fn test_schedule_period_without_delay() {
     block_on(|runtime| async move {
-        let (checker, observer) = Checker::new();
-        let mut observer = Some(observer);
-        let _disposal = runtime.clone().schedule_period(
+        let start_instant = Instant::now();
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let mut tx = Some(tx);
+        let _disposal = runtime.clone().schedule_periodically(
             move |index| {
-                observer.as_mut().unwrap().on_next(index);
-                if index == 5 {
-                    observer
-                        .take()
-                        .unwrap()
-                        .on_termination(Termination::<Infallible>::Completed);
+                if index == RECURSION_EXECUTION_TIMES {
+                    tx.take().unwrap();
                     true
                 } else {
+                    tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
                     false
                 }
             },
-            Duration::from_millis(100),
+            Duration::from_millis(RECURSION_SLEEP_TIME),
             None,
         );
-        runtime.clone().sleep(Duration::from_millis(50)).await;
-        assert_eq!(checker.values(), [0]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert_eq!(checker.state(), State::Completed);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert_eq!(checker.state(), State::Completed);
+        let mut count = 0;
+        while let Some(call_instant) = rx.next().await {
+            let duration = call_instant - start_instant;
+            let diff = duration.as_micros() - (count * RECURSION_SLEEP_TIME * 1000) as u128;
+            assert!(
+                diff < RECURSION_EXPECTED_DIFF,
+                "diff: {}, count: {}",
+                diff,
+                count
+            );
+            count += 1;
+        }
+        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
     });
 }
 
 #[test]
 fn test_schedule_period_with_delay() {
     block_on(|runtime| async move {
-        let (checker, observer) = Checker::new();
-        let mut observer = Some(observer);
-        let _disposal = runtime.clone().schedule_period(
+        let start_instant = Instant::now();
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let mut tx = Some(tx);
+        let _disposal = runtime.clone().schedule_periodically(
             move |index| {
-                observer.as_mut().unwrap().on_next(index);
-                if index == 5 {
-                    observer
-                        .take()
-                        .unwrap()
-                        .on_termination(Termination::<Infallible>::Completed);
+                if index == RECURSION_EXECUTION_TIMES {
+                    tx.take().unwrap();
                     true
                 } else {
+                    tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
                     false
                 }
             },
-            Duration::from_millis(100),
-            Some(Duration::from_millis(20)),
+            Duration::from_millis(RECURSION_SLEEP_TIME),
+            Some(Duration::from_millis(RECURSION_SLEEP_TIME)),
         );
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(50)).await;
-        assert_eq!(checker.values(), [0]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4]);
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert_eq!(checker.state(), State::Completed);
-
-        runtime.clone().sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [0, 1, 2, 3, 4, 5]);
-        assert_eq!(checker.state(), State::Completed);
+        let mut count = 0;
+        while let Some(call_instant) = rx.next().await {
+            let duration = call_instant - start_instant;
+            let diff = duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME * 1000) as u128;
+            assert!(
+                diff < RECURSION_EXPECTED_DIFF,
+                "diff: {}, count: {}",
+                diff,
+                count
+            );
+            count += 1;
+        }
+        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
     });
 }

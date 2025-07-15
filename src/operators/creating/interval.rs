@@ -32,7 +32,7 @@ where
         self,
         mut observer: impl Observer<usize, Infallible> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let disposal = self.scheduler.schedule_period(
+        let disposal = self.scheduler.schedule_periodically(
             move |count| {
                 observer.on_next(count);
                 false
