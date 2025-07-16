@@ -27,6 +27,9 @@ pub enum RecursionAction {
     /// No timing correction is applied.
     ContinueAfterFixedDelay(Duration),
 
+    /// Continue immediately
+    Continue,
+
     /// Stop execution
     Stop,
 }
@@ -82,6 +85,9 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
                     RecursionAction::ContinueAfterFixedDelay(delay) => {
                         this.clone().sleep(delay).await;
                         diff = now.elapsed() - delay;
+                    }
+                    RecursionAction::Continue => {
+                        diff = now.elapsed();
                     }
                     RecursionAction::Stop => {
                         break;
