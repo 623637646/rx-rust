@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
+use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
@@ -10,7 +11,7 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
 };
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tests_utils::checker::Checker;
 
 #[test]
@@ -153,6 +154,45 @@ fn test_unsubscribe() {
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [0, 1, 2, 3, 4]);
         assert_eq!(checker_2.state(), State::Active);
+    });
+}
+
+#[test]
+fn test_precision() {
+    pub(crate) const RECURSION_EXECUTION_TIMES: u64 = 200;
+    pub(crate) const RECURSION_EXPECTED_DIFF: u128 = 8_000;
+    pub(crate) const RECURSION_SLEEP_TIME: u64 = 10;
+
+    block_on(|runtime| async move {
+        let start_instant = Instant::now();
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let observable = Interval::new(
+            Duration::from_millis(RECURSION_SLEEP_TIME),
+            runtime.clone(),
+            None,
+        );
+        let _subscription = observable.subscribe_with_callback(
+            move |_| {
+                tx.unbounded_send(Instant::now()).unwrap();
+            },
+            |_| {},
+        );
+
+        let mut count = 0;
+        while let Some(call_instant) = rx.next().await {
+            let duration = call_instant - start_instant;
+            let diff = duration.as_micros() - (count * RECURSION_SLEEP_TIME * 1000) as u128;
+            assert!(
+                diff < RECURSION_EXPECTED_DIFF,
+                "diff: {}, count: {}",
+                diff,
+                count
+            );
+            count += 1;
+            if count == RECURSION_EXECUTION_TIMES {
+                break;
+            }
+        }
     });
 }
 
