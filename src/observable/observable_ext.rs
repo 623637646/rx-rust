@@ -39,6 +39,7 @@ use crate::{
             do_after_termination::DoAfterTermination, do_before_disposal::DoBeforeDisposal,
             do_before_next::DoBeforeNext, do_before_subscription::DoBeforeSubscription,
             do_before_termination::DoBeforeTermination, materialize::Materialize,
+            observe_on::ObserveOn,
         },
     },
     subject::{
@@ -331,6 +332,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         F: FnOnce() -> S,
     {
         ConnectableObservable::new(self, subject_maker())
+    }
+
+    fn observe_on<S>(self, scheduler: S) -> ObserveOn<Self, S> {
+        ObserveOn::new(self, scheduler)
     }
 
     fn publish(self) -> ConnectableObservable<Self, PublishSubject<'or, T, E>> {

@@ -1,10 +1,5 @@
+use crate::tests_utils::join_handle::JoinHandle;
 use educe::Educe;
-use futures::{
-    channel::oneshot::{Canceled, Receiver},
-    future::abortable,
-    stream::AbortHandle,
-};
-use pin_project::pin_project;
 use rx_rust::utils::types::NecessarySend;
 
 cfg_if::cfg_if! {
@@ -51,21 +46,12 @@ cfg_if::cfg_if! {
 }
 
 impl TestRuntime {
-    pub(crate) fn spawn<FU>(&self, future: FU) -> JoinHandle<FU::Output>
+    pub(crate) fn spawn<FU>(&self, future: FU) -> JoinHandle<FU>
     where
         FU: Future + NecessarySend + 'static,
         FU::Output: NecessarySend + 'static,
     {
-        let (tx, rx) = futures::channel::oneshot::channel();
-        let (future, abort_handle) = abortable(future);
-
-        let future = async {
-            let result = future.await;
-            if let Ok(value) = result {
-                _ = tx.send(value);
-            }
-        };
-
+        let (join_handle, future) = JoinHandle::wrape(future);
         cfg_if::cfg_if! {
             if #[cfg(feature = "local-pool-scheduler")] {
                 use futures::task::LocalSpawnExt;
@@ -81,8 +67,7 @@ impl TestRuntime {
                 _ = future;
             }
         }
-
-        JoinHandle { rx, abort_handle }
+        join_handle
     }
 }
 
@@ -112,30 +97,5 @@ where
             _ = body(runtime);
             panic!("You need to specify a feature to run tests.");
         }
-    }
-}
-
-#[pin_project]
-pub(crate) struct JoinHandle<T> {
-    #[pin]
-    rx: Receiver<T>,
-    abort_handle: AbortHandle,
-}
-
-impl<T> JoinHandle<T> {
-    pub(crate) fn abort(self) {
-        self.abort_handle.abort();
-    }
-}
-
-impl<T> Future for JoinHandle<T> {
-    type Output = Result<T, Canceled>;
-
-    fn poll(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let this = self.project();
-        Future::poll(this.rx, cx)
     }
 }

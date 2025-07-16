@@ -111,6 +111,34 @@ macro_rules! safe_lock_option_observer {
         }
     }};
 
+    (on_next: $lock_name:expr, values: $values:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let values = $values;
+        if let Some(observer) = $lock_name.lock_mut().as_mut() {
+            for value in values {
+                Observer::on_next(observer, value);
+            }
+            true
+        } else {
+            false
+        }
+    }};
+
+    (on_next_and_termination: $lock_name:expr, values: $values:expr, $termination:expr) => {{
+        use $crate::safe_lock_option;
+        let values = $values;
+        let termination = $termination;
+        if let Some(mut observer) = safe_lock_option!(take: $lock_name) {
+            for value in values {
+                Observer::on_next(&mut observer, value);
+            }
+            Observer::on_termination(observer, termination);
+            true
+        } else {
+            false
+        }
+    }};
+
     (on_termination: $lock_name:expr, $value:expr) => {{
         use $crate::safe_lock_option;
         if let Some(observer) = safe_lock_option!(take: $lock_name) {
