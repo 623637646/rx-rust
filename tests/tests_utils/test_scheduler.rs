@@ -1,7 +1,7 @@
 use crate::tests_utils::test_runtime::TestRuntime;
 use educe::Educe;
 use rx_rust::{
-    disposable::{auto_disposal::AutoDisposal, callback_disposal::CallbackDisposal},
+    disposable::{Disposable, callback_disposal::CallbackDisposal},
     scheduler::Scheduler,
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
@@ -11,7 +11,7 @@ impl Scheduler for TestRuntime {
     fn schedule_future(
         self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
-    ) -> AutoDisposal<'static> {
+    ) -> impl Disposable + NecessarySend + 'static {
         let entry = EntryExitChecker::enter();
         let entry_cloned = entry.clone();
         let future = async move {
@@ -19,10 +19,10 @@ impl Scheduler for TestRuntime {
             entry_cloned.exit();
         };
         let handle = self.spawn(future);
-        AutoDisposal::new(CallbackDisposal::new(move || {
+        CallbackDisposal::new(move || {
             handle.abort();
             entry.exit();
-        }))
+        })
     }
 
     fn sleep(self, duration: Duration) -> impl Future + NecessarySend {

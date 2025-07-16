@@ -1,4 +1,4 @@
-use crate::disposable::auto_disposal::AutoDisposal;
+use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
 use crate::scheduler::RecursionAction;
@@ -61,7 +61,7 @@ struct DelayObserver<T, OR, S> {
     delay: Duration,
     scheduler: S,
     values: DelayObserverValues<T>,
-    timer: Shared<Mutable<Option<AutoDisposal<'static>>>>,
+    timer: Shared<Mutable<Option<BoxedDisposal<'static>>>>,
 }
 
 impl<T, OR, S> DelayObserver<T, OR, S> {
@@ -77,37 +77,39 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
         let values = self.values.clone();
         let observer = self.observer.clone();
         let timer = self.timer.clone();
-        *self.timer.lock_mut() = Some(self.scheduler.clone().schedule_recursively(
-            move |_| {
-                if let Some((instant, value)) = { values.lock_mut().pop_front() } {
-                    if let Some(value) = value {
-                        //  next
-                        if let Some(observer) = observer.lock_mut().as_mut() {
-                            observer.on_next(value);
-                            if let Some((next_instant, _)) = values.lock_ref().front() {
-                                let delay = next_instant.duration_since(instant);
-                                RecursionAction::ContinueAfterRevisedDelay(delay)
+        *self.timer.lock_mut() = Some(BoxedDisposal::new(
+            self.scheduler.clone().schedule_recursively(
+                move |_| {
+                    if let Some((instant, value)) = { values.lock_mut().pop_front() } {
+                        if let Some(value) = value {
+                            //  next
+                            if let Some(observer) = observer.lock_mut().as_mut() {
+                                observer.on_next(value);
+                                if let Some((next_instant, _)) = values.lock_ref().front() {
+                                    let delay = next_instant.duration_since(instant);
+                                    RecursionAction::ContinueAfterRevisedDelay(delay)
+                                } else {
+                                    timer.lock_mut().take().unwrap();
+                                    RecursionAction::Stop
+                                }
                             } else {
                                 timer.lock_mut().take().unwrap();
                                 RecursionAction::Stop
                             }
                         } else {
+                            // completed
+                            if let Some(observer) = { observer.lock_mut().take() } {
+                                observer.on_termination(Termination::Completed);
+                            }
                             timer.lock_mut().take().unwrap();
                             RecursionAction::Stop
                         }
                     } else {
-                        // completed
-                        if let Some(observer) = { observer.lock_mut().take() } {
-                            observer.on_termination(Termination::Completed);
-                        }
-                        timer.lock_mut().take().unwrap();
-                        RecursionAction::Stop
+                        unreachable!()
                     }
-                } else {
-                    unreachable!()
-                }
-            },
-            Some(self.delay),
+                },
+                Some(self.delay),
+            ),
         ));
     }
 }

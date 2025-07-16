@@ -7,7 +7,7 @@ pub mod thread_pool_scheduler;
 #[cfg(feature = "tokio-scheduler")]
 pub mod tokio_scheduler;
 
-use crate::{disposable::auto_disposal::AutoDisposal, utils::types::NecessarySend};
+use crate::{disposable::Disposable, utils::types::NecessarySend};
 #[cfg(feature = "futures")]
 use futures::{Stream, stream::StreamExt};
 use std::time::{Duration, Instant};
@@ -39,7 +39,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
     fn schedule_future(
         self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
-    ) -> AutoDisposal<'static>;
+    ) -> impl Disposable + NecessarySend + 'static;
 
     fn sleep(self, duration: Duration) -> impl Future + NecessarySend;
 
@@ -47,7 +47,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         self,
         task: impl FnOnce() + NecessarySend + 'static,
         delay: Option<Duration>,
-    ) -> AutoDisposal<'static> {
+    ) -> impl Disposable + NecessarySend + 'static {
         let this = self.clone();
         self.schedule_future(async move {
             if let Some(delay) = delay {
@@ -61,7 +61,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         self,
         mut task: impl FnMut(usize) -> RecursionAction + NecessarySend + 'static,
         delay: Option<Duration>,
-    ) -> AutoDisposal<'static> {
+    ) -> impl Disposable + NecessarySend + 'static {
         let this = self.clone();
         self.schedule_future(async move {
             let mut diff;
@@ -103,7 +103,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> AutoDisposal<'static> {
+    ) -> impl Disposable + NecessarySend + 'static {
         self.schedule_recursively(
             move |count| {
                 let stop = task(count);
@@ -122,7 +122,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         self,
         mut stream: SM,
         mut result_callback: impl FnMut(Option<SM::Item>) + NecessarySend + 'static,
-    ) -> AutoDisposal<'static>
+    ) -> impl Disposable + NecessarySend + 'static
     where
         SM: Stream + NecessarySend + Unpin + 'static,
     {

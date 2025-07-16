@@ -1,5 +1,5 @@
 use super::Scheduler;
-use crate::disposable::auto_disposal::AutoDisposal;
+use crate::disposable::Disposable;
 use crate::utils::types::NecessarySend;
 use educe::Educe;
 use futures::stream::{AbortHandle, Abortable};
@@ -13,11 +13,11 @@ impl Scheduler for AsyncStdScheduler {
     fn schedule_future(
         self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
-    ) -> AutoDisposal<'static> {
+    ) -> impl Disposable + NecessarySend + 'static {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let future = Abortable::new(future, abort_registration);
         async_std::task::spawn(future);
-        AutoDisposal::new(abort_handle)
+        abort_handle
     }
 
     fn sleep(self, duration: Duration) -> impl Future + NecessarySend {
