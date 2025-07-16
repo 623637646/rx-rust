@@ -1,6 +1,6 @@
 use crate::{
     disposable::{
-        Disposable, binding_drop_disposal::BindingDropDisposal, boxed_disposal::BoxedDisposal,
+        Disposable, bound_drop_disposal::BoundDropDisposal, boxed_disposal::BoxedDisposal,
         callback_disposal::CallbackDisposal, disposable_bag::DisposableBag,
     },
     utils::types::NecessarySend,
@@ -9,7 +9,7 @@ use std::ops::Add;
 
 /// Subscription is from Observable pattern, it is used to unsubscribe the observable.
 /// The `dispose` method of `Disposable` will be called when the subscription is unsubscribe or dropped.
-pub struct Subscription<'dis>(DisposableBag<BindingDropDisposal<BoxedDisposal<'dis>>>);
+pub struct Subscription<'dis>(DisposableBag<BoundDropDisposal<BoxedDisposal<'dis>>>);
 
 impl<'dis> Subscription<'dis> {
     /// Create a new `Subscription` with no disposal. No action will be performed when the subscription is unsubscribed or dropped.
@@ -18,17 +18,17 @@ impl<'dis> Subscription<'dis> {
     }
 
     pub fn new_with_disposal(disposable: impl Disposable + NecessarySend + 'dis) -> Self {
-        Self(DisposableBag::default()) + BindingDropDisposal::new(BoxedDisposal::new(disposable))
+        Self(DisposableBag::default()) + BoundDropDisposal::new(BoxedDisposal::new(disposable))
     }
 
     pub fn new_with_disposal_callback(callback: impl FnOnce() + NecessarySend + 'dis) -> Self {
         Self(DisposableBag::default())
-            + BindingDropDisposal::new(BoxedDisposal::new(CallbackDisposal::new(callback)))
+            + BoundDropDisposal::new(BoxedDisposal::new(CallbackDisposal::new(callback)))
     }
 
     pub fn append_disposable(&mut self, disposable: impl Disposable + NecessarySend + 'dis) {
         self.0
-            .append_disposable(BindingDropDisposal::new(BoxedDisposal::new(disposable)));
+            .append_disposable(BoundDropDisposal::new(BoxedDisposal::new(disposable)));
     }
 }
 
