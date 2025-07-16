@@ -685,9 +685,9 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
-        let another_source_subject = Create::new(|_| Subscription::new_none_disposal());
+        let another_source_subject = Create::new(|_| Subscription::default());
         let observable = observable.concat_with(another_source_subject);
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
@@ -736,9 +736,9 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
-    let another_source_subject = Create::new(|_| Subscription::new_none_disposal());
+    let another_source_subject = Create::new(|_| Subscription::default());
     let observable = observable.concat_with(another_source_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }

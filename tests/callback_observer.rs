@@ -271,7 +271,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
 
         let on_next = |_: i32| life_marker_2.consume_ref();

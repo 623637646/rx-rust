@@ -13,7 +13,7 @@ pub struct Subscription<'dis>(DisposableBag<BindingDropDisposal<BoxedDisposal<'d
 
 impl<'dis> Subscription<'dis> {
     /// Create a new `Subscription` with no disposal. No action will be performed when the subscription is unsubscribed or dropped.
-    pub fn new_none_disposal() -> Self {
+    pub fn new() -> Self {
         Self(DisposableBag::default())
     }
 
@@ -29,6 +29,12 @@ impl<'dis> Subscription<'dis> {
     pub fn append_disposable(&mut self, disposable: impl Disposable + NecessarySend + 'dis) {
         self.0
             .append_disposable(BindingDropDisposal::new(BoxedDisposal::new(disposable)));
+    }
+}
+
+impl Default for Subscription<'_> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

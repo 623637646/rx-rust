@@ -591,7 +591,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer: BoxedObserver<'_, _, String>| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable =
             observable.catch_error(move |value| Throw::new(value).map_infallible_to_value());
@@ -634,7 +634,7 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let observable =
         observable.catch_error(move |value| Throw::new(value).map_infallible_to_value());

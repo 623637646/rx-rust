@@ -77,14 +77,14 @@ where
                     let termination = termination.clone();
                     drop(lock);
                     observer.on_termination(termination);
-                    Subscription::new_none_disposal()
+                    Subscription::default()
                 }
             },
             State::Terminated(termination) => {
                 let termination = termination.clone();
                 drop(lock);
                 observer.on_termination(termination);
-                Subscription::new_none_disposal()
+                Subscription::default()
             }
         }
     }

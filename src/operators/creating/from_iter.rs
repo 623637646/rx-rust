@@ -32,6 +32,6 @@ where
             observer.on_next(value);
         }
         observer.on_termination(Termination::Completed);
-        Subscription::new_none_disposal()
+        Subscription::default()
     }
 }

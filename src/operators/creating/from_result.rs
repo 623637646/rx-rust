@@ -28,6 +28,6 @@ impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for FromResult<T, E> {
             }
             Err(error) => observer.on_termination(Termination::Error(error)),
         }
-        Subscription::new_none_disposal()
+        Subscription::default()
     }
 }

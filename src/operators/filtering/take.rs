@@ -28,7 +28,7 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
-            Subscription::new_none_disposal()
+            Subscription::default()
         } else {
             subscribe_unsub_after_termination(observer, |observer| {
                 self.source.subscribe(TakeObserver {

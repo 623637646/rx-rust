@@ -406,7 +406,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = observable.take(2);
 
@@ -446,7 +446,7 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let observable = observable.take(2);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

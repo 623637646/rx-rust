@@ -20,7 +20,7 @@ fn test_completed() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
         observer.on_termination(Termination::<String>::Completed);
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -58,7 +58,7 @@ fn test_error() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
         observer.on_termination(Termination::Error("error"));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -185,7 +185,7 @@ fn test_ref() {
     let observable = Create::new(|mut observer| {
         observer.on_next(&value);
         observer.on_termination(Termination::Error(&error));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -202,7 +202,7 @@ fn test_mut_ref() {
     let observable = Create::new(|mut observer| {
         observer.on_next(&mut value);
         observer.on_termination(Termination::Error(&mut error));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -280,7 +280,7 @@ fn test_subscribe_by_different_observer() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
         observer.on_termination(Termination::Error("error"));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -337,7 +337,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
@@ -354,7 +354,7 @@ fn test_fn() {
         s.consume();
         observer.on_next(111);
         observer.on_termination(Termination::Error("error"));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
 }
 
@@ -363,7 +363,7 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
@@ -374,7 +374,7 @@ fn test_type_inference_with_subscribe() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
         observer.on_termination(Termination::Error("error"));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
 
     let observable = observable.filter(|_| true);
@@ -388,7 +388,7 @@ fn test_type_inference_without_subscribe() {
     let observable = Create::new(|mut observer| {
         observer.on_next(111);
         observer.on_termination(Termination::Error("error"));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
 
     observable.filter(|_| true);

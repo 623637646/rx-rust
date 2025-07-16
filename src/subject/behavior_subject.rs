@@ -42,7 +42,7 @@ where
     ) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated() {
             observer.on_termination(terminated);
-            Subscription::new_none_disposal()
+            Subscription::default()
         } else {
             observer.on_next(self.value.lock_ref().clone());
             self.publish_subject.subscribe(observer)

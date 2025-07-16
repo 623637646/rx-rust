@@ -801,7 +801,7 @@ fn test_clone() {
         let observable = Create::new(|mut observer| {
             observer.on_next(TestStruct);
             observer.on_termination(Termination::Error(TestStruct));
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = observable.delay(Duration::from_millis(100), runtime.clone());
         _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

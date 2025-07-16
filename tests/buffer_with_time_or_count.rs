@@ -1843,7 +1843,7 @@ fn test_clone() {
         let observable = Create::new(|mut observer| {
             observer.on_next(TestStruct);
             observer.on_termination(Termination::Error(TestStruct));
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
