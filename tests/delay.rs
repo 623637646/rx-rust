@@ -1,5 +1,8 @@
 mod tests_utils;
 
+use crate::tests_utils::RECURSION_EXECUTION_TIMES;
+use crate::tests_utils::RECURSION_EXPECTED_DIFF;
+use crate::tests_utils::RECURSION_SLEEP_TIME;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
@@ -331,10 +334,6 @@ fn test_unsubscribe() {
 
 #[test]
 fn test_precision() {
-    pub(crate) const RECURSION_EXECUTION_TIMES: u64 = 200;
-    pub(crate) const RECURSION_EXPECTED_DIFF: u128 = 8_000;
-    pub(crate) const RECURSION_SLEEP_TIME: u64 = 10;
-
     block_on(|runtime| async move {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
@@ -355,7 +354,8 @@ fn test_precision() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff = duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME * 1000) as u128;
+            let diff =
+                duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
                 "diff: {}, count: {}",

@@ -1,14 +1,13 @@
 mod tests_utils;
 
 use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::{
+    RECURSION_EXECUTION_TIMES, RECURSION_EXPECTED_DIFF, RECURSION_SLEEP_TIME,
+};
 use futures::StreamExt;
 use rx_rust::scheduler::RecursionAction;
 use rx_rust::{disposable::Disposable, scheduler::Scheduler};
 use std::time::{Duration, Instant};
-
-const RECURSION_EXECUTION_TIMES: usize = 200;
-const RECURSION_EXPECTED_DIFF: u128 = 8_000;
-const RECURSION_SLEEP_TIME: u64 = 10;
 
 #[test]
 fn test_schedule_without_delay() {
@@ -98,7 +97,8 @@ fn test_schedule_recursively_without_delay() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff = duration.as_micros() - (count * RECURSION_SLEEP_TIME * 1000) as u128;
+            let diff =
+                duration.as_micros() - (count * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
                 "diff: {}, count: {}",
@@ -107,7 +107,7 @@ fn test_schedule_recursively_without_delay() {
             );
             count += 1;
         }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
+        assert_eq!(count, RECURSION_EXECUTION_TIMES);
     });
 }
 
@@ -134,7 +134,8 @@ fn test_schedule_recursively_with_delay() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff = duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME * 1000) as u128;
+            let diff =
+                duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
                 "diff: {}, count: {}",
@@ -143,7 +144,7 @@ fn test_schedule_recursively_with_delay() {
             );
             count += 1;
         }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
+        assert_eq!(count, RECURSION_EXECUTION_TIMES);
     });
 }
 
@@ -169,7 +170,7 @@ fn test_schedule_recursively_small_delay() {
         while (rx.next().await).is_some() {
             count += 1;
         }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
+        assert_eq!(count, RECURSION_EXECUTION_TIMES);
     });
 }
 #[test]
@@ -194,7 +195,8 @@ fn test_schedule_period_without_delay() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff = duration.as_micros() - (count * RECURSION_SLEEP_TIME * 1000) as u128;
+            let diff =
+                duration.as_micros() - (count * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
                 "diff: {}, count: {}",
@@ -203,7 +205,7 @@ fn test_schedule_period_without_delay() {
             );
             count += 1;
         }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
+        assert_eq!(count, RECURSION_EXECUTION_TIMES);
     });
 }
 
@@ -229,7 +231,8 @@ fn test_schedule_period_with_delay() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff = duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME * 1000) as u128;
+            let diff =
+                duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
                 "diff: {}, count: {}",
@@ -238,6 +241,6 @@ fn test_schedule_period_with_delay() {
             );
             count += 1;
         }
-        assert_eq!(count, RECURSION_EXECUTION_TIMES as u64);
+        assert_eq!(count, RECURSION_EXECUTION_TIMES);
     });
 }
