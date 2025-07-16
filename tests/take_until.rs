@@ -349,7 +349,7 @@ fn test_mut_ref() {
         observer.on_next(&mut value_1);
         observer.on_next(&mut value_2);
         observer.on_next(&mut value_3);
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
 
     let stop_subject: PublishSubject<'_, Infallible, _> = PublishSubject::default();
@@ -637,11 +637,11 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let stop_subject = Create::new(|observer: BoxedObserver<'_, (), _>| {
             life_marker_2 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = observable.take_until(stop_subject);
 
@@ -681,9 +681,9 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
-    let stop_subject = Create::new(|_: BoxedObserver<'_, (), _>| Subscription::new_none_disposal());
+    let stop_subject = Create::new(|_: BoxedObserver<'_, (), _>| Subscription::default());
     let observable = observable.take_until(stop_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }

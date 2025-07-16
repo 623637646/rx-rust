@@ -63,7 +63,7 @@ fn test_completed_lazy_subscription() {
             *subscribed_cloned.lock_mut() = true;
             observer.on_next(111);
             observer.on_termination(Termination::Completed);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
 
         let stream = observable.into_stream();
@@ -170,7 +170,7 @@ fn test_mut_ref() {
         let observable = Create::new(|mut observer| {
             observer.on_next(&mut value);
             observer.on_termination(Termination::Completed);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
 
         let mut stream = observable.into_stream();
@@ -410,7 +410,7 @@ fn test_lifetime_or() {
         let observable = Create::new(|mut observer: BoxedObserver<'_, _, Infallible>| {
             observer.on_next(&life_marker_2);
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let _stream = observable.into_stream();
     }

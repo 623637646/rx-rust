@@ -703,7 +703,7 @@ fn test_mut_ref() {
         observer.on_next(Just::new(&mut value_2).map_infallible_to_error());
         observer.on_next(Just::new(&mut value_3).map_infallible_to_error());
         observer.on_termination(Termination::Error(&mut error));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let observable = observable.concat_map(|value| value);
 
@@ -1108,7 +1108,7 @@ fn test_lifetime_or() {
         let observable = Create::new(
             |observer: BoxedObserver<'_, Just<&TestStruct>, Infallible>| {
                 life_marker_1 = Some(observer);
-                Subscription::new_none_disposal()
+                Subscription::default()
             },
         );
         let observable = observable.concat_map(|value| value);
@@ -1150,7 +1150,7 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(Just::new(TestStruct).map_infallible_to_error());
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let observable = observable.concat_map(|value| value);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

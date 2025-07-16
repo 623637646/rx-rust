@@ -29,6 +29,6 @@ impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Just<T> {
     ) -> Subscription<'sub> {
         observer.on_next(self.0);
         observer.on_termination(Termination::Completed);
-        Subscription::new_none_disposal()
+        Subscription::default()
     }
 }

@@ -713,7 +713,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = observable.publish();
 
@@ -737,9 +737,8 @@ fn test_lifetime_or_sub() {
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(&life_marker);
 
-        let observable = Create::new(|_: BoxedObserver<'_, &TestStruct, Infallible>| {
-            Subscription::new_none_disposal()
-        });
+        let observable =
+            Create::new(|_: BoxedObserver<'_, &TestStruct, Infallible>| Subscription::default());
         let observable = observable.publish();
         _subscription = observable.subscribe(observer);
     }
@@ -750,7 +749,7 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let observable = observable.publish();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

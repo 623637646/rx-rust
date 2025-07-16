@@ -17,6 +17,6 @@ impl<'or, 'sub> Observable<'or, 'sub, Infallible, Infallible> for Empty {
         observer: impl Observer<Infallible, Infallible> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         observer.on_termination(Termination::Completed);
-        Subscription::new_none_disposal()
+        Subscription::default()
     }
 }

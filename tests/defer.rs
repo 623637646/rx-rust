@@ -136,7 +136,7 @@ fn test_mut_ref() {
     let observable = Create::new(|mut observer| {
         observer.on_next(&mut value);
         observer.on_termination(Termination::Error(&mut error));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -287,7 +287,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = Defer::new(|| observable);
 

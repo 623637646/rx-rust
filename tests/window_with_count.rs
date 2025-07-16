@@ -1343,7 +1343,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
@@ -1361,7 +1361,7 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

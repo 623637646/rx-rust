@@ -1,10 +1,10 @@
 use crate::disposable::Disposable;
 
-pub struct BindingDropDisposal<T>(Option<T>)
+pub struct BoundDropDisposal<T>(Option<T>)
 where
     T: Disposable;
 
-impl<T> BindingDropDisposal<T>
+impl<T> BoundDropDisposal<T>
 where
     T: Disposable,
 {
@@ -13,7 +13,7 @@ where
     }
 }
 
-impl<T> Disposable for BindingDropDisposal<T>
+impl<T> Disposable for BoundDropDisposal<T>
 where
     T: Disposable,
 {
@@ -22,7 +22,7 @@ where
     }
 }
 
-impl<T> Drop for BindingDropDisposal<T>
+impl<T> Drop for BoundDropDisposal<T>
 where
     T: Disposable,
 {

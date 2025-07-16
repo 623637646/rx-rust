@@ -291,7 +291,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = observable.into_boxed();
 
@@ -316,7 +316,7 @@ fn test_lifetime_oe() {
             life_marker.consume_ref();
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
 
         _observable = create.into_boxed();

@@ -243,7 +243,7 @@ fn test_mut_ref() {
     let observable = Create::new(|mut observer| {
         observer.on_next(&mut value);
         observer.on_termination(Termination::Error(&mut error_1));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let (checker, observer) = Checker::<Infallible, _>::new();
     let (_, on_termination) = observer.into_callbacks();
@@ -503,7 +503,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::new_none_disposal()
+            Subscription::default()
         });
         let observable = observable.hook_on_termination(|_, _| {});
 
@@ -533,7 +533,7 @@ fn test_clone() {
     let observable = Create::new(|mut observer| {
         observer.on_next(TestStruct);
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::new_none_disposal()
+        Subscription::default()
     });
     let observable = observable.hook_on_termination(|_, _| {});
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

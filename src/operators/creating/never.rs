@@ -12,6 +12,6 @@ impl<'or, 'sub> Observable<'or, 'sub, Infallible, Infallible> for Never {
         self,
         _: impl Observer<Infallible, Infallible> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
-        Subscription::new_none_disposal()
+        Subscription::default()
     }
 }

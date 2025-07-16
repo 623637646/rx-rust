@@ -49,7 +49,7 @@ where
                 Termination::Error(_) => {}
             }
             observer.on_termination(terminated);
-            Subscription::new_none_disposal()
+            Subscription::default()
         } else {
             self.publish_subject.subscribe(observer)
         }

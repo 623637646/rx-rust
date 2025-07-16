@@ -23,6 +23,6 @@ impl<'or, 'sub, E> Observable<'or, 'sub, Infallible, E> for Throw<E> {
         observer: impl Observer<Infallible, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         observer.on_termination(Termination::Error(self.0));
-        Subscription::new_none_disposal()
+        Subscription::default()
     }
 }
