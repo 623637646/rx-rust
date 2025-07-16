@@ -737,9 +737,8 @@ fn test_lifetime_or_sub() {
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(&life_marker);
 
-        let observable = Create::new(|_: BoxedObserver<'_, &TestStruct, Infallible>| {
-            Subscription::default()
-        });
+        let observable =
+            Create::new(|_: BoxedObserver<'_, &TestStruct, Infallible>| Subscription::default());
         let observable = observable.publish();
         _subscription = observable.subscribe(observer);
     }
