@@ -43,7 +43,7 @@ impl<'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTimeO
 where
     T: NecessarySend + 'static,
     OE: Observable<'static, 'sub, T, E>,
-    S: Scheduler + Clone + NecessarySend + 'static,
+    S: Scheduler,
 {
     fn subscribe(
         self,
@@ -79,7 +79,7 @@ impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
     where
         T: NecessarySend + 'static,
         OR: Observer<Vec<T>, E> + NecessarySend + 'static,
-        S: Scheduler + Clone + NecessarySend + 'static,
+        S: Scheduler,
     {
         if self.observer.lock_ref().is_none() {
             return;
@@ -111,7 +111,7 @@ impl<T, E, OR, S> Observer<T, E> for BufferWithTimeOrCountObserver<T, OR, S>
 where
     T: NecessarySend + 'static,
     OR: Observer<Vec<T>, E> + NecessarySend + 'static,
-    S: Scheduler + Clone + NecessarySend + 'static,
+    S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
         let mut observer_lock = self.observer.lock_mut();

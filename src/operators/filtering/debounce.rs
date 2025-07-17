@@ -33,7 +33,7 @@ impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Debounce<OE, S>
 where
     T: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler + NecessarySend + 'or,
+    S: Scheduler,
 {
     fn subscribe(
         self,

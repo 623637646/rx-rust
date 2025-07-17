@@ -31,7 +31,7 @@ impl<OE, S> Throttle<OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Throttle<OE, S>
 where
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler + NecessarySend + 'or,
+    S: Scheduler,
 {
     fn subscribe(
         self,
