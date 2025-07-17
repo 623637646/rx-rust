@@ -1,3 +1,4 @@
+use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
@@ -67,7 +68,7 @@ where
         let disposal = self.disposal.clone();
         *lock = Some(BoxedDisposal::new(self.scheduler.clone().schedule(
             move || {
-                disposal.lock_mut().take();
+                disposal.lock_mut().take().unwrap().dispose();
             },
             Some(self.time_span),
         )));
