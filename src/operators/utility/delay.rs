@@ -1,5 +1,5 @@
+use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
 use crate::scheduler::RecursionAction;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
@@ -36,82 +36,46 @@ impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Delay<OE, S>
 where
     T: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler + NecessarySend + 'or,
+    S: Scheduler,
 {
     fn subscribe(
         self,
         observer: impl Observer<T, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let timer = Shared::new(Mutable::new(None));
+        let context = Shared::new(Mutable::new(DelayContext {
+            observer: Some(observer),
+            values: VecDeque::new(),
+            timer: None,
+        }));
         let delay_observer = DelayObserver {
-            observer: Shared::new(Mutable::new(Some(observer))),
             delay: self.delay,
             scheduler: self.scheduler,
-            values: Shared::new(Mutable::new(VecDeque::new())),
-            timer: timer.clone(),
+            context: context.clone(),
         };
-        self.source.subscribe(delay_observer) + SharedDisposal::new(timer)
+        self.source.subscribe(delay_observer) + context
     }
 }
 
-type DelayObserverValues<T> = Shared<Mutable<VecDeque<(Instant, Option<T>)>>>; // None means completed
+struct DelayContext<T, OR> {
+    observer: Option<OR>,                   // None means terminated or disposed
+    values: VecDeque<(Instant, Option<T>)>, // None means completed
+    timer: Option<BoxedDisposal<'static>>,
+}
+
+impl<T, OR> Disposable for Shared<Mutable<DelayContext<T, OR>>> {
+    fn dispose(self) {
+        let mut lock = self.lock_mut();
+        lock.observer.take();
+        if let Some(timer) = lock.timer.take() {
+            timer.dispose();
+        }
+    }
+}
 
 struct DelayObserver<T, OR, S> {
-    observer: Shared<Mutable<Option<OR>>>,
     delay: Duration,
     scheduler: S,
-    values: DelayObserverValues<T>,
-    timer: Shared<Mutable<Option<BoxedDisposal<'static>>>>,
-}
-
-impl<T, OR, S> DelayObserver<T, OR, S> {
-    fn setup_emit_timer_if_needed<E>(&mut self)
-    where
-        T: NecessarySend + 'static,
-        OR: Observer<T, E> + NecessarySend + 'static,
-        S: Scheduler,
-    {
-        if self.timer.lock_ref().is_some() {
-            return;
-        }
-        let values = self.values.clone();
-        let observer = self.observer.clone();
-        let timer = self.timer.clone();
-        *self.timer.lock_mut() = Some(BoxedDisposal::new(
-            self.scheduler.clone().schedule_recursively(
-                move |_| {
-                    if let Some((instant, value)) = { values.lock_mut().pop_front() } {
-                        if let Some(value) = value {
-                            //  next
-                            if let Some(observer) = observer.lock_mut().as_mut() {
-                                observer.on_next(value);
-                                if let Some((next_instant, _)) = values.lock_ref().front() {
-                                    let delay = next_instant.duration_since(instant);
-                                    RecursionAction::ContinueAfterRevisedDelay(delay)
-                                } else {
-                                    timer.lock_mut().take().unwrap();
-                                    RecursionAction::Stop
-                                }
-                            } else {
-                                timer.lock_mut().take().unwrap();
-                                RecursionAction::Stop
-                            }
-                        } else {
-                            // completed
-                            if let Some(observer) = { observer.lock_mut().take() } {
-                                observer.on_termination(Termination::Completed);
-                            }
-                            timer.lock_mut().take().unwrap();
-                            RecursionAction::Stop
-                        }
-                    } else {
-                        unreachable!()
-                    }
-                },
-                Some(self.delay),
-            ),
-        ));
-    }
+    context: Shared<Mutable<DelayContext<T, OR>>>,
 }
 
 impl<T, E, OR, S> Observer<T, E> for DelayObserver<T, OR, S>
@@ -121,23 +85,85 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        self.values
-            .lock_mut()
-            .push_back((Instant::now(), Some(value)));
-        self.setup_emit_timer_if_needed();
+        let mut lock = self.context.lock_mut();
+        lock.values.push_back((Instant::now(), Some(value)));
+        if lock.timer.is_none() {
+            setup_emit_timer(
+                &mut lock.timer,
+                self.delay,
+                self.scheduler.clone(),
+                self.context.clone(),
+            );
+        }
     }
 
-    fn on_termination(mut self, termination: Termination<E>) {
+    fn on_termination(self, termination: Termination<E>) {
+        let mut lock = self.context.lock_mut();
         match termination {
             Termination::Completed => {
-                self.values.lock_mut().push_back((Instant::now(), None));
-                self.setup_emit_timer_if_needed();
+                lock.values.push_back((Instant::now(), None));
+                if lock.timer.is_none() {
+                    setup_emit_timer(
+                        &mut lock.timer,
+                        self.delay,
+                        self.scheduler.clone(),
+                        self.context.clone(),
+                    );
+                }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock_mut().take() } {
+                if let Some(observer) = { lock.observer.take() } {
                     observer.on_termination(termination);
+                }
+                if let Some(timer) = { lock.timer.take() } {
+                    timer.dispose();
                 }
             }
         }
     }
+}
+
+fn setup_emit_timer<T, E, OR>(
+    timer: &mut Option<BoxedDisposal<'static>>,
+    delay: Duration,
+    scheduler: impl Scheduler,
+    context: Shared<Mutable<DelayContext<T, OR>>>,
+) where
+    T: NecessarySend + 'static,
+    OR: Observer<T, E> + NecessarySend + 'static,
+{
+    *timer = Some(BoxedDisposal::new(scheduler.schedule_recursively(
+        move |_| {
+            let mut lock = context.lock_mut();
+            if let Some((instant, value)) = { lock.values.pop_front() } {
+                if let Some(value) = value {
+                    //  Next
+                    if let Some(observer) = lock.observer.as_mut() {
+                        observer.on_next(value);
+                        if let Some((next_instant, _)) = lock.values.front() {
+                            // Continue
+                            let delay = next_instant.duration_since(instant);
+                            RecursionAction::ContinueAfterRevisedDelay(delay)
+                        } else {
+                            // No more values. Stop timer. Set timer to None.
+                            lock.timer.take().unwrap();
+                            RecursionAction::Stop
+                        }
+                    } else {
+                        // Already terminated
+                        RecursionAction::Stop
+                    }
+                } else {
+                    // Completed
+                    if let Some(observer) = { lock.observer.take() } {
+                        observer.on_termination(Termination::Completed);
+                    }
+                    RecursionAction::Stop
+                }
+            } else {
+                unreachable!()
+            }
+        },
+        Some(delay),
+    )));
 }
