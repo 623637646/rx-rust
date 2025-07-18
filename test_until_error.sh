@@ -21,7 +21,7 @@ while true; do
   if grep -q "error" "$tmpfile"; then
     mkdir -p logs
     timestamp=$(date +"%Y%m%d_%H%M%S")
-    logfile="logs/test_${timestamp}.log"
+    logfile="logs/test_${timestamp}_${count}.log"
     mv "$tmpfile" "$logfile"
     echo "Error detected. Output saved to $logfile. Exiting loop."
     break
