@@ -31,18 +31,26 @@ cfg_if::cfg_if! {
         impl<T> NecessarySend for T {}
     } else {
         use std::sync::{Arc, Mutex, MutexGuard};
+        use std::ops::Deref;
         pub type Shared<T> = Arc<T>;
         pub type Mutable<T> = Mutex<T>;
+        pub struct ReadOnlyMutexGuard<'a, T: ?Sized + 'a>(MutexGuard<'a, T>);
+        impl<T: ?Sized> Deref for ReadOnlyMutexGuard<'_, T> {
+            type Target = T;
+            fn deref(&self) -> &T {
+                &self.0
+            }
+        }
         pub trait MutableHelper<T> {
             fn lock_mut(&self) -> MutexGuard<'_, T>;
-            fn lock_ref(&self) -> MutexGuard<'_, T>;
+            fn lock_ref(&self) -> ReadOnlyMutexGuard<'_, T>;
         }
         impl<T> MutableHelper<T> for Mutex<T> {
             fn lock_mut(&self) -> MutexGuard<'_, T> {
                 self.lock().unwrap()
             }
-            fn lock_ref(&self) -> MutexGuard<'_, T> {
-                self.lock().unwrap()
+            fn lock_ref(&self) -> ReadOnlyMutexGuard<'_, T> {
+                ReadOnlyMutexGuard(self.lock().unwrap())
             }
         }
         pub trait NecessarySend: Send {}
