@@ -80,7 +80,7 @@ fn test_schedule_recursively_without_delay() {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
-        let _disposal = runtime.clone().schedule_recursively(
+        let disposal = runtime.clone().schedule_recursively(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
@@ -108,6 +108,7 @@ fn test_schedule_recursively_without_delay() {
             count += 1;
         }
         assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        disposal.dispose();
     });
 }
 
@@ -117,7 +118,7 @@ fn test_schedule_recursively_with_delay() {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
-        let _disposal = runtime.clone().schedule_recursively(
+        let disposal = runtime.clone().schedule_recursively(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
@@ -145,6 +146,7 @@ fn test_schedule_recursively_with_delay() {
             count += 1;
         }
         assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        disposal.dispose();
     });
 }
 
@@ -154,7 +156,7 @@ fn test_schedule_recursively_small_delay() {
     block_on(|runtime| async move {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
-        let _disposal = runtime.clone().schedule_recursively(
+        let disposal = runtime.clone().schedule_recursively(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
@@ -171,6 +173,7 @@ fn test_schedule_recursively_small_delay() {
             count += 1;
         }
         assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        disposal.dispose();
     });
 }
 #[test]
@@ -179,7 +182,7 @@ fn test_schedule_period_without_delay() {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
-        let _disposal = runtime.clone().schedule_periodically(
+        let disposal = runtime.clone().schedule_periodically(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
@@ -206,6 +209,7 @@ fn test_schedule_period_without_delay() {
             count += 1;
         }
         assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        disposal.dispose();
     });
 }
 
@@ -215,7 +219,7 @@ fn test_schedule_period_with_delay() {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
-        let _disposal = runtime.clone().schedule_periodically(
+        let disposal = runtime.clone().schedule_periodically(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
@@ -242,5 +246,6 @@ fn test_schedule_period_with_delay() {
             count += 1;
         }
         assert_eq!(count, RECURSION_EXECUTION_TIMES);
+        disposal.dispose();
     });
 }

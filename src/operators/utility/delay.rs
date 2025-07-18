@@ -146,7 +146,7 @@ fn setup_emit_timer<T, E, OR>(
                             RecursionAction::ContinueAfterRevisedDelay(delay)
                         } else {
                             // No more values. Stop timer. Set timer to None.
-                            lock.timer.take().unwrap();
+                            lock.timer.take().unwrap().dispose();
                             RecursionAction::Stop
                         }
                     } else {
