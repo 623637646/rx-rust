@@ -37,19 +37,15 @@ where
         observer: impl Observer<(T1, T2), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Shared::new(Mutable::new(Some(observer)));
-            let latest_1 = Shared::new(Mutable::new(None));
-            let latest_2 = Shared::new(Mutable::new(None));
+            let context = Shared::new(Mutable::new(CombineLatestContext {
+                observer: Some(observer),
+                latest_1: None,
+                latest_2: None,
+            }));
             let observer_1 = CombineLatestObserver1 {
-                observer: observer.clone(),
-                latest_1: latest_1.clone(),
-                latest_2: latest_2.clone(),
+                context: context.clone(),
             };
-            let observer_2 = CombineLatestObserver2 {
-                observer,
-                latest_1,
-                latest_2,
-            };
+            let observer_2 = CombineLatestObserver2 { context };
             let subscription_1 = self.source_1.subscribe(observer_1);
             let subscription_2 = self.source_2.subscribe(observer_2);
             subscription_1 + subscription_2
@@ -57,10 +53,14 @@ where
     }
 }
 
+struct CombineLatestContext<T1, T2, OR> {
+    observer: Option<OR>,
+    latest_1: Option<T1>,
+    latest_2: Option<T2>,
+}
+
 struct CombineLatestObserver1<T1, T2, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    latest_1: Shared<Mutable<Option<T1>>>,
-    latest_2: Shared<Mutable<Option<T2>>>,
+    context: Shared<Mutable<CombineLatestContext<T1, T2, OR>>>,
 }
 
 impl<T1, T2, E, OR> Observer<T1, E> for CombineLatestObserver1<T1, T2, OR>
@@ -70,25 +70,24 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, latest_1: T1) {
-        *self.latest_1.lock_mut() = Some(latest_1.clone());
-        if let Some(latest_2) = { self.latest_2.lock_ref().clone() } {
-            if let Some(observer) = self.observer.lock_mut().as_mut() {
+        let mut lock = self.context.lock_mut();
+        lock.latest_1 = Some(latest_1.clone());
+        if let Some(latest_2) = lock.latest_2.clone() {
+            if let Some(observer) = lock.observer.as_mut() {
                 observer.on_next((latest_1, latest_2))
             }
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock_mut().take() } {
+        if let Some(observer) = { self.context.lock_mut().observer.take() } {
             observer.on_termination(termination);
         }
     }
 }
 
 struct CombineLatestObserver2<T1, T2, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    latest_1: Shared<Mutable<Option<T1>>>,
-    latest_2: Shared<Mutable<Option<T2>>>,
+    context: Shared<Mutable<CombineLatestContext<T1, T2, OR>>>,
 }
 
 impl<T1, T2, E, OR> Observer<T2, E> for CombineLatestObserver2<T1, T2, OR>
@@ -98,16 +97,17 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, latest_2: T2) {
-        *self.latest_2.lock_mut() = Some(latest_2.clone());
-        if let Some(latest_1) = { self.latest_1.lock_ref().clone() } {
-            if let Some(observer) = self.observer.lock_mut().as_mut() {
+        let mut lock = self.context.lock_mut();
+        lock.latest_2 = Some(latest_2.clone());
+        if let Some(latest_1) = lock.latest_1.clone() {
+            if let Some(observer) = lock.observer.as_mut() {
                 observer.on_next((latest_1, latest_2))
             }
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock_mut().take() } {
+        if let Some(observer) = { self.context.lock_mut().observer.take() } {
             observer.on_termination(termination);
         }
     }
