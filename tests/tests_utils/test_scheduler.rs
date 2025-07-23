@@ -58,6 +58,8 @@ impl EntryExitChecker {
 
 impl Drop for EntryExitChecker {
     fn drop(&mut self) {
-        assert!(self.0, "EntryExitChecker dropped without exit");
+        if !std::thread::panicking() {
+            assert!(self.0, "EntryExitChecker dropped without exit");
+        }
     }
 }
