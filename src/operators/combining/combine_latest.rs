@@ -41,6 +41,7 @@ where
                 observer: Some(observer),
                 latest_1: None,
                 latest_2: None,
+                should_completed: false,
             }));
             let observer_1 = CombineLatestObserver1 {
                 context: context.clone(),
@@ -57,6 +58,7 @@ struct CombineLatestContext<T1, T2, OR> {
     observer: Option<OR>,
     latest_1: Option<T1>,
     latest_2: Option<T2>,
+    should_completed: bool,
 }
 
 struct CombineLatestObserver1<T1, T2, OR> {
@@ -80,8 +82,22 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.context.lock_mut().observer.take() } {
-            observer.on_termination(termination);
+        let mut lock = self.context.lock_mut();
+        match termination {
+            Termination::Completed => {
+                if lock.should_completed {
+                    if let Some(observer) = { lock.observer.take() } {
+                        observer.on_termination(termination);
+                    }
+                } else {
+                    lock.should_completed = true;
+                }
+            }
+            Termination::Error(_) => {
+                if let Some(observer) = { lock.observer.take() } {
+                    observer.on_termination(termination);
+                }
+            }
         }
     }
 }
@@ -107,8 +123,22 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.context.lock_mut().observer.take() } {
-            observer.on_termination(termination);
+        let mut lock = self.context.lock_mut();
+        match termination {
+            Termination::Completed => {
+                if lock.should_completed {
+                    if let Some(observer) = { lock.observer.take() } {
+                        observer.on_termination(termination);
+                    }
+                } else {
+                    lock.should_completed = true;
+                }
+            }
+            Termination::Error(_) => {
+                if let Some(observer) = { lock.observer.take() } {
+                    observer.on_termination(termination);
+                }
+            }
         }
     }
 }

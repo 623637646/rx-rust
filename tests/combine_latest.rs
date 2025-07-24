@@ -69,14 +69,44 @@ fn test_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    sender.on_termination(Termination::<Infallible>::Completed);
+    sender_1.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [(222, "111"), (333, "111"), (444, "111"), (444, "222")]
     );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+
+    sender.on_next(555);
+    assert_eq!(
+        checker.values(),
+        [
+            (222, "111"),
+            (333, "111"),
+            (444, "111"),
+            (444, "222"),
+            (555, "222")
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            (222, "111"),
+            (333, "111"),
+            (444, "111"),
+            (444, "222"),
+            (555, "222")
+        ]
+    );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
 }
 
 #[test]
@@ -133,13 +163,43 @@ fn test_completed_from_another_source() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    sender_1.on_termination(Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [(222, "111"), (333, "111"), (444, "111"), (444, "222")]
     );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    sender_1.on_next("333");
+    assert_eq!(
+        checker.values(),
+        [
+            (222, "111"),
+            (333, "111"),
+            (444, "111"),
+            (444, "222"),
+            (444, "333")
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    sender_1.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            (222, "111"),
+            (333, "111"),
+            (444, "111"),
+            (444, "222"),
+            (444, "333")
+        ]
+    );
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(channel_checker_1.state(), ChannelState::Completed);
 }
 
@@ -274,10 +334,40 @@ fn test_completed_3_sources() {
             ((333, "222"), 0.222)
         ]
     );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    sender_1.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            ((222, "111"), 0.111),
+            ((333, "111"), 0.111),
+            ((333, "222"), 0.111),
+            ((333, "222"), 0.222)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    sender_2.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            ((222, "111"), 0.111),
+            ((333, "111"), 0.111),
+            ((333, "222"), 0.111),
+            ((333, "222"), 0.222)
+        ]
+    );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Completed);
 }
 
 #[test]
@@ -518,6 +608,15 @@ fn test_unsubscribe() {
         checker_2.values(),
         [(222, "111"), (333, "111"), (444, "111"), (444, "222")]
     );
+    assert_eq!(checker_2.state(), State::Active);
+
+    subject_1.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker_1.values(), [(222, "111")]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(
+        checker_2.values(),
+        [(222, "111"), (333, "111"), (444, "111"), (444, "222")]
+    );
     assert_eq!(checker_2.state(), State::Completed);
 }
 
@@ -663,6 +762,14 @@ fn test_subscribe_by_different_observer() {
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [(111, "111")]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [(111, "111")]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    another_source_subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker_1.values(), [(111, "111")]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [(111, "111")]);
     assert_eq!(checker_2.state(), State::Completed);
@@ -773,11 +880,56 @@ fn test_multiple_operation() {
             (((333, "222"), 0.222), true)
         ]
     );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
+
+    sender_1.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            (((333, "111"), 0.111), true),
+            (((333, "222"), 0.111), true),
+            (((333, "222"), 0.222), true)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
+
+    sender_2.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            (((333, "111"), 0.111), true),
+            (((333, "222"), 0.111), true),
+            (((333, "222"), 0.222), true)
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
+
+    sender_3.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            (((333, "111"), 0.111), true),
+            (((333, "222"), 0.111), true),
+            (((333, "222"), 0.222), true)
+        ]
+    );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
-    assert_eq!(channel_checker_2.state(), ChannelState::Unsubscribed);
-    assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Completed);
 }
 
 #[test]
@@ -851,6 +1003,19 @@ fn test_multiple_operation_same_another_source() {
             (("222", 444), 444),
         ]
     );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+
+    another_source_subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            (("111", 333), 333),
+            (("111", 444), 333),
+            (("111", 444), 444),
+            (("222", 444), 444),
+        ]
+    );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
@@ -909,14 +1074,44 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
 
-    sender.on_termination(Termination::<Infallible>::Completed);
+    sender_1.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
         [(222, "111"), (333, "111"), (444, "111"), (444, "222")]
     );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+
+    sender.on_next(555);
+    assert_eq!(
+        checker.values(),
+        [
+            (222, "111"),
+            (333, "111"),
+            (444, "111"),
+            (444, "222"),
+            (555, "222")
+        ]
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(
+        checker.values(),
+        [
+            (222, "111"),
+            (333, "111"),
+            (444, "111"),
+            (444, "222"),
+            (555, "222")
+        ]
+    );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
 }
 
 #[test]
