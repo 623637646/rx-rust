@@ -3,7 +3,10 @@ use rx_rust::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
+    utils::{
+        safe_lock::SafeLock,
+        types::{Mutable, MutableHelper, NecessarySend, Shared},
+    },
 };
 
 enum State<'or, T, E> {
@@ -49,10 +52,10 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let observer = match std::mem::replace(
-            &mut *self.0.lock_mut(),
-            State::Terminated(termination.clone()),
-        ) {
+        let observer = match self
+            .0
+            .safe_lock_mem_replace(State::Terminated(termination.clone()))
+        {
             State::Initialized => panic!(),
             State::Subscribed(boxed_observer) => boxed_observer.unwrap(),
             State::Terminated(_) => panic!(),
@@ -71,10 +74,10 @@ where
     'or: 'sub,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        match std::mem::replace(
-            &mut *self.0.lock_mut(),
-            State::Subscribed(Some(BoxedObserver::new(observer))),
-        ) {
+        match self
+            .0
+            .safe_lock_mem_replace(State::Subscribed(Some(BoxedObserver::new(observer))))
+        {
             State::Initialized => {}
             State::Subscribed(_) => panic!(),
             State::Terminated(_) => panic!(),
@@ -89,7 +92,7 @@ where
                 State::Unsubscribed => panic!(),
             };
             if change {
-                _ = std::mem::replace(&mut *self.0.lock_mut(), State::Unsubscribed);
+                self.0.safe_lock_set(State::Unsubscribed);
             }
         })
     }

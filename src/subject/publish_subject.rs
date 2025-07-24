@@ -1,6 +1,7 @@
 use super::Subject;
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
+use crate::utils::safe_lock::SafeLock;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -156,16 +157,10 @@ where
                                 }
 
                                 // Reset to Idle
-                                _ = std::mem::replace(
-                                    &mut *self.0.lock_mut(),
-                                    State::Idle(observers),
-                                );
+                                self.0.safe_lock_set(State::Idle(observers));
                             }
                             ProcessedAction::Terminate(termination) => {
-                                _ = std::mem::replace(
-                                    &mut *self.0.lock_mut(),
-                                    State::Terminated(termination.clone()),
-                                );
+                                self.0.safe_lock_set(State::Terminated(termination.clone()));
                                 observers.into_iter().for_each(|(_, observer)| {
                                     observer.on_termination(termination.clone());
                                 })

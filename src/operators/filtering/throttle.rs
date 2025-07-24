@@ -2,6 +2,7 @@ use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
+use crate::utils::safe_lock::SafeLockOption;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -68,7 +69,7 @@ where
         let disposal = self.disposal.clone();
         *lock = Some(BoxedDisposal::new(self.scheduler.clone().schedule(
             move || {
-                disposal.lock_mut().take().unwrap().dispose();
+                disposal.safe_lock_take().unwrap().dispose();
             },
             Some(self.time_span),
         )));

@@ -10,7 +10,8 @@ use rx_rust::observer::{Observer, Termination};
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::Subject;
 use rx_rust::subject::publish_subject::PublishSubject;
-use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
+use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption};
+use rx_rust::utils::types::{Mutable, Shared};
 use std::convert::Infallible;
 use std::time::Duration;
 use tests_utils::checker::Checker;
@@ -386,27 +387,27 @@ fn test_unsub_on_next() {
     // unsubscribe before on_next
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable
             .clone()
             .hook_on_next(move |observer, value| {
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
                 observer.on_next(value);
             })
             .subscribe(observer_2),
-    );
+    ));
 
     // unsubscribe after on_next
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable
             .hook_on_next(move |observer, value| {
                 observer.on_next(value);
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
             })
             .subscribe(observer_3),
-    );
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -449,14 +450,14 @@ fn test_sub_on_next() {
             .hook_on_next(move |observer, value| {
                 // subscribe before on_next
                 if let Some(observer) = observer_2.take() {
-                    *subscription_2_cloned.lock_mut() =
-                        Some(observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_next(value);
                 // subscribe after on_next
                 if let Some(observer) = observer_3.take() {
-                    *subscription_3_cloned.lock_mut() =
-                        Some(observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),
@@ -504,27 +505,27 @@ fn test_unsub_on_completed() {
     // unsubscribe before on_termination
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
-    );
+    ));
 
     // unsubscribe after on_termination
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
             })
             .subscribe(observer_3),
-    );
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -576,14 +577,14 @@ fn test_sub_on_completed() {
             .hook_on_termination(move |observer, value| {
                 // subscribe before on_next
                 if let Some(observer) = observer_2.take() {
-                    *subscription_2_cloned.lock_mut() =
-                        Some(observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_termination(value);
                 // subscribe after on_next
                 if let Some(observer) = observer_3.take() {
-                    *subscription_3_cloned.lock_mut() =
-                        Some(observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),
@@ -640,27 +641,27 @@ fn test_unsub_on_error() {
     // unsubscribe before on_termination
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
-    );
+    ));
 
     // unsubscribe after on_termination
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
             })
             .subscribe(observer_3),
-    );
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -715,14 +716,14 @@ fn test_sub_on_error() {
             .hook_on_termination(move |observer, value| {
                 // subscribe before on_next
                 if let Some(observer) = observer_2.take() {
-                    *subscription_2_cloned.lock_mut() =
-                        Some(observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_termination(value);
                 // subscribe after on_next
                 if let Some(observer) = observer_3.take() {
-                    *subscription_3_cloned.lock_mut() =
-                        Some(observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),

@@ -1,7 +1,8 @@
 use crate::disposable::Disposable;
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::{SafeLockOption, SafeLockOptionObserver};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -95,15 +96,15 @@ where
                 match termination {
                     Termination::Completed => {
                         if completed.load(Ordering::SeqCst) {
-                            if let Some(observer) = { observer.lock_mut().take() } {
+                            if let Some(observer) = observer.safe_lock_take() {
                                 observer.on_termination(Termination::Completed);
                             }
                         } else {
-                            on_going_sub.lock_mut().take();
+                            on_going_sub.safe_lock_take();
                         }
                     }
                     Termination::Error(_) => {
-                        if let Some(observer) = { observer.lock_mut().take() } {
+                        if let Some(observer) = observer.safe_lock_take() {
                             observer.on_termination(termination);
                         }
                     }
@@ -112,10 +113,10 @@ where
         };
         let sub = value.subscribe(observer);
         if !terminated.load(Ordering::SeqCst) {
-            if let Some(sub) = { self.on_going_sub.lock_mut().replace(sub) } {
+            if let Some(sub) = self.on_going_sub.safe_lock_replace(sub) {
                 sub.dispose();
             }
-        } else if let Some(sub) = { self.on_going_sub.lock_mut().take() } {
+        } else if let Some(sub) = self.on_going_sub.safe_lock_take() {
             sub.dispose();
         }
     }
@@ -124,14 +125,14 @@ where
         match termination {
             Termination::Completed => {
                 self.completed.store(true, Ordering::SeqCst);
-                if self.on_going_sub.lock_ref().is_none() {
-                    if let Some(observer) = { self.observer.lock_mut().take() } {
+                if self.on_going_sub.safe_lock_is_none() {
+                    if let Some(observer) = self.observer.safe_lock_take() {
                         observer.on_termination(Termination::Completed);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock_mut().take() } {
+                if let Some(observer) = self.observer.safe_lock_take() {
                     observer.on_termination(termination);
                 }
             }
@@ -150,9 +151,7 @@ where
     F: FnOnce(Termination<E>),
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.observer.lock_mut().as_mut() {
-            observer.on_next(value);
-        }
+        self.observer.safe_lock_on_next_if_some(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {

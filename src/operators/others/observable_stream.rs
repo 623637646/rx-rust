@@ -2,7 +2,10 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
+    utils::{
+        safe_lock::{SafeLock, SafeLockOption, SafeLockVecDeque},
+        types::{Mutable, NecessarySend, Shared},
+    },
 };
 use futures::Stream;
 use std::{
@@ -56,8 +59,8 @@ where
             self.sub = Some(sub);
         }
 
-        *self.waker.lock_mut() = Some(cx.waker().clone());
-        if let Some(event) = { self.values.lock_mut().pop_front() } {
+        self.waker.safe_lock_set(Some(cx.waker().clone()));
+        if let Some(event) = self.values.safe_lock_pop_front() {
             Poll::Ready(Some(event))
         } else if self.terminated.load(Ordering::SeqCst) {
             Poll::Ready(None)
@@ -75,15 +78,15 @@ struct ObservableStreamObserver<T> {
 
 impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
-        self.values.lock_mut().push_back(value);
-        if let Some(waker) = { self.waker.lock_mut().take() } {
+        self.values.safe_lock_push_back(value);
+        if let Some(waker) = self.waker.safe_lock_take() {
             waker.wake();
         }
     }
 
     fn on_termination(self, _: Termination<Infallible>) {
         self.terminated.store(true, Ordering::SeqCst);
-        if let Some(waker) = { self.waker.lock_mut().take() } {
+        if let Some(waker) = self.waker.safe_lock_take() {
             waker.wake();
         }
     }

@@ -1,7 +1,10 @@
 use crate::{
     disposable::{Disposable, shared_disposal::SharedDisposal, subscription::Subscription},
     observer::{Observer, Termination},
-    utils::types::{Mutable, MutableHelper, Shared},
+    utils::{
+        safe_lock::{SafeLock, SafeLockOption},
+        types::{Mutable, Shared},
+    },
 };
 
 pub fn subscribe_unsub_after_termination<'sub, OR, F>(
@@ -17,7 +20,7 @@ where
         subscription: subscription.clone(),
     };
     let sub = builder(observer);
-    *subscription.lock_mut() = Some(sub);
+    subscription.safe_lock_set(Some(sub));
     Subscription::new_with_disposal(SharedDisposal::new(subscription))
 }
 
@@ -36,7 +39,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
-        if let Some(sub) = { self.subscription.lock_mut().take() } {
+        if let Some(sub) = self.subscription.safe_lock_take() {
             sub.dispose()
         }
     }

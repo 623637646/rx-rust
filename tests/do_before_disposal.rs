@@ -5,7 +5,8 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
+use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockOptionObserver};
+use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -263,7 +264,7 @@ fn test_async() {
         let disposed_cloned = disposed.clone();
         let boxed_observer_cloned = boxed_observer.clone();
         let observable = Create::new(move |observer| {
-            *boxed_observer_cloned.lock_mut() = Some(observer);
+            boxed_observer_cloned.safe_lock_set(Some(observer));
             Subscription::new_with_disposal_callback(move || {
                 disposed_cloned.store(true, Ordering::SeqCst);
             })
@@ -291,7 +292,7 @@ fn test_async() {
         let boxed_observer = runtime
             .clone()
             .spawn(async move {
-                boxed_observer.lock_mut().as_mut().unwrap().on_next(111);
+                boxed_observer.safe_lock_unwrap_on_next(111);
                 boxed_observer
             })
             .await
@@ -316,8 +317,7 @@ fn test_async() {
             .clone()
             .spawn(async move {
                 boxed_observer
-                    .lock_mut()
-                    .take()
+                    .safe_lock_take()
                     .unwrap()
                     .on_termination(Termination::<Infallible>::Completed);
             })
@@ -340,13 +340,13 @@ fn test_subscribe_by_different_observer() {
     let boxed_observer_2 = Shared::new(Mutable::new(None));
 
     let observable = Create::new(|observer| {
-        if boxed_observer_1.lock_ref().is_none() {
-            *boxed_observer_1.lock_mut() = Some(observer);
+        if boxed_observer_1.safe_lock_is_none() {
+            boxed_observer_1.safe_lock_set(Some(observer));
             Subscription::new_with_disposal_callback(|| {
                 disposed_1.store(true, Ordering::SeqCst);
             })
         } else {
-            *boxed_observer_2.lock_mut() = Some(observer);
+            boxed_observer_2.safe_lock_set(Some(observer));
             Subscription::new_with_disposal_callback(|| {
                 disposed_2.store(true, Ordering::SeqCst);
             })
@@ -386,8 +386,8 @@ fn test_subscribe_by_different_observer() {
     assert!(!called_1.load(Ordering::SeqCst));
     assert!(!called_2.load(Ordering::SeqCst));
 
-    boxed_observer_1.lock_mut().as_mut().unwrap().on_next(111);
-    boxed_observer_2.lock_mut().as_mut().unwrap().on_next(111);
+    boxed_observer_1.safe_lock_unwrap_on_next(111);
+    boxed_observer_2.safe_lock_unwrap_on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -409,13 +409,11 @@ fn test_subscribe_by_different_observer() {
     assert!(called_2.load(Ordering::SeqCst));
 
     boxed_observer_1
-        .lock_mut()
-        .take()
+        .safe_lock_take()
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     boxed_observer_2
-        .lock_mut()
-        .take()
+        .safe_lock_take()
         .unwrap()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [111]);

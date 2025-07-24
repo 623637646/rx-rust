@@ -1,4 +1,5 @@
 use super::{Subject, publish_subject::PublishSubject};
+use crate::utils::safe_lock::SafeLock;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -43,7 +44,7 @@ where
         if let Some(terminated) = self.terminated() {
             match &terminated {
                 Termination::Completed => {
-                    let values: Vec<_> = self.values.lock_ref().iter().cloned().collect();
+                    let values = self.values.safe_lock_clone();
                     for value in values {
                         observer.on_next(value);
                     }
@@ -53,7 +54,7 @@ where
             observer.on_termination(terminated);
             Subscription::default()
         } else {
-            let values: Vec<_> = self.values.lock_ref().iter().cloned().collect();
+            let values = self.values.safe_lock_clone();
             for value in values {
                 observer.on_next(value);
             }
@@ -82,6 +83,7 @@ where
             } else {
                 lock.push_back(value.clone());
             }
+            drop(lock);
             self.publish_subject.on_next(value);
         }
     }

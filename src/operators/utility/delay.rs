@@ -112,10 +112,10 @@ where
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { lock.observer.take() } {
+                if let Some(observer) = lock.observer.take() {
                     observer.on_termination(termination);
                 }
-                if let Some(timer) = { lock.timer.take() } {
+                if let Some(timer) = lock.timer.take() {
                     timer.dispose();
                 }
             }
@@ -135,7 +135,7 @@ fn setup_emit_timer<T, E, OR>(
     *timer = Some(BoxedDisposal::new(scheduler.schedule_recursively(
         move |_| {
             let mut lock = context.lock_mut();
-            if let Some((instant, value)) = { lock.values.pop_front() } {
+            if let Some((instant, value)) = lock.values.pop_front() {
                 if let Some(value) = value {
                     //  Next
                     if let Some(observer) = lock.observer.as_mut() {
@@ -155,7 +155,8 @@ fn setup_emit_timer<T, E, OR>(
                     }
                 } else {
                     // Completed
-                    if let Some(observer) = { lock.observer.take() } {
+                    if let Some(observer) = lock.observer.take() {
+                        drop(lock);
                         observer.on_termination(Termination::Completed);
                     }
                     RecursionAction::Stop

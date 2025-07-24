@@ -1,6 +1,7 @@
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::{SafeLockOption, SafeLockOptionObserver, SafeLockVecDeque};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -89,7 +90,7 @@ impl<'or, 'sub, T, OR, OE1> ConcatAllObserver<'sub, T, OR, OE1> {
         OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
         'sub: 'or,
     {
-        if let Some(observable) = { self.pending_observables.lock_mut().pop_front() } {
+        if let Some(observable) = self.pending_observables.safe_lock_pop_front() {
             let this = self.clone();
             let terminated = Shared::new(AtomicBool::new(false));
             let terminated_cloned = terminated.clone();
@@ -107,14 +108,14 @@ impl<'or, 'sub, T, OR, OE1> ConcatAllObserver<'sub, T, OR, OE1> {
             };
             let sub = observable.subscribe(observer);
             if !terminated.load(Ordering::SeqCst) {
-                self.on_going_sub.lock_mut().replace(sub);
+                self.on_going_sub.safe_lock_replace(sub);
             }
         } else if self.completed.load(Ordering::SeqCst) {
-            if let Some(observer) = { self.observer.lock_mut().take() } {
+            if let Some(observer) = self.observer.safe_lock_take() {
                 observer.on_termination(Termination::Completed);
             }
         } else {
-            self.on_going_sub.lock_mut().take();
+            self.on_going_sub.safe_lock_take();
         }
     }
 }
@@ -128,8 +129,8 @@ where
     'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        self.pending_observables.lock_mut().push_back(value);
-        if self.on_going_sub.lock_ref().is_none() {
+        self.pending_observables.safe_lock_push_back(value);
+        if self.on_going_sub.safe_lock_is_none() {
             self.subscribe_next();
         }
     }
@@ -138,16 +139,16 @@ where
         match termination {
             Termination::Completed => {
                 self.completed.store(true, Ordering::SeqCst);
-                if self.on_going_sub.lock_ref().is_none()
-                    && self.pending_observables.lock_ref().is_empty()
+                if self.on_going_sub.safe_lock_is_none()
+                    && self.pending_observables.safe_lock_is_empty()
                 {
-                    if let Some(observer) = { self.observer.lock_mut().take() } {
+                    if let Some(observer) = self.observer.safe_lock_take() {
                         observer.on_termination(Termination::Completed);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock_mut().take() } {
+                if let Some(observer) = self.observer.safe_lock_take() {
                     observer.on_termination(termination);
                 }
             }
@@ -166,9 +167,7 @@ where
     F: FnOnce(Termination<E>),
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.observer.lock_mut().as_mut() {
-            observer.on_next(value);
-        }
+        self.observer.safe_lock_on_next_if_some(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {

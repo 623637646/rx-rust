@@ -1,5 +1,6 @@
 use super::{Subject, publish_subject::PublishSubject};
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::SafeLock;
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -42,7 +43,7 @@ where
         if let Some(terminated) = self.terminated() {
             match &terminated {
                 Termination::Completed => {
-                    if let Some(value) = { self.value.lock_ref().clone() } {
+                    if let Some(value) = self.value.safe_lock_clone() {
                         observer.on_next(value);
                     }
                 }
@@ -63,14 +64,14 @@ where
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
-            *self.value.lock_mut() = Some(value);
+            self.value.safe_lock_set(Some(value));
         }
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
         match &termination {
             Termination::Completed => {
-                if let Some(value) = { self.value.lock_ref().clone() } {
+                if let Some(value) = self.value.safe_lock_clone() {
                     self.publish_subject.on_next(value);
                 }
             }

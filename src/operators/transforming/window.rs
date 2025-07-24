@@ -1,4 +1,5 @@
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::{SafeLock, SafeLockObserver, SafeLockOption, SafeLockOptionObserver};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -68,15 +69,14 @@ where
     OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.subject.lock_mut().on_next(value);
+        self.subject.safe_lock_on_next(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
         self.subject
-            .lock_ref()
-            .clone()
+            .safe_lock_clone()
             .on_termination(termination.clone());
-        if let Some(observer) = { self.observer.lock_mut().take() } {
+        if let Some(observer) = self.observer.safe_lock_take() {
             observer.on_termination(termination);
         }
     }
@@ -95,19 +95,17 @@ where
 {
     fn on_next(&mut self, _: ()) {
         let new_subject = PublishSubject::default();
-        let old_subject = std::mem::replace(&mut *self.subject.lock_mut(), new_subject.clone());
+        let old_subject = self.subject.safe_lock_mem_replace(new_subject.clone());
         old_subject.on_termination(Termination::Completed);
-        if let Some(observer) = self.observer.lock_mut().as_mut() {
-            observer.on_next(SubjectObservable::new(new_subject));
-        }
+        self.observer
+            .safe_lock_on_next_if_some(SubjectObservable::new(new_subject));
     }
 
     fn on_termination(self, termination: Termination<E>) {
         self.subject
-            .lock_ref()
-            .clone()
+            .safe_lock_clone()
             .on_termination(termination.clone());
-        if let Some(observer) = { self.observer.lock_mut().take() } {
+        if let Some(observer) = self.observer.safe_lock_take() {
             observer.on_termination(termination);
         }
     }

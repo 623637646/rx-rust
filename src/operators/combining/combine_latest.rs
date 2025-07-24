@@ -86,7 +86,8 @@ where
         match termination {
             Termination::Completed => {
                 if lock.should_completed || lock.latest_1.is_none() {
-                    if let Some(observer) = { lock.observer.take() } {
+                    if let Some(observer) = lock.observer.take() {
+                        drop(lock);
                         observer.on_termination(termination);
                     }
                 } else {
@@ -94,7 +95,8 @@ where
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { lock.observer.take() } {
+                if let Some(observer) = lock.observer.take() {
+                    drop(lock);
                     observer.on_termination(termination);
                 }
             }
@@ -127,7 +129,8 @@ where
         match termination {
             Termination::Completed => {
                 if lock.should_completed || lock.latest_2.is_none() {
-                    if let Some(observer) = { lock.observer.take() } {
+                    if let Some(observer) = lock.observer.take() {
+                        drop(lock);
                         observer.on_termination(termination);
                     }
                 } else {
@@ -135,7 +138,8 @@ where
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { lock.observer.take() } {
+                if let Some(observer) = lock.observer.take() {
+                    drop(lock);
                     observer.on_termination(termination);
                 }
             }

@@ -5,6 +5,7 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::utils::safe_lock::SafeLock;
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -336,7 +337,7 @@ fn test_boxed_observable() {
     assert_eq!(checker.values(), [222]);
     assert_eq!(checker.state(), State::Completed);
 
-    *switch.lock_mut() = true;
+    switch.safe_lock_set(true);
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);

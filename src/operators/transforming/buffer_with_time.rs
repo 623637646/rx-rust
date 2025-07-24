@@ -1,4 +1,5 @@
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockOptionObserver, SafeLockVec};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -45,13 +46,12 @@ where
         let observer_cloned = observer.clone();
         let disposal = self.scheduler.schedule_periodically(
             move |_| {
-                if let Some(observer) = observer_cloned.observer.lock_mut().as_mut() {
-                    let values = std::mem::take(&mut *observer_cloned.values.lock_mut());
-                    observer.on_next(values);
-                    false
-                } else {
-                    true
-                }
+                let mut stop = true;
+                observer_cloned.observer.safe_lock_on_next_with_builder(|| {
+                    stop = false;
+                    Some(observer_cloned.values.safe_lock_mem_take())
+                });
+                stop
             },
             self.time_span,
             self.delay,
@@ -72,14 +72,14 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.values.lock_mut().push(value);
+        self.values.safe_lock_push(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = { self.observer.lock_mut().take() } {
+        if let Some(mut observer) = self.observer.safe_lock_take() {
             match termination {
                 Termination::Completed => {
-                    let values = std::mem::take(&mut *self.values.lock_mut());
+                    let values = self.values.safe_lock_mem_take();
                     if !values.is_empty() {
                         observer.on_next(values);
                     }

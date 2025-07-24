@@ -1,3 +1,4 @@
+use crate::utils::safe_lock::{SafeLockOption, SafeLockOptionObserver};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -68,14 +69,16 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, value: T1) {
-        if let Some(observer) = self.observer.lock_mut().as_mut() {
+        self.observer.safe_lock_on_next_with_builder(|| {
             let mut lock = self.buffer.lock_mut();
             match &mut *lock {
                 ZipObserverBufferState::None => {
-                    *lock = ZipObserverBufferState::One(VecDeque::from([value]))
+                    *lock = ZipObserverBufferState::One(VecDeque::from([value]));
+                    None
                 }
                 ZipObserverBufferState::One(items) => {
                     items.push_back(value);
+                    None
                 }
                 ZipObserverBufferState::Two(items) => {
                     let item = items.pop_front().unwrap();
@@ -83,14 +86,14 @@ where
                         *lock = ZipObserverBufferState::None;
                     }
                     drop(lock);
-                    observer.on_next((value, item))
+                    Some((value, item))
                 }
             }
-        }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock_mut().take() } {
+        if let Some(observer) = self.observer.safe_lock_take() {
             observer.on_termination(termination);
         }
     }
@@ -106,11 +109,12 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, value: T2) {
-        if let Some(observer) = self.observer.lock_mut().as_mut() {
+        self.observer.safe_lock_on_next_with_builder(|| {
             let mut lock = self.buffer.lock_mut();
             match &mut *lock {
                 ZipObserverBufferState::None => {
-                    *lock = ZipObserverBufferState::Two(VecDeque::from([value]))
+                    *lock = ZipObserverBufferState::Two(VecDeque::from([value]));
+                    None
                 }
                 ZipObserverBufferState::One(items) => {
                     let item = items.pop_front().unwrap();
@@ -118,17 +122,18 @@ where
                         *lock = ZipObserverBufferState::None;
                     }
                     drop(lock);
-                    observer.on_next((item, value))
+                    Some((item, value))
                 }
                 ZipObserverBufferState::Two(items) => {
                     items.push_back(value);
+                    None
                 }
             }
-        }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.observer.lock_mut().take() } {
+        if let Some(observer) = self.observer.safe_lock_take() {
             observer.on_termination(termination);
         }
     }

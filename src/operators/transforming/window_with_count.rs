@@ -1,4 +1,5 @@
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::{SafeLock, SafeLockObserver};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -63,7 +64,7 @@ where
     fn on_next(&mut self, value: T) {
         match (self.sent_count + 1).cmp(&self.count.get()) {
             Ordering::Less => {
-                self.subject.lock_mut().on_next(value);
+                self.subject.safe_lock_on_next(value);
                 self.sent_count += 1;
             }
             Ordering::Equal => {
@@ -72,10 +73,9 @@ where
                     &mut self.subject,
                     Shared::new(Mutable::new(new_subject.clone())),
                 );
-                old_subject.lock_mut().on_next(value);
+                old_subject.safe_lock_on_next(value);
                 old_subject
-                    .lock_ref()
-                    .clone()
+                    .safe_lock_clone()
                     .on_termination(Termination::Completed);
                 self.observer.on_next(SubjectObservable::new(new_subject));
                 self.sent_count = 0;
@@ -86,8 +86,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.subject
-            .lock_ref()
-            .clone()
+            .safe_lock_clone()
             .on_termination(termination.clone());
         self.observer.on_termination(termination);
     }

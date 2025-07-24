@@ -33,18 +33,18 @@ where
     S: Observable<'or, 'sub, T, E> + Observer<T, E> + NecessarySend + 'or + Clone,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        let mut state_lock = self.state.lock_mut();
-        match &mut *state_lock {
+        let mut lock = self.state.lock_mut();
+        match &mut *lock {
             State::Initialized => {
                 _ = std::mem::replace(
-                    &mut *state_lock,
+                    &mut *lock,
                     State::Subscribed(1, self.source.clone().connect()),
                 );
             }
             State::Subscribed(count, _) => *count += 1,
             State::Unsubscribed => panic!("Already Unsubscribed"),
         };
-        drop(state_lock);
+        drop(lock);
         self.source.subscribe(observer) + RefCountDisposal { state: self.state }
     }
 }
@@ -55,13 +55,14 @@ struct RefCountDisposal<'sub> {
 
 impl Disposable for RefCountDisposal<'_> {
     fn dispose(self) {
-        let mut state_lock = self.state.lock_mut();
-        match &mut *state_lock {
+        let mut lock = self.state.lock_mut();
+        match &mut *lock {
             State::Initialized => unreachable!(),
             State::Subscribed(count, _) => {
                 *count -= 1;
                 if *count == 0 {
-                    let state = std::mem::replace(&mut *state_lock, State::Unsubscribed);
+                    let state = std::mem::replace(&mut *lock, State::Unsubscribed);
+                    drop(lock);
                     match state {
                         State::Initialized => unreachable!(),
                         State::Subscribed(_, subscription) => {

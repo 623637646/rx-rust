@@ -1,7 +1,11 @@
 use educe::Educe;
+use rx_rust::utils::safe_lock::SafeLockVec;
 use rx_rust::{
     observer::{Observer, Termination},
-    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
+    utils::{
+        safe_lock::SafeLock,
+        types::{Mutable, MutableHelper, NecessarySend, Shared},
+    },
 };
 
 #[derive(Educe)]
@@ -38,14 +42,14 @@ impl<T, E> Checker<T, E> {
     where
         T: Clone,
     {
-        self.values.lock_ref().clone()
+        self.values.safe_lock_clone()
     }
 
     pub(crate) fn state(&self) -> State<E>
     where
         E: Clone,
     {
-        self.state.lock_ref().clone()
+        self.state.safe_lock_clone()
     }
 }
 
@@ -69,10 +73,7 @@ impl<T, E> CheckerObserver<T, E> {
     {
         let values = self.values.clone();
         (
-            move |value| {
-                let mut values = values.lock_mut();
-                values.push(value);
-            },
+            move |value| values.safe_lock_push(value),
             |termination| self.on_termination(termination),
         )
     }
@@ -80,9 +81,9 @@ impl<T, E> CheckerObserver<T, E> {
 
 impl<T, E> Drop for CheckerObserver<T, E> {
     fn drop(&mut self) {
-        let mut state = self.state.lock_mut();
-        match &mut *state {
-            State::Active => *state = State::Dropped,
+        let mut lock = self.state.lock_mut();
+        match &mut *lock {
+            State::Active => *lock = State::Dropped,
             State::Completed | State::Error(_) => {}
             State::Dropped => panic!(),
         }
@@ -91,15 +92,14 @@ impl<T, E> Drop for CheckerObserver<T, E> {
 
 impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
     fn on_next(&mut self, value: T) {
-        let mut values = self.values.lock_mut();
-        values.push(value);
+        self.values.safe_lock_push(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut state = self.state.lock_mut();
-        match &mut *state {
+        let mut lock = self.state.lock_mut();
+        match &mut *lock {
             State::Active => {
-                *state = match termination {
+                *lock = match termination {
                     Termination::Completed => State::Completed,
                     Termination::Error(error) => State::Error(error),
                 };
@@ -131,11 +131,11 @@ impl<T> Checker<T, Infallible> {
         let state_cloned = state.clone();
         let handle = runtime.clone().spawn(async move {
             while let Some(value) = stream.next().await {
-                values_cloned.lock_mut().push(value);
+                values_cloned.safe_lock_push(value);
             }
-            let mut state = state_cloned.lock_mut();
-            match &mut *state {
-                State::Active => *state = State::Completed,
+            let mut lock = state_cloned.lock_mut();
+            match &mut *lock {
+                State::Active => *lock = State::Completed,
                 State::Completed | State::Error(_) | State::Dropped => panic!(),
             }
         });
@@ -146,9 +146,9 @@ impl<T> Checker<T, Infallible> {
             },
             Subscription::new_with_disposal_callback(move || {
                 handle.abort();
-                let mut state = state.lock_mut();
-                match &mut *state {
-                    State::Active => *state = State::Dropped,
+                let mut lock = state.lock_mut();
+                match &mut *lock {
+                    State::Active => *lock = State::Dropped,
                     State::Completed | State::Error(_) => {}
                     State::Dropped => panic!(),
                 }

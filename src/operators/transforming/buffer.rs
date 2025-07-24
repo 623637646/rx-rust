@@ -1,4 +1,5 @@
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockOptionObserver, SafeLockVec};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -60,14 +61,14 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.values.lock_mut().push(value);
+        self.values.safe_lock_push(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = { self.observer.lock_mut().take() } {
+        if let Some(mut observer) = self.observer.safe_lock_take() {
             match termination {
                 Termination::Completed => {
-                    let values = std::mem::take(&mut *self.values.lock_mut());
+                    let values = self.values.safe_lock_mem_take();
                     if !values.is_empty() {
                         observer.on_next(values);
                     }
@@ -86,10 +87,9 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, _: ()) {
-        if let Some(observer) = self.0.observer.lock_mut().as_mut() {
-            let values = std::mem::take(&mut *self.0.values.lock_mut());
-            observer.on_next(values);
-        }
+        self.0
+            .observer
+            .safe_lock_on_next_with_builder(|| Some(self.0.values.safe_lock_mem_take()));
     }
 
     fn on_termination(self, termination: Termination<E>) {

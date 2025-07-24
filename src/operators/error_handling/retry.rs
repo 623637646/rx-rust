@@ -1,6 +1,7 @@
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::SafeLock;
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -73,7 +74,7 @@ where
                 match action {
                     RetryAction::Retry(observable) => {
                         let sub = self.sub.clone();
-                        *sub.lock_mut() = Some(observable.subscribe(self));
+                        sub.safe_lock_set(Some(observable.subscribe(self)));
                     }
                     RetryAction::Stop(error) => {
                         self.observer.on_termination(Termination::Error(error))

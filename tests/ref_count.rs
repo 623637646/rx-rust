@@ -6,7 +6,8 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
+use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption};
+use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt, ref_count_observable::RefCount},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -717,26 +718,26 @@ fn test_unsub_on_next() {
     // unsubscribe before on_next
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable_2
             .hook_on_next(move |observer, value| {
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
                 observer.on_next(value);
             })
             .subscribe(observer_2),
-    );
+    ));
 
     // unsubscribe after on_next
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable_3
             .hook_on_next(move |observer, value| {
                 observer.on_next(value);
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
             })
             .subscribe(observer_3),
-    );
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -799,26 +800,26 @@ fn test_unsub_on_completed() {
     // unsubscribe before on_next
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable_2
             .hook_on_termination(move |observer, value| {
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
-    );
+    ));
 
     // unsubscribe after on_next
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable_3
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
             })
             .subscribe(observer_3),
-    );
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -881,26 +882,26 @@ fn test_unsub_on_error() {
     // unsubscribe before on_next
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable_2
             .hook_on_termination(move |observer, value| {
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
-    );
+    ));
 
     // unsubscribe after on_next
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
-    *sub.lock_mut() = Some(
+    sub.safe_lock_set(Some(
         observable_3
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                { sub_cloned.lock_mut().take() }.unwrap().dispose();
+                sub_cloned.safe_lock_take().unwrap().dispose();
             })
             .subscribe(observer_3),
-    );
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);

@@ -1,5 +1,6 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
+use crate::utils::safe_lock::{SafeLockOption, SafeLockOptionObserver, SafeLockVec};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -105,13 +106,13 @@ where
                 self.pending_termination_count
                     .fetch_sub(1, Ordering::SeqCst);
                 if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
-                    if let Some(observer) = { self.observer.lock_mut().take() } {
+                    if let Some(observer) = self.observer.safe_lock_take() {
                         observer.on_termination(termination);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock_mut().take() } {
+                if let Some(observer) = self.observer.safe_lock_take() {
                     observer.on_termination(termination);
                 }
             }
@@ -130,9 +131,7 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.observer.lock_mut().as_mut() {
-            observer.on_next(value);
-        }
+        self.observer.safe_lock_on_next_if_some(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -142,13 +141,13 @@ where
                 self.pending_termination_count
                     .fetch_sub(1, Ordering::SeqCst);
                 if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
-                    if let Some(observer) = { self.observer.lock_mut().take() } {
+                    if let Some(observer) = self.observer.safe_lock_take() {
                         observer.on_termination(termination);
                     }
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = { self.observer.lock_mut().take() } {
+                if let Some(observer) = self.observer.safe_lock_take() {
                     observer.on_termination(termination);
                 }
             }
@@ -162,6 +161,6 @@ struct MergeAllDisposal<'sub> {
 
 impl Disposable for MergeAllDisposal<'_> {
     fn dispose(self) {
-        self.subscriptions.lock_mut().clear();
+        self.subscriptions.safe_lock_clear();
     }
 }

@@ -9,7 +9,8 @@ use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
+use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption};
+use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
@@ -332,23 +333,23 @@ fn test_unsub_after_next() {
         let subscription = Shared::new(Mutable::new(None::<Subscription<'_>>));
         let subscription_cloned = subscription.clone();
         let (mut on_next, on_termination) = observer.into_callbacks();
-        *subscription.lock_mut() = Some(observable.subscribe_with_callback(
+        subscription.safe_lock_set(Some(observable.subscribe_with_callback(
             move |value| {
                 on_next(value);
-                subscription_cloned.lock_mut().take().unwrap().dispose();
+                subscription_cloned.safe_lock_take().unwrap().dispose();
             },
             |termination| {
                 on_termination(termination);
             },
-        ));
+        )));
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
-        assert!(subscription.lock_ref().is_some());
+        assert!(subscription.safe_lock_is_some());
 
         runtime.clone().sleep(Duration::from_millis(110)).await;
         assert_eq!(checker.values(), [0]);
         assert_eq!(checker.state(), State::Dropped);
-        assert!(subscription.lock_ref().is_none());
+        assert!(subscription.safe_lock_is_none());
     });
 }
 

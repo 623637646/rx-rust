@@ -1,4 +1,5 @@
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::safe_lock::{SafeLockOption, SafeLockOptionObserver};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -59,13 +60,11 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.0.lock_mut().as_mut() {
-            observer.on_next(value);
-        }
+        self.0.safe_lock_on_next_if_some(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = { self.0.lock_mut().take() } {
+        if let Some(observer) = self.0.safe_lock_take() {
             observer.on_termination(termination);
         }
     }
@@ -81,7 +80,7 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, _: T1) {
-        if let Some(observer) = { self.observer.lock_mut().take() } {
+        if let Some(observer) = self.observer.safe_lock_take() {
             observer.on_termination(Termination::Completed);
         }
     }
@@ -90,7 +89,7 @@ where
         match termination {
             Termination::Completed => {}
             Termination::Error(error) => {
-                if let Some(observer) = { self.observer.lock_mut().take() } {
+                if let Some(observer) = self.observer.safe_lock_take() {
                     observer.on_termination(Termination::Error(error));
                 }
             }
