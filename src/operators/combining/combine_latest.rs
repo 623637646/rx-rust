@@ -85,7 +85,7 @@ where
         let mut lock = self.context.lock_mut();
         match termination {
             Termination::Completed => {
-                if lock.should_completed {
+                if lock.should_completed || lock.latest_1.is_none() {
                     if let Some(observer) = { lock.observer.take() } {
                         observer.on_termination(termination);
                     }
@@ -126,7 +126,7 @@ where
         let mut lock = self.context.lock_mut();
         match termination {
             Termination::Completed => {
-                if lock.should_completed {
+                if lock.should_completed || lock.latest_2.is_none() {
                     if let Some(observer) = { lock.observer.take() } {
                         observer.on_termination(termination);
                     }
