@@ -153,8 +153,14 @@ fn test_completed_stop_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(stop_channel_checker.state(), ChannelState::Completed);
 
+    sender.on_next(333);
+    assert_eq!(checker.values(), [111, 222, 333]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(stop_channel_checker.state(), ChannelState::Completed);
+
     sender.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(stop_channel_checker.state(), ChannelState::Completed);
