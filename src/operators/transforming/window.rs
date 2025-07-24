@@ -28,7 +28,7 @@ impl<OE, OE1> Window<OE, OE1> {
 impl<'or, 'sub, T, E, OE, OE1>
     Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for Window<OE, OE1>
 where
-    T: Clone + 'or,
+    T: Clone + NecessarySend + 'or,
     E: Clone + NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,

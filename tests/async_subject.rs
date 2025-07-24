@@ -298,42 +298,41 @@ fn test_subscribe_by_different_observer() {
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
 
-// AsyncSubject does not support this test. panic "No support for regression calls on_next"
-// #[test]
-// fn test_complete_on_next() {
-//     let mut subject = AsyncSubject::default();
-//     let (checker, observer) = Checker::new();
+#[test]
+fn test_complete_on_next() {
+    let mut subject = AsyncSubject::default();
+    let (checker, observer) = Checker::new();
 
-//     // Custom operations
-//     let observable = subject.clone();
+    // Custom operations
+    let observable = subject.clone();
 
-//     let _subscription = observable.clone().subscribe(observer);
-//     let mut subject_cloned = Some(subject.clone());
-//     let _subscription = observable.subscribe_with_callback(
-//         move |_| {
-//             subject_cloned
-//                 .take()
-//                 .unwrap()
-//                 .on_termination(Termination::Completed);
-//         },
-//         move |_| {},
-//     );
-//     assert_eq!(checker.values(), []);
-//     assert_eq!(checker.state(), State::Active);
-//     assert!(subject.terminated().is_none());
+    let _subscription = observable.clone().subscribe(observer);
+    let mut subject_cloned = Some(subject.clone());
+    let _subscription = observable.subscribe_with_callback(
+        move |_| {
+            subject_cloned
+                .take()
+                .unwrap()
+                .on_termination(Termination::Completed);
+        },
+        move |_| {},
+    );
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert!(subject.terminated().is_none());
 
-//     subject.on_next(111);
-//     assert_eq!(checker.values(), []);
-//     assert_eq!(checker.state(), State::Active);
-//     assert!(subject.terminated().is_none());
+    subject.on_next(111);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert!(subject.terminated().is_none());
 
-//     subject
-//         .clone()
-//         .on_termination(Termination::<Infallible>::Completed);
-//     assert_eq!(checker.values(), [111]);
-//     assert_eq!(checker.state(), State::Completed);
-//     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
-// }
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
+}
 
 #[test]
 fn test_error_on_next() {

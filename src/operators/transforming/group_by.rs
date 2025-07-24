@@ -37,7 +37,7 @@ impl<OE, F, K> GroupBy<OE, F, K> {
 impl<'or, 'sub, T, E, OE, F, K>
     Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for GroupBy<OE, F, K>
 where
-    T: Clone + 'or,
+    T: Clone + NecessarySend + 'or,
     E: Clone + NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     F: FnMut(T) -> K + NecessarySend + 'or,
@@ -64,7 +64,7 @@ struct GroupByObserver<'or, T, E, OR, F, K> {
 
 impl<'or, T, E, OR, F, K> Observer<T, E> for GroupByObserver<'or, T, E, OR, F, K>
 where
-    T: Clone,
+    T: Clone + NecessarySend,
     E: Clone + NecessarySend,
     OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
     F: FnMut(T) -> K,

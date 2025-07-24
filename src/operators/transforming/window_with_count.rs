@@ -24,7 +24,7 @@ impl<OE> WindowWithCount<OE> {
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E>
     for WindowWithCount<OE>
 where
-    T: Clone + 'or,
+    T: Clone + NecessarySend + 'or,
     E: Clone + NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {

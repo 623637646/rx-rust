@@ -32,7 +32,7 @@ impl<T, E> ReplaySubject<'_, T, E> {
 
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for ReplaySubject<'or, T, E>
 where
-    T: Clone + 'sub,
+    T: Clone + NecessarySend + 'sub,
     E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
@@ -64,7 +64,7 @@ where
 
 impl<T, E> Observer<T, E> for ReplaySubject<'_, T, E>
 where
-    T: Clone,
+    T: Clone + NecessarySend,
     E: Clone + NecessarySend,
 {
     fn on_next(&mut self, value: T) {
@@ -93,7 +93,7 @@ where
 
 impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for ReplaySubject<'or, T, E>
 where
-    T: Clone + 'sub,
+    T: Clone + NecessarySend + 'sub,
     E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {

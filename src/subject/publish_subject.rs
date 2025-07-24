@@ -15,13 +15,14 @@ enum ObserverActionInsertState<'or, T, E> {
     Cancelled,
 }
 
-enum ObserverAction<'or, T, E> {
+enum ContinueAction<'or, T, E> {
     InsertObserver(Shared<Mutable<ObserverActionInsertState<'or, T, E>>>),
     RemoveObserver(DefaultKey),
+    EmitNext(T),
 }
 
 enum ProcessedAction<'or, T, E> {
-    Continue(Vec<ObserverAction<'or, T, E>>),
+    Continue(Vec<ContinueAction<'or, T, E>>),
     Terminate(Termination<E>),
 }
 
@@ -49,7 +50,7 @@ impl<T, E> Default for PublishSubject<'_, T, E> {
 
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for PublishSubject<'or, T, E>
 where
-    T: 'sub,
+    T: NecessarySend + 'sub,
     E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
@@ -66,7 +67,7 @@ where
                     let insert_state = Shared::new(Mutable::new(
                         ObserverActionInsertState::BeforeInserted(BoxedObserver::new(observer)),
                     ));
-                    actions.push(ObserverAction::InsertObserver(insert_state.clone()));
+                    actions.push(ContinueAction::InsertObserver(insert_state.clone()));
                     drop(lock);
                     Subscription::new_with_disposal(PublishSubjectInsertStateDisposal {
                         state: self.0,
@@ -122,7 +123,7 @@ where
                             ProcessedAction::Continue(actions) => {
                                 for action in actions {
                                     match action {
-                                        ObserverAction::InsertObserver(insert_state) => {
+                                        ContinueAction::InsertObserver(insert_state) => {
                                             let mut lock = insert_state.lock_mut();
                                             match std::mem::replace(
                                                 &mut *lock,
@@ -143,8 +144,13 @@ where
                                                 }
                                             }
                                         }
-                                        ObserverAction::RemoveObserver(key) => {
+                                        ContinueAction::RemoveObserver(key) => {
                                             observers.remove(key);
+                                        }
+                                        ContinueAction::EmitNext(value) => {
+                                            observers.values_mut().for_each(|observer| {
+                                                observer.on_next(value.clone())
+                                            });
                                         }
                                     }
                                 }
@@ -169,11 +175,16 @@ where
                     State::Terminated(_) => unreachable!(),
                 };
             }
-            State::Processing(_) => {
-                panic!("No support for regression calls on_next");
-            }
+            State::Processing(processed_action) => match processed_action {
+                ProcessedAction::Continue(mut actions) => {
+                    actions.push(ContinueAction::EmitNext(value));
+                }
+                ProcessedAction::Terminate(_) => {
+                    // ignore if it will be terminated
+                }
+            },
             State::Terminated(termination) => {
-                // revert
+                // It's already terminated. revert
                 _ = std::mem::replace(&mut *lock, State::Terminated(termination));
             }
         }
@@ -206,7 +217,7 @@ where
 
 impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for PublishSubject<'or, T, E>
 where
-    T: Clone + 'sub,
+    T: Clone + NecessarySend + 'sub,
     E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
@@ -235,7 +246,7 @@ impl<T, E> Disposable for PublishSubjectKeyDisposal<'_, T, E> {
             }
             State::Processing(processed_action) => match processed_action {
                 ProcessedAction::Continue(actions) => {
-                    actions.push(ObserverAction::RemoveObserver(self.key));
+                    actions.push(ContinueAction::RemoveObserver(self.key));
                 }
                 ProcessedAction::Terminate(_) => {
                     // Do nothing if it will be terminated
@@ -268,7 +279,7 @@ impl<T, E> Disposable for PublishSubjectInsertStateDisposal<'_, T, E> {
                     }
                     State::Processing(processed_action) => match processed_action {
                         ProcessedAction::Continue(actions) => {
-                            actions.push(ObserverAction::RemoveObserver(key));
+                            actions.push(ContinueAction::RemoveObserver(key));
                         }
                         ProcessedAction::Terminate(_) => {
                             // Do nothing if it will be terminated
