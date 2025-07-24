@@ -469,6 +469,73 @@ fn test_error_inner_finish() {
 }
 
 #[test]
+fn test_error_only_inner_finish() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.concat_all();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender.on_next(observable_1);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender_1.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender.on_next(observable_2);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender_1.on_next(333);
+    assert_eq!(checker.values(), [111, 333]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender_1.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111, 333]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    sender_2.on_next(444);
+    assert_eq!(checker.values(), [111, 333, 444]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    sender_2.on_termination(Termination::Error("error"));
+    assert_eq!(checker.values(), [111, 333, 444]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Error("error"));
+}
+
+#[test]
 fn test_error_outer_finish() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
@@ -540,6 +607,73 @@ fn test_error_outer_finish() {
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
     assert_eq!(channel_checker_1.state(), ChannelState::Completed);
     assert_eq!(channel_checker_2.state(), ChannelState::Completed);
+}
+
+#[test]
+fn test_error_only_outer_finish() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.concat_all();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender.on_next(observable_1);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender_1.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender.on_next(observable_2);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender_1.on_next(333);
+    assert_eq!(checker.values(), [111, 333]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender_1.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111, 333]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    sender_2.on_next(444);
+    assert_eq!(checker.values(), [111, 333, 444]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    sender.on_termination(Termination::Error("error"));
+    assert_eq!(checker.values(), [111, 333, 444]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
