@@ -39,6 +39,7 @@ impl Scheduler for TestRuntime {
                 AsyncStdScheduler.sleep(duration)
             } else {
                 _ = duration;
+                async {}
             }
         }
     }
