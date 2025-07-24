@@ -192,8 +192,8 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Error("hooked"));
     assert_eq!(
-        terminations.lock_ref().deref(),
-        &[Termination::Error("error")]
+        terminations.lock_ref().as_ref(),
+        vec![Termination::Error("error")]
     );
 }
 
