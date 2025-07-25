@@ -1165,6 +1165,34 @@ fn test_without_convenient_api() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel::<'_, _, Infallible>();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable_1.combine_latest(observable_2).take(1);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    sender_1.on_next(111);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    sender_2.on_next("111");
+    assert_eq!(checker.values(), [(111, "111")]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker_1 = TestStruct;

@@ -1,3 +1,4 @@
+use crate::utils::safe_lock::{SafeLockOption, SafeLockOptionObserver};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -37,16 +38,17 @@ where
         observer: impl Observer<(T1, T2), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
+            let observer = Shared::new(Mutable::new(Some(observer)));
             let context = Shared::new(Mutable::new(CombineLatestContext {
-                observer: Some(observer),
                 latest_1: None,
                 latest_2: None,
                 should_completed: false,
             }));
             let observer_1 = CombineLatestObserver1 {
                 context: context.clone(),
+                observer: observer.clone(),
             };
-            let observer_2 = CombineLatestObserver2 { context };
+            let observer_2 = CombineLatestObserver2 { context, observer };
             let subscription_1 = self.source_1.subscribe(observer_1);
             let subscription_2 = self.source_2.subscribe(observer_2);
             subscription_1 + subscription_2
@@ -54,15 +56,15 @@ where
     }
 }
 
-struct CombineLatestContext<T1, T2, OR> {
-    observer: Option<OR>,
+struct CombineLatestContext<T1, T2> {
     latest_1: Option<T1>,
     latest_2: Option<T2>,
     should_completed: bool,
 }
 
 struct CombineLatestObserver1<T1, T2, OR> {
-    context: Shared<Mutable<CombineLatestContext<T1, T2, OR>>>,
+    context: Shared<Mutable<CombineLatestContext<T1, T2>>>,
+    observer: Shared<Mutable<Option<OR>>>,
 }
 
 impl<T1, T2, E, OR> Observer<T1, E> for CombineLatestObserver1<T1, T2, OR>
@@ -75,9 +77,9 @@ where
         let mut lock = self.context.lock_mut();
         lock.latest_1 = Some(latest_1.clone());
         if let Some(latest_2) = lock.latest_2.clone() {
-            if let Some(observer) = lock.observer.as_mut() {
-                observer.on_next((latest_1, latest_2))
-            }
+            drop(lock);
+            self.observer
+                .safe_lock_on_next_if_some((latest_1, latest_2));
         }
     }
 
@@ -86,8 +88,8 @@ where
         match termination {
             Termination::Completed => {
                 if lock.should_completed || lock.latest_1.is_none() {
-                    if let Some(observer) = lock.observer.take() {
-                        drop(lock);
+                    drop(lock);
+                    if let Some(observer) = self.observer.safe_lock_take() {
                         observer.on_termination(termination);
                     }
                 } else {
@@ -95,8 +97,8 @@ where
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = lock.observer.take() {
-                    drop(lock);
+                drop(lock);
+                if let Some(observer) = self.observer.safe_lock_take() {
                     observer.on_termination(termination);
                 }
             }
@@ -105,7 +107,8 @@ where
 }
 
 struct CombineLatestObserver2<T1, T2, OR> {
-    context: Shared<Mutable<CombineLatestContext<T1, T2, OR>>>,
+    context: Shared<Mutable<CombineLatestContext<T1, T2>>>,
+    observer: Shared<Mutable<Option<OR>>>,
 }
 
 impl<T1, T2, E, OR> Observer<T2, E> for CombineLatestObserver2<T1, T2, OR>
@@ -118,9 +121,9 @@ where
         let mut lock = self.context.lock_mut();
         lock.latest_2 = Some(latest_2.clone());
         if let Some(latest_1) = lock.latest_1.clone() {
-            if let Some(observer) = lock.observer.as_mut() {
-                observer.on_next((latest_1, latest_2))
-            }
+            drop(lock);
+            self.observer
+                .safe_lock_on_next_if_some((latest_1, latest_2));
         }
     }
 
@@ -129,8 +132,8 @@ where
         match termination {
             Termination::Completed => {
                 if lock.should_completed || lock.latest_2.is_none() {
-                    if let Some(observer) = lock.observer.take() {
-                        drop(lock);
+                    drop(lock);
+                    if let Some(observer) = self.observer.safe_lock_take() {
                         observer.on_termination(termination);
                     }
                 } else {
@@ -138,8 +141,8 @@ where
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = lock.observer.take() {
-                    drop(lock);
+                drop(lock);
+                if let Some(observer) = self.observer.safe_lock_take() {
                     observer.on_termination(termination);
                 }
             }
