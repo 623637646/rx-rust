@@ -575,13 +575,13 @@ fn test_sub_on_completed() {
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                // subscribe before on_next
+                // subscribe before termination
                 if let Some(observer) = observer_2.take() {
                     subscription_2_cloned
                         .safe_lock_set(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_termination(value);
-                // subscribe after on_next
+                // subscribe after termination
                 if let Some(observer) = observer_3.take() {
                     subscription_3_cloned
                         .safe_lock_set(Some(observable.clone().subscribe(observer)));
@@ -714,13 +714,13 @@ fn test_sub_on_error() {
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                // subscribe before on_next
+                // subscribe before termination
                 if let Some(observer) = observer_2.take() {
                     subscription_2_cloned
                         .safe_lock_set(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_termination(value);
-                // subscribe after on_next
+                // subscribe after termination
                 if let Some(observer) = observer_3.take() {
                     subscription_3_cloned
                         .safe_lock_set(Some(observable.clone().subscribe(observer)));

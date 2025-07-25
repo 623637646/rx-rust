@@ -469,6 +469,68 @@ fn test_unsub_on_next() {
 }
 
 #[test]
+fn test_sub_on_next() {
+    let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(-1);
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_3 = Shared::new(Mutable::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_next(move |observer, value| {
+                // subscribe before on_next
+                if let Some(observer) = observer_2.take() {
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+                observer.on_next(value);
+                // subscribe after on_next
+                if let Some(observer) = observer_3.take() {
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert_eq!(checker_1.values(), [-1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [-1]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), [-1]);
+    assert_eq!(checker_3.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [-1, 111]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [-1, 111]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), [-1, 111]);
+    assert_eq!(checker_3.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(222);
+    assert_eq!(checker_1.values(), [-1, 111, 222]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [-1, 111, 222]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), [-1, 111, 222]);
+    assert_eq!(checker_3.state(), State::Active);
+    assert!(subject.terminated().is_none());
+}
+
+#[test]
 fn test_unsub_on_completed() {
     let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(-1);
     let (checker_1, observer_1) = Checker::new();
@@ -534,6 +596,68 @@ fn test_unsub_on_completed() {
     assert_eq!(checker_3.state(), State::Completed);
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
     assert_eq!(subject.value(), 111);
+}
+
+#[test]
+fn test_sub_on_completed() {
+    let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(-1);
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_3 = Shared::new(Mutable::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_termination(move |observer, value| {
+                // subscribe before termination
+                if let Some(observer) = observer_2.take() {
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+                observer.on_termination(value);
+                // subscribe after termination
+                if let Some(observer) = observer_3.take() {
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert_eq!(checker_1.values(), [-1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [-1, 111]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.clone().on_termination(Termination::Completed);
+    assert_eq!(checker_1.values(), [-1, 111]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Completed);
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
 
 #[test]
@@ -605,6 +729,71 @@ fn test_unsub_on_error() {
         Some(Termination::Error("error"))
     ));
     assert_eq!(subject.value(), 111);
+}
+
+#[test]
+fn test_sub_on_error() {
+    let mut subject = BehaviorSubject::new(-1);
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_3 = Shared::new(Mutable::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_termination(move |observer, value| {
+                // subscribe before termination
+                if let Some(observer) = observer_2.take() {
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+                observer.on_termination(value);
+                // subscribe after termination
+                if let Some(observer) = observer_3.take() {
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert_eq!(checker_1.values(), [-1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [-1, 111]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.clone().on_termination(Termination::Error("error"));
+    assert_eq!(checker_1.values(), [-1, 111]);
+    assert_eq!(checker_1.state(), State::Error("error"));
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Error("error"));
+    assert!(matches!(
+        subject.terminated(),
+        Some(Termination::Error("error"))
+    ));
 }
 
 #[test]

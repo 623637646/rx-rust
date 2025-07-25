@@ -767,6 +767,75 @@ fn test_unsub_on_next() {
 }
 
 #[test]
+fn test_sub_on_next() {
+    let mut counter = 0;
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .publish()
+        .ref_count();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_3 = Shared::new(Mutable::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_next(move |observer, value| {
+                // subscribe before on_next
+                if let Some(observer) = observer_2.take() {
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+                observer.on_next(value);
+                // subscribe after on_next
+                if let Some(observer) = observer_3.take() {
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [2]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), [2]);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+}
+
+#[test]
 fn test_unsub_on_completed() {
     let mut counter = 0;
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
@@ -797,7 +866,7 @@ fn test_unsub_on_completed() {
     // no unsubscribe
     let _subscription = observable_1.subscribe(observer_1);
 
-    // unsubscribe before on_next
+    // unsubscribe before termination
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
     sub.safe_lock_set(Some(
@@ -849,6 +918,84 @@ fn test_unsub_on_completed() {
 }
 
 #[test]
+fn test_sub_on_completed() {
+    let mut counter = 0;
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .publish()
+        .ref_count();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_3 = Shared::new(Mutable::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_termination(move |observer, value| {
+                // subscribe before termination
+                if let Some(observer) = observer_2.take() {
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+                observer.on_termination(value);
+                // subscribe after termination
+                if let Some(observer) = observer_3.take() {
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_termination(Termination::Completed);
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+#[test]
 fn test_unsub_on_error() {
     let mut counter = 0;
     let (mut sender, observable, channel_checker) = test_channel();
@@ -879,7 +1026,7 @@ fn test_unsub_on_error() {
     // no unsubscribe
     let _subscription = observable_1.subscribe(observer_1);
 
-    // unsubscribe before on_next
+    // unsubscribe before termination
     let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
     let sub_cloned = sub.clone();
     sub.safe_lock_set(Some(
@@ -926,6 +1073,84 @@ fn test_unsub_on_error() {
     assert_eq!(checker_2.values(), [1]);
     assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(checker_3.values(), [1]);
+    assert_eq!(checker_3.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+}
+
+#[test]
+fn test_sub_on_error() {
+    let mut counter = 0;
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .publish()
+        .ref_count();
+
+    let mut observer_2 = Some(observer_2);
+    let mut observer_3 = Some(observer_3);
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_3 = Shared::new(Mutable::new(None));
+
+    let subscription_2_cloned = subscription_2.clone();
+    let subscription_3_cloned = subscription_3.clone();
+    let _subscription = Some(
+        observable
+            .clone()
+            .hook_on_termination(move |observer, value| {
+                // subscribe before termination
+                if let Some(observer) = observer_2.take() {
+                    subscription_2_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+                observer.on_termination(value);
+                // subscribe after termination
+                if let Some(observer) = observer_3.take() {
+                    subscription_3_cloned
+                        .safe_lock_set(Some(observable.clone().subscribe(observer)));
+                }
+            })
+            .subscribe(observer_1),
+    );
+    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_termination(Termination::Error("error"));
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Error("error"));
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
