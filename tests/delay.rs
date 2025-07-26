@@ -472,6 +472,39 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    block_on(|runtime| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable
+            .delay(Duration::from_millis(100), runtime.clone())
+            .take(1);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+        sender.on_next(111);
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+        runtime.clone().sleep(Duration::from_millis(50)).await;
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+        runtime.sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    });
+}
+
+#[test]
 fn test_multiple_operation() {
     block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
@@ -579,39 +612,6 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    });
-}
-
-#[test]
-fn test_unsub_on_next_by_take() {
-    block_on(|runtime| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable
-            .delay(Duration::from_millis(100), runtime.clone())
-            .take(1);
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-        sender.on_next(111);
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-        runtime.clone().sleep(Duration::from_millis(50)).await;
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-        runtime.sleep(Duration::from_millis(100)).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
 }
 
