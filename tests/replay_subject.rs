@@ -780,6 +780,33 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let mut subject = ReplaySubject::<'_, _, Infallible>::new(None);
+    let (checker_1, observer_1) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().take(1);
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let subject_cloned = subject.clone();
+    let _subscription = observable.clone().subscribe_with_callback(
+        |_| {},
+        move |_| {
+            // In this case, Subject is not terminated.
+            assert!(subject_cloned.terminated().is_none());
+        },
+    );
+    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert!(subject.terminated().is_none());
+}
+
+#[test]
 fn test_complete_on_next() {
     let mut subject = ReplaySubject::new(None);
     let (checker, observer) = Checker::new();

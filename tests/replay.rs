@@ -752,6 +752,65 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let mut counter = 0;
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .replay(None);
+    let observable_1 = observable.clone().take(1);
+    let observable_2 = observable.clone().take(2);
+
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
+
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
+
+    let _subscription_2 = observable.connect();
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    let _subscription = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_2.values(), [1]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(());
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+}
+
+#[test]
 fn test_multiple_operation() {
     let mut counter = 0;
     let (mut sender, observable, channel_checker) = test_channel();

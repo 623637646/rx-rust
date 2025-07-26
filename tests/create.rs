@@ -301,6 +301,22 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let observable = Create::new(|mut observer| {
+        observer.on_next(111);
+        observer.on_next(222);
+        observer.on_termination(Termination::Error("error"));
+        Subscription::default()
+    })
+    .take(1);
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;

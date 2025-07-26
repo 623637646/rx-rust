@@ -296,6 +296,33 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let mut subject = PublishSubject::<'_, _, Infallible>::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().take(1);
+
+    let _subscription = observable.clone().subscribe(observer);
+    let subject_cloned = subject.clone();
+    let _subscription = observable.subscribe_with_callback(
+        |_| {},
+        move |_| {
+            // In this case, Subject is not terminated.
+            assert!(subject_cloned.terminated().is_none());
+        },
+    );
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert!(subject.terminated().is_none());
+}
+
+#[test]
 fn test_complete_on_next() {
     let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();

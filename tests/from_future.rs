@@ -142,6 +142,21 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    block_on(|runtime| async move {
+        let (_tx, rx) = futures::channel::oneshot::channel();
+
+        let observable = FromFuture::new(rx, runtime.clone());
+        let observable = observable.map(|result| result.unwrap_or(-1)).take(0);
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
 fn test_unsub_after_completed() {
     block_on(|runtime| async move {
         let (tx, rx) = futures::channel::oneshot::channel();

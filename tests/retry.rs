@@ -912,6 +912,45 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
+    let (checker, observer) = Checker::<_, &str>::new();
+    let errors = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = new_channel(sender.clone(), channel_checker.clone());
+    let sender_cloned = sender.clone();
+    let channel_checker_cloned = channel_checker.clone();
+    let errors_cloned = errors.clone();
+    let observable = observable
+        .retry(move |error| {
+            errors_cloned.safe_lock_push(error);
+            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+            RetryAction::Retry(observable)
+        })
+        .take(1);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(
+        channel_checker.lock_ref().as_ref().unwrap().state(),
+        ChannelState::Subscribed
+    );
+    assert!(errors.safe_lock_is_empty());
+
+    sender.safe_lock_unwrap_on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(
+        channel_checker.lock_ref().as_ref().unwrap().state(),
+        ChannelState::Unsubscribed
+    );
+    assert!(errors.safe_lock_is_empty());
+}
+
+#[test]
 fn test_multiple_operation() {
     let sender = Shared::new(Mutable::new(None));
     let channel_checker = Shared::new(Mutable::new(None));

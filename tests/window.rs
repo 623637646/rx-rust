@@ -1505,6 +1505,42 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let (_sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let (_boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = observable.window(boundary_observable).take(1);
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Active);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
 fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender_1, boundary_observable_1, boundary_channel_checker_1) = test_channel();

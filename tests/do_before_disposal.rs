@@ -427,6 +427,42 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let disposed = Shared::new(AtomicBool::new(false));
+    let called = Shared::new(AtomicBool::new(false));
+    let called_cloned = called.clone();
+    let mut boxed_observer = None;
+
+    let observable = Create::new(|observer: BoxedObserver<'_, _, Infallible>| {
+        boxed_observer = Some(observer);
+        Subscription::new_with_disposal_callback(|| {
+            disposed.store(true, Ordering::SeqCst);
+        })
+    });
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .do_before_disposal(|| {
+            assert!(!disposed.load(Ordering::SeqCst));
+            called_cloned.store(true, Ordering::SeqCst);
+        })
+        .take(1);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert!(!disposed.load(Ordering::SeqCst));
+    assert!(!called.load(Ordering::SeqCst));
+
+    boxed_observer.as_mut().unwrap().on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert!(disposed.load(Ordering::SeqCst));
+    assert!(called.load(Ordering::SeqCst));
+}
+
+#[test]
 fn test_multiple_operation() {
     let disposed = Shared::new(AtomicBool::new(false));
     let called_1 = Shared::new(AtomicBool::new(false));

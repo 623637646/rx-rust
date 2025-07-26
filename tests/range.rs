@@ -81,6 +81,17 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let source = 100..103;
+    let observable = Range::new(source).take(1);
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [100]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
 fn test_clone() {
     let source = 100..103;
     let observable = Range::new(source);

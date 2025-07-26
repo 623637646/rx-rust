@@ -369,6 +369,35 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.distinct_until_changed().take(2);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(222);
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
 fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();

@@ -1078,6 +1078,46 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (_sender_2, observable_2, channel_checker_2) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let mut observable_1_option = Some(observable_1);
+    let mut observable_2_option = Some(observable_2);
+    let observable = observable
+        .concat_map(move |value| match value {
+            1 => observable_1_option.take().unwrap(),
+            2 => observable_2_option.take().unwrap(),
+            _ => panic!(),
+        })
+        .take(1);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender.on_next(1);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+
+    sender_1.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+}
+
+#[test]
 fn test_multiple_operation() {
     let mut subject = PublishSubject::default();
     let mut subject_1 = PublishSubject::default();

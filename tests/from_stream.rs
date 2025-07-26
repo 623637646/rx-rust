@@ -135,6 +135,25 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    block_on(|runtime| async move {
+        let (mut tx, rx) = futures::channel::mpsc::unbounded();
+        let stream = rx;
+        let observable = FromStream::new(stream, runtime.clone()).take(1);
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        tx.send(111).await.unwrap();
+        runtime.clone().sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
 fn test_complete_after_next() {
     block_on(|runtime| async move {
         let (mut tx, rx) = futures::channel::mpsc::unbounded();

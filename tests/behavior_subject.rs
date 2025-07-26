@@ -322,6 +322,29 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let subject = BehaviorSubject::new(-1);
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().take(1);
+
+    let _subscription = observable.clone().subscribe(observer);
+    let subject_cloned = subject.clone();
+    let _subscription = observable.subscribe_with_callback(
+        |_| {},
+        move |_| {
+            // In this case, Subject is not terminated.
+            assert!(subject_cloned.terminated().is_none());
+        },
+    );
+    assert_eq!(checker.values(), [-1]);
+    assert_eq!(checker.state(), State::<Infallible>::Completed);
+    assert!(subject.terminated().is_none());
+    assert_eq!(subject.value(), -1);
+}
+
+#[test]
 fn test_complete_on_next() {
     let mut subject = BehaviorSubject::new(-1);
     let (checker, observer) = Checker::new();

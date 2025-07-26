@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
@@ -190,6 +191,20 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Completed);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Completed);
+}
+
+#[test]
+fn test_completest_unsub_on_next_by_taketed() {
+    let (_sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::<i32, String>::new();
+
+    // Custom operations
+    let observable = observable.map_infallible_to_value().take(0);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 }
 
 #[test]

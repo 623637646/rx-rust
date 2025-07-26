@@ -68,6 +68,16 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let observable = Empty;
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.take(1).subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
 fn test_clone() {
     let observable = Empty;
     _ = observable.clone();

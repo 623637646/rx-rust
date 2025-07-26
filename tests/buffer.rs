@@ -683,6 +683,34 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.buffer(boundary_observable).take(1);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(0);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
+
+    boundary_sender.on_next(());
+    assert_eq!(checker.values(), [vec![0]]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
 fn test_multiple_operation() {
     let mut subject = PublishSubject::default();
     let mut boundary_subject_1 = PublishSubject::default();

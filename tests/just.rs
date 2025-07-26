@@ -101,6 +101,16 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let observable = Just::new(111).take(0);
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
 fn test_clone() {
     let observable = Just::new(111);
     _ = observable.clone();

@@ -489,6 +489,28 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (_stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.take_until(stop_observable).take(1);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(stop_channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(stop_channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
 fn test_multiple_operation_stop_1() {
     let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
     let mut stop_subject_1 = PublishSubject::default();

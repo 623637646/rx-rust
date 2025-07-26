@@ -300,6 +300,45 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    let mut subject = AsyncSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().take(1);
+
+    let _subscription = observable.clone().subscribe(observer);
+    let subject_cloned = subject.clone();
+    let _subscription = observable.subscribe_with_callback(
+        |_| {},
+        move |_| {
+            // In this case, Subject is not terminated.
+            assert!(subject_cloned.terminated().is_none());
+        },
+    );
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(111);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject.on_next(222);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert!(subject.terminated().is_none());
+
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [222]);
+    assert_eq!(checker.state(), State::Completed);
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
+}
+
+#[test]
 fn test_complete_on_next() {
     let mut subject = AsyncSubject::default();
     let (checker, observer) = Checker::new();

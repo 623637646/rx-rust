@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
@@ -387,6 +388,35 @@ fn test_subscribe_by_different_observer() {
         terminations.lock_ref().as_ref(),
         vec![Termination::Error("error"), Termination::Error("error")]
     );
+}
+
+#[test]
+fn test_unsub_on_next_by_take() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::<(), _>::new();
+
+    // Custom operations
+    let observable = observable
+        .hook_on_termination(move |observer, termination| {
+            observer_2.on_termination(termination);
+            observer.on_termination(Termination::Error("error"));
+        })
+        .take(1);
+
+    let _subscription = observable.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]

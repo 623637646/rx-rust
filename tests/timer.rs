@@ -147,6 +147,26 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
+fn test_unsub_on_next_by_take() {
+    block_on(|runtime| async move {
+        let observable = Timer::new(111, Duration::from_millis(100), runtime.clone()).take(1);
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.clone().sleep(Duration::from_millis(50)).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.clone().sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
 fn test_undisposed_schedule() {
     block_on(|runtime| async move {
         let observable = Timer::new(111, Duration::from_millis(100), runtime.clone());
