@@ -1,11 +1,27 @@
 use crate::{
-    disposable::{Disposable, shared_disposal::SharedDisposal, subscription::Subscription},
+    disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
     utils::{
-        safe_lock::{SafeLock, SafeLockOption},
-        types::{Mutable, Shared},
+        safe_lock::SafeLock,
+        types::{Mutable, MutableHelper, Shared},
     },
 };
+
+enum SubState<'sub> {
+    Initialized,
+    Subscribed(Subscription<'sub>),
+    Unsubscribed,
+}
+
+impl Disposable for Shared<Mutable<SubState<'_>>> {
+    fn dispose(self) {
+        match self.safe_lock_mem_replace(SubState::Unsubscribed) {
+            SubState::Initialized => {}
+            SubState::Subscribed(subscription) => subscription.dispose(),
+            SubState::Unsubscribed => {}
+        }
+    }
+}
 
 pub fn subscribe_unsub_after_termination<'sub, OR, F>(
     observer: OR,
@@ -14,19 +30,27 @@ pub fn subscribe_unsub_after_termination<'sub, OR, F>(
 where
     F: FnOnce(UnsubAfterTerminationObserver<'sub, OR>) -> Subscription<'sub>,
 {
-    let subscription = Shared::new(Mutable::new(None));
+    let sub_state = Shared::new(Mutable::new(SubState::Initialized));
     let observer = UnsubAfterTerminationObserver {
         observer,
-        subscription: subscription.clone(),
+        sub_state: sub_state.clone(),
     };
     let sub = builder(observer);
-    subscription.safe_lock_set(Some(sub));
-    Subscription::new_with_disposal(SharedDisposal::new(subscription))
+
+    let mut lock = sub_state.lock_mut();
+    match &*lock {
+        SubState::Initialized => *lock = SubState::Subscribed(sub),
+        SubState::Subscribed(_) => unreachable!(),
+        SubState::Unsubscribed => sub.dispose(),
+    }
+    drop(lock);
+
+    Subscription::new_with_disposal(sub_state)
 }
 
 pub struct UnsubAfterTerminationObserver<'sub, OR> {
     observer: OR,
-    subscription: Shared<Mutable<Option<Subscription<'sub>>>>,
+    sub_state: Shared<Mutable<SubState<'sub>>>,
 }
 
 impl<T, E, OR> Observer<T, E> for UnsubAfterTerminationObserver<'_, OR>
@@ -39,8 +63,6 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
-        if let Some(sub) = self.subscription.safe_lock_take() {
-            sub.dispose()
-        }
+        self.sub_state.dispose();
     }
 }
