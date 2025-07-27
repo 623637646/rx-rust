@@ -280,7 +280,6 @@ fn test_async() {
         });
 
         let subscription = runtime
-            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
@@ -290,7 +289,6 @@ fn test_async() {
         assert!(!called.load(Ordering::SeqCst));
 
         let boxed_observer = runtime
-            .clone()
             .spawn(async move {
                 boxed_observer.safe_lock_unwrap_on_next(111);
                 boxed_observer
@@ -303,18 +301,16 @@ fn test_async() {
         assert!(!called.load(Ordering::SeqCst));
 
         runtime
-            .clone()
             .spawn(async move { subscription.dispose() })
             .await
             .unwrap();
-        runtime.clone().sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert!(disposed.load(Ordering::SeqCst));
         assert!(called.load(Ordering::SeqCst));
 
         runtime
-            .clone()
             .spawn(async move {
                 boxed_observer
                     .safe_lock_take()

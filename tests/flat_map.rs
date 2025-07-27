@@ -937,7 +937,6 @@ fn test_async() {
         });
 
         let subscription = runtime
-            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
@@ -946,7 +945,6 @@ fn test_async() {
 
         let mut subject_cloned = subject.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(1);
             })
@@ -957,7 +955,6 @@ fn test_async() {
 
         let mut subject_cloned = subject_1.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(111);
             })
@@ -968,7 +965,6 @@ fn test_async() {
 
         let mut subject_cloned = subject.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(2);
             })
@@ -979,7 +975,6 @@ fn test_async() {
 
         let mut subject_cloned = subject_2.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(222);
             })
@@ -989,17 +984,15 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
 
         runtime
-            .clone()
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.clone().sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Dropped);
 
         let mut subject_cloned = subject_1.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(333);
             })
@@ -1010,7 +1003,6 @@ fn test_async() {
 
         let subject_cloned = subject_1.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_termination(Termination::Completed);
             })
@@ -1021,7 +1013,6 @@ fn test_async() {
 
         let mut subject_cloned = subject_2.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(444);
             })
@@ -1032,7 +1023,6 @@ fn test_async() {
 
         let subject_cloned = subject_2.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_termination(Termination::Error("error"));
             })

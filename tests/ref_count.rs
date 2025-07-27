@@ -326,7 +326,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
         let subscription_1 = runtime
-            .clone()
             .spawn(async move { observable_1.subscribe(observer_1) })
             .await
             .unwrap();
@@ -337,7 +336,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let mut sender = runtime
-            .clone()
             .spawn(async move {
                 sender.on_next(());
                 sender
@@ -351,7 +349,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let _subscription_2 = runtime
-            .clone()
             .spawn(async move { observable_2.subscribe(observer_2) })
             .await
             .unwrap();
@@ -362,7 +359,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let sender = runtime
-            .clone()
             .spawn(async move {
                 sender.on_next(());
                 sender
@@ -376,11 +372,10 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         runtime
-            .clone()
             .spawn(async move { subscription_1.dispose() })
             .await
             .unwrap();
-        runtime.clone().sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [2]);
@@ -388,7 +383,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         runtime
-            .clone()
             .spawn(async move { sender.on_termination(Termination::Error("error")) })
             .await
             .unwrap();

@@ -21,11 +21,11 @@ fn test_completed() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
@@ -62,7 +62,7 @@ fn test_unsubscribe() {
         assert!(checker_3.values().is_empty());
         assert_eq!(checker_3.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Dropped);
         assert!(checker_2.values().is_empty());
@@ -78,7 +78,7 @@ fn test_unsubscribe() {
         assert!(checker_3.values().is_empty());
         assert_eq!(checker_3.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Dropped);
         assert!(checker_2.values().is_empty());
@@ -95,18 +95,17 @@ fn test_async() {
         let (checker, observer) = Checker::new();
 
         let _subscription = runtime
-            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
@@ -132,13 +131,13 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [111]);
         assert_eq!(checker_1.state(), State::Completed);
         assert_eq!(checker_2.values(), [111]);
@@ -156,11 +155,11 @@ fn test_unsub_on_next_by_take() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
@@ -196,7 +195,7 @@ fn test_type_inference_with_subscribe() {
         let (_, observer) = Checker::new();
         observable.subscribe(observer);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
     });
 }
 

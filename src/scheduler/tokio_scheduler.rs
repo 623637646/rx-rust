@@ -4,7 +4,7 @@ use std::time::Duration;
 
 impl Scheduler for tokio::runtime::Handle {
     fn schedule_periodically(
-        self,
+        &self,
         mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
         period: Duration,
         delay: Option<Duration>,
@@ -28,13 +28,13 @@ impl Scheduler for tokio::runtime::Handle {
     }
 
     fn schedule_future(
-        self,
+        &self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> impl Disposable + NecessarySend + 'static {
         self.spawn(future)
     }
 
-    fn sleep(self, duration: Duration) -> impl Future + NecessarySend {
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static {
         tokio::time::sleep(duration)
     }
 }

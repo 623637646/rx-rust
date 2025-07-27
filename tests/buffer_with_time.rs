@@ -34,11 +34,11 @@ fn test_completed_last_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -46,7 +46,7 @@ fn test_completed_last_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -58,7 +58,7 @@ fn test_completed_last_empty() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -88,11 +88,11 @@ fn test_completed_last_not_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -100,7 +100,7 @@ fn test_completed_last_not_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -135,11 +135,11 @@ fn test_completed_no_delay() {
         // assert!(checker.values().is_empty()); // This assert may be failed in multi-thread.
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -147,7 +147,7 @@ fn test_completed_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -159,7 +159,7 @@ fn test_completed_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![], vec![], vec![111], vec![222, 333]]
@@ -195,11 +195,11 @@ fn test_completed_small_delay() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -207,7 +207,7 @@ fn test_completed_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -219,7 +219,7 @@ fn test_completed_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(
             checker.values(),
             [vec![], vec![], vec![111], vec![222, 333]]
@@ -255,11 +255,11 @@ fn test_error_last_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -267,7 +267,7 @@ fn test_error_last_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -279,7 +279,7 @@ fn test_error_last_empty() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -307,11 +307,11 @@ fn test_error_last_not_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -319,7 +319,7 @@ fn test_error_last_not_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -361,13 +361,13 @@ fn test_unsubscribe() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![]]);
@@ -379,7 +379,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![], vec![111]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![], vec![111]]);
@@ -391,7 +391,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![], vec![111]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker_1.values(), [vec![], vec![111]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [vec![], vec![111]]);
@@ -409,7 +409,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![], vec![111]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![], vec![111]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [vec![], vec![111], vec![222, 333]]);
@@ -440,24 +440,22 @@ fn test_async() {
         );
 
         let subscription = runtime
-            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(111);
             })
@@ -466,13 +464,12 @@ fn test_async() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
         let mut subject_cloned = subject.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(222);
             })
@@ -483,7 +480,6 @@ fn test_async() {
 
         let mut subject_cloned = subject.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_next(333);
             })
@@ -493,17 +489,15 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
 
         runtime
-            .clone()
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.clone().sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Dropped);
 
         let subject_cloned = subject.clone();
         runtime
-            .clone()
             .spawn(async move {
                 subject_cloned.on_termination(Termination::Error("error"));
             })
@@ -512,7 +506,7 @@ fn test_async() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Dropped);
 
-        runtime.clone().sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Dropped);
     });
@@ -543,13 +537,13 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![]]);
@@ -561,7 +555,7 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker_1.values(), [vec![], vec![111]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![], vec![111]]);
@@ -609,12 +603,12 @@ fn test_unsub_on_next_by_take() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -645,11 +639,11 @@ fn test_multiple_operation() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![vec![]]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -657,7 +651,7 @@ fn test_multiple_operation() {
         assert_eq!(checker.values(), [vec![vec![]]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![vec![]], vec![vec![111]]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -699,11 +693,11 @@ fn test_without_convenient_api() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(50)).await;
+        runtime.sleep(Duration::from_millis(50)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -711,7 +705,7 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.clone().sleep(Duration::from_millis(100)).await;
+        runtime.sleep(Duration::from_millis(100)).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -755,12 +749,12 @@ fn test_complete_after_next() {
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
 
-        runtime.clone().sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert_eq!(checker.values(), [vec![111]]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
 
-        runtime.clone().sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert_eq!(checker.values(), [vec![111]]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -791,12 +785,12 @@ fn test_error_after_next() {
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 
-        runtime.clone().sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 
-        runtime.clone().sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
@@ -823,17 +817,17 @@ fn test_unsub_after_next() {
 
         sender.on_next(111);
         subscription.dispose();
-        runtime.clone().sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 
-        runtime.clone().sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 
-        runtime.clone().sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -864,12 +858,12 @@ fn test_unsub_after_completed() {
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
 
-        runtime.clone().sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
 
-        runtime.clone().sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -900,12 +894,12 @@ fn test_unsub_after_error() {
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 
-        runtime.clone().sleep(Duration::from_millis(90)).await;
+        runtime.sleep(Duration::from_millis(90)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 
-        runtime.clone().sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(20)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));

@@ -37,14 +37,14 @@ pub enum RecursionAction {
 /// This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
 pub trait Scheduler: Clone + NecessarySend + 'static {
     fn schedule_future(
-        self,
+        &self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> impl Disposable + NecessarySend + 'static;
 
-    fn sleep(self, duration: Duration) -> impl Future + NecessarySend;
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static;
 
     fn schedule(
-        self,
+        &self,
         task: impl FnOnce() + NecessarySend + 'static,
         delay: Option<Duration>,
     ) -> impl Disposable + NecessarySend + 'static {
@@ -58,7 +58,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
     }
 
     fn schedule_recursively(
-        self,
+        &self,
         mut task: impl FnMut(usize) -> RecursionAction + NecessarySend + 'static,
         delay: Option<Duration>,
     ) -> impl Disposable + NecessarySend + 'static {
@@ -99,7 +99,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
     }
 
     fn schedule_periodically(
-        self,
+        &self,
         mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
         period: Duration,
         delay: Option<Duration>,
@@ -119,7 +119,7 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
 
     #[cfg(feature = "futures")]
     fn schedule_stream<SM>(
-        self,
+        &self,
         mut stream: SM,
         mut result_callback: impl FnMut(Option<SM::Item>) + NecessarySend + 'static,
     ) -> impl Disposable + NecessarySend + 'static

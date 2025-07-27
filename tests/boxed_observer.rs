@@ -73,12 +73,10 @@ fn test_async() {
     block_on(|runtime| async move {
         let (checker, observer) = Checker::new();
         let mut boxed_observer = runtime
-            .clone()
             .spawn(async { BoxedObserver::new(observer) })
             .await
             .unwrap();
         runtime
-            .clone()
             .spawn(async move {
                 boxed_observer.on_next(111);
                 boxed_observer.on_termination(Termination::Error("error"));

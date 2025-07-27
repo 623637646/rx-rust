@@ -781,7 +781,6 @@ fn test_async() {
         });
 
         let _subscription = runtime
-            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
@@ -794,7 +793,6 @@ fn test_async() {
         assert!(errors.safe_lock_is_empty());
 
         let sender = runtime
-            .clone()
             .spawn(async move {
                 sender.safe_lock_unwrap_on_next(111);
                 sender
@@ -810,7 +808,6 @@ fn test_async() {
         assert!(errors.safe_lock_is_empty());
 
         let sender = runtime
-            .clone()
             .spawn(async move {
                 sender
                     .safe_lock_take()
@@ -829,7 +826,6 @@ fn test_async() {
         assert_eq!(*errors.lock_ref(), ["error"]);
 
         let sender = runtime
-            .clone()
             .spawn(async move {
                 sender.safe_lock_unwrap_on_next(222);
                 sender
@@ -845,7 +841,6 @@ fn test_async() {
         assert_eq!(*errors.lock_ref(), ["error"]);
 
         let _sender = runtime
-            .clone()
             .spawn(async move {
                 sender
                     .safe_lock_take()

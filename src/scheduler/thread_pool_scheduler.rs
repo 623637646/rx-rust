@@ -9,7 +9,7 @@ use std::time::Duration;
 
 impl Scheduler for ThreadPool {
     fn schedule_future(
-        self,
+        &self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> impl Disposable + NecessarySend + 'static {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
@@ -21,7 +21,7 @@ impl Scheduler for ThreadPool {
         abort_handle
     }
 
-    fn sleep(self, duration: Duration) -> impl Future + NecessarySend {
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static {
         async_io::Timer::after(duration)
     }
 }

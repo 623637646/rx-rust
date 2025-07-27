@@ -333,7 +333,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
         let _subscription_1 = runtime
-            .clone()
             .spawn(async move { observable_1.subscribe(observer_1) })
             .await
             .unwrap();
@@ -344,7 +343,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
         let _subscription = runtime
-            .clone()
             .spawn(async move { observable.connect() })
             .await
             .unwrap();
@@ -355,7 +353,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let mut sender = runtime
-            .clone()
             .spawn(async move {
                 sender.on_next(());
                 sender
@@ -369,7 +366,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let _subscription_2 = runtime
-            .clone()
             .spawn(async move { observable_2.subscribe(observer_2) })
             .await
             .unwrap();
@@ -380,7 +376,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         let sender = runtime
-            .clone()
             .spawn(async move {
                 sender.on_next(());
                 sender
@@ -394,7 +389,6 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         runtime
-            .clone()
             .spawn(async { sender.on_termination(Termination::<Infallible>::Completed) })
             .await
             .unwrap();

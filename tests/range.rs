@@ -41,7 +41,6 @@ fn test_async() {
         let (checker, observer) = Checker::<i32, Infallible>::new();
 
         let subscription = runtime
-            .clone()
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
@@ -49,11 +48,10 @@ fn test_async() {
         assert_eq!(checker.state(), State::Completed);
 
         runtime
-            .clone()
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.clone().sleep(Duration::from_millis(10)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [100, 101, 102]);
         assert_eq!(checker.state(), State::Completed);
     });
