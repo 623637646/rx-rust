@@ -64,8 +64,8 @@ impl<T, E> CheckerObserver<T, E> {
     pub(crate) fn into_callbacks(
         self,
     ) -> (
-        impl FnMut(T) + NecessarySend + use<T, E>,
-        impl FnOnce(Termination<E>) + NecessarySend + use<T, E>,
+        impl FnMut(T) + NecessarySend,
+        impl FnOnce(Termination<E>) + NecessarySend,
     )
     where
         T: NecessarySend,
