@@ -185,9 +185,7 @@ fn test_precision() {
                 duration.as_micros() - (count * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {}, count: {}",
-                diff,
-                count
+                "diff: {diff}, count: {count}"
             );
             count += 1;
             if count == RECURSION_EXECUTION_TIMES {

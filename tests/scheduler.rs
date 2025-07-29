@@ -97,9 +97,7 @@ fn test_schedule_recursively_without_delay() {
                 duration.as_micros() - (count * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {}, count: {}",
-                diff,
-                count
+                "diff: {diff}, count: {count}"
             );
             count += 1;
         }
@@ -135,9 +133,7 @@ fn test_schedule_recursively_with_delay() {
                 duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {}, count: {}",
-                diff,
-                count
+                "diff: {diff}, count: {count}"
             );
             count += 1;
         }
@@ -198,9 +194,7 @@ fn test_schedule_period_without_delay() {
                 duration.as_micros() - (count * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {}, count: {}",
-                diff,
-                count
+                "diff: {diff}, count: {count}"
             );
             count += 1;
         }
@@ -235,9 +229,7 @@ fn test_schedule_period_with_delay() {
                 duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME as usize * 1000) as u128;
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {}, count: {}",
-                diff,
-                count
+                "diff: {diff}, count: {count}"
             );
             count += 1;
         }
