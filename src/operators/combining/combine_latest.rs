@@ -84,23 +84,18 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut lock = self.context.lock_mut();
         match termination {
             Termination::Completed => {
+                let mut lock = self.context.lock_mut();
                 if lock.should_completed || lock.latest_1.is_none() {
                     drop(lock);
-                    if let Some(observer) = self.observer.safe_lock_take() {
-                        observer.on_termination(termination);
-                    }
+                    self.observer.safe_lock_on_termination_if_some(termination);
                 } else {
                     lock.should_completed = true;
                 }
             }
             Termination::Error(_) => {
-                drop(lock);
-                if let Some(observer) = self.observer.safe_lock_take() {
-                    observer.on_termination(termination);
-                }
+                self.observer.safe_lock_on_termination_if_some(termination);
             }
         }
     }
@@ -128,23 +123,18 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut lock = self.context.lock_mut();
         match termination {
             Termination::Completed => {
+                let mut lock = self.context.lock_mut();
                 if lock.should_completed || lock.latest_2.is_none() {
                     drop(lock);
-                    if let Some(observer) = self.observer.safe_lock_take() {
-                        observer.on_termination(termination);
-                    }
+                    self.observer.safe_lock_on_termination_if_some(termination);
                 } else {
                     lock.should_completed = true;
                 }
             }
             Termination::Error(_) => {
-                drop(lock);
-                if let Some(observer) = self.observer.safe_lock_take() {
-                    observer.on_termination(termination);
-                }
+                self.observer.safe_lock_on_termination_if_some(termination);
             }
         }
     }
