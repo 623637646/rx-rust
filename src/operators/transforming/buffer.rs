@@ -1,4 +1,4 @@
-use crate::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockOptionObserver, SafeLockVec};
+use crate::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockVec};
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,

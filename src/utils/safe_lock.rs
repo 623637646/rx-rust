@@ -10,7 +10,7 @@
 ///    println!("{}", equals);
 /// }
 use crate::{
-    observer::Observer,
+    observer::{Observer, Termination},
     utils::types::{Mutable, MutableHelper},
 };
 use std::collections::VecDeque;
@@ -28,6 +28,14 @@ pub trait SafeLock<T> {
 
     #[must_use = "if you don't need the old value, you can just assign the new value directly"]
     fn safe_lock_mem_replace(&self, value: T) -> T;
+
+    fn safe_lock_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R;
+
+    fn safe_lock_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R;
+
+    fn safe_lock_on_next<T1, E>(&self, value: T1)
+    where
+        T: Observer<T1, E>;
 }
 
 impl<T> SafeLock<T> for Mutable<T> {
@@ -52,6 +60,21 @@ impl<T> SafeLock<T> for Mutable<T> {
     fn safe_lock_mem_replace(&self, value: T) -> T {
         std::mem::replace(&mut self.lock_mut(), value)
     }
+
+    fn safe_lock_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
+        callback(&self.lock_ref())
+    }
+
+    fn safe_lock_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
+        callback(&mut self.lock_mut())
+    }
+
+    fn safe_lock_on_next<T1, E>(&self, value: T1)
+    where
+        T: Observer<T1, E>,
+    {
+        self.lock_mut().on_next(value);
+    }
 }
 
 pub trait SafeLockOption<T> {
@@ -62,6 +85,25 @@ pub trait SafeLockOption<T> {
     fn safe_lock_take(&self) -> Option<T>;
 
     fn safe_lock_replace(&self, value: T) -> Option<T>;
+
+    fn safe_lock_on_next_if_some<T1, E>(&self, value: T1) -> bool
+    where
+        T: Observer<T1, E>;
+
+    fn safe_lock_on_next_with_builder<T1, E>(
+        &self,
+        value_builder: impl FnOnce() -> Option<T1>,
+    ) -> bool
+    where
+        T: Observer<T1, E>;
+
+    fn safe_lock_unwrap_on_next<T1, E>(&self, value: T1)
+    where
+        T: Observer<T1, E>;
+
+    fn safe_lock_on_termination_if_some<T1, E>(&self, termination: Termination<E>) -> bool
+    where
+        T: Observer<T1, E>;
 }
 
 impl<T> SafeLockOption<T> for Mutable<Option<T>> {
@@ -79,6 +121,56 @@ impl<T> SafeLockOption<T> for Mutable<Option<T>> {
 
     fn safe_lock_replace(&self, value: T) -> Option<T> {
         self.lock_mut().replace(value)
+    }
+
+    fn safe_lock_on_next_if_some<T1, E>(&self, value: T1) -> bool
+    where
+        T: Observer<T1, E>,
+    {
+        if let Some(observer) = self.lock_mut().as_mut() {
+            observer.on_next(value);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn safe_lock_on_next_with_builder<T1, E>(
+        &self,
+        value_builder: impl FnOnce() -> Option<T1>,
+    ) -> bool
+    where
+        T: Observer<T1, E>,
+    {
+        if let Some(observer) = self.lock_mut().as_mut() {
+            if let Some(value) = value_builder() {
+                observer.on_next(value);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
+    fn safe_lock_unwrap_on_next<T1, E>(&self, value: T1)
+    where
+        T: Observer<T1, E>,
+    {
+        self.lock_mut().as_mut().unwrap().on_next(value);
+    }
+
+    fn safe_lock_on_termination_if_some<T1, E>(&self, termination: Termination<E>) -> bool
+    where
+        T: Observer<T1, E>,
+    {
+        if let Some(observer) = self.safe_lock_take() {
+            observer.on_termination(termination);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -135,49 +227,5 @@ impl<T> SafeLockVecDeque<T> for Mutable<VecDeque<T>> {
 
     fn safe_lock_push_back(&self, value: T) {
         self.lock_mut().push_back(value);
-    }
-}
-
-pub trait SafeLockObserver<T, E> {
-    fn safe_lock_on_next(&self, value: T);
-}
-
-impl<T, E, OR> SafeLockObserver<T, E> for Mutable<OR>
-where
-    OR: Observer<T, E>,
-{
-    fn safe_lock_on_next(&self, value: T) {
-        self.lock_mut().on_next(value);
-    }
-}
-
-pub trait SafeLockOptionObserver<T, E> {
-    fn safe_lock_on_next_if_some(&self, value: T);
-
-    fn safe_lock_on_next_with_builder(&self, value_builder: impl FnOnce() -> Option<T>);
-
-    fn safe_lock_unwrap_on_next(&self, value: T);
-}
-
-impl<T, E, OR> SafeLockOptionObserver<T, E> for Mutable<Option<OR>>
-where
-    OR: Observer<T, E>,
-{
-    fn safe_lock_on_next_if_some(&self, value: T) {
-        if let Some(observer) = self.lock_mut().as_mut() {
-            observer.on_next(value);
-        }
-    }
-
-    fn safe_lock_on_next_with_builder(&self, value_builder: impl FnOnce() -> Option<T>) {
-        if let Some(observer) = self.lock_mut().as_mut() {
-            if let Some(value) = value_builder() {
-                observer.on_next(value);
-            }
-        }
-    }
-
-    fn safe_lock_unwrap_on_next(&self, value: T) {
-        self.lock_mut().as_mut().unwrap().on_next(value);
     }
 }

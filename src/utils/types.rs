@@ -7,6 +7,11 @@ use std::marker::PhantomData;
 /// For more detail: https://users.rust-lang.org/t/getting-phantomdata-to-have-a-static-lifetime/38505
 pub type MarkerType<T> = PhantomData<fn(T) -> T>;
 
+pub trait MutableHelper<T> {
+    fn lock_mut(&self) -> MutGuard<'_, T>;
+    fn lock_ref(&self) -> RefGuard<'_, T>;
+}
+
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
         use std::{
@@ -15,15 +20,13 @@ cfg_if::cfg_if! {
         };
         pub type Shared<T> = Rc<T>;
         pub type Mutable<T> = RefCell<T>;
-        pub trait MutableHelper<T> {
-            fn lock_mut(&self) -> RefMut<'_, T>;
-            fn lock_ref(&self) -> Ref<'_, T>;
-        }
+        pub type MutGuard<'a, T> = RefMut<'a, T>;
+        pub type RefGuard<'a, T> = Ref<'a, T>;
         impl<T> MutableHelper<T> for RefCell<T> {
-            fn lock_mut(&self) -> RefMut<'_, T> {
+            fn lock_mut(&self) -> MutGuard<'_, T> {
                 self.borrow_mut()
             }
-            fn lock_ref(&self) -> Ref<'_, T> {
+            fn lock_ref(&self) -> RefGuard<'_, T> {
                 self.borrow()
             }
         }
@@ -41,15 +44,13 @@ cfg_if::cfg_if! {
                 &self.0
             }
         }
-        pub trait MutableHelper<T> {
-            fn lock_mut(&self) -> MutexGuard<'_, T>;
-            fn lock_ref(&self) -> ReadOnlyMutexGuard<'_, T>;
-        }
+        pub type MutGuard<'a, T> = MutexGuard<'a, T>;
+        pub type RefGuard<'a, T> = ReadOnlyMutexGuard<'a, T>;
         impl<T> MutableHelper<T> for Mutex<T> {
-            fn lock_mut(&self) -> MutexGuard<'_, T> {
+            fn lock_mut(&self) -> MutGuard<'_, T> {
                 self.lock().unwrap()
             }
-            fn lock_ref(&self) -> ReadOnlyMutexGuard<'_, T> {
+            fn lock_ref(&self) -> RefGuard<'_, T> {
                 ReadOnlyMutexGuard(self.lock().unwrap())
             }
         }

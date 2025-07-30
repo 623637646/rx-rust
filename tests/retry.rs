@@ -6,7 +6,7 @@ use crate::tests_utils::test_channel::{ChannelChecker, ReceiverObservable, Sende
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
-use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockOptionObserver, SafeLockVec};
+use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockVec};
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},

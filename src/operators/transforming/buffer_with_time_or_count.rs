@@ -2,7 +2,7 @@ use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockOptionObserver};
+use crate::utils::safe_lock::{SafeLock, SafeLockOption};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
