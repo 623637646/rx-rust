@@ -37,7 +37,7 @@ where
     T: 'or,
     E: 'or,
     OE: Observable<'or, 'sub, T0, E>,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'sub,
     F: FnMut(T0) -> OE1 + NecessarySend + 'or,
     'sub: 'or,
 {

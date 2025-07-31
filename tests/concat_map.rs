@@ -853,7 +853,7 @@ fn test_mut_ref() {
     });
     let observable = observable.concat_map(|value| value);
 
-    let _subscription = observable.subscribe_with_callback(
+    let subscription = observable.subscribe_with_callback(
         |value| {
             *value *= 2;
         },
@@ -862,6 +862,7 @@ fn test_mut_ref() {
             Termination::Error(error) => *error *= 2,
         },
     );
+    subscription.dispose();
 
     assert_eq!(value_1, 222);
     assert_eq!(value_2, 444);
