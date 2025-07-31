@@ -78,7 +78,7 @@ struct ConcatAllContext<'sub, OE1> {
     completed: bool,
 }
 
-impl<'sub, OE1> Disposable for Shared<Mutable<ConcatAllContext<'sub, OE1>>> {
+impl<OE1> Disposable for Shared<Mutable<ConcatAllContext<'_, OE1>>> {
     fn dispose(self) {
         if let Some(sub) = self.safe_lock_mut(|e| e.on_going_sub.take()) {
             sub.dispose();

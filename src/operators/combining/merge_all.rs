@@ -137,7 +137,7 @@ struct MergeAllInnerObserver<'sub, OR> {
     key: DefaultKey,
 }
 
-impl<'sub, T, E, OR> Observer<T, E> for MergeAllInnerObserver<'sub, OR>
+impl<T, E, OR> Observer<T, E> for MergeAllInnerObserver<'_, OR>
 where
     OR: Observer<T, E>,
 {

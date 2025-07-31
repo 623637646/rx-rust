@@ -136,7 +136,7 @@ struct SwitchInnerObserver<'sub, OR> {
     context: Shared<Mutable<SwitchContext<'sub>>>,
 }
 
-impl<'sub, T, E, OR> Observer<T, E> for SwitchInnerObserver<'sub, OR>
+impl<T, E, OR> Observer<T, E> for SwitchInnerObserver<'_, OR>
 where
     OR: Observer<T, E>,
 {
