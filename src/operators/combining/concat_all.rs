@@ -111,11 +111,10 @@ impl<'or, 'sub, T, OR, OE1> ConcatAllObserver<'sub, T, OR, OE1> {
                 self.on_going_sub.safe_lock_replace(sub);
             }
         } else if self.completed.load(Ordering::SeqCst) {
-            if let Some(observer) = self.observer.safe_lock_take() {
-                observer.on_termination(Termination::Completed);
-            }
+            self.observer
+                .safe_lock_on_termination_if_some(Termination::Completed);
         } else {
-            self.on_going_sub.safe_lock_take();
+            self.on_going_sub.safe_lock_dispose_if_some();
         }
     }
 }
@@ -142,15 +141,11 @@ where
                 if self.on_going_sub.safe_lock_is_none()
                     && self.pending_observables.safe_lock_is_empty()
                 {
-                    if let Some(observer) = self.observer.safe_lock_take() {
-                        observer.on_termination(Termination::Completed);
-                    }
+                    self.observer.safe_lock_on_termination_if_some(termination);
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.safe_lock_take() {
-                    observer.on_termination(termination);
-                }
+                self.observer.safe_lock_on_termination_if_some(termination);
             }
         }
     }

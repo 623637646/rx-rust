@@ -68,17 +68,13 @@ where
         match termination {
             Termination::Completed => {
                 if self.one_is_completed.load(Ordering::SeqCst) {
-                    if let Some(observer) = self.observer.safe_lock_take() {
-                        observer.on_termination(termination);
-                    }
+                    self.observer.safe_lock_on_termination_if_some(termination);
                 } else {
                     self.one_is_completed.store(true, Ordering::SeqCst);
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.safe_lock_take() {
-                    observer.on_termination(termination);
-                }
+                self.observer.safe_lock_on_termination_if_some(termination);
             }
         }
     }

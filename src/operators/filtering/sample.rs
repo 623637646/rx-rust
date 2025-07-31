@@ -66,9 +66,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = self.observer.safe_lock_take() {
-            observer.on_termination(termination);
-        }
+        self.observer.safe_lock_on_termination_if_some(termination);
     }
 }
 
@@ -87,8 +85,6 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = self.observer.safe_lock_take() {
-            observer.on_termination(termination);
-        }
+        self.observer.safe_lock_on_termination_if_some(termination);
     }
 }

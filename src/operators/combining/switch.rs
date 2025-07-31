@@ -96,17 +96,13 @@ where
                 match termination {
                     Termination::Completed => {
                         if completed.load(Ordering::SeqCst) {
-                            if let Some(observer) = observer.safe_lock_take() {
-                                observer.on_termination(Termination::Completed);
-                            }
+                            observer.safe_lock_on_termination_if_some(termination);
                         } else {
-                            on_going_sub.safe_lock_take();
+                            on_going_sub.safe_lock_dispose_if_some();
                         }
                     }
                     Termination::Error(_) => {
-                        if let Some(observer) = observer.safe_lock_take() {
-                            observer.on_termination(termination);
-                        }
+                        observer.safe_lock_on_termination_if_some(termination);
                     }
                 }
             },
@@ -116,8 +112,8 @@ where
             if let Some(sub) = self.on_going_sub.safe_lock_replace(sub) {
                 sub.dispose();
             }
-        } else if let Some(sub) = self.on_going_sub.safe_lock_take() {
-            sub.dispose();
+        } else {
+            self.on_going_sub.safe_lock_dispose_if_some();
         }
     }
 
@@ -126,15 +122,11 @@ where
             Termination::Completed => {
                 self.completed.store(true, Ordering::SeqCst);
                 if self.on_going_sub.safe_lock_is_none() {
-                    if let Some(observer) = self.observer.safe_lock_take() {
-                        observer.on_termination(Termination::Completed);
-                    }
+                    self.observer.safe_lock_on_termination_if_some(termination);
                 }
             }
             Termination::Error(_) => {
-                if let Some(observer) = self.observer.safe_lock_take() {
-                    observer.on_termination(termination);
-                }
+                self.observer.safe_lock_on_termination_if_some(termination);
             }
         }
     }

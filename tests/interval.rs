@@ -357,7 +357,7 @@ fn test_unsub_after_next() {
         subscription.safe_lock_set(Some(observable.subscribe_with_callback(
             move |value| {
                 on_next(value);
-                subscription_cloned.safe_lock_take().unwrap().dispose();
+                subscription_cloned.safe_lock_unwrap_dispose();
             },
             |termination| {
                 on_termination(termination);

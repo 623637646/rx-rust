@@ -66,10 +66,7 @@ fn test_completed_no_retry() {
     );
     assert!(errors.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::<Infallible>::Completed);
+    sender.safe_lock_unwrap_on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -115,10 +112,7 @@ fn test_completed_retry_once() {
     );
     assert!(errors.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -136,10 +130,7 @@ fn test_completed_retry_once() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Completed);
+    sender.safe_lock_unwrap_on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -185,10 +176,7 @@ fn test_completed_retry_twice() {
     );
     assert!(errors.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -206,10 +194,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error2"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -227,10 +212,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Completed);
+    sender.safe_lock_unwrap_on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -300,10 +282,7 @@ fn test_erryr_no_retry() {
         ChannelState::Subscribed
     );
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(
@@ -352,10 +331,7 @@ fn test_error_retry_once() {
     );
     assert!(errors.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -373,10 +349,7 @@ fn test_error_retry_once() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error2"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
     assert_eq!(
@@ -426,10 +399,7 @@ fn test_error_retry_twice() {
     );
     assert!(errors.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -447,10 +417,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error2"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -468,10 +435,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error3"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error3"));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
     assert_eq!(
@@ -605,10 +569,7 @@ fn test_unsubscribe_after_retry() {
     );
     assert!(errors.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -680,10 +641,7 @@ fn test_ref() {
     );
     assert!(errors.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error(&error));
+    sender.safe_lock_unwrap_on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -701,10 +659,7 @@ fn test_ref() {
     );
     assert_eq!(*errors.lock_ref(), [&error]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error(&error));
+    sender.safe_lock_unwrap_on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Error(&error));
     assert_eq!(
@@ -740,15 +695,9 @@ fn test_mut_ref() {
     );
 
     sender.safe_lock_unwrap_on_next(&mut value_1);
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     sender.safe_lock_unwrap_on_next(&mut value_2);
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Completed);
+    sender.safe_lock_unwrap_on_termination(Termination::Completed);
     drop(sender);
     drop(subscription);
     drop(channel_checker);
@@ -809,10 +758,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                sender
-                    .safe_lock_take()
-                    .unwrap()
-                    .on_termination(Termination::Error("error"));
+                sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
                 sender
             })
             .await
@@ -842,10 +788,7 @@ fn test_async() {
 
         let _sender = runtime
             .spawn(async move {
-                sender
-                    .safe_lock_take()
-                    .unwrap()
-                    .on_termination(Termination::Error("error2"));
+                sender.safe_lock_unwrap_on_termination(Termination::Error("error2"));
                 sender
             })
             .await
@@ -1003,10 +946,7 @@ fn test_multiple_operation() {
     assert!(errors_1.safe_lock_is_empty());
     assert!(errors_2.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1026,10 +966,7 @@ fn test_multiple_operation() {
     assert_eq!(*errors_1.lock_ref(), ["error"]);
     assert!(errors_2.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error2"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1049,10 +986,7 @@ fn test_multiple_operation() {
     assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
     assert_eq!(*errors_2.lock_ref(), ["error2"]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error3"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error3"));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
     assert_eq!(
@@ -1103,10 +1037,7 @@ fn test_without_convenient_api() {
     );
     assert!(errors.safe_lock_is_empty());
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1124,10 +1055,7 @@ fn test_without_convenient_api() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    sender
-        .safe_lock_take()
-        .unwrap()
-        .on_termination(Termination::Error("error2"));
+    sender.safe_lock_unwrap_on_termination(Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
     assert_eq!(

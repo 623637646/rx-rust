@@ -75,9 +75,7 @@ where
         let observer = self.observer.clone();
         let disposal = self.scheduler.clone().schedule(
             move || {
-                if let Some(value) = current_value.safe_lock_take() {
-                    observer.safe_lock_on_next_if_some(value);
-                }
+                observer.safe_lock_on_next_with_builder(|| current_value.safe_lock_take());
             },
             Some(self.time_span),
         );
@@ -91,9 +89,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(disposal) = self.disposal.safe_lock_take() {
-            disposal.dispose();
-        }
+        self.disposal.safe_lock_dispose_if_some();
         if let Some(mut observer) = self.observer.safe_lock_take() {
             match termination {
                 Termination::Completed => {

@@ -76,9 +76,7 @@ where
         self.subject
             .safe_lock_clone()
             .on_termination(termination.clone());
-        if let Some(observer) = self.observer.safe_lock_take() {
-            observer.on_termination(termination);
-        }
+        self.observer.safe_lock_on_termination_if_some(termination);
     }
 }
 
@@ -105,8 +103,6 @@ where
         self.subject
             .safe_lock_clone()
             .on_termination(termination.clone());
-        if let Some(observer) = self.observer.safe_lock_take() {
-            observer.on_termination(termination);
-        }
+        self.observer.safe_lock_on_termination_if_some(termination);
     }
 }

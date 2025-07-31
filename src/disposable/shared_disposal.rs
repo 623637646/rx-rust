@@ -19,8 +19,6 @@ where
     D: Disposable,
 {
     fn dispose(self) {
-        if let Some(disposal) = self.0.safe_lock_take() {
-            disposal.dispose();
-        }
+        self.0.safe_lock_dispose_if_some();
     }
 }

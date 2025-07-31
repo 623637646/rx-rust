@@ -127,9 +127,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(timer) = self.timer.safe_lock_take() {
-            timer.dispose();
-        }
+        self.timer.safe_lock_dispose_if_some();
         if let Some(mut observer) = self.observer.safe_lock_take() {
             match termination {
                 Termination::Completed => {
