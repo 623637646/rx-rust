@@ -1,6 +1,6 @@
 {
     "rust-analyzer.cargo.features": [
-        "tokio-scheduler",
+        "local-pool-scheduler",
     ],
     "rust-analyzer.runnables.extraArgs": [
         "--features",
