@@ -1,6 +1,6 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::{SafeLockOption, SafeLockVec};
+use crate::utils::safe_lock::{SafeLock, SafeLockOption};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -9,10 +9,8 @@ use crate::{
     utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
-use std::{
-    marker::PhantomData,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-};
+use slotmap::{DefaultKey, SlotMap};
+use std::marker::PhantomData;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -56,24 +54,34 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let subscriptions = Shared::new(Mutable::new(Vec::new()));
+            let context = Shared::new(Mutable::new(MergeAllContext {
+                subscriptions: SlotMap::new(),
+                terminated: false,
+            }));
             let observer = MergeAllObserver {
                 observer: Shared::new(Mutable::new(Some(observer))),
-                subscriptions: subscriptions.clone(),
-                pending_termination_count: Shared::new(AtomicUsize::new(1)),
+                context: context.clone(),
                 _marker: PhantomData,
             };
-            self.source.subscribe(observer) + MergeAllDisposal { subscriptions }
+            self.source.subscribe(observer) + context
         })
     }
 }
 
-type SubscriptionsType<'sub> = Shared<Mutable<Vec<(Subscription<'sub>, Shared<AtomicBool>)>>>;
+struct MergeAllContext<'sub> {
+    subscriptions: SlotMap<DefaultKey, Subscription<'sub>>,
+    terminated: bool,
+}
+
+impl Disposable for Shared<Mutable<MergeAllContext<'_>>> {
+    fn dispose(self) {
+        self.safe_lock_mut(|e| e.subscriptions.clear());
+    }
+}
 
 struct MergeAllObserver<'sub, T, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    subscriptions: SubscriptionsType<'sub>,
-    pending_termination_count: Shared<AtomicUsize>,
+    context: Shared<Mutable<MergeAllContext<'sub>>>,
     _marker: MarkerType<T>,
 }
 
@@ -81,32 +89,39 @@ impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for MergeAllObserver<'sub, T, OR
 where
     OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
+    'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let terminated = Shared::new(AtomicBool::new(false));
+        // Insert a placeholder subscription.
+        let key = self
+            .context
+            .safe_lock_mut(|e| e.subscriptions.insert(Subscription::default()));
+
         let observer = MergeAllInnerObserver {
             observer: self.observer.clone(),
-            pending_termination_count: self.pending_termination_count.clone(),
-            terminated: terminated.clone(),
+            context: self.context.clone(),
+            key,
         };
-        self.pending_termination_count
-            .fetch_add(1, Ordering::SeqCst);
         let sub = value.subscribe(observer);
 
-        let mut lock = self.subscriptions.lock_mut();
-        // clean up terminated subscriptions
-        lock.retain(|(_, terminated)| !terminated.load(Ordering::SeqCst));
-        // add new subscription
-        lock.push((sub, terminated));
+        self.context.safe_lock_mut(|e| {
+            if e.subscriptions.contains_key(key) {
+                e.subscriptions[key] = sub;
+            } else {
+                // already terminated
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.pending_termination_count
-                    .fetch_sub(1, Ordering::SeqCst);
-                if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
+                let mut lock = self.context.lock_mut();
+                if lock.subscriptions.is_empty() {
+                    drop(lock);
                     self.observer.safe_lock_on_termination_if_some(termination);
+                } else {
+                    lock.terminated = true;
                 }
             }
             Termination::Error(_) => {
@@ -116,13 +131,13 @@ where
     }
 }
 
-struct MergeAllInnerObserver<OR> {
+struct MergeAllInnerObserver<'sub, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    pending_termination_count: Shared<AtomicUsize>,
-    terminated: Shared<AtomicBool>,
+    context: Shared<Mutable<MergeAllContext<'sub>>>,
+    key: DefaultKey,
 }
 
-impl<T, E, OR> Observer<T, E> for MergeAllInnerObserver<OR>
+impl<'sub, T, E, OR> Observer<T, E> for MergeAllInnerObserver<'sub, OR>
 where
     OR: Observer<T, E>,
 {
@@ -131,28 +146,19 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.terminated.store(true, Ordering::SeqCst);
+        let mut lock = self.context.lock_mut();
+        lock.subscriptions.remove(self.key);
         match termination {
             Termination::Completed => {
-                self.pending_termination_count
-                    .fetch_sub(1, Ordering::SeqCst);
-                if self.pending_termination_count.load(Ordering::SeqCst) == 0 {
+                if lock.terminated && lock.subscriptions.is_empty() {
+                    drop(lock);
                     self.observer.safe_lock_on_termination_if_some(termination);
                 }
             }
             Termination::Error(_) => {
+                drop(lock);
                 self.observer.safe_lock_on_termination_if_some(termination);
             }
         }
-    }
-}
-
-struct MergeAllDisposal<'sub> {
-    subscriptions: SubscriptionsType<'sub>,
-}
-
-impl Disposable for MergeAllDisposal<'_> {
-    fn dispose(self) {
-        self.subscriptions.safe_lock_clear();
     }
 }

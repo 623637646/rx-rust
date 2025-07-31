@@ -218,8 +218,6 @@ pub trait SafeLockVec<T> {
 
     fn safe_lock_len(&self) -> usize;
 
-    fn safe_lock_clear(&self);
-
     fn safe_lock_push(&self, value: T);
 }
 
@@ -230,10 +228,6 @@ impl<T> SafeLockVec<T> for Mutable<Vec<T>> {
 
     fn safe_lock_len(&self) -> usize {
         self.lock_ref().len()
-    }
-
-    fn safe_lock_clear(&self) {
-        self.lock_mut().clear();
     }
 
     fn safe_lock_push(&self, value: T) {
