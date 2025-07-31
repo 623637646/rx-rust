@@ -77,29 +77,6 @@ struct DelayObserver<T, OR, S> {
     observer: Shared<Mutable<Option<OR>>>, // None means terminated or disposed
 }
 
-impl<T, E, OR, S> Observer<T, E> for DelayObserver<T, OR, S>
-where
-    T: NecessarySend + 'static,
-    OR: Observer<T, E> + NecessarySend + 'static,
-    S: Scheduler,
-{
-    fn on_next(&mut self, value: T) {
-        self.emit_value_and_setup_timer_if_needed((Instant::now(), Some(value)));
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                self.emit_value_and_setup_timer_if_needed((Instant::now(), None));
-            }
-            Termination::Error(_) => {
-                self.context.dispose();
-                self.observer.safe_lock_on_termination_if_some(termination);
-            }
-        }
-    }
-}
-
 impl<T, OR, S> DelayObserver<T, OR, S> {
     fn emit_value_and_setup_timer_if_needed<E>(&self, value: (Instant, Option<T>))
     where
@@ -149,5 +126,28 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
             },
             Some(self.delay),
         )));
+    }
+}
+
+impl<T, E, OR, S> Observer<T, E> for DelayObserver<T, OR, S>
+where
+    T: NecessarySend + 'static,
+    OR: Observer<T, E> + NecessarySend + 'static,
+    S: Scheduler,
+{
+    fn on_next(&mut self, value: T) {
+        self.emit_value_and_setup_timer_if_needed((Instant::now(), Some(value)));
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        match termination {
+            Termination::Completed => {
+                self.emit_value_and_setup_timer_if_needed((Instant::now(), None));
+            }
+            Termination::Error(_) => {
+                self.context.dispose();
+                self.observer.safe_lock_on_termination_if_some(termination);
+            }
+        }
     }
 }
