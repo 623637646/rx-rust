@@ -1,8 +1,7 @@
 use crate::disposable::Disposable;
-use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::SafeLockOption;
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::safe_lock::{SafeLock, SafeLockOption};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -10,10 +9,7 @@ use crate::{
     utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
 use educe::Educe;
-use std::{
-    marker::PhantomData,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::marker::PhantomData;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -57,22 +53,36 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let on_going_sub = Shared::new(Mutable::new(None));
+            let context = Shared::new(Mutable::new(SwitchContext {
+                on_going_sub: None,
+                completed: false,
+            }));
             let observer = SwitchObserver {
                 observer: Shared::new(Mutable::new(Some(observer))),
-                on_going_sub: on_going_sub.clone(),
-                completed: Shared::new(AtomicBool::new(false)),
+                context: context.clone(),
                 _marker: PhantomData,
             };
-            self.source.subscribe(observer) + SharedDisposal::new(on_going_sub)
+            self.source.subscribe(observer) + context
         })
+    }
+}
+
+struct SwitchContext<'sub> {
+    on_going_sub: Option<Subscription<'sub>>,
+    completed: bool,
+}
+
+impl Disposable for Shared<Mutable<SwitchContext<'_>>> {
+    fn dispose(self) {
+        if let Some(on_going_sub) = self.safe_lock_mut(|e| e.on_going_sub.take()) {
+            on_going_sub.dispose();
+        }
     }
 }
 
 struct SwitchObserver<'sub, T, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    on_going_sub: Shared<Mutable<Option<Subscription<'sub>>>>,
-    completed: Shared<AtomicBool>,
+    context: Shared<Mutable<SwitchContext<'sub>>>,
     _marker: MarkerType<T>,
 }
 
@@ -83,45 +93,34 @@ where
     'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let observer = self.observer.clone();
-        let completed = self.completed.clone();
-        let on_going_sub = self.on_going_sub.clone();
-        let terminated = Shared::new(AtomicBool::new(false));
-        let terminated_cloned = terminated.clone();
-
+        // Use a placeholder subscription.
+        if let Some(on_going_sub) = self
+            .context
+            .safe_lock_mut(|e| e.on_going_sub.replace(Subscription::default()))
+        {
+            on_going_sub.dispose();
+        }
         let observer = SwitchInnerObserver {
-            observer: observer.clone(),
-            termination_callback: move |termination| {
-                terminated_cloned.store(true, Ordering::SeqCst);
-                match termination {
-                    Termination::Completed => {
-                        if completed.load(Ordering::SeqCst) {
-                            observer.safe_lock_on_termination_if_some(termination);
-                        } else {
-                            on_going_sub.safe_lock_dispose_if_some();
-                        }
-                    }
-                    Termination::Error(_) => {
-                        observer.safe_lock_on_termination_if_some(termination);
-                    }
-                }
-            },
+            observer: self.observer.clone(),
+            context: self.context.clone(),
         };
         let sub = value.subscribe(observer);
-        if !terminated.load(Ordering::SeqCst) {
-            if let Some(sub) = self.on_going_sub.safe_lock_replace(sub) {
-                sub.dispose();
+        self.context.safe_lock_mut(|e| {
+            if e.on_going_sub.is_some() {
+                e.on_going_sub = Some(sub);
+            } else {
+                // already terminated
             }
-        } else {
-            self.on_going_sub.safe_lock_dispose_if_some();
-        }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.completed.store(true, Ordering::SeqCst);
-                if self.on_going_sub.safe_lock_is_none() {
+                let mut lock = self.context.lock_mut();
+                lock.completed = true;
+                if lock.on_going_sub.is_none() {
+                    drop(lock);
                     self.observer.safe_lock_on_termination_if_some(termination);
                 }
             }
@@ -132,21 +131,34 @@ where
     }
 }
 
-struct SwitchInnerObserver<OR, F> {
+struct SwitchInnerObserver<'sub, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    termination_callback: F,
+    context: Shared<Mutable<SwitchContext<'sub>>>,
 }
 
-impl<T, E, OR, F> Observer<T, E> for SwitchInnerObserver<OR, F>
+impl<'sub, T, E, OR> Observer<T, E> for SwitchInnerObserver<'sub, OR>
 where
     OR: Observer<T, E>,
-    F: FnOnce(Termination<E>),
 {
     fn on_next(&mut self, value: T) {
         self.observer.safe_lock_on_next_if_some(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        (self.termination_callback)(termination);
+        match termination {
+            Termination::Completed => {
+                let mut lock = self.context.lock_mut();
+                if lock.completed {
+                    drop(lock);
+                    self.observer.safe_lock_on_termination_if_some(termination);
+                } else if let Some(on_going_sub) = lock.on_going_sub.take() {
+                    drop(lock);
+                    on_going_sub.dispose();
+                }
+            }
+            Termination::Error(_) => {
+                self.observer.safe_lock_on_termination_if_some(termination);
+            }
+        }
     }
 }
