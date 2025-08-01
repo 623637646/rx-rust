@@ -89,9 +89,9 @@ where
         let observer = self.observer.clone();
         let disposal = self.scheduler.schedule(
             move || {
-                observer.safe_lock_on_next_with_builder(|| {
-                    context.safe_lock_mut(|e| e.current_value.take())
-                });
+                if let Some(current_value) = context.safe_lock_mut(|e| e.current_value.take()) {
+                    observer.safe_lock_on_next_if_some(current_value);
+                }
             },
             Some(self.time_span),
         );

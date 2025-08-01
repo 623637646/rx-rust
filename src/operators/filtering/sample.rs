@@ -80,8 +80,9 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, _: ()) {
-        self.observer
-            .safe_lock_on_next_with_builder(|| self.last_value.safe_lock_take());
+        if let Some(value) = self.last_value.safe_lock_take() {
+            self.observer.safe_lock_on_next_if_some(value);
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {

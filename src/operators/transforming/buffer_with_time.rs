@@ -46,12 +46,8 @@ where
         let observer_cloned = observer.clone();
         let disposal = self.scheduler.schedule_periodically(
             move |_| {
-                let mut stop = true;
-                observer_cloned.observer.safe_lock_on_next_with_builder(|| {
-                    stop = false;
-                    Some(observer_cloned.values.safe_lock_mem_take())
-                });
-                stop
+                let values = observer_cloned.values.safe_lock_mem_take();
+                !observer_cloned.observer.safe_lock_on_next_if_some(values)
             },
             self.time_span,
             self.delay,

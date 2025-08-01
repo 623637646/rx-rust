@@ -87,9 +87,8 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, _: ()) {
-        self.0
-            .observer
-            .safe_lock_on_next_with_builder(|| Some(self.0.values.safe_lock_mem_take()));
+        let values = self.0.values.safe_lock_mem_take();
+        self.0.observer.safe_lock_on_next_if_some(values);
     }
 
     fn on_termination(self, termination: Termination<E>) {

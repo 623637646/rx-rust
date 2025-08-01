@@ -91,13 +91,6 @@ pub trait SafeLockOption<T> {
     where
         T: Observer<T1, E>;
 
-    fn safe_lock_on_next_with_builder<T1, E>(
-        &self,
-        value_builder: impl FnOnce() -> Option<T1>,
-    ) -> bool
-    where
-        T: Observer<T1, E>;
-
     fn safe_lock_unwrap_on_next<T1, E>(&self, value: T1)
     where
         T: Observer<T1, E>;
@@ -143,25 +136,6 @@ impl<T> SafeLockOption<T> for Mutable<Option<T>> {
         if let Some(observer) = self.lock_mut().as_mut() {
             observer.on_next(value);
             true
-        } else {
-            false
-        }
-    }
-
-    fn safe_lock_on_next_with_builder<T1, E>(
-        &self,
-        value_builder: impl FnOnce() -> Option<T1>,
-    ) -> bool
-    where
-        T: Observer<T1, E>,
-    {
-        if let Some(observer) = self.lock_mut().as_mut() {
-            if let Some(value) = value_builder() {
-                observer.on_next(value);
-                true
-            } else {
-                false
-            }
         } else {
             false
         }

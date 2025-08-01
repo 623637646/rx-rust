@@ -69,27 +69,23 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, value: T1) {
-        self.observer.safe_lock_on_next_with_builder(|| {
-            let mut lock = self.buffer.lock_mut();
-            match &mut *lock {
-                ZipObserverBufferState::None => {
-                    *lock = ZipObserverBufferState::One(VecDeque::from([value]));
-                    None
-                }
-                ZipObserverBufferState::One(items) => {
-                    items.push_back(value);
-                    None
-                }
-                ZipObserverBufferState::Two(items) => {
-                    let item = items.pop_front().unwrap();
-                    if items.is_empty() {
-                        *lock = ZipObserverBufferState::None;
-                    }
-                    drop(lock);
-                    Some((value, item))
-                }
+        let mut lock = self.buffer.lock_mut();
+        match &mut *lock {
+            ZipObserverBufferState::None => {
+                *lock = ZipObserverBufferState::One(VecDeque::from([value]));
             }
-        });
+            ZipObserverBufferState::One(items) => {
+                items.push_back(value);
+            }
+            ZipObserverBufferState::Two(items) => {
+                let item = items.pop_front().unwrap();
+                if items.is_empty() {
+                    *lock = ZipObserverBufferState::None;
+                }
+                drop(lock);
+                self.observer.safe_lock_on_next_if_some((value, item));
+            }
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -107,27 +103,23 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, value: T2) {
-        self.observer.safe_lock_on_next_with_builder(|| {
-            let mut lock = self.buffer.lock_mut();
-            match &mut *lock {
-                ZipObserverBufferState::None => {
-                    *lock = ZipObserverBufferState::Two(VecDeque::from([value]));
-                    None
-                }
-                ZipObserverBufferState::One(items) => {
-                    let item = items.pop_front().unwrap();
-                    if items.is_empty() {
-                        *lock = ZipObserverBufferState::None;
-                    }
-                    drop(lock);
-                    Some((item, value))
-                }
-                ZipObserverBufferState::Two(items) => {
-                    items.push_back(value);
-                    None
-                }
+        let mut lock = self.buffer.lock_mut();
+        match &mut *lock {
+            ZipObserverBufferState::None => {
+                *lock = ZipObserverBufferState::Two(VecDeque::from([value]));
             }
-        });
+            ZipObserverBufferState::One(items) => {
+                let item = items.pop_front().unwrap();
+                if items.is_empty() {
+                    *lock = ZipObserverBufferState::None;
+                }
+                drop(lock);
+                self.observer.safe_lock_on_next_if_some((item, value));
+            }
+            ZipObserverBufferState::Two(items) => {
+                items.push_back(value);
+            }
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
