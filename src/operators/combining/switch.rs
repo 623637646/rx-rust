@@ -1,6 +1,5 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::{SafeLock, SafeLockOption};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -8,6 +7,7 @@ use crate::{
     operators::creating::from_iter::FromIter,
     utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
+use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::marker::PhantomData;
 
@@ -74,9 +74,7 @@ struct SwitchContext<'sub> {
 
 impl Disposable for Shared<Mutable<SwitchContext<'_>>> {
     fn dispose(self) {
-        if let Some(on_going_sub) = self.safe_lock_mut(|e| e.on_going_sub.take()) {
-            on_going_sub.dispose();
-        }
+        safe_lock_option_disposable!(dispose: self, on_going_sub);
     }
 }
 
@@ -94,9 +92,8 @@ where
 {
     fn on_next(&mut self, value: OE1) {
         // Use a placeholder subscription.
-        if let Some(on_going_sub) = self
-            .context
-            .safe_lock_mut(|e| e.on_going_sub.replace(Subscription::default()))
+        if let Some(on_going_sub) =
+            safe_lock_option!(replace: self.context, on_going_sub, Subscription::default())
         {
             on_going_sub.dispose();
         }
@@ -120,11 +117,11 @@ where
                 lock.completed = true;
                 if lock.on_going_sub.is_none() {
                     drop(lock);
-                    self.observer.safe_lock_on_termination_if_some(termination);
+                    safe_lock_option_observer!(on_termination: self.observer, termination);
                 }
             }
             Termination::Error(_) => {
-                self.observer.safe_lock_on_termination_if_some(termination);
+                safe_lock_option_observer!(on_termination: self.observer, termination);
             }
         }
     }
@@ -140,7 +137,7 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.observer.safe_lock_on_next_if_some(value);
+        safe_lock_option_observer!(on_next: self.observer, value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -149,14 +146,14 @@ where
                 let mut lock = self.context.lock_mut();
                 if lock.completed {
                     drop(lock);
-                    self.observer.safe_lock_on_termination_if_some(termination);
+                    safe_lock_option_observer!(on_termination: self.observer, termination);
                 } else if let Some(on_going_sub) = lock.on_going_sub.take() {
                     drop(lock);
                     on_going_sub.dispose();
                 }
             }
             Termination::Error(_) => {
-                self.observer.safe_lock_on_termination_if_some(termination);
+                safe_lock_option_observer!(on_termination: self.observer, termination);
             }
         }
     }

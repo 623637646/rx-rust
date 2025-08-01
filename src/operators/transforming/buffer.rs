@@ -1,4 +1,3 @@
-use crate::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockVec};
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -6,6 +5,7 @@ use crate::{
     observer::{Observer, Termination},
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
+use crate::{safe_lock, safe_lock_option, safe_lock_option_observer, safe_lock_vec};
 use educe::Educe;
 
 #[derive(Educe)]
@@ -59,14 +59,14 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.values.safe_lock_push(value);
+        safe_lock_vec!(push: self.values, value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = self.observer.safe_lock_take() {
+        if let Some(mut observer) = safe_lock_option!(take: self.observer) {
             match termination {
                 Termination::Completed => {
-                    let values = self.values.safe_lock_mem_take();
+                    let values = safe_lock!(mem_take: self.values);
                     if !values.is_empty() {
                         observer.on_next(values);
                     }
@@ -88,15 +88,15 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, _: ()) {
-        let values = self.values.safe_lock_mem_take();
-        self.observer.safe_lock_on_next_if_some(values);
+        let values = safe_lock!(mem_take: self.values);
+        safe_lock_option_observer!(on_next: self.observer, values);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(mut observer) = self.observer.safe_lock_take() {
+        if let Some(mut observer) = safe_lock_option!(take: self.observer) {
             match termination {
                 Termination::Completed => {
-                    let values = self.values.safe_lock_mem_take();
+                    let values = safe_lock!(mem_take: self.values);
                     if !values.is_empty() {
                         observer.on_next(values);
                     }

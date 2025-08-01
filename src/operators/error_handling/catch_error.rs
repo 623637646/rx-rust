@@ -1,6 +1,6 @@
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::SafeLockOption;
+use crate::safe_lock_option;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -76,7 +76,7 @@ where
             Termination::Error(error) => {
                 let observable = (self.callback)(error);
                 let sub = observable.subscribe(self.observer);
-                self.sub.safe_lock_replace(sub);
+                safe_lock_option!(replace: self.sub, sub);
             }
         }
     }

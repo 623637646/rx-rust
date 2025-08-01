@@ -1,4 +1,3 @@
-use crate::utils::safe_lock::SafeLockOption;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -6,6 +5,7 @@ use crate::{
     observer::{Observer, Termination},
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
+use crate::{safe_lock_option, safe_lock_option_observer};
 use educe::Educe;
 
 #[derive(Educe)]
@@ -62,11 +62,11 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.last_value.safe_lock_replace(value);
+        safe_lock_option!(replace: self.last_value, value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.observer.safe_lock_on_termination_if_some(termination);
+        safe_lock_option_observer!(on_termination: self.observer, termination);
     }
 }
 
@@ -80,12 +80,12 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, _: ()) {
-        if let Some(value) = self.last_value.safe_lock_take() {
-            self.observer.safe_lock_on_next_if_some(value);
+        if let Some(value) = safe_lock_option!(take: self.last_value) {
+            safe_lock_option_observer!(on_next: self.observer, value);
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.observer.safe_lock_on_termination_if_some(termination);
+        safe_lock_option_observer!(on_termination: self.observer, termination);
     }
 }

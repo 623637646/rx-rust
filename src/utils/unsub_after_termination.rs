@@ -1,10 +1,8 @@
 use crate::{
     disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
-    utils::{
-        safe_lock::SafeLock,
-        types::{Mutable, MutableHelper, Shared},
-    },
+    safe_lock,
+    utils::types::{Mutable, MutableHelper, Shared},
 };
 
 enum SubState<'sub> {
@@ -15,7 +13,7 @@ enum SubState<'sub> {
 
 impl Disposable for Shared<Mutable<SubState<'_>>> {
     fn dispose(self) {
-        match self.safe_lock_mem_replace(SubState::Unsubscribed) {
+        match safe_lock!(mem_replace: self, SubState::Unsubscribed) {
             SubState::Initialized => {}
             SubState::Subscribed(subscription) => subscription.dispose(),
             SubState::Unsubscribed => {}

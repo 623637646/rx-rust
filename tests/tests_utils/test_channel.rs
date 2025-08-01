@@ -3,10 +3,8 @@ use rx_rust::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    utils::{
-        safe_lock::SafeLock,
-        types::{Mutable, MutableHelper, NecessarySend, Shared},
-    },
+    safe_lock,
+    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 
 enum State<'or, T, E> {
@@ -36,12 +34,13 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        let mut observer = match &mut *self.0.lock_mut() {
+        let mut observer = match safe_lock!(mem_replace: self.0, State::Subscribed(None)) {
             State::Initialized => panic!(),
-            State::Subscribed(boxed_observer) => boxed_observer.take().unwrap(),
+            State::Subscribed(boxed_observer) => boxed_observer.unwrap(),
             State::Terminated(_) => panic!(),
             State::Unsubscribed => panic!(),
         };
+
         observer.on_next(value);
         match &mut *self.0.lock_mut() {
             State::Initialized => panic!(),
@@ -52,9 +51,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let observer = match self
-            .0
-            .safe_lock_mem_replace(State::Terminated(termination.clone()))
+        let observer = match safe_lock!(mem_replace: self.0, State::Terminated(termination.clone()))
         {
             State::Initialized => panic!(),
             State::Subscribed(boxed_observer) => boxed_observer.unwrap(),
@@ -74,10 +71,10 @@ where
     'or: 'sub,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        match self
-            .0
-            .safe_lock_mem_replace(State::Subscribed(Some(BoxedObserver::new(observer))))
-        {
+        match safe_lock!(mem_replace:
+            self.0,
+            State::Subscribed(Some(BoxedObserver::new(observer)))
+        ) {
             State::Initialized => {}
             State::Subscribed(_) => panic!(),
             State::Terminated(_) => panic!(),
@@ -92,7 +89,7 @@ where
                 State::Unsubscribed => panic!(),
             };
             if change {
-                self.0.safe_lock_set(State::Unsubscribed);
+                safe_lock!(set: self.0, State::Unsubscribed);
             }
         })
     }

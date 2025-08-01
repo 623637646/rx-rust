@@ -8,8 +8,8 @@ use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};
 use futures::{FutureExt, StreamExt};
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::safe_lock;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::safe_lock::SafeLock;
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::observable_ext::ObservableExt,
@@ -61,7 +61,7 @@ fn test_completed_lazy_subscription() {
         let subscribed = Shared::new(Mutable::new(false));
         let subscribed_cloned = subscribed.clone();
         let observable = Create::new(move |mut observer| {
-            subscribed_cloned.safe_lock_set(true);
+            safe_lock!(set: subscribed_cloned, true);
             observer.on_next(111);
             observer.on_termination(Termination::Completed);
             Subscription::default()

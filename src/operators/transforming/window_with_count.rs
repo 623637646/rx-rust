@@ -1,4 +1,3 @@
-use crate::utils::safe_lock::SafeLock;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -6,6 +5,7 @@ use crate::{
     observer::{Observer, Termination},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
 };
+use crate::{safe_lock, safe_lock_observer};
 use educe::Educe;
 use std::{cmp::Ordering, num::NonZeroUsize};
 
@@ -64,7 +64,7 @@ where
     fn on_next(&mut self, value: T) {
         match (self.sent_count + 1).cmp(&self.count.get()) {
             Ordering::Less => {
-                self.subject.safe_lock_on_next(value);
+                safe_lock_observer!(on_next: self.subject, value);
                 self.sent_count += 1;
             }
             Ordering::Equal => {
@@ -73,10 +73,8 @@ where
                     &mut self.subject,
                     Shared::new(Mutable::new(new_subject.clone())),
                 );
-                old_subject.safe_lock_on_next(value);
-                old_subject
-                    .safe_lock_clone()
-                    .on_termination(Termination::Completed);
+                safe_lock_observer!(on_next: old_subject, value);
+                safe_lock!(clone: old_subject).on_termination(Termination::Completed);
                 self.observer.on_next(SubjectObservable::new(new_subject));
                 self.sent_count = 0;
             }
@@ -85,9 +83,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.subject
-            .safe_lock_clone()
-            .on_termination(termination.clone());
+        safe_lock!(clone: self.subject).on_termination(termination.clone());
         self.observer.on_termination(termination);
     }
 }

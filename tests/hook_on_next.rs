@@ -5,8 +5,8 @@ use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::safe_lock_observer;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::safe_lock::SafeLock;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -148,7 +148,7 @@ fn test_unsubscribe() {
     let observable = subject.clone();
     let observer_3 = Shared::new(Mutable::new(observer_3));
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_3.safe_lock_on_next(value);
+        safe_lock_observer!(on_next: observer_3, value);
         observer.on_next(value * 2);
     });
     let observable_1 = observable;
@@ -340,7 +340,7 @@ fn test_subscribe_by_different_observer() {
     let observable = subject.clone();
     let observer_3 = Shared::new(Mutable::new(observer_3));
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_3.safe_lock_on_next(value);
+        safe_lock_observer!(on_next: observer_3, value);
         observer.on_next(value * 2);
     });
     let observable_1 = observable;

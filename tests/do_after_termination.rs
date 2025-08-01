@@ -5,8 +5,8 @@ use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::safe_lock_vec;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::safe_lock::SafeLockVec;
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -126,7 +126,7 @@ fn test_unsubscribe() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.do_after_termination(|termination| {
-        terminations.safe_lock_push(termination.clone());
+        safe_lock_vec!(push: terminations, termination.clone());
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -137,28 +137,28 @@ fn test_unsubscribe() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(terminations.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: terminations));
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert!(terminations.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: terminations));
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert!(terminations.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: terminations));
 
     subject.on_next(222);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Active);
-    assert!(terminations.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: terminations));
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
@@ -275,7 +275,7 @@ fn test_subscribe_by_different_observer() {
     let observable = subject.clone();
     let terminations_cloned = terminations.clone();
     let observable = observable.do_after_termination(move |termination| {
-        terminations_cloned.safe_lock_push(termination.clone());
+        safe_lock_vec!(push: terminations_cloned, termination.clone());
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -288,14 +288,14 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(terminations.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: terminations));
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert!(terminations.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: terminations));
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
@@ -348,21 +348,21 @@ fn test_multiple_operation() {
     let terminations_cloned_2 = terminations.clone();
     let observable = observable
         .do_after_termination(move |termination| {
-            terminations_cloned_1.safe_lock_push(termination.clone());
+            safe_lock_vec!(push: terminations_cloned_1, termination.clone());
         })
         .do_after_termination(move |termination| {
-            terminations_cloned_2.safe_lock_push(termination.clone());
+            safe_lock_vec!(push: terminations_cloned_2, termination.clone());
         });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert!(terminations.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: terminations));
 
     subject.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(terminations.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: terminations));
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);

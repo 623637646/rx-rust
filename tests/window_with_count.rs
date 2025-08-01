@@ -5,7 +5,6 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
-use rx_rust::utils::safe_lock::SafeLockVec;
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -13,6 +12,7 @@ use rx_rust::{
     operators::{creating::create::Create, transforming::window_with_count::WindowWithCount},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
 };
+use rx_rust::{safe_lock, safe_lock_vec};
 use std::{convert::Infallible, num::NonZeroUsize};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
@@ -30,13 +30,13 @@ fn test_completed() {
         move |value| {
             let (checker, observer) = Checker::new();
             let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
         },
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -50,7 +50,7 @@ fn test_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -64,7 +64,7 @@ fn test_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -82,7 +82,7 @@ fn test_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -100,7 +100,7 @@ fn test_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(444);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 3);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -122,7 +122,7 @@ fn test_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 3);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -158,13 +158,13 @@ fn test_error() {
         move |value| {
             let (checker, observer) = Checker::new();
             let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
         },
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -178,7 +178,7 @@ fn test_error() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -192,7 +192,7 @@ fn test_error() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -210,7 +210,7 @@ fn test_error() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -228,7 +228,7 @@ fn test_error() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(444);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 3);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -250,7 +250,7 @@ fn test_error() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error("error"));
-    assert_eq!(checker_sub_vec.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 3);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -286,13 +286,13 @@ fn test_unsubscribe() {
         move |value| {
             let (checker, observer) = Checker::new();
             let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
         },
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -306,7 +306,7 @@ fn test_unsubscribe() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -320,7 +320,7 @@ fn test_unsubscribe() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -338,7 +338,7 @@ fn test_unsubscribe() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -356,7 +356,7 @@ fn test_unsubscribe() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(444);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 3);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -378,8 +378,11 @@ fn test_unsubscribe() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     subscription.dispose();
-    assert_eq!(checker_sub_vec.safe_lock_len(), 3);
-    for (index, (checker, sub)) in checker_sub_vec.lock_mut().drain(..).enumerate() {
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 3);
+    for (index, (checker, sub)) in safe_lock!(mem_take: checker_sub_vec)
+        .into_iter()
+        .enumerate()
+    {
         match index {
             0 => {
                 assert_eq!(checker.values(), [111, 222]);
@@ -421,13 +424,13 @@ fn test_ref() {
         move |value| {
             let (checker, observer) = Checker::new();
             let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
         },
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -441,7 +444,7 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(&value_1);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -455,7 +458,7 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(&value_2);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -473,7 +476,7 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(&value_3);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -491,7 +494,7 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Error(&error));
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -526,7 +529,7 @@ fn test_async() {
                     move |value| {
                         let (checker, observer) = Checker::new();
                         let sub = value.subscribe(observer);
-                        checker_sub_vec_cloned.safe_lock_push((checker, sub));
+                        safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
                     },
                     |termination| {
                         termination_observer.on_termination(termination);
@@ -535,7 +538,7 @@ fn test_async() {
             })
             .await
             .unwrap();
-        assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+        assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
         for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
             match index {
                 0 => {
@@ -555,7 +558,7 @@ fn test_async() {
             })
             .await
             .unwrap();
-        assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+        assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
         for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
             match index {
                 0 => {
@@ -575,7 +578,7 @@ fn test_async() {
             })
             .await
             .unwrap();
-        assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+        assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
         for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
             match index {
                 0 => {
@@ -599,7 +602,7 @@ fn test_async() {
             })
             .await
             .unwrap();
-        assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+        assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
         for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
             match index {
                 0 => {
@@ -620,7 +623,7 @@ fn test_async() {
             .spawn(async move { sender.on_termination(Termination::Completed) })
             .await
             .unwrap();
-        assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+        assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
         for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
             match index {
                 0 => {
@@ -658,7 +661,7 @@ fn test_subscribe_by_different_observer() {
         move |value| {
             let (checker, observer) = Checker::new();
             let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
         },
         |termination| {
             termination_observer_1.on_termination(termination);
@@ -669,13 +672,13 @@ fn test_subscribe_by_different_observer() {
         move |value| {
             let (checker, observer) = Checker::new();
             let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
         },
         |termination| {
             termination_observer_2.on_termination(termination);
         },
     );
-    assert_eq!(checker_sub_vec_1.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_1), 1);
     for (index, (checker, _)) in checker_sub_vec_1.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -686,7 +689,7 @@ fn test_subscribe_by_different_observer() {
         }
     }
     assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_2), 1);
     for (index, (checker, _)) in checker_sub_vec_2.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -699,7 +702,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(termination_checker_2.state(), State::Active);
 
     subject.on_next(111);
-    assert_eq!(checker_sub_vec_1.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_1), 2);
     for (index, (checker, _)) in checker_sub_vec_1.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -714,7 +717,7 @@ fn test_subscribe_by_different_observer() {
         }
     }
     assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_2), 2);
     for (index, (checker, _)) in checker_sub_vec_2.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -731,7 +734,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(termination_checker_2.state(), State::Active);
 
     subject.on_next(222);
-    assert_eq!(checker_sub_vec_1.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_1), 3);
     for (index, (checker, _)) in checker_sub_vec_1.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -750,7 +753,7 @@ fn test_subscribe_by_different_observer() {
         }
     }
     assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_2), 3);
     for (index, (checker, _)) in checker_sub_vec_2.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -771,7 +774,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(termination_checker_2.state(), State::Active);
 
     subject.on_next(333);
-    assert_eq!(checker_sub_vec_1.safe_lock_len(), 4);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_1), 4);
     for (index, (checker, _)) in checker_sub_vec_1.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -794,7 +797,7 @@ fn test_subscribe_by_different_observer() {
         }
     }
     assert_eq!(termination_checker_1.state(), State::Active);
-    assert_eq!(checker_sub_vec_2.safe_lock_len(), 4);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_2), 4);
     for (index, (checker, _)) in checker_sub_vec_2.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -819,7 +822,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(termination_checker_2.state(), State::Active);
 
     subject.on_termination(Termination::Completed);
-    assert_eq!(checker_sub_vec_1.safe_lock_len(), 4);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_1), 4);
     for (index, (checker, _)) in checker_sub_vec_1.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -842,7 +845,7 @@ fn test_subscribe_by_different_observer() {
         }
     }
     assert_eq!(termination_checker_1.state(), State::Completed);
-    assert_eq!(checker_sub_vec_2.safe_lock_len(), 4);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec_2), 4);
     for (index, (checker, _)) in checker_sub_vec_2.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -883,13 +886,13 @@ fn test_unsub_on_next_by_take() {
         move |value| {
             let (checker, observer) = Checker::new();
             let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
         },
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -923,21 +926,21 @@ fn test_multiple_operation() {
                 move |value| {
                     let (checker, observer) = Checker::new();
                     let sub = value.subscribe(observer);
-                    checker_sub_vec_cloned.safe_lock_push((checker, sub));
+                    safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
                 },
                 |_| {},
             );
-            context_cloned.safe_lock_push((checker_sub_vec, sub));
+            safe_lock_vec!(push: context_cloned, (checker_sub_vec, sub));
         },
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
-    assert_eq!(context.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: context), 1);
     for (index, (checker, _)) in context.lock_ref().iter().enumerate() {
         match index {
             0 => {
-                assert_eq!(checker.safe_lock_len(), 1);
+                assert_eq!(safe_lock_vec!(len: checker), 1);
                 for (index, (checker, _)) in checker.lock_ref().iter().enumerate() {
                     match index {
                         0 => {
@@ -955,11 +958,11 @@ fn test_multiple_operation() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
-    assert_eq!(context.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: context), 2);
     for (index, (checker, _)) in context.lock_ref().iter().enumerate() {
         match index {
             0 => {
-                assert_eq!(checker.safe_lock_len(), 2);
+                assert_eq!(safe_lock_vec!(len: checker), 2);
                 for (index, (checker, _)) in checker.lock_ref().iter().enumerate() {
                     match index {
                         0 => {
@@ -975,7 +978,7 @@ fn test_multiple_operation() {
                 }
             }
             1 => {
-                assert_eq!(checker.safe_lock_len(), 0);
+                assert_eq!(safe_lock_vec!(len: checker), 0);
             }
             _ => panic!(),
         }
@@ -984,11 +987,11 @@ fn test_multiple_operation() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
-    assert_eq!(context.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: context), 2);
     for (index, (checker, _)) in context.lock_ref().iter().enumerate() {
         match index {
             0 => {
-                assert_eq!(checker.safe_lock_len(), 2);
+                assert_eq!(safe_lock_vec!(len: checker), 2);
                 for (index, (checker, _)) in checker.lock_ref().iter().enumerate() {
                     match index {
                         0 => {
@@ -1004,7 +1007,7 @@ fn test_multiple_operation() {
                 }
             }
             1 => {
-                assert_eq!(checker.safe_lock_len(), 1);
+                assert_eq!(safe_lock_vec!(len: checker), 1);
                 for (index, (checker, _)) in checker.lock_ref().iter().enumerate() {
                     match index {
                         0 => {
@@ -1022,11 +1025,11 @@ fn test_multiple_operation() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
-    assert_eq!(context.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: context), 3);
     for (index, (checker, _)) in context.lock_ref().iter().enumerate() {
         match index {
             0 => {
-                assert_eq!(checker.safe_lock_len(), 2);
+                assert_eq!(safe_lock_vec!(len: checker), 2);
                 for (index, (checker, _)) in checker.lock_ref().iter().enumerate() {
                     match index {
                         0 => {
@@ -1042,7 +1045,7 @@ fn test_multiple_operation() {
                 }
             }
             1 => {
-                assert_eq!(checker.safe_lock_len(), 2);
+                assert_eq!(safe_lock_vec!(len: checker), 2);
                 for (index, (checker, _)) in checker.lock_ref().iter().enumerate() {
                     match index {
                         0 => {
@@ -1058,7 +1061,7 @@ fn test_multiple_operation() {
                 }
             }
             2 => {
-                assert_eq!(checker.safe_lock_len(), 0);
+                assert_eq!(safe_lock_vec!(len: checker), 0);
             }
             _ => panic!(),
         }
@@ -1067,11 +1070,11 @@ fn test_multiple_operation() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
-    assert_eq!(context.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: context), 3);
     for (index, (checker, _)) in context.lock_ref().iter().enumerate() {
         match index {
             0 => {
-                assert_eq!(checker.safe_lock_len(), 2);
+                assert_eq!(safe_lock_vec!(len: checker), 2);
                 for (index, (checker, _)) in checker.lock_ref().iter().enumerate() {
                     match index {
                         0 => {
@@ -1087,7 +1090,7 @@ fn test_multiple_operation() {
                 }
             }
             1 => {
-                assert_eq!(checker.safe_lock_len(), 2);
+                assert_eq!(safe_lock_vec!(len: checker), 2);
                 for (index, (checker, _)) in checker.lock_ref().iter().enumerate() {
                     match index {
                         0 => {
@@ -1103,7 +1106,7 @@ fn test_multiple_operation() {
                 }
             }
             2 => {
-                assert_eq!(checker.safe_lock_len(), 0);
+                assert_eq!(safe_lock_vec!(len: checker), 0);
             }
             _ => panic!(),
         }
@@ -1126,13 +1129,13 @@ fn test_without_convenient_api() {
         move |value| {
             let (checker, observer) = Checker::new();
             let sub = value.subscribe(observer);
-            checker_sub_vec_cloned.safe_lock_push((checker, sub));
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
         },
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -1146,7 +1149,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(111);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 1);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -1160,7 +1163,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(222);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -1178,7 +1181,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(333);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 2);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -1196,7 +1199,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(444);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 3);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {
@@ -1218,7 +1221,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::Completed);
-    assert_eq!(checker_sub_vec.safe_lock_len(), 3);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 3);
     for (index, (checker, _)) in checker_sub_vec.lock_ref().iter().enumerate() {
         match index {
             0 => {

@@ -1,11 +1,11 @@
 use super::{Subject, publish_subject::PublishSubject};
-use crate::utils::safe_lock::SafeLock;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
 };
+use crate::{safe_lock, safe_lock_option};
 use educe::Educe;
 
 #[derive(Educe)]
@@ -43,7 +43,7 @@ where
         if let Some(terminated) = self.terminated() {
             match &terminated {
                 Termination::Completed => {
-                    if let Some(value) = self.value.safe_lock_clone() {
+                    if let Some(value) = safe_lock!(clone: self.value) {
                         observer.on_next(value);
                     }
                 }
@@ -64,14 +64,14 @@ where
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
-            self.value.safe_lock_set(Some(value));
+            safe_lock_option!(replace: self.value, value);
         }
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
         match &termination {
             Termination::Completed => {
-                if let Some(value) = self.value.safe_lock_clone() {
+                if let Some(value) = safe_lock!(clone: self.value) {
                     self.publish_subject.on_next(value);
                 }
             }

@@ -2,12 +2,14 @@ use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::subscription::Subscription;
 use crate::scheduler::RecursionAction;
-use crate::utils::safe_lock::{SafeLock, SafeLockOption};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
+};
+use crate::{
+    safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer, safe_lock_vec_deque,
 };
 use educe::Educe;
 use std::{
@@ -64,9 +66,7 @@ struct DelayContext<T> {
 
 impl<T> Disposable for Shared<Mutable<DelayContext<T>>> {
     fn dispose(self) {
-        if let Some(timer) = self.safe_lock_mut(|e| e.timer.take()) {
-            timer.dispose();
-        }
+        safe_lock_option_disposable!(dispose: self, timer);
     }
 }
 
@@ -93,10 +93,12 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
         let observer = self.observer.clone();
         lock.timer = Some(BoxedDisposal::new(self.scheduler.schedule_recursively(
             move |_| {
-                if let Some((instant, value)) = context.safe_lock_mut(|e| e.values.pop_front()) {
+                if let Some((instant, value)) =
+                    safe_lock_vec_deque!(pop_front: context, values)
+                {
                     if let Some(value) = value {
                         //  Next
-                        if observer.safe_lock_on_next_if_some(value) {
+                        if safe_lock_option_observer!(on_next: observer, value) {
                             let mut lock = context.lock_mut();
                             if let Some((next_instant, _)) = lock.values.front() {
                                 // Continue
@@ -117,7 +119,7 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
                         }
                     } else {
                         // Completed
-                        observer.safe_lock_on_termination_if_some(Termination::Completed);
+                        safe_lock_option_observer!(on_termination: observer, Termination::Completed);
                         RecursionAction::Stop
                     }
                 } else {
@@ -146,7 +148,7 @@ where
             }
             Termination::Error(_) => {
                 self.context.dispose();
-                self.observer.safe_lock_on_termination_if_some(termination);
+                safe_lock_option_observer!(on_termination: self.observer, termination);
             }
         }
     }

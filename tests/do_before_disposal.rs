@@ -5,7 +5,6 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption};
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -13,6 +12,7 @@ use rx_rust::{
     operators::{creating::create::Create, utility::do_before_disposal::DoBeforeDisposal},
     subject::publish_subject::PublishSubject,
 };
+use rx_rust::{safe_lock, safe_lock_option, safe_lock_option_observer};
 use std::{
     convert::Infallible,
     sync::atomic::{AtomicBool, Ordering},
@@ -264,7 +264,7 @@ fn test_async() {
         let disposed_cloned = disposed.clone();
         let boxed_observer_cloned = boxed_observer.clone();
         let observable = Create::new(move |observer| {
-            boxed_observer_cloned.safe_lock_set(Some(observer));
+            safe_lock!(set: boxed_observer_cloned, Some(observer));
             Subscription::new_with_disposal_callback(move || {
                 disposed_cloned.store(true, Ordering::SeqCst);
             })
@@ -290,7 +290,7 @@ fn test_async() {
 
         let boxed_observer = runtime
             .spawn(async move {
-                assert!(boxed_observer.safe_lock_on_next_if_some(111));
+                assert!(safe_lock_option_observer!(on_next: boxed_observer, 111));
                 boxed_observer
             })
             .await
@@ -313,8 +313,7 @@ fn test_async() {
         runtime
             .spawn(async move {
                 assert!(
-                    boxed_observer
-                        .safe_lock_on_termination_if_some(Termination::<Infallible>::Completed)
+                    safe_lock_option_observer!(on_termination: boxed_observer, Termination::<Infallible>::Completed)
                 );
             })
             .await
@@ -336,13 +335,13 @@ fn test_subscribe_by_different_observer() {
     let boxed_observer_2 = Shared::new(Mutable::new(None));
 
     let observable = Create::new(|observer| {
-        if boxed_observer_1.safe_lock_is_none() {
-            boxed_observer_1.safe_lock_set(Some(observer));
+        if safe_lock_option!(is_none: boxed_observer_1) {
+            safe_lock!(set: boxed_observer_1, Some(observer));
             Subscription::new_with_disposal_callback(|| {
                 disposed_1.store(true, Ordering::SeqCst);
             })
         } else {
-            boxed_observer_2.safe_lock_set(Some(observer));
+            safe_lock!(set: boxed_observer_2, Some(observer));
             Subscription::new_with_disposal_callback(|| {
                 disposed_2.store(true, Ordering::SeqCst);
             })
@@ -382,8 +381,8 @@ fn test_subscribe_by_different_observer() {
     assert!(!called_1.load(Ordering::SeqCst));
     assert!(!called_2.load(Ordering::SeqCst));
 
-    assert!(boxed_observer_1.safe_lock_on_next_if_some(111));
-    assert!(boxed_observer_2.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: boxed_observer_1, 111));
+    assert!(safe_lock_option_observer!(on_next: boxed_observer_2, 111));
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -405,10 +404,10 @@ fn test_subscribe_by_different_observer() {
     assert!(called_2.load(Ordering::SeqCst));
 
     assert!(
-        boxed_observer_1.safe_lock_on_termination_if_some(Termination::<Infallible>::Completed)
+        safe_lock_option_observer!(on_termination: boxed_observer_1, Termination::<Infallible>::Completed)
     );
     assert!(
-        boxed_observer_2.safe_lock_on_termination_if_some(Termination::<Infallible>::Completed)
+        safe_lock_option_observer!(on_termination: boxed_observer_2, Termination::<Infallible>::Completed)
     );
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Completed);

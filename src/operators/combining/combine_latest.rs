@@ -1,4 +1,4 @@
-use crate::utils::safe_lock::SafeLockOption;
+use crate::safe_lock_option_observer;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -78,8 +78,7 @@ where
         lock.latest_1 = Some(latest_1.clone());
         if let Some(latest_2) = lock.latest_2.clone() {
             drop(lock);
-            self.observer
-                .safe_lock_on_next_if_some((latest_1, latest_2));
+            safe_lock_option_observer!(on_next: self.observer, (latest_1, latest_2));
         }
     }
 
@@ -89,13 +88,13 @@ where
                 let mut lock = self.context.lock_mut();
                 if lock.should_completed || lock.latest_1.is_none() {
                     drop(lock);
-                    self.observer.safe_lock_on_termination_if_some(termination);
+                    safe_lock_option_observer!(on_termination: self.observer, termination);
                 } else {
                     lock.should_completed = true;
                 }
             }
             Termination::Error(_) => {
-                self.observer.safe_lock_on_termination_if_some(termination);
+                safe_lock_option_observer!(on_termination: self.observer, termination);
             }
         }
     }
@@ -117,8 +116,7 @@ where
         lock.latest_2 = Some(latest_2.clone());
         if let Some(latest_1) = lock.latest_1.clone() {
             drop(lock);
-            self.observer
-                .safe_lock_on_next_if_some((latest_1, latest_2));
+            safe_lock_option_observer!(on_next: self.observer, (latest_1, latest_2));
         }
     }
 
@@ -128,13 +126,13 @@ where
                 let mut lock = self.context.lock_mut();
                 if lock.should_completed || lock.latest_2.is_none() {
                     drop(lock);
-                    self.observer.safe_lock_on_termination_if_some(termination);
+                    safe_lock_option_observer!(on_termination: self.observer, termination);
                 } else {
                     lock.should_completed = true;
                 }
             }
             Termination::Error(_) => {
-                self.observer.safe_lock_on_termination_if_some(termination);
+                safe_lock_option_observer!(on_termination: self.observer, termination);
             }
         }
     }

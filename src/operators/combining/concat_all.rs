@@ -1,6 +1,5 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::{SafeLock, SafeLockOption};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -8,6 +7,7 @@ use crate::{
     operators::creating::from_iter::FromIter,
     utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
 };
+use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::{
     collections::VecDeque,
@@ -80,9 +80,7 @@ struct ConcatAllContext<'sub, OE1> {
 
 impl<OE1> Disposable for Shared<Mutable<ConcatAllContext<'_, OE1>>> {
     fn dispose(self) {
-        if let Some(sub) = self.safe_lock_mut(|e| e.on_going_sub.take()) {
-            sub.dispose();
-        }
+        safe_lock_option_disposable!(dispose: self, on_going_sub);
     }
 }
 
@@ -120,7 +118,7 @@ fn subscribe_next<'or, 'sub, T, E, OR, OE1>(
                 match termination {
                     Termination::Completed => subscribe_next(context_cloned, observer, None),
                     Termination::Error(_) => {
-                        observer.safe_lock_on_termination_if_some(termination);
+                        safe_lock_option_observer!(on_termination: observer, termination);
                     }
                 }
             },
@@ -131,7 +129,7 @@ fn subscribe_next<'or, 'sub, T, E, OR, OE1>(
         }
     } else if lock.completed {
         drop(lock);
-        observer.safe_lock_on_termination_if_some(Termination::Completed);
+        safe_lock_option_observer!(on_termination: observer, Termination::Completed);
     } else {
         lock.on_going_sub.take();
     }
@@ -154,11 +152,11 @@ where
                 lock.completed = true;
                 if lock.on_going_sub.is_none() && lock.pending_observables.is_empty() {
                     drop(lock);
-                    self.observer.safe_lock_on_termination_if_some(termination);
+                    safe_lock_option_observer!(on_termination: self.observer, termination);
                 }
             }
             Termination::Error(_) => {
-                self.observer.safe_lock_on_termination_if_some(termination);
+                safe_lock_option_observer!(on_termination: self.observer, termination);
             }
         }
     }
@@ -175,7 +173,7 @@ where
     F: FnOnce(Termination<E>),
 {
     fn on_next(&mut self, value: T) {
-        self.observer.safe_lock_on_next_if_some(value);
+        safe_lock_option_observer!(on_next: self.observer, value);
     }
 
     fn on_termination(self, termination: Termination<E>) {

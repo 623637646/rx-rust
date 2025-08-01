@@ -6,14 +6,14 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::safe_lock::SafeLock;
-use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     operators::creating::{create::Create, defer::Defer, just::Just},
     subject::publish_subject::PublishSubject,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -339,10 +339,10 @@ fn test_clone() {
 #[test]
 fn test_boxed_observable() {
     // Custom operations
-    let switch = Shared::new(Mutable::new(false));
+    let switch = Shared::new(AtomicBool::new(false));
     let observable = Defer::new(|| {
         let observable = Just::new(111);
-        if *switch.lock_ref() {
+        if switch.load(Ordering::SeqCst) {
             observable.into_boxed()
         } else {
             observable.map(|value| value * 2).into_boxed()
@@ -353,7 +353,7 @@ fn test_boxed_observable() {
     assert_eq!(checker.values(), [222]);
     assert_eq!(checker.state(), State::Completed);
 
-    switch.safe_lock_set(true);
+    switch.store(true, Ordering::SeqCst);
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);

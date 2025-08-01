@@ -1,13 +1,13 @@
 use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::{SafeLock, SafeLockOption};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
+use crate::{safe_lock, safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::{num::NonZeroUsize, time::Duration};
 
@@ -72,9 +72,7 @@ struct BufferWithTimeOrCountContext<T> {
 
 impl<T> Disposable for Shared<Mutable<BufferWithTimeOrCountContext<T>>> {
     fn dispose(self) {
-        if let Some(timer) = self.safe_lock_mut(|e| e.timer.take()) {
-            timer.dispose();
-        }
+        safe_lock_option_disposable!(dispose: self, timer);
     }
 }
 
@@ -93,15 +91,15 @@ impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
         OR: Observer<Vec<T>, E> + NecessarySend + 'static,
         S: Scheduler,
     {
-        if self.observer.safe_lock_is_none() {
+        if safe_lock_option!(is_none: self.observer) {
             return;
         }
         let observer = self.observer.clone();
         let context = self.context.clone();
         let disposal = self.scheduler.schedule_periodically(
             move |_| {
-                let values = context.safe_lock_mut(|e| std::mem::take(&mut e.values));
-                !observer.safe_lock_on_next_if_some(values)
+                let values = safe_lock!(mem_take: context, values);
+                !safe_lock_option_observer!(on_next: observer, values)
             },
             self.time_span,
             delay,
@@ -127,18 +125,16 @@ where
             let values = std::mem::take(&mut lock.values);
             drop(lock);
             self.setup_emit_timer(Some(self.time_span));
-            self.observer.safe_lock_on_next_if_some(values);
+            safe_lock_option_observer!(on_next: self.observer, values);
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
         self.context.clone().dispose();
-        if let Some(mut observer) = self.observer.safe_lock_take() {
+        if let Some(mut observer) = safe_lock_option!(take: self.observer) {
             match termination {
                 Termination::Completed => {
-                    let values = self
-                        .context
-                        .safe_lock_mut(|e| std::mem::take(&mut e.values));
+                    let values = safe_lock!(mem_take: self.context, values);
                     if !values.is_empty() {
                         observer.on_next(values);
                     }

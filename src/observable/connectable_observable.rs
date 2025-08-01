@@ -1,5 +1,5 @@
 use super::{Observable, ref_count_observable::RefCount};
-use crate::utils::safe_lock::SafeLockOption;
+use crate::safe_lock_option;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
@@ -24,8 +24,7 @@ impl<OE, S> ConnectableObservable<OE, S> {
         OE: Observable<'or, 'sub, T, E>,
         S: Observer<T, E> + NecessarySend + 'or,
     {
-        self.source
-            .safe_lock_take()
+        safe_lock_option!(take: self.source)
             .expect("Already connected")
             .subscribe(self.subject)
     }

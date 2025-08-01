@@ -1,205 +1,191 @@
-/// We use this mod to avoid deadlocks.
-/// Refer to this case: https://stackoverflow.com/q/79621758/9315497
-/// And this case:
-///
-/// fn main() {
-///    use std::sync::Mutex;
-///    let lock = Mutex::new("My String".to_owned());
-///    // let equals = { lock.lock().unwrap().clone() } == { lock.lock().unwrap().clone() }; // No deadlock
-///    let equals = lock.lock().unwrap().clone() == lock.lock().unwrap().clone(); // Deadlock
-///    println!("{}", equals);
-/// }
-use crate::{
-    disposable::Disposable,
-    observer::{Observer, Termination},
-    utils::types::{Mutable, MutableHelper},
-};
-use std::collections::VecDeque;
+//! We use this mod to avoid deadlocks.
+//! Refer to this case: https://stackoverflow.com/q/79621758/9315497
+//! And this case:
+//!
+//! fn main() {
+//!    use std::sync::Mutex;
+//!    let lock = Mutex::new("My String".to_owned());
+//!    // let equals = { lock.lock().unwrap().clone() } == { lock.lock().unwrap().clone() }; // No deadlock
+//!    let equals = lock.lock().unwrap().clone() == lock.lock().unwrap().clone(); // Deadlock
+//!    println!("{}", equals);
+//! }
+//!
+//! We don't use this more common macro below, because it may cause deadlocks in Disposable of merge_all.rs.
+//!
+//! macro_rules! safe_lock {
+//!     ($lock_name:expr, $field_name:ident, $method_name:ident) => {{
+//!         use $crate::utils::types::MutableHelper;
+//!         $lock_name.lock_mut().$field_name.$method_name()
+//!     }};
+//! }
+//!
+//! The code like this may cause a deadlock:
+//! safe_lock!(self, subscriptions, clear);
+//!
+//! We use this approach: `Clone::clone(&*$lock_name.lock_ref())` instead of `$lock_name.lock_ref().clone()` to do the type checking.
 
-pub trait SafeLock<T> {
-    fn safe_lock_clone(&self) -> T
-    where
-        T: Clone;
+// Common
 
-    fn safe_lock_set(&self, value: T);
+#[macro_export]
+macro_rules! safe_lock {
+    (clone: $lock_name:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        Clone::clone(&*$lock_name.lock_ref())
+    }};
 
-    fn safe_lock_mem_take(&self) -> T
-    where
-        T: Default;
+    (set: $lock_name:expr, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        *$lock_name.lock_mut() = value
+    }};
 
-    #[must_use = "if you don't need the old value, you can just assign the new value directly"]
-    fn safe_lock_mem_replace(&self, value: T) -> T;
+    (mem_take: $lock_name:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        std::mem::take(&mut *$lock_name.lock_mut())
+    }};
 
-    // fn safe_lock_ref<R>(&self, callback: fn(&T) -> R) -> R;
+    (mem_take: $lock_name:expr, $field_name:ident) => {{
+        use $crate::utils::types::MutableHelper;
+        std::mem::take(&mut $lock_name.lock_mut().$field_name)
+    }};
 
-    fn safe_lock_mut<R>(&self, callback: fn(&mut T) -> R) -> R;
-
-    fn safe_lock_on_next<T1, E>(&self, value: T1)
-    where
-        T: Observer<T1, E>;
+    (mem_replace: $lock_name:expr, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        std::mem::replace(&mut *$lock_name.lock_mut(), value)
+    }};
 }
 
-impl<T> SafeLock<T> for Mutable<T> {
-    fn safe_lock_clone(&self) -> T
-    where
-        T: Clone,
-    {
-        self.lock_ref().clone()
-    }
+// Option
 
-    fn safe_lock_set(&self, value: T) {
-        *self.lock_mut() = value;
-    }
+#[macro_export]
+macro_rules! safe_lock_option {
+    (is_none: $lock_name:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        Option::is_none(&$lock_name.lock_ref())
+    }};
 
-    fn safe_lock_mem_take(&self) -> T
-    where
-        T: Default,
-    {
-        std::mem::take(&mut self.lock_mut())
-    }
+    (is_some: $lock_name:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        Option::is_some(&$lock_name.lock_ref())
+    }};
 
-    fn safe_lock_mem_replace(&self, value: T) -> T {
-        std::mem::replace(&mut self.lock_mut(), value)
-    }
+    (take: $lock_name:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        Option::take(&mut $lock_name.lock_mut())
+    }};
 
-    // fn safe_lock_ref<R>(&self, callback: fn(&T) -> R) -> R {
-    //     callback(&self.lock_ref())
-    // }
+    (take: $lock_name:expr, $field_name:ident) => {{
+        use $crate::utils::types::MutableHelper;
+        Option::take(&mut $lock_name.lock_mut().$field_name)
+    }};
 
-    fn safe_lock_mut<R>(&self, callback: fn(&mut T) -> R) -> R {
-        callback(&mut self.lock_mut())
-    }
+    (replace: $lock_name:expr, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        Option::replace(&mut $lock_name.lock_mut(), value)
+    }};
 
-    fn safe_lock_on_next<T1, E>(&self, value: T1)
-    where
-        T: Observer<T1, E>,
-    {
-        self.lock_mut().on_next(value);
-    }
+    (replace: $lock_name:expr, $field_name:ident, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        Option::replace(&mut $lock_name.lock_mut().$field_name, value)
+    }};
 }
 
-pub trait SafeLockOption<T> {
-    fn safe_lock_is_none(&self) -> bool;
-
-    fn safe_lock_is_some(&self) -> bool;
-
-    fn safe_lock_take(&self) -> Option<T>;
-
-    fn safe_lock_replace(&self, value: T) -> Option<T>;
-
-    fn safe_lock_on_next_if_some<T1, E>(&self, value: T1) -> bool
-    where
-        T: Observer<T1, E>;
-
-    fn safe_lock_on_termination_if_some<T1, E>(&self, termination: Termination<E>) -> bool
-    where
-        T: Observer<T1, E>;
-
-    fn safe_lock_dispose_if_some(&self) -> bool
-    where
-        T: Disposable;
+#[macro_export]
+macro_rules! safe_lock_observer {
+    (on_next: $lock_name:expr, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        Observer::on_next(&mut *$lock_name.lock_mut(), value)
+    }};
 }
 
-impl<T> SafeLockOption<T> for Mutable<Option<T>> {
-    fn safe_lock_is_none(&self) -> bool {
-        self.lock_ref().is_none()
-    }
-
-    fn safe_lock_is_some(&self) -> bool {
-        self.lock_ref().is_some()
-    }
-
-    fn safe_lock_take(&self) -> Option<T> {
-        self.lock_mut().take()
-    }
-
-    fn safe_lock_replace(&self, value: T) -> Option<T> {
-        self.lock_mut().replace(value)
-    }
-
-    fn safe_lock_on_next_if_some<T1, E>(&self, value: T1) -> bool
-    where
-        T: Observer<T1, E>,
-    {
-        if let Some(observer) = self.lock_mut().as_mut() {
-            observer.on_next(value);
+#[macro_export]
+macro_rules! safe_lock_option_observer {
+    (on_next: $lock_name:expr, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        if let Some(observer) = $lock_name.lock_mut().as_mut() {
+            Observer::on_next(observer, value);
             true
         } else {
             false
         }
-    }
+    }};
 
-    fn safe_lock_on_termination_if_some<T1, E>(&self, termination: Termination<E>) -> bool
-    where
-        T: Observer<T1, E>,
-    {
-        if let Some(observer) = self.safe_lock_take() {
-            observer.on_termination(termination);
+    (on_termination: $lock_name:expr, $value:expr) => {{
+        use $crate::safe_lock_option;
+        if let Some(observer) = safe_lock_option!(take: $lock_name) {
+            let value = $value;
+            Observer::on_termination(observer, value);
             true
         } else {
             false
         }
-    }
+    }};
+}
 
-    fn safe_lock_dispose_if_some(&self) -> bool
-    where
-        T: Disposable,
-    {
-        if let Some(disposable) = self.safe_lock_take() {
-            disposable.dispose();
+#[macro_export]
+macro_rules! safe_lock_option_disposable {
+    (dispose: $lock_name:expr) => {{
+        use $crate::safe_lock_option;
+        if let Some(disposable) = safe_lock_option!(take: $lock_name) {
+            Disposable::dispose(disposable);
             true
         } else {
             false
         }
-    }
+    }};
+
+    (dispose: $lock_name:expr, $field_name:ident) => {{
+        use $crate::safe_lock_option;
+        if let Some(disposable) = safe_lock_option!(take: $lock_name, $field_name) {
+            Disposable::dispose(disposable);
+            true
+        } else {
+            false
+        }
+    }};
 }
 
-pub trait SafeLockVec<T> {
-    fn safe_lock_is_empty(&self) -> bool;
+// Vec
 
-    fn safe_lock_len(&self) -> usize;
+#[macro_export]
+macro_rules! safe_lock_vec {
+    (is_empty: $lock_name:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        Vec::is_empty(&$lock_name.lock_ref())
+    }};
 
-    fn safe_lock_push(&self, value: T);
+    (len: $lock_name:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        Vec::len(&$lock_name.lock_ref())
+    }};
+
+    (push: $lock_name:expr, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        Vec::push(&mut $lock_name.lock_mut(), value)
+    }};
 }
 
-impl<T> SafeLockVec<T> for Mutable<Vec<T>> {
-    fn safe_lock_is_empty(&self) -> bool {
-        self.lock_ref().is_empty()
-    }
+// VecDeque
 
-    fn safe_lock_len(&self) -> usize {
-        self.lock_ref().len()
-    }
-
-    fn safe_lock_push(&self, value: T) {
-        self.lock_mut().push(value);
-    }
+#[macro_export]
+macro_rules! safe_lock_vec_deque {
+    (pop_front: $lock_name:expr, $field_name:ident) => {{
+        use $crate::utils::types::MutableHelper;
+        VecDeque::pop_front(&mut $lock_name.lock_mut().$field_name)
+    }};
 }
 
-pub trait SafeLockVecDeque<T> {
-    fn safe_lock_is_empty(&self) -> bool;
-
-    fn safe_lock_len(&self) -> usize;
-
-    fn safe_lock_pop_front(&self) -> Option<T>;
-
-    fn safe_lock_push_back(&self, value: T);
-}
-
-impl<T> SafeLockVecDeque<T> for Mutable<VecDeque<T>> {
-    fn safe_lock_is_empty(&self) -> bool {
-        self.lock_ref().is_empty()
-    }
-
-    fn safe_lock_len(&self) -> usize {
-        self.lock_ref().len()
-    }
-
-    fn safe_lock_pop_front(&self) -> Option<T> {
-        self.lock_mut().pop_front()
-    }
-
-    fn safe_lock_push_back(&self, value: T) {
-        self.lock_mut().push_back(value);
-    }
+#[macro_export]
+macro_rules! safe_lock_slot_map {
+    (insert: $lock_name:expr, $field_name:ident, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        SlotMap::insert(&mut $lock_name.lock_mut().$field_name, value)
+    }};
 }

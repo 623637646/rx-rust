@@ -6,7 +6,6 @@ use crate::tests_utils::test_channel::{ChannelChecker, ReceiverObservable, Sende
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
-use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption, SafeLockVec};
 use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -17,6 +16,7 @@ use rx_rust::{
     },
     subject::publish_subject::PublishSubject,
 };
+use rx_rust::{safe_lock, safe_lock_option_observer, safe_lock_vec};
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
@@ -25,8 +25,8 @@ fn new_channel<'or, T, E>(
     channel_checker: Shared<Mutable<Option<ChannelChecker<'or, T, E>>>>,
 ) -> ReceiverObservable<'or, T, E> {
     let (sender_1, observable, channel_checker_1) = test_channel();
-    sender.safe_lock_set(Some(sender_1));
-    channel_checker.safe_lock_set(Some(channel_checker_1));
+    safe_lock!(set: sender, Some(sender_1));
+    safe_lock!(set: channel_checker, Some(channel_checker_1));
     observable
 }
 
@@ -43,7 +43,7 @@ fn test_completed_no_retry() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.safe_lock_push(error);
+        safe_lock_vec!(push: errors_cloned, error);
         let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
         RetryAction::Retry(observable)
     });
@@ -55,18 +55,20 @@ fn test_completed_no_retry() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::<Infallible>::Completed));
+    assert!(
+        safe_lock_option_observer!(on_termination: sender, Termination::<Infallible>::Completed)
+    );
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -89,7 +91,7 @@ fn test_completed_retry_once() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.safe_lock_push(error);
+        safe_lock_vec!(push: errors_cloned, error);
         let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
         RetryAction::Retry(observable)
     });
@@ -101,18 +103,18 @@ fn test_completed_retry_once() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -121,7 +123,7 @@ fn test_completed_retry_once() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_next_if_some(222));
+    assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -130,7 +132,7 @@ fn test_completed_retry_once() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Completed));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -153,7 +155,7 @@ fn test_completed_retry_twice() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.safe_lock_push(error);
+        safe_lock_vec!(push: errors_cloned, error);
         let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
         RetryAction::Retry(observable)
     });
@@ -165,18 +167,18 @@ fn test_completed_retry_twice() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -185,7 +187,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_next_if_some(222));
+    assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -194,7 +196,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error2")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -203,7 +205,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    assert!(sender.safe_lock_on_next_if_some(333));
+    assert!(safe_lock_option_observer!(on_next: sender, 333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -212,7 +214,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Completed));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -274,7 +276,7 @@ fn test_erryr_no_retry() {
         ChannelState::Subscribed
     );
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -282,7 +284,7 @@ fn test_erryr_no_retry() {
         ChannelState::Subscribed
     );
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(
@@ -304,8 +306,8 @@ fn test_error_retry_once() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.safe_lock_push(error);
-        if errors_cloned.safe_lock_len() <= 1 {
+        safe_lock_vec!(push: errors_cloned, error);
+        if safe_lock_vec!(len: errors_cloned) <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -320,18 +322,18 @@ fn test_error_retry_once() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -340,7 +342,7 @@ fn test_error_retry_once() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_next_if_some(222));
+    assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -349,7 +351,7 @@ fn test_error_retry_once() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error2")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
     assert_eq!(
@@ -372,8 +374,8 @@ fn test_error_retry_twice() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.safe_lock_push(error);
-        if errors_cloned.safe_lock_len() <= 2 {
+        safe_lock_vec!(push: errors_cloned, error);
+        if safe_lock_vec!(len: errors_cloned) <= 2 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -388,18 +390,18 @@ fn test_error_retry_twice() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -408,7 +410,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_next_if_some(222));
+    assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -417,7 +419,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error2")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -426,7 +428,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    assert!(sender.safe_lock_on_next_if_some(333));
+    assert!(safe_lock_option_observer!(on_next: sender, 333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -435,7 +437,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.lock_ref(), ["error", "error2"]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error3")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error3")));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
     assert_eq!(
@@ -455,8 +457,8 @@ fn test_error_source_and_retry_are_same() {
     let subject_cloned = subject.clone();
     let errors_cloned = errors.clone();
     let observable = subject.clone().retry(move |error| {
-        errors_cloned.safe_lock_push(error);
-        if errors_cloned.safe_lock_len() <= 3 {
+        safe_lock_vec!(push: errors_cloned, error);
+        if safe_lock_vec!(len: errors_cloned) <= 3 {
             RetryAction::Retry(subject_cloned.clone())
         } else {
             RetryAction::Stop(error)
@@ -466,12 +468,12 @@ fn test_error_source_and_retry_are_same() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
     subject.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
@@ -492,8 +494,8 @@ fn test_unsubscribe_before_retry() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error: String| {
-        errors_cloned.safe_lock_push(error.clone());
-        if errors_cloned.safe_lock_len() <= 1 {
+        safe_lock_vec!(push: errors_cloned, error.clone());
+        if safe_lock_vec!(len: errors_cloned) <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -508,16 +510,16 @@ fn test_unsubscribe_before_retry() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
@@ -526,7 +528,7 @@ fn test_unsubscribe_before_retry() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Unsubscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 }
 
 #[test]
@@ -542,8 +544,8 @@ fn test_unsubscribe_after_retry() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.safe_lock_push(error);
-        if errors_cloned.safe_lock_len() <= 1 {
+        safe_lock_vec!(push: errors_cloned, error);
+        if safe_lock_vec!(len: errors_cloned) <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -558,18 +560,18 @@ fn test_unsubscribe_after_retry() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -578,7 +580,7 @@ fn test_unsubscribe_after_retry() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_next_if_some(222));
+    assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -614,8 +616,8 @@ fn test_ref() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.safe_lock_push(error);
-        if errors_cloned.safe_lock_len() <= 1 {
+        safe_lock_vec!(push: errors_cloned, error);
+        if safe_lock_vec!(len: errors_cloned) <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -630,18 +632,18 @@ fn test_ref() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(&value_1));
+    assert!(safe_lock_option_observer!(on_next: sender, &value_1));
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error(&error)));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error(&error)));
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -650,7 +652,7 @@ fn test_ref() {
     );
     assert_eq!(*errors.lock_ref(), [&error]);
 
-    assert!(sender.safe_lock_on_next_if_some(&value_2));
+    assert!(safe_lock_option_observer!(on_next: sender, &value_2));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -659,7 +661,7 @@ fn test_ref() {
     );
     assert_eq!(*errors.lock_ref(), [&error]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error(&error)));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error(&error)));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Error(&error));
     assert_eq!(
@@ -694,10 +696,10 @@ fn test_mut_ref() {
         |_| {},
     );
 
-    assert!(sender.safe_lock_on_next_if_some(&mut value_1));
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
-    assert!(sender.safe_lock_on_next_if_some(&mut value_2));
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Completed));
+    assert!(safe_lock_option_observer!(on_next: sender, &mut value_1));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_next: sender, &mut value_2));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
     drop(sender);
     drop(subscription);
     drop(channel_checker);
@@ -720,8 +722,8 @@ fn test_async() {
         let channel_checker_cloned = channel_checker.clone();
         let errors_cloned = errors.clone();
         let observable = observable.retry(move |error| {
-            errors_cloned.safe_lock_push(error);
-            if errors_cloned.safe_lock_len() <= 1 {
+            safe_lock_vec!(push: errors_cloned, error);
+            if safe_lock_vec!(len: errors_cloned) <= 1 {
                 let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
                 RetryAction::Retry(observable)
             } else {
@@ -739,11 +741,11 @@ fn test_async() {
             channel_checker.lock_ref().as_ref().unwrap().state(),
             ChannelState::Subscribed
         );
-        assert!(errors.safe_lock_is_empty());
+        assert!(safe_lock_vec!(is_empty: errors));
 
         let sender = runtime
             .spawn(async move {
-                assert!(sender.safe_lock_on_next_if_some(111));
+                assert!(safe_lock_option_observer!(on_next: sender, 111));
                 sender
             })
             .await
@@ -754,11 +756,13 @@ fn test_async() {
             channel_checker.lock_ref().as_ref().unwrap().state(),
             ChannelState::Subscribed
         );
-        assert!(errors.safe_lock_is_empty());
+        assert!(safe_lock_vec!(is_empty: errors));
 
         let sender = runtime
             .spawn(async move {
-                assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+                assert!(
+                    safe_lock_option_observer!(on_termination: sender, Termination::Error("error"))
+                );
                 sender
             })
             .await
@@ -773,7 +777,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                assert!(sender.safe_lock_on_next_if_some(222));
+                assert!(safe_lock_option_observer!(on_next: sender, 222));
                 sender
             })
             .await
@@ -788,7 +792,9 @@ fn test_async() {
 
         let _sender = runtime
             .spawn(async move {
-                assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error2")));
+                assert!(
+                    safe_lock_option_observer!(on_termination: sender, Termination::Error("error2"))
+                );
                 sender
             })
             .await
@@ -815,8 +821,8 @@ fn test_subscribe_by_different_observer() {
     let observable_cloned = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
-        errors_cloned.safe_lock_push(error);
-        if errors_cloned.safe_lock_len() <= 2 {
+        safe_lock_vec!(push: errors_cloned, error);
+        if safe_lock_vec!(len: errors_cloned) <= 2 {
             RetryAction::Retry(observable_cloned.clone())
         } else {
             RetryAction::Stop(error)
@@ -832,14 +838,14 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
@@ -863,7 +869,7 @@ fn test_unsub_on_next_by_take() {
     let errors_cloned = errors.clone();
     let observable = observable
         .retry(move |error| {
-            errors_cloned.safe_lock_push(error);
+            safe_lock_vec!(push: errors_cloned, error);
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         })
@@ -876,16 +882,16 @@ fn test_unsub_on_next_by_take() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Unsubscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 }
 
 #[test]
@@ -906,8 +912,8 @@ fn test_multiple_operation() {
     let errors_cloned_2 = errors_2.clone();
     let observable = observable
         .retry(move |error| {
-            errors_cloned_1.safe_lock_push(error);
-            if errors_cloned_1.safe_lock_len() <= 1 {
+            safe_lock_vec!(push: errors_cloned_1, error);
+            if safe_lock_vec!(len: errors_cloned_1) <= 1 {
                 let observable =
                     new_channel(sender_cloned_1.clone(), channel_checker_cloned_1.clone());
                 RetryAction::Retry(observable)
@@ -916,8 +922,8 @@ fn test_multiple_operation() {
             }
         })
         .retry(move |error| {
-            errors_cloned_2.safe_lock_push(error);
-            if errors_cloned_2.safe_lock_len() <= 1 {
+            safe_lock_vec!(push: errors_cloned_2, error);
+            if safe_lock_vec!(len: errors_cloned_2) <= 1 {
                 let observable =
                     new_channel(sender_cloned_2.clone(), channel_checker_cloned_2.clone());
                 RetryAction::Retry(observable)
@@ -933,20 +939,20 @@ fn test_multiple_operation() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors_1.safe_lock_is_empty());
-    assert!(errors_2.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors_1));
+    assert!(safe_lock_vec!(is_empty: errors_2));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors_1.safe_lock_is_empty());
-    assert!(errors_2.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors_1));
+    assert!(safe_lock_vec!(is_empty: errors_2));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -954,9 +960,9 @@ fn test_multiple_operation() {
         ChannelState::Subscribed
     );
     assert_eq!(*errors_1.lock_ref(), ["error"]);
-    assert!(errors_2.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors_2));
 
-    assert!(sender.safe_lock_on_next_if_some(222));
+    assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -964,9 +970,9 @@ fn test_multiple_operation() {
         ChannelState::Subscribed
     );
     assert_eq!(*errors_1.lock_ref(), ["error"]);
-    assert!(errors_2.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors_2));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error2")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -976,7 +982,7 @@ fn test_multiple_operation() {
     assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
     assert_eq!(*errors_2.lock_ref(), ["error2"]);
 
-    assert!(sender.safe_lock_on_next_if_some(333));
+    assert!(safe_lock_option_observer!(on_next: sender, 333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -986,7 +992,7 @@ fn test_multiple_operation() {
     assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
     assert_eq!(*errors_2.lock_ref(), ["error2"]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error3")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error3")));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
     assert_eq!(
@@ -1010,8 +1016,8 @@ fn test_without_convenient_api() {
     let channel_checker_cloned = channel_checker.clone();
     let errors_cloned = errors.clone();
     let observable = Retry::new(observable, move |error| {
-        errors_cloned.safe_lock_push(error);
-        if errors_cloned.safe_lock_len() <= 1 {
+        safe_lock_vec!(push: errors_cloned, error);
+        if safe_lock_vec!(len: errors_cloned) <= 1 {
             let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
             RetryAction::Retry(observable)
         } else {
@@ -1026,18 +1032,18 @@ fn test_without_convenient_api() {
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_next_if_some(111));
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
         channel_checker.lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert!(errors.safe_lock_is_empty());
+    assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1046,7 +1052,7 @@ fn test_without_convenient_api() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_next_if_some(222));
+    assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1055,7 +1061,7 @@ fn test_without_convenient_api() {
     );
     assert_eq!(*errors.lock_ref(), ["error"]);
 
-    assert!(sender.safe_lock_on_termination_if_some(Termination::Error("error2")));
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
     assert_eq!(

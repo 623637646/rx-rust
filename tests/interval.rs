@@ -8,13 +8,14 @@ use crate::tests_utils::{
 use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::safe_lock_option_disposable;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::safe_lock::{SafeLock, SafeLockOption};
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
 };
+use rx_rust::{safe_lock, safe_lock_option};
 use std::time::{Duration, Instant};
 use tests_utils::checker::Checker;
 
@@ -354,23 +355,26 @@ fn test_unsub_after_next() {
         let subscription = Shared::new(Mutable::new(None::<Subscription<'_>>));
         let subscription_cloned = subscription.clone();
         let (mut on_next, on_termination) = observer.into_callbacks();
-        subscription.safe_lock_set(Some(observable.subscribe_with_callback(
-            move |value| {
-                on_next(value);
-                subscription_cloned.safe_lock_dispose_if_some();
-            },
-            |termination| {
-                on_termination(termination);
-            },
-        )));
+        safe_lock!(set:
+            subscription,
+            Some(observable.subscribe_with_callback(
+                move |value| {
+                    on_next(value);
+                    safe_lock_option_disposable!(dispose: subscription_cloned);
+                },
+                |termination| {
+                    on_termination(termination);
+                },
+            ))
+        );
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
-        assert!(subscription.safe_lock_is_some());
+        assert!(safe_lock_option!(is_some: subscription));
 
         runtime.sleep(Duration::from_millis(110)).await;
         assert_eq!(checker.values(), [0]);
         assert_eq!(checker.state(), State::Dropped);
-        assert!(subscription.safe_lock_is_none());
+        assert!(safe_lock_option!(is_none: subscription));
     });
 }
 

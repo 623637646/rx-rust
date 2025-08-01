@@ -1,7 +1,7 @@
 use super::Subject;
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::SafeLock;
+use crate::safe_lock;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -157,10 +157,10 @@ where
                                 }
 
                                 // Reset to Idle
-                                self.0.safe_lock_set(State::Idle(observers));
+                                safe_lock!(set: self.0, State::Idle(observers));
                             }
                             ProcessedAction::Terminate(termination) => {
-                                self.0.safe_lock_set(State::Terminated(termination.clone()));
+                                safe_lock!(set: self.0, State::Terminated(termination.clone()));
                                 observers.into_iter().for_each(|(_, observer)| {
                                     observer.on_termination(termination.clone());
                                 })

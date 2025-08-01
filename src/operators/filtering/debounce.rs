@@ -1,6 +1,5 @@
 use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::utils::safe_lock::{SafeLock, SafeLockOption};
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -8,6 +7,7 @@ use crate::{
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
+use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::time::Duration;
 
@@ -59,9 +59,7 @@ struct DebounceContext<T> {
 
 impl<T> Disposable for Shared<Mutable<DebounceContext<T>>> {
     fn dispose(self) {
-        if let Some(timer) = self.safe_lock_mut(|e| e.timer.take()) {
-            timer.dispose();
-        }
+        safe_lock_option_disposable!(dispose: self, timer);
     }
 }
 
@@ -79,7 +77,7 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        if self.observer.safe_lock_is_none() {
+        if safe_lock_option!(is_none: self.observer) {
             return;
         }
         let mut lock = self.context.lock_mut();
@@ -89,8 +87,8 @@ where
         let observer = self.observer.clone();
         let disposal = self.scheduler.schedule(
             move || {
-                if let Some(current_value) = context.safe_lock_mut(|e| e.current_value.take()) {
-                    observer.safe_lock_on_next_if_some(current_value);
+                if let Some(current_value) = safe_lock_option!(take: context, current_value) {
+                    safe_lock_option_observer!(on_next: observer, current_value);
                 }
             },
             Some(self.time_span),
@@ -104,10 +102,10 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.context.clone().dispose();
-        if let Some(mut observer) = self.observer.safe_lock_take() {
+        if let Some(mut observer) = safe_lock_option!(take: self.observer) {
             match termination {
                 Termination::Completed => {
-                    if let Some(value) = self.context.safe_lock_mut(|e| e.current_value.take()) {
+                    if let Some(value) = safe_lock_option!(take: self.context, current_value) {
                         observer.on_next(value);
                     }
                 }

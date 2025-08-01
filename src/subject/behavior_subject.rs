@@ -1,5 +1,5 @@
 use super::{Subject, publish_subject::PublishSubject};
-use crate::utils::safe_lock::SafeLock;
+use crate::safe_lock;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -27,7 +27,7 @@ impl<T, E> BehaviorSubject<'_, T, E> {
     where
         T: Clone,
     {
-        self.value.safe_lock_clone()
+        safe_lock!(clone: self.value)
     }
 }
 
@@ -45,7 +45,7 @@ where
             observer.on_termination(terminated);
             Subscription::default()
         } else {
-            observer.on_next(self.value.safe_lock_clone());
+            observer.on_next(safe_lock!(clone: self.value));
             self.publish_subject.subscribe(observer)
         }
     }
@@ -58,7 +58,7 @@ where
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
-            self.value.safe_lock_set(value.clone());
+            safe_lock!(set: self.value, value.clone());
             self.publish_subject.on_next(value);
         }
     }

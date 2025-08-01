@@ -1,6 +1,6 @@
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::safe_lock::SafeLockOption;
+use crate::safe_lock_option;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -61,7 +61,7 @@ where
         match termination {
             Termination::Completed => {
                 let sub = self.source_2.subscribe(self.observer);
-                self.sub_2.safe_lock_replace(sub);
+                safe_lock_option!(replace: self.sub_2, sub);
             }
             Termination::Error(_) => {
                 self.observer.on_termination(termination);

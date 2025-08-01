@@ -1,4 +1,4 @@
-use crate::utils::safe_lock::SafeLockOption;
+use crate::safe_lock_option_observer;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -83,13 +83,13 @@ where
                     *lock = ZipObserverBufferState::None;
                 }
                 drop(lock);
-                self.observer.safe_lock_on_next_if_some((value, item));
+                safe_lock_option_observer!(on_next: self.observer, (value, item));
             }
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.observer.safe_lock_on_termination_if_some(termination);
+        safe_lock_option_observer!(on_termination: self.observer, termination);
     }
 }
 
@@ -114,7 +114,7 @@ where
                     *lock = ZipObserverBufferState::None;
                 }
                 drop(lock);
-                self.observer.safe_lock_on_next_if_some((item, value));
+                safe_lock_option_observer!(on_next: self.observer, (item, value));
             }
             ZipObserverBufferState::Two(items) => {
                 items.push_back(value);
@@ -123,6 +123,6 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.observer.safe_lock_on_termination_if_some(termination);
+        safe_lock_option_observer!(on_termination: self.observer, termination);
     }
 }

@@ -1,9 +1,7 @@
 use crate::{
     disposable::Disposable,
-    utils::{
-        safe_lock::SafeLockOption,
-        types::{Mutable, Shared},
-    },
+    safe_lock_option_disposable,
+    utils::types::{Mutable, Shared},
 };
 
 pub struct SharedDisposal<D>(Shared<Mutable<Option<D>>>);
@@ -19,6 +17,6 @@ where
     D: Disposable,
 {
     fn dispose(self) {
-        self.0.safe_lock_dispose_if_some();
+        safe_lock_option_disposable!(dispose: self.0);
     }
 }

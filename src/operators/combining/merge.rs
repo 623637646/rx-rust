@@ -1,4 +1,4 @@
-use crate::utils::safe_lock::SafeLockOption;
+use crate::safe_lock_option_observer;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -61,20 +61,20 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.observer.safe_lock_on_next_if_some(value);
+        safe_lock_option_observer!(on_next: self.observer, value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
                 if self.one_is_completed.load(Ordering::SeqCst) {
-                    self.observer.safe_lock_on_termination_if_some(termination);
+                    safe_lock_option_observer!(on_termination: self.observer, termination);
                 } else {
                     self.one_is_completed.store(true, Ordering::SeqCst);
                 }
             }
             Termination::Error(_) => {
-                self.observer.safe_lock_on_termination_if_some(termination);
+                safe_lock_option_observer!(on_termination: self.observer, termination);
             }
         }
     }
