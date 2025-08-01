@@ -127,7 +127,7 @@ fn subscribe_next<'or, 'sub, T, E, OR, OE1>(
         };
         let sub = observable.subscribe(observer);
         if !terminated.load(Ordering::SeqCst) {
-            context.safe_lock_mut(|e| e.on_going_sub = Some(sub));
+            context.lock_mut().on_going_sub = Some(sub);
         }
     } else if lock.completed {
         drop(lock);

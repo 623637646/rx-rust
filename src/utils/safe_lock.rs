@@ -30,9 +30,9 @@ pub trait SafeLock<T> {
     #[must_use = "if you don't need the old value, you can just assign the new value directly"]
     fn safe_lock_mem_replace(&self, value: T) -> T;
 
-    fn safe_lock_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R;
+    // fn safe_lock_ref<R>(&self, callback: fn(&T) -> R) -> R;
 
-    fn safe_lock_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R;
+    fn safe_lock_mut<R>(&self, callback: fn(&mut T) -> R) -> R;
 
     fn safe_lock_on_next<T1, E>(&self, value: T1)
     where
@@ -62,11 +62,11 @@ impl<T> SafeLock<T> for Mutable<T> {
         std::mem::replace(&mut self.lock_mut(), value)
     }
 
-    fn safe_lock_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
-        callback(&self.lock_ref())
-    }
+    // fn safe_lock_ref<R>(&self, callback: fn(&T) -> R) -> R {
+    //     callback(&self.lock_ref())
+    // }
 
-    fn safe_lock_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
+    fn safe_lock_mut<R>(&self, callback: fn(&mut T) -> R) -> R {
         callback(&mut self.lock_mut())
     }
 

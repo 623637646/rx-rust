@@ -105,13 +105,12 @@ where
             context: self.context.clone(),
         };
         let sub = value.subscribe(observer);
-        self.context.safe_lock_mut(|e| {
-            if e.on_going_sub.is_some() {
-                e.on_going_sub = Some(sub);
-            } else {
-                // already terminated
-            }
-        });
+        let mut lock = self.context.lock_mut();
+        if lock.on_going_sub.is_some() {
+            lock.on_going_sub = Some(sub);
+        } else {
+            // already terminated
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {

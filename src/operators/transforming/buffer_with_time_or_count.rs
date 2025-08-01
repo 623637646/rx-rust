@@ -106,10 +106,9 @@ impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
             self.time_span,
             delay,
         );
-        if let Some(timer) = self
-            .context
-            .safe_lock_mut(|e| e.timer.replace(BoxedDisposal::new(disposal)))
-        {
+        let mut lock = self.context.lock_mut();
+        if let Some(timer) = lock.timer.replace(BoxedDisposal::new(disposal)) {
+            drop(lock);
             timer.dispose();
         }
     }

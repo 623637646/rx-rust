@@ -104,13 +104,12 @@ where
         };
         let sub = value.subscribe(observer);
 
-        self.context.safe_lock_mut(|e| {
-            if e.subscriptions.contains_key(key) {
-                e.subscriptions[key] = sub;
-            } else {
-                // already terminated
-            }
-        });
+        let mut lock = self.context.lock_mut();
+        if lock.subscriptions.contains_key(key) {
+            lock.subscriptions[key] = sub;
+        } else {
+            // already terminated
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
