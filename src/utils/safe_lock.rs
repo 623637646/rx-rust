@@ -91,23 +91,11 @@ pub trait SafeLockOption<T> {
     where
         T: Observer<T1, E>;
 
-    fn safe_lock_unwrap_on_next<T1, E>(&self, value: T1)
-    where
-        T: Observer<T1, E>;
-
     fn safe_lock_on_termination_if_some<T1, E>(&self, termination: Termination<E>) -> bool
     where
         T: Observer<T1, E>;
 
-    fn safe_lock_unwrap_on_termination<T1, E>(&self, termination: Termination<E>)
-    where
-        T: Observer<T1, E>;
-
     fn safe_lock_dispose_if_some(&self) -> bool
-    where
-        T: Disposable;
-
-    fn safe_lock_unwrap_dispose(&self)
     where
         T: Disposable;
 }
@@ -141,13 +129,6 @@ impl<T> SafeLockOption<T> for Mutable<Option<T>> {
         }
     }
 
-    fn safe_lock_unwrap_on_next<T1, E>(&self, value: T1)
-    where
-        T: Observer<T1, E>,
-    {
-        self.lock_mut().as_mut().unwrap().on_next(value);
-    }
-
     fn safe_lock_on_termination_if_some<T1, E>(&self, termination: Termination<E>) -> bool
     where
         T: Observer<T1, E>,
@@ -160,13 +141,6 @@ impl<T> SafeLockOption<T> for Mutable<Option<T>> {
         }
     }
 
-    fn safe_lock_unwrap_on_termination<T1, E>(&self, termination: Termination<E>)
-    where
-        T: Observer<T1, E>,
-    {
-        self.safe_lock_take().unwrap().on_termination(termination);
-    }
-
     fn safe_lock_dispose_if_some(&self) -> bool
     where
         T: Disposable,
@@ -177,13 +151,6 @@ impl<T> SafeLockOption<T> for Mutable<Option<T>> {
         } else {
             false
         }
-    }
-
-    fn safe_lock_unwrap_dispose(&self)
-    where
-        T: Disposable,
-    {
-        self.safe_lock_take().unwrap().dispose();
     }
 }
 

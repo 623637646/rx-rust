@@ -290,7 +290,7 @@ fn test_async() {
 
         let boxed_observer = runtime
             .spawn(async move {
-                boxed_observer.safe_lock_unwrap_on_next(111);
+                assert!(boxed_observer.safe_lock_on_next_if_some(111));
                 boxed_observer
             })
             .await
@@ -312,8 +312,10 @@ fn test_async() {
 
         runtime
             .spawn(async move {
-                boxed_observer
-                    .safe_lock_unwrap_on_termination(Termination::<Infallible>::Completed);
+                assert!(
+                    boxed_observer
+                        .safe_lock_on_termination_if_some(Termination::<Infallible>::Completed)
+                );
             })
             .await
             .unwrap();
@@ -380,8 +382,8 @@ fn test_subscribe_by_different_observer() {
     assert!(!called_1.load(Ordering::SeqCst));
     assert!(!called_2.load(Ordering::SeqCst));
 
-    boxed_observer_1.safe_lock_unwrap_on_next(111);
-    boxed_observer_2.safe_lock_unwrap_on_next(111);
+    assert!(boxed_observer_1.safe_lock_on_next_if_some(111));
+    assert!(boxed_observer_2.safe_lock_on_next_if_some(111));
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -402,8 +404,12 @@ fn test_subscribe_by_different_observer() {
     assert!(called_1.load(Ordering::SeqCst));
     assert!(called_2.load(Ordering::SeqCst));
 
-    boxed_observer_1.safe_lock_unwrap_on_termination(Termination::<Infallible>::Completed);
-    boxed_observer_2.safe_lock_unwrap_on_termination(Termination::<Infallible>::Completed);
+    assert!(
+        boxed_observer_1.safe_lock_on_termination_if_some(Termination::<Infallible>::Completed)
+    );
+    assert!(
+        boxed_observer_2.safe_lock_on_termination_if_some(Termination::<Infallible>::Completed)
+    );
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [111]);

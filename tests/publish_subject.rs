@@ -414,7 +414,7 @@ fn test_unsub_on_next() {
         observable
             .clone()
             .hook_on_next(move |observer, value| {
-                sub_cloned.safe_lock_unwrap_dispose();
+                sub_cloned.safe_lock_dispose_if_some();
                 observer.on_next(value);
             })
             .subscribe(observer_2),
@@ -427,7 +427,7 @@ fn test_unsub_on_next() {
         observable
             .hook_on_next(move |observer, value| {
                 observer.on_next(value);
-                sub_cloned.safe_lock_unwrap_dispose();
+                sub_cloned.safe_lock_dispose_if_some();
             })
             .subscribe(observer_3),
     ));
@@ -532,7 +532,7 @@ fn test_unsub_on_completed() {
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                sub_cloned.safe_lock_unwrap_dispose();
+                sub_cloned.safe_lock_dispose_if_some();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
@@ -545,7 +545,7 @@ fn test_unsub_on_completed() {
         observable
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                sub_cloned.safe_lock_unwrap_dispose();
+                sub_cloned.safe_lock_dispose_if_some();
             })
             .subscribe(observer_3),
     ));
@@ -668,7 +668,7 @@ fn test_unsub_on_error() {
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                sub_cloned.safe_lock_unwrap_dispose();
+                sub_cloned.safe_lock_dispose_if_some();
                 observer.on_termination(value);
             })
             .subscribe(observer_2),
@@ -681,7 +681,7 @@ fn test_unsub_on_error() {
         observable
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                sub_cloned.safe_lock_unwrap_dispose();
+                sub_cloned.safe_lock_dispose_if_some();
             })
             .subscribe(observer_3),
     ));
