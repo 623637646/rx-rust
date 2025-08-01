@@ -1,8 +1,7 @@
 use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::disposable::shared_disposal::SharedDisposal;
 use crate::utils::safe_lock::{SafeLock, SafeLockOption};
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -40,23 +39,37 @@ where
         self,
         observer: impl Observer<T, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let disposal = Shared::new(Mutable::new(None));
+        let context = Shared::new(Mutable::new(DebounceContext {
+            current_value: None,
+            timer: None,
+        }));
         self.source.subscribe(DebounceObserver {
             observer: Shared::new(Mutable::new(Some(observer))),
+            context: context.clone(),
             time_span: self.time_span,
             scheduler: self.scheduler,
-            current_value: Shared::new(Mutable::new(None)),
-            disposal: disposal.clone(),
-        }) + SharedDisposal::new(disposal)
+        }) + context
+    }
+}
+
+struct DebounceContext<T> {
+    current_value: Option<T>,
+    timer: Option<BoxedDisposal<'static>>,
+}
+
+impl<T> Disposable for Shared<Mutable<DebounceContext<T>>> {
+    fn dispose(self) {
+        if let Some(timer) = self.safe_lock_mut(|e| e.timer.take()) {
+            timer.dispose();
+        }
     }
 }
 
 struct DebounceObserver<T, OR, S> {
     observer: Shared<Mutable<Option<OR>>>,
+    context: Shared<Mutable<DebounceContext<T>>>,
     time_span: Duration,
     scheduler: S,
-    current_value: Shared<Mutable<Option<T>>>,
-    disposal: Shared<Mutable<Option<BoxedDisposal<'static>>>>,
 }
 
 impl<T, E, OR, S> Observer<T, E> for DebounceObserver<T, OR, S>
@@ -69,31 +82,32 @@ where
         if self.observer.safe_lock_is_none() {
             return;
         }
-        self.current_value.safe_lock_set(Some(value));
+        let mut lock = self.context.lock_mut();
+        lock.current_value = Some(value);
 
-        let current_value = self.current_value.clone();
+        let context = self.context.clone();
         let observer = self.observer.clone();
-        let disposal = self.scheduler.clone().schedule(
+        let disposal = self.scheduler.schedule(
             move || {
-                observer.safe_lock_on_next_with_builder(|| current_value.safe_lock_take());
+                observer.safe_lock_on_next_with_builder(|| {
+                    context.safe_lock_mut(|e| e.current_value.take())
+                });
             },
             Some(self.time_span),
         );
 
-        if let Some(disposal) = self
-            .disposal
-            .safe_lock_replace(BoxedDisposal::new(disposal))
-        {
+        if let Some(disposal) = lock.timer.replace(BoxedDisposal::new(disposal)) {
+            drop(lock);
             disposal.dispose();
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.disposal.safe_lock_dispose_if_some();
+        self.context.clone().dispose();
         if let Some(mut observer) = self.observer.safe_lock_take() {
             match termination {
                 Termination::Completed => {
-                    if let Some(value) = self.current_value.safe_lock_take() {
+                    if let Some(value) = self.context.safe_lock_mut(|e| e.current_value.take()) {
                         observer.on_next(value);
                     }
                 }

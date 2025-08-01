@@ -66,7 +66,7 @@ where
             return;
         }
         let disposal = self.disposal.clone();
-        *lock = Some(BoxedDisposal::new(self.scheduler.clone().schedule(
+        *lock = Some(BoxedDisposal::new(self.scheduler.schedule(
             move || {
                 disposal.safe_lock_unwrap_dispose();
             },
