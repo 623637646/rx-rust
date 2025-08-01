@@ -39,25 +39,23 @@ where
         self,
         observer: impl Observer<Vec<T>, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let observer = BufferWithTimeObserver {
-            observer: Shared::new(Mutable::new(Some(observer))),
-            values: Shared::new(Mutable::new(Vec::default())),
-        };
+        let observer = Shared::new(Mutable::new(Some(observer)));
+        let values = Shared::new(Mutable::new(Vec::default()));
         let observer_cloned = observer.clone();
+        let values_cloned = values.clone();
         let disposal = self.scheduler.schedule_periodically(
             move |_| {
-                let values = observer_cloned.values.safe_lock_mem_take();
-                !observer_cloned.observer.safe_lock_on_next_if_some(values)
+                let values = values_cloned.safe_lock_mem_take();
+                !observer_cloned.safe_lock_on_next_if_some(values)
             },
             self.time_span,
             self.delay,
         );
+        let observer = BufferWithTimeObserver { observer, values };
         self.source.subscribe(observer) + disposal
     }
 }
 
-#[derive(Educe)]
-#[educe(Clone)]
 struct BufferWithTimeObserver<T, OR> {
     observer: Shared<Mutable<Option<OR>>>,
     values: Shared<Mutable<Vec<T>>>,
