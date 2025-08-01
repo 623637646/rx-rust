@@ -2,25 +2,25 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::{
-        safe_lock::{SafeLock, SafeLockOption, SafeLockVecDeque},
-        types::{Mutable, NecessarySend, Shared},
-    },
+    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 use futures::Stream;
 use std::{
     collections::VecDeque,
     convert::Infallible,
-    sync::atomic::{AtomicBool, Ordering},
     task::{Poll, Waker},
 };
+
+struct ObservableStreamContext<T> {
+    values: VecDeque<T>,
+    waker: Option<Waker>,
+    terminated: bool,
+}
 
 pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,
-    values: Shared<Mutable<VecDeque<T>>>,
-    terminated: Shared<AtomicBool>,
-    waker: Shared<Mutable<Option<Waker>>>,
+    context: Shared<Mutable<ObservableStreamContext<T>>>,
 }
 
 impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
@@ -31,9 +31,11 @@ impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
         Self {
             source: Some(source),
             sub: None,
-            values: Shared::new(Mutable::new(VecDeque::new())),
-            terminated: Shared::new(AtomicBool::new(false)),
-            waker: Shared::new(Mutable::new(None)),
+            context: Shared::new(Mutable::new(ObservableStreamContext {
+                terminated: false,
+                waker: None,
+                values: VecDeque::new(),
+            })),
         }
     }
 }
@@ -51,18 +53,17 @@ where
     ) -> Poll<Option<Self::Item>> {
         if let Some(source) = self.source.take() {
             let observer = ObservableStreamObserver {
-                values: self.values.clone(),
-                terminated: self.terminated.clone(),
-                waker: self.waker.clone(),
+                context: self.context.clone(),
             };
             let sub = source.subscribe(observer);
             self.sub = Some(sub);
         }
 
-        self.waker.safe_lock_set(Some(cx.waker().clone()));
-        if let Some(event) = self.values.safe_lock_pop_front() {
+        let mut lock = self.context.lock_mut();
+        lock.waker = Some(cx.waker().clone());
+        if let Some(event) = lock.values.pop_front() {
             Poll::Ready(Some(event))
-        } else if self.terminated.load(Ordering::SeqCst) {
+        } else if lock.terminated {
             Poll::Ready(None)
         } else {
             Poll::Pending
@@ -71,22 +72,24 @@ where
 }
 
 struct ObservableStreamObserver<T> {
-    values: Shared<Mutable<VecDeque<T>>>,
-    terminated: Shared<AtomicBool>,
-    waker: Shared<Mutable<Option<Waker>>>,
+    context: Shared<Mutable<ObservableStreamContext<T>>>,
 }
 
 impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
-        self.values.safe_lock_push_back(value);
-        if let Some(waker) = self.waker.safe_lock_take() {
+        let mut lock = self.context.lock_mut();
+        lock.values.push_back(value);
+        if let Some(waker) = lock.waker.take() {
+            drop(lock);
             waker.wake();
         }
     }
 
     fn on_termination(self, _: Termination<Infallible>) {
-        self.terminated.store(true, Ordering::SeqCst);
-        if let Some(waker) = self.waker.safe_lock_take() {
+        let mut lock = self.context.lock_mut();
+        lock.terminated = true;
+        if let Some(waker) = lock.waker.take() {
+            drop(lock);
             waker.wake();
         }
     }
