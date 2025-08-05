@@ -2,9 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
-use crate::tests_utils::{
-    RECURSION_EXECUTION_TIMES, RECURSION_EXPECTED_DIFF, RECURSION_SLEEP_TIME,
-};
+use crate::tests_utils::{RECURSION_EXECUTION_TIMES, RECURSION_EXPECTED_DIFF, RECURSION_PERIOD};
 use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
@@ -167,11 +165,7 @@ fn test_precision() {
     block_on(|runtime| async move {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
-        let observable = Interval::new(
-            Duration::from_millis(RECURSION_SLEEP_TIME),
-            runtime.clone(),
-            None,
-        );
+        let observable = Interval::new(RECURSION_PERIOD, runtime.clone(), None);
         let _subscription = observable.subscribe_with_callback(
             move |_| {
                 tx.unbounded_send(Instant::now()).unwrap();
@@ -182,11 +176,10 @@ fn test_precision() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff =
-                duration.as_micros() - (count * RECURSION_SLEEP_TIME as usize * 1000) as u128;
+            let diff = duration - (count as u32 * RECURSION_PERIOD);
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {diff}, count: {count}"
+                "diff: {diff:?}, count: {count}"
             );
             count += 1;
             if count == RECURSION_EXECUTION_TIMES {

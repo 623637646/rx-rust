@@ -8,9 +8,7 @@ use crate::{
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
-use crate::{
-    safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer, safe_lock_vec_deque,
-};
+use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::{
     collections::VecDeque,
@@ -78,14 +76,14 @@ struct DelayObserver<T, OR, S> {
 }
 
 impl<T, OR, S> DelayObserver<T, OR, S> {
-    fn emit_value_and_setup_timer_if_needed<E>(&self, value: (Instant, Option<T>))
+    fn emit_value_and_setup_timer_if_needed<E>(&self, value: Option<T>)
     where
         T: NecessarySend + 'static,
         OR: Observer<T, E> + NecessarySend + 'static,
         S: Scheduler,
     {
         let mut lock = self.context.lock_mut();
-        lock.values.push_back(value);
+        lock.values.push_back((Instant::now() + self.delay, value));
         if lock.timer.is_some() {
             return;
         }
@@ -93,37 +91,51 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
         let observer = self.observer.clone();
         lock.timer = Some(BoxedDisposal::new(self.scheduler.schedule_recursively(
             move |_| {
-                if let Some((instant, value)) =
-                    safe_lock_vec_deque!(pop_front: context, values)
-                {
-                    if let Some(value) = value {
-                        //  Next
-                        if safe_lock_option_observer!(on_next: observer, value) {
-                            let mut lock = context.lock_mut();
-                            if let Some((next_instant, _)) = lock.values.front() {
-                                // Continue
-                                let delay = next_instant.duration_since(instant);
-                                drop(lock);
-                                RecursionAction::ContinueAfterRevisedDelay(delay)
-                            } else {
-                                // No more values. Stop timer. Set timer to None.
-                                if let Some(timer) = lock.timer.take() {
-                                    drop(lock);
-                                    timer.dispose();
-                                }
-                                RecursionAction::Stop
-                            }
+                // Get values that should be sent
+                let mut lock = context.lock_mut();
+                let mut values_should_be_sent = Vec::new();
+                let now = Instant::now();
+                while let Some((instant, _)) = lock.values.front() {
+                    if now < *instant {
+                        break;
+                    }
+                    values_should_be_sent.push(lock.values.pop_front().unwrap().1);
+                }
+                drop(lock);
+                assert!(!values_should_be_sent.is_empty());
+
+                let mut lock = observer.lock_mut();
+                if let Some(observer) = lock.as_mut() {
+                    // Send values
+                    for value in values_should_be_sent {
+                        if let Some(value) = value {
+                            //  Next
+                            observer.on_next(value);
                         } else {
-                            // Already terminated
-                            RecursionAction::Stop
+                            // Completed
+                            let observer = lock.take().unwrap();
+                            drop(lock);
+                            observer.on_termination(Termination::Completed);
+                            return RecursionAction::Stop;
                         }
+                    }
+                    drop(lock);
+
+                    let mut lock = context.lock_mut();
+                    if let Some((next_instant, _)) = lock.values.front() {
+                        // Continue
+                        RecursionAction::ContinueAt(*next_instant)
                     } else {
-                        // Completed
-                        safe_lock_option_observer!(on_termination: observer, Termination::Completed);
+                        // No more values. Stop timer. Set timer to None.
+                        if let Some(timer) = lock.timer.take() {
+                            drop(lock);
+                            timer.dispose();
+                        }
                         RecursionAction::Stop
                     }
                 } else {
-                    unreachable!()
+                    // Already terminated
+                    RecursionAction::Stop
                 }
             },
             Some(self.delay),
@@ -138,13 +150,13 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        self.emit_value_and_setup_timer_if_needed((Instant::now(), Some(value)));
+        self.emit_value_and_setup_timer_if_needed(Some(value));
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.emit_value_and_setup_timer_if_needed((Instant::now(), None));
+                self.emit_value_and_setup_timer_if_needed(None);
             }
             Termination::Error(_) => {
                 self.context.dispose();

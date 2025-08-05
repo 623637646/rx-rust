@@ -13,24 +13,8 @@ use futures::{Stream, stream::StreamExt};
 use std::time::{Duration, Instant};
 
 pub enum RecursionAction {
-    /// Smart delay with timing correction (recommended)
-    ///
-    /// Delays execution by accounting for timing drift from previous cycles.
-    /// Calculates delay as: ideal_sleep_time + current_value - last_execution_end_time
-    ///
-    /// This corrects accumulated timing errors caused by imprecise system sleep.
-    ContinueAfterRevisedDelay(Duration),
-
-    /// Simple fixed delay
-    ///
-    /// Delays execution by exactly the specified duration from current time.
-    /// No timing correction is applied.
-    ContinueAfterFixedDelay(Duration),
-
-    /// Continue immediately
-    Continue,
-
-    /// Stop execution
+    ContinueAt(Instant),
+    ContinueImmediately,
     Stop,
 }
 
@@ -64,34 +48,19 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
     ) -> impl Disposable + NecessarySend + 'static {
         let this = self.clone();
         self.schedule_future(async move {
-            let mut diff;
             if let Some(delay) = delay {
-                let now = Instant::now();
                 this.clone().sleep(delay).await;
-                diff = now.elapsed() - delay;
-            } else {
-                diff = Duration::ZERO;
             }
             let mut count = 0;
             loop {
-                let now = Instant::now();
                 match task(count) {
-                    RecursionAction::ContinueAfterRevisedDelay(delay) => {
-                        // Using `let delay = delay - diff` will panic with `overflow when subtracting durations`.
-                        let delay = delay.saturating_sub(diff);
-                        this.clone().sleep(delay).await;
-                        diff = now.elapsed() - delay;
+                    RecursionAction::ContinueAt(at) => {
+                        if let Some(delay) = at.checked_duration_since(Instant::now()) {
+                            this.clone().sleep(delay).await;
+                        }
                     }
-                    RecursionAction::ContinueAfterFixedDelay(delay) => {
-                        this.clone().sleep(delay).await;
-                        diff = now.elapsed() - delay;
-                    }
-                    RecursionAction::Continue => {
-                        diff = now.elapsed();
-                    }
-                    RecursionAction::Stop => {
-                        break;
-                    }
+                    RecursionAction::ContinueImmediately => {}
+                    RecursionAction::Stop => break,
                 }
                 count += 1;
             }
@@ -104,13 +73,14 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         period: Duration,
         delay: Option<Duration>,
     ) -> impl Disposable + NecessarySend + 'static {
+        let first = Instant::now() + delay.unwrap_or_default();
         self.schedule_recursively(
             move |count| {
                 let stop = task(count);
                 if stop {
                     RecursionAction::Stop
                 } else {
-                    RecursionAction::ContinueAfterRevisedDelay(period)
+                    RecursionAction::ContinueAt(first + period * (count as u32 + 1))
                 }
             },
             delay,

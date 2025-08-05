@@ -256,6 +256,33 @@ fn test_undisposed_schedule() {
 }
 
 #[test]
+fn test_order_with_continuous_next() {
+    block_on(|runtime| async move {
+        let (tx, rx) = futures::channel::mpsc::unbounded();
+        let stream = rx;
+        let observable = FromStream::new(stream, runtime.clone());
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        let values = (0..100000).collect::<Vec<_>>();
+        for i in &values {
+            tx.unbounded_send(*i).unwrap();
+        }
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), values);
+        assert_eq!(checker.state(), State::Active);
+
+        drop(tx);
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), values);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
 fn test_clone() {
     block_on(|runtime| async move {
         let source = stream::iter(vec![111, 222, 333]);

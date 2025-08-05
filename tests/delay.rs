@@ -2,7 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::RECURSION_EXECUTION_TIMES;
 use crate::tests_utils::RECURSION_EXPECTED_DIFF;
-use crate::tests_utils::RECURSION_SLEEP_TIME;
+use crate::tests_utils::RECURSION_PERIOD;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
@@ -337,13 +337,8 @@ fn test_precision() {
     block_on(|runtime| async move {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
-        let observable = Interval::new(
-            Duration::from_millis(RECURSION_SLEEP_TIME),
-            runtime.clone(),
-            None,
-        );
-        let observable =
-            observable.delay(Duration::from_millis(RECURSION_SLEEP_TIME), runtime.clone());
+        let observable = Interval::new(RECURSION_PERIOD, runtime.clone(), None);
+        let observable = observable.delay(RECURSION_PERIOD, runtime.clone());
         let _subscription = observable.subscribe_with_callback(
             move |_| {
                 tx.unbounded_send(Instant::now()).unwrap();
@@ -354,11 +349,10 @@ fn test_precision() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff =
-                duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME as usize * 1000) as u128;
+            let diff = duration - (count as u32 * RECURSION_PERIOD);
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {diff}, count: {count}"
+                "diff: {diff:?}, count: {count}"
             );
             count += 1;
             if count == RECURSION_EXECUTION_TIMES {
@@ -790,6 +784,41 @@ fn test_undisposed_schedule() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    });
+}
+
+#[test]
+fn test_order_with_continuous_next() {
+    block_on(|runtime| async move {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.delay(Duration::from_millis(100), runtime.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+        let values = (0..100000).collect::<Vec<_>>();
+        for i in &values {
+            sender.on_next(*i);
+        }
+        sender.on_termination(Termination::<Infallible>::Completed);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+
+        runtime.sleep(Duration::from_millis(50)).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+
+        runtime.sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker.values(), values);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
     });
 }
 

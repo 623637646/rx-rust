@@ -24,8 +24,6 @@
 //!
 //! We use this approach: `Clone::clone(&*$lock_name.lock_ref())` instead of `$lock_name.lock_ref().clone()` to do the type checking.
 
-// Common
-
 #[macro_export]
 macro_rules! safe_lock {
     (clone: $lock_name:expr) => {{
@@ -55,8 +53,6 @@ macro_rules! safe_lock {
         std::mem::replace(&mut *$lock_name.lock_mut(), value)
     }};
 }
-
-// Option
 
 #[macro_export]
 macro_rules! safe_lock_option {
@@ -150,8 +146,6 @@ macro_rules! safe_lock_option_disposable {
     }};
 }
 
-// Vec
-
 #[macro_export]
 macro_rules! safe_lock_vec {
     (is_empty: $lock_name:expr) => {{
@@ -168,16 +162,6 @@ macro_rules! safe_lock_vec {
         use $crate::utils::types::MutableHelper;
         let value = $value;
         Vec::push(&mut $lock_name.lock_mut(), value)
-    }};
-}
-
-// VecDeque
-
-#[macro_export]
-macro_rules! safe_lock_vec_deque {
-    (pop_front: $lock_name:expr, $field_name:ident) => {{
-        use $crate::utils::types::MutableHelper;
-        VecDeque::pop_front(&mut $lock_name.lock_mut().$field_name)
     }};
 }
 

@@ -1,9 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::test_runtime::block_on;
-use crate::tests_utils::{
-    RECURSION_EXECUTION_TIMES, RECURSION_EXPECTED_DIFF, RECURSION_SLEEP_TIME,
-};
+use crate::tests_utils::{RECURSION_EXECUTION_TIMES, RECURSION_EXPECTED_DIFF, RECURSION_PERIOD};
 use futures::StreamExt;
 use rx_rust::scheduler::RecursionAction;
 use rx_rust::{disposable::Disposable, scheduler::Scheduler};
@@ -76,6 +74,7 @@ fn test_schedule_recursively_without_delay() {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
+        let first = Instant::now();
         let disposal = runtime.schedule_recursively(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -83,9 +82,7 @@ fn test_schedule_recursively_without_delay() {
                     RecursionAction::Stop
                 } else {
                     tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
-                    RecursionAction::ContinueAfterRevisedDelay(Duration::from_millis(
-                        RECURSION_SLEEP_TIME,
-                    ))
+                    RecursionAction::ContinueAt(first + RECURSION_PERIOD * (index as u32 + 1))
                 }
             },
             None,
@@ -93,11 +90,10 @@ fn test_schedule_recursively_without_delay() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff =
-                duration.as_micros() - (count * RECURSION_SLEEP_TIME as usize * 1000) as u128;
+            let diff = duration - (count as u32 * RECURSION_PERIOD);
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {diff}, count: {count}"
+                "diff: {diff:?}, count: {count}"
             );
             count += 1;
         }
@@ -112,6 +108,7 @@ fn test_schedule_recursively_with_delay() {
         let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
+        let first = Instant::now() + RECURSION_PERIOD;
         let disposal = runtime.schedule_recursively(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -119,21 +116,18 @@ fn test_schedule_recursively_with_delay() {
                     RecursionAction::Stop
                 } else {
                     tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
-                    RecursionAction::ContinueAfterRevisedDelay(Duration::from_millis(
-                        RECURSION_SLEEP_TIME,
-                    ))
+                    RecursionAction::ContinueAt(first + RECURSION_PERIOD * (index as u32 + 1))
                 }
             },
-            Some(Duration::from_millis(RECURSION_SLEEP_TIME)),
+            Some(RECURSION_PERIOD),
         );
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff =
-                duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME as usize * 1000) as u128;
+            let diff = duration - (count as u32 * RECURSION_PERIOD);
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {diff}, count: {count}"
+                "diff: {diff:?}, count: {count}"
             );
             count += 1;
         }
@@ -148,6 +142,8 @@ fn test_schedule_recursively_small_delay() {
     block_on(|runtime| async move {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
+        let small = Duration::from_millis(1);
+        let first = Instant::now() + small;
         let disposal = runtime.schedule_recursively(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -155,10 +151,10 @@ fn test_schedule_recursively_small_delay() {
                     RecursionAction::Stop
                 } else {
                     tx.as_ref().unwrap().unbounded_send(()).unwrap();
-                    RecursionAction::ContinueAfterRevisedDelay(Duration::from_millis(1))
+                    RecursionAction::ContinueAt(first + small * (index as u32 + 1))
                 }
             },
-            Some(Duration::from_millis(1)),
+            Some(small),
         );
         let mut count = 0;
         while (rx.next().await).is_some() {
@@ -184,17 +180,16 @@ fn test_schedule_period_without_delay() {
                     false
                 }
             },
-            Duration::from_millis(RECURSION_SLEEP_TIME),
+            RECURSION_PERIOD,
             None,
         );
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff =
-                duration.as_micros() - (count * RECURSION_SLEEP_TIME as usize * 1000) as u128;
+            let diff = duration - (count as u32 * RECURSION_PERIOD);
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {diff}, count: {count}"
+                "diff: {diff:?}, count: {count}"
             );
             count += 1;
         }
@@ -219,17 +214,16 @@ fn test_schedule_period_with_delay() {
                     false
                 }
             },
-            Duration::from_millis(RECURSION_SLEEP_TIME),
-            Some(Duration::from_millis(RECURSION_SLEEP_TIME)),
+            RECURSION_PERIOD,
+            Some(RECURSION_PERIOD),
         );
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff =
-                duration.as_micros() - ((count + 1) * RECURSION_SLEEP_TIME as usize * 1000) as u128;
+            let diff = duration - (count as u32 * RECURSION_PERIOD);
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
-                "diff: {diff}, count: {count}"
+                "diff: {diff:?}, count: {count}"
             );
             count += 1;
         }

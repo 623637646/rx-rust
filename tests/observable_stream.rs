@@ -371,6 +371,38 @@ fn test_undisposed_schedule() {
 }
 
 #[test]
+fn test_order_with_continuous_next() {
+    block_on(|runtime| async move {
+        let mut subject = PublishSubject::default();
+
+        // Custom operations
+        let observable = subject.clone();
+        let stream = observable.into_stream();
+
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        let values = (0..100000).collect::<Vec<_>>();
+        for i in &values {
+            subject.on_next(*i);
+        }
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), values);
+        assert_eq!(checker.state(), State::Active);
+
+        subject.on_termination(Termination::<Infallible>::Completed);
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), values);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;

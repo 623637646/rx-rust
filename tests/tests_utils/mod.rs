@@ -5,6 +5,7 @@ pub(crate) mod test_runtime;
 pub(crate) mod test_scheduler;
 pub(crate) mod test_struct;
 
-pub(crate) const RECURSION_EXECUTION_TIMES: usize = 200;
-pub(crate) const RECURSION_EXPECTED_DIFF: u128 = 20_000;
-pub(crate) const RECURSION_SLEEP_TIME: u64 = 10;
+use std::time::Duration;
+pub(crate) const RECURSION_EXECUTION_TIMES: usize = 400;
+pub(crate) const RECURSION_EXPECTED_DIFF: Duration = Duration::from_millis(20);
+pub(crate) const RECURSION_PERIOD: Duration = Duration::from_millis(5);
