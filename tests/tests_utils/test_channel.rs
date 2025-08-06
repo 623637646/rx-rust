@@ -82,15 +82,13 @@ where
         }
 
         Subscription::new_with_disposal_callback(move || {
-            let change = match &*self.0.lock_ref() {
+            let mut lock = self.0.lock_mut();
+            match &*lock {
                 State::Initialized => panic!(),
-                State::Subscribed(_) => true,
-                State::Terminated(_) => false,
+                State::Subscribed(_) => *lock = State::Unsubscribed,
+                State::Terminated(_) => {}
                 State::Unsubscribed => panic!(),
             };
-            if change {
-                safe_lock!(set: self.0, State::Unsubscribed);
-            }
         })
     }
 }

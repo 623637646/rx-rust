@@ -8,15 +8,15 @@ use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};
 use futures::{FutureExt, StreamExt};
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
-use rx_rust::safe_lock;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::observable_ext::ObservableExt,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, others::observable_stream::ObservableStream},
     subject::publish_subject::PublishSubject,
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -58,25 +58,25 @@ fn test_completed() {
 #[test]
 fn test_completed_lazy_subscription() {
     block_on(|runtime| async move {
-        let subscribed = Shared::new(Mutable::new(false));
+        let subscribed = Shared::new(AtomicBool::new(false));
         let subscribed_cloned = subscribed.clone();
         let observable = Create::new(move |mut observer| {
-            safe_lock!(set: subscribed_cloned, true);
+            subscribed_cloned.store(true, Ordering::SeqCst);
             observer.on_next(111);
             observer.on_termination(Termination::Completed);
             Subscription::default()
         });
 
         let stream = observable.into_stream();
-        assert!(!*subscribed.lock_ref());
+        assert!(!subscribed.load(Ordering::SeqCst));
 
         runtime.sleep(Duration::from_millis(10)).await;
-        assert!(!*subscribed.lock_ref());
+        assert!(!subscribed.load(Ordering::SeqCst));
 
         let (checker, _subscription) =
             Checker::<_, Infallible>::from_stream(stream, runtime.clone());
         runtime.sleep(Duration::from_millis(10)).await;
-        assert!(*subscribed.lock_ref());
+        assert!(subscribed.load(Ordering::SeqCst));
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
