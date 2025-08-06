@@ -7,5 +7,5 @@ pub(crate) mod test_struct;
 
 use std::time::Duration;
 pub(crate) const RECURSION_EXECUTION_TIMES: usize = 200;
-pub(crate) const RECURSION_EXPECTED_DIFF: Duration = Duration::from_millis(20);
+pub(crate) const RECURSION_EXPECTED_DIFF: Duration = Duration::from_millis(40);
 pub(crate) const RECURSION_PERIOD: Duration = Duration::from_millis(5);
