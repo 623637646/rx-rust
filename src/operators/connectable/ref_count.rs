@@ -1,6 +1,7 @@
-use super::{Observable, connectable_observable::ConnectableObservable};
+use super::connectable_observable::ConnectableObservable;
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
+use crate::observable::Observable;
 use crate::observer::Observer;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use educe::Educe;

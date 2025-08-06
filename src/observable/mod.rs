@@ -1,7 +1,5 @@
 pub mod boxed_observable;
-pub mod connectable_observable;
 pub mod observable_ext;
-pub mod ref_count_observable;
 
 use crate::{
     disposable::subscription::Subscription, observer::Observer, utils::types::NecessarySend,

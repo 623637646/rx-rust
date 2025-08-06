@@ -1,4 +1,5 @@
-use super::{Observable, ref_count_observable::RefCount};
+use super::ref_count::RefCount;
+use crate::observable::Observable;
 use crate::safe_lock_option;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};

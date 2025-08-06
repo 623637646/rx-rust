@@ -5,12 +5,13 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::connectable::ref_count::RefCount;
 use rx_rust::safe_lock;
 use rx_rust::safe_lock_option_disposable;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt, ref_count_observable::RefCount},
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
     subject::publish_subject::PublishSubject,

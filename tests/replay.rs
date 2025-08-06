@@ -5,10 +5,9 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::connectable::connectable_observable::ConnectableObservable;
 use rx_rust::{
-    observable::{
-        Observable, connectable_observable::ConnectableObservable, observable_ext::ObservableExt,
-    },
+    observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
     subject::replay_subject::ReplaySubject,

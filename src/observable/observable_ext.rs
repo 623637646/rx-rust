@@ -1,7 +1,4 @@
-use super::{
-    Observable, boxed_observable::BoxedObservable, connectable_observable::ConnectableObservable,
-    ref_count_observable::RefCount,
-};
+use super::{Observable, boxed_observable::BoxedObservable};
 use crate::{
     disposable::subscription::Subscription,
     observer::{
@@ -13,6 +10,7 @@ use crate::{
             merge_all::MergeAll, switch::Switch, zip::Zip,
         },
         conditional_boolean::take_until::TakeUntil,
+        connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
             catch_error::CatchError,
             retry::{Retry, RetryAction},
