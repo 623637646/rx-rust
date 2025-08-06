@@ -42,17 +42,13 @@ where
             State::Unsubscribed => panic!("Already Unsubscribed"),
         };
         drop(lock);
-        self.source.subscribe(observer) + RefCountDisposal { state: self.state }
+        self.source.subscribe(observer) + self.state
     }
 }
 
-struct RefCountDisposal<'sub> {
-    state: Shared<Mutable<State<'sub>>>,
-}
-
-impl Disposable for RefCountDisposal<'_> {
+impl Disposable for Shared<Mutable<State<'_>>> {
     fn dispose(self) {
-        let mut lock = self.state.lock_mut();
+        let mut lock = self.lock_mut();
         match &mut *lock {
             State::Initialized => unreachable!(),
             State::Subscribed(count, _) => {
