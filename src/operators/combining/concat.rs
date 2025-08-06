@@ -1,4 +1,3 @@
-use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
 use crate::safe_lock_option;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
@@ -38,7 +37,7 @@ where
             source_2: self.source_2,
             sub_2: sub_2.clone(),
         };
-        self.source_1.subscribe(onserver) + SharedDisposal::new(sub_2)
+        self.source_1.subscribe(onserver) + sub_2
     }
 }
 

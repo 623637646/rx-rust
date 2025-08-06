@@ -1,6 +1,5 @@
 use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
 use crate::safe_lock_option_disposable;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
@@ -45,7 +44,7 @@ where
             time_span: self.time_span,
             scheduler: self.scheduler,
             disposal: disposal.clone(),
-        }) + SharedDisposal::new(disposal)
+        }) + disposal
     }
 }
 
