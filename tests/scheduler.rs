@@ -15,10 +15,11 @@ fn test_schedule_without_delay() {
             tx.send(()).unwrap();
         };
         let start_time = Instant::now();
-        let _disposal = runtime.schedule(task, None);
+        let disposal = runtime.schedule(task, None);
         assert!(rx.await.is_ok());
         let elapsed_time = start_time.elapsed();
         assert!(elapsed_time < Duration::from_millis(10));
+        disposal.dispose();
     });
 }
 
@@ -30,11 +31,12 @@ fn test_schedule_with_delay() {
             tx.send(()).unwrap();
         };
         let start_time = Instant::now();
-        let _disposal = runtime.schedule(task, Some(Duration::from_millis(100)));
+        let disposal = runtime.schedule(task, Some(Duration::from_millis(100)));
         assert!(rx.await.is_ok());
         let elapsed_time = start_time.elapsed();
         assert!(elapsed_time >= Duration::from_millis(100));
         assert!(elapsed_time < Duration::from_millis(110));
+        disposal.dispose();
     });
 }
 
