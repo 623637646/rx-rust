@@ -80,8 +80,6 @@ where
         if safe_lock_option!(is_none: self.observer) {
             return;
         }
-        let mut lock = self.context.lock_mut();
-        lock.current_value = Some(value);
 
         let context = self.context.clone();
         let observer = self.observer.clone();
@@ -94,6 +92,8 @@ where
             Some(self.time_span),
         );
 
+        let mut lock = self.context.lock_mut();
+        lock.current_value = Some(value);
         if let Some(disposal) = lock.timer.replace(BoxedDisposal::new(disposal)) {
             drop(lock);
             disposal.dispose();

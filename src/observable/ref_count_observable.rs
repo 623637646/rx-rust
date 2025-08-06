@@ -36,10 +36,7 @@ where
         let mut lock = self.state.lock_mut();
         match &mut *lock {
             State::Initialized => {
-                _ = std::mem::replace(
-                    &mut *lock,
-                    State::Subscribed(1, self.source.clone().connect()),
-                );
+                *lock = State::Subscribed(1, self.source.clone().connect());
             }
             State::Subscribed(count, _) => *count += 1,
             State::Unsubscribed => panic!("Already Unsubscribed"),

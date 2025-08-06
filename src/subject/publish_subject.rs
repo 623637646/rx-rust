@@ -111,15 +111,11 @@ where
                     .values_mut()
                     .for_each(|observer| observer.on_next(value.clone()));
 
-                // Will reset to Idle
-                let mut lock = self.0.lock_mut();
-                match std::mem::replace(
-                    &mut *lock,
-                    State::Processing(ProcessedAction::Continue(Vec::new())), // Set to "Zero Processing" first. Correct it later.
-                ) {
+                // Will reset to Idle, set to "Zero Processing" first. Correct it later.
+                match safe_lock!(mem_replace: self.0, State::Processing(ProcessedAction::Continue(Vec::new())))
+                {
                     State::Idle(_) => unreachable!(),
                     State::Processing(processed_action) => {
-                        drop(lock);
                         match processed_action {
                             ProcessedAction::Continue(actions) => {
                                 for action in actions {
@@ -180,7 +176,7 @@ where
             },
             State::Terminated(termination) => {
                 // It's already terminated. revert
-                _ = std::mem::replace(&mut *lock, State::Terminated(termination));
+                *lock = State::Terminated(termination);
             }
         }
     }
@@ -197,14 +193,11 @@ where
             State::Processing(processed_action) => {
                 assert!(matches!(processed_action, ProcessedAction::Continue(_)));
                 // revert
-                _ = std::mem::replace(
-                    &mut *lock,
-                    State::Processing(ProcessedAction::Terminate(termination)),
-                );
+                *lock = State::Processing(ProcessedAction::Terminate(termination));
             }
             State::Terminated(termination) => {
                 // revert
-                _ = std::mem::replace(&mut *lock, State::Terminated(termination));
+                *lock = State::Terminated(termination);
             }
         }
     }
@@ -261,13 +254,11 @@ struct PublishSubjectInsertStateDisposal<'or, T, E> {
 
 impl<T, E> Disposable for PublishSubjectInsertStateDisposal<'_, T, E> {
     fn dispose(self) {
-        let mut lock = self.insert_state.lock_mut();
-        match std::mem::replace(&mut *lock, ObserverActionInsertState::Cancelled) {
+        match safe_lock!(mem_replace: self.insert_state, ObserverActionInsertState::Cancelled) {
             ObserverActionInsertState::BeforeInserted(_) => {
                 // Unsubscribed before the observer was inserted
             }
             ObserverActionInsertState::Inserted(key) => {
-                drop(lock);
                 match &mut *self.state.lock_mut() {
                     State::Idle(observers) => {
                         observers.remove(key);
