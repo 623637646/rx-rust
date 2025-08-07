@@ -1,6 +1,6 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -84,44 +84,23 @@ impl<OE1> Disposable for Shared<Mutable<ConcatAllContext<'_, OE1>>> {
     }
 }
 
-struct ConcatAllObserver<'sub, T, OR, OE1> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<ConcatAllContext<'sub, OE1>>>,
-    _marker: MarkerType<T>,
-}
-
 fn subscribe_next<'or, 'sub, T, E, OR, OE1>(
+    lock: Option<MutGuard<'_, ConcatAllContext<'sub, OE1>>>,
     context: Shared<Mutable<ConcatAllContext<'sub, OE1>>>,
     observer: Shared<Mutable<Option<OR>>>,
-    observable: Option<OE1>,
 ) where
     OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
     'sub: 'or,
 {
-    let mut lock = context.lock_mut();
-    if let Some(observable) = observable {
-        lock.pending_observables.push_back(observable);
-        if lock.on_going_sub.is_some() {
-            return;
-        }
-    }
+    let mut lock = lock.unwrap_or_else(|| context.lock_mut());
     if let Some(observable) = lock.pending_observables.pop_front() {
         drop(lock);
         let terminated = Shared::new(AtomicBool::new(false));
-        let terminated_cloned = terminated.clone();
-        let context_cloned = context.clone();
         let observer = ConcatAllInnerObserver {
             observer: observer.clone(),
-            termination_callback: move |termination| {
-                terminated_cloned.store(true, Ordering::SeqCst);
-                match termination {
-                    Termination::Completed => subscribe_next(context_cloned, observer, None),
-                    Termination::Error(_) => {
-                        safe_lock_option_observer!(on_termination: observer, termination);
-                    }
-                }
-            },
+            context: context.clone(),
+            terminated: terminated.clone(),
         };
         let sub = observable.subscribe(observer);
         if !terminated.load(Ordering::SeqCst) {
@@ -135,6 +114,12 @@ fn subscribe_next<'or, 'sub, T, E, OR, OE1>(
     }
 }
 
+struct ConcatAllObserver<'sub, T, OR, OE1> {
+    observer: Shared<Mutable<Option<OR>>>,
+    context: Shared<Mutable<ConcatAllContext<'sub, OE1>>>,
+    _marker: MarkerType<T>,
+}
+
 impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for ConcatAllObserver<'sub, T, OR, OE1>
 where
     OR: Observer<T, E> + NecessarySend + 'or,
@@ -142,7 +127,12 @@ where
     'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        subscribe_next(self.context.clone(), self.observer.clone(), Some(value));
+        let mut lock = self.context.lock_mut();
+        lock.pending_observables.push_back(value);
+        if lock.on_going_sub.is_some() {
+            return;
+        }
+        subscribe_next(Some(lock), self.context.clone(), self.observer.clone());
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -162,21 +152,29 @@ where
     }
 }
 
-struct ConcatAllInnerObserver<OR, F> {
+struct ConcatAllInnerObserver<'sub, OR, OE1> {
     observer: Shared<Mutable<Option<OR>>>,
-    termination_callback: F,
+    context: Shared<Mutable<ConcatAllContext<'sub, OE1>>>,
+    terminated: Shared<AtomicBool>,
 }
 
-impl<T, E, OR, F> Observer<T, E> for ConcatAllInnerObserver<OR, F>
+impl<'or, 'sub, T, E, OR, OE1> Observer<T, E> for ConcatAllInnerObserver<'sub, OR, OE1>
 where
-    OR: Observer<T, E>,
-    F: FnOnce(Termination<E>),
+    OR: Observer<T, E> + NecessarySend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
+    'sub: 'or,
 {
     fn on_next(&mut self, value: T) {
         safe_lock_option_observer!(on_next: self.observer, value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        (self.termination_callback)(termination);
+        self.terminated.store(true, Ordering::SeqCst);
+        match termination {
+            Termination::Completed => subscribe_next(None, self.context, self.observer),
+            Termination::Error(_) => {
+                safe_lock_option_observer!(on_termination: self.observer, termination);
+            }
+        }
     }
 }
