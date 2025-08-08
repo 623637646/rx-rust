@@ -74,24 +74,26 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, latest_1: T1) {
-        let mut lock = self.context.lock_mut();
-        lock.latest_1 = Some(latest_1.clone());
-        if let Some(latest_2) = lock.latest_2.clone() {
-            drop(lock);
-            safe_lock_option_observer!(on_next: self.observer, (latest_1, latest_2));
-        }
+        self.context.lock_mut(|mut lock| {
+            lock.latest_1 = Some(latest_1.clone());
+            if let Some(latest_2) = lock.latest_2.clone() {
+                drop(lock);
+                safe_lock_option_observer!(on_next: self.observer, (latest_1, latest_2));
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let mut lock = self.context.lock_mut();
-                if lock.should_completed || lock.latest_1.is_none() {
-                    drop(lock);
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                } else {
-                    lock.should_completed = true;
-                }
+                self.context.lock_mut(|mut lock| {
+                    if lock.should_completed || lock.latest_1.is_none() {
+                        drop(lock);
+                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                    } else {
+                        lock.should_completed = true;
+                    }
+                });
             }
             Termination::Error(_) => {
                 safe_lock_option_observer!(on_termination: self.observer, termination);
@@ -112,24 +114,26 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, latest_2: T2) {
-        let mut lock = self.context.lock_mut();
-        lock.latest_2 = Some(latest_2.clone());
-        if let Some(latest_1) = lock.latest_1.clone() {
-            drop(lock);
-            safe_lock_option_observer!(on_next: self.observer, (latest_1, latest_2));
-        }
+        self.context.lock_mut(|mut lock| {
+            lock.latest_2 = Some(latest_2.clone());
+            if let Some(latest_1) = lock.latest_1.clone() {
+                drop(lock);
+                safe_lock_option_observer!(on_next: self.observer, (latest_1, latest_2));
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let mut lock = self.context.lock_mut();
-                if lock.should_completed || lock.latest_2.is_none() {
-                    drop(lock);
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                } else {
-                    lock.should_completed = true;
-                }
+                self.context.lock_mut(|mut lock| {
+                    if lock.should_completed || lock.latest_2.is_none() {
+                        drop(lock);
+                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                    } else {
+                        lock.should_completed = true;
+                    }
+                });
             }
             Termination::Error(_) => {
                 safe_lock_option_observer!(on_termination: self.observer, termination);

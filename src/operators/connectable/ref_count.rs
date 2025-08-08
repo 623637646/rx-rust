@@ -34,23 +34,23 @@ where
     S: Observable<'or, 'sub, T, E> + Observer<T, E> + NecessarySend + 'or + Clone,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        let mut lock = self.state.lock_mut();
-        match &mut *lock {
-            State::Initialized => {
-                *lock = State::Subscribed(1, self.source.clone().connect());
-            }
-            State::Subscribed(count, _) => *count += 1,
-            State::Unsubscribed => panic!("Already Unsubscribed"),
-        };
-        drop(lock);
-        self.source.subscribe(observer) + self.state
+        self.state.lock_mut(|mut lock| {
+            match &mut *lock {
+                State::Initialized => {
+                    *lock = State::Subscribed(1, self.source.clone().connect());
+                }
+                State::Subscribed(count, _) => *count += 1,
+                State::Unsubscribed => panic!("Already Unsubscribed"),
+            };
+            drop(lock);
+            self.source.subscribe(observer) + self.state.clone()
+        })
     }
 }
 
 impl Disposable for Shared<Mutable<State<'_>>> {
     fn dispose(self) {
-        let mut lock = self.lock_mut();
-        match &mut *lock {
+        self.lock_mut(|mut lock| match &mut *lock {
             State::Initialized => unreachable!(),
             State::Subscribed(count, _) => {
                 *count -= 1;
@@ -67,6 +67,6 @@ impl Disposable for Shared<Mutable<State<'_>>> {
                 }
             }
             State::Unsubscribed => unreachable!(),
-        };
+        });
     }
 }

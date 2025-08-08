@@ -8,8 +8,8 @@ use std::marker::PhantomData;
 pub type MarkerType<T> = PhantomData<fn(T) -> T>;
 
 pub trait MutableHelper<T> {
-    fn lock_mut(&self) -> MutGuard<'_, T>;
-    fn lock_ref(&self) -> RefGuard<'_, T>;
+    fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R;
+    fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R;
 }
 
 cfg_if::cfg_if! {
@@ -23,11 +23,11 @@ cfg_if::cfg_if! {
         pub type MutGuard<'a, T> = RefMut<'a, T>;
         pub type RefGuard<'a, T> = Ref<'a, T>;
         impl<T> MutableHelper<T> for RefCell<T> {
-            fn lock_mut(&self) -> MutGuard<'_, T> {
-                self.borrow_mut()
+            fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) ->R {
+                callback(self.borrow_mut())
             }
-            fn lock_ref(&self) -> RefGuard<'_, T> {
-                self.borrow()
+            fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) ->R) ->R {
+                callback(self.borrow())
             }
         }
         pub trait NecessarySend {}
@@ -38,6 +38,11 @@ cfg_if::cfg_if! {
         pub type Shared<T> = Arc<T>;
         pub type Mutable<T> = Mutex<T>;
         pub struct ReadOnlyMutexGuard<'a, T: ?Sized + 'a>(MutexGuard<'a, T>);
+        impl<'a, T> ReadOnlyMutexGuard<'a, T> {
+            pub fn new(guard: MutexGuard<'a, T>) -> Self {
+                Self(guard)
+            }
+        }
         impl<T: ?Sized> Deref for ReadOnlyMutexGuard<'_, T> {
             type Target = T;
             fn deref(&self) -> &T {
@@ -47,11 +52,11 @@ cfg_if::cfg_if! {
         pub type MutGuard<'a, T> = MutexGuard<'a, T>;
         pub type RefGuard<'a, T> = ReadOnlyMutexGuard<'a, T>;
         impl<T> MutableHelper<T> for Mutex<T> {
-            fn lock_mut(&self) -> MutGuard<'_, T> {
-                self.lock().unwrap()
+            fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) ->R {
+                callback(self.lock().unwrap())
             }
-            fn lock_ref(&self) -> RefGuard<'_, T> {
-                ReadOnlyMutexGuard(self.lock().unwrap())
+            fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) ->R) ->R {
+                callback(ReadOnlyMutexGuard(self.lock().unwrap()))
             }
         }
         pub trait NecessarySend: Send {}

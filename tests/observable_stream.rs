@@ -1,5 +1,4 @@
 #![cfg(feature = "futures")]
-
 mod tests_utils;
 
 use crate::tests_utils::checker::State;

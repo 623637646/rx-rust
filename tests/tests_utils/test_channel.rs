@@ -1,3 +1,4 @@
+use crate::tests_utils::types::TestMutableHelper;
 use educe::Educe;
 use rx_rust::{
     disposable::subscription::Subscription,
@@ -42,12 +43,12 @@ where
         };
 
         observer.on_next(value);
-        match &mut *self.0.lock_mut() {
+        self.0.lock_mut(|mut lock| match &mut *lock {
             State::Initialized => panic!(),
             State::Subscribed(boxed_observer) => *boxed_observer = Some(observer),
             State::Terminated(_) => panic!(),
             State::Unsubscribed => {}
-        };
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -82,13 +83,12 @@ where
         }
 
         Subscription::new_with_disposal_callback(move || {
-            let mut lock = self.0.lock_mut();
-            match &*lock {
+            self.0.lock_mut(|mut lock| match &*lock {
                 State::Initialized => panic!(),
                 State::Subscribed(_) => *lock = State::Unsubscribed,
                 State::Terminated(_) => {}
                 State::Unsubscribed => panic!(),
-            };
+            });
         })
     }
 }
@@ -112,7 +112,7 @@ impl<T, E> ChannelChecker<'_, T, E> {
     where
         E: Clone,
     {
-        match &*self.0.lock_ref() {
+        match &*self.0.test_lock_ref() {
             State::Initialized => ChannelState::Initialized,
             State::Subscribed(_) => ChannelState::Subscribed,
             State::Terminated(termination) => match termination {

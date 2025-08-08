@@ -16,13 +16,13 @@ impl Scheduler for TestRuntime {
         let future = async move {
             future.await;
             if let Some(entry) = weak_entry.upgrade() {
-                entry.lock_mut().exit();
+                entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
             }
         };
         let handle = self.spawn(future);
         CallbackDisposal::new(move || {
             handle.abort();
-            entry.lock_mut().exit();
+            entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
         })
     }
 

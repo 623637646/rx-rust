@@ -102,24 +102,26 @@ where
         };
         let sub = value.subscribe(observer);
 
-        let mut lock = self.context.lock_mut();
-        if lock.subscriptions.contains_key(key) {
-            lock.subscriptions[key] = sub;
-        } else {
-            // already terminated
-        }
+        self.context.lock_mut(|mut lock| {
+            if lock.subscriptions.contains_key(key) {
+                lock.subscriptions[key] = sub;
+            } else {
+                // already terminated
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let mut lock = self.context.lock_mut();
-                if lock.subscriptions.is_empty() {
-                    drop(lock);
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                } else {
-                    lock.terminated = true;
-                }
+                self.context.lock_mut(|mut lock| {
+                    if lock.subscriptions.is_empty() {
+                        drop(lock);
+                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                    } else {
+                        lock.terminated = true;
+                    }
+                });
             }
             Termination::Error(_) => {
                 safe_lock_option_observer!(on_termination: self.observer, termination);
@@ -143,19 +145,20 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut lock = self.context.lock_mut();
-        lock.subscriptions.remove(self.key);
-        match termination {
-            Termination::Completed => {
-                if lock.terminated && lock.subscriptions.is_empty() {
+        self.context.lock_mut(|mut lock| {
+            lock.subscriptions.remove(self.key);
+            match termination {
+                Termination::Completed => {
+                    if lock.terminated && lock.subscriptions.is_empty() {
+                        drop(lock);
+                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                    }
+                }
+                Termination::Error(_) => {
                     drop(lock);
                     safe_lock_option_observer!(on_termination: self.observer, termination);
                 }
             }
-            Termination::Error(_) => {
-                drop(lock);
-                safe_lock_option_observer!(on_termination: self.observer, termination);
-            }
-        }
+        });
     }
 }

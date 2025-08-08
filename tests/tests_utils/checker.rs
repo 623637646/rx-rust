@@ -78,12 +78,11 @@ impl<T, E> CheckerObserver<T, E> {
 
 impl<T, E> Drop for CheckerObserver<T, E> {
     fn drop(&mut self) {
-        let mut lock = self.state.lock_mut();
-        match &*lock {
+        self.state.lock_mut(|mut lock| match &*lock {
             State::Active => *lock = State::Dropped,
             State::Completed | State::Error(_) => {}
             State::Dropped => panic!(),
-        }
+        })
     }
 }
 
@@ -140,12 +139,11 @@ impl<T> Checker<T, Infallible> {
             },
             Subscription::new_with_disposal_callback(move || {
                 handle.abort();
-                let mut lock = state.lock_mut();
-                match &*lock {
+                state.lock_mut(|mut lock| match &*lock {
                     State::Active => *lock = State::Dropped,
                     State::Completed | State::Error(_) => {}
                     State::Dropped => panic!(),
-                }
+                });
             }),
         )
     }

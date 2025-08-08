@@ -102,23 +102,25 @@ where
             context: self.context.clone(),
         };
         let sub = value.subscribe(observer);
-        let mut lock = self.context.lock_mut();
-        if lock.on_going_sub.is_some() {
-            lock.on_going_sub = Some(sub);
-        } else {
-            // already terminated
-        }
+        self.context.lock_mut(|mut lock| {
+            if lock.on_going_sub.is_some() {
+                lock.on_going_sub = Some(sub);
+            } else {
+                // already terminated
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let mut lock = self.context.lock_mut();
-                lock.completed = true;
-                if lock.on_going_sub.is_none() {
-                    drop(lock);
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                self.context.lock_mut(|mut lock| {
+                    lock.completed = true;
+                    if lock.on_going_sub.is_none() {
+                        drop(lock);
+                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                    }
+                });
             }
             Termination::Error(_) => {
                 safe_lock_option_observer!(on_termination: self.observer, termination);
@@ -143,14 +145,15 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let mut lock = self.context.lock_mut();
-                if lock.completed {
-                    drop(lock);
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                } else if let Some(on_going_sub) = lock.on_going_sub.take() {
-                    drop(lock);
-                    on_going_sub.dispose();
-                }
+                self.context.lock_mut(|mut lock| {
+                    if lock.completed {
+                        drop(lock);
+                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                    } else if let Some(on_going_sub) = lock.on_going_sub.take() {
+                        drop(lock);
+                        on_going_sub.dispose();
+                    }
+                });
             }
             Termination::Error(_) => {
                 safe_lock_option_observer!(on_termination: self.observer, termination);

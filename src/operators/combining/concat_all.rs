@@ -93,24 +93,30 @@ fn subscribe_next<'or, 'sub, T, E, OR, OE1>(
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
     'sub: 'or,
 {
-    let mut lock = lock.unwrap_or_else(|| context.lock_mut());
-    if let Some(observable) = lock.pending_observables.pop_front() {
-        drop(lock);
-        let terminated = Shared::new(AtomicBool::new(false));
-        let observer = ConcatAllInnerObserver {
-            observer: observer.clone(),
-            context: context.clone(),
-            terminated: terminated.clone(),
-        };
-        let sub = observable.subscribe(observer);
-        if !terminated.load(Ordering::SeqCst) {
-            safe_lock_option!(replace: context, on_going_sub, sub);
+    let implementation = |mut lock: MutGuard<'_, ConcatAllContext<'sub, OE1>>| {
+        if let Some(observable) = lock.pending_observables.pop_front() {
+            drop(lock);
+            let terminated = Shared::new(AtomicBool::new(false));
+            let observer = ConcatAllInnerObserver {
+                observer: observer.clone(),
+                context: context.clone(),
+                terminated: terminated.clone(),
+            };
+            let sub = observable.subscribe(observer);
+            if !terminated.load(Ordering::SeqCst) {
+                safe_lock_option!(replace: context, on_going_sub, sub);
+            }
+        } else if lock.completed {
+            drop(lock);
+            safe_lock_option_observer!(on_termination: observer, Termination::Completed);
+        } else {
+            lock.on_going_sub.take();
         }
-    } else if lock.completed {
-        drop(lock);
-        safe_lock_option_observer!(on_termination: observer, Termination::Completed);
+    };
+    if let Some(lock) = lock {
+        implementation(lock);
     } else {
-        lock.on_going_sub.take();
+        context.lock_mut(implementation);
     }
 }
 
@@ -127,23 +133,24 @@ where
     'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let mut lock = self.context.lock_mut();
-        lock.pending_observables.push_back(value);
-        if lock.on_going_sub.is_some() {
-            return;
-        }
-        subscribe_next(Some(lock), self.context.clone(), self.observer.clone());
+        self.context.lock_mut(|mut lock| {
+            lock.pending_observables.push_back(value);
+            if lock.on_going_sub.is_none() {
+                subscribe_next(Some(lock), self.context.clone(), self.observer.clone());
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let mut lock = self.context.lock_mut();
-                lock.completed = true;
-                if lock.on_going_sub.is_none() && lock.pending_observables.is_empty() {
-                    drop(lock);
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                self.context.lock_mut(|mut lock| {
+                    lock.completed = true;
+                    if lock.on_going_sub.is_none() && lock.pending_observables.is_empty() {
+                        drop(lock);
+                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                    }
+                });
             }
             Termination::Error(_) => {
                 safe_lock_option_observer!(on_termination: self.observer, termination);

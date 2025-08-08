@@ -69,8 +69,7 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, value: T1) {
-        let mut lock = self.buffer.lock_mut();
-        match &mut *lock {
+        self.buffer.lock_mut(|mut lock| match &mut *lock {
             ZipObserverBufferState::None => {
                 *lock = ZipObserverBufferState::One(VecDeque::from([value]));
             }
@@ -85,7 +84,7 @@ where
                 drop(lock);
                 safe_lock_option_observer!(on_next: self.observer, (value, item));
             }
-        }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -103,8 +102,7 @@ where
     OR: Observer<(T1, T2), E>,
 {
     fn on_next(&mut self, value: T2) {
-        let mut lock = self.buffer.lock_mut();
-        match &mut *lock {
+        self.buffer.lock_mut(|mut lock| match &mut *lock {
             ZipObserverBufferState::None => {
                 *lock = ZipObserverBufferState::Two(VecDeque::from([value]));
             }
@@ -119,7 +117,7 @@ where
             ZipObserverBufferState::Two(items) => {
                 items.push_back(value);
             }
-        }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {

@@ -77,45 +77,47 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
         }
         let context = self.context.clone();
         let observer = self.observer.clone();
-        lock.disposal.replace(BoxedDisposal::new(self.scheduler.schedule_recursively(
-            move |_| {
-                let mut lock = context.lock_mut();
-                let termination = lock.termination.take();
-                let values = std::mem::take(&mut lock.values);
-                if termination.is_none() && values.is_empty() {
-                    lock.disposal = None;
-                    return RecursionAction::Stop;
-                }
-                drop(lock);
-
-                match termination {
-                    None => {
-                        if !values.is_empty() {
-                            safe_lock_option_observer!(on_next: observer, values: values);
-                            RecursionAction::ContinueImmediately
-                        } else {
-                            unreachable!();
+        lock.disposal
+            .replace(BoxedDisposal::new(self.scheduler.schedule_recursively(
+                move |_| {
+                    context.lock_mut(|mut lock| {
+                        let termination = lock.termination.take();
+                        let values = std::mem::take(&mut lock.values);
+                        if termination.is_none() && values.is_empty() {
+                            lock.disposal = None; // No more values. Stop scheduler. Set disposal to None.
+                            return RecursionAction::Stop;
                         }
-                    }
-                    Some(termination) => {
+                        drop(lock);
+
                         match termination {
-                            Termination::Completed => {
-                                if values.is_empty() {
-                                    safe_lock_option_observer!(on_termination: observer, Termination::Completed);
+                            None => {
+                                if !values.is_empty() {
+                                    safe_lock_option_observer!(on_next: observer, values: values);
+                                    RecursionAction::ContinueImmediately
                                 } else {
-                                    safe_lock_option_observer!(on_next_and_termination: observer, values: values, Termination::Completed);
+                                    unreachable!();
                                 }
                             }
-                            Termination::Error(error) => {
-                                safe_lock_option_observer!(on_termination: observer, Termination::Error(error));
+                            Some(termination) => {
+                                match termination {
+                                    Termination::Completed => {
+                                        if values.is_empty() {
+                                            safe_lock_option_observer!(on_termination: observer, Termination::Completed);
+                                        } else {
+                                            safe_lock_option_observer!(on_next_and_termination: observer, values: values, Termination::Completed);
+                                        }
+                                    }
+                                    Termination::Error(error) => {
+                                        safe_lock_option_observer!(on_termination: observer, Termination::Error(error));
+                                    }
+                                }
+                                RecursionAction::Stop
                             }
                         }
-                        RecursionAction::Stop
-                    }
-                }
-            },
-            None,
-        )));
+                    })
+                },
+                None,
+            )));
     }
 }
 
@@ -127,14 +129,16 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let mut lock = self.context.lock_mut();
-        lock.values.push(value);
-        self.setup_scheduler_if_needed(lock);
+        self.context.lock_mut(|mut lock| {
+            lock.values.push(value);
+            self.setup_scheduler_if_needed(lock);
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut lock = self.context.lock_mut();
-        lock.termination.replace(termination);
-        self.setup_scheduler_if_needed(lock);
+        self.context.lock_mut(|mut lock| {
+            lock.termination.replace(termination);
+            self.setup_scheduler_if_needed(lock);
+        });
     }
 }

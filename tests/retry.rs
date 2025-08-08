@@ -4,9 +4,11 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::{ChannelChecker, ReceiverObservable, SenderObserver};
 use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
-use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
+use rx_rust::safe_lock_option;
+use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -16,7 +18,7 @@ use rx_rust::{
     },
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock, safe_lock_option_observer, safe_lock_vec};
+use rx_rust::{safe_lock_option_observer, safe_lock_vec};
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
@@ -25,8 +27,8 @@ fn new_channel<'or, T, E>(
     channel_checker: Shared<Mutable<Option<ChannelChecker<'or, T, E>>>>,
 ) -> ReceiverObservable<'or, T, E> {
     let (sender_1, observable, channel_checker_1) = test_channel();
-    safe_lock!(set: sender, Some(sender_1));
-    safe_lock!(set: channel_checker, Some(channel_checker_1));
+    safe_lock_option!(replace: sender, sender_1);
+    safe_lock_option!(replace: channel_checker, channel_checker_1);
     observable
 }
 
@@ -52,7 +54,7 @@ fn test_completed_no_retry() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -61,7 +63,7 @@ fn test_completed_no_retry() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -72,10 +74,10 @@ fn test_completed_no_retry() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Completed
     );
-    assert_eq!(*errors.lock_ref(), []);
+    assert_eq!(*errors.test_lock_ref(), []);
 }
 
 #[test]
@@ -100,7 +102,7 @@ fn test_completed_retry_once() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -109,7 +111,7 @@ fn test_completed_retry_once() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -118,28 +120,28 @@ fn test_completed_retry_once() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Completed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 }
 
 #[test]
@@ -164,7 +166,7 @@ fn test_completed_retry_twice() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -173,7 +175,7 @@ fn test_completed_retry_twice() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -182,46 +184,46 @@ fn test_completed_retry_twice() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Completed
     );
-    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 }
 
 #[test]
@@ -272,7 +274,7 @@ fn test_erryr_no_retry() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
 
@@ -280,7 +282,7 @@ fn test_erryr_no_retry() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
 
@@ -288,7 +290,7 @@ fn test_erryr_no_retry() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Error("error")
     );
 }
@@ -319,7 +321,7 @@ fn test_error_retry_once() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -328,7 +330,7 @@ fn test_error_retry_once() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -337,28 +339,28 @@ fn test_error_retry_once() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Error("error2")
     );
-    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 }
 
 #[test]
@@ -387,7 +389,7 @@ fn test_error_retry_twice() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -396,7 +398,7 @@ fn test_error_retry_twice() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -405,46 +407,46 @@ fn test_error_retry_twice() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error3")));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Error("error3")
     );
-    assert_eq!(*errors.lock_ref(), ["error", "error2", "error3"]);
+    assert_eq!(*errors.test_lock_ref(), ["error", "error2", "error3"]);
 }
 
 #[test]
@@ -478,7 +480,10 @@ fn test_error_source_and_retry_are_same() {
     subject.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
-    assert_eq!(*errors.lock_ref(), ["error", "error", "error", "error"]);
+    assert_eq!(
+        *errors.test_lock_ref(),
+        ["error", "error", "error", "error"]
+    );
 }
 
 #[test]
@@ -507,7 +512,7 @@ fn test_unsubscribe_before_retry() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -516,7 +521,7 @@ fn test_unsubscribe_before_retry() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -525,7 +530,7 @@ fn test_unsubscribe_before_retry() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Unsubscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -557,7 +562,7 @@ fn test_unsubscribe_after_retry() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -566,7 +571,7 @@ fn test_unsubscribe_after_retry() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -575,28 +580,28 @@ fn test_unsubscribe_after_retry() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     subscription.dispose();
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Unsubscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 }
 
 #[test]
@@ -629,7 +634,7 @@ fn test_ref() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -638,7 +643,7 @@ fn test_ref() {
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -647,28 +652,28 @@ fn test_ref() {
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), [&error]);
+    assert_eq!(*errors.test_lock_ref(), [&error]);
 
     assert!(safe_lock_option_observer!(on_next: sender, &value_2));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), [&error]);
+    assert_eq!(*errors.test_lock_ref(), [&error]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error(&error)));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Error(&error));
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Error(&error)
     );
-    assert_eq!(*errors.lock_ref(), [&error, &error]);
+    assert_eq!(*errors.test_lock_ref(), [&error, &error]);
 }
 
 #[test]
@@ -738,7 +743,7 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(
-            channel_checker.lock_ref().as_ref().unwrap().state(),
+            channel_checker.test_lock_ref().as_ref().unwrap().state(),
             ChannelState::Subscribed
         );
         assert!(safe_lock_vec!(is_empty: errors));
@@ -753,7 +758,7 @@ fn test_async() {
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(
-            channel_checker.lock_ref().as_ref().unwrap().state(),
+            channel_checker.test_lock_ref().as_ref().unwrap().state(),
             ChannelState::Subscribed
         );
         assert!(safe_lock_vec!(is_empty: errors));
@@ -770,10 +775,10 @@ fn test_async() {
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(
-            channel_checker.lock_ref().as_ref().unwrap().state(),
+            channel_checker.test_lock_ref().as_ref().unwrap().state(),
             ChannelState::Subscribed
         );
-        assert_eq!(*errors.lock_ref(), ["error"]);
+        assert_eq!(*errors.test_lock_ref(), ["error"]);
 
         let sender = runtime
             .spawn(async move {
@@ -785,10 +790,10 @@ fn test_async() {
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(
-            channel_checker.lock_ref().as_ref().unwrap().state(),
+            channel_checker.test_lock_ref().as_ref().unwrap().state(),
             ChannelState::Subscribed
         );
-        assert_eq!(*errors.lock_ref(), ["error"]);
+        assert_eq!(*errors.test_lock_ref(), ["error"]);
 
         let _sender = runtime
             .spawn(async move {
@@ -802,10 +807,10 @@ fn test_async() {
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Error("error2"));
         assert_eq!(
-            channel_checker.lock_ref().as_ref().unwrap().state(),
+            channel_checker.test_lock_ref().as_ref().unwrap().state(),
             ChannelState::Error("error2")
         );
-        assert_eq!(*errors.lock_ref(), ["error", "error2"]);
+        assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
     });
 }
 
@@ -852,7 +857,10 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Error("error"));
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Error("error"));
-    assert_eq!(*errors.lock_ref(), ["error", "error", "error", "error"]);
+    assert_eq!(
+        *errors.test_lock_ref(),
+        ["error", "error", "error", "error"]
+    );
 }
 
 #[test]
@@ -879,7 +887,7 @@ fn test_unsub_on_next_by_take() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -888,7 +896,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Unsubscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -936,7 +944,7 @@ fn test_multiple_operation() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors_1));
@@ -946,7 +954,7 @@ fn test_multiple_operation() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors_1));
@@ -956,51 +964,51 @@ fn test_multiple_operation() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors_1.lock_ref(), ["error"]);
+    assert_eq!(*errors_1.test_lock_ref(), ["error"]);
     assert!(safe_lock_vec!(is_empty: errors_2));
 
     assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors_1.lock_ref(), ["error"]);
+    assert_eq!(*errors_1.test_lock_ref(), ["error"]);
     assert!(safe_lock_vec!(is_empty: errors_2));
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
-    assert_eq!(*errors_2.lock_ref(), ["error2"]);
+    assert_eq!(*errors_1.test_lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors_2.test_lock_ref(), ["error2"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
-    assert_eq!(*errors_2.lock_ref(), ["error2"]);
+    assert_eq!(*errors_1.test_lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors_2.test_lock_ref(), ["error2"]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error3")));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Error("error3")
     );
-    assert_eq!(*errors_1.lock_ref(), ["error", "error2"]);
-    assert_eq!(*errors_2.lock_ref(), ["error2", "error3"]);
+    assert_eq!(*errors_1.test_lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors_2.test_lock_ref(), ["error2", "error3"]);
 }
 
 #[test]
@@ -1029,7 +1037,7 @@ fn test_without_convenient_api() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -1038,7 +1046,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
     assert!(safe_lock_vec!(is_empty: errors));
@@ -1047,28 +1055,28 @@ fn test_without_convenient_api() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_next: sender, 222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Subscribed
     );
-    assert_eq!(*errors.lock_ref(), ["error"]);
+    assert_eq!(*errors.test_lock_ref(), ["error"]);
 
     assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
     assert_eq!(
-        channel_checker.lock_ref().as_ref().unwrap().state(),
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Error("error2")
     );
-    assert_eq!(*errors.lock_ref(), ["error", "error2"]);
+    assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 }
 
 #[test]

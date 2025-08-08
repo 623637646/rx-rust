@@ -92,12 +92,13 @@ where
             Some(self.time_span),
         );
 
-        let mut lock = self.context.lock_mut();
-        lock.current_value = Some(value);
-        if let Some(disposal) = lock.timer.replace(BoxedDisposal::new(disposal)) {
-            drop(lock);
-            disposal.dispose();
-        }
+        self.context.lock_mut(|mut lock| {
+            lock.current_value = Some(value);
+            if let Some(disposal) = lock.timer.replace(BoxedDisposal::new(disposal)) {
+                drop(lock);
+                disposal.dispose();
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {

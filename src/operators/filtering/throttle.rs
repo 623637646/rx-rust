@@ -61,19 +61,20 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let mut lock = self.disposal.lock_mut();
-        if lock.is_some() {
-            return;
-        }
-        let disposal = self.disposal.clone();
-        *lock = Some(BoxedDisposal::new(self.scheduler.schedule(
-            move || {
-                assert!(safe_lock_option_disposable!(dispose: disposal));
-            },
-            Some(self.time_span),
-        )));
-        drop(lock);
-        self.observer.on_next(value);
+        self.disposal.lock_mut(|mut lock| {
+            if lock.is_some() {
+                return;
+            }
+            let disposal = self.disposal.clone();
+            *lock = Some(BoxedDisposal::new(self.scheduler.schedule(
+                move || {
+                    assert!(safe_lock_option_disposable!(dispose: disposal));
+                },
+                Some(self.time_span),
+            )));
+            drop(lock);
+            self.observer.on_next(value);
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {

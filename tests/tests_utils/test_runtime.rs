@@ -80,9 +80,9 @@ where
     cfg_if::cfg_if! {
         if #[cfg(feature = "local-pool-scheduler")] {
             use futures::task::LocalSpawnExt;
-            use rx_rust::utils::types::MutableHelper;
+            use crate::tests_utils::types::TestMutableHelper;
             runtime.spawner.spawn_local(body(runtime.clone())).unwrap();
-            runtime.pool.lock_mut().run();
+            runtime.pool.test_lock_mut().run();
         } else if #[cfg(feature = "thread-pool-scheduler")] {
             futures::executor::block_on(body(runtime));
         } else if #[cfg(feature = "tokio-scheduler")] {

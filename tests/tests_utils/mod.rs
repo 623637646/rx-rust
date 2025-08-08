@@ -7,6 +7,7 @@ pub(crate) mod test_scheduler;
 pub(crate) mod test_struct;
 #[cfg(not(feature = "single-threaded"))]
 pub(crate) mod test_thread_scheduler;
+pub(crate) mod types;
 
 use std::time::Duration;
 pub(crate) const RECURSION_EXECUTION_TIMES: usize = 200;

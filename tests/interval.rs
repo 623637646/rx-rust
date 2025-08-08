@@ -6,6 +6,7 @@ use crate::tests_utils::{RECURSION_EXECUTION_TIMES, RECURSION_EXPECTED_DIFF, REC
 use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_disposable;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::{Mutable, Shared};
@@ -13,7 +14,6 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
 };
-use rx_rust::{safe_lock, safe_lock_option};
 use std::time::{Duration, Instant};
 use tests_utils::checker::Checker;
 
@@ -348,18 +348,15 @@ fn test_unsub_after_next() {
         let subscription = Shared::new(Mutable::new(None::<Subscription<'_>>));
         let subscription_cloned = subscription.clone();
         let (mut on_next, on_termination) = observer.into_callbacks();
-        safe_lock!(set:
-            subscription,
-            Some(observable.subscribe_with_callback(
-                move |value| {
-                    on_next(value);
-                    safe_lock_option_disposable!(dispose: subscription_cloned);
-                },
-                |termination| {
-                    on_termination(termination);
-                },
-            ))
-        );
+        safe_lock_option!(replace: subscription, observable.subscribe_with_callback(
+            move |value| {
+                on_next(value);
+                safe_lock_option_disposable!(dispose: subscription_cloned);
+            },
+            |termination| {
+                on_termination(termination);
+            },
+        ));
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
         assert!(safe_lock_option!(is_some: subscription));

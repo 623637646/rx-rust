@@ -59,15 +59,16 @@ where
             self.sub = Some(sub);
         }
 
-        let mut lock = self.context.lock_mut();
-        lock.waker = Some(cx.waker().clone());
-        if let Some(event) = lock.values.pop_front() {
-            Poll::Ready(Some(event))
-        } else if lock.terminated {
-            Poll::Ready(None)
-        } else {
-            Poll::Pending
-        }
+        self.context.lock_mut(|mut lock| {
+            lock.waker = Some(cx.waker().clone());
+            if let Some(event) = lock.values.pop_front() {
+                Poll::Ready(Some(event))
+            } else if lock.terminated {
+                Poll::Ready(None)
+            } else {
+                Poll::Pending
+            }
+        })
     }
 }
 
@@ -77,20 +78,22 @@ struct ObservableStreamObserver<T> {
 
 impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
-        let mut lock = self.context.lock_mut();
-        lock.values.push_back(value);
-        if let Some(waker) = lock.waker.take() {
-            drop(lock);
-            waker.wake();
-        }
+        self.context.lock_mut(|mut lock| {
+            lock.values.push_back(value);
+            if let Some(waker) = lock.waker.take() {
+                drop(lock);
+                waker.wake();
+            }
+        });
     }
 
     fn on_termination(self, _: Termination<Infallible>) {
-        let mut lock = self.context.lock_mut();
-        lock.terminated = true;
-        if let Some(waker) = lock.waker.take() {
-            drop(lock);
-            waker.wake();
-        }
+        self.context.lock_mut(|mut lock| {
+            lock.terminated = true;
+            if let Some(waker) = lock.waker.take() {
+                drop(lock);
+                waker.wake();
+            }
+        });
     }
 }

@@ -70,21 +70,22 @@ where
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
-            let mut lock = self.values.lock_mut();
-            if let Some(buffer_size) = self.buffer_size {
-                if lock.len() == buffer_size {
-                    if lock.pop_front().is_some() {
-                        // only push if the buffer is not 0
+            self.values.lock_mut(|mut lock| {
+                if let Some(buffer_size) = self.buffer_size {
+                    if lock.len() == buffer_size {
+                        if lock.pop_front().is_some() {
+                            // only push if the buffer is not 0
+                            lock.push_back(value.clone());
+                        }
+                    } else {
                         lock.push_back(value.clone());
                     }
                 } else {
                     lock.push_back(value.clone());
                 }
-            } else {
-                lock.push_back(value.clone());
-            }
-            drop(lock);
-            self.publish_subject.on_next(value);
+                drop(lock);
+                self.publish_subject.on_next(value);
+            });
         }
     }
 

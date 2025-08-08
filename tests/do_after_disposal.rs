@@ -4,6 +4,8 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::safe_lock_option;
+use rx_rust::safe_lock_option_observer;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
@@ -12,7 +14,6 @@ use rx_rust::{
     operators::{creating::create::Create, utility::do_after_disposal::DoAfterDisposal},
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock, safe_lock_option, safe_lock_option_observer};
 use std::{
     convert::Infallible,
     sync::atomic::{AtomicBool, Ordering},
@@ -264,7 +265,7 @@ fn test_async() {
         let disposed_cloned = disposed.clone();
         let boxed_observer_cloned = boxed_observer.clone();
         let observable = Create::new(move |observer| {
-            safe_lock!(set: boxed_observer_cloned, Some(observer));
+            safe_lock_option!(replace: boxed_observer_cloned, observer);
             Subscription::new_with_disposal_callback(move || {
                 disposed_cloned.store(true, Ordering::SeqCst);
             })
@@ -336,12 +337,12 @@ fn test_subscribe_by_different_observer() {
 
     let observable = Create::new(|observer| {
         if safe_lock_option!(is_none: boxed_observer_1) {
-            safe_lock!(set: boxed_observer_1, Some(observer));
+            safe_lock_option!(replace: boxed_observer_1, observer);
             Subscription::new_with_disposal_callback(|| {
                 disposed_1.store(true, Ordering::SeqCst);
             })
         } else {
-            safe_lock!(set: boxed_observer_2, Some(observer));
+            safe_lock_option!(replace: boxed_observer_2, observer);
             Subscription::new_with_disposal_callback(|| {
                 disposed_2.store(true, Ordering::SeqCst);
             })

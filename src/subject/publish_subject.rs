@@ -56,8 +56,7 @@ where
     'or: 'sub,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        let mut lock = self.0.lock_mut();
-        match &mut *lock {
+        self.0.clone().lock_mut(|mut lock| match &mut *lock {
             State::Idle(observers) => {
                 let key = observers.insert(BoxedObserver::new(observer));
                 drop(lock);
@@ -88,7 +87,7 @@ where
                 observer.on_termination(termination);
                 Subscription::default()
             }
-        }
+        })
     }
 }
 
@@ -98,30 +97,48 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        let mut lock = self.0.lock_mut();
-        match std::mem::replace(
-            &mut *lock,
-            State::Processing(ProcessedAction::Continue(Vec::new())),
-        ) {
-            State::Idle(mut observers) => {
-                drop(lock);
+        let observers = self.0.lock_mut(|mut lock| {
+            match std::mem::replace(
+                &mut *lock,
+                State::Processing(ProcessedAction::Continue(Vec::new())),
+            ) {
+                State::Idle(observers) => Some(observers),
+                State::Processing(processed_action) => {
+                    match processed_action {
+                        ProcessedAction::Continue(mut actions) => {
+                            actions.push(ContinueAction::EmitNext(value.clone()));
+                        }
+                        ProcessedAction::Terminate(_) => {
+                            // ignore if it will be terminated
+                        }
+                    };
+                    None
+                }
+                State::Terminated(termination) => {
+                    // It's already terminated. revert
+                    *lock = State::Terminated(termination);
+                    None
+                }
+            }
+        });
 
-                // Notify
-                observers
-                    .values_mut()
-                    .for_each(|observer| observer.on_next(value.clone()));
+        if let Some(mut observers) = observers {
+            // Notify
+            observers
+                .values_mut()
+                .for_each(|observer| observer.on_next(value.clone()));
 
-                // Will reset to Idle, set to "Zero Processing" first. Correct it later.
-                match safe_lock!(mem_replace: self.0, State::Processing(ProcessedAction::Continue(Vec::new())))
-                {
-                    State::Idle(_) => unreachable!(),
-                    State::Processing(processed_action) => {
-                        match processed_action {
-                            ProcessedAction::Continue(actions) => {
-                                for action in actions {
-                                    match action {
-                                        ContinueAction::InsertObserver(insert_state) => {
-                                            let mut lock = insert_state.lock_mut();
+            // Will reset to Idle, set to "Zero Processing" first. Correct it later.
+            match safe_lock!(mem_replace: self.0, State::Processing(ProcessedAction::Continue(Vec::new())))
+            {
+                State::Idle(_) => unreachable!(),
+                State::Processing(processed_action) => {
+                    match processed_action {
+                        ProcessedAction::Continue(actions) => {
+                            for action in actions {
+                                match action {
+                                    ContinueAction::InsertObserver(insert_state) => {
+                                        insert_state.lock_mut(|mut lock| {
                                             match std::mem::replace(
                                                 &mut *lock,
                                                 ObserverActionInsertState::Cancelled, // set to Cancelled first. Correct it later.
@@ -140,66 +157,55 @@ where
                                                     // Do nothing if it was already cancelled
                                                 }
                                             }
-                                        }
-                                        ContinueAction::RemoveObserver(key) => {
-                                            observers.remove(key);
-                                        }
-                                        ContinueAction::EmitNext(value) => {
-                                            observers.values_mut().for_each(|observer| {
-                                                observer.on_next(value.clone())
-                                            });
-                                        }
+                                        });
+                                    }
+                                    ContinueAction::RemoveObserver(key) => {
+                                        observers.remove(key);
+                                    }
+                                    ContinueAction::EmitNext(value) => {
+                                        observers
+                                            .values_mut()
+                                            .for_each(|observer| observer.on_next(value.clone()));
                                     }
                                 }
+                            }
 
-                                // Reset to Idle
-                                safe_lock!(set: self.0, State::Idle(observers));
-                            }
-                            ProcessedAction::Terminate(termination) => {
-                                safe_lock!(set: self.0, State::Terminated(termination.clone()));
-                                observers.into_iter().for_each(|(_, observer)| {
-                                    observer.on_termination(termination.clone());
-                                })
-                            }
+                            // Reset to Idle
+                            safe_lock!(set: self.0, State::Idle(observers));
+                        }
+                        ProcessedAction::Terminate(termination) => {
+                            safe_lock!(set: self.0, State::Terminated(termination.clone()));
+                            observers.into_iter().for_each(|(_, observer)| {
+                                observer.on_termination(termination.clone());
+                            })
                         }
                     }
-                    State::Terminated(_) => unreachable!(),
-                };
-            }
-            State::Processing(processed_action) => match processed_action {
-                ProcessedAction::Continue(mut actions) => {
-                    actions.push(ContinueAction::EmitNext(value));
                 }
-                ProcessedAction::Terminate(_) => {
-                    // ignore if it will be terminated
-                }
-            },
-            State::Terminated(termination) => {
-                // It's already terminated. revert
-                *lock = State::Terminated(termination);
-            }
+                State::Terminated(_) => unreachable!(),
+            };
         }
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let mut lock = self.0.lock_mut();
-        match std::mem::replace(&mut *lock, State::Terminated(termination.clone())) {
-            State::Idle(observers) => {
-                drop(lock);
-                observers.into_iter().for_each(|(_, observer)| {
-                    observer.on_termination(termination.clone());
-                });
+        self.0.lock_mut(|mut lock| {
+            match std::mem::replace(&mut *lock, State::Terminated(termination.clone())) {
+                State::Idle(observers) => {
+                    drop(lock);
+                    observers.into_iter().for_each(|(_, observer)| {
+                        observer.on_termination(termination.clone());
+                    });
+                }
+                State::Processing(processed_action) => {
+                    assert!(matches!(processed_action, ProcessedAction::Continue(_)));
+                    // revert
+                    *lock = State::Processing(ProcessedAction::Terminate(termination));
+                }
+                State::Terminated(termination) => {
+                    // revert
+                    *lock = State::Terminated(termination);
+                }
             }
-            State::Processing(processed_action) => {
-                assert!(matches!(processed_action, ProcessedAction::Continue(_)));
-                // revert
-                *lock = State::Processing(ProcessedAction::Terminate(termination));
-            }
-            State::Terminated(termination) => {
-                // revert
-                *lock = State::Terminated(termination);
-            }
-        }
+        });
     }
 }
 
@@ -213,11 +219,11 @@ where
     where
         E: Clone,
     {
-        match &*self.0.lock_ref() {
+        self.0.lock_ref(|lock| match &*lock {
             State::Idle(_) => None,
             State::Processing(_) => None,
             State::Terminated(termination) => Some(termination.clone()),
-        }
+        })
     }
 }
 
@@ -228,22 +234,24 @@ struct PublishSubjectKeyDisposal<'or, T, E> {
 
 impl<T, E> Disposable for PublishSubjectKeyDisposal<'_, T, E> {
     fn dispose(self) {
-        match &mut *self.state.lock_mut() {
-            State::Idle(observers) => {
-                observers.remove(self.key);
-            }
-            State::Processing(processed_action) => match processed_action {
-                ProcessedAction::Continue(actions) => {
-                    actions.push(ContinueAction::RemoveObserver(self.key));
+        self.state.lock_mut(|mut lock| {
+            match &mut *lock {
+                State::Idle(observers) => {
+                    observers.remove(self.key);
                 }
-                ProcessedAction::Terminate(_) => {
-                    // Do nothing if it will be terminated
+                State::Processing(processed_action) => match processed_action {
+                    ProcessedAction::Continue(actions) => {
+                        actions.push(ContinueAction::RemoveObserver(self.key));
+                    }
+                    ProcessedAction::Terminate(_) => {
+                        // Do nothing if it will be terminated
+                    }
+                },
+                State::Terminated(_) => {
+                    // Do nothing if it was already terminated
                 }
-            },
-            State::Terminated(_) => {
-                // Do nothing if it was already terminated
             }
-        };
+        });
     }
 }
 
@@ -259,22 +267,24 @@ impl<T, E> Disposable for PublishSubjectInsertStateDisposal<'_, T, E> {
                 // Unsubscribed before the observer was inserted
             }
             ObserverActionInsertState::Inserted(key) => {
-                match &mut *self.state.lock_mut() {
-                    State::Idle(observers) => {
-                        observers.remove(key);
-                    }
-                    State::Processing(processed_action) => match processed_action {
-                        ProcessedAction::Continue(actions) => {
-                            actions.push(ContinueAction::RemoveObserver(key));
+                self.state.lock_mut(|mut lock| {
+                    match &mut *lock {
+                        State::Idle(observers) => {
+                            observers.remove(key);
                         }
-                        ProcessedAction::Terminate(_) => {
-                            // Do nothing if it will be terminated
+                        State::Processing(processed_action) => match processed_action {
+                            ProcessedAction::Continue(actions) => {
+                                actions.push(ContinueAction::RemoveObserver(key));
+                            }
+                            ProcessedAction::Terminate(_) => {
+                                // Do nothing if it will be terminated
+                            }
+                        },
+                        State::Terminated(_) => {
+                            // Do nothing if it was already terminated
                         }
-                    },
-                    State::Terminated(_) => {
-                        // Do nothing if it was already terminated
                     }
-                };
+                });
             }
             ObserverActionInsertState::Cancelled => unreachable!(),
         }

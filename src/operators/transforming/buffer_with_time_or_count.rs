@@ -1,7 +1,7 @@
 use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -60,7 +60,7 @@ where
             time_span: self.time_span,
             scheduler: self.scheduler,
         };
-        buffer_observer.setup_emit_timer(self.delay);
+        buffer_observer.setup_emit_timer(None, self.delay);
         self.source.subscribe(buffer_observer) + context
     }
 }
@@ -85,15 +85,15 @@ struct BufferWithTimeOrCountObserver<T, OR, S> {
 }
 
 impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
-    fn setup_emit_timer<E>(&self, delay: Option<Duration>)
-    where
+    fn setup_emit_timer<E>(
+        &self,
+        mut lock: Option<MutGuard<'_, BufferWithTimeOrCountContext<T>>>,
+        delay: Option<Duration>,
+    ) where
         T: NecessarySend + 'static,
         OR: Observer<Vec<T>, E> + NecessarySend + 'static,
         S: Scheduler,
     {
-        if safe_lock_option!(is_none: self.observer) {
-            return;
-        }
         let observer = self.observer.clone();
         let context = self.context.clone();
         let disposal = self.scheduler.schedule_periodically(
@@ -104,9 +104,13 @@ impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
             self.time_span,
             delay,
         );
-        if let Some(timer) =
+        let old_timer = if let Some(lock) = lock.as_mut() {
+            lock.timer.replace(BoxedDisposal::new(disposal))
+        } else {
             safe_lock_option!(replace: self.context, timer, BoxedDisposal::new(disposal))
-        {
+        };
+        drop(lock);
+        if let Some(timer) = old_timer {
             timer.dispose();
         }
     }
@@ -119,14 +123,14 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let mut lock = self.context.lock_mut();
-        lock.values.push(value);
-        if lock.values.len() >= self.count.get() {
-            let values = std::mem::take(&mut lock.values);
-            drop(lock);
-            self.setup_emit_timer(Some(self.time_span));
-            safe_lock_option_observer!(on_next: self.observer, values);
-        }
+        self.context.lock_mut(|mut lock| {
+            lock.values.push(value);
+            if lock.values.len() >= self.count.get() {
+                let values = std::mem::take(&mut lock.values);
+                self.setup_emit_timer(Some(lock), Some(self.time_span));
+                safe_lock_option_observer!(on_next: self.observer, values);
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {

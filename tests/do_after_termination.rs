@@ -3,11 +3,12 @@ mod tests_utils;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::safe_lock_vec;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::{Mutable, MutableHelper, Shared};
+use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -166,7 +167,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(
-        terminations.lock_ref().as_ref(),
+        terminations.test_lock_ref().as_ref(),
         vec![Termination::Error("error")]
     );
 }
@@ -303,7 +304,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(
-        terminations.lock_ref().as_ref(),
+        terminations.test_lock_ref().as_ref(),
         vec![Termination::Error("error"), Termination::Error("error")]
     );
 }
@@ -368,7 +369,7 @@ fn test_multiple_operation() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(
-        terminations.lock_ref().as_ref(),
+        terminations.test_lock_ref().as_ref(),
         vec![Termination::Error("error"), Termination::Error("error")]
     );
 }

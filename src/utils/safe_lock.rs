@@ -28,29 +28,29 @@
 macro_rules! safe_lock {
     (clone: $lock_name:expr) => {{
         use $crate::utils::types::MutableHelper;
-        Clone::clone(&*$lock_name.lock_ref())
+        $lock_name.lock_ref(|lock| Clone::clone(&*lock))
     }};
 
     (set: $lock_name:expr, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        *$lock_name.lock_mut() = value
+        $lock_name.lock_mut(|mut lock| *lock = value)
     }};
 
     (mem_take: $lock_name:expr) => {{
         use $crate::utils::types::MutableHelper;
-        std::mem::take(&mut *$lock_name.lock_mut())
+        $lock_name.lock_mut(|mut lock| std::mem::take(&mut *lock))
     }};
 
     (mem_take: $lock_name:expr, $field_name:ident) => {{
         use $crate::utils::types::MutableHelper;
-        std::mem::take(&mut $lock_name.lock_mut().$field_name)
+        $lock_name.lock_mut(|mut lock| std::mem::take(&mut lock.$field_name))
     }};
 
     (mem_replace: $lock_name:expr, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        std::mem::replace(&mut *$lock_name.lock_mut(), value)
+        $lock_name.lock_mut(|mut lock| std::mem::replace(&mut *lock, value))
     }};
 }
 
@@ -58,34 +58,34 @@ macro_rules! safe_lock {
 macro_rules! safe_lock_option {
     (is_none: $lock_name:expr) => {{
         use $crate::utils::types::MutableHelper;
-        Option::is_none(&$lock_name.lock_ref())
+        $lock_name.lock_ref(|lock| Option::is_none(&*lock))
     }};
 
     (is_some: $lock_name:expr) => {{
         use $crate::utils::types::MutableHelper;
-        Option::is_some(&$lock_name.lock_ref())
+        $lock_name.lock_ref(|lock| Option::is_some(&*lock))
     }};
 
     (take: $lock_name:expr) => {{
         use $crate::utils::types::MutableHelper;
-        Option::take(&mut $lock_name.lock_mut())
+        $lock_name.lock_mut(|mut lock| Option::take(&mut *lock))
     }};
 
     (take: $lock_name:expr, $field_name:ident) => {{
         use $crate::utils::types::MutableHelper;
-        Option::take(&mut $lock_name.lock_mut().$field_name)
+        $lock_name.lock_mut(|mut lock| Option::take(&mut lock.$field_name))
     }};
 
     (replace: $lock_name:expr, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        Option::replace(&mut $lock_name.lock_mut(), value)
+        $lock_name.lock_mut(|mut lock| Option::replace(&mut lock, value))
     }};
 
     (replace: $lock_name:expr, $field_name:ident, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        Option::replace(&mut $lock_name.lock_mut().$field_name, value)
+        $lock_name.lock_mut(|mut lock| Option::replace(&mut lock.$field_name, value))
     }};
 }
 
@@ -94,7 +94,7 @@ macro_rules! safe_lock_observer {
     (on_next: $lock_name:expr, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        Observer::on_next(&mut *$lock_name.lock_mut(), value)
+        $lock_name.lock_mut(|mut lock| Observer::on_next(&mut *lock, value))
     }};
 }
 
@@ -103,25 +103,27 @@ macro_rules! safe_lock_option_observer {
     (on_next: $lock_name:expr, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        if let Some(observer) = $lock_name.lock_mut().as_mut() {
-            Observer::on_next(observer, value);
-            true
-        } else {
-            false
-        }
+        $lock_name.lock_mut(|mut lock| if let Some(observer) = lock.as_mut() {
+                Observer::on_next(observer, value);
+                true
+            } else {
+                false
+            }
+        )
     }};
 
     (on_next: $lock_name:expr, values: $values:expr) => {{
         use $crate::utils::types::MutableHelper;
         let values = $values;
-        if let Some(observer) = $lock_name.lock_mut().as_mut() {
-            for value in values {
-                Observer::on_next(observer, value);
+        $lock_name.lock_mut(|mut lock| if let Some(observer) = lock.as_mut() {
+                for value in values {
+                    Observer::on_next(observer, value);
+                }
+                true
+            } else {
+                false
             }
-            true
-        } else {
-            false
-        }
+        )
     }};
 
     (on_next_and_termination: $lock_name:expr, values: $values:expr, $termination:expr) => {{
@@ -178,18 +180,18 @@ macro_rules! safe_lock_option_disposable {
 macro_rules! safe_lock_vec {
     (is_empty: $lock_name:expr) => {{
         use $crate::utils::types::MutableHelper;
-        Vec::is_empty(&$lock_name.lock_ref())
+        $lock_name.lock_ref(|lock| Vec::is_empty(&*lock))
     }};
 
     (len: $lock_name:expr) => {{
         use $crate::utils::types::MutableHelper;
-        Vec::len(&$lock_name.lock_ref())
+        $lock_name.lock_ref(|lock| Vec::len(&*lock))
     }};
 
     (push: $lock_name:expr, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        Vec::push(&mut $lock_name.lock_mut(), value)
+        $lock_name.lock_mut(|mut lock| Vec::push(&mut lock, value))
     }};
 }
 
@@ -198,6 +200,6 @@ macro_rules! safe_lock_slot_map {
     (insert: $lock_name:expr, $field_name:ident, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        SlotMap::insert(&mut $lock_name.lock_mut().$field_name, value)
+        $lock_name.lock_mut(|mut lock| SlotMap::insert(&mut lock.$field_name, value))
     }};
 }
