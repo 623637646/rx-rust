@@ -77,10 +77,6 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        if safe_lock_option!(is_none: self.observer) {
-            return;
-        }
-
         let context = self.context.clone();
         let observer = self.observer.clone();
         let disposal = self.scheduler.schedule(
@@ -102,7 +98,6 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.context.clone().dispose();
         match termination {
             Termination::Completed => {
                 if let Some(value) = safe_lock_option!(take: self.context, current_value) {

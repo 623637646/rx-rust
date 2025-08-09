@@ -134,7 +134,6 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.context.clone().dispose();
         match termination {
             Termination::Completed => {
                 let values = safe_lock!(mem_take: self.context, values);
