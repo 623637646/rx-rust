@@ -1,3 +1,4 @@
+use crate::safe_lock_option_observer;
 use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
@@ -6,7 +7,6 @@ use crate::{
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
-use crate::{safe_lock, safe_lock_observer, safe_lock_option_observer};
 use educe::Educe;
 
 #[derive(Educe)]
@@ -43,7 +43,6 @@ where
             let subject = PublishSubject::default();
             observer.on_next(SubjectObservable::new(subject.clone()));
 
-            let subject = Shared::new(Mutable::new(subject));
             let observer = Shared::new(Mutable::new(Some(observer)));
             let window_observer = WindowObserver {
                 observer: observer.clone(),
@@ -59,7 +58,7 @@ where
 
 struct WindowObserver<'or, T, E, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    subject: Shared<Mutable<PublishSubject<'or, T, E>>>,
+    subject: PublishSubject<'or, T, E>,
 }
 
 impl<'or, T, E, OR> Observer<T, E> for WindowObserver<'or, T, E, OR>
@@ -69,18 +68,18 @@ where
     OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_observer!(on_next: self.subject, value);
+        self.subject.on_next(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock!(clone: self.subject).on_termination(termination.clone());
+        self.subject.on_termination(termination.clone());
         safe_lock_option_observer!(on_termination: self.observer, termination);
     }
 }
 
 struct BoundaryObserver<'or, T, E, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    subject: Shared<Mutable<PublishSubject<'or, T, E>>>,
+    subject: PublishSubject<'or, T, E>,
 }
 
 impl<'or, T, E, OR> Observer<(), E> for BoundaryObserver<'or, T, E, OR>
@@ -91,13 +90,13 @@ where
 {
     fn on_next(&mut self, _: ()) {
         let new_subject = PublishSubject::default();
-        let old_subject = safe_lock!(mem_replace: self.subject, new_subject.clone());
+        let old_subject = std::mem::replace(&mut self.subject, new_subject.clone());
         old_subject.on_termination(Termination::Completed);
         safe_lock_option_observer!(on_next: self.observer, SubjectObservable::new(new_subject));
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock!(clone: self.subject).on_termination(termination.clone());
+        self.subject.on_termination(termination.clone());
         safe_lock_option_observer!(on_termination: self.observer, termination);
     }
 }
