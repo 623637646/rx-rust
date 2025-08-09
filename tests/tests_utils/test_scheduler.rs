@@ -36,7 +36,7 @@ impl Scheduler for TestRuntime {
             if #[cfg(feature = "local-pool-scheduler")] {
                 self.spawner.sleep(duration)
             } else if #[cfg(feature = "thread-pool-scheduler")] {
-                self.0.sleep(duration)
+                self.pool.sleep(duration)
             } else if #[cfg(feature = "tokio-scheduler")] {
                 // TODO: Why this code doesn't work. Refer to: https://stackoverflow.com/q/79718285/9315497
                 // tokio::runtime::Handle::current().sleep(duration)

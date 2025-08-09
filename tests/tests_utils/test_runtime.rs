@@ -13,6 +13,7 @@ cfg_if::cfg_if! {
         pub(crate) struct TestRuntime {
             pool: Shared<Mutable<LocalPool>>,
             pub(crate) spawner: LocalSpawner,
+            pub(crate) alive_tasks_count: Shared<AtomicUsize>,
         }
         impl Default for TestRuntime {
             fn default() -> Self {
@@ -21,6 +22,7 @@ cfg_if::cfg_if! {
                 Self {
                     pool: Shared::new(Mutable::new(pool)),
                     spawner,
+                    alive_tasks_count: Shared::new(AtomicUsize::new(0)),
                 }
             }
         }
@@ -28,10 +30,16 @@ cfg_if::cfg_if! {
         use futures::executor::ThreadPool;
         #[derive(Educe)]
         #[educe(Debug, Clone)]
-        pub(crate) struct TestRuntime(pub(crate) ThreadPool);
+        pub(crate) struct TestRuntime {
+            pub(crate) pool: ThreadPool,
+            pub(crate) alive_tasks_count: Shared<AtomicUsize>
+        }
         impl Default for TestRuntime {
             fn default() -> Self {
-                Self(ThreadPool::new().unwrap())
+                Self {
+                    pool: ThreadPool::new().unwrap(),
+                    alive_tasks_count: Shared::new(AtomicUsize::new(0)),
+                }
             }
         }
     } else {
@@ -64,7 +72,7 @@ impl TestRuntime {
                 self.spawner.spawn_local(future).unwrap();
             } else if #[cfg(feature = "thread-pool-scheduler")] {
                 use futures::task::SpawnExt;
-                self.0.spawn(future).unwrap();
+                self.pool.spawn(future).unwrap();
             } else if #[cfg(feature = "tokio-scheduler")] {
                 tokio::runtime::Handle::current().spawn(future);
             } else if #[cfg(feature = "async-std-scheduler")] {
@@ -86,9 +94,9 @@ where
     cfg_if::cfg_if! {
         if #[cfg(feature = "local-pool-scheduler")] {
             use futures::task::LocalSpawnExt;
-            use crate::tests_utils::types::TestMutableHelper;
+            use rx_rust::utils::types::MutableHelper;
             runtime.spawner.spawn_local(body(runtime.clone())).unwrap();
-            runtime.pool.test_lock_mut().run();
+            runtime.pool.lock_mut(|mut lock| lock.run());
         } else if #[cfg(feature = "thread-pool-scheduler")] {
             futures::executor::block_on(body(runtime));
         } else if #[cfg(feature = "tokio-scheduler")] {
