@@ -4,7 +4,7 @@ use rx_rust::{
     scheduler::Scheduler,
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
-use std::time::Duration;
+use std::{sync::atomic::Ordering, time::Duration};
 
 impl Scheduler for TestRuntime {
     fn schedule_future(
@@ -13,16 +13,21 @@ impl Scheduler for TestRuntime {
     ) -> impl Disposable + NecessarySend + 'static {
         let entry = Shared::new(Mutable::new(EntryExitChecker::enter()));
         let weak_entry = Shared::downgrade(&entry);
+        let alive_tasks_count = self.alive_tasks_count.clone();
+        alive_tasks_count.fetch_add(1, Ordering::SeqCst);
+        let alive_tasks_count_cloned = alive_tasks_count.clone();
         let future = async move {
             future.await;
             if let Some(entry) = weak_entry.upgrade() {
                 entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
             }
+            alive_tasks_count.fetch_sub(1, Ordering::SeqCst);
         };
         let handle = self.spawn(future);
         CallbackDisposal::new(move || {
             handle.abort();
             entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
+            alive_tasks_count_cloned.fetch_sub(1, Ordering::SeqCst);
         })
     }
 

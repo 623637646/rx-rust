@@ -1,10 +1,12 @@
 use crate::tests_utils::join_handle::JoinHandle;
 use educe::Educe;
 use rx_rust::utils::types::NecessarySend;
+use rx_rust::utils::types::Shared;
+use std::sync::atomic::AtomicUsize;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "local-pool-scheduler")] {
-        use rx_rust::utils::types::{Shared, Mutable};
+        use rx_rust::utils::types::Mutable;
         use futures::executor::{LocalPool, LocalSpawner};
         #[derive(Educe)]
         #[educe(Debug, Clone)]
@@ -35,10 +37,14 @@ cfg_if::cfg_if! {
     } else {
         #[derive(Educe)]
         #[educe(Debug, Clone)]
-        pub(crate) struct TestRuntime;
+        pub(crate) struct TestRuntime {
+            pub(crate) alive_tasks_count: Shared<AtomicUsize>,
+        }
         impl Default for TestRuntime {
             fn default() -> Self {
-                Self
+                Self {
+                    alive_tasks_count: Shared::new(AtomicUsize::new(0)),
+                }
             }
         }
     }

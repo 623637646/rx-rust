@@ -206,6 +206,12 @@ macro_rules! safe_lock_vec {
         let value = $value;
         $lock_name.lock_mut(|mut lock| Vec::push(&mut lock, value))
     }};
+
+    (push: $lock_name:expr, $field_name:ident, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        $lock_name.lock_mut(|mut lock| Vec::push(&mut lock.$field_name, value))
+    }};
 }
 
 #[macro_export]

@@ -14,6 +14,7 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
 };
+use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 use tests_utils::checker::Checker;
 
@@ -381,6 +382,35 @@ fn test_undisposed_schedule() {
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
+    });
+}
+
+#[test]
+fn test_scheduler_should_be_disposed_after_completed() {
+    block_on(|runtime| async move {
+        let observable = Interval::new(
+            Duration::from_millis(100),
+            runtime.clone(),
+            Some(Duration::from_millis(100)),
+        )
+        .take(1);
+        let (checker, observer) = Checker::new();
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+
+        runtime.sleep(Duration::from_millis(50)).await;
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+
+        runtime.sleep(Duration::from_millis(100)).await;
+        assert_eq!(checker.values(), [0]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
     });
 }
 

@@ -16,6 +16,7 @@ use rx_rust::{
     },
     subject::publish_subject::PublishSubject,
 };
+use std::sync::atomic::Ordering;
 use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -718,6 +719,66 @@ fn test_undisposed_schedule() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    });
+}
+
+#[test]
+fn test_scheduler_should_be_disposed_after_completed() {
+    block_on(|runtime| async move {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.debounce(Duration::from_millis(100), runtime.clone());
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        sender.on_next(111);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+
+        sender.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
+fn test_scheduler_should_be_disposed_after_error() {
+    block_on(|runtime| async move {
+        let (mut sender, observable, channel_checker) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.debounce(Duration::from_millis(100), runtime.clone());
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        sender.on_next(111);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+
+        sender.on_termination(Termination::Error("error"));
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Error("error"));
+        assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
     });
 }
 

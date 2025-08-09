@@ -1,11 +1,16 @@
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::disposable::Disposable;
+use crate::disposable::boxed_disposal::BoxedDisposal;
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
-use crate::{safe_lock, safe_lock_option, safe_lock_option_observer, safe_lock_vec};
+use crate::{
+    safe_lock, safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer,
+    safe_lock_vec,
+};
 use educe::Educe;
 use std::time::Duration;
 
@@ -40,25 +45,43 @@ where
         observer: impl Observer<Vec<T>, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
         let observer = Shared::new(Mutable::new(Some(observer)));
-        let values = Shared::new(Mutable::new(Vec::default()));
+        let context = Shared::new(Mutable::new(BufferWithTimeContext {
+            values: Vec::new(),
+            timer: None,
+        }));
         let observer_cloned = observer.clone();
-        let values_cloned = values.clone();
+        let context_cloned = context.clone();
         let disposal = self.scheduler.schedule_periodically(
             move |_| {
-                let values = safe_lock!(mem_take: values_cloned);
+                let values = safe_lock!(mem_take: context_cloned, values);
                 !safe_lock_option_observer!(on_next: observer_cloned, values)
             },
             self.time_span,
             self.delay,
         );
-        let observer = BufferWithTimeObserver { observer, values };
-        self.source.subscribe(observer) + disposal
+        safe_lock_option!(replace: context, timer, BoxedDisposal::new(disposal));
+        let observer = BufferWithTimeObserver {
+            observer,
+            context: context.clone(),
+        };
+        self.source.subscribe(observer) + context
+    }
+}
+
+struct BufferWithTimeContext<T> {
+    values: Vec<T>,
+    timer: Option<BoxedDisposal<'static>>,
+}
+
+impl<T> Disposable for Shared<Mutable<BufferWithTimeContext<T>>> {
+    fn dispose(self) {
+        safe_lock_option_disposable!(dispose: self, timer);
     }
 }
 
 struct BufferWithTimeObserver<T, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    values: Shared<Mutable<Vec<T>>>,
+    context: Shared<Mutable<BufferWithTimeContext<T>>>,
 }
 
 impl<T, E, OR> Observer<T, E> for BufferWithTimeObserver<T, OR>
@@ -66,13 +89,18 @@ where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_vec!(push: self.values, value);
+        safe_lock_vec!(push: self.context, values, value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
+        let values = self.context.lock_mut(|mut lock| {
+            if let Some(timer) = lock.timer.take() {
+                timer.dispose();
+            }
+            std::mem::take(&mut lock.values)
+        });
         match termination {
             Termination::Completed => {
-                let values = safe_lock!(mem_take: self.values);
                 if !values.is_empty() {
                     safe_lock_option_observer!(on_next_and_termination: self.observer, values, termination);
                 } else {

@@ -10,6 +10,7 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::from_stream::FromStream,
 };
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tests_utils::checker::Checker;
 
@@ -251,6 +252,28 @@ fn test_undisposed_schedule() {
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
+    });
+}
+
+#[test]
+fn test_scheduler_should_be_disposed_after_completed() {
+    block_on(|runtime| async move {
+        let (tx, rx) = futures::channel::mpsc::unbounded::<i32>();
+        let stream = rx;
+        let observable = FromStream::new(stream, runtime.clone());
+        let (checker, observer) = Checker::new();
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+
+        drop(tx);
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
     });
 }
 

@@ -370,6 +370,30 @@ fn test_undisposed_schedule() {
 }
 
 #[test]
+fn test_scheduler_should_be_disposed_after_completed() {
+    block_on(|runtime| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+
+        // Custom operations
+        let stream = observable.into_stream();
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        runtime.sleep(Duration::from_millis(10)).await; // make sure the stream is ready.
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        sender.on_next(111);
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
 fn test_order_with_continuous_next() {
     block_on(|runtime| async move {
         let mut subject = PublishSubject::default();

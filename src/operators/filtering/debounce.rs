@@ -98,9 +98,15 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
+        let current_value = self.context.lock_mut(|mut lock| {
+            if let Some(timer) = lock.timer.take() {
+                timer.dispose();
+            }
+            std::mem::take(&mut lock.current_value)
+        });
         match termination {
             Termination::Completed => {
-                if let Some(value) = safe_lock_option!(take: self.context, current_value) {
+                if let Some(value) = current_value {
                     safe_lock_option_observer!(on_next_and_termination: self.observer, value, termination);
                 } else {
                     safe_lock_option_observer!(on_termination: self.observer, termination);

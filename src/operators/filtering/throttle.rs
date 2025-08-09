@@ -78,6 +78,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
+        self.disposal.dispose();
         self.observer.on_termination(termination);
     }
 }

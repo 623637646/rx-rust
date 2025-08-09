@@ -153,6 +153,7 @@ where
                 self.emit_value_and_setup_timer_if_needed(None);
             }
             Termination::Error(_) => {
+                self.context.dispose();
                 safe_lock_option_observer!(on_termination: self.observer, termination);
             }
         }
