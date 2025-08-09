@@ -92,52 +92,44 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
             lock.timer = Some(BoxedDisposal::new(self.scheduler.schedule_recursively(
                 move |_| {
                     // Get values that should be sent
-                    let values_should_be_sent = context.lock_mut(|mut lock| {
-                        let mut values_should_be_sent = Vec::new();
+                    let (values, completed) = context.lock_mut(|mut lock| {
+                        let mut values = Vec::new();
+                        let mut completed = false;
                         let now = Instant::now();
                         while let Some((instant, _)) = lock.values.front() {
                             if now < *instant {
                                 break;
                             }
-                            values_should_be_sent.push(lock.values.pop_front().unwrap().1);
-                        }
-                        assert!(!values_should_be_sent.is_empty());
-                        values_should_be_sent
-                    });
-
-                    let completed = observer.lock_mut(|mut lock| {
-                        // Send values
-                        for value in values_should_be_sent {
+                            let value = lock.values.pop_front().unwrap().1;
                             if let Some(value) = value {
-                                //  Next
-                                lock.as_mut().unwrap().on_next(value);
+                                values.push(value);
                             } else {
-                                // Completed
-                                let observer = lock.take().unwrap();
-                                drop(lock);
-                                observer.on_termination(Termination::Completed);
-                                return true;
+                                completed = true;
+                                break;
                             }
                         }
-                        false
+                        (values, completed)
                     });
-                    if completed {
-                        return RecursionAction::Stop;
-                    }
 
-                    context.lock_mut(|mut lock| {
-                        if let Some((next_instant, _)) = lock.values.front() {
-                            // Continue
-                            RecursionAction::ContinueAt(*next_instant)
-                        } else {
-                            // No more values. Stop timer. Set timer to None.
-                            if let Some(timer) = lock.timer.take() {
-                                drop(lock);
-                                timer.dispose();
+                    if completed {
+                        safe_lock_option_observer!(on_next_and_termination: observer, values: values, Termination::Completed);
+                        RecursionAction::Stop
+                    } else {
+                        safe_lock_option_observer!(on_next: observer, values: values);
+                        context.lock_mut(|mut lock| {
+                            if let Some((next_instant, _)) = lock.values.front() {
+                                // Continue
+                                RecursionAction::ContinueAt(*next_instant)
+                            } else {
+                                // No more values. Stop timer. Set timer to None.
+                                if let Some(timer) = lock.timer.take() {
+                                    drop(lock);
+                                    timer.dispose();
+                                }
+                                RecursionAction::Stop
                             }
-                            RecursionAction::Stop
-                        }
-                    })
+                        })
+                    }
                 },
                 Some(self.delay),
             )));
