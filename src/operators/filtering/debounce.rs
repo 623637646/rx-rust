@@ -77,18 +77,18 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let context = self.context.clone();
-        let observer = self.observer.clone();
-        let disposal = self.scheduler.schedule(
-            move || {
-                if let Some(current_value) = safe_lock_option!(take: context, current_value) {
-                    safe_lock_option_observer!(on_next: observer, current_value);
-                }
-            },
-            Some(self.time_span),
-        );
-
         self.context.lock_mut(|mut lock| {
+            let context = self.context.clone();
+            let observer = self.observer.clone();
+            let disposal = self.scheduler.schedule(
+                move || {
+                    if let Some(current_value) = safe_lock_option!(take: context, current_value) {
+                        safe_lock_option_observer!(on_next: observer, current_value);
+                    }
+                },
+                Some(self.time_span),
+            );
+
             lock.current_value = Some(value);
             if let Some(disposal) = lock.timer.replace(BoxedDisposal::new(disposal)) {
                 drop(lock);
