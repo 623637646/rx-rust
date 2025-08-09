@@ -135,17 +135,18 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.context.clone().dispose();
-        if let Some(mut observer) = safe_lock_option!(take: self.observer) {
-            match termination {
-                Termination::Completed => {
-                    let values = safe_lock!(mem_take: self.context, values);
-                    if !values.is_empty() {
-                        observer.on_next(values);
-                    }
+        match termination {
+            Termination::Completed => {
+                let values = safe_lock!(mem_take: self.context, values);
+                if !values.is_empty() {
+                    safe_lock_option_observer!(on_next_and_termination: self.observer, values, termination);
+                } else {
+                    safe_lock_option_observer!(on_termination: self.observer, termination);
                 }
-                Termination::Error(_) => {}
             }
-            observer.on_termination(termination);
+            Termination::Error(_) => {
+                safe_lock_option_observer!(on_termination: self.observer, termination);
+            }
         }
     }
 }

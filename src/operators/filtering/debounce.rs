@@ -103,16 +103,17 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.context.clone().dispose();
-        if let Some(mut observer) = safe_lock_option!(take: self.observer) {
-            match termination {
-                Termination::Completed => {
-                    if let Some(value) = safe_lock_option!(take: self.context, current_value) {
-                        observer.on_next(value);
-                    }
+        match termination {
+            Termination::Completed => {
+                if let Some(value) = safe_lock_option!(take: self.context, current_value) {
+                    safe_lock_option_observer!(on_next_and_termination: self.observer, value, termination);
+                } else {
+                    safe_lock_option_observer!(on_termination: self.observer, termination);
                 }
-                Termination::Error(_) => {}
             }
-            observer.on_termination(termination);
+            Termination::Error(_) => {
+                safe_lock_option_observer!(on_termination: self.observer, termination);
+            }
         }
     }
 }

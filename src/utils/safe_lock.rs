@@ -126,6 +126,19 @@ macro_rules! safe_lock_option_observer {
         )
     }};
 
+    (on_next_and_termination: $lock_name:expr, $value:expr, $termination:expr) => {{
+        use $crate::safe_lock_option;
+        let value = $value;
+        let termination = $termination;
+        if let Some(mut observer) = safe_lock_option!(take: $lock_name) {
+            Observer::on_next(&mut observer, value);
+            Observer::on_termination(observer, termination);
+            true
+        } else {
+            false
+        }
+    }};
+
     (on_next_and_termination: $lock_name:expr, values: $values:expr, $termination:expr) => {{
         use $crate::safe_lock_option;
         let values = $values;
