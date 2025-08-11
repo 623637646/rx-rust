@@ -83,9 +83,8 @@ where
                 } else {
                     lock.push_back(value.clone());
                 }
-                drop(lock);
-                self.publish_subject.on_next(value);
             });
+            self.publish_subject.on_next(value);
         }
     }
 

@@ -42,9 +42,8 @@ where
                 State::Subscribed(count, _) => *count += 1,
                 State::Unsubscribed => panic!("Already Unsubscribed"),
             };
-            drop(lock);
-            self.source.subscribe(observer) + self.state.clone()
-        })
+        });
+        self.source.subscribe(observer) + self.state.clone()
     }
 }
 

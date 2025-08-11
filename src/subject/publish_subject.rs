@@ -49,10 +49,10 @@ where
                 Subscription::new_with_disposal(PublishSubjectDisposal { state: self.0, key })
             }
             State::Processing {
-                slot_map: observers,
+                slot_map,
                 events: _,
             } => {
-                let key = observers.insert(Some(BoxedObserver::new(observer)));
+                let key = slot_map.insert(Some(BoxedObserver::new(observer)));
                 drop(lock);
                 Subscription::new_with_disposal(PublishSubjectDisposal { state: self.0, key })
             }
@@ -97,9 +97,9 @@ where
                 match &mut *lock {
                     State::Idle(..) => unreachable!(),
                     State::Processing {
-                        slot_map: observers,
+                        slot_map,
                         events: _,
-                    } => *observers = dense_slot_map,
+                    } => *slot_map = dense_slot_map,
                     State::Terminated(..) => unreachable!(),
                 }
 
@@ -109,46 +109,45 @@ where
                     .iter_mut()
                     .for_each(|observer| observer.1.on_next(value.clone()));
 
-                self.0.clone().lock_mut(|mut lock| {
+                let events = self.0.clone().lock_mut(|mut lock| {
                     // Get SloptMap and Events
-                    let (mut dense_slot_map, events) = match std::mem::replace(
+                    let (mut slot_map, events) = match std::mem::replace(
                         &mut *lock,
                         State::Idle(DenseSlotMap::new()), // Placeholder,
                     ) {
                         State::Idle(..) => unreachable!(),
-                        State::Processing {
-                            slot_map: observers,
-                            events,
-                        } => (observers, events),
+                        State::Processing { slot_map, events } => (slot_map, events),
                         State::Terminated(..) => unreachable!(),
                     };
 
                     // Set Observers
                     for (key, observer) in observers {
-                        if dense_slot_map.contains_key(key) {
-                            dense_slot_map[key] = Some(observer);
+                        if slot_map.contains_key(key) {
+                            slot_map[key] = Some(observer);
                         } else {
                             // already unsubscribed
                         }
                     }
 
                     // Set SloptMap
-                    *lock = State::Idle(dense_slot_map);
-                    drop(lock);
+                    *lock = State::Idle(slot_map);
 
-                    // Handle Events
-                    for event in events {
-                        match event {
-                            Event::Next(value) => {
-                                self.on_next(value);
-                            }
-                            Event::Termination(termination) => {
-                                self.clone().on_termination(termination);
-                                break;
-                            }
+                    // Return
+                    events
+                });
+
+                // Handle Events
+                for event in events {
+                    match event {
+                        Event::Next(value) => {
+                            self.on_next(value);
+                        }
+                        Event::Termination(termination) => {
+                            self.clone().on_termination(termination);
+                            break;
                         }
                     }
-                });
+                }
             }
             State::Processing {
                 slot_map: _,
@@ -226,10 +225,10 @@ impl<T, E> Disposable for PublishSubjectDisposal<'_, T, E> {
                     observers.remove(self.key);
                 }
                 State::Processing {
-                    slot_map: observers,
+                    slot_map,
                     events: _,
                 } => {
-                    observers.remove(self.key);
+                    slot_map.remove(self.key);
                 }
                 State::Terminated(_) => {
                     // Do nothing if it was already terminated
