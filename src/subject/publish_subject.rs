@@ -1,7 +1,7 @@
 use super::Subject;
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
-use crate::safe_lock;
+use crate::observer::Event;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -10,26 +10,12 @@ use crate::{
 use educe::Educe;
 use slotmap::{DefaultKey, DenseSlotMap};
 
-enum ObserverActionInsertState<'or, T, E> {
-    BeforeInserted(BoxedObserver<'or, T, E>),
-    Inserted(DefaultKey),
-    Cancelled,
-}
-
-enum ContinueAction<'or, T, E> {
-    InsertObserver(Shared<Mutable<ObserverActionInsertState<'or, T, E>>>),
-    RemoveObserver(DefaultKey),
-    EmitNext(T),
-}
-
-enum ProcessedAction<'or, T, E> {
-    Continue(Vec<ContinueAction<'or, T, E>>),
-    Terminate(Termination<E>),
-}
-
 enum State<'or, T, E> {
-    Idle(DenseSlotMap<DefaultKey, BoxedObserver<'or, T, E>>),
-    Processing(ProcessedAction<'or, T, E>),
+    Idle(DenseSlotMap<DefaultKey, Option<BoxedObserver<'or, T, E>>>),
+    Processing {
+        slot_map: DenseSlotMap<DefaultKey, Option<BoxedObserver<'or, T, E>>>,
+        events: Vec<Event<T, E>>,
+    },
     Terminated(Termination<E>),
 }
 
@@ -58,29 +44,18 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.0.clone().lock_mut(|mut lock| match &mut *lock {
             State::Idle(observers) => {
-                let key = observers.insert(BoxedObserver::new(observer));
+                let key = observers.insert(Some(BoxedObserver::new(observer)));
                 drop(lock);
-                Subscription::new_with_disposal(PublishSubjectKeyDisposal { state: self.0, key })
+                Subscription::new_with_disposal(PublishSubjectDisposal { state: self.0, key })
             }
-            State::Processing(result) => match result {
-                ProcessedAction::Continue(actions) => {
-                    let insert_state = Shared::new(Mutable::new(
-                        ObserverActionInsertState::BeforeInserted(BoxedObserver::new(observer)),
-                    ));
-                    actions.push(ContinueAction::InsertObserver(insert_state.clone()));
-                    drop(lock);
-                    Subscription::new_with_disposal(PublishSubjectInsertStateDisposal {
-                        state: self.0,
-                        insert_state,
-                    })
-                }
-                ProcessedAction::Terminate(termination) => {
-                    let termination = termination.clone();
-                    drop(lock);
-                    observer.on_termination(termination);
-                    Subscription::default()
-                }
-            },
+            State::Processing {
+                slot_map: observers,
+                events: _,
+            } => {
+                let key = observers.insert(Some(BoxedObserver::new(observer)));
+                drop(lock);
+                Subscription::new_with_disposal(PublishSubjectDisposal { state: self.0, key })
+            }
             State::Terminated(termination) => {
                 let termination = termination.clone();
                 drop(lock);
@@ -97,112 +72,123 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        let observers = self.0.lock_mut(|mut lock| {
-            match std::mem::replace(
-                &mut *lock,
-                State::Processing(ProcessedAction::Continue(Vec::new())),
-            ) {
-                State::Idle(observers) => Some(observers),
-                State::Processing(processed_action) => {
-                    match processed_action {
-                        ProcessedAction::Continue(mut actions) => {
-                            actions.push(ContinueAction::EmitNext(value.clone()));
-                        }
-                        ProcessedAction::Terminate(_) => {
-                            // ignore if it will be terminated
-                        }
+        self.0.clone().lock_mut(|mut lock| match &mut *lock {
+            State::Idle(_) => {
+                // Get SloptMap
+                let mut dense_slot_map = match std::mem::replace(
+                    &mut *lock,
+                    State::Processing {
+                        slot_map: DenseSlotMap::new(), // Placeholder
+                        events: Vec::new(),
+                    },
+                ) {
+                    State::Idle(dense_slot_map) => dense_slot_map,
+                    State::Processing { .. } => unreachable!(),
+                    State::Terminated(..) => unreachable!(),
+                };
+
+                // Get observers
+                let mut observers: Vec<_> = dense_slot_map
+                    .iter_mut()
+                    .map(|value| (value.0, value.1.take().unwrap()))
+                    .collect();
+
+                // Set SloptMap
+                match &mut *lock {
+                    State::Idle(..) => unreachable!(),
+                    State::Processing {
+                        slot_map: observers,
+                        events: _,
+                    } => *observers = dense_slot_map,
+                    State::Terminated(..) => unreachable!(),
+                }
+
+                // Notify
+                drop(lock);
+                observers
+                    .iter_mut()
+                    .for_each(|observer| observer.1.on_next(value.clone()));
+
+                self.0.clone().lock_mut(|mut lock| {
+                    // Get SloptMap and Events
+                    let (mut dense_slot_map, events) = match std::mem::replace(
+                        &mut *lock,
+                        State::Idle(DenseSlotMap::new()), // Placeholder,
+                    ) {
+                        State::Idle(..) => unreachable!(),
+                        State::Processing {
+                            slot_map: observers,
+                            events,
+                        } => (observers, events),
+                        State::Terminated(..) => unreachable!(),
                     };
-                    None
-                }
-                State::Terminated(termination) => {
-                    // It's already terminated. revert
-                    *lock = State::Terminated(termination);
-                    None
-                }
-            }
-        });
 
-        if let Some(mut observers) = observers {
-            // Notify
-            observers
-                .values_mut()
-                .for_each(|observer| observer.on_next(value.clone()));
-
-            // Will reset to Idle, set to "Zero Processing" first. Correct it later.
-            match safe_lock!(mem_replace: self.0, State::Processing(ProcessedAction::Continue(Vec::new())))
-            {
-                State::Idle(_) => unreachable!(),
-                State::Processing(processed_action) => {
-                    match processed_action {
-                        ProcessedAction::Continue(actions) => {
-                            for action in actions {
-                                match action {
-                                    ContinueAction::InsertObserver(insert_state) => {
-                                        insert_state.lock_mut(|mut lock| {
-                                            match std::mem::replace(
-                                                &mut *lock,
-                                                ObserverActionInsertState::Cancelled, // set to Cancelled first. Correct it later.
-                                            ) {
-                                                ObserverActionInsertState::BeforeInserted(
-                                                    observer,
-                                                ) => {
-                                                    let key = observers.insert(observer);
-                                                    *lock =
-                                                        ObserverActionInsertState::Inserted(key);
-                                                }
-                                                ObserverActionInsertState::Inserted(_) => {
-                                                    unreachable!()
-                                                }
-                                                ObserverActionInsertState::Cancelled => {
-                                                    // Do nothing if it was already cancelled
-                                                }
-                                            }
-                                        });
-                                    }
-                                    ContinueAction::RemoveObserver(key) => {
-                                        observers.remove(key);
-                                    }
-                                    ContinueAction::EmitNext(value) => {
-                                        observers
-                                            .values_mut()
-                                            .for_each(|observer| observer.on_next(value.clone()));
-                                    }
-                                }
-                            }
-
-                            // Reset to Idle
-                            safe_lock!(set: self.0, State::Idle(observers));
-                        }
-                        ProcessedAction::Terminate(termination) => {
-                            safe_lock!(set: self.0, State::Terminated(termination.clone()));
-                            observers.into_iter().for_each(|(_, observer)| {
-                                observer.on_termination(termination.clone());
-                            })
+                    // Set Observers
+                    for (key, observer) in observers {
+                        if dense_slot_map.contains_key(key) {
+                            dense_slot_map[key] = Some(observer);
+                        } else {
+                            // already unsubscribed
                         }
                     }
-                }
-                State::Terminated(_) => unreachable!(),
-            };
-        }
+
+                    // Set SloptMap
+                    *lock = State::Idle(dense_slot_map);
+                    drop(lock);
+
+                    // Handle Events
+                    for event in events {
+                        match event {
+                            Event::Next(value) => {
+                                self.on_next(value);
+                            }
+                            Event::Termination(termination) => {
+                                self.clone().on_termination(termination);
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+            State::Processing {
+                slot_map: _,
+                events,
+            } => {
+                events.push(Event::Next(value));
+            }
+            State::Terminated(_) => {
+                // It's already terminated. Do nothing.
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         self.0.lock_mut(|mut lock| {
-            match std::mem::replace(&mut *lock, State::Terminated(termination.clone())) {
-                State::Idle(observers) => {
+            match &mut *lock {
+                State::Idle(_) => {
+                    // Get SloptMap
+                    let dense_slot_map =
+                        match std::mem::replace(&mut *lock, State::Terminated(termination.clone()))
+                        {
+                            State::Idle(dense_slot_map) => dense_slot_map,
+                            State::Processing { .. } => unreachable!(),
+                            State::Terminated(..) => unreachable!(),
+                        };
                     drop(lock);
-                    observers.into_iter().for_each(|(_, observer)| {
-                        observer.on_termination(termination.clone());
+
+                    // Notify
+                    dense_slot_map.into_iter().for_each(|observer| {
+                        observer.1.unwrap().on_termination(termination.clone())
                     });
                 }
-                State::Processing(processed_action) => {
-                    assert!(matches!(processed_action, ProcessedAction::Continue(_)));
-                    // revert
-                    *lock = State::Processing(ProcessedAction::Terminate(termination));
+                State::Processing {
+                    slot_map: _,
+                    events,
+                } => {
+                    events.push(Event::Termination(termination));
                 }
-                State::Terminated(termination) => {
-                    // revert
-                    *lock = State::Terminated(termination);
+                State::Terminated(_) => {
+                    // It's already terminated. Do nothing.
                 }
             }
         });
@@ -221,72 +207,34 @@ where
     {
         self.0.lock_ref(|lock| match &*lock {
             State::Idle(_) => None,
-            State::Processing(_) => None,
+            State::Processing { .. } => None,
             State::Terminated(termination) => Some(termination.clone()),
         })
     }
 }
 
-struct PublishSubjectKeyDisposal<'or, T, E> {
+struct PublishSubjectDisposal<'or, T, E> {
     state: Shared<Mutable<State<'or, T, E>>>,
     key: DefaultKey,
 }
 
-impl<T, E> Disposable for PublishSubjectKeyDisposal<'_, T, E> {
+impl<T, E> Disposable for PublishSubjectDisposal<'_, T, E> {
     fn dispose(self) {
         self.state.lock_mut(|mut lock| {
             match &mut *lock {
                 State::Idle(observers) => {
                     observers.remove(self.key);
                 }
-                State::Processing(processed_action) => match processed_action {
-                    ProcessedAction::Continue(actions) => {
-                        actions.push(ContinueAction::RemoveObserver(self.key));
-                    }
-                    ProcessedAction::Terminate(_) => {
-                        // Do nothing if it will be terminated
-                    }
-                },
+                State::Processing {
+                    slot_map: observers,
+                    events: _,
+                } => {
+                    observers.remove(self.key);
+                }
                 State::Terminated(_) => {
                     // Do nothing if it was already terminated
                 }
             }
         });
-    }
-}
-
-struct PublishSubjectInsertStateDisposal<'or, T, E> {
-    state: Shared<Mutable<State<'or, T, E>>>,
-    insert_state: Shared<Mutable<ObserverActionInsertState<'or, T, E>>>,
-}
-
-impl<T, E> Disposable for PublishSubjectInsertStateDisposal<'_, T, E> {
-    fn dispose(self) {
-        match safe_lock!(mem_replace: self.insert_state, ObserverActionInsertState::Cancelled) {
-            ObserverActionInsertState::BeforeInserted(_) => {
-                // Unsubscribed before the observer was inserted
-            }
-            ObserverActionInsertState::Inserted(key) => {
-                self.state.lock_mut(|mut lock| {
-                    match &mut *lock {
-                        State::Idle(observers) => {
-                            observers.remove(key);
-                        }
-                        State::Processing(processed_action) => match processed_action {
-                            ProcessedAction::Continue(actions) => {
-                                actions.push(ContinueAction::RemoveObserver(key));
-                            }
-                            ProcessedAction::Terminate(_) => {
-                                // Do nothing if it will be terminated
-                            }
-                        },
-                        State::Terminated(_) => {
-                            // Do nothing if it was already terminated
-                        }
-                    }
-                });
-            }
-            ObserverActionInsertState::Cancelled => unreachable!(),
-        }
     }
 }

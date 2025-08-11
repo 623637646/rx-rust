@@ -350,12 +350,11 @@ fn test_complete_on_next() {
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
-    let mut subject_cloned = Some(subject.clone());
+    let subject_cloned = subject.clone();
     let _subscription = observable.subscribe_with_callback(
         move |_| {
             subject_cloned
-                .take()
-                .unwrap()
+                .clone()
                 .on_termination(Termination::Completed);
         },
         move |_| {},
@@ -389,12 +388,11 @@ fn test_error_on_next() {
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
-    let mut subject_cloned = Some(subject.clone());
+    let subject_cloned = subject.clone();
     let _subscription = observable.subscribe_with_callback(
         move |_| {
             subject_cloned
-                .take()
-                .unwrap()
+                .clone()
                 .on_termination(Termination::Error("error"));
         },
         move |_| {},
@@ -542,6 +540,48 @@ fn test_sub_on_next() {
     assert_eq!(checker_3.values(), [-1, 111, 222]);
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
+}
+
+#[test]
+fn test_next_on_next() {
+    let mut subject = BehaviorSubject::new(-1);
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let _subscription = observable.clone().subscribe(observer);
+    let mut subject_cloned = subject.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            assert!(subject_cloned.terminated().is_none());
+            if value < 3 {
+                subject_cloned.on_next(value + 1);
+            }
+            subject_cloned
+                .clone()
+                .on_termination(Termination::Completed);
+        },
+        move |_| {},
+    );
+    assert_eq!(checker.values(), [-1, 0]);
+    assert_eq!(checker.state(), State::Completed);
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
+    assert_eq!(subject.value(), 0);
+
+    subject.on_next(1);
+    assert_eq!(checker.values(), [-1, 0]);
+    assert_eq!(checker.state(), State::Completed);
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
+    assert_eq!(subject.value(), 0);
+
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [-1, 0]);
+    assert_eq!(checker.state(), State::Completed);
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
+    assert_eq!(subject.value(), 0);
 }
 
 #[test]

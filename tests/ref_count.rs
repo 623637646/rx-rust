@@ -9,6 +9,7 @@ use rx_rust::operators::connectable::ref_count::RefCount;
 use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_disposable;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::subject::Subject;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -649,12 +650,11 @@ fn test_complete_on_next() {
         .ref_count();
 
     let _subscription = observable.clone().subscribe(observer);
-    let mut subject_cloned = Some(subject.clone());
+    let subject_cloned = subject.clone();
     let _subscription = observable.subscribe_with_callback(
         move |_| {
             subject_cloned
-                .take()
-                .unwrap()
+                .clone()
                 .on_termination(Termination::Completed);
         },
         move |_| {},
@@ -690,12 +690,11 @@ fn test_error_on_next() {
         .ref_count();
 
     let _subscription = observable.clone().subscribe(observer);
-    let mut subject_cloned = Some(subject.clone());
+    let subject_cloned = subject.clone();
     let _subscription = observable.subscribe_with_callback(
         move |_| {
             subject_cloned
-                .take()
-                .unwrap()
+                .clone()
                 .on_termination(Termination::Error("error"));
         },
         move |_| {},
@@ -859,6 +858,50 @@ fn test_sub_on_next() {
     assert_eq!(checker_3.values(), [2]);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+}
+
+#[test]
+fn test_next_on_next() {
+    let mut counter = 0;
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+    let observable = observable
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .publish()
+        .ref_count();
+
+    let _subscription = observable.clone().subscribe(observer);
+    let mut subject_cloned = subject.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            assert!(subject_cloned.terminated().is_none());
+            if value < 3 {
+                subject_cloned.on_next(());
+            }
+            subject_cloned
+                .clone()
+                .on_termination(Termination::Completed);
+        },
+        move |_| {},
+    );
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_next(());
+    assert_eq!(checker.values(), [1, 2, 3]);
+    assert_eq!(checker.state(), State::Completed);
+
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [1, 2, 3]);
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
