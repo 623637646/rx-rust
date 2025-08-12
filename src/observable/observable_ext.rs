@@ -39,7 +39,7 @@ use crate::{
             do_after_termination::DoAfterTermination, do_before_disposal::DoBeforeDisposal,
             do_before_next::DoBeforeNext, do_before_subscription::DoBeforeSubscription,
             do_before_termination::DoBeforeTermination, materialize::Materialize,
-            observe_on::ObserveOn,
+            observe_on::ObserveOn, subscribe_on::SubscribeOn,
         },
     },
     subject::{
@@ -409,6 +409,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         OE0: Observable<'or, 'sub, T, E>,
     {
         start.concat_with(self)
+    }
+
+    fn subscribe_on<S>(self, scheduler: S) -> SubscribeOn<Self, S> {
+        SubscribeOn::new(self, scheduler)
     }
 
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>
