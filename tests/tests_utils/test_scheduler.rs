@@ -4,30 +4,51 @@ use rx_rust::{
     scheduler::Scheduler,
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
-use std::{sync::atomic::Ordering, time::Duration};
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 impl Scheduler for TestRuntime {
     fn schedule_future(
         &self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> impl Disposable + NecessarySend + 'static {
-        let entry = Shared::new(Mutable::new(EntryExitChecker::enter()));
-        let weak_entry = Shared::downgrade(&entry);
+        let is_finished = Shared::new(AtomicBool::new(false));
+        let is_finished_cloned = is_finished.clone();
         let alive_tasks_count = self.alive_tasks_count.clone();
-        alive_tasks_count.fetch_add(1, Ordering::SeqCst);
         let alive_tasks_count_cloned = alive_tasks_count.clone();
+        let entry = Shared::new(Mutable::new(EntryExitChecker::enter()));
+        let entry_cloned = entry.clone();
+        alive_tasks_count.fetch_add(1, Ordering::SeqCst);
         let future = async move {
             future.await;
-            if let Some(entry) = weak_entry.upgrade() {
-                entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
-            }
-            alive_tasks_count.fetch_sub(1, Ordering::SeqCst);
+            let _ = is_finished.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |is_finished| {
+                if !is_finished {
+                    entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
+                    alive_tasks_count.fetch_sub(1, Ordering::SeqCst);
+                    Some(true)
+                } else {
+                    None
+                }
+            });
         };
         let handle = self.spawn(future);
         CallbackDisposal::new(move || {
+            let _ = is_finished_cloned.fetch_update(
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+                |is_finished| {
+                    if !is_finished {
+                        entry_cloned.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
+                        alive_tasks_count_cloned.fetch_sub(1, Ordering::SeqCst);
+                        Some(true)
+                    } else {
+                        None
+                    }
+                },
+            );
             handle.abort();
-            entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
-            alive_tasks_count_cloned.fetch_sub(1, Ordering::SeqCst);
         })
     }
 

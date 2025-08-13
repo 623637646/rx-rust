@@ -278,6 +278,28 @@ fn test_scheduler_should_be_disposed_after_completed() {
 }
 
 #[test]
+fn test_scheduler_should_be_disposed_after_unsub() {
+    block_on(|runtime| async move {
+        let (_tx, rx) = futures::channel::mpsc::unbounded::<i32>();
+        let stream = rx;
+        let observable = FromStream::new(stream, runtime.clone());
+        let (checker, observer) = Checker::new();
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        let subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+
+        subscription.dispose();
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
 fn test_order_with_continuous_next() {
     block_on(|runtime| async move {
         let (tx, rx) = futures::channel::mpsc::unbounded();

@@ -260,6 +260,30 @@ fn test_scheduler_should_be_disposed_after_completed() {
 }
 
 #[test]
+fn test_scheduler_should_be_disposed_after_unsub() {
+    block_on(|runtime| async move {
+        let (_tx, rx) = futures::channel::oneshot::channel::<i32>();
+
+        let observable = FromFuture::new(rx, runtime.clone());
+        let observable = observable.map(|result| result.unwrap_or(-1));
+        let (checker, observer) = Checker::new();
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        let subscription = observable.subscribe(observer);
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+
+        subscription.dispose();
+        runtime.sleep(Duration::from_millis(10)).await;
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
 fn test_clone() {
     block_on(|runtime| async move {
         let source = std::future::ready(111);

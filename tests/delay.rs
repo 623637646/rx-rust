@@ -873,6 +873,48 @@ fn test_scheduler_should_be_disposed_after_error() {
 }
 
 #[test]
+fn test_scheduler_should_be_disposed_after_unsub() {
+    block_on(|runtime| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.delay(Duration::from_millis(100), runtime.clone());
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        let subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        sender.on_next(111);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+
+        subscription.dispose();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        runtime.sleep(Duration::from_millis(90)).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        runtime.sleep(Duration::from_millis(20)).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
 fn test_order_with_continuous_next() {
     block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
