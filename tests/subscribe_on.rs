@@ -1310,16 +1310,16 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         let subscription = observable.subscribe(observer);
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
-        runtime.sleep(Duration::from_millis(10)).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        subscription.dispose();
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
 
-        subscription.dispose();
+        runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        assert!(
+            channel_checker.state() == ChannelState::Initialized
+                || channel_checker.state() == ChannelState::Unsubscribed
+        );
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
     });
 }

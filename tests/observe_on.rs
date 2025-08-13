@@ -1214,6 +1214,8 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
         subscription.dispose();
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
         runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty() || checker.values() == [111]);
         assert_eq!(checker.state(), State::Dropped);

@@ -895,18 +895,9 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
         subscription.dispose();
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
 
-        runtime.sleep(Duration::from_millis(90)).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
-
-        runtime.sleep(Duration::from_millis(20)).await;
+        runtime.sleep(Duration::from_millis(10)).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

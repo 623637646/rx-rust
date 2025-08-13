@@ -715,6 +715,10 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
         subscription.dispose();
+        // assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+
+        // No need to sleep because the observer is not keeped in scheduler.
+        // runtime.sleep(Duration::from_millis(10)).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
