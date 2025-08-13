@@ -283,6 +283,7 @@ fn test_without_convenient_api() {
         assert_eq!(checker.state(), State::Completed);
     });
 }
+
 #[test]
 fn test_complete_after_next() {
     block_on(|runtime| async move {

@@ -87,6 +87,7 @@ fn test_completed_without_catch() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
 }
+
 #[test]
 fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();

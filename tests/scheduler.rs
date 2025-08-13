@@ -166,6 +166,7 @@ fn test_schedule_recursively_small_delay() {
         disposal.dispose();
     });
 }
+
 #[test]
 fn test_schedule_period_without_delay() {
     block_on(|runtime| async move {
