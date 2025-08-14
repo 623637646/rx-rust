@@ -336,10 +336,10 @@ fn test_unsubscribe() {
 #[test]
 fn test_precision() {
     block_on(|runtime| async move {
-        let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let observable = Interval::new(RECURSION_PERIOD, runtime.clone(), None);
         let observable = observable.delay(RECURSION_PERIOD, runtime.clone());
+        let start_instant = Instant::now();
         let _subscription = observable.subscribe_with_callback(
             move |_| {
                 tx.unbounded_send(Instant::now()).unwrap();
@@ -350,7 +350,7 @@ fn test_precision() {
         let mut count = 0;
         while let Some(call_instant) = rx.next().await {
             let duration = call_instant - start_instant;
-            let diff = duration - (count as u32 * RECURSION_PERIOD);
+            let diff = duration - ((count as u32 + 1) * RECURSION_PERIOD);
             assert!(
                 diff < RECURSION_EXPECTED_DIFF,
                 "diff: {diff:?}, count: {count}"

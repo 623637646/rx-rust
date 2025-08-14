@@ -164,9 +164,9 @@ fn test_unsubscribe() {
 #[test]
 fn test_precision() {
     block_on(|runtime| async move {
-        let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let observable = Interval::new(RECURSION_PERIOD, runtime.clone(), None);
+        let start_instant = Instant::now();
         let _subscription = observable.subscribe_with_callback(
             move |_| {
                 tx.unbounded_send(Instant::now()).unwrap();

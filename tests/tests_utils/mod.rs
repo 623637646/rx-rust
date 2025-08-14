@@ -11,5 +11,5 @@ pub(crate) mod types;
 
 use std::time::Duration;
 pub(crate) const RECURSION_EXECUTION_TIMES: usize = 200;
-pub(crate) const RECURSION_EXPECTED_DIFF: Duration = Duration::from_millis(40);
+pub(crate) const RECURSION_EXPECTED_DIFF: Duration = Duration::from_millis(10);
 pub(crate) const RECURSION_PERIOD: Duration = Duration::from_millis(5);

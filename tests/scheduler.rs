@@ -73,10 +73,10 @@ fn test_schedule_with_late_abort() {
 #[test]
 fn test_schedule_recursively_without_delay() {
     block_on(|runtime| async move {
-        let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
         let first = Instant::now();
+        let start_instant = Instant::now();
         let disposal = runtime.schedule_recursively(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -107,10 +107,10 @@ fn test_schedule_recursively_without_delay() {
 #[test]
 fn test_schedule_recursively_with_delay() {
     block_on(|runtime| async move {
-        let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
         let first = Instant::now() + RECURSION_PERIOD;
+        let start_instant = Instant::now();
         let disposal = runtime.schedule_recursively(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -170,9 +170,9 @@ fn test_schedule_recursively_small_delay() {
 #[test]
 fn test_schedule_period_without_delay() {
     block_on(|runtime| async move {
-        let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
+        let start_instant = Instant::now();
         let disposal = runtime.schedule_periodically(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
@@ -204,9 +204,9 @@ fn test_schedule_period_without_delay() {
 #[test]
 fn test_schedule_period_with_delay() {
     block_on(|runtime| async move {
-        let start_instant = Instant::now();
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let mut tx = Some(tx);
+        let start_instant = Instant::now();
         let disposal = runtime.schedule_periodically(
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
