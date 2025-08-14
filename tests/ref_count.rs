@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_NEXT_LOOP;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
@@ -17,7 +18,7 @@ use rx_rust::{
     operators::creating::create::Create,
     subject::publish_subject::PublishSubject,
 };
-use std::{convert::Infallible, time::Duration};
+use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -378,7 +379,7 @@ fn test_async() {
             .spawn(async move { subscription_1.dispose() })
             .await
             .unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [2]);

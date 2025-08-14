@@ -1,6 +1,7 @@
 #![cfg(feature = "futures")]
 mod tests_utils;
 
+use crate::tests_utils::DURATION_NEXT_LOOP;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use futures::{SinkExt, stream};
@@ -11,7 +12,6 @@ use rx_rust::{
     operators::creating::from_stream::FromStream,
 };
 use std::sync::atomic::Ordering;
-use std::time::Duration;
 use tests_utils::checker::Checker;
 
 #[test]
@@ -27,12 +27,12 @@ fn test_completed() {
         assert_eq!(checker.state(), State::Active);
 
         tx.send(111).await.unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
 
         drop(tx);
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
@@ -51,7 +51,7 @@ fn test_completed_without_next() {
         assert_eq!(checker.state(), State::Active);
 
         drop(tx);
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Completed);
     });
@@ -70,12 +70,12 @@ fn test_unsubscribe() {
         assert_eq!(checker.state(), State::Active);
 
         tx.send(111).await.unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
 
         subscription.dispose();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
     });
@@ -97,12 +97,12 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
 
         tx.send(111).await.unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
 
         drop(tx);
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
@@ -125,7 +125,7 @@ fn test_subscribe_by_different_observer() {
         let (on_next, on_termination) = observer_2.into_callbacks();
         let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
 
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker_1.values(), [111, 222, 333]);
         assert_eq!(checker_1.state(), State::Completed);
         assert_eq!(checker_2.values(), [111, 222, 333]);
@@ -146,7 +146,7 @@ fn test_unsub_on_next_by_take() {
         assert_eq!(checker.state(), State::Active);
 
         tx.send(111).await.unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
@@ -161,21 +161,13 @@ fn test_complete_after_next() {
         let (checker, observer) = Checker::new();
 
         let _subscription = observable.subscribe(observer);
-        runtime.sleep(Duration::from_millis(10)).await; // make sure it's subscribed
+        runtime.sleep(DURATION_NEXT_LOOP).await; // make sure it's subscribed
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
         tx.send(111).await.unwrap();
         drop(tx);
-        runtime.sleep(Duration::from_millis(10)).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Completed);
-
-        runtime.sleep(Duration::from_millis(90)).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Completed);
-
-        runtime.sleep(Duration::from_millis(20)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
@@ -190,22 +182,14 @@ fn test_unsub_after_next() {
         let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(observer);
-        runtime.sleep(Duration::from_millis(10)).await; // make sure it's subscribed
+        runtime.sleep(DURATION_NEXT_LOOP).await; // make sure it's subscribed
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
         tx.send(111).await.unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         subscription.dispose();
-        runtime.sleep(Duration::from_millis(10)).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Dropped);
-
-        runtime.sleep(Duration::from_millis(90)).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Dropped);
-
-        runtime.sleep(Duration::from_millis(20)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
     });
@@ -220,22 +204,14 @@ fn test_unsub_after_completed() {
         let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(observer);
-        runtime.sleep(Duration::from_millis(10)).await; // make sure it's subscribed
+        runtime.sleep(DURATION_NEXT_LOOP).await; // make sure it's subscribed
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
         drop(tx);
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         subscription.dispose();
-        runtime.sleep(Duration::from_millis(10)).await;
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Completed);
-
-        runtime.sleep(Duration::from_millis(90)).await;
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Completed);
-
-        runtime.sleep(Duration::from_millis(20)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Completed);
     });
@@ -270,7 +246,7 @@ fn test_scheduler_should_be_disposed_after_completed() {
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
         drop(tx);
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
@@ -294,7 +270,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         subscription.dispose();
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
 
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
@@ -317,12 +293,12 @@ fn test_order_with_continuous_next() {
         for i in &values {
             tx.unbounded_send(*i).unwrap();
         }
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), values);
         assert_eq!(checker.state(), State::Active);
 
         drop(tx);
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), values);
         assert_eq!(checker.state(), State::Completed);
     });

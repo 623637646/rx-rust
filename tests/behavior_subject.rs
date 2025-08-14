@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_NEXT_LOOP;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
@@ -14,7 +15,6 @@ use rx_rust::subject::Subject;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::{Mutable, Shared};
 use std::convert::Infallible;
-use std::time::Duration;
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
 
@@ -253,7 +253,7 @@ fn test_async() {
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [&-1, &111]);
         assert_eq!(checker.state(), State::Dropped);
         assert!(subject.terminated().is_none());

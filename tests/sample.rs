@@ -1,5 +1,8 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_DEVIATION;
+use crate::tests_utils::DURATION_LOGICAL;
+use crate::tests_utils::DURATION_NEXT_LOOP;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
@@ -15,7 +18,7 @@ use rx_rust::{
     },
     subject::publish_subject::PublishSubject,
 };
-use std::{convert::Infallible, time::Duration};
+use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -180,7 +183,7 @@ fn test_completed_source_and_sampler_are_same() {
 fn test_completed_with_interval() {
     block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
-        let sampler = Interval::new(Duration::from_millis(100), runtime.clone(), None);
+        let sampler = Interval::new(DURATION_LOGICAL, runtime.clone(), None);
         let (checker, observer) = Checker::new();
 
         // Custom operations
@@ -191,7 +194,7 @@ fn test_completed_with_interval() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(Duration::from_millis(20)).await;
+        runtime.sleep(DURATION_DEVIATION).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -201,7 +204,7 @@ fn test_completed_with_interval() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(Duration::from_millis(100)).await;
+        runtime.sleep(DURATION_LOGICAL).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -216,7 +219,7 @@ fn test_completed_with_interval() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(Duration::from_millis(100)).await;
+        runtime.sleep(DURATION_LOGICAL).await;
         assert_eq!(checker.values(), [111, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -615,7 +618,7 @@ fn test_async() {
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

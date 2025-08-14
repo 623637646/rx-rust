@@ -1,6 +1,7 @@
 #![cfg(not(feature = "single-threaded"))]
 mod tests_utils;
 
+use crate::tests_utils::DURATION_NEXT_LOOP;
 use crate::tests_utils::{
     checker::State,
     test_channel::{ChannelState, test_channel},
@@ -24,7 +25,6 @@ use rx_rust::{
 use std::{
     convert::Infallible,
     sync::atomic::{AtomicUsize, Ordering},
-    time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -79,7 +79,7 @@ fn test_completed() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -163,7 +163,7 @@ fn test_error() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -247,7 +247,7 @@ fn test_unsubscribe() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -332,7 +332,7 @@ fn test_unsubscribe_immediately() {
 
     let subscription = observable.subscribe(observer);
     subscription.dispose();
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
 
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Dropped);
@@ -401,7 +401,7 @@ fn test_async() {
     let subscription = std::thread::spawn(move || observable.subscribe(observer))
         .join()
         .unwrap();
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -507,7 +507,7 @@ fn test_subscribe_by_different_observer() {
     let subscription_1 = observable_1.subscribe(observer_1);
     let (on_next, on_termination) = observer_2.into_callbacks();
     let subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -598,7 +598,7 @@ fn test_unsub_on_next_by_take() {
         .take(1);
 
     let _subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -704,7 +704,7 @@ fn test_multiple_operation() {
         .subscribe_on(TestThreadScheduler::new("thread_2"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -795,7 +795,7 @@ fn test_without_convenient_api() {
     );
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -879,7 +879,7 @@ fn test_complete_after_next() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -950,7 +950,7 @@ fn test_error_after_next() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1021,7 +1021,7 @@ fn test_unsub_after_next() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1086,7 +1086,7 @@ fn test_unsub_after_completed() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1151,7 +1151,7 @@ fn test_unsub_after_error() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1216,7 +1216,7 @@ fn test_undisposed_schedule() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let _subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1256,7 +1256,7 @@ fn test_scheduler_should_be_disposed_after_completed() {
         let _subscription = observable.subscribe(observer);
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1283,7 +1283,7 @@ fn test_scheduler_should_be_disposed_after_error() {
         let _subscription = observable.subscribe(observer);
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1313,7 +1313,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         subscription.dispose();
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
 
-        runtime.sleep(Duration::from_millis(10)).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert!(
@@ -1375,7 +1375,7 @@ fn test_order_with_continuous_next() {
         .subscribe_on(TestThreadScheduler::new("thread_1"));
 
     let _subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1487,7 +1487,7 @@ fn test_observe_on_with_subscribe_on() {
         .subscribe_on(TestThreadScheduler::new("thread_s_2"));
 
     let subscription = observable.subscribe(observer);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1495,7 +1495,7 @@ fn test_observe_on_with_subscribe_on() {
     assert_eq!(call_history_b.load(Ordering::SeqCst), 0b00000011);
 
     sender.on_next(111);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1504,7 +1504,7 @@ fn test_observe_on_with_subscribe_on() {
 
     sender.on_next(222);
     sender.on_next(333);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1513,7 +1513,7 @@ fn test_observe_on_with_subscribe_on() {
 
     sender.on_next(444);
     sender.on_termination(Termination::<Infallible>::Completed);
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(DURATION_NEXT_LOOP);
     assert_eq!(checker.values(), [111, 222, 333, 444]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
