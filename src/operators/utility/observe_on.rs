@@ -83,36 +83,34 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
                     context.lock_mut(|mut lock| {
                         let termination = lock.termination.take();
                         let values = std::mem::take(&mut lock.values);
-                        if termination.is_none() && values.is_empty() {
-                            lock.disposal = None; // No more values. Stop scheduler. Set disposal to None.
-                            RecursionAction::Stop
-                        } else {
-                            drop(lock);
-                            match termination {
-                                None => {
-                                    if !values.is_empty() {
-                                        safe_lock_option_observer!(on_next: observer, values: values);
-                                        RecursionAction::ContinueImmediately
-                                    } else {
-                                        unreachable!();
+
+                        match (termination, values.is_empty()){
+                            (None, true) => {
+                                lock.disposal = None; // No more values. Stop scheduler. Set disposal to None.
+                                RecursionAction::Stop
+                            },
+                            (None, false) => {
+                                drop(lock);
+                                safe_lock_option_observer!(on_next: observer, values: values);
+                                RecursionAction::ContinueImmediately
+                            },
+                            (Some(termination), true) => {
+                                drop(lock);
+                                safe_lock_option_observer!(on_termination: observer, termination);
+                                RecursionAction::Stop
+                            },
+                            (Some(termination), false) => {
+                                drop(lock);
+                                match termination {
+                                    Termination::Completed => {
+                                        safe_lock_option_observer!(on_next_and_termination: observer, values: values, Termination::Completed);
+                                    }
+                                    Termination::Error(_) => {
+                                        safe_lock_option_observer!(on_termination: observer, termination);
                                     }
                                 }
-                                Some(termination) => {
-                                    match termination {
-                                        Termination::Completed => {
-                                            if values.is_empty() {
-                                                safe_lock_option_observer!(on_termination: observer, Termination::Completed);
-                                            } else {
-                                                safe_lock_option_observer!(on_next_and_termination: observer, values: values, Termination::Completed);
-                                            }
-                                        }
-                                        Termination::Error(error) => {
-                                            safe_lock_option_observer!(on_termination: observer, Termination::Error(error));
-                                        }
-                                    }
-                                    RecursionAction::Stop
-                                }
-                            }
+                                RecursionAction::Stop
+                            },
                         }
                     })
                 },
