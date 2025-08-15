@@ -86,7 +86,8 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
 
                         match (termination, values.is_empty()){
                             (None, true) => {
-                                lock.disposal = None; // No more values. Stop scheduler. Set disposal to None.
+                                // No more values. Stop scheduler. Set disposal to None.
+                                lock.disposal.take().unwrap().dispose(); 
                                 RecursionAction::Stop
                             },
                             (None, false) => {
