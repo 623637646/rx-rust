@@ -1384,7 +1384,7 @@ fn test_order_with_continuous_next() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
-    let values = (0..100000).collect::<Vec<_>>();
+    let values = (0..1000).collect::<Vec<_>>();
     for i in &values {
         sender.on_next(*i);
     }

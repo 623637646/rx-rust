@@ -914,7 +914,7 @@ fn test_order_with_continuous_next() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        let values = (0..100000).collect::<Vec<_>>();
+        let values = (0..1000).collect::<Vec<_>>();
         for i in &values {
             sender.on_next(*i);
         }

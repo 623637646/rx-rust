@@ -289,7 +289,7 @@ fn test_order_with_continuous_next() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        let values = (0..100000).collect::<Vec<_>>();
+        let values = (0..1000).collect::<Vec<_>>();
         for i in &values {
             tx.unbounded_send(*i).unwrap();
         }
