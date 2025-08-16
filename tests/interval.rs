@@ -23,11 +23,14 @@ use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed_no_delay() {
-    block_on(|runtime| async move {
+    block_on(|mut runtime| async move {
+        runtime.mock_delay = true;
         let observable = Interval::new(DURATION_LOGICAL, runtime.clone(), None);
         let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), []);
+
         runtime.sleep(DURATION_DEVIATION).await;
         assert_eq!(checker.values(), [0]);
         assert_eq!(checker.state(), State::Active);
@@ -44,11 +47,7 @@ fn test_completed_no_delay() {
         assert_eq!(checker.values(), [0, 1, 2]);
         // assert_eq!(checker.state(), State::Active); // This assert may be failed in multi-thread.
 
-        runtime.sleep(DURATION_LOGICAL).await;
-        assert_eq!(checker.values(), [0, 1, 2]);
-        assert_eq!(checker.state(), State::Dropped);
-
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert_eq!(checker.state(), State::Dropped);
     });

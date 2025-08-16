@@ -1142,7 +1142,8 @@ fn test_undisposed_schedule() {
 
 #[test]
 fn test_scheduler_should_be_disposed_after_completed() {
-    block_on(|runtime| async move {
+    block_on(|mut runtime| async move {
+        runtime.mock_delay = true;
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
@@ -1157,8 +1158,7 @@ fn test_scheduler_should_be_disposed_after_completed() {
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
 
         sender.on_termination(Termination::<Infallible>::Completed);
-        let count = runtime.alive_tasks_count.load(Ordering::SeqCst);
-        assert!(count == 1 || count == 0); // In rare multi-thread cases it may be 0.
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
@@ -1170,7 +1170,8 @@ fn test_scheduler_should_be_disposed_after_completed() {
 
 #[test]
 fn test_scheduler_should_be_disposed_after_error() {
-    block_on(|runtime| async move {
+    block_on(|mut runtime| async move {
+        runtime.mock_delay = true;
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
@@ -1185,8 +1186,7 @@ fn test_scheduler_should_be_disposed_after_error() {
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
 
         sender.on_termination(Termination::Error("error"));
-        let count = runtime.alive_tasks_count.load(Ordering::SeqCst);
-        assert!(count == 1 || count == 0); // In rare multi-thread cases it may be 0.
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
@@ -1198,7 +1198,8 @@ fn test_scheduler_should_be_disposed_after_error() {
 
 #[test]
 fn test_scheduler_should_be_disposed_after_unsub() {
-    block_on(|runtime| async move {
+    block_on(|mut runtime| async move {
+        runtime.mock_delay = true;
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -1213,14 +1214,13 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
 
         sender.on_next(111);
-        let count = runtime.alive_tasks_count.load(Ordering::SeqCst);
-        assert!(count == 1 || count == 0); // In rare multi-thread cases it may be 0.
+        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
         subscription.dispose();
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
 
         runtime.sleep(DURATION_NEXT_LOOP).await;
-        assert!(checker.values().is_empty() || checker.values() == [111]);
+        assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);

@@ -14,6 +14,7 @@ cfg_if::cfg_if! {
             pool: Shared<Mutable<LocalPool>>,
             pub(crate) spawner: LocalSpawner,
             pub(crate) alive_tasks_count: Shared<AtomicUsize>,
+            pub(crate) mock_delay: bool,
         }
         impl Default for TestRuntime {
             fn default() -> Self {
@@ -23,6 +24,7 @@ cfg_if::cfg_if! {
                     pool: Shared::new(Mutable::new(pool)),
                     spawner,
                     alive_tasks_count: Shared::new(AtomicUsize::new(0)),
+                    mock_delay: false
                 }
             }
         }
@@ -32,13 +34,15 @@ cfg_if::cfg_if! {
         #[educe(Debug, Clone)]
         pub(crate) struct TestRuntime {
             pub(crate) pool: ThreadPool,
-            pub(crate) alive_tasks_count: Shared<AtomicUsize>
+            pub(crate) alive_tasks_count: Shared<AtomicUsize>,
+            pub(crate) mock_delay: bool,
         }
         impl Default for TestRuntime {
             fn default() -> Self {
                 Self {
                     pool: ThreadPool::new().unwrap(),
                     alive_tasks_count: Shared::new(AtomicUsize::new(0)),
+                    mock_delay: false
                 }
             }
         }
@@ -47,11 +51,13 @@ cfg_if::cfg_if! {
         #[educe(Debug, Clone)]
         pub(crate) struct TestRuntime {
             pub(crate) alive_tasks_count: Shared<AtomicUsize>,
+            pub(crate) mock_delay: bool,
         }
         impl Default for TestRuntime {
             fn default() -> Self {
                 Self {
                     alive_tasks_count: Shared::new(AtomicUsize::new(0)),
+                    mock_delay: false
                 }
             }
         }

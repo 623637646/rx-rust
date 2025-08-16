@@ -179,7 +179,8 @@ fn test_unsubscribe() {
 
         subscription_1.dispose();
         assert_eq!(checker_1.values(), [111]);
-        assert_eq!(checker_1.state(), State::Dropped); // This assert is ok in multi-thread because the scheduler is finished.
+        // This assert is ok in multi-thread because the scheduler is finished. Even if it is not, the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [111]);
         assert_eq!(checker_2.state(), State::Active);
         assert_eq!(checker_3.values(), [111]);
@@ -213,7 +214,8 @@ fn test_unsubscribe() {
         assert_eq!(checker_1.values(), [111]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [111, 222]);
-        assert_eq!(checker_2.state(), State::Dropped); // This assert is ok in multi-thread because the scheduler is finished.
+        // This assert is ok in multi-thread because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        assert_eq!(checker_2.state(), State::Dropped);
         assert_eq!(checker_3.values(), [111, 222]);
         assert_eq!(checker_3.state(), State::Active);
 
@@ -276,7 +278,8 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [&111]);
-        assert_eq!(checker.state(), State::Dropped); // This assert is ok in multi-thread because the scheduler is finished.
+        // This assert is ok in multi-thread because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
 }
@@ -651,9 +654,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
 
         subscription.dispose();
-        // assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
-
-        // No need to sleep because the observer is not keeped in scheduler.
+        // No need to sleep because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
         // runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);

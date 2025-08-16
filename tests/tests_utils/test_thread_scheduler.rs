@@ -1,4 +1,4 @@
-use crate::tests_utils::join_handle::JoinHandle;
+use crate::tests_utils::{DURATION_POST_CREATER, join_handle::JoinHandle};
 use educe::Educe;
 use futures::executor::block_on;
 use rx_rust::{disposable::Disposable, scheduler::Scheduler, utils::types::NecessarySend};
@@ -16,11 +16,22 @@ pub fn get_thread_name() -> &'static str {
 #[educe(Debug, Clone)]
 pub(crate) struct TestThreadScheduler {
     name: &'static str,
+    mock_delay: bool,
 }
 
 impl TestThreadScheduler {
     pub(crate) fn new(name: &'static str) -> Self {
-        Self { name }
+        Self {
+            name,
+            mock_delay: false,
+        }
+    }
+
+    pub fn new_mock_delay(name: &'static str) -> Self {
+        Self {
+            name,
+            mock_delay: true,
+        }
     }
 }
 
@@ -31,8 +42,12 @@ impl Scheduler for TestThreadScheduler {
     ) -> impl Disposable + NecessarySend + 'static {
         let (join_handle, future) = JoinHandle::wrape(future);
         let thread_name = self.name;
-        std::thread::spawn(|| {
+        let mock_delay = self.mock_delay;
+        std::thread::spawn(move || {
             THREAD_NAME.with(|name| name.set(thread_name));
+            if mock_delay {
+                std::thread::sleep(DURATION_POST_CREATER);
+            }
             block_on(future);
         });
         join_handle
