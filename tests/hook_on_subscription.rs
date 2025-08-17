@@ -7,6 +7,7 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -267,6 +268,7 @@ fn test_subscribe_by_different_observer() {
 fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
+    let channel_checker = Shared::new(channel_checker);
 
     // Custom operations
     let observable = observable
@@ -274,8 +276,10 @@ fn test_unsub_on_next_by_take() {
             assert_eq!(channel_checker.state(), ChannelState::Initialized);
             let sub = observable.subscribe(observer);
             assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-            sub + Subscription::new_with_disposal_callback(|| {
-                // assert_eq!(channel_checker.state(), ChannelState::Completed);
+
+            let channel_checker = channel_checker.clone();
+            sub + Subscription::new_with_disposal_callback(move || {
+                assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
             })
         })
         .take(1);
