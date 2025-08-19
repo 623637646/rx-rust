@@ -8,10 +8,13 @@ pub mod thread_pool_scheduler;
 pub mod tokio_scheduler;
 
 use crate::{disposable::Disposable, utils::types::NecessarySend};
+use educe::Educe;
 #[cfg(feature = "futures")]
 use futures::{Stream, stream::StreamExt};
 use std::time::{Duration, Instant};
 
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq)]
 pub enum RecursionAction {
     ContinueAt(Instant),
     ContinueImmediately,

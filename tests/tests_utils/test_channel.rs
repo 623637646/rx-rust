@@ -98,7 +98,7 @@ where
 pub(crate) struct ChannelChecker<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
 #[derive(Educe)]
-#[educe(Debug, Clone, PartialEq)]
+#[educe(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ChannelState<E> {
     Initialized,
     Subscribed,

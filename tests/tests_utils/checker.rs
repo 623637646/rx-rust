@@ -6,7 +6,7 @@ use rx_rust::{
 use rx_rust::{safe_lock, safe_lock_vec};
 
 #[derive(Educe)]
-#[educe(Debug, Clone, PartialEq)]
+#[educe(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum State<E> {
     Active,
     Dropped,
