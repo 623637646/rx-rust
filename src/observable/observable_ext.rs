@@ -40,6 +40,7 @@ use crate::{
             do_before_next::DoBeforeNext, do_before_subscription::DoBeforeSubscription,
             do_before_termination::DoBeforeTermination, materialize::Materialize,
             observe_on::ObserveOn, subscribe_on::SubscribeOn, time_interval::TimeInterval,
+            timeout::Timeout,
         },
     },
     subject::{
@@ -461,6 +462,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
 
     fn time_interval(self) -> TimeInterval<Self> {
         TimeInterval::new(self)
+    }
+
+    fn timeout<S>(self, duration: Duration, scheduler: S) -> Timeout<Self, S> {
+        Timeout::new(self, duration, scheduler)
     }
 
     fn window<OE1>(self, boundary: OE1) -> Window<Self, OE1>

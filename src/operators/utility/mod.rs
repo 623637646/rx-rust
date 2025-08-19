@@ -12,3 +12,4 @@ pub mod materialize;
 pub mod observe_on;
 pub mod subscribe_on;
 pub mod time_interval;
+pub mod timeout;
