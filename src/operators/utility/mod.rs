@@ -11,3 +11,4 @@ pub mod do_before_termination;
 pub mod materialize;
 pub mod observe_on;
 pub mod subscribe_on;
+pub mod time_interval;

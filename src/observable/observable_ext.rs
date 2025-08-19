@@ -39,7 +39,7 @@ use crate::{
             do_after_termination::DoAfterTermination, do_before_disposal::DoBeforeDisposal,
             do_before_next::DoBeforeNext, do_before_subscription::DoBeforeSubscription,
             do_before_termination::DoBeforeTermination, materialize::Materialize,
-            observe_on::ObserveOn, subscribe_on::SubscribeOn,
+            observe_on::ObserveOn, subscribe_on::SubscribeOn, time_interval::TimeInterval,
         },
     },
     subject::{
@@ -457,6 +457,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
 
     fn throttle<S>(self, time_span: Duration, scheduler: S) -> Throttle<Self, S> {
         Throttle::new(self, time_span, scheduler)
+    }
+
+    fn time_interval(self) -> TimeInterval<Self> {
+        TimeInterval::new(self)
     }
 
     fn window<OE1>(self, boundary: OE1) -> Window<Self, OE1>
