@@ -674,6 +674,39 @@ fn test_order_with_continuous_next() {
 }
 
 #[test]
+fn test_stress_testing() {
+    block_on(|runtime| async move {
+        const COUNT: usize = 100000;
+        let mut handles = Vec::with_capacity(COUNT);
+        for i in 0..COUNT {
+            let runtime_cloned = runtime.clone();
+            let handle = runtime_cloned.clone().spawn(async move {
+                let mut subject = PublishSubject::<'_, _, Infallible>::default();
+                let (checker, observer) = Checker::new();
+
+                // Custom operations
+                let observable = subject
+                    .clone()
+                    .timeout(DURATION_NEXT_LOOP, runtime_cloned.clone());
+                let _subscription = observable.subscribe(observer);
+                runtime_cloned.sleep(DURATION_NEXT_LOOP).await;
+                subject.on_next(111);
+                if checker.values() == [111]
+                    && checker.state() == State::Error(timeout::Error::Timeout)
+                {
+                    panic!("Panic at {i}");
+                }
+            });
+            handles.push(handle);
+        }
+
+        for handle in handles {
+            handle.await.unwrap();
+        }
+    });
+}
+
+#[test]
 fn test_clone() {
     block_on(|runtime| async move {
         let observable = Create::new(|mut observer| {
