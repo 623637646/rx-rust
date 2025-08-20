@@ -130,12 +130,12 @@ fn test_unsub_on_next_by_take() {
         called.store(true, Ordering::SeqCst);
         111
     })
-    .take(0);
+    .take(1);
 
     assert!(!called.load(Ordering::SeqCst));
     let _subscription = observable.subscribe(observer);
-    assert!(!called.load(Ordering::SeqCst));
-    assert_eq!(checker.values(), []);
+    assert!(called.load(Ordering::SeqCst));
+    assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
 

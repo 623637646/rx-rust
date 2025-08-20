@@ -192,7 +192,7 @@ fn test_subscribe_by_different_observer() {
 }
 
 #[test]
-fn test_completest_unsub_on_next_by_taketed() {
+fn test_unsub_on_next_by_take() {
     let (_sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::<i32, String>::new();
 

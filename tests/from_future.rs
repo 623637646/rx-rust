@@ -143,14 +143,23 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_on_next_by_take() {
     block_on(|runtime| async move {
-        let (_tx, rx) = futures::channel::oneshot::channel();
+        let (tx, rx) = futures::channel::oneshot::channel();
 
         let observable = FromFuture::new(rx, runtime.clone());
-        let observable = observable.map(|result| result.unwrap_or(-1)).take(0);
+        let observable = observable.map(|result| result.unwrap_or(-1)).take(1);
         let (checker, observer) = Checker::new();
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_NEXT_LOOP).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        tx.send(111).unwrap();
+        runtime.sleep(DURATION_NEXT_LOOP).await;
+        assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });
 }
