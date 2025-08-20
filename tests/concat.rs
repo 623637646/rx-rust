@@ -82,46 +82,6 @@ fn test_completed_source_and_another_source_are_same() {
 }
 
 #[test]
-fn test_completed_start_with() {
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = observable_1.start_with(observable);
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
-
-    sender.on_next(111);
-    assert_eq!(checker.values(), [111]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
-
-    sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [111]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-    sender_1.on_next(222);
-    assert_eq!(checker.values(), [111, 222]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-    sender_1.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), [111, 222]);
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-}
-
-#[test]
 fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut _sender_1, observable_1, channel_checker_1) = test_channel();

@@ -7,7 +7,7 @@ use crate::{
     operators::{
         combining::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll, merge::Merge,
-            merge_all::MergeAll, switch::Switch, zip::Zip,
+            merge_all::MergeAll, start_with::StartWith, switch::Switch, zip::Zip,
         },
         conditional_boolean::take_until::TakeUntil,
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
@@ -405,11 +405,11 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         SkipLast::new(self, count)
     }
 
-    fn start_with<OE0>(self, start: OE0) -> Concat<OE0, Self>
+    fn start_with<I>(self, values: I) -> StartWith<Self, I>
     where
-        OE0: Observable<'or, 'sub, T, E>,
+        I: IntoIterator<Item = T>,
     {
-        start.concat_with(self)
+        StartWith::new(self, values)
     }
 
     fn subscribe_on<S>(self, scheduler: S) -> SubscribeOn<Self, S> {
