@@ -11,13 +11,13 @@ use std::marker::PhantomData;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct CatchError<E0, OE, F> {
+pub struct Catch<E0, OE, F> {
     source: OE,
     callback: F,
     _marker: MarkerType<E0>,
 }
 
-impl<E0, OE, F> CatchError<E0, OE, F> {
+impl<E0, OE, F> Catch<E0, OE, F> {
     pub fn new<'or, 'sub, T, E, OE1>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, 'sub, T, E0>,
@@ -32,7 +32,7 @@ impl<E0, OE, F> CatchError<E0, OE, F> {
     }
 }
 
-impl<'or, 'sub, T, E0, E, OE, OE1, F> Observable<'or, 'sub, T, E> for CatchError<E0, OE, F>
+impl<'or, 'sub, T, E0, E, OE, OE1, F> Observable<'or, 'sub, T, E> for Catch<E0, OE, F>
 where
     E: 'or,
     OE: Observable<'or, 'sub, T, E0>,
@@ -42,7 +42,7 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let sub = Shared::new(Mutable::new(None));
-        let onserver = CatchErrorObserver {
+        let onserver = CatchObserver {
             observer,
             callback: self.callback,
             sub: sub.clone(),
@@ -52,14 +52,14 @@ where
     }
 }
 
-struct CatchErrorObserver<'sub, E, OR, F> {
+struct CatchObserver<'sub, E, OR, F> {
     observer: OR,
     callback: F,
     sub: Shared<Mutable<Option<Subscription<'sub>>>>,
     _marker: MarkerType<E>,
 }
 
-impl<'or, 'sub, T, E0, E, OR, OE1, F> Observer<T, E0> for CatchErrorObserver<'sub, E, OR, F>
+impl<'or, 'sub, T, E0, E, OR, OE1, F> Observer<T, E0> for CatchObserver<'sub, E, OR, F>
 where
     OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,

@@ -1,2 +1,2 @@
-pub mod catch_error;
+pub mod catch;
 pub mod retry;

@@ -10,7 +10,7 @@ use rx_rust::{
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{
         creating::{create::Create, just::Just, throw::Throw},
-        error_handling::catch_error::CatchError,
+        error_handling::catch::Catch,
     },
     subject::publish_subject::PublishSubject,
 };
@@ -24,7 +24,7 @@ fn test_completed() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.catch_error(move |value| {
+    let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         observable_1
     });
@@ -67,7 +67,7 @@ fn test_completed_without_catch() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.catch_error(move |_| observable_1);
+    let observable = observable.catch(move |_| observable_1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -95,7 +95,7 @@ fn test_error() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.catch_error(move |value| {
+    let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         observable_1
     });
@@ -138,7 +138,7 @@ fn test_error_source_and_catch_are_same() {
 
     // Custom operations
     let subject_cloned = subject.clone();
-    let observable = subject.clone().catch_error(move |value| {
+    let observable = subject.clone().catch(move |value| {
         assert_eq!(value, "error");
         subject_cloned
     });
@@ -163,7 +163,7 @@ fn test_unsubscribe_before_catch() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.catch_error(move |_| observable_1);
+    let observable = observable.catch(move |_| observable_1);
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -191,7 +191,7 @@ fn test_unsubscribe_after_catch() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.catch_error(move |value| {
+    let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         observable_1
     });
@@ -238,7 +238,7 @@ fn test_ref() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.catch_error(move |value| {
+    let observable = observable.catch(move |value| {
         assert_eq!(value, &error);
         observable_1
     });
@@ -283,7 +283,7 @@ fn test_mut_ref() {
     let (mut sender_1, observable_1, _) = test_channel();
 
     // Custom operations
-    let observable = observable.catch_error(move |error| {
+    let observable = observable.catch(move |error| {
         assert_eq!(error, "error");
         observable_1
     });
@@ -316,7 +316,7 @@ fn test_async() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.catch_error(move |value| {
+        let observable = observable.catch(move |value| {
             assert_eq!(value, "error");
             observable_1
         });
@@ -388,7 +388,7 @@ fn test_subscribe_by_different_observer() {
     // Custom operations
     let observable = subject.clone();
     let subject_1_cloned = subject_1.clone();
-    let observable = observable.catch_error(move |value| {
+    let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         subject_1_cloned
     });
@@ -436,7 +436,7 @@ fn test_unsub_on_next_by_take() {
 
     // Custom operations
     let observable = observable
-        .catch_error(move |value: &str| {
+        .catch(move |value: &str| {
             assert_eq!(value, "error");
             observable_1
         })
@@ -464,11 +464,11 @@ fn test_multiple_operation() {
 
     // Custom operations
     let observable = observable
-        .catch_error(move |value| {
+        .catch(move |value| {
             assert_eq!(value, "error");
             observable_1
         })
-        .catch_error(move |value| {
+        .catch(move |value| {
             assert_eq!(value, "error".to_string());
             observable_2
         });
@@ -539,7 +539,7 @@ fn test_without_convenient_api() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = CatchError::new(observable, move |value| {
+    let observable = Catch::new(observable, move |value| {
         assert_eq!(value, "error");
         observable_1
     });
@@ -593,8 +593,7 @@ fn test_lifetime_sub() {
                 life_marker.consume_ref();
             })
         });
-        let observable =
-            observable.catch_error(move |value| Throw::new(value).map_infallible_to_value());
+        let observable = observable.catch(move |value| Throw::new(value).map_infallible_to_value());
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -616,8 +615,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
-        let observable =
-            observable.catch_error(move |value| Throw::new(value).map_infallible_to_value());
+        let observable = observable.catch(move |value| Throw::new(value).map_infallible_to_value());
 
         let (_, mut observer) = Checker::new();
         observer.on_next(&life_marker_2);
@@ -644,8 +642,7 @@ fn test_lifetime_or_sub() {
                 })
             },
         );
-        let observable =
-            observable.catch_error(move |value| Throw::new(value).map_infallible_to_value());
+        let observable = observable.catch(move |value| Throw::new(value).map_infallible_to_value());
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
@@ -659,8 +656,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let observable =
-        observable.catch_error(move |value| Throw::new(value).map_infallible_to_value());
+    let observable = observable.catch(move |value| Throw::new(value).map_infallible_to_value());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -668,7 +664,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, String> = PublishSubject::default();
-    let observable = subject.catch_error(move |value| Throw::new(value).map_infallible_to_value());
+    let observable = subject.catch(move |value| Throw::new(value).map_infallible_to_value());
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -679,7 +675,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, Infallible> = PublishSubject::default();
-    let observable = subject.catch_error(move |value| Throw::new(value).map_infallible_to_value());
+    let observable = subject.catch(move |value| Throw::new(value).map_infallible_to_value());
 
     observable.filter(|_| true);
 }

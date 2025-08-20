@@ -12,7 +12,7 @@ use crate::{
         conditional_boolean::take_until::TakeUntil,
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
-            catch_error::CatchError,
+            catch::Catch,
             retry::{Retry, RetryAction},
         },
         filtering::{
@@ -83,12 +83,12 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         BufferWithTimeOrCount::new(self, count, time_span, scheduler, delay)
     }
 
-    fn catch_error<E1, OE1, F>(self, callback: F) -> CatchError<E, Self, F>
+    fn catch<E1, OE1, F>(self, callback: F) -> Catch<E, Self, F>
     where
         OE1: Observable<'or, 'sub, T, E1>,
         F: FnOnce(E) -> OE1,
     {
-        CatchError::new(self, callback)
+        Catch::new(self, callback)
     }
 
     fn combine_latest<T1, OE2>(self, another_source: OE2) -> CombineLatest<Self, OE2>
