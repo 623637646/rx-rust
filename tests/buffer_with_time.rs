@@ -376,7 +376,7 @@ fn test_unsubscribe() {
 
         subscription_1.dispose();
         assert_eq!(checker_1.values(), [vec![], vec![111]]);
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
         assert_eq!(checker_2.values(), [vec![], vec![111]]);
         assert_eq!(checker_2.state(), State::Active);
 

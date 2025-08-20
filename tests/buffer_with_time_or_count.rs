@@ -721,7 +721,7 @@ fn test_unsubscribe() {
 
         subscription_1.dispose();
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_2.state(), State::Active);
 
@@ -1136,7 +1136,7 @@ fn test_subscribe_by_different_observer() {
 
         subscription_1.dispose();
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_2.state(), State::Active);
 

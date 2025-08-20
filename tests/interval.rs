@@ -45,7 +45,7 @@ fn test_completed_no_delay() {
 
         subscription.dispose();
         assert_eq!(checker.values(), [0, 1, 2]);
-        // assert_eq!(checker.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker.state(), State::Active); // This assert may be failed in multi-threaded.
 
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [0, 1, 2]);
@@ -81,7 +81,7 @@ fn test_completed_with_delay() {
 
         subscription.dispose();
         assert_eq!(checker.values(), [0, 1, 2]);
-        // assert_eq!(checker.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker.state(), State::Active); // This assert may be failed in multi-threaded.
 
         runtime.sleep(DURATION_LOGICAL).await;
         assert_eq!(checker.values(), [0, 1, 2]);
@@ -137,7 +137,7 @@ fn test_unsubscribe() {
 
         subscription_1.dispose();
         assert_eq!(checker_1.values(), [0, 1, 2]);
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
         assert_eq!(checker_2.values(), [0, 1, 2]);
         assert_eq!(checker_2.state(), State::Active);
 
@@ -276,9 +276,9 @@ fn test_subscribe_by_different_observer() {
         subscription_1.dispose();
         subscription_2.dispose();
         assert_eq!(checker_1.values(), [0, 1, 2]);
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
         assert_eq!(checker_2.values(), [0, 1, 2]);
-        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-threaded.
 
         runtime.sleep(DURATION_LOGICAL).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);

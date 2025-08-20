@@ -59,7 +59,7 @@ fn test_unsubscribe() {
 
         subscription_1.dispose();
         assert!(checker_1.values().is_empty());
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
         assert!(checker_3.values().is_empty());
@@ -77,7 +77,7 @@ fn test_unsubscribe() {
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Dropped);
         assert!(checker_2.values().is_empty());
-        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-threaded.
         assert!(checker_3.values().is_empty());
         assert_eq!(checker_3.state(), State::Active);
 

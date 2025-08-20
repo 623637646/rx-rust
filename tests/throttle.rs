@@ -179,7 +179,7 @@ fn test_unsubscribe() {
 
         subscription_1.dispose();
         assert_eq!(checker_1.values(), [111]);
-        // This assert is ok in multi-thread because the scheduler is finished. Even if it is not, the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        // This assert is ok in multi-threaded because the scheduler is finished. Even if it is not, the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [111]);
         assert_eq!(checker_2.state(), State::Active);
@@ -214,7 +214,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_1.values(), [111]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [111, 222]);
-        // This assert is ok in multi-thread because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        // This assert is ok in multi-threaded because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
         assert_eq!(checker_2.state(), State::Dropped);
         assert_eq!(checker_3.values(), [111, 222]);
         assert_eq!(checker_3.state(), State::Active);
@@ -278,7 +278,7 @@ fn test_async() {
             .await
             .unwrap();
         assert_eq!(checker.values(), [&111]);
-        // This assert is ok in multi-thread because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        // This assert is ok in multi-threaded because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });

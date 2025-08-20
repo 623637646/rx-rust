@@ -196,7 +196,7 @@ fn test_unsubscribe() {
 
         subscription_1.dispose();
         assert_eq!(checker_1.values(), [111]);
-        assert_eq!(checker_1.state(), State::Dropped); // This assert is ok in multi-thread because the scheduler is finished.
+        assert_eq!(checker_1.state(), State::Dropped); // This assert is ok in multi-threaded because the scheduler is finished.
         assert_eq!(checker_2.values(), [111]);
         assert_eq!(checker_2.state(), State::Active);
         assert_eq!(checker_3.values(), [111]);
@@ -246,7 +246,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_1.values(), [111]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [111, 222]);
-        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-thread.
+        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-threaded.
         assert_eq!(checker_3.values(), [111, 222]);
         assert_eq!(checker_3.state(), State::Active);
 
