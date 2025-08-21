@@ -1,7 +1,6 @@
 pub mod bound_drop_disposal;
 pub mod boxed_disposal;
 pub mod callback_disposal;
-pub mod disposable_bag;
 pub mod disposable_ext;
 pub mod subscription;
 
