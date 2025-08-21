@@ -41,7 +41,7 @@ where
         observer: impl Observer<bool, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = FilterObserver {
+            let observer = AllObserver {
                 observer: Some(observer),
                 callback: self.callback,
             };
@@ -50,12 +50,12 @@ where
     }
 }
 
-struct FilterObserver<OR, F> {
+struct AllObserver<OR, F> {
     observer: Option<OR>,
     callback: F,
 }
 
-impl<T, E, OR, F> Observer<T, E> for FilterObserver<OR, F>
+impl<T, E, OR, F> Observer<T, E> for AllObserver<OR, F>
 where
     OR: Observer<bool, E>,
     F: FnMut(T) -> bool,
