@@ -9,7 +9,7 @@ use crate::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll, merge::Merge,
             merge_all::MergeAll, start_with::StartWith, switch::Switch, zip::Zip,
         },
-        conditional_boolean::{all::All, take_until::TakeUntil},
+        conditional_boolean::{all::All, amb::Amb, take_until::TakeUntil},
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
             catch::Catch,
@@ -58,6 +58,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         F: FnMut(T) -> bool,
     {
         All::new(self, callback)
+    }
+
+    fn amb_with(self, other: Self) -> Amb<[Self; 2]> {
+        Amb::new([self, other])
     }
 
     fn buffer<OE1>(self, boundary: OE1) -> Buffer<Self, OE1>
