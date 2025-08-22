@@ -55,8 +55,14 @@ where
 
 enum ZipObserverBufferState<T1, T2> {
     None,
-    One(VecDeque<T1>),
-    Two(VecDeque<T2>),
+    One {
+        buffer: VecDeque<T1>,
+        is_completed: bool,
+    },
+    Two {
+        buffer: VecDeque<T2>,
+        is_completed: bool,
+    },
 }
 
 struct ZipObserver1<T1, T2, OR> {
@@ -71,24 +77,51 @@ where
     fn on_next(&mut self, value: T1) {
         self.buffer.lock_mut(|mut lock| match &mut *lock {
             ZipObserverBufferState::None => {
-                *lock = ZipObserverBufferState::One(VecDeque::from([value]));
+                *lock = ZipObserverBufferState::One {
+                    buffer: VecDeque::from([value]),
+                    is_completed: false,
+                };
             }
-            ZipObserverBufferState::One(items) => {
+            ZipObserverBufferState::One { buffer: items, .. } => {
                 items.push_back(value);
             }
-            ZipObserverBufferState::Two(items) => {
+            ZipObserverBufferState::Two {
+                buffer: items,
+                is_completed,
+            } => {
                 let item = items.pop_front().unwrap();
+                let should_complete;
                 if items.is_empty() {
+                    should_complete = *is_completed;
                     *lock = ZipObserverBufferState::None;
+                } else {
+                    should_complete = false;
                 }
                 drop(lock);
-                safe_lock_option_observer!(on_next: self.observer, (value, item));
+                if should_complete {
+                    safe_lock_option_observer!(on_next_and_termination: self.observer, (value, item), Termination::Completed);
+                } else {
+                    safe_lock_option_observer!(on_next: self.observer, (value, item));
+                }
             }
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock_option_observer!(on_termination: self.observer, termination);
+        let should_terminate = match termination {
+            Termination::Completed => self.buffer.lock_mut(|mut lock| match &mut *lock {
+                ZipObserverBufferState::None => true,
+                ZipObserverBufferState::One { is_completed, .. } => {
+                    *is_completed = true;
+                    false
+                }
+                ZipObserverBufferState::Two { .. } => true,
+            }),
+            Termination::Error(_) => true,
+        };
+        if should_terminate {
+            safe_lock_option_observer!(on_termination: self.observer, termination);
+        }
     }
 }
 
@@ -104,23 +137,50 @@ where
     fn on_next(&mut self, value: T2) {
         self.buffer.lock_mut(|mut lock| match &mut *lock {
             ZipObserverBufferState::None => {
-                *lock = ZipObserverBufferState::Two(VecDeque::from([value]));
+                *lock = ZipObserverBufferState::Two {
+                    buffer: VecDeque::from([value]),
+                    is_completed: false,
+                };
             }
-            ZipObserverBufferState::One(items) => {
+            ZipObserverBufferState::One {
+                buffer: items,
+                is_completed,
+            } => {
                 let item = items.pop_front().unwrap();
+                let should_complete;
                 if items.is_empty() {
+                    should_complete = *is_completed;
                     *lock = ZipObserverBufferState::None;
+                } else {
+                    should_complete = false;
                 }
                 drop(lock);
-                safe_lock_option_observer!(on_next: self.observer, (item, value));
+                if should_complete {
+                    safe_lock_option_observer!(on_next_and_termination: self.observer, (item, value), Termination::Completed);
+                } else {
+                    safe_lock_option_observer!(on_next: self.observer, (item, value));
+                }
             }
-            ZipObserverBufferState::Two(items) => {
+            ZipObserverBufferState::Two { buffer: items, .. } => {
                 items.push_back(value);
             }
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock_option_observer!(on_termination: self.observer, termination);
+        let should_terminate = match termination {
+            Termination::Completed => self.buffer.lock_mut(|mut lock| match &mut *lock {
+                ZipObserverBufferState::None => true,
+                ZipObserverBufferState::One { .. } => true,
+                ZipObserverBufferState::Two { is_completed, .. } => {
+                    *is_completed = true;
+                    false
+                }
+            }),
+            Termination::Error(_) => true,
+        };
+        if should_terminate {
+            safe_lock_option_observer!(on_termination: self.observer, termination);
+        }
     }
 }
