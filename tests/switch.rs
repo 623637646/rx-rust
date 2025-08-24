@@ -6,7 +6,9 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -1359,6 +1361,75 @@ fn test_without_convenient_api() {
     subject_2.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 444]);
     assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_next() {
+    let mut subject_1 = BehaviorSubject::new(111);
+    let mut subject_2 = BehaviorSubject::new(333);
+    let mut subject = BehaviorSubject::new(subject_1.clone());
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().switch();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject_1.on_next(222);
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_next(subject_2.clone());
+    assert_eq!(checker.values(), [111, 222, 333]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [111, 222, 333]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject_1.on_next(0);
+    assert_eq!(checker.values(), [111, 222, 333]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject_1.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111, 222, 333]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject_2.on_next(444);
+    assert_eq!(checker.values(), [111, 222, 333, 444]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject_2.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111, 222, 333, 444]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_completed() {
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Empty.map_infallible_to_value::<Empty>().switch();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_error() {
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Throw::new("error")
+        .map_infallible_to_value::<Throw<_>>()
+        .switch();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]

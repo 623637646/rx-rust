@@ -6,7 +6,10 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -866,6 +869,52 @@ fn test_without_convenient_api() {
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_next() {
+    let subject = BehaviorSubject::new(111);
+    let mut boundary_subject = BehaviorSubject::new(());
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().buffer(boundary_subject.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.state(), State::Active);
+
+    boundary_subject.on_next(());
+    assert_eq!(checker.values(), [vec![], vec![111]]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [vec![], vec![111]]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_completed() {
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Empty.buffer(Empty.map_infallible_to_value());
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_error() {
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Throw::new("error").buffer(Throw::new("error").map_infallible_to_value());
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]

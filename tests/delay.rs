@@ -11,8 +11,11 @@ use crate::tests_utils::test_runtime::block_on;
 use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::interval::Interval;
+use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -932,6 +935,77 @@ fn test_order_with_continuous_next() {
         assert_eq!(checker.values(), values);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_next() {
+    block_on(|runtime| async move {
+        let subject = BehaviorSubject::new(111);
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = subject.clone().delay(DURATION_LOGICAL, runtime.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_DEVIATION * 2).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+
+        subject.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_DEVIATION * 2).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_completed() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = Empty.delay(DURATION_LOGICAL, runtime.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_DEVIATION * 2).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_error() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = Throw::new("error").delay(DURATION_LOGICAL, runtime.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Error("error"));
     });
 }
 

@@ -7,7 +7,9 @@ use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
 use rx_rust::safe_lock_option;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -1077,6 +1079,52 @@ fn test_without_convenient_api() {
         ChannelState::Error("error2")
     );
     assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
+}
+
+#[test]
+fn test_immediate_next() {
+    let subject = BehaviorSubject::<'_, _, &str>::new(111);
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().retry(move |error| {
+        assert_eq!(error, "error");
+        RetryAction::Retry(Just::new(222).map_infallible_to_error())
+    });
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![111]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_termination(Termination::Error("error"));
+    assert_eq!(checker.values(), vec![111, 222]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_completed() {
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Empty
+        .map_infallible_to_error()
+        .retry(move |_| RetryAction::<_, Throw<_>>::Stop("error"));
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_error() {
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Throw::new("error").retry(move |_| RetryAction::<_, Throw<_>>::Stop("error"));
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]

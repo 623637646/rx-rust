@@ -6,6 +6,9 @@ use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::throw::Throw;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -2382,6 +2385,142 @@ fn test_revert_error() {
     assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(checker_3.values(), [111, 222]);
     assert_eq!(checker_3.state(), State::Error("error"));
+}
+
+#[test]
+fn test_immediate_next() {
+    let mut subject = BehaviorSubject::new(111);
+    let boundary_subject = BehaviorSubject::new(());
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = subject.clone().window(boundary_subject.clone());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            1 => {
+                assert_eq!(checker.values(), [111]);
+                assert_eq!(checker.state(), State::Active);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subject.on_next(222);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            1 => {
+                assert_eq!(checker.values(), [111, 222]);
+                assert_eq!(checker.state(), State::Active);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            1 => {
+                assert_eq!(checker.values(), [111, 222]);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_completed() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = Empty.window(Empty.map_infallible_to_value());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_error() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = Throw::new("error").window(Throw::new("error").map_infallible_to_value());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Error("error"));
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Error("error"));
 }
 
 #[test]

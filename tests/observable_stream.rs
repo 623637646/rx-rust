@@ -8,7 +8,9 @@ use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};
 use futures::{FutureExt, StreamExt};
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::observable_ext::ObservableExt,
@@ -399,6 +401,48 @@ fn test_order_with_continuous_next() {
         subject.on_termination(Termination::<Infallible>::Completed);
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), values);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_next() {
+    block_on(|mut runtime| async move {
+        runtime.mock_delay = true;
+        let subject = BehaviorSubject::new(111);
+
+        // Custom operations
+        let observable = subject.clone();
+        let stream = observable.into_stream();
+
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_NEXT_LOOP).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+
+        subject.on_termination(Termination::<Infallible>::Completed);
+        runtime.sleep(DURATION_NEXT_LOOP).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_completed() {
+    block_on(|mut runtime| async move {
+        runtime.mock_delay = true;
+        // Custom operations
+        let stream = Empty.into_stream();
+
+        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        runtime.sleep(DURATION_NEXT_LOOP).await;
+        assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Completed);
     });
 }

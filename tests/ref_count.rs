@@ -7,10 +7,13 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::operators::connectable::ref_count::RefCount;
+use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::throw::Throw;
 use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_disposable;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::Subject;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -1219,6 +1222,137 @@ fn test_sub_on_error() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+}
+
+#[test]
+fn test_immediate_next() {
+    let mut counter = 0;
+    let mut subject = BehaviorSubject::new(());
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = subject
+        .clone()
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .publish()
+        .ref_count();
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    let subscription_1 = observable_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    subject.on_next(());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    let _subscription_2 = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Active);
+
+    subject.on_next(());
+    assert_eq!(checker_1.values(), [1, 2, 3]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [3]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    subscription_1.dispose();
+    assert_eq!(checker_1.values(), [1, 2, 3]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [3]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker_1.values(), [1, 2, 3]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [3]);
+    assert_eq!(checker_2.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_completed() {
+    let mut counter = 0;
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = Empty
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .publish()
+        .ref_count();
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    let _subscription_2 = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_error() {
+    let mut counter = 0;
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = Throw::new("error")
+        .map(|_| {
+            counter += 1;
+            counter
+        })
+        .publish()
+        .ref_count();
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.state(), State::Error("error"));
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    let _subscription_2 = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), []);
+    assert_eq!(checker_1.state(), State::Error("error"));
+    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.state(), State::Error("error"));
 }
 
 #[test]

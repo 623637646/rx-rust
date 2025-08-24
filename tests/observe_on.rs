@@ -8,6 +8,9 @@ use crate::tests_utils::{
     test_runtime::block_on,
     test_thread_scheduler::{TestThreadScheduler, get_thread_name},
 };
+use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::throw::Throw;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     disposable::{Disposable, subscription::Subscription},
     observable::{Observable, observable_ext::ObservableExt},
@@ -1289,6 +1292,185 @@ fn test_order_with_continuous_next() {
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(call_history.load(Ordering::SeqCst), 0b00111111);
+}
+
+#[test]
+fn test_immediate_next() {
+    let subject = BehaviorSubject::new(111);
+    let (checker, observer) = Checker::new();
+    let call_history = Shared::new(AtomicUsize::new(0));
+    let call_history_1 = call_history.clone();
+    let call_history_2 = call_history.clone();
+    let call_history_3 = call_history.clone();
+    let call_history_4 = call_history.clone();
+
+    // Custom operations
+    let observable = subject
+        .clone()
+        .observe_on(TestThreadScheduler::new("thread_1"))
+        .do_before_subscription(|| {
+            call_history.fetch_or(1 << 0, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_after_subscription(|| {
+            call_history.fetch_or(1 << 1, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_before_next(move |_| {
+            call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_after_next(move |_| {
+            call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_before_termination(move |_| {
+            call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_after_termination(move |_| {
+            call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_before_disposal(|| {
+            call_history.fetch_or(1 << 6, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_after_disposal(|| {
+            call_history.fetch_or(1 << 7, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        });
+
+    let subscription = observable.subscribe(observer);
+    std::thread::sleep(DURATION_NEXT_LOOP);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(call_history.load(Ordering::SeqCst), 0b00001111);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    std::thread::sleep(DURATION_NEXT_LOOP);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(call_history.load(Ordering::SeqCst), 0b00111111);
+
+    subscription.dispose();
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(call_history.load(Ordering::SeqCst), 0b11111111);
+}
+
+#[test]
+fn test_immediate_completed() {
+    let (checker, observer) = Checker::new();
+    let call_history = Shared::new(AtomicUsize::new(0));
+    let call_history_1 = call_history.clone();
+    let call_history_2 = call_history.clone();
+    let call_history_3 = call_history.clone();
+    let call_history_4 = call_history.clone();
+
+    // Custom operations
+    let observable = Empty
+        .observe_on(TestThreadScheduler::new("thread_1"))
+        .do_before_subscription(|| {
+            call_history.fetch_or(1 << 0, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_after_subscription(|| {
+            call_history.fetch_or(1 << 1, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_before_next(move |_| {
+            call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_after_next(move |_| {
+            call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_before_termination(move |_| {
+            call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_after_termination(move |_| {
+            call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_before_disposal(|| {
+            call_history.fetch_or(1 << 6, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_after_disposal(|| {
+            call_history.fetch_or(1 << 7, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        });
+
+    let subscription = observable.subscribe(observer);
+    std::thread::sleep(DURATION_NEXT_LOOP);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(call_history.load(Ordering::SeqCst), 0b00110011);
+
+    subscription.dispose();
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(call_history.load(Ordering::SeqCst), 0b11110011);
+}
+
+#[test]
+fn test_immediate_error() {
+    let (checker, observer) = Checker::new();
+    let call_history = Shared::new(AtomicUsize::new(0));
+    let call_history_1 = call_history.clone();
+    let call_history_2 = call_history.clone();
+    let call_history_3 = call_history.clone();
+    let call_history_4 = call_history.clone();
+
+    // Custom operations
+    let observable = Throw::new("error")
+        .observe_on(TestThreadScheduler::new("thread_1"))
+        .do_before_subscription(|| {
+            call_history.fetch_or(1 << 0, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_after_subscription(|| {
+            call_history.fetch_or(1 << 1, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_before_next(move |_| {
+            call_history_1.fetch_or(1 << 2, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_after_next(move |_| {
+            call_history_2.fetch_or(1 << 3, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_before_termination(move |_| {
+            call_history_3.fetch_or(1 << 4, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_after_termination(move |_| {
+            call_history_4.fetch_or(1 << 5, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "thread_1");
+        })
+        .do_before_disposal(|| {
+            call_history.fetch_or(1 << 6, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        })
+        .do_after_disposal(|| {
+            call_history.fetch_or(1 << 7, Ordering::SeqCst);
+            assert_eq!(get_thread_name(), "");
+        });
+
+    let subscription = observable.subscribe(observer);
+    std::thread::sleep(DURATION_NEXT_LOOP);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(call_history.load(Ordering::SeqCst), 0b00110011);
+
+    subscription.dispose();
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(call_history.load(Ordering::SeqCst), 0b11110011);
 }
 
 #[test]

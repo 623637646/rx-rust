@@ -12,11 +12,11 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     operators::{
-        creating::create::Create,
+        creating::{create::Create, empty::Empty, throw::Throw},
         utility::timeout::{self, Timeout},
     },
     scheduler::Scheduler,
-    subject::publish_subject::PublishSubject,
+    subject::{behavior_subject::BehaviorSubject, publish_subject::PublishSubject},
 };
 use std::{convert::Infallible, sync::atomic::Ordering, time::Duration};
 
@@ -666,6 +666,56 @@ fn test_order_with_continuous_next() {
         assert_eq!(checker.values(), values);
         assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    });
+}
+
+#[test]
+fn test_immediate_next() {
+    block_on(|runtime| async move {
+        let subject = BehaviorSubject::new(111);
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = subject.clone().timeout(DURATION_LOGICAL, runtime.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+
+        subject.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_completed() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = Empty.timeout(DURATION_LOGICAL, runtime.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_error() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = Throw::new("error").timeout(DURATION_LOGICAL, runtime.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), []);
+        assert_eq!(
+            checker.state(),
+            State::Error(timeout::Error::SourceError("error"))
+        );
     });
 }
 

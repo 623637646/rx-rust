@@ -6,7 +6,10 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -611,6 +614,48 @@ fn test_without_convenient_api() {
     stop_subject.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_next() {
+    let subject = BehaviorSubject::<'_, _, Infallible>::new(111);
+    let subject_1 = BehaviorSubject::new(222);
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().take_until(subject_1.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_completed() {
+    let (_, observable, channel_checker) = test_channel::<'_, (), _>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Empty.take_until(observable);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_immediate_error() {
+    let (_, observable, channel_checker) = test_channel::<'_, (), _>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Throw::new("error").take_until(observable);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]

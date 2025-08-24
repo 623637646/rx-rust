@@ -6,7 +6,10 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -1392,6 +1395,64 @@ fn test_without_convenient_api() {
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_immediate_next() {
+    let mut subject = BehaviorSubject::new(111);
+    let mut subject_1 = BehaviorSubject::new(111);
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().zip(subject_1.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![(111, 111)]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject_1.on_next(222);
+    assert_eq!(checker.values(), vec![(111, 111)]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_next(222);
+    assert_eq!(checker.values(), vec![(111, 111), (222, 222)]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), vec![(111, 111), (222, 222)]);
+    assert_eq!(checker.state(), State::Completed);
+
+    subject_1.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), vec![(111, 111), (222, 222)]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_immediate_completed() {
+    let (_, observable, channel_checker) = test_channel::<'_, i32, _>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Empty.zip(observable);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_immediate_error() {
+    let (_, observable, channel_checker) = test_channel::<'_, i32, _>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Throw::new("error").zip(observable);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]

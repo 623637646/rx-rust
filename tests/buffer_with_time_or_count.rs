@@ -9,7 +9,10 @@ use crate::tests_utils::test_channel::test_channel;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -1871,6 +1874,71 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
         assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+    });
+}
+
+#[test]
+fn test_immediate_next() {
+    block_on(|runtime| async move {
+        let subject = BehaviorSubject::new(111);
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = subject.clone();
+        let observable = observable.buffer_with_time_or_count(
+            NonZeroUsize::new(1).unwrap(),
+            DURATION_LOGICAL,
+            runtime.clone(),
+            Some(DURATION_LOGICAL),
+        );
+
+        let _subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), [vec![111]]);
+        assert_eq!(checker.state(), State::Active);
+
+        subject
+            .clone()
+            .on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.values(), [vec![111]]);
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_completed() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = Empty.buffer_with_time_or_count(
+            NonZeroUsize::new(1).unwrap(),
+            DURATION_LOGICAL,
+            runtime.clone(),
+            Some(DURATION_LOGICAL),
+        );
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_immediate_error() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = Throw::new("error").buffer_with_time_or_count(
+            NonZeroUsize::new(1).unwrap(),
+            DURATION_LOGICAL,
+            runtime.clone(),
+            Some(DURATION_LOGICAL),
+        );
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Error("error"));
     });
 }
 
