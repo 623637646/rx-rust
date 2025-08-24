@@ -23,7 +23,7 @@ use crate::{
         },
         mathematical_aggregate::reduce::Reduce,
         others::{
-            hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
+            debug::Debug, hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination, map_infallible_to_error::MapInfallibleToError,
             map_infallible_to_value::MapInfallibleToValue,
         },
@@ -133,6 +133,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
 
     fn debounce<S>(self, time_span: Duration, scheduler: S) -> Debounce<Self, S> {
         Debounce::new(self, time_span, scheduler)
+    }
+
+    fn debug<D>(self, label: D) -> Debug<Self, D> {
+        Debug::new(self, label)
     }
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {
