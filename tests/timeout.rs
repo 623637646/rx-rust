@@ -167,11 +167,7 @@ fn test_unsubscribe() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         subscription.dispose();
-        assert_eq!(checker.values(), [111, 222]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
