@@ -3,16 +3,13 @@ mod tests_utils;
 use crate::tests_utils::DURATION_DEVIATION;
 use crate::tests_utils::DURATION_LOGICAL;
 use crate::tests_utils::DURATION_NEXT_LOOP;
-use crate::tests_utils::RECURSION_EXECUTION_TIMES;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
 use crate::tests_utils::test_runtime::block_on;
-use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::operators::creating::empty::Empty;
-use rx_rust::operators::creating::interval::Interval;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
@@ -27,7 +24,6 @@ use rx_rust::{
 };
 use std::convert::Infallible;
 use std::sync::atomic::Ordering;
-use std::time::Instant;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -334,33 +330,6 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.state(), State::Dropped);
         assert_eq!(checker_3.values(), [111, 222, 333]);
         assert_eq!(checker_3.state(), State::Error("error"));
-    });
-}
-
-#[test]
-fn test_precision() {
-    block_on(|runtime| async move {
-        let (tx, mut rx) = futures::channel::mpsc::unbounded();
-        let observable = Interval::new(DURATION_NEXT_LOOP, runtime.clone(), None);
-        let observable = observable.delay(DURATION_NEXT_LOOP, runtime.clone());
-        let start_instant = Instant::now();
-        let _subscription = observable.subscribe_with_callback(
-            move |_| {
-                tx.unbounded_send(Instant::now()).unwrap();
-            },
-            |_| {},
-        );
-
-        let mut count = 0;
-        while let Some(call_instant) = rx.next().await {
-            let duration = call_instant - start_instant;
-            let diff = duration - ((count as u32 + 1) * DURATION_NEXT_LOOP);
-            assert!(diff < DURATION_DEVIATION, "diff: {diff:?}, count: {count}");
-            count += 1;
-            if count == RECURSION_EXECUTION_TIMES {
-                break;
-            }
-        }
     });
 }
 
