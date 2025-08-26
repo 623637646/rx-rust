@@ -31,19 +31,20 @@ impl<OE, S> RefCount<'_, OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'or, 'sub, T, E> for RefCount<'sub, OE, S>
 where
     OE: Observable<'or, 'sub, T, E>,
-    S: Observable<'or, 'sub, T, E> + Observer<T, E> + NecessarySend + 'or + Clone,
+    S: Observable<'or, 'sub, T, E> + Observer<T, E> + Clone + NecessarySend + 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+        let sub = self.source.clone().subscribe(observer);
         self.state.lock_mut(|mut lock| {
             match &mut *lock {
                 State::Initialized => {
-                    *lock = State::Subscribed(1, self.source.clone().connect());
+                    *lock = State::Subscribed(1, self.source.connect());
                 }
                 State::Subscribed(count, _) => *count += 1,
                 State::Unsubscribed => panic!("Already Unsubscribed"),
             };
         });
-        self.source.subscribe(observer) + self.state.clone()
+        sub + self.state
     }
 }
 
