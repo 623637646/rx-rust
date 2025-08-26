@@ -1,4 +1,4 @@
-use crate::tests_utils::{DURATION_POST_CREATER, test_runtime::TestRuntime};
+use crate::tests_utils::test_runtime::TestRuntime;
 use rx_rust::{
     disposable::{Disposable, callback_disposal::CallbackDisposal},
     safe_lock_option,
@@ -21,11 +21,7 @@ impl Scheduler for TestRuntime {
         let entry = Shared::new(Mutable::new(EntryExitChecker::enter()));
         let weak_entry = Shared::downgrade(&entry);
 
-        let this = self.clone();
         let future = async move {
-            if this.mock_delay {
-                this.sleep(DURATION_POST_CREATER).await;
-            }
             future.await;
             if let Some(entry) = weak_entry.upgrade() {
                 entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));

@@ -1,5 +1,7 @@
+use crate::tests_utils::DURATION_POST_CREATER;
 use crate::tests_utils::join_handle::JoinHandle;
 use educe::Educe;
+use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::NecessarySend;
 use rx_rust::utils::types::Shared;
 use std::sync::atomic::AtomicUsize;
@@ -66,11 +68,20 @@ cfg_if::cfg_if! {
 }
 
 impl TestRuntime {
-    pub(crate) fn spawn<FU>(&self, future: FU) -> JoinHandle<FU>
+    pub(crate) fn spawn<OP>(
+        &self,
+        future: impl Future<Output = OP> + NecessarySend + 'static,
+    ) -> JoinHandle<impl Future<Output = OP> + NecessarySend + 'static>
     where
-        FU: Future + NecessarySend + 'static,
-        FU::Output: NecessarySend + 'static,
+        OP: NecessarySend + 'static,
     {
+        let self_cloned = self.clone();
+        let future = async move {
+            if self_cloned.mock_delay {
+                self_cloned.sleep(DURATION_POST_CREATER).await;
+            }
+            future.await
+        };
         let (join_handle, future) = JoinHandle::wrape(future);
         cfg_if::cfg_if! {
             if #[cfg(feature = "local-pool-scheduler")] {
