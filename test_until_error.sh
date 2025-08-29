@@ -18,7 +18,7 @@ while true; do
 
   echo "===== Loop #$count finished in ${elapsed}s ====="
 
-  if grep -q "error" "$tmpfile"; then
+  if grep -q "test run failed" "$tmpfile"; then
     mkdir -p logs
     timestamp=$(date +"%Y%m%d_%H%M%S")
     logfile="logs/test_${timestamp}_${count}.log"
