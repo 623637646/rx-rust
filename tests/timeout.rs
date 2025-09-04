@@ -3,6 +3,7 @@ mod tests_utils;
 use crate::tests_utils::{
     DURATION_DEVIATION, DURATION_LOGICAL, DURATION_NEXT_LOOP,
     checker::{Checker, State},
+    stress_test::stress_test,
     test_channel::{ChannelState, test_channel},
     test_runtime::block_on,
     test_struct::TestStruct,
@@ -721,33 +722,17 @@ fn test_immediate_error() {
 
 #[test]
 fn test_stress_testing() {
-    block_on(|runtime| async move {
-        const COUNT: usize = 100000;
-        let mut handles = Vec::with_capacity(COUNT);
-        for i in 0..COUNT {
-            let runtime_cloned = runtime.clone();
-            let handle = runtime_cloned.clone().spawn(async move {
-                let mut subject = PublishSubject::<'_, _, Infallible>::default();
-                let (checker, observer) = Checker::new();
+    stress_test(|runtime, count| async move {
+        let mut subject = PublishSubject::<'_, _, Infallible>::default();
+        let (checker, observer) = Checker::new();
 
-                // Custom operations
-                let observable = subject
-                    .clone()
-                    .timeout(DURATION_NEXT_LOOP, runtime_cloned.clone());
-                let _subscription = observable.subscribe(observer);
-                runtime_cloned.sleep(DURATION_NEXT_LOOP).await;
-                subject.on_next(111);
-                if checker.values() == [111]
-                    && checker.state() == State::Error(timeout::Error::Timeout)
-                {
-                    panic!("Panic at {i}");
-                }
-            });
-            handles.push(handle);
-        }
-
-        for handle in handles {
-            handle.await.unwrap();
+        // Custom operations
+        let observable = subject.clone().timeout(DURATION_NEXT_LOOP, runtime.clone());
+        let _subscription = observable.subscribe(observer);
+        runtime.sleep(DURATION_NEXT_LOOP).await;
+        subject.on_next(111);
+        if checker.values() == [111] && checker.state() == State::Error(timeout::Error::Timeout) {
+            panic!("Panic at {count}");
         }
     });
 }

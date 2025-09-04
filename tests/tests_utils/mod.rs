@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 pub(crate) mod checker;
 pub(crate) mod join_handle;
+pub(crate) mod stress_test;
 pub(crate) mod test_channel;
 pub(crate) mod test_runtime;
 pub(crate) mod test_scheduler;
