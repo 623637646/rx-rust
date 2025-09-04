@@ -3,12 +3,13 @@ mod tests_utils;
 use crate::tests_utils::DURATION_DEVIATION;
 use crate::tests_utils::DURATION_LOGICAL;
 use crate::tests_utils::DURATION_NEXT_LOOP;
-use crate::tests_utils::RECURSION_EXECUTION_TIMES;
 use crate::tests_utils::test_runtime::block_on;
 use futures::StreamExt;
 use rx_rust::scheduler::RecursionAction;
 use rx_rust::{disposable::Disposable, scheduler::Scheduler};
 use std::time::Instant;
+
+const RECURSION_EXECUTION_TIMES: usize = 200;
 
 #[test]
 fn test_schedule_without_delay() {
