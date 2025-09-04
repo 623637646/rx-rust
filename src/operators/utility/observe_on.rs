@@ -84,24 +84,24 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
                         let termination = lock.termination.take();
                         let values = std::mem::take(&mut lock.values);
 
-                        match (termination, values.is_empty()){
+                        match (termination, values.is_empty()) {
                             (None, true) => {
                                 // No more values. Stop scheduler. Set disposal to None.
-                                if let Some(disposal) = lock.disposal.take()  {
+                                if let Some(disposal) = lock.disposal.take() {
                                     disposal.dispose();
                                 }
                                 RecursionAction::Stop
-                            },
+                            }
                             (None, false) => {
                                 drop(lock);
                                 safe_lock_option_observer!(on_next: observer, values: values);
                                 RecursionAction::ContinueImmediately
-                            },
+                            }
                             (Some(termination), true) => {
                                 drop(lock);
                                 safe_lock_option_observer!(on_termination: observer, termination);
                                 RecursionAction::Stop
-                            },
+                            }
                             (Some(termination), false) => {
                                 drop(lock);
                                 match termination {
@@ -113,7 +113,7 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
                                     }
                                 }
                                 RecursionAction::Stop
-                            },
+                            }
                         }
                     })
                 },
