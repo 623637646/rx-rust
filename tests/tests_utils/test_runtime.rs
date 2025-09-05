@@ -94,7 +94,7 @@ impl TestRuntime {
         FU: Future + NecessarySend + 'static,
         FU::Output: NecessarySend + 'static,
     {
-        let (join_handle, future) = JoinHandle::wrape(future);
+        let (join_handle, future) = JoinHandle::wrap(future);
         let self_cloned = self.clone();
         let future = async move {
             if self_cloned.mock_delay {

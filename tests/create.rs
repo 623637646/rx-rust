@@ -109,7 +109,7 @@ fn test_unsubscribe() {
                 runtime.sleep(DURATION_LOGICAL).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
-            Subscription::new_with_disposal_callback(move || handle.abort())
+            Subscription::new_with_disposal_callback(move || handle.dispose())
         });
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
@@ -243,7 +243,7 @@ fn test_async() {
                 runtime.sleep(DURATION_LOGICAL).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
-            Subscription::new_with_disposal_callback(move || handle.abort())
+            Subscription::new_with_disposal_callback(move || handle.dispose())
         });
         let (checker, observer) = Checker::new();
 

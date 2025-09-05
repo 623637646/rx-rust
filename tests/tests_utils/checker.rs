@@ -138,7 +138,8 @@ impl<T> Checker<T, Infallible> {
                 state: state.clone(),
             },
             Subscription::new_with_disposal_callback(move || {
-                handle.abort();
+                use rx_rust::disposable::Disposable;
+                handle.dispose();
                 state.lock_mut(|mut lock| match &*lock {
                     State::Active => *lock = State::Dropped,
                     State::Completed | State::Error(_) => {}

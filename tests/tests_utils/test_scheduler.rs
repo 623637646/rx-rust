@@ -38,7 +38,7 @@ impl Scheduler for TestRuntime {
             if let Some(count_sub) = safe_lock_option!(take: count_sub_cloned) {
                 count_sub();
             }
-            handle.abort();
+            handle.dispose();
         })
     }
 

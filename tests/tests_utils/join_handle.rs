@@ -20,7 +20,7 @@ impl<FU> JoinHandle<FU>
 where
     FU: Future,
 {
-    pub(crate) fn wrape(future: FU) -> (Self, impl Future<Output = ()>) {
+    pub(crate) fn wrap(future: FU) -> (Self, impl Future<Output = ()>) {
         let (tx, rx) = futures::channel::oneshot::channel();
         let (future, abort_handle) = abortable(future);
 
@@ -32,10 +32,6 @@ where
         };
 
         (JoinHandle { rx, abort_handle }, future)
-    }
-
-    pub(crate) fn abort(self) {
-        self.abort_handle.abort();
     }
 }
 
@@ -59,6 +55,6 @@ where
     FU: Future,
 {
     fn dispose(self) {
-        self.abort();
+        self.abort_handle.abort();
     }
 }
