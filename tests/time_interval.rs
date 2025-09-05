@@ -24,7 +24,7 @@ fn check_values<T: PartialEq + Debug>(values: Vec<(T, Duration)>, expected: Vec<
         let expected = &expected[i];
         assert_eq!(value.0, expected.0);
         let diff = value.1.max(expected.1).sub(value.1.min(expected.1));
-        assert!(diff.as_millis() < 5, "{value:?} != {expected:?}",);
+        assert!(diff < DURATION_DEVIATION, "{value:?} != {expected:?}",);
     }
 }
 
@@ -528,9 +528,9 @@ fn test_multiple_operation() {
                 let expected = &expected[i];
                 assert_eq!(value.0.0, expected.0);
                 let diff = value.0.1.max(expected.1).sub(value.0.1.min(expected.1));
-                assert!(diff.as_millis() < 5, "{value:?} != {expected:?}",);
+                assert!(diff < DURATION_DEVIATION, "{value:?} != {expected:?}",);
                 let diff = value.1.max(expected.1).sub(value.1.min(expected.1));
-                assert!(diff.as_millis() < 5, "{value:?} != {expected:?}",);
+                assert!(diff < DURATION_DEVIATION, "{value:?} != {expected:?}",);
             }
         }
 
