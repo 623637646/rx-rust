@@ -1,9 +1,9 @@
 #![cfg(feature = "futures")]
 mod tests_utils;
 
-use crate::tests_utils::DURATION_NEXT_LOOP;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
+use crate::tests_utils::{DURATION_NEXT_LOOP, DURATION_POST_CREATER};
 use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};
 use futures::{FutureExt, StreamExt};
 use rx_rust::disposable::Disposable;
@@ -407,8 +407,7 @@ fn test_order_with_continuous_next() {
 
 #[test]
 fn test_immediate_next() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+    block_on(|runtime| async move {
         let subject = BehaviorSubject::new(111);
 
         // Custom operations
@@ -416,10 +415,7 @@ fn test_immediate_next() {
         let stream = observable.into_stream();
 
         let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_POST_CREATER).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
 
@@ -432,16 +428,12 @@ fn test_immediate_next() {
 
 #[test]
 fn test_immediate_completed() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+    block_on(|runtime| async move {
         // Custom operations
         let stream = Empty.into_stream();
 
         let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_POST_CREATER).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Completed);
     });

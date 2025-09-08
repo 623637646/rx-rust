@@ -19,7 +19,7 @@ use rx_rust::{
     scheduler::Scheduler,
     subject::{behavior_subject::BehaviorSubject, publish_subject::PublishSubject},
 };
-use std::{convert::Infallible, sync::atomic::Ordering, time::Duration};
+use std::{convert::Infallible, time::Duration};
 
 #[test]
 fn test_completed() {
@@ -123,7 +123,7 @@ fn test_timeout() {
 #[test]
 fn test_timeout_0_duration() {
     block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+        runtime.mock_delay();
         let (_, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -144,7 +144,7 @@ fn test_timeout_0_duration() {
 #[test]
 fn test_unsubscribe() {
     block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+        runtime.mock_delay();
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -532,32 +532,32 @@ fn test_scheduler_should_be_disposed_after_completed() {
 
         // Custom operations
         let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         sender.on_next(111);
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         sender.on_termination(Termination::Completed);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 
@@ -569,26 +569,26 @@ fn test_scheduler_should_be_disposed_after_error() {
 
         // Custom operations
         let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         sender.on_next(111);
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         sender.on_termination(Termination::Error("error"));
         assert_eq!(checker.values(), [111, 222]);
@@ -597,7 +597,7 @@ fn test_scheduler_should_be_disposed_after_error() {
             State::Error(timeout::Error::SourceError("error"))
         );
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 
@@ -609,35 +609,35 @@ fn test_scheduler_should_be_disposed_after_unsub() {
 
         // Custom operations
         let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         sender.on_next(111);
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         subscription.dispose();
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 

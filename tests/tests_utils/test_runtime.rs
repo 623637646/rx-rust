@@ -1,33 +1,32 @@
-use crate::tests_utils::DURATION_POST_CREATER;
 use crate::tests_utils::join_handle::JoinHandle;
 use educe::Educe;
-use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::NecessarySend;
 use rx_rust::utils::types::Shared;
-use std::cell::Cell;
 use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
-thread_local! {
-    static THREAD_NAME: Cell<Option<&'static str>> = const { Cell::new(None) };
-}
-
-pub(crate) fn get_thread_name() -> Option<&'static str> {
-    THREAD_NAME.with(|name| name.get())
+#[derive(Educe)]
+#[educe(Debug, Clone, Default)]
+struct TestRuntimeContext {
+    alive_tasks_count: Shared<AtomicUsize>,
+    #[cfg(not(feature = "single-threaded"))]
+    is_spawned_late: bool,
+    #[cfg(not(feature = "single-threaded"))]
+    is_abort_late: bool,
+    #[cfg(not(feature = "single-threaded"))]
+    thread_name: Option<&'static str>,
 }
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "local-pool-scheduler")] {
-        use rx_rust::utils::types::Mutable;
         use futures::executor::{LocalPool, LocalSpawner};
+        use rx_rust::utils::types::Mutable;
         #[derive(Educe)]
         #[educe(Debug, Clone)]
         pub(crate) struct TestRuntime {
             pool: Shared<Mutable<LocalPool>>,
             pub(crate) spawner: LocalSpawner,
-            pub(crate) alive_tasks_count: Shared<AtomicUsize>,
-            pub(crate) mock_delay: bool,
-            #[cfg(not(feature = "single-threaded"))]
-            thread_name: Option<&'static str>,
+            context: TestRuntimeContext
         }
         impl Default for TestRuntime {
             fn default() -> Self {
@@ -36,10 +35,7 @@ cfg_if::cfg_if! {
                 Self {
                     pool: Shared::new(Mutable::new(pool)),
                     spawner,
-                    alive_tasks_count: Shared::new(AtomicUsize::new(0)),
-                    mock_delay: false,
-                    #[cfg(not(feature = "single-threaded"))]
-                    thread_name: None
+                    context: TestRuntimeContext::default(),
                 }
             }
         }
@@ -49,40 +45,21 @@ cfg_if::cfg_if! {
         #[educe(Debug, Clone)]
         pub(crate) struct TestRuntime {
             pub(crate) pool: ThreadPool,
-            pub(crate) alive_tasks_count: Shared<AtomicUsize>,
-            pub(crate) mock_delay: bool,
-            #[cfg(not(feature = "single-threaded"))]
-            thread_name: Option<&'static str>,
+            context: TestRuntimeContext
         }
         impl Default for TestRuntime {
             fn default() -> Self {
                 Self {
                     pool: ThreadPool::new().unwrap(),
-                    alive_tasks_count: Shared::new(AtomicUsize::new(0)),
-                    mock_delay: false,
-                    #[cfg(not(feature = "single-threaded"))]
-                    thread_name: None
+                    context: TestRuntimeContext::default(),
                 }
             }
         }
     } else {
         #[derive(Educe)]
-        #[educe(Debug, Clone)]
+        #[educe(Debug, Clone, Default)]
         pub(crate) struct TestRuntime {
-            pub(crate) alive_tasks_count: Shared<AtomicUsize>,
-            pub(crate) mock_delay: bool,
-            #[cfg(not(feature = "single-threaded"))]
-            thread_name: Option<&'static str>,
-        }
-        impl Default for TestRuntime {
-            fn default() -> Self {
-                Self {
-                    alive_tasks_count: Shared::new(AtomicUsize::new(0)),
-                    mock_delay: false,
-                    #[cfg(not(feature = "single-threaded"))]
-                    thread_name: None
-                }
-            }
+            context: TestRuntimeContext
         }
     }
 
@@ -95,23 +72,6 @@ impl TestRuntime {
         FU::Output: NecessarySend + 'static,
     {
         let (join_handle, future) = JoinHandle::wrap(future);
-        let self_cloned = self.clone();
-        let future = async move {
-            if self_cloned.mock_delay {
-                self_cloned.sleep(DURATION_POST_CREATER).await;
-            }
-            future.await
-        };
-
-        #[cfg(not(feature = "single-threaded"))]
-        if let Some(thread_name) = self.thread_name {
-            std::thread::spawn(move || {
-                THREAD_NAME.with(|name| name.set(Some(thread_name)));
-                block_on(|_| future);
-            });
-            return join_handle;
-        }
-
         cfg_if::cfg_if! {
             if #[cfg(feature = "local-pool-scheduler")] {
                 use futures::task::LocalSpawnExt;
@@ -124,7 +84,7 @@ impl TestRuntime {
             } else if #[cfg(feature = "async-std-scheduler")] {
                 async_std::task::spawn(future);
             } else {
-                _ = future;
+                panic!("You need to specify a feature to run tests.");
             }
         }
         join_handle
@@ -133,8 +93,47 @@ impl TestRuntime {
     #[cfg(not(feature = "single-threaded"))]
     pub(crate) fn clone_with_thread_name(&self, thread_name: &'static str) -> Self {
         let mut cloned = self.clone();
-        cloned.thread_name = Some(thread_name);
+        cloned.context.thread_name = Some(thread_name);
         cloned
+    }
+
+    pub(crate) fn get_alive_tasks_count(&self) -> usize {
+        self.context.alive_tasks_count.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn alive_tasks_count_add_1(&self) {
+        self.context
+            .alive_tasks_count
+            .fetch_add(1, Ordering::SeqCst);
+    }
+
+    pub(crate) fn alive_tasks_count_sub_1(&self) {
+        self.context
+            .alive_tasks_count
+            .fetch_sub(1, Ordering::SeqCst);
+    }
+
+    #[cfg(not(feature = "single-threaded"))]
+    pub(crate) fn is_spawned_late(&self) -> bool {
+        self.context.is_spawned_late
+    }
+
+    #[cfg(not(feature = "single-threaded"))]
+    pub(crate) fn is_abort_late(&self) -> bool {
+        self.context.is_abort_late
+    }
+
+    #[cfg(not(feature = "single-threaded"))]
+    pub(crate) fn get_expected_thread_name(&self) -> Option<&'static str> {
+        self.context.thread_name
+    }
+
+    pub(crate) fn mock_delay(&mut self) {
+        #[cfg(not(feature = "single-threaded"))]
+        {
+            self.context.is_spawned_late = true;
+            self.context.is_abort_late = false;
+        }
     }
 }
 
@@ -142,8 +141,7 @@ pub(crate) fn block_on<FU>(body: impl FnOnce(TestRuntime) -> FU)
 where
     FU: Future<Output = ()> + 'static,
 {
-    let runtime: TestRuntime = Default::default();
-
+    let runtime = TestRuntime::default();
     cfg_if::cfg_if! {
         if #[cfg(feature = "local-pool-scheduler")] {
             use futures::task::LocalSpawnExt;
@@ -161,7 +159,6 @@ where
         } else if #[cfg(feature = "async-std-scheduler")] {
             async_std::task::block_on(body(runtime));
         } else {
-            _ = body(runtime);
             panic!("You need to specify a feature to run tests.");
         }
     }

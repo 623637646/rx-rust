@@ -15,13 +15,12 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::interval::Interval,
 };
-use std::sync::atomic::Ordering;
 use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed_no_delay() {
     block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+        runtime.mock_delay();
         let observable = Interval::new(DURATION_LOGICAL, runtime.clone(), None);
         let (checker, observer) = Checker::new();
 
@@ -338,22 +337,22 @@ fn test_scheduler_should_be_disposed_after_completed() {
         let observable =
             Interval::new(DURATION_LOGICAL, runtime.clone(), Some(DURATION_LOGICAL)).take(1);
         let (checker, observer) = Checker::new();
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         runtime.sleep(DURATION_DEVIATION).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         runtime.sleep(DURATION_LOGICAL).await;
         assert_eq!(checker.values(), [0]);
         assert_eq!(checker.state(), State::Completed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 
@@ -362,20 +361,20 @@ fn test_scheduler_should_be_disposed_after_unsub() {
     block_on(|runtime| async move {
         let observable = Interval::new(DURATION_LOGICAL, runtime.clone(), Some(DURATION_LOGICAL));
         let (checker, observer) = Checker::new();
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         subscription.dispose();
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 

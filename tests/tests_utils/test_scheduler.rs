@@ -5,23 +5,43 @@ use rx_rust::{
     scheduler::Scheduler,
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
-use std::{sync::atomic::Ordering, time::Duration};
+use std::{cell::Cell, time::Duration};
+
+thread_local! {
+    static THREAD_NAME: Cell<Option<&'static str>> = const { Cell::new(None) };
+}
+
+pub(crate) fn get_thread_name() -> Option<&'static str> {
+    THREAD_NAME.with(|name| name.get())
+}
 
 impl Scheduler for TestRuntime {
     fn schedule_future(
         &self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> impl Disposable + NecessarySend + 'static {
-        let alive_tasks_count = self.alive_tasks_count.clone();
+        // Use this Fn() to avoid sub multiple times.
+        let self_cloned = self.clone();
         let count_sub = Shared::new(Mutable::new(Some(move || {
-            alive_tasks_count.fetch_sub(1, Ordering::SeqCst);
+            self_cloned.alive_tasks_count_sub_1();
         })));
         let count_sub_cloned = count_sub.clone();
 
         let entry = Shared::new(Mutable::new(EntryExitChecker::enter()));
         let weak_entry = Shared::downgrade(&entry);
 
+        #[cfg(not(feature = "single-threaded"))]
+        let self_cloned = self.clone();
         let future = async move {
+            #[cfg(not(feature = "single-threaded"))]
+            if self_cloned.is_spawned_late() {
+                use crate::tests_utils::DURATION_POST_CREATER;
+                if self_cloned.get_expected_thread_name().is_none() {
+                    self_cloned.sleep(DURATION_POST_CREATER).await;
+                } else {
+                    std::thread::sleep(DURATION_POST_CREATER);
+                }
+            }
             future.await;
             if let Some(entry) = weak_entry.upgrade() {
                 entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
@@ -31,14 +51,56 @@ impl Scheduler for TestRuntime {
             }
         };
 
-        self.alive_tasks_count.fetch_add(1, Ordering::SeqCst);
-        let handle = self.spawn(future);
+        self.alive_tasks_count_add_1();
+
+        let handle;
+        cfg_if::cfg_if! {
+            if #[cfg(not(feature = "single-threaded"))] {
+                if let Some(thread_name) = self.get_expected_thread_name() {
+                    use crate::tests_utils::join_handle::JoinHandle;
+                    let (join_handle, future) = JoinHandle::wrap(future);
+                    std::thread::spawn(move || {
+                        THREAD_NAME.with(|name| name.set(Some(thread_name)));
+                        futures::executor::block_on(future);
+                    });
+                    handle = join_handle;
+                } else {
+                    handle = self.spawn(future);
+                }
+            } else {
+                handle = self.spawn(future);
+            }
+        }
+
+        #[cfg(not(feature = "single-threaded"))]
+        let self_cloned = self.clone();
         CallbackDisposal::new(move || {
             entry.lock_mut(|mut lock| EntryExitChecker::exit(&mut lock));
             if let Some(count_sub) = safe_lock_option!(take: count_sub_cloned) {
                 count_sub();
             }
-            handle.dispose();
+            cfg_if::cfg_if! {
+                if #[cfg(not(feature = "single-threaded"))] {
+                    if self_cloned.is_abort_late() {
+                        use crate::tests_utils::DURATION_POST_CREATER;
+                        if self_cloned.get_expected_thread_name().is_none() {
+                            self_cloned.clone().spawn(async move {
+                                self_cloned.sleep(DURATION_POST_CREATER).await;
+                                handle.dispose();
+                            });
+                        } else {
+                            std::thread::spawn(move || {
+                                std::thread::sleep(DURATION_POST_CREATER);
+                                handle.dispose();
+                            });
+                        }
+                    } else {
+                        handle.dispose();
+                    }
+                } else {
+                    handle.dispose();
+                }
+            }
         })
     }
 
@@ -58,8 +120,7 @@ impl Scheduler for TestRuntime {
                 use rx_rust::scheduler::async_std_scheduler::AsyncStdScheduler;
                 AsyncStdScheduler.sleep(duration)
             } else {
-                _ = duration;
-                async {}
+                panic!("You need to specify a feature to run tests.");
             }
         }
     }

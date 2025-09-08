@@ -20,7 +20,6 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
-use std::sync::atomic::Ordering;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -124,7 +123,7 @@ fn test_completed_last_not_empty() {
 #[test]
 fn test_completed_no_delay() {
     block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+        runtime.mock_delay();
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -850,19 +849,19 @@ fn test_scheduler_should_be_disposed_after_completed() {
         // Custom operations
         let observable =
             observable.buffer_with_time(DURATION_LOGICAL, runtime.clone(), Some(DURATION_LOGICAL));
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         sender.on_termination(Termination::Completed);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 
@@ -875,19 +874,19 @@ fn test_scheduler_should_be_disposed_after_error() {
         // Custom operations
         let observable =
             observable.buffer_with_time(DURATION_LOGICAL, runtime.clone(), Some(DURATION_LOGICAL));
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         sender.on_termination(Termination::Error("error"));
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 
@@ -900,29 +899,29 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         // Custom operations
         let observable =
             observable.buffer_with_time(DURATION_LOGICAL, runtime.clone(), Some(DURATION_LOGICAL));
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         subscription.dispose();
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 
 #[test]
 fn test_immediate_next() {
     block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+        runtime.mock_delay();
         let subject = BehaviorSubject::new(111);
         let (checker, observer) = Checker::new();
 
@@ -949,7 +948,7 @@ fn test_immediate_next() {
 #[test]
 fn test_immediate_completed() {
     block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+        runtime.mock_delay();
         let (checker, observer) = Checker::new();
 
         // Custom operations
@@ -965,7 +964,7 @@ fn test_immediate_completed() {
 #[test]
 fn test_immediate_error() {
     block_on(|mut runtime| async move {
-        runtime.mock_delay = true;
+        runtime.mock_delay();
         let (checker, observer) = Checker::new();
 
         // Custom operations

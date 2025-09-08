@@ -10,7 +10,6 @@ use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     operators::creating::{from_future::FromFuture, from_result::FromResult},
 };
-use std::sync::atomic::Ordering;
 use tests_utils::checker::Checker;
 
 #[test]
@@ -236,19 +235,19 @@ fn test_scheduler_should_be_disposed_after_completed() {
         let observable = FromFuture::new(rx, runtime.clone());
         let observable = observable.map(|result| result.unwrap_or(-1));
         let (checker, observer) = Checker::new();
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         tx.send(111).unwrap();
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 
@@ -260,21 +259,21 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         let observable = FromFuture::new(rx, runtime.clone());
         let observable = observable.map(|result| result.unwrap_or(-1));
         let (checker, observer) = Checker::new();
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let subscription = observable.subscribe(observer);
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 1);
+        assert_eq!(runtime.get_alive_tasks_count(), 1);
 
         subscription.dispose();
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         runtime.sleep(DURATION_NEXT_LOOP).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(runtime.alive_tasks_count.load(Ordering::SeqCst), 0);
+        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 
