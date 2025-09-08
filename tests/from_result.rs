@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_NEXT_LOOP;
+use crate::tests_utils::DURATION_5_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::scheduler::Scheduler;
@@ -82,7 +82,7 @@ fn test_async() {
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });

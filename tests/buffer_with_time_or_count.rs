@@ -1,8 +1,8 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_DEVIATION;
-use crate::tests_utils::DURATION_LOGICAL;
-use crate::tests_utils::DURATION_NEXT_LOOP;
+use crate::tests_utils::DURATION_20_MS;
+use crate::tests_utils::DURATION_100_MS;
+use crate::tests_utils::DURATION_5_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
@@ -34,20 +34,20 @@ fn test_completed_time_last_empty() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -55,7 +55,7 @@ fn test_completed_time_last_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -67,7 +67,7 @@ fn test_completed_time_last_empty() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -89,20 +89,20 @@ fn test_completed_time_last_not_empty() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -110,7 +110,7 @@ fn test_completed_time_last_not_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -141,7 +141,7 @@ fn test_completed_no_delay() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
             None,
         );
@@ -150,11 +150,11 @@ fn test_completed_no_delay() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -162,7 +162,7 @@ fn test_completed_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -174,7 +174,7 @@ fn test_completed_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [vec![], vec![], vec![111], vec![222, 333]]
@@ -202,20 +202,20 @@ fn test_completed_time_small_delay() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_NEXT_LOOP),
+            Some(DURATION_5_MS),
         );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -223,7 +223,7 @@ fn test_completed_time_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -235,7 +235,7 @@ fn test_completed_time_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [vec![], vec![], vec![111], vec![222, 333]]
@@ -263,9 +263,9 @@ fn test_completed_count_last_empty() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(3).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
@@ -314,9 +314,9 @@ fn test_completed_count_last_not_empty() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(3).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
@@ -361,16 +361,16 @@ fn test_completed_time_and_count() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -379,7 +379,7 @@ fn test_completed_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -388,7 +388,7 @@ fn test_completed_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -400,7 +400,7 @@ fn test_completed_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -414,7 +414,7 @@ fn test_completed_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -435,7 +435,7 @@ fn test_completed_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -448,7 +448,7 @@ fn test_completed_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -462,7 +462,7 @@ fn test_completed_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -522,16 +522,16 @@ fn test_error_time_and_count() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -540,7 +540,7 @@ fn test_error_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -549,7 +549,7 @@ fn test_error_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -561,7 +561,7 @@ fn test_error_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -575,7 +575,7 @@ fn test_error_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -596,7 +596,7 @@ fn test_error_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -609,7 +609,7 @@ fn test_error_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -623,7 +623,7 @@ fn test_error_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -681,9 +681,9 @@ fn test_unsubscribe() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -695,7 +695,7 @@ fn test_unsubscribe() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
@@ -708,7 +708,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![111, 111]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![111, 111]]);
@@ -727,7 +727,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
@@ -743,7 +743,7 @@ fn test_unsubscribe() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -761,7 +761,7 @@ fn test_unsubscribe() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -786,7 +786,7 @@ fn test_unsubscribe() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -801,7 +801,7 @@ fn test_unsubscribe() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -817,7 +817,7 @@ fn test_unsubscribe() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -883,9 +883,9 @@ fn test_async() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let subscription = runtime
@@ -895,7 +895,7 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -910,7 +910,7 @@ fn test_async() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -925,7 +925,7 @@ fn test_async() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -943,7 +943,7 @@ fn test_async() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -963,7 +963,7 @@ fn test_async() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -990,7 +990,7 @@ fn test_async() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1003,7 +1003,7 @@ fn test_async() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1017,7 +1017,7 @@ fn test_async() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1057,7 +1057,7 @@ fn test_async() {
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
 
         let subject_cloned = subject.clone();
         runtime
@@ -1067,7 +1067,7 @@ fn test_async() {
             .await
             .unwrap();
 
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1095,9 +1095,9 @@ fn test_subscribe_by_different_observer() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -1110,7 +1110,7 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
@@ -1123,7 +1123,7 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![111, 111]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![111, 111]]);
@@ -1142,7 +1142,7 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
@@ -1158,7 +1158,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1176,7 +1176,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1201,7 +1201,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1216,7 +1216,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1232,7 +1232,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1298,9 +1298,9 @@ fn test_unsub_on_next_by_take() {
         let observable = observable
             .buffer_with_time_or_count(
                 NonZeroUsize::new(100).unwrap(),
-                DURATION_LOGICAL,
+                DURATION_100_MS,
                 runtime.clone(),
-                Some(DURATION_LOGICAL),
+                Some(DURATION_100_MS),
             )
             .take(1);
 
@@ -1309,12 +1309,12 @@ fn test_unsub_on_next_by_take() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1332,22 +1332,22 @@ fn test_multiple_operation() {
         let observable = observable
             .buffer_with_time_or_count(
                 NonZeroUsize::new(2).unwrap(),
-                DURATION_LOGICAL,
+                DURATION_100_MS,
                 runtime.clone(),
-                Some(DURATION_LOGICAL),
+                Some(DURATION_100_MS),
             )
             .buffer_with_time_or_count(
                 NonZeroUsize::new(2).unwrap(),
-                DURATION_LOGICAL + DURATION_DEVIATION,
+                DURATION_100_MS + DURATION_20_MS,
                 runtime.clone(),
-                Some(DURATION_LOGICAL + DURATION_DEVIATION),
+                Some(DURATION_100_MS + DURATION_20_MS),
             );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -1358,7 +1358,7 @@ fn test_multiple_operation() {
         assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -1375,7 +1375,7 @@ fn test_multiple_operation() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1399,7 +1399,7 @@ fn test_multiple_operation() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION * 2).await;
+        runtime.sleep(DURATION_20_MS * 2).await;
         assert_eq!(
             checker.values(),
             [
@@ -1422,7 +1422,7 @@ fn test_multiple_operation() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL + DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1476,16 +1476,16 @@ fn test_without_convenient_api() {
         let observable = BufferWithTimeOrCount::new(
             observable,
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -1494,7 +1494,7 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -1503,7 +1503,7 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -1515,7 +1515,7 @@ fn test_without_convenient_api() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -1529,7 +1529,7 @@ fn test_without_convenient_api() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333], vec![444]]
@@ -1550,7 +1550,7 @@ fn test_without_convenient_api() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1563,7 +1563,7 @@ fn test_without_convenient_api() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1577,7 +1577,7 @@ fn test_without_convenient_api() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1633,9 +1633,9 @@ fn test_complete_after_next() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
@@ -1660,9 +1660,9 @@ fn test_error_after_next() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
@@ -1687,9 +1687,9 @@ fn test_unsub_after_next() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let subscription = observable.subscribe(observer);
@@ -1699,7 +1699,7 @@ fn test_unsub_after_next() {
 
         sender.on_next(111);
         subscription.dispose();
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1715,9 +1715,9 @@ fn test_unsub_after_completed() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let subscription = observable.subscribe(observer);
@@ -1742,9 +1742,9 @@ fn test_unsub_after_error() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let subscription = observable.subscribe(observer);
@@ -1769,9 +1769,9 @@ fn test_undisposed_schedule() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
@@ -1795,9 +1795,9 @@ fn test_scheduler_should_be_disposed_after_completed() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
@@ -1824,9 +1824,9 @@ fn test_scheduler_should_be_disposed_after_error() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
@@ -1853,9 +1853,9 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         // Custom operations
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(100).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
@@ -1868,7 +1868,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         subscription.dispose();
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1886,9 +1886,9 @@ fn test_immediate_next() {
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(1).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
@@ -1911,9 +1911,9 @@ fn test_immediate_completed() {
         // Custom operations
         let observable = Empty.buffer_with_time_or_count(
             NonZeroUsize::new(1).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
@@ -1930,9 +1930,9 @@ fn test_immediate_error() {
         // Custom operations
         let observable = Throw::new("error").buffer_with_time_or_count(
             NonZeroUsize::new(1).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let _subscription = observable.subscribe(observer);
@@ -1962,9 +1962,9 @@ fn test_lifetime_sub() {
 
             let observable = observable.buffer_with_time_or_count(
                 NonZeroUsize::new(2).unwrap(),
-                DURATION_LOGICAL,
+                DURATION_100_MS,
                 runtime.clone(),
-                Some(DURATION_LOGICAL),
+                Some(DURATION_100_MS),
             );
 
             let (_, observer) = Checker::<_, ()>::new();
@@ -1983,9 +1983,9 @@ fn test_clone() {
         });
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
         _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
     });
@@ -1998,9 +1998,9 @@ fn test_type_inference_with_subscribe() {
         let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
         let observable = subject.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         let observable = observable.filter(|_| true);
@@ -2016,9 +2016,9 @@ fn test_type_inference_without_subscribe() {
         let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
         let observable = subject.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
-            DURATION_LOGICAL,
+            DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_LOGICAL),
+            Some(DURATION_100_MS),
         );
 
         observable.filter(|_| true);

@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::{
-    DURATION_DEVIATION, DURATION_LOGICAL, DURATION_NEXT_LOOP,
+    DURATION_20_MS, DURATION_100_MS, DURATION_5_MS,
     checker::{Checker, State},
     stress_test::stress_test,
     test_channel::{ChannelState, test_channel},
@@ -28,7 +28,7 @@ fn test_completed() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -40,7 +40,7 @@ fn test_completed() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
@@ -60,7 +60,7 @@ fn test_error() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -72,7 +72,7 @@ fn test_error() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
@@ -95,7 +95,7 @@ fn test_timeout() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -107,13 +107,13 @@ fn test_timeout() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL + DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -135,7 +135,7 @@ fn test_timeout_0_duration() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -149,7 +149,7 @@ fn test_unsubscribe() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -161,14 +161,14 @@ fn test_unsubscribe() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         subscription.dispose();
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -182,7 +182,7 @@ fn test_async() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = runtime
             .spawn(async move { observable.subscribe(observer) })
@@ -203,7 +203,7 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         let _sender = runtime
             .spawn(async move {
                 sender.on_next(222);
@@ -215,7 +215,7 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL + DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -229,7 +229,7 @@ fn test_subscribe_by_different_observer() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
         // Custom operations
-        let observable = subject.clone().timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = subject.clone().timeout(DURATION_100_MS, runtime.clone());
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
@@ -246,14 +246,14 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [111]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         subject.on_next(222);
         assert_eq!(checker_1.values(), [111, 222]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [111, 222]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL + DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
         assert_eq!(checker_1.values(), [111, 222]);
         assert_eq!(checker_1.state(), State::Error(timeout::Error::Timeout));
         assert_eq!(checker_2.values(), [111, 222]);
@@ -269,7 +269,7 @@ fn test_unsub_on_next_by_take() {
 
         // Custom operations
         let observable = observable
-            .timeout(DURATION_LOGICAL, runtime.clone())
+            .timeout(DURATION_100_MS, runtime.clone())
             .take(1);
 
         let _subscription = observable.subscribe(observer);
@@ -292,8 +292,8 @@ fn test_multiple_operation_timeout_at_first() {
 
         // Custom operations
         let observable = observable
-            .timeout(DURATION_LOGICAL, runtime.clone())
-            .timeout(DURATION_LOGICAL * 2, runtime.clone());
+            .timeout(DURATION_100_MS, runtime.clone())
+            .timeout(DURATION_100_MS * 2, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -305,13 +305,13 @@ fn test_multiple_operation_timeout_at_first() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL + DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(
             checker.state(),
@@ -329,8 +329,8 @@ fn test_multiple_operation_timeout_at_sencond() {
 
         // Custom operations
         let observable = observable
-            .timeout(DURATION_LOGICAL * 2, runtime.clone())
-            .timeout(DURATION_LOGICAL, runtime.clone());
+            .timeout(DURATION_100_MS * 2, runtime.clone())
+            .timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -342,13 +342,13 @@ fn test_multiple_operation_timeout_at_sencond() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL + DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -361,7 +361,7 @@ fn test_without_convenient_api() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = Timeout::new(observable, DURATION_LOGICAL, runtime.clone());
+        let observable = Timeout::new(observable, DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -373,13 +373,13 @@ fn test_without_convenient_api() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL + DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -393,7 +393,7 @@ fn test_complete_after_next() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -415,7 +415,7 @@ fn test_error_after_next() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -440,7 +440,7 @@ fn test_unsub_after_next() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -449,7 +449,7 @@ fn test_unsub_after_next() {
 
         sender.on_next(111);
         subscription.dispose();
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -463,7 +463,7 @@ fn test_unsub_after_completed() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -485,7 +485,7 @@ fn test_unsub_after_error() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -510,7 +510,7 @@ fn test_undisposed_schedule() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -531,7 +531,7 @@ fn test_scheduler_should_be_disposed_after_completed() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
@@ -546,7 +546,7 @@ fn test_scheduler_should_be_disposed_after_completed() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(runtime.get_alive_tasks_count(), 1);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
@@ -568,7 +568,7 @@ fn test_scheduler_should_be_disposed_after_error() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
@@ -583,7 +583,7 @@ fn test_scheduler_should_be_disposed_after_error() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(runtime.get_alive_tasks_count(), 1);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
@@ -608,7 +608,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let subscription = observable.subscribe(observer);
@@ -623,7 +623,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(runtime.get_alive_tasks_count(), 1);
 
-        runtime.sleep(DURATION_LOGICAL - DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS - DURATION_20_MS).await;
         sender.on_next(222);
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
@@ -633,7 +633,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         subscription.dispose();
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -648,7 +648,7 @@ fn test_order_with_continuous_next() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -663,7 +663,7 @@ fn test_order_with_continuous_next() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_LOGICAL + DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
         assert_eq!(checker.values(), values);
         assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -677,7 +677,7 @@ fn test_immediate_next() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = subject.clone().timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = subject.clone().timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert_eq!(checker.values(), [111]);
@@ -695,7 +695,7 @@ fn test_immediate_completed() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = Empty.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = Empty.timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert_eq!(checker.values(), []);
@@ -709,7 +709,7 @@ fn test_immediate_error() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = Throw::new("error").timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = Throw::new("error").timeout(DURATION_100_MS, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
         assert_eq!(checker.values(), []);
@@ -727,9 +727,9 @@ fn test_stress_testing() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = subject.clone().timeout(DURATION_NEXT_LOOP, runtime.clone());
+        let observable = subject.clone().timeout(DURATION_5_MS, runtime.clone());
         let _subscription = observable.subscribe(observer);
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         subject.on_next(111);
         if checker.values() == [111] && checker.state() == State::Error(timeout::Error::Timeout) {
             panic!("Panic at {count}");
@@ -745,7 +745,7 @@ fn test_clone() {
             observer.on_termination(Termination::Error(TestStruct));
             Subscription::default()
         });
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
         _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
     });
 }
@@ -756,7 +756,7 @@ fn test_type_inference_with_subscribe() {
         // Custom operations
         let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
-        let observable = observable.timeout(DURATION_LOGICAL, runtime.clone());
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone());
         let (_, observer) = Checker::new();
         observable.subscribe(observer);
     });
@@ -768,6 +768,6 @@ fn test_type_inference_without_subscribe() {
         // Custom operations
         let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
-        observable.timeout(DURATION_LOGICAL, runtime.clone());
+        observable.timeout(DURATION_100_MS, runtime.clone());
     });
 }

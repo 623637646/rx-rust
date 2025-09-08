@@ -1,8 +1,8 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_DEVIATION;
-use crate::tests_utils::DURATION_LOGICAL;
-use crate::tests_utils::DURATION_NEXT_LOOP;
+use crate::tests_utils::DURATION_20_MS;
+use crate::tests_utils::DURATION_100_MS;
+use crate::tests_utils::DURATION_5_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
@@ -102,11 +102,11 @@ fn test_unsubscribe() {
             observer.on_next(1);
             let runtime = runtime_cloned.clone();
             let handle = runtime_cloned.spawn(async move {
-                runtime.sleep(DURATION_LOGICAL).await;
+                runtime.sleep(DURATION_100_MS).await;
                 observer.on_next(2);
-                runtime.sleep(DURATION_LOGICAL).await;
+                runtime.sleep(DURATION_100_MS).await;
                 observer.on_next(3);
-                runtime.sleep(DURATION_LOGICAL).await;
+                runtime.sleep(DURATION_100_MS).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.dispose())
@@ -124,13 +124,13 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [1]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker_1.values(), [1]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [1]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [1, 2]);
@@ -138,13 +138,13 @@ fn test_unsubscribe() {
 
         subscription_1.dispose(); // unsubscribe
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [1, 2, 3]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [1, 2, 3]);
@@ -238,9 +238,9 @@ fn test_async() {
             observer.on_next(1);
             let runtime = runtime_cloned.clone();
             let handle = runtime_cloned.spawn(async move {
-                runtime.sleep(DURATION_LOGICAL).await;
+                runtime.sleep(DURATION_100_MS).await;
                 observer.on_next(2);
-                runtime.sleep(DURATION_LOGICAL).await;
+                runtime.sleep(DURATION_100_MS).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
             Subscription::new_with_disposal_callback(move || handle.dispose())
@@ -254,11 +254,11 @@ fn test_async() {
         assert_eq!(checker.values(), [1]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_DEVIATION).await;
+        runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [1]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [1, 2]);
         assert_eq!(checker.state(), State::Active);
 
@@ -266,11 +266,11 @@ fn test_async() {
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(DURATION_NEXT_LOOP).await;
+        runtime.sleep(DURATION_5_MS).await;
         assert_eq!(checker.values(), [1, 2]);
         assert_eq!(checker.state(), State::Dropped);
 
-        runtime.sleep(DURATION_LOGICAL).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [1, 2]);
         assert_eq!(checker.state(), State::Dropped);
     });
