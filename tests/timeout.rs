@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::{
-    DURATION_20_MS, DURATION_100_MS, DURATION_5_MS,
+    DURATION_5_MS, DURATION_20_MS, DURATION_100_MS,
     checker::{Checker, State},
     stress_test::stress_test,
     test_channel::{ChannelState, test_channel},
@@ -268,9 +268,7 @@ fn test_unsub_on_next_by_take() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable
-            .timeout(DURATION_100_MS, runtime.clone())
-            .take(1);
+        let observable = observable.timeout(DURATION_100_MS, runtime.clone()).take(1);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());

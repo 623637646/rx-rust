@@ -1,8 +1,8 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_5_MS;
 use crate::tests_utils::DURATION_20_MS;
 use crate::tests_utils::DURATION_100_MS;
-use crate::tests_utils::DURATION_5_MS;
 use crate::tests_utils::test_runtime::block_on;
 use futures::StreamExt;
 use rx_rust::scheduler::RecursionAction;

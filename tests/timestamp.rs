@@ -58,11 +58,7 @@ fn test_completed() {
         sender.on_next(333);
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -71,11 +67,7 @@ fn test_completed() {
         sender.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -112,11 +104,7 @@ fn test_error() {
         sender.on_next(333);
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -125,11 +113,7 @@ fn test_error() {
         sender.on_termination(Termination::Error("error"));
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
@@ -166,11 +150,7 @@ fn test_unsubscribe() {
         sender.on_next(333);
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -179,11 +159,7 @@ fn test_unsubscribe() {
         subscription.dispose();
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -281,11 +257,7 @@ fn test_mut_ref() {
         sender.on_next(&mut value_3);
         check_values(
             checker.values(),
-            vec![
-                (222, start),
-                (444, start),
-                (666, start + DURATION_20_MS),
-            ],
+            vec![(222, start), (444, start), (666, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -294,11 +266,7 @@ fn test_mut_ref() {
         sender.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker.values(),
-            vec![
-                (222, start),
-                (444, start),
-                (666, start + DURATION_20_MS),
-            ],
+            vec![(222, start), (444, start), (666, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -356,11 +324,7 @@ fn test_async() {
             .unwrap();
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -374,11 +338,7 @@ fn test_async() {
             .unwrap();
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -423,20 +383,12 @@ fn test_subscribe_by_different_observer() {
         subject.on_next(333);
         check_values(
             checker_1.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker_1.state(), State::Active);
         check_values(
             checker_2.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker_2.state(), State::Active);
 
@@ -444,20 +396,12 @@ fn test_subscribe_by_different_observer() {
         subject.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker_1.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker_1.state(), State::Completed);
         check_values(
             checker_2.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker_2.state(), State::Completed);
     });
@@ -533,11 +477,7 @@ fn test_multiple_operation() {
         sender.on_next(333);
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -546,11 +486,7 @@ fn test_multiple_operation() {
         sender.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -587,11 +523,7 @@ fn test_without_convenient_api() {
         sender.on_next(333);
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -600,11 +532,7 @@ fn test_without_convenient_api() {
         sender.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker.values(),
-            vec![
-                (111, start),
-                (222, start),
-                (333, start + DURATION_20_MS),
-            ],
+            vec![(111, start), (222, start), (333, start + DURATION_20_MS)],
         );
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);

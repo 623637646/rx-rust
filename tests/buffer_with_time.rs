@@ -1,8 +1,8 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_5_MS;
 use crate::tests_utils::DURATION_20_MS;
 use crate::tests_utils::DURATION_100_MS;
-use crate::tests_utils::DURATION_5_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
@@ -185,11 +185,8 @@ fn test_completed_small_delay() {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.buffer_with_time(
-            DURATION_100_MS,
-            runtime.clone(),
-            Some(DURATION_5_MS),
-        );
+        let observable =
+            observable.buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_5_MS));
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
