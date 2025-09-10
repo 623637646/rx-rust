@@ -121,6 +121,7 @@ impl Scheduler for TestRuntime {
                 AsyncStdScheduler.sleep(duration)
             } else {
                 panic!("You need to specify a feature to run tests.");
+                async {}
             }
         }
     }
