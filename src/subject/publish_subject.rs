@@ -10,7 +10,10 @@ use crate::{
 use educe::Educe;
 use slotmap::{DefaultKey, DenseSlotMap};
 
+#[derive(Educe)]
+#[educe(Debug, Default)]
 enum State<'or, T, E> {
+    #[educe(Default)]
     Idle(DenseSlotMap<DefaultKey, Option<BoxedObserver<'or, T, E>>>),
     Processing {
         slot_map: DenseSlotMap<DefaultKey, Option<BoxedObserver<'or, T, E>>>,
@@ -20,18 +23,12 @@ enum State<'or, T, E> {
 }
 
 #[derive(Educe)]
-#[educe(Debug, Clone)]
+#[educe(Debug, Clone, Default)]
 pub struct PublishSubject<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
 impl<T, E> PublishSubject<'_, T, E> {
     pub fn new() -> Self {
         Self(Shared::new(Mutable::new(State::Idle(DenseSlotMap::new()))))
-    }
-}
-
-impl<T, E> Default for PublishSubject<'_, T, E> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

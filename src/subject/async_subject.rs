@@ -9,7 +9,7 @@ use crate::{safe_lock, safe_lock_option};
 use educe::Educe;
 
 #[derive(Educe)]
-#[educe(Debug, Clone)]
+#[educe(Debug, Clone, Default)]
 pub struct AsyncSubject<'or, T, E> {
     value: Shared<Mutable<Option<T>>>,
     publish_subject: PublishSubject<'or, T, E>,
@@ -21,12 +21,6 @@ impl<T, E> AsyncSubject<'_, T, E> {
             value: Shared::new(Mutable::new(None)),
             publish_subject: PublishSubject::default(),
         }
-    }
-}
-
-impl<T, E> Default for AsyncSubject<'_, T, E> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

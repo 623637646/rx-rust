@@ -5,10 +5,13 @@ use crate::{
     },
     utils::types::NecessarySend,
 };
+use educe::Educe;
 use std::ops::Add;
 
 /// Subscription is from Observable pattern, it is used to unsubscribe the observable.
 /// The `dispose` method of `Disposable` will be called when the subscription is unsubscribe or dropped.
+#[derive(Educe)]
+#[educe(Debug, Default)]
 pub struct Subscription<'dis>(Vec<BoundDropDisposal<BoxedDisposal<'dis>>>);
 
 impl<'dis> Subscription<'dis> {
@@ -29,12 +32,6 @@ impl<'dis> Subscription<'dis> {
     pub fn append_disposable(&mut self, disposable: impl Disposable + NecessarySend + 'dis) {
         self.0
             .push(BoundDropDisposal::new(BoxedDisposal::new(disposable)));
-    }
-}
-
-impl Default for Subscription<'_> {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
