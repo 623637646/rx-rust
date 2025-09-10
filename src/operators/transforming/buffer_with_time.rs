@@ -49,22 +49,21 @@ where
             values: Vec::new(),
             timer: None,
         }));
-        let observer_cloned = observer.clone();
+        let sub = self.source.subscribe(BufferWithTimeObserver {
+            observer: observer.clone(),
+            context: context.clone(),
+        });
         let context_cloned = context.clone();
         let disposal = self.scheduler.schedule_periodically(
             move |_| {
                 let values = safe_lock!(mem_take: context_cloned, values);
-                !safe_lock_option_observer!(on_next: observer_cloned, values)
+                !safe_lock_option_observer!(on_next: observer, values)
             },
             self.time_span,
             self.delay,
         );
         safe_lock_option!(replace: context, timer, BoxedDisposal::new(disposal));
-        let observer = BufferWithTimeObserver {
-            observer,
-            context: context.clone(),
-        };
-        self.source.subscribe(observer) + context
+        sub + context
     }
 }
 
