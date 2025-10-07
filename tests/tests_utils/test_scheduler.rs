@@ -39,7 +39,7 @@ impl Scheduler for TestRuntime {
                 if self_cloned.get_expected_thread_name().is_none() {
                     self_cloned.sleep(DURATION_1_MS).await;
                 } else {
-                    std::thread::sleep(DURATION_1_MS);
+                    async_io::Timer::after(DURATION_1_MS).await;
                 }
             }
             future.await;

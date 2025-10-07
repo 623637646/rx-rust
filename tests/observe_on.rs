@@ -1183,7 +1183,7 @@ fn test_scheduler_should_be_disposed_after_completed() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.observe_on(runtime.clone());
+        let observable = observable.observe_on(runtime.clone_with_thread_name("thread_1"));
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
@@ -1211,7 +1211,7 @@ fn test_scheduler_should_be_disposed_after_error() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.observe_on(runtime.clone());
+        let observable = observable.observe_on(runtime.clone_with_thread_name("thread_1"));
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
@@ -1239,7 +1239,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.observe_on(runtime.clone());
+        let observable = observable.observe_on(runtime.clone_with_thread_name("thread_1"));
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let subscription = observable.subscribe(observer);
