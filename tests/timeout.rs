@@ -122,8 +122,7 @@ fn test_timeout() {
 
 #[test]
 fn test_timeout_0_duration() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (_, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -131,10 +130,19 @@ fn test_timeout_0_duration() {
         let observable = observable.timeout(Duration::ZERO, runtime.clone());
 
         let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+            },
+            {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
+                assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+            }
+        );
         runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
@@ -143,8 +151,7 @@ fn test_timeout_0_duration() {
 }
 #[test]
 fn test_unsubscribe() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -168,10 +175,19 @@ fn test_unsubscribe() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         subscription.dispose();
-        runtime.sleep(DURATION_5_MS).await;
-        assert_eq!(checker.values(), [111, 222]);
-        assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        check_with_abort_late!(
+            runtime,
+            {
+                assert_eq!(checker.values(), [111, 222]);
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+            },
+            {
+                assert_eq!(checker.values(), [111, 222]);
+                assert_eq!(checker.state(), State::Dropped);
+                assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+            }
+        );
     });
 }
 

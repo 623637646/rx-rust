@@ -132,8 +132,7 @@ fn test_completed_time_last_not_empty() {
 
 #[test]
 fn test_completed_no_delay() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -147,9 +146,17 @@ fn test_completed_no_delay() {
         );
 
         let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+            },
+            {
+                assert_eq!(checker.values(), [vec![]]);
+                assert_eq!(checker.state(), State::Active);
+            }
+        );
         runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
