@@ -1892,16 +1892,24 @@ fn test_immediate_next() {
         // Custom operations
         let observable = subject.clone();
         let observable = observable.buffer_with_time_or_count(
-            NonZeroUsize::new(1).unwrap(),
+            NonZeroUsize::new(2).unwrap(),
             DURATION_100_MS,
             runtime.clone(),
-            Some(DURATION_100_MS),
+            None,
         );
 
         let _subscription = observable.subscribe(observer);
-        assert_eq!(checker.values(), [vec![111]]);
-        assert_eq!(checker.state(), State::Active);
-
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+            },
+            {
+                assert_eq!(checker.values(), [vec![111]]);
+                assert_eq!(checker.state(), State::Active);
+            }
+        );
         subject
             .clone()
             .on_termination(Termination::<Infallible>::Completed);
