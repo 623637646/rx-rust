@@ -127,21 +127,22 @@ impl TestRuntime {
     pub(crate) fn get_expected_thread_name(&self) -> Option<&'static str> {
         self.context.thread_name
     }
-
-    pub(crate) fn mock_delay(&mut self) {
-        #[cfg(not(feature = "single-threaded"))]
-        {
-            self.context.is_spawned_late = true;
-            self.context.is_abort_late = false;
-        }
-    }
 }
 
 pub(crate) fn block_on<FU>(body: impl FnOnce(TestRuntime) -> FU)
 where
     FU: Future<Output = ()> + 'static,
 {
-    let runtime = TestRuntime::default();
+    cfg_if::cfg_if! {
+        if #[cfg(not(feature = "single-threaded"))] {
+            use rand::random;
+            let mut runtime = TestRuntime::default();
+            runtime.context.is_spawned_late = random();
+            runtime.context.is_abort_late = random();
+        } else {
+            let runtime = TestRuntime::default();
+        }
+    }
     cfg_if::cfg_if! {
         if #[cfg(feature = "local-pool-scheduler")] {
             use futures::task::LocalSpawnExt;
@@ -162,4 +163,50 @@ where
             panic!("You need to specify a feature to run tests.");
         }
     }
+}
+
+#[macro_export]
+macro_rules! check_with_spawned_late {
+    ($runtime:ident, $not_spawned:expr, $spawned:expr) => {
+        #[cfg(not(feature = "single-threaded"))]
+        if $runtime.is_spawned_late() {
+            $not_spawned
+            $runtime.sleep(tests_utils::DURATION_5_MS).await;
+            $spawned
+        } else {
+            $runtime.sleep(tests_utils::DURATION_1_MS).await;
+            $spawned
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! check_with_abort_late {
+    ($runtime:ident, $not_spawned:expr, $spawned:expr) => {
+        #[cfg(not(feature = "single-threaded"))]
+        if $runtime.is_abort_late() {
+            $not_spawned
+            $runtime.sleep(tests_utils::DURATION_5_MS).await;
+            $spawned
+        } else {
+            $runtime.sleep(tests_utils::DURATION_1_MS).await;
+            $spawned
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! check_with_spawned_and_abort_late {
+    ($runtime:ident, $spawned_first:expr, $abort_first:expr) => {
+        #[cfg(not(feature = "single-threaded"))]
+        {
+            $runtime.sleep(tests_utils::DURATION_1_MS).await;
+            match ($runtime.is_spawned_late(), $runtime.is_abort_late()) {
+                (true, true) => {}
+                (false, true) => $spawned_first,
+                (true, false) => $abort_first,
+                (false, false) => {}
+            }
+        }
+    };
 }

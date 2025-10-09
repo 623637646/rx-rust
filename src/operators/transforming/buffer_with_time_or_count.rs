@@ -60,8 +60,13 @@ where
             time_span: self.time_span,
             scheduler: self.scheduler,
         };
-        buffer_observer.setup_emit_timer(None, self.delay);
-        self.source.subscribe(buffer_observer) + context
+        let observer = buffer_observer.observer.clone();
+        let scheduler = buffer_observer.scheduler.clone();
+        let delay = self.delay;
+        let time_span = buffer_observer.time_span;
+        let sub = self.source.subscribe(buffer_observer) + context.clone();
+        setup_emit_timer(None, observer, context, scheduler, delay, time_span);
+        sub
     }
 }
 
@@ -84,35 +89,35 @@ struct BufferWithTimeOrCountObserver<T, OR, S> {
     scheduler: S,
 }
 
-impl<T, OR, S> BufferWithTimeOrCountObserver<T, OR, S> {
-    fn setup_emit_timer<E>(
-        &self,
-        mut lock: Option<MutGuard<'_, BufferWithTimeOrCountContext<T>>>,
-        delay: Option<Duration>,
-    ) where
-        T: NecessarySend + 'static,
-        OR: Observer<Vec<T>, E> + NecessarySend + 'static,
-        S: Scheduler,
-    {
-        let observer = self.observer.clone();
-        let context = self.context.clone();
-        let disposal = self.scheduler.schedule_periodically(
-            move |_| {
-                let values = safe_lock!(mem_take: context, values);
-                !safe_lock_option_observer!(on_next: observer, values)
-            },
-            self.time_span,
-            delay,
-        );
-        let old_timer = if let Some(lock) = lock.as_mut() {
-            lock.timer.replace(BoxedDisposal::new(disposal))
-        } else {
-            safe_lock_option!(replace: self.context, timer, BoxedDisposal::new(disposal))
-        };
-        drop(lock);
-        if let Some(timer) = old_timer {
-            timer.dispose();
-        }
+fn setup_emit_timer<T, E, OR, S>(
+    mut lock: Option<MutGuard<'_, BufferWithTimeOrCountContext<T>>>,
+    observer: Shared<Mutable<Option<OR>>>,
+    context: Shared<Mutable<BufferWithTimeOrCountContext<T>>>,
+    scheduler: S,
+    delay: Option<Duration>,
+    time_span: Duration,
+) where
+    T: NecessarySend + 'static,
+    OR: Observer<Vec<T>, E> + NecessarySend + 'static,
+    S: Scheduler,
+{
+    let context_cloned = context.clone();
+    let disposal = scheduler.schedule_periodically(
+        move |_| {
+            let values = safe_lock!(mem_take: context_cloned, values);
+            !safe_lock_option_observer!(on_next: observer, values)
+        },
+        time_span,
+        delay,
+    );
+    let old_timer = if let Some(lock) = lock.as_mut() {
+        lock.timer.replace(BoxedDisposal::new(disposal))
+    } else {
+        safe_lock_option!(replace: context, timer, BoxedDisposal::new(disposal))
+    };
+    drop(lock);
+    if let Some(timer) = old_timer {
+        timer.dispose();
     }
 }
 
@@ -127,7 +132,18 @@ where
             lock.values.push(value);
             if lock.values.len() >= self.count.get() {
                 let values = std::mem::take(&mut lock.values);
-                self.setup_emit_timer(Some(lock), Some(self.time_span));
+                let observer = self.observer.clone();
+                let context = self.context.clone();
+                let scheduler = self.scheduler.clone();
+                let time_span = self.time_span;
+                setup_emit_timer(
+                    Some(lock),
+                    observer,
+                    context,
+                    scheduler,
+                    Some(self.time_span),
+                    time_span,
+                );
                 safe_lock_option_observer!(on_next: self.observer, values);
             }
         });

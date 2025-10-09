@@ -7,7 +7,6 @@ use crate::tests_utils::{
     checker::State,
     test_channel::{ChannelState, test_channel},
     test_runtime::block_on,
-    types::TestMutableHelper,
 };
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
@@ -20,10 +19,9 @@ use rx_rust::{
         creating::{create::Create, never::Never},
         utility::subscribe_on::SubscribeOn,
     },
-    safe_lock,
     scheduler::Scheduler,
     subject::publish_subject::PublishSubject,
-    utils::types::{Mutable, MutableHelper, Shared},
+    utils::types::Shared,
 };
 use std::{
     convert::Infallible,
@@ -277,8 +275,7 @@ fn test_unsubscribe() {
 
 #[test]
 fn test_unsubscribe_immediately() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (_sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
         let call_history = Shared::new(AtomicUsize::new(0));
@@ -291,19 +288,9 @@ fn test_unsubscribe_immediately() {
         let call_history_7 = call_history.clone();
         let call_history_8 = call_history.clone();
 
-        enum Case {
-            Initialized,
-            Subscribed,
-        }
-        let case = Shared::new(Mutable::new(Case::Initialized));
-        let case_1 = case.clone();
-        let case_2 = case.clone();
-        let case_3 = case.clone();
-
         // Custom operations
         let observable = observable
             .do_before_subscription(move || {
-                safe_lock!(mem_replace:case_1, Case::Subscribed);
                 call_history_1.fetch_or(1 << 0, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), Some("thread_1"));
             })
@@ -329,32 +316,42 @@ fn test_unsubscribe_immediately() {
             })
             .do_before_disposal(move || {
                 call_history_7.fetch_or(1 << 6, Ordering::SeqCst);
-                assert!(matches!(&*case_2.test_lock_ref(), Case::Subscribed));
-                assert_eq!(get_thread_name(), Some("thread_1"));
+                assert_eq!(get_thread_name(), None);
             })
             .do_after_disposal(move || {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
-                assert!(matches!(&*case_3.test_lock_ref(), Case::Subscribed));
-                assert_eq!(get_thread_name(), Some("thread_1"));
+                assert_eq!(get_thread_name(), None);
             })
             .subscribe_on(runtime.clone_with_thread_name("thread_1"));
 
         let subscription = observable.subscribe(observer);
         subscription.dispose();
-        runtime.sleep(DURATION_5_MS).await;
-
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Dropped);
-        case.lock_ref(|lock| match &*lock {
-            Case::Initialized => {
+        check_with_spawned_and_abort_late!(
+            runtime,
+            {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Dropped);
+                match channel_checker.state() {
+                    ChannelState::Initialized => {
+                        assert_eq!(call_history.load(Ordering::SeqCst), 0b00000000)
+                    }
+                    ChannelState::Subscribed => unreachable!(),
+                    ChannelState::Completed => unreachable!(),
+                    ChannelState::Error(_) => unreachable!(),
+                    ChannelState::Unsubscribed => {
+                        assert_eq!(call_history.load(Ordering::SeqCst), 0b11000011)
+                    }
+                }
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
+            },
+            {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Dropped);
                 assert_eq!(channel_checker.state(), ChannelState::Initialized);
                 assert_eq!(call_history.load(Ordering::SeqCst), 0b00000000);
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
             }
-            Case::Subscribed => {
-                assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-                assert_eq!(call_history.load(Ordering::SeqCst), 0b11000011);
-            }
-        })
+        );
     });
 }
 
@@ -1282,8 +1279,7 @@ fn test_undisposed_schedule() {
 
 #[test]
 fn test_scheduler_should_be_disposed_after_completed() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
@@ -1292,13 +1288,21 @@ fn test_scheduler_should_be_disposed_after_completed() {
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        runtime.sleep(DURATION_5_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Initialized);
+                assert_eq!(runtime.get_alive_tasks_count(), 1);
+            },
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
+            }
+        );
 
         sender.on_termination(Termination::<Infallible>::Completed);
         assert!(checker.values().is_empty());
@@ -1310,8 +1314,7 @@ fn test_scheduler_should_be_disposed_after_completed() {
 
 #[test]
 fn test_scheduler_should_be_disposed_after_error() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
@@ -1320,13 +1323,21 @@ fn test_scheduler_should_be_disposed_after_error() {
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let _subscription = observable.subscribe(observer);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        runtime.sleep(DURATION_5_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Initialized);
+                assert_eq!(runtime.get_alive_tasks_count(), 1);
+            },
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
+            }
+        );
 
         sender.on_termination(Termination::Error("error"));
         assert!(checker.values().is_empty());
@@ -1338,8 +1349,7 @@ fn test_scheduler_should_be_disposed_after_error() {
 
 #[test]
 fn test_scheduler_should_be_disposed_after_unsub() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (_sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -1348,19 +1358,25 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         let subscription = observable.subscribe(observer);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Initialized);
+                assert_eq!(runtime.get_alive_tasks_count(), 1);
 
-        subscription.dispose();
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
+                subscription.dispose();
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
 
-        runtime.sleep(DURATION_5_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Dropped);
-        assert!(
-            channel_checker.state() == ChannelState::Initialized
-                || channel_checker.state() == ChannelState::Unsubscribed
+                runtime.sleep(DURATION_5_MS).await;
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Dropped);
+                assert_eq!(channel_checker.state(), ChannelState::Initialized);
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
+            },
+            {}
         );
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 

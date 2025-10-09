@@ -19,14 +19,22 @@ use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed_no_delay() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let observable = Interval::new(DURATION_100_MS, runtime.clone(), None);
         let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(observer);
-        assert_eq!(checker.values(), []);
-
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Active);
+            },
+            {
+                assert_eq!(checker.values(), [0]);
+                assert_eq!(checker.state(), State::Active);
+            }
+        );
         runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [0]);
         assert_eq!(checker.state(), State::Active);

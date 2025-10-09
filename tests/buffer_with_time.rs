@@ -122,8 +122,7 @@ fn test_completed_last_not_empty() {
 
 #[test]
 fn test_completed_no_delay() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
@@ -132,9 +131,17 @@ fn test_completed_no_delay() {
         let observable = observable.buffer_with_time(DURATION_100_MS, runtime.clone(), None);
 
         let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+            },
+            {
+                assert_eq!(checker.values(), [vec![]]);
+                assert_eq!(checker.state(), State::Active);
+            }
+        );
         runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
@@ -917,8 +924,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
 
 #[test]
 fn test_immediate_next() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let subject = BehaviorSubject::new(111);
         let (checker, observer) = Checker::new();
 
@@ -927,9 +933,17 @@ fn test_immediate_next() {
         let observable = observable.buffer_with_time(DURATION_100_MS, runtime.clone(), None);
 
         let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+            },
+            {
+                assert_eq!(checker.values(), [vec![111]]);
+                assert_eq!(checker.state(), State::Active);
+            }
+        );
         runtime.sleep(DURATION_20_MS).await;
         assert_eq!(checker.values(), [vec![111]]);
         assert_eq!(checker.state(), State::Active);
@@ -944,8 +958,7 @@ fn test_immediate_next() {
 
 #[test]
 fn test_immediate_completed() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (checker, observer) = Checker::new();
 
         // Custom operations
@@ -960,8 +973,7 @@ fn test_immediate_completed() {
 
 #[test]
 fn test_immediate_error() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (checker, observer) = Checker::new();
 
         // Custom operations

@@ -1177,8 +1177,7 @@ fn test_undisposed_schedule() {
 
 #[test]
 fn test_scheduler_should_be_disposed_after_completed() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
@@ -1193,20 +1192,27 @@ fn test_scheduler_should_be_disposed_after_completed() {
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         sender.on_termination(Termination::<Infallible>::Completed);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        runtime.sleep(DURATION_5_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Completed);
+                assert_eq!(runtime.get_alive_tasks_count(), 1);
+            },
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Completed);
+                assert_eq!(channel_checker.state(), ChannelState::Completed);
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
+            }
+        );
     });
 }
 
 #[test]
 fn test_scheduler_should_be_disposed_after_error() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
@@ -1221,20 +1227,27 @@ fn test_scheduler_should_be_disposed_after_error() {
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
         sender.on_termination(Termination::Error("error"));
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        runtime.sleep(DURATION_5_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Error("error"));
-        assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Active);
+                assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+                assert_eq!(runtime.get_alive_tasks_count(), 1);
+            },
+            {
+                assert!(checker.values().is_empty());
+                assert_eq!(checker.state(), State::Error("error"));
+                assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
+            }
+        );
     });
 }
 
 #[test]
 fn test_scheduler_should_be_disposed_after_unsub() {
-    block_on(|mut runtime| async move {
-        runtime.mock_delay();
+    block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -1254,11 +1267,21 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         subscription.dispose();
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
-        runtime.sleep(DURATION_5_MS).await;
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
+        check_with_spawned_and_abort_late!(
+            runtime,
+            {
+                assert_eq!(checker.values(), [111]);
+                assert_eq!(checker.state(), State::Dropped);
+                assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
+            },
+            {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Dropped);
+                assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+                assert_eq!(runtime.get_alive_tasks_count(), 0);
+            }
+        );
     });
 }
 

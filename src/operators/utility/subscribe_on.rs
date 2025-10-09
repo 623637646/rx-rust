@@ -1,5 +1,5 @@
 use crate::{
-    disposable::{Disposable, subscription::Subscription},
+    disposable::subscription::Subscription,
     observable::Observable,
     observer::Observer,
     scheduler::Scheduler,
@@ -33,13 +33,11 @@ where
         let sub_cloned = sub.clone();
         let disposal = self.scheduler.schedule(
             move || {
-                let sub = self.source.subscribe(observer);
                 sub_cloned.lock_mut(|mut lock| {
                     if lock.is_some() {
+                        // Only subscribe if not unsubscribed yet.
+                        let sub = self.source.subscribe(observer);
                         lock.replace(sub);
-                    } else {
-                        // It's already unsubscribed
-                        sub.dispose();
                     }
                 });
             },
