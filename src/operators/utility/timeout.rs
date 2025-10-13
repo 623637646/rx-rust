@@ -1,11 +1,14 @@
 use crate::{
-    disposable::{Disposable, boxed_disposal::BoxedDisposal, subscription::Subscription},
+    disposable::{
+        Disposable, boxed_disposal::BoxedDisposal, callback_disposal::CallbackDisposal,
+        subscription::Subscription,
+    },
     observable::Observable,
     observer::{Observer, Termination},
-    safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer,
+    safe_lock, safe_lock_option_observer,
     scheduler::Scheduler,
     utils::{
-        types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared},
+        types::{Mutable, MutableHelper, NecessarySend, Shared},
         unsub_after_termination::subscribe_unsub_after_termination,
     },
 };
@@ -48,29 +51,59 @@ where
     ) -> Subscription<'static> {
         subscribe_unsub_after_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(TimeoutContext {
-                timer: None,
+                timer_state: TimerState::Initialized,
                 version: 0,
             }));
-            let observer = TimeoutObserver {
-                observer: Shared::new(Mutable::new(Some(observer))),
+            let observer = Shared::new(Mutable::new(Some(observer)));
+            let timeout_observer = TimeoutObserver {
+                observer: observer.clone(),
                 duration: self.duration,
-                scheduler: self.scheduler,
+                scheduler: self.scheduler.clone(),
                 context: context.clone(),
             };
-            observer.schedule_timer(None);
-            self.source.subscribe(observer) + context
+
+            let sub = self.source.subscribe(timeout_observer);
+            let timer = create_timer(
+                0,
+                observer.clone(),
+                self.duration,
+                self.scheduler.clone(),
+                context.clone(),
+            );
+            let timer_state =
+                safe_lock!(mem_replace: context, timer_state, TimerState::Scheduled(timer));
+            match timer_state {
+                TimerState::Initialized => {} // Normal case.
+                TimerState::Scheduled(_) => unreachable!(),
+                TimerState::DidTimeout => {} // Scheduled task is too fast.
+                TimerState::Disposed => unreachable!(),
+            }
+            sub + context
         })
     }
 }
 
+enum TimerState {
+    Initialized,
+    Scheduled(BoxedDisposal<'static>),
+    DidTimeout,
+    Disposed,
+}
+
 struct TimeoutContext {
-    timer: Option<BoxedDisposal<'static>>, // None means disposed
+    timer_state: TimerState,
     version: usize,
 }
 
 impl Disposable for Shared<Mutable<TimeoutContext>> {
     fn dispose(self) {
-        safe_lock_option_disposable!(dispose: self, timer);
+        let timer_state = safe_lock!(mem_replace: self, timer_state, TimerState::Disposed);
+        match timer_state {
+            TimerState::Initialized => unreachable!(),
+            TimerState::Scheduled(disposal) => disposal.dispose(), // Not timeout yet.
+            TimerState::DidTimeout => {}                           // Timeout
+            TimerState::Disposed => unreachable!(),
+        }
     }
 }
 
@@ -81,66 +114,44 @@ struct TimeoutObserver<OR, S> {
     context: Shared<Mutable<TimeoutContext>>,
 }
 
-impl<OR, S> TimeoutObserver<OR, S> {
-    fn schedule_timer<T, E>(&self, lock: Option<MutGuard<'_, TimeoutContext>>)
-    where
-        OR: Observer<T, Error<E>> + NecessarySend + 'static,
-        S: Scheduler,
-    {
-        let implementation = |mut lock: MutGuard<'_, TimeoutContext>| {
-            let observer = self.observer.clone();
-            let context = self.context.clone();
-            let version = lock.version;
-            let timer = BoxedDisposal::new(self.scheduler.schedule(
-                move || {
-                    context.lock_mut(|mut lock| {
-                        if lock.version == version {
-                            // Same version, should do timeout.
-                            let current_timer = lock.timer.take(); // Take the current timer to mark it as disposed.
-                            drop(lock);
-                            safe_lock_option_observer!(on_termination: observer, Termination::Error(Error::Timeout));
-                            if let Some(current_timer) = current_timer {
-                                current_timer.dispose(); // Dispose the old timer as soon as possible to make the `EntryExitChecker` correct.
-                            }
-                        } else {
-                            // New version, should ignore.
-                        }
-                    });
-                },
-                Some(self.duration),
-            ));
-            if let Some(old_timer) = lock.timer.replace(timer) {
-                drop(lock);
-                old_timer.dispose();
-            }
-        };
-        if let Some(lock) = lock {
-            implementation(lock);
-        } else {
-            self.context.lock_mut(implementation);
-        }
-    }
-}
-
 impl<T, E, OR, S> Observer<T, E> for TimeoutObserver<OR, S>
 where
     OR: Observer<T, Error<E>> + NecessarySend + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let do_on_next = self.context.lock_mut(|mut lock| {
-            if lock.timer.is_none() {
-                // Already disposed
-                false
-            } else {
-                lock.version += 1;
-                self.schedule_timer(Some(lock));
-                true
-            }
-        });
-        if do_on_next {
-            safe_lock_option_observer!(on_next: self.observer, value);
-        }
+        self.context
+            .lock_mut(|mut lock| match &mut lock.timer_state {
+                TimerState::Initialized => {
+                    drop(lock);
+                    safe_lock_option_observer!(on_next: self.observer, value);
+                }
+                TimerState::Scheduled(disposal) => {
+                    // dispose old timer
+                    let disposal = std::mem::replace(
+                        disposal,
+                        BoxedDisposal::new(CallbackDisposal::new(|| {})), // Plcaceholder
+                    );
+                    disposal.dispose();
+
+                    // schedule new timer
+                    lock.version += 1;
+                    let timer = create_timer(
+                        lock.version,
+                        self.observer.clone(),
+                        self.duration,
+                        self.scheduler.clone(),
+                        self.context.clone(),
+                    );
+                    lock.timer_state = TimerState::Scheduled(timer);
+
+                    // emit
+                    drop(lock);
+                    safe_lock_option_observer!(on_next: self.observer, value);
+                }
+                TimerState::DidTimeout => {}
+                TimerState::Disposed => {}
+            });
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -153,4 +164,38 @@ where
             }
         }
     }
+}
+
+fn create_timer<T, E, OR, S>(
+    version: usize,
+    observer: Shared<Mutable<Option<OR>>>,
+    duration: Duration,
+    scheduler: S,
+    context: Shared<Mutable<TimeoutContext>>,
+) -> BoxedDisposal<'static>
+where
+    OR: Observer<T, Error<E>> + NecessarySend + 'static,
+    S: Scheduler,
+{
+    BoxedDisposal::new(scheduler.schedule(
+        move || {
+            context.lock_mut(|mut lock| {
+                if lock.version != version {
+                    // New version, should ignore.
+                    return;
+                }
+                // Same version, should do timeout.
+                let timer_state = std::mem::replace(&mut lock.timer_state, TimerState::DidTimeout);
+                drop(lock);
+                safe_lock_option_observer!(on_termination: observer, Termination::Error(Error::Timeout));
+                match timer_state {
+                    TimerState::Initialized => {} //  Scheduled task is too fast.
+                    TimerState::Scheduled(disposal) => disposal.dispose(), // Dispose the old timer as soon as possible to make the `EntryExitChecker` correct.
+                    TimerState::DidTimeout => unreachable!(),
+                    TimerState::Disposed => {},
+                }
+            });
+        },
+        Some(duration),
+    ))
 }

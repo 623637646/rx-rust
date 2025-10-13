@@ -52,6 +52,12 @@ macro_rules! safe_lock {
         let value = $value;
         $lock_name.lock_mut(|mut lock| std::mem::replace(&mut *lock, value))
     }};
+
+    (mem_replace: $lock_name:expr, $field_name:ident, $value:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        let value = $value;
+        $lock_name.lock_mut(|mut lock| std::mem::replace(&mut lock.$field_name, value))
+    }};
 }
 
 #[macro_export]

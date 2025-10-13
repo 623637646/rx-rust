@@ -704,6 +704,30 @@ fn test_immediate_next() {
 }
 
 #[test]
+fn test_immediate_next_with_timeout() {
+    block_on(|runtime| async move {
+        let subject: BehaviorSubject<'_, i32, Infallible> = BehaviorSubject::new(111);
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = subject.clone().timeout(Duration::ZERO, runtime.clone());
+
+        let _subscription = observable.subscribe(observer);
+        check_with_spawned_late!(
+            runtime,
+            {
+                assert_eq!(checker.values(), [111]);
+                assert_eq!(checker.state(), State::Active);
+            },
+            {
+                assert_eq!(checker.values(), [111]);
+                assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
+            }
+        );
+    });
+}
+
+#[test]
 fn test_immediate_completed() {
     block_on(|runtime| async move {
         let (checker, observer) = Checker::new();
