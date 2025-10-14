@@ -53,22 +53,21 @@ impl Scheduler for TestRuntime {
 
         self.alive_tasks_count_add_1();
 
-        let handle;
         cfg_if::cfg_if! {
             if #[cfg(not(feature = "single-threaded"))] {
-                if let Some(thread_name) = self.get_expected_thread_name() {
+                let handle = if let Some(thread_name) = self.get_expected_thread_name() {
                     use crate::tests_utils::join_handle::JoinHandle;
                     let (join_handle, future) = JoinHandle::wrap(future);
                     std::thread::spawn(move || {
                         THREAD_NAME.with(|name| name.set(Some(thread_name)));
                         futures::executor::block_on(future);
                     });
-                    handle = join_handle;
+                    join_handle
                 } else {
-                    handle = self.spawn(future);
-                }
+                    self.spawn(future)
+                };
             } else {
-                handle = self.spawn(future);
+                let handle = self.spawn(future);
             }
         }
 
