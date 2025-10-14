@@ -57,12 +57,25 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.state(), State::Active);
 
         subscription_1.dispose();
-        assert!(checker_1.values().is_empty());
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
-        assert!(checker_2.values().is_empty());
-        assert_eq!(checker_2.state(), State::Active);
-        assert!(checker_3.values().is_empty());
-        assert_eq!(checker_3.state(), State::Active);
+        check_with_abort_late!(
+            runtime,
+            {
+                assert!(checker_1.values().is_empty());
+                assert_eq!(checker_1.state(), State::Active);
+                assert!(checker_2.values().is_empty());
+                assert_eq!(checker_2.state(), State::Active);
+                assert!(checker_3.values().is_empty());
+                assert_eq!(checker_3.state(), State::Active);
+            },
+            {
+                assert!(checker_1.values().is_empty());
+                assert_eq!(checker_1.state(), State::Dropped);
+                assert!(checker_2.values().is_empty());
+                assert_eq!(checker_2.state(), State::Active);
+                assert!(checker_3.values().is_empty());
+                assert_eq!(checker_3.state(), State::Active);
+            }
+        );
 
         runtime.sleep(DURATION_30_MS).await;
         assert!(checker_1.values().is_empty());
@@ -73,12 +86,25 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.state(), State::Active);
 
         subscription_2.dispose();
-        assert!(checker_1.values().is_empty());
-        assert_eq!(checker_1.state(), State::Dropped);
-        assert!(checker_2.values().is_empty());
-        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-threaded.
-        assert!(checker_3.values().is_empty());
-        assert_eq!(checker_3.state(), State::Active);
+        check_with_abort_late!(
+            runtime,
+            {
+                assert!(checker_1.values().is_empty());
+                assert_eq!(checker_1.state(), State::Dropped);
+                assert!(checker_2.values().is_empty());
+                assert_eq!(checker_2.state(), State::Active);
+                assert!(checker_3.values().is_empty());
+                assert_eq!(checker_3.state(), State::Active);
+            },
+            {
+                assert!(checker_1.values().is_empty());
+                assert_eq!(checker_1.state(), State::Dropped);
+                assert!(checker_2.values().is_empty());
+                assert_eq!(checker_2.state(), State::Dropped);
+                assert!(checker_3.values().is_empty());
+                assert_eq!(checker_3.state(), State::Active);
+            }
+        );
 
         runtime.sleep(DURATION_100_MS).await;
         assert!(checker_1.values().is_empty());

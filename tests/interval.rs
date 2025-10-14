@@ -48,10 +48,19 @@ fn test_completed_no_delay() {
         assert_eq!(checker.state(), State::Active);
 
         subscription.dispose();
-        assert_eq!(checker.values(), [0, 1, 2]);
-        // assert_eq!(checker.state(), State::Active); // This assert may be failed in multi-threaded.
+        check_with_abort_late!(
+            runtime,
+            {
+                assert_eq!(checker.values(), [0, 1, 2]);
+                assert_eq!(checker.state(), State::Active);
+            },
+            {
+                assert_eq!(checker.values(), [0, 1, 2]);
+                assert_eq!(checker.state(), State::Dropped);
+            }
+        );
 
-        runtime.sleep(DURATION_10_MS).await;
+        runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [0, 1, 2]);
         assert_eq!(checker.state(), State::Dropped);
     });
@@ -84,8 +93,17 @@ fn test_completed_with_delay() {
         assert_eq!(checker.state(), State::Active);
 
         subscription.dispose();
-        assert_eq!(checker.values(), [0, 1, 2]);
-        // assert_eq!(checker.state(), State::Active); // This assert may be failed in multi-threaded.
+        check_with_abort_late!(
+            runtime,
+            {
+                assert_eq!(checker.values(), [0, 1, 2]);
+                assert_eq!(checker.state(), State::Active);
+            },
+            {
+                assert_eq!(checker.values(), [0, 1, 2]);
+                assert_eq!(checker.state(), State::Dropped);
+            }
+        );
 
         runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [0, 1, 2]);
@@ -140,10 +158,21 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.state(), State::Active);
 
         subscription_1.dispose();
-        assert_eq!(checker_1.values(), [0, 1, 2]);
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
-        assert_eq!(checker_2.values(), [0, 1, 2]);
-        assert_eq!(checker_2.state(), State::Active);
+        check_with_abort_late!(
+            runtime,
+            {
+                assert_eq!(checker_1.values(), [0, 1, 2]);
+                assert_eq!(checker_1.state(), State::Active);
+                assert_eq!(checker_2.values(), [0, 1, 2]);
+                assert_eq!(checker_2.state(), State::Active);
+            },
+            {
+                assert_eq!(checker_1.values(), [0, 1, 2]);
+                assert_eq!(checker_1.state(), State::Dropped);
+                assert_eq!(checker_2.values(), [0, 1, 2]);
+                assert_eq!(checker_2.state(), State::Active);
+            }
+        );
 
         runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);
@@ -253,10 +282,21 @@ fn test_subscribe_by_different_observer() {
 
         subscription_1.dispose();
         subscription_2.dispose();
-        assert_eq!(checker_1.values(), [0, 1, 2]);
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
-        assert_eq!(checker_2.values(), [0, 1, 2]);
-        // assert_eq!(checker_2.state(), State::Active); // This assert may be failed in multi-threaded.
+        check_with_abort_late!(
+            runtime,
+            {
+                assert_eq!(checker_1.values(), [0, 1, 2]);
+                assert_eq!(checker_1.state(), State::Active);
+                assert_eq!(checker_2.values(), [0, 1, 2]);
+                assert_eq!(checker_2.state(), State::Active);
+            },
+            {
+                assert_eq!(checker_1.values(), [0, 1, 2]);
+                assert_eq!(checker_1.state(), State::Dropped);
+                assert_eq!(checker_2.values(), [0, 1, 2]);
+                assert_eq!(checker_2.state(), State::Dropped);
+            }
+        );
 
         runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker_1.values(), [0, 1, 2]);

@@ -381,16 +381,21 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.state(), State::Active);
 
         subscription_1.dispose();
-        assert_eq!(checker_1.values(), [vec![], vec![111]]);
-        // assert_eq!(checker_1.state(), State::Active); // This assert may be failed in multi-threaded.
-        assert_eq!(checker_2.values(), [vec![], vec![111]]);
-        assert_eq!(checker_2.state(), State::Active);
-
-        runtime.sleep(DURATION_10_MS).await;
-        assert_eq!(checker_1.values(), [vec![], vec![111]]);
-        assert_eq!(checker_1.state(), State::Dropped);
-        assert_eq!(checker_2.values(), [vec![], vec![111]]);
-        assert_eq!(checker_2.state(), State::Active);
+        check_with_abort_late!(
+            runtime,
+            {
+                assert_eq!(checker_1.values(), [vec![], vec![111]]);
+                assert_eq!(checker_1.state(), State::Active);
+                assert_eq!(checker_2.values(), [vec![], vec![111]]);
+                assert_eq!(checker_2.state(), State::Active);
+            },
+            {
+                assert_eq!(checker_1.values(), [vec![], vec![111]]);
+                assert_eq!(checker_1.state(), State::Dropped);
+                assert_eq!(checker_2.values(), [vec![], vec![111]]);
+                assert_eq!(checker_2.state(), State::Active);
+            }
+        );
 
         subject.on_next(222);
         assert_eq!(checker_1.values(), [vec![], vec![111]]);

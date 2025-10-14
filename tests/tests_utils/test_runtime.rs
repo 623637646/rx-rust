@@ -168,14 +168,21 @@ where
 #[macro_export]
 macro_rules! check_with_spawned_late {
     ($runtime:ident, $not_spawned:expr, $spawned:expr) => {
-        #[cfg(not(feature = "single-threaded"))]
-        if $runtime.is_spawned_late() {
-            $not_spawned
-            $runtime.sleep(tests_utils::DURATION_10_MS).await;
-            $spawned
-        } else {
-            $runtime.sleep(tests_utils::DURATION_3_MS).await;
-            $spawned
+        cfg_if::cfg_if! {
+            if #[cfg(not(feature = "single-threaded"))] {
+                if $runtime.is_spawned_late() {
+                    $not_spawned
+                    $runtime.sleep(tests_utils::DURATION_10_MS).await;
+                    $spawned
+                } else {
+                    $runtime.sleep(tests_utils::DURATION_3_MS).await;
+                    $spawned
+                }
+            } else {
+                $not_spawned
+                $runtime.sleep(tests_utils::DURATION_3_MS).await;
+                $spawned
+            }
         }
     };
 }
@@ -183,14 +190,21 @@ macro_rules! check_with_spawned_late {
 #[macro_export]
 macro_rules! check_with_abort_late {
     ($runtime:ident, $not_spawned:expr, $spawned:expr) => {
-        #[cfg(not(feature = "single-threaded"))]
-        if $runtime.is_abort_late() {
-            $not_spawned
-            $runtime.sleep(tests_utils::DURATION_10_MS).await;
-            $spawned
-        } else {
-            $runtime.sleep(tests_utils::DURATION_3_MS).await;
-            $spawned
+        cfg_if::cfg_if! {
+            if #[cfg(not(feature = "single-threaded"))] {
+                if $runtime.is_abort_late() {
+                    $not_spawned
+                    $runtime.sleep(tests_utils::DURATION_10_MS).await;
+                    $spawned
+                } else {
+                    $runtime.sleep(tests_utils::DURATION_3_MS).await;
+                    $spawned
+                }
+            } else {
+                $not_spawned
+                $runtime.sleep(tests_utils::DURATION_3_MS).await;
+                $spawned
+            }
         }
     };
 }
