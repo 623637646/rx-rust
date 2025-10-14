@@ -212,7 +212,7 @@ fn test_unsub_after_completed_drop() {
 }
 
 #[test]
-fn test_undisposed_schedule() {
+fn test_undisposed_scheduler() {
     block_on(|runtime| async move {
         let (_tx, rx) = futures::channel::oneshot::channel::<i32>();
 

@@ -217,7 +217,7 @@ fn test_unsub_after_completed() {
 }
 
 #[test]
-fn test_undisposed_schedule() {
+fn test_undisposed_scheduler() {
     block_on(|runtime| async move {
         let (_tx, rx) = futures::channel::mpsc::unbounded::<i32>();
         let stream = rx;

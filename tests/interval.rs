@@ -368,7 +368,7 @@ fn test_unsub_after_next() {
 }
 
 #[test]
-fn test_undisposed_schedule() {
+fn test_undisposed_scheduler() {
     block_on(|runtime| async move {
         let observable = Interval::new(DURATION_100_MS, runtime.clone(), Some(DURATION_100_MS));
         let (checker, observer) = Checker::new();

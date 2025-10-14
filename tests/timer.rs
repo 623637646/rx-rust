@@ -194,7 +194,7 @@ fn test_unsub_on_next_by_take() {
 }
 
 #[test]
-fn test_undisposed_schedule() {
+fn test_undisposed_scheduler() {
     block_on(|runtime| async move {
         let observable = Timer::new(111, DURATION_100_MS, runtime.clone());
         let (checker, observer) = Checker::new();

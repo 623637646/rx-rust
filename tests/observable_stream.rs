@@ -353,7 +353,7 @@ fn test_unsub_after_completed() {
 }
 
 #[test]
-fn test_undisposed_schedule() {
+fn test_undisposed_scheduler() {
     block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
 
