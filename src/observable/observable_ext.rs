@@ -9,7 +9,7 @@ use crate::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll, merge::Merge,
             merge_all::MergeAll, start_with::StartWith, switch::Switch, zip::Zip,
         },
-        conditional_boolean::{all::All, amb::Amb, take_until::TakeUntil},
+        conditional_boolean::{all::All, amb::Amb, contains::Contains, take_until::TakeUntil},
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
             catch::Catch,
@@ -129,6 +129,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         OE2: Observable<'or, 'sub, T, E>,
     {
         Concat::new(self, source_2)
+    }
+
+    fn contains(self, item: T) -> Contains<T, Self> {
+        Contains::new(self, item)
     }
 
     fn debounce<S>(self, time_span: Duration, scheduler: S) -> Debounce<Self, S> {

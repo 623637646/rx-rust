@@ -8,7 +8,7 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::observer::boxed_observer::BoxedObserver;
-use rx_rust::operators::conditional_boolean::all::All;
+use rx_rust::operators::conditional_boolean::contains::Contains;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
@@ -21,11 +21,11 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed_true() {
-    let (mut sender, observable, channel_checker) = test_channel();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.all(|value| value % 2 == 0);
+    let observable = observable.contains(888);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -48,14 +48,9 @@ fn test_completed_true() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(888);
-    assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -64,7 +59,7 @@ fn test_completed_false() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.all(|value| value % 2 == 0);
+    let observable = observable.contains(888);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -86,10 +81,10 @@ fn test_completed_false() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(777);
+    sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
@@ -98,7 +93,7 @@ fn test_error() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.all(|value| value % 2 == 0);
+    let observable = observable.contains(999);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -137,7 +132,7 @@ fn test_unsubscribe() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.all(|value| value % 2 == 0);
+    let observable = observable.contains(999);
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -179,7 +174,7 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
 
     // Custom operations
-    let observable = observable.all(move |value| value == &value_1);
+    let observable = observable.contains(&value_2);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -192,32 +187,9 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(&value_2);
-    assert_eq!(checker.values(), [false]);
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-}
-
-#[test]
-fn test_mut_ref() {
-    let mut value = 111;
-
-    let observable = Create::new(|mut observer| {
-        observer.on_next(&mut value);
-        observer.on_termination(Termination::<Infallible>::Completed);
-        Subscription::default()
-    });
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = observable.all(|value| {
-        *value *= 2;
-        true
-    });
-
-    let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(value, 222);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -227,7 +199,7 @@ fn test_async() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.all(|value| value % 2 == 0);
+        let observable = observable.contains(333);
 
         let _subscription = runtime
             .spawn(async move { observable.subscribe(observer) })
@@ -253,7 +225,7 @@ fn test_async() {
             .await
             .unwrap();
         runtime.sleep(DURATION_10_MS).await;
-        assert_eq!(checker.values(), [false]);
+        assert_eq!(checker.values(), [true]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
@@ -267,7 +239,7 @@ fn test_subscribe_by_different_observer() {
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable.all(|_| true);
+    let observable = observable.contains(222);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -286,9 +258,9 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.state(), State::Active);
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker_1.values(), [true]);
+    assert_eq!(checker_1.values(), [false]);
     assert_eq!(checker_1.state(), State::Completed);
-    assert_eq!(checker_2.values(), [true]);
+    assert_eq!(checker_2.values(), [false]);
     assert_eq!(checker_2.state(), State::Completed);
 }
 
@@ -298,7 +270,7 @@ fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.all(|value| value % 2 == 0).take(1);
+    let observable = observable.contains(777).take(1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -321,7 +293,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(777);
-    assert_eq!(checker.values(), [false]);
+    assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
@@ -332,7 +304,7 @@ fn test_multiple_operation_positive_true() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.all(|value| value % 2 == 0).all(|value| value);
+    let observable = observable.contains(666).contains(true);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -350,14 +322,9 @@ fn test_multiple_operation_positive_true() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(666);
-    assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -366,7 +333,7 @@ fn test_multiple_operation_positive_false() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.all(|value| value % 2 == 0).all(|value| value);
+    let observable = observable.contains(666).contains(false);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -384,11 +351,6 @@ fn test_multiple_operation_positive_false() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(666);
-    assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_next(777);
     assert_eq!(checker.values(), [false]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -400,7 +362,41 @@ fn test_multiple_operation_negative_true() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.all(|value| value % 2 == 0).all(|value| !value);
+    let observable = observable.contains(888).contains(false);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(222);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(444);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(666);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [true]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+#[test]
+fn test_multiple_operation_negative_false() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.contains(888).contains(true);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -429,46 +425,12 @@ fn test_multiple_operation_negative_true() {
 }
 
 #[test]
-fn test_multiple_operation_negative_false() {
-    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-    let (checker, observer) = Checker::new();
-
-    // Custom operations
-    let observable = observable.all(|value| value % 2 == 0).all(|value| !value);
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_next(222);
-    assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_next(444);
-    assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_next(666);
-    assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_next(777);
-    assert_eq!(checker.values(), [true]);
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-}
-
-#[test]
 fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = All::new(observable, |value| value % 2 == 0);
+    let observable = Contains::new(observable, 666);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -486,12 +448,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_next(666);
-    assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_next(777);
-    assert_eq!(checker.values(), [false]);
+    assert_eq!(checker.values(), [true]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
@@ -515,7 +472,7 @@ fn test_lifetime_sub() {
             })
         });
 
-        let observable = observable.all(|_| true);
+        let observable = observable.contains(1);
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -525,24 +482,22 @@ fn test_lifetime_sub() {
 #[test]
 fn test_lifetime_or() {
     // OK
-    let mut life_marker_2: Option<TestStruct> = None;
+    let life_marker_2 = 111;
     let mut life_marker_1 = None;
 
     // Error
     // let mut life_marker_1 = None;
-    // let mut life_marker_2: Option<TestStruct> = None;
+    // let life_marker_2 = 111;
 
     {
         let observable = Create::new(|observer| {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
-        let observable = observable.all(|value| {
-            life_marker_2 = Some(value);
-            true
-        });
+        let observable = observable.contains(&life_marker_2);
 
-        let (_, observer) = Checker::<_, Infallible>::new();
+        let (_, mut observer) = Checker::<_, Infallible>::new();
+        observer.on_next(true);
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -550,22 +505,22 @@ fn test_lifetime_or() {
 #[test]
 fn test_lifetime_or_sub() {
     // OK
-    let life_marker_sub = TestStruct;
+    let life_marker_sub = 111;
     let mut life_marker_or = None;
 
     // Error
     // let mut life_marker_or = None;
-    // let life_marker_sub = TestStruct;
+    // let life_marker_sub = 111;
 
     {
-        let observable = Create::new(|observer: BoxedObserver<'_, &TestStruct, Infallible>| {
+        let observable = Create::new(|observer: BoxedObserver<'_, &i32, Infallible>| {
             life_marker_or = Some(observer);
             Subscription::new_with_disposal_callback(|| {
-                life_marker_sub.consume_ref();
+                let _ = life_marker_sub;
             })
         });
 
-        let observable = observable.all(|_| true);
+        let observable = observable.contains(&life_marker_sub);
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
@@ -573,35 +528,22 @@ fn test_lifetime_or_sub() {
 }
 
 #[test]
-fn test_fn() {
-    let mut s = TestStruct;
-
-    // Custom operations
-    let observable = Just::new(1).all(|_| {
-        s.consume_mut();
-        true
-    });
-
-    observable.subscribe_with_callback(|_| {}, |_| {});
-}
-
-#[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        observer.on_next(111);
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let observable = observable.all(|_| true);
-    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+    let observable = observable.contains(111);
+    _ = observable.clone(); // Make sure it's Clone when E is not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let observable = Just::new(1).all(|_| true);
+    let observable = Just::new(1).contains(111);
 
-    let observable = observable.all(|_| true);
+    let observable = observable.contains(true);
     let (_, observer) = Checker::new();
     observable.subscribe(observer);
 }
@@ -609,7 +551,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let observable = Just::new(1).all(|_| true);
+    let observable = Just::new(1).contains(111);
 
-    observable.all(|_| true);
+    observable.contains(true);
 }
