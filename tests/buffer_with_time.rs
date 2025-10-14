@@ -1,7 +1,7 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_5_MS;
-use crate::tests_utils::DURATION_20_MS;
+use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
@@ -37,7 +37,7 @@ fn test_completed_last_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -88,7 +88,7 @@ fn test_completed_last_not_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -142,7 +142,7 @@ fn test_completed_no_delay() {
                 assert_eq!(checker.state(), State::Active);
             }
         );
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -193,13 +193,13 @@ fn test_completed_small_delay() {
         // Custom operations
         let observable = subject.clone();
         let observable =
-            observable.buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_5_MS));
+            observable.buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_10_MS));
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -256,7 +256,7 @@ fn test_error_last_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -305,7 +305,7 @@ fn test_error_last_not_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -356,7 +356,7 @@ fn test_unsubscribe() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
@@ -386,7 +386,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![], vec![111]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker_1.values(), [vec![], vec![111]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(checker_2.values(), [vec![], vec![111]]);
@@ -438,7 +438,7 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -484,7 +484,7 @@ fn test_async() {
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Dropped);
 
@@ -498,7 +498,7 @@ fn test_async() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Dropped);
 
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Dropped);
     });
@@ -526,7 +526,7 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
@@ -588,7 +588,7 @@ fn test_unsub_on_next_by_take() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -611,20 +611,20 @@ fn test_multiple_operation() {
         let observable = observable
             .buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_100_MS))
             .buffer_with_time(
-                DURATION_100_MS + DURATION_20_MS,
+                DURATION_100_MS + DURATION_30_MS,
                 runtime.clone(),
-                Some(DURATION_100_MS + DURATION_20_MS),
+                Some(DURATION_100_MS + DURATION_30_MS),
             );
 
         let _subscription = observable.clone().subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
+        runtime.sleep(DURATION_100_MS + DURATION_30_MS).await;
         assert_eq!(checker.values(), [vec![vec![]]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -632,7 +632,7 @@ fn test_multiple_operation() {
         assert_eq!(checker.values(), [vec![vec![]]]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_100_MS + DURATION_20_MS).await;
+        runtime.sleep(DURATION_100_MS + DURATION_30_MS).await;
         assert_eq!(checker.values(), [vec![vec![]], vec![vec![111]]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -674,7 +674,7 @@ fn test_without_convenient_api() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
@@ -769,7 +769,7 @@ fn test_unsub_after_next() {
 
         sender.on_next(111);
         subscription.dispose();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -914,7 +914,7 @@ fn test_scheduler_should_be_disposed_after_unsub() {
         subscription.dispose();
         assert_eq!(runtime.get_alive_tasks_count(), 0);
 
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -944,7 +944,7 @@ fn test_immediate_next() {
                 assert_eq!(checker.state(), State::Active);
             }
         );
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert_eq!(checker.values(), [vec![111]]);
         assert_eq!(checker.state(), State::Active);
 

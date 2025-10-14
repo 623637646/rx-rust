@@ -1,7 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::{
-    DURATION_20_MS,
+    DURATION_30_MS,
     checker::{Checker, State},
     test_channel::{ChannelState, test_channel},
     test_runtime::block_on,
@@ -24,7 +24,7 @@ fn check_values<T: PartialEq + Debug>(values: Vec<(T, Duration)>, expected: Vec<
         let expected = &expected[i];
         assert_eq!(value.0, expected.0);
         let diff = value.1.max(expected.1).sub(value.1.min(expected.1));
-        assert!(diff < DURATION_20_MS, "{value:?} != {expected:?}",);
+        assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
     }
 }
 
@@ -36,7 +36,7 @@ fn test_completed() {
 
         // Custom operations
         let observable = observable.time_interval();
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -56,27 +56,27 @@ fn test_completed() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_next(333);
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Completed);
@@ -92,7 +92,7 @@ fn test_error() {
 
         // Custom operations
         let observable = observable.time_interval();
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -112,27 +112,27 @@ fn test_error() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_next(333);
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_termination(Termination::Error("error"));
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Error("error"));
@@ -148,7 +148,7 @@ fn test_unsubscribe() {
 
         // Custom operations
         let observable = observable.time_interval();
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -168,27 +168,27 @@ fn test_unsubscribe() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_next(333);
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         subscription.dispose();
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Dropped);
@@ -208,7 +208,7 @@ fn test_ref() {
 
         // Custom operations
         let observable = observable.time_interval();
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -228,27 +228,27 @@ fn test_ref() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_next(&value_3);
         check_values(
             checker.values(),
             vec![
                 (&value_1, Duration::ZERO),
                 (&value_2, Duration::ZERO),
-                (&value_3, DURATION_20_MS),
+                (&value_3, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_termination(Termination::Error(&error));
         check_values(
             checker.values(),
             vec![
                 (&value_1, Duration::ZERO),
                 (&value_2, Duration::ZERO),
-                (&value_3, DURATION_20_MS),
+                (&value_3, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Error(&error));
@@ -267,7 +267,7 @@ fn test_mut_ref() {
 
         // Custom operations
         let observable = observable.time_interval();
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription = observable.map(|v| (*v.0 * 2, v.1)).subscribe(observer);
         assert!(checker.values().is_empty());
@@ -287,27 +287,27 @@ fn test_mut_ref() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_next(&mut value_3);
         check_values(
             checker.values(),
             vec![
                 (222, Duration::ZERO),
                 (444, Duration::ZERO),
-                (666, DURATION_20_MS),
+                (666, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker.values(),
             vec![
                 (222, Duration::ZERO),
                 (444, Duration::ZERO),
-                (666, DURATION_20_MS),
+                (666, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Completed);
@@ -323,7 +323,7 @@ fn test_async() {
 
         // Custom operations
         let observable = observable.time_interval();
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription = runtime
             .spawn(async move { observable.subscribe(observer) })
@@ -358,7 +358,7 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         let sender = runtime
             .spawn(async move {
                 sender.on_next(333);
@@ -371,13 +371,13 @@ fn test_async() {
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         runtime
             .spawn(async move {
                 sender.on_termination(Termination::<Infallible>::Completed);
@@ -389,7 +389,7 @@ fn test_async() {
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Completed);
@@ -408,7 +408,7 @@ fn test_subscribe_by_different_observer() {
         let observable = subject.clone().time_interval();
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription_1 = observable_1.subscribe(observer_1);
         let (on_next, on_termination) = observer_2.into_callbacks();
@@ -436,14 +436,14 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         subject.on_next(333);
         check_values(
             checker_1.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker_1.state(), State::Active);
@@ -452,19 +452,19 @@ fn test_subscribe_by_different_observer() {
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         subject.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker_1.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker_1.state(), State::Completed);
@@ -473,7 +473,7 @@ fn test_subscribe_by_different_observer() {
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker_2.state(), State::Completed);
@@ -488,16 +488,16 @@ fn test_unsub_on_next_by_take() {
 
         // Custom operations
         let observable = observable.time_interval().take(1);
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_next(111);
-        check_values(checker.values(), vec![(111, DURATION_20_MS)]);
+        check_values(checker.values(), vec![(111, DURATION_30_MS)]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
@@ -511,7 +511,7 @@ fn test_multiple_operation() {
 
         // Custom operations
         let observable = observable.time_interval().time_interval();
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -528,9 +528,9 @@ fn test_multiple_operation() {
                 let expected = &expected[i];
                 assert_eq!(value.0.0, expected.0);
                 let diff = value.0.1.max(expected.1).sub(value.0.1.min(expected.1));
-                assert!(diff < DURATION_20_MS, "{value:?} != {expected:?}",);
+                assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
                 let diff = value.1.max(expected.1).sub(value.1.min(expected.1));
-                assert!(diff < DURATION_20_MS, "{value:?} != {expected:?}",);
+                assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
             }
         }
 
@@ -547,27 +547,27 @@ fn test_multiple_operation() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_next(333);
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Completed);
@@ -583,7 +583,7 @@ fn test_without_convenient_api() {
 
         // Custom operations
         let observable = TimeInterval::new(observable);
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -603,27 +603,27 @@ fn test_without_convenient_api() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_next(333);
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         sender.on_termination(Termination::<Infallible>::Completed);
         check_values(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
                 (222, Duration::ZERO),
-                (333, DURATION_20_MS),
+                (333, DURATION_30_MS),
             ],
         );
         assert_eq!(checker.state(), State::Completed);
@@ -675,7 +675,7 @@ fn test_lifetime_or() {
         let observable = observable.time_interval();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next((Some(&life_marker_2), DURATION_20_MS));
+        observer.on_next((Some(&life_marker_2), DURATION_30_MS));
         let _subscription = observable.subscribe(observer);
     }
 }

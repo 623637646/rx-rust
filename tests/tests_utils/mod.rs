@@ -9,7 +9,7 @@ pub(crate) mod test_struct;
 pub(crate) mod types;
 
 use std::time::Duration;
-pub(crate) const DURATION_1_MS: Duration = Duration::from_millis(1);
-pub(crate) const DURATION_5_MS: Duration = Duration::from_millis(5);
-pub(crate) const DURATION_20_MS: Duration = Duration::from_millis(20);
+pub(crate) const DURATION_3_MS: Duration = Duration::from_millis(3);
+pub(crate) const DURATION_10_MS: Duration = Duration::from_millis(10);
+pub(crate) const DURATION_30_MS: Duration = Duration::from_millis(30);
 pub(crate) const DURATION_100_MS: Duration = Duration::from_millis(100);

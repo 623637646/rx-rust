@@ -1,7 +1,7 @@
 #![cfg(not(feature = "single-threaded"))]
 mod tests_utils;
 
-use crate::tests_utils::DURATION_5_MS;
+use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::test_scheduler::get_thread_name;
 use crate::tests_utils::{
     checker::State,
@@ -83,7 +83,7 @@ fn test_completed() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         sender.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -91,7 +91,7 @@ fn test_completed() {
 
         sender.on_next(222);
         sender.on_next(333);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -99,7 +99,7 @@ fn test_completed() {
 
         sender.on_next(444);
         sender.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -167,7 +167,7 @@ fn test_error() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         sender.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -175,14 +175,14 @@ fn test_error() {
 
         sender.on_next(222);
         sender.on_next(333);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00001111);
 
         sender.on_termination(Termination::Error("error"));
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
@@ -250,7 +250,7 @@ fn test_unsubscribe() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         sender.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -331,7 +331,7 @@ fn test_async() {
             })
             .await
             .unwrap();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -345,7 +345,7 @@ fn test_async() {
             })
             .await
             .unwrap();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -358,7 +358,7 @@ fn test_async() {
             })
             .await
             .unwrap();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -436,7 +436,7 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         subject.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker_1.values(), [111]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [111]);
@@ -445,7 +445,7 @@ fn test_subscribe_by_different_observer() {
 
         subject.on_next(222);
         subject.on_next(333);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker_1.values(), [111, 222, 333]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [111, 222, 333]);
@@ -454,7 +454,7 @@ fn test_subscribe_by_different_observer() {
 
         subject.on_next(444);
         subject.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker_1.values(), [111, 222, 333, 444]);
         assert_eq!(checker_1.state(), State::Completed);
         assert_eq!(checker_2.values(), [111, 222, 333, 444]);
@@ -530,7 +530,7 @@ fn test_unsub_on_next_by_take() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         sender.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -631,7 +631,7 @@ fn test_multiple_operation() {
         assert_eq!(call_history_b.load(Ordering::SeqCst), 0b00000011);
 
         sender.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -640,7 +640,7 @@ fn test_multiple_operation() {
 
         sender.on_next(222);
         sender.on_next(333);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -649,7 +649,7 @@ fn test_multiple_operation() {
 
         sender.on_next(444);
         sender.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -718,7 +718,7 @@ fn test_without_convenient_api() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         sender.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -726,7 +726,7 @@ fn test_without_convenient_api() {
 
         sender.on_next(222);
         sender.on_next(333);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -734,7 +734,7 @@ fn test_without_convenient_api() {
 
         sender.on_next(444);
         sender.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -803,7 +803,7 @@ fn test_complete_after_next() {
 
         sender.on_next(111);
         sender.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -872,7 +872,7 @@ fn test_error_after_next() {
 
         sender.on_next(111);
         sender.on_termination(Termination::Error("error"));
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         if checker.values().is_empty() {
             assert_eq!(call_history.load(Ordering::SeqCst), 0b00110011);
         } else if checker.values() == [111] {
@@ -940,7 +940,7 @@ fn test_unsub_after_next() {
 
         sender.on_next(111);
         subscription.dispose();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         if checker.values().is_empty() {
             assert_eq!(call_history.load(Ordering::SeqCst), 0b11000011);
         } else if checker.values() == [111] {
@@ -1008,7 +1008,7 @@ fn test_unsub_after_completed() {
 
         sender.on_termination(Termination::<Infallible>::Completed);
         subscription.dispose();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         match checker.state() {
             State::Dropped => {
                 assert_eq!(checker.values(), []);
@@ -1080,7 +1080,7 @@ fn test_unsub_after_error() {
 
         sender.on_termination(Termination::Error("error"));
         subscription.dispose();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         match checker.state() {
             State::Dropped => {
                 assert_eq!(checker.values(), []);
@@ -1151,7 +1151,7 @@ fn test_undisposed_schedule() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         sender.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1159,7 +1159,7 @@ fn test_undisposed_schedule() {
 
         sender.on_next(222);
         sender.on_next(333);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1167,7 +1167,7 @@ fn test_undisposed_schedule() {
 
         sender.on_next(444);
         sender.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -1343,7 +1343,7 @@ fn test_order_with_continuous_next() {
             sender.on_next(*i);
         }
         sender.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), values);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -1400,13 +1400,13 @@ fn test_immediate_next() {
             });
 
         let subscription = observable.subscribe(observer);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00001111);
 
         subject.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00111111);
@@ -1465,7 +1465,7 @@ fn test_immediate_completed() {
             });
 
         let subscription = observable.subscribe(observer);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00110011);
@@ -1524,7 +1524,7 @@ fn test_immediate_error() {
             });
 
         let subscription = observable.subscribe(observer);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00110011);
@@ -1632,7 +1632,7 @@ fn test_observe_on_with_subscribe_on() {
             .subscribe_on(runtime.clone_with_thread_name("thread_s_2"));
 
         let subscription = observable.subscribe(observer);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1640,7 +1640,7 @@ fn test_observe_on_with_subscribe_on() {
         assert_eq!(call_history_b.load(Ordering::SeqCst), 0b00000011);
 
         sender.on_next(111);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1649,7 +1649,7 @@ fn test_observe_on_with_subscribe_on() {
 
         sender.on_next(222);
         sender.on_next(333);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1658,7 +1658,7 @@ fn test_observe_on_with_subscribe_on() {
 
         sender.on_next(444);
         sender.on_termination(Termination::<Infallible>::Completed);
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);

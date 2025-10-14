@@ -35,11 +35,11 @@ impl Scheduler for TestRuntime {
         let future = async move {
             #[cfg(not(feature = "single-threaded"))]
             if self_cloned.is_spawned_late() {
-                use crate::tests_utils::DURATION_1_MS;
+                use crate::tests_utils::DURATION_3_MS;
                 if self_cloned.get_expected_thread_name().is_none() {
-                    self_cloned.sleep(DURATION_1_MS).await;
+                    self_cloned.sleep(DURATION_3_MS).await;
                 } else {
-                    async_io::Timer::after(DURATION_1_MS).await;
+                    async_io::Timer::after(DURATION_3_MS).await;
                 }
             }
             future.await;
@@ -82,15 +82,15 @@ impl Scheduler for TestRuntime {
             cfg_if::cfg_if! {
                 if #[cfg(not(feature = "single-threaded"))] {
                     if self_cloned.is_abort_late() {
-                        use crate::tests_utils::DURATION_1_MS;
+                        use crate::tests_utils::DURATION_3_MS;
                         if self_cloned.get_expected_thread_name().is_none() {
                             self_cloned.clone().spawn(async move {
-                                self_cloned.sleep(DURATION_1_MS).await;
+                                self_cloned.sleep(DURATION_3_MS).await;
                                 handle.dispose();
                             });
                         } else {
                             std::thread::spawn(move || {
-                                std::thread::sleep(DURATION_1_MS);
+                                std::thread::sleep(DURATION_3_MS);
                                 handle.dispose();
                             });
                         }

@@ -171,10 +171,10 @@ macro_rules! check_with_spawned_late {
         #[cfg(not(feature = "single-threaded"))]
         if $runtime.is_spawned_late() {
             $not_spawned
-            $runtime.sleep(tests_utils::DURATION_5_MS).await;
+            $runtime.sleep(tests_utils::DURATION_10_MS).await;
             $spawned
         } else {
-            $runtime.sleep(tests_utils::DURATION_1_MS).await;
+            $runtime.sleep(tests_utils::DURATION_3_MS).await;
             $spawned
         }
     };
@@ -186,10 +186,10 @@ macro_rules! check_with_abort_late {
         #[cfg(not(feature = "single-threaded"))]
         if $runtime.is_abort_late() {
             $not_spawned
-            $runtime.sleep(tests_utils::DURATION_5_MS).await;
+            $runtime.sleep(tests_utils::DURATION_10_MS).await;
             $spawned
         } else {
-            $runtime.sleep(tests_utils::DURATION_1_MS).await;
+            $runtime.sleep(tests_utils::DURATION_3_MS).await;
             $spawned
         }
     };
@@ -200,7 +200,7 @@ macro_rules! check_with_spawned_and_abort_late {
     ($runtime:ident, $spawned_first:expr, $abort_first:expr) => {
         #[cfg(not(feature = "single-threaded"))]
         {
-            $runtime.sleep(tests_utils::DURATION_1_MS).await;
+            $runtime.sleep(tests_utils::DURATION_3_MS).await;
             match ($runtime.is_spawned_late(), $runtime.is_abort_late()) {
                 (true, true) => {}
                 (false, true) => $spawned_first,

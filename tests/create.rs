@@ -1,7 +1,7 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_5_MS;
-use crate::tests_utils::DURATION_20_MS;
+use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
@@ -124,7 +124,7 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [1]);
         assert_eq!(checker_2.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert_eq!(checker_1.values(), [1]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [1]);
@@ -254,7 +254,7 @@ fn test_async() {
         assert_eq!(checker.values(), [1]);
         assert_eq!(checker.state(), State::Active);
 
-        runtime.sleep(DURATION_20_MS).await;
+        runtime.sleep(DURATION_30_MS).await;
         assert_eq!(checker.values(), [1]);
         assert_eq!(checker.state(), State::Active);
 
@@ -266,7 +266,7 @@ fn test_async() {
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [1, 2]);
         assert_eq!(checker.state(), State::Dropped);
 

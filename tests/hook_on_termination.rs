@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_5_MS;
+use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
@@ -323,7 +323,7 @@ fn test_async() {
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
-        runtime.sleep(DURATION_5_MS).await;
+        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker_1.values(), [111]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert!(checker_2.values().is_empty());
