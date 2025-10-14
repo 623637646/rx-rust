@@ -11,7 +11,7 @@ use crate::{
         },
         conditional_boolean::{
             all::All, amb::Amb, contains::Contains, default_if_empty::DefaultIfEmpty,
-            take_until::TakeUntil,
+            sequence_equal::SequenceEqual, take_until::TakeUntil,
         },
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
@@ -407,6 +407,13 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         F: FnMut(T0, T) -> T0,
     {
         Scan::new(self, initial_value, callback)
+    }
+
+    fn sequence_equal<OE2>(self, another_source: OE2) -> SequenceEqual<T, Self, OE2>
+    where
+        OE2: Observable<'or, 'sub, T, E>,
+    {
+        SequenceEqual::new(self, another_source)
     }
 
     fn share(self) -> RefCount<'sub, Self, PublishSubject<'or, T, E>> {
