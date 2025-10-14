@@ -9,7 +9,10 @@ use crate::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll, merge::Merge,
             merge_all::MergeAll, start_with::StartWith, switch::Switch, zip::Zip,
         },
-        conditional_boolean::{all::All, amb::Amb, contains::Contains, take_until::TakeUntil},
+        conditional_boolean::{
+            all::All, amb::Amb, contains::Contains, default_if_empty::DefaultIfEmpty,
+            take_until::TakeUntil,
+        },
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
             catch::Catch,
@@ -141,6 +144,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
 
     fn debug<D>(self, label: D) -> Debug<Self, D> {
         Debug::new(self, label)
+    }
+
+    fn default_if_empty(self, default_value: T) -> DefaultIfEmpty<T, Self> {
+        DefaultIfEmpty::new(self, default_value)
     }
 
     fn delay<S>(self, delay: Duration, scheduler: S) -> Delay<Self, S> {

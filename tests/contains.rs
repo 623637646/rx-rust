@@ -1,6 +1,5 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
@@ -9,7 +8,6 @@ use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
 use rx_rust::observer::boxed_observer::BoxedObserver;
 use rx_rust::operators::conditional_boolean::contains::Contains;
-use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
@@ -224,7 +222,6 @@ fn test_async() {
             .spawn(async move { sender.on_next(333) })
             .await
             .unwrap();
-        runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [true]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
