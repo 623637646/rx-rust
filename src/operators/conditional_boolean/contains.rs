@@ -54,11 +54,11 @@ where
     T: PartialEq,
 {
     fn on_next(&mut self, value: T) {
-        if self.item == value {
-            if let Some(mut observer) = self.observer.take() {
-                observer.on_next(true);
-                observer.on_termination(Termination::Completed);
-            }
+        if self.item == value
+            && let Some(mut observer) = self.observer.take()
+        {
+            observer.on_next(true);
+            observer.on_termination(Termination::Completed);
         }
     }
 

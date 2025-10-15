@@ -69,10 +69,10 @@ where
 {
     fn on_next(&mut self, value: T) {
         let key = (self.key_selector)(&value);
-        if let Some(previous_key) = self.previous_key.as_ref() {
-            if previous_key == &key {
-                return;
-            }
+        if let Some(previous_key) = self.previous_key.as_ref()
+            && previous_key == &key
+        {
+            return;
         }
         self.previous_key = Some(key);
         self.observer.on_next(value);

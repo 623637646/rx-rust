@@ -61,11 +61,11 @@ where
     F: FnMut(T) -> bool,
 {
     fn on_next(&mut self, value: T) {
-        if !(self.callback)(value) {
-            if let Some(mut observer) = self.observer.take() {
-                observer.on_next(false);
-                observer.on_termination(Termination::Completed);
-            }
+        if !(self.callback)(value)
+            && let Some(mut observer) = self.observer.take()
+        {
+            observer.on_next(false);
+            observer.on_termination(Termination::Completed);
         }
     }
 
