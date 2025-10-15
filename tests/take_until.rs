@@ -217,11 +217,11 @@ fn test_same_source_stop_next() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(111);
+    subject.on_next(());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Completed);
 
-    subject.on_next(222);
+    subject.on_next(());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Completed);
 
@@ -232,7 +232,7 @@ fn test_same_source_stop_next() {
 
 #[test]
 fn test_same_source_stop_completed() {
-    let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+    let subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -250,7 +250,7 @@ fn test_same_source_stop_completed() {
 
 #[test]
 fn test_same_source_stop_error() {
-    let subject: PublishSubject<'_, i32, _> = PublishSubject::default();
+    let subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -324,7 +324,7 @@ fn test_ref() {
     let error = -1;
 
     let mut subject = PublishSubject::default();
-    let stop_subject: PublishSubject<'_, Infallible, _> = PublishSubject::default();
+    let stop_subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -362,7 +362,7 @@ fn test_mut_ref() {
         Subscription::default()
     });
 
-    let stop_subject: PublishSubject<'_, Infallible, _> = PublishSubject::default();
+    let stop_subject = PublishSubject::default();
     let observable = observable.take_until(stop_subject.clone());
 
     let subscription = observable.subscribe_with_callback(
@@ -619,7 +619,7 @@ fn test_without_convenient_api() {
 #[test]
 fn test_immediate_next() {
     let subject = BehaviorSubject::<'_, _, Infallible>::new(111);
-    let subject_1 = BehaviorSubject::new(222);
+    let subject_1 = BehaviorSubject::new(());
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -737,7 +737,7 @@ fn test_lifetime_or_sub() {
             })
         });
 
-        let observable = observable.take_until(Just::new(1));
+        let observable = observable.take_until(Just::new(()));
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);

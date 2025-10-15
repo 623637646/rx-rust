@@ -482,9 +482,9 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         TakeLast::new(self, count)
     }
 
-    fn take_until<T1, OE1>(self, stop: OE1) -> TakeUntil<T1, Self, OE1>
+    fn take_until<OE1>(self, stop: OE1) -> TakeUntil<Self, OE1>
     where
-        OE1: Observable<'or, 'sub, T1, E>,
+        OE1: Observable<'or, 'sub, (), E>,
     {
         TakeUntil::new(self, stop)
     }

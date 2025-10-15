@@ -11,31 +11,26 @@ use std::marker::PhantomData;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct TakeUntil<T1, OE, OE1> {
+pub struct TakeUntil<OE, OE1> {
     source: OE,
     stop: OE1,
-    _marker: MarkerType<T1>,
 }
 
-impl<T1, OE, OE1> TakeUntil<T1, OE, OE1> {
+impl<OE, OE1> TakeUntil<OE, OE1> {
     pub fn new<'or, 'sub, T, E>(source: OE, stop: OE1) -> Self
     where
         OE: Observable<'or, 'sub, T, E>,
-        OE1: Observable<'or, 'sub, T1, E>,
+        OE1: Observable<'or, 'sub, (), E>,
     {
-        Self {
-            source,
-            stop,
-            _marker: PhantomData,
-        }
+        Self { source, stop }
     }
 }
 
-impl<'or, 'sub, T, T1, E, OE, OE1> Observable<'or, 'sub, T, E> for TakeUntil<T1, OE, OE1>
+impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for TakeUntil<OE, OE1>
 where
     T: 'or,
     OE: Observable<'or, 'sub, T, E>,
-    OE1: Observable<'or, 'sub, T1, E>,
+    OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
@@ -73,11 +68,11 @@ struct StopObserver<T, OR> {
     _marker: MarkerType<T>,
 }
 
-impl<T, T1, E, OR> Observer<T1, E> for StopObserver<T, OR>
+impl<T, E, OR> Observer<(), E> for StopObserver<T, OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, _: T1) {
+    fn on_next(&mut self, _: ()) {
         safe_lock_option_observer!(on_termination: self.observer, Termination::Completed);
     }
 
