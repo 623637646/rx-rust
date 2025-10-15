@@ -4,4 +4,5 @@ pub mod contains;
 pub mod default_if_empty;
 pub mod sequence_equal;
 pub mod skip_until;
+pub mod skip_while;
 pub mod take_until;

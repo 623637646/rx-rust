@@ -11,7 +11,8 @@ use crate::{
         },
         conditional_boolean::{
             all::All, amb::Amb, contains::Contains, default_if_empty::DefaultIfEmpty,
-            sequence_equal::SequenceEqual, skip_until::SkipUntil, take_until::TakeUntil,
+            sequence_equal::SequenceEqual, skip_until::SkipUntil, skip_while::SkipWhile,
+            take_until::TakeUntil,
         },
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
@@ -443,6 +444,13 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         OE1: Observable<'or, 'sub, (), E>,
     {
         SkipUntil::new(self, start)
+    }
+
+    fn skip_while<F>(self, callback: F) -> SkipWhile<Self, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        SkipWhile::new(self, callback)
     }
 
     fn start_with<I>(self, values: I) -> StartWith<Self, I>
