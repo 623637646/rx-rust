@@ -12,7 +12,7 @@ use crate::{
         conditional_boolean::{
             all::All, amb::Amb, contains::Contains, default_if_empty::DefaultIfEmpty,
             sequence_equal::SequenceEqual, skip_until::SkipUntil, skip_while::SkipWhile,
-            take_until::TakeUntil,
+            take_until::TakeUntil, take_while::TakeWhile,
         },
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
@@ -502,6 +502,13 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         OE1: Observable<'or, 'sub, (), E>,
     {
         TakeUntil::new(self, stop)
+    }
+
+    fn take_while<F>(self, callback: F) -> TakeWhile<Self, F>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        TakeWhile::new(self, callback)
     }
 
     fn throttle<S>(self, time_span: Duration, scheduler: S) -> Throttle<Self, S> {
