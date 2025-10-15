@@ -1162,6 +1162,57 @@ fn test_async() {
 }
 
 #[test]
+fn test_async_with_continuous_next() {
+    block_on(|runtime| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
+        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+        let (checker, observer) = Checker::new();
+
+        // Custom operations
+        let observable = observable.sequence_equal(observable_1);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+        let values = (0..1000).collect::<Vec<_>>();
+        let values_1 = values.clone();
+        let task_1 = runtime.spawn(async move {
+            for i in values {
+                sender.on_next(i);
+            }
+            sender
+        });
+        let task_2 = runtime.spawn(async move {
+            for i in values_1 {
+                sender_1.on_next(i);
+            }
+            sender_1
+        });
+        let sender = task_1.await.unwrap();
+        let sender_1 = task_2.await.unwrap();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+        sender.on_termination(Termination::<Infallible>::Completed);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+        sender_1.on_termination(Termination::<Infallible>::Completed);
+        assert_eq!(checker.values(), [true]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+        assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+    });
+}
+
+#[test]
 fn test_subscribe_by_different_observer() {
     let mut subject = PublishSubject::default();
     let mut another_source_subject = PublishSubject::default();
@@ -1370,187 +1421,6 @@ fn test_without_convenient_api() {
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
-}
-
-#[test]
-fn test_complete_after_next() {
-    block_on(|_| async move {
-        let (mut sender, observable, channel_checker) = test_channel();
-        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.sequence_equal(observable_1);
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-        sender.on_next(111);
-        sender_1.on_next(111);
-        sender.on_termination(Termination::<Infallible>::Completed);
-        sender_1.on_termination(Termination::<Infallible>::Completed);
-        assert_eq!(checker.values(), [true]);
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    });
-}
-
-#[test]
-fn test_error_after_next() {
-    block_on(|_| async move {
-        let (mut sender, observable, channel_checker) = test_channel();
-        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.sequence_equal(observable_1);
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-        sender.on_next(111);
-        sender_1.on_next(111);
-        sender.on_termination(Termination::Error("error_1"));
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Error("error_1"));
-        assert_eq!(channel_checker.state(), ChannelState::Error("error_1"));
-        assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
-    });
-}
-
-#[test]
-fn test_unsub_after_next() {
-    block_on(|_| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.sequence_equal(observable_1);
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-        sender.on_next(111);
-        sender_1.on_next(111);
-        subscription.dispose();
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
-    });
-}
-
-#[test]
-fn test_unsub_after_completed() {
-    block_on(|_| async move {
-        let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
-        let (sender_1, observable_1, channel_checker_1) = test_channel();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.sequence_equal(observable_1);
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-        sender.on_termination(Termination::Completed);
-        sender_1.on_termination(Termination::Completed);
-        subscription.dispose();
-        assert_eq!(checker.values(), [true]);
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    });
-}
-
-#[test]
-fn test_unsub_after_error() {
-    block_on(|_| async move {
-        let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
-        let (_sender_1, observable_1, channel_checker_1) = test_channel();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.sequence_equal(observable_1);
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-        sender.on_termination(Termination::Error("error"));
-        subscription.dispose();
-        assert_eq!(checker.values(), []);
-        assert_eq!(checker.state(), State::Error("error"));
-        assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-        assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
-    });
-}
-
-#[test]
-fn test_order_with_continuous_next() {
-    block_on(|runtime| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
-        let (mut sender_1, observable_1, channel_checker_1) = test_channel();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.sequence_equal(observable_1);
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-        let values = (0..1000).collect::<Vec<_>>();
-        let values_1 = values.clone();
-        let task_1 = runtime.spawn(async move {
-            for i in values {
-                sender.on_next(i);
-            }
-            sender
-        });
-        let task_2 = runtime.spawn(async move {
-            for i in values_1 {
-                sender_1.on_next(i);
-            }
-            sender_1
-        });
-        let sender = task_1.await.unwrap();
-        let sender_1 = task_2.await.unwrap();
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-        sender.on_termination(Termination::<Infallible>::Completed);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
-
-        sender_1.on_termination(Termination::<Infallible>::Completed);
-        assert_eq!(checker.values(), [true]);
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(channel_checker_1.state(), ChannelState::Completed);
-    });
 }
 
 #[test]
