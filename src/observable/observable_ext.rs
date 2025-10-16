@@ -25,7 +25,9 @@ use crate::{
             last::Last, sample::Sample, skip::Skip, skip_last::SkipLast, take::Take,
             take_last::TakeLast, throttle::Throttle,
         },
-        mathematical_aggregate::{average::Average, count::Count, reduce::Reduce},
+        mathematical_aggregate::{
+            average::Average, count::Count, max::Max, min::Min, reduce::Reduce,
+        },
         others::{
             debug::Debug, hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination, map_infallible_to_error::MapInfallibleToError,
@@ -349,6 +351,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         Materialize::new(self)
     }
 
+    fn max(self) -> Max<Self> {
+        Max::new(self)
+    }
+
     fn merge_all<T1>(self) -> MergeAll<Self, T>
     where
         T: Observable<'or, 'sub, T1, E>,
@@ -361,6 +367,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         OE2: Observable<'or, 'sub, T, E>,
     {
         Merge::new(self, source_2)
+    }
+
+    fn min(self) -> Min<Self> {
+        Min::new(self)
     }
 
     fn multicast<S, F>(self, subject_maker: F) -> ConnectableObservable<Self, S>
