@@ -17,6 +17,7 @@ struct ObservableStreamContext<T> {
     terminated: bool,
 }
 
+/// Converts an Observable into a `futures::Stream` that can be used with `async/await`.
 pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,

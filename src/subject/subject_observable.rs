@@ -3,6 +3,7 @@ use crate::utils::types::NecessarySend;
 use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
 use educe::Educe;
 
+/// An observable from a subject without the observer behavior of the subject.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SubjectObservable<S>(S);

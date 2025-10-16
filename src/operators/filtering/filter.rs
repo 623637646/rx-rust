@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits only those items from an Observable that pass a predicate test.
+/// See <https://reactivex.io/documentation/operators/filter.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Filter<OE, F> {

@@ -4,6 +4,7 @@
 //!
 //! This library provides a set of tools for composing asynchronous and event-based programs
 //! using observable sequences and LINQ-style query operators.
+//! See <https://reactivex.io/>
 
 pub mod disposable;
 pub mod observable;

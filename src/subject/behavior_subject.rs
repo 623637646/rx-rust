@@ -8,6 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
+/// Keeps the latest value and emits it immediately to new subscribers.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BehaviorSubject<'or, T, E> {

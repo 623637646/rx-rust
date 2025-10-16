@@ -22,6 +22,8 @@ pub enum Error<E> {
     SourceError(E),
 }
 
+/// Mirrors the source Observable, but issues an error if a specified duration elapses between emissions.
+/// See <https://reactivex.io/documentation/operators/timeout.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Timeout<OE, S> {

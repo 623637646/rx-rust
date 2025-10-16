@@ -3,11 +3,13 @@ use crate::utils::types::NecessarySend;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
+        /// Observer implementation backed by user-provided callbacks.
         pub struct CallbackObserver<'cb, T, E> {
             on_next: Box<dyn FnMut(T) + 'cb>,
             on_termination: Box<dyn FnOnce(Termination<E>) + 'cb>,
         }
     } else {
+        /// Observer implementation backed by user-provided callbacks.
         pub struct CallbackObserver<'cb, T, E> {
             on_next: Box<dyn FnMut(T) + Send + 'cb>,
             on_termination: Box<dyn FnOnce(Termination<E>) + Send + 'cb>,

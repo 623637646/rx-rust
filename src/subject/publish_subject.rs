@@ -22,6 +22,7 @@ enum State<'or, T, E> {
     Terminated(Termination<E>),
 }
 
+/// Basic multicast subject that forwards events to all observers.
 #[derive(Educe)]
 #[educe(Debug, Clone, Default)]
 pub struct PublishSubject<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);

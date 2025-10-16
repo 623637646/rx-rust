@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Converts a `Result` into an Observable.
+/// See <https://reactivex.io/documentation/operators/from.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromResult<T, E>(Result<T, E>);

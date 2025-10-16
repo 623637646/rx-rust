@@ -9,6 +9,8 @@ use educe::Educe;
 use futures::Stream;
 use std::convert::Infallible;
 
+/// Converts a `Stream` into an Observable.
+/// See <https://reactivex.io/documentation/operators/from.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromStream<SM, S> {

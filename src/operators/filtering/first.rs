@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits only the first item emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/first.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct First<OE> {

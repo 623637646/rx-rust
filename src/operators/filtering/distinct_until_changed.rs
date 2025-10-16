@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits items from the source Observable only if the current item is different from the immediately preceding item.
+/// See <https://reactivex.io/documentation/operators/distinctuntilchanged.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DistinctUntilChanged<OE, F> {

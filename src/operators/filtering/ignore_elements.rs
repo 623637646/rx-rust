@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Suppresses all notifications from an Observable but `on_termination`.
+/// See <https://reactivex.io/documentation/operators/ignoreelements.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct IgnoreElements<OE> {

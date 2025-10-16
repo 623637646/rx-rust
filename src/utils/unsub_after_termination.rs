@@ -21,6 +21,7 @@ impl Disposable for Shared<Mutable<SubState<'_>>> {
     }
 }
 
+/// Wraps subscription creation so that termination from the observer automatically disposes the inner subscription.
 pub fn subscribe_unsub_after_termination<'sub, OR, F>(
     observer: OR,
     builder: F,

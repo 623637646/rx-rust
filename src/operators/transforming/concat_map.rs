@@ -9,6 +9,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Projects each source value to an Observable which is merged in a serialized fashion in the output Observable.
+/// See <https://reactivex.io/documentation/operators/flatmap.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ConcatMap<T0, OE, OE1, F> {

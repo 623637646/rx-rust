@@ -9,6 +9,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Projects each source value to an Observable which is merged in the output Observable, emitting values only from the most recently projected Observable.
+/// See <https://reactivex.io/documentation/operators/flatmap.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SwitchMap<T0, OE, OE1, F> {

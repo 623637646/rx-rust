@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::num::NonZeroUsize;
 
+/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, when the bundle reaches a specified size.
+/// See <https://reactivex.io/documentation/operators/buffer.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BufferWithCount<OE> {

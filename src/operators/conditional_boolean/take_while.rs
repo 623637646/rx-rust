@@ -7,6 +7,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits items emitted by a source Observable as long as a specified condition is true.
+/// See <https://reactivex.io/documentation/operators/takewhile.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct TakeWhile<OE, F> {

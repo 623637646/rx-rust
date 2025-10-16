@@ -8,6 +8,8 @@ use crate::{
 use crate::{safe_lock, safe_lock_option, safe_lock_option_observer, safe_lock_vec};
 use educe::Educe;
 
+/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, when a `boundary` Observable emits an item.
+/// See <https://reactivex.io/documentation/operators/buffer.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Buffer<OE, OE1> {

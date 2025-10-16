@@ -2,6 +2,8 @@ use crate::utils::types::NecessarySend;
 use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
 use educe::Educe;
 
+/// Do not create the Observable until a Observer subscribes, and create a fresh Observable for each Observer.
+/// See <https://reactivex.io/documentation/operators/defer.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Defer<OE, F>(F)

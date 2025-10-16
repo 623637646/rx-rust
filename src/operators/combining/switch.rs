@@ -11,6 +11,8 @@ use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_obse
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Converts an Observable that emits Observables into a single Observable that emits the items emitted by the most recently emitted of those Observables.
+/// See <https://reactivex.io/documentation/operators/switch.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Switch<OE, OE1> {

@@ -3,6 +3,8 @@ use crate::{disposable::subscription::Subscription, observable::Observable, obse
 use educe::Educe;
 use std::convert::Infallible;
 
+/// Creates an Observable that emits no items and never terminates.
+/// See <https://reactivex.io/documentation/operators/empty-never-throw.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Never;

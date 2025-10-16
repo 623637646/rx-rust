@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Suppresses the first N items emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/skip.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Skip<OE> {

@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Calculates the average of numbers emitted by an Observable and emits this average.
+/// See <https://reactivex.io/documentation/operators/average.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Average<T, OE> {

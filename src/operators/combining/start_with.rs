@@ -2,6 +2,8 @@ use crate::utils::types::NecessarySend;
 use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
 use educe::Educe;
 
+/// Emits a specified sequence of values before beginning to emit the items from the source Observable.
+/// See <https://reactivex.io/documentation/operators/startwith.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct StartWith<OE, I> {

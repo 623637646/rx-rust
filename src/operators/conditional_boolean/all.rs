@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Emits a single boolean value that indicates whether all items emitted by a source Observable satisfy a specified condition.
+/// See <https://reactivex.io/documentation/operators/all.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct All<T, OE, F> {

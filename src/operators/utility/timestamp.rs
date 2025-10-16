@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::time::Instant;
 
+/// Attaches a timestamp to each item emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/timestamp.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Timestamp<OE> {

@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Transforms items emitted by an Observable by applying a function to each item.
+/// See <https://reactivex.io/documentation/operators/map.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Map<T0, OE, F> {

@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::{cmp::Ordering, num::NonZeroUsize};
 
+/// Periodically subdivides items from an Observable into Observable windows, each containing a specified number of items.
+/// See <https://reactivex.io/documentation/operators/window.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct WindowWithCount<OE> {

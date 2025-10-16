@@ -12,6 +12,8 @@ use crate::{
 use educe::Educe;
 use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 
+/// Divides an Observable into a set of Observables, each of which emits a different group of items from the original Observable, organized by key.
+/// See <https://reactivex.io/documentation/operators/groupby.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct GroupBy<OE, F, K> {

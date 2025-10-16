@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Discards items emitted by an Observable until a specified condition becomes false.
+/// See <https://reactivex.io/documentation/operators/skipwhile.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SkipWhile<OE, F> {

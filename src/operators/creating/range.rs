@@ -4,6 +4,8 @@ use crate::{disposable::subscription::Subscription, observable::Observable, obse
 use educe::Educe;
 use std::{convert::Infallible, ops::RangeBounds};
 
+/// Creates an Observable that emits a sequence of integers within a specified range.
+/// See <https://reactivex.io/documentation/operators/range.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Range<I>(I);

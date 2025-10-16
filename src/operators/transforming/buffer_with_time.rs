@@ -14,6 +14,8 @@ use crate::{
 use educe::Educe;
 use std::time::Duration;
 
+/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, after a specified time interval.
+/// See <https://reactivex.io/documentation/operators/buffer.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BufferWithTime<OE, S> {

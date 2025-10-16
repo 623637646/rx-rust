@@ -11,6 +11,8 @@ use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_obse
 use educe::Educe;
 use std::time::Duration;
 
+/// Emits a notification from the source Observable only after a particular time span has passed without another source emission.
+/// See <https://reactivex.io/documentation/operators/debounce.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Debounce<OE, S> {

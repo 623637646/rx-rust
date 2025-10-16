@@ -11,6 +11,8 @@ use crate::{
 use educe::Educe;
 use std::time::Duration;
 
+/// Emits an item from the source Observable then ignores subsequent items for a particular time span.
+/// See <https://reactivex.io/documentation/operators/debounce.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Throttle<OE, S> {

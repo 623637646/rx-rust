@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
+/// Converts an `IntoIterator` into an Observable.
+/// See <https://reactivex.io/documentation/operators/from.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromIter<I>(I);

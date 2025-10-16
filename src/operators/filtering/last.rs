@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits only the last item emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/last.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Last<OE> {

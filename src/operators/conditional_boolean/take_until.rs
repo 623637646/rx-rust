@@ -9,6 +9,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Emits the items emitted by a source Observable until a second Observable emits an item or a notification.
+/// See <https://reactivex.io/documentation/operators/takeuntil.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct TakeUntil<OE, OE1> {

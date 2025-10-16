@@ -7,6 +7,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits a single boolean value that indicates whether a source Observable emits a specified item.
+/// See <https://reactivex.io/documentation/operators/contains.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Contains<T, OE> {

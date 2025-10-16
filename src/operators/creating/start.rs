@@ -5,6 +5,8 @@ use crate::{disposable::subscription::Subscription, observable::Observable, obse
 use educe::Educe;
 use std::convert::Infallible;
 
+/// Creates an Observable that emits the return value of a function.
+/// See <https://reactivex.io/documentation/operators/start.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Start<T, F>(F)

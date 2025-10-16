@@ -2,6 +2,7 @@ use super::Scheduler;
 use crate::{disposable::Disposable, utils::types::NecessarySend};
 use std::time::Duration;
 
+/// Leverages a Tokio runtime handle to drive scheduled tasks.
 impl Scheduler for tokio::runtime::Handle {
     fn schedule_periodically(
         &self,
@@ -39,6 +40,7 @@ impl Scheduler for tokio::runtime::Handle {
     }
 }
 
+/// Allows aborting spawned Tokio tasks via the `Disposable` interface.
 impl<T> Disposable for tokio::task::JoinHandle<T> {
     fn dispose(self) {
         self.abort();

@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits the minimum item emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/min.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Min<OE> {

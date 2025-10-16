@@ -6,6 +6,7 @@ use crate::{
 };
 use educe::Educe;
 
+/// Invokes a callback for each item emitted by the source Observable.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct HookOnNext<OE, F> {

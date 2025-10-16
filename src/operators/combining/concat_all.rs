@@ -15,6 +15,8 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+/// Concatenates an Observable of Observables, emitting all values from each inner Observable in sequence.
+/// See <https://reactivex.io/documentation/operators/concat.html> (referencing concat operator for general concept)
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ConcatAll<OE, OE1> {

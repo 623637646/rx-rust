@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
 
+/// Creates an Observable that emits a single item after a given delay.
+/// See <https://reactivex.io/documentation/operators/timer.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Timer<T, S> {

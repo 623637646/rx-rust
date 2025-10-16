@@ -8,6 +8,7 @@ use crate::{
 use crate::{safe_lock, safe_lock_option};
 use educe::Educe;
 
+/// Remembers only the last emission and replays it on completion.
 #[derive(Educe)]
 #[educe(Debug, Clone, Default)]
 pub struct AsyncSubject<'or, T, E> {

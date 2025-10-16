@@ -8,6 +8,7 @@ use crate::{
 use educe::Educe;
 use std::fmt::Display;
 
+/// Logs all items from the source Observable to the console, and re-emits them. This is useful for debugging.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Debug<OE, D> {

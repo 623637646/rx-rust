@@ -6,6 +6,7 @@ use crate::{
 };
 use educe::Educe;
 
+/// Invokes a callback when the source Observable terminates.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct HookOnTermination<OE, F> {

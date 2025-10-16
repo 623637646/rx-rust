@@ -9,6 +9,8 @@ use crate::{
 use educe::Educe;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// Combines multiple Observables into a single Observable that emits all of their emissions.
+/// See <https://reactivex.io/documentation/operators/merge.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Merge<OE1, OE2> {

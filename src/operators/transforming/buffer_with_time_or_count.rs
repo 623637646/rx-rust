@@ -11,6 +11,8 @@ use crate::{safe_lock, safe_lock_option, safe_lock_option_disposable, safe_lock_
 use educe::Educe;
 use std::{num::NonZeroUsize, time::Duration};
 
+/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, either when the bundle reaches a specified size or after a specified time interval, whichever happens first.
+/// See <https://reactivex.io/documentation/operators/buffer.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BufferWithTimeOrCount<OE, S> {

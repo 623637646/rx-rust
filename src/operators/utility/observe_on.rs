@@ -8,6 +8,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Specifies the `Scheduler` on which an observer will observe this Observable.
+/// See <https://reactivex.io/documentation/operators/observeon.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ObserveOn<OE, S> {

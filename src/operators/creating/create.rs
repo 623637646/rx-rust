@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Creates an Observable from scratch by means of a producer function.
+/// See <https://reactivex.io/documentation/operators/create.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Create<F>(F);

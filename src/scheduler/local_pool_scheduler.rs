@@ -7,6 +7,7 @@ use futures::{
 };
 use std::time::Duration;
 
+/// Adapts `LocalSpawner` to the `Scheduler` trait for single-threaded pools.
 impl Scheduler for LocalSpawner {
     fn schedule_future(
         &self,

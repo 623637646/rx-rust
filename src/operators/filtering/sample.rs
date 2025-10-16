@@ -8,6 +8,8 @@ use crate::{
 use crate::{safe_lock_option, safe_lock_option_observer};
 use educe::Educe;
 
+/// Emits the most recently emitted item from the source Observable whenever the sampler Observable emits an item.
+/// See <https://reactivex.io/documentation/operators/sample.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Sample<OE, OE1> {

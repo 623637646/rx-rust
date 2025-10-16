@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits the maximum item emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/max.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Max<OE> {

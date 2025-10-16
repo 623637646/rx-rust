@@ -14,6 +14,8 @@ pub enum RetryAction<E, OE1> {
     Stop(E),
 }
 
+/// Retries an Observable in case of an error, based on a retry policy.
+/// See <https://reactivex.io/documentation/operators/retry.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Retry<OE, F> {

@@ -13,6 +13,7 @@ use educe::Educe;
 use futures::{Stream, stream::StreamExt};
 use std::time::{Duration, Instant};
 
+/// Indicates how a recursive scheduling step should continue.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
 pub enum RecursionAction {
@@ -21,6 +22,8 @@ pub enum RecursionAction {
     Stop,
 }
 
+/// Core abstraction for driving asynchronous work across runtimes.
+/// See <https://reactivex.io/documentation/scheduler.html>
 /// This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
 pub trait Scheduler: Clone + NecessarySend + 'static {
     fn schedule_future(

@@ -12,6 +12,8 @@ use educe::Educe;
 use slotmap::{DefaultKey, SlotMap};
 use std::marker::PhantomData;
 
+/// Merges an Observable of Observables into a single Observable that emits all of their emissions.
+/// See <https://reactivex.io/documentation/operators/merge.html> (referencing merge operator for general concept)
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct MergeAll<OE, OE1> {

@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
+/// Converts an Observable that emits `Event` objects into a "live" Observable that emits the items and notifications embedded in those `Event` objects.
+/// See <https://reactivex.io/documentation/operators/materialize-dematerialize.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Dematerialize<OE>(OE);

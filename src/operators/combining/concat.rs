@@ -7,6 +7,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Concatenates multiple Observables to create an Observable that emits all of the values from the first, then all of the values from the second, and so on.
+/// See <https://reactivex.io/documentation/operators/concat.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Concat<OE1, OE2> {

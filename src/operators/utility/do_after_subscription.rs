@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Invokes a callback when the Observable is subscribed to, after the subscription has been established.
+/// See <https://reactivex.io/documentation/operators/do.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DoAfterSubscription<OE, F> {

@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Invokes a callback for each item emitted by the source Observable before the item is emitted to the downstream observer.
+/// See <https://reactivex.io/documentation/operators/do.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DoBeforeNext<OE, F> {

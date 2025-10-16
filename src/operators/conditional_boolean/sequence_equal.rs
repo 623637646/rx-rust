@@ -10,6 +10,8 @@ use educe::Educe;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
+/// Emits a single boolean value that indicates whether two Observables emit the same sequence of items.
+/// See <https://reactivex.io/documentation/operators/sequenceequal.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SequenceEqual<T, OE1, OE2> {

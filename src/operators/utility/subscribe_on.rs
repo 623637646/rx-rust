@@ -7,6 +7,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Specifies the `Scheduler` on which an observer will subscribe to this Observable.
+/// See <https://reactivex.io/documentation/operators/subscribeon.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SubscribeOn<OE, S> {

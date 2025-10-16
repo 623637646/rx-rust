@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
+/// Emits the time elapsed between consecutive emissions from the source Observable.
+/// See <https://reactivex.io/documentation/operators/timeinterval.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct TimeInterval<OE> {

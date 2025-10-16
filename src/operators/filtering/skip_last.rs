@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::collections::VecDeque;
 
+/// Suppresses the last N items emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/skiplast.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SkipLast<OE> {

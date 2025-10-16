@@ -7,6 +7,7 @@ use futures::{
 };
 use std::time::Duration;
 
+/// Exposes `ThreadPool` as a multithreaded `Scheduler`.
 impl Scheduler for ThreadPool {
     fn schedule_future(
         &self,

@@ -7,6 +7,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Emits only the first N items emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/take.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Take<OE> {

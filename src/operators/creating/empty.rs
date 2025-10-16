@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
+/// Creates an Observable that emits no items and then terminates normally.
+/// See <https://reactivex.io/documentation/operators/empty-never-throw.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Empty;

@@ -8,6 +8,7 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
 
+/// Maps an Observable with an `Infallible` item type to an Observable with a concrete item type.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct MapInfallibleToValue<T, OE> {

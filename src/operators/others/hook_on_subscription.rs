@@ -6,6 +6,7 @@ use crate::{
 };
 use educe::Educe;
 
+/// Invokes a callback when the Observable is subscribed to.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct HookOnSubscription<OE, F> {

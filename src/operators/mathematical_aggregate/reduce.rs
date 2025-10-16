@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Applies a function to each item emitted by an Observable, sequentially, and emits the final accumulated value.
+/// See <https://reactivex.io/documentation/operators/reduce.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Reduce<T, T1, OE, F> {

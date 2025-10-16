@@ -6,11 +6,12 @@ use crate::{
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
+        /// Type-erased observable for single-threaded builds to handle this problem https://stackoverflow.com/q/46620790/9315497
         pub struct BoxedObservable<'or, 'sub, 'oe, T, E>(
             Box<dyn FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub> + 'oe>,
         );
     } else {
-        /// https://stackoverflow.com/a/56447952/9315497
+        /// Type-erased observable for multi-threaded builds to handle this problem https://stackoverflow.com/q/46620790/9315497
         pub struct BoxedObservable<'or, 'sub, 'oe, T, E>(
             Box<dyn FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub> + Send + 'oe>,
         );

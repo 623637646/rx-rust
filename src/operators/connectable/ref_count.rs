@@ -12,6 +12,8 @@ enum State<'sub> {
     Unsubscribed,
 }
 
+/// Makes a `ConnectableObservable` behave like an ordinary `Observable` that automatically connects and disconnects.
+/// See <https://reactivex.io/documentation/operators/refcount.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct RefCount<'sub, OE, S> {

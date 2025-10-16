@@ -9,6 +9,8 @@ use crate::{
 use crate::{safe_lock, safe_lock_observer, safe_lock_option_observer};
 use educe::Educe;
 
+/// Periodically subdivides items from an Observable into Observable windows, each window being emitted when a `boundary` Observable emits an item.
+/// See <https://reactivex.io/documentation/operators/window.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Window<OE, OE1> {

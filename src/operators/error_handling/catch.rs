@@ -9,6 +9,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Catches errors on the observable to be handled by returning a new observable or throwing an error.
+/// See <https://reactivex.io/documentation/operators/catch.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Catch<E0, OE, F> {

@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
+/// Creates an Observable that emits a single item and then terminates normally.
+/// See <https://reactivex.io/documentation/operators/just.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Just<T>(T);

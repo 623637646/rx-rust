@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Invokes a callback when the source Observable terminates (either completes or errors), after the termination notification has been emitted to the downstream observer.
+/// See <https://reactivex.io/documentation/operators/do.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DoAfterTermination<OE, F> {

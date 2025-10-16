@@ -15,7 +15,6 @@ use std::ops::Add;
 pub struct Subscription<'dis>(Vec<BoundDropDisposal<BoxedDisposal<'dis>>>);
 
 impl<'dis> Subscription<'dis> {
-    /// Create a new `Subscription` with no disposal. No action will be performed when the subscription is unsubscribed or dropped.
     pub fn new() -> Self {
         Self(Vec::default())
     }

@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Invokes a callback when the subscription is disposed.
+/// See <https://reactivex.io/documentation/operators/do.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DoAfterDisposal<OE, F> {

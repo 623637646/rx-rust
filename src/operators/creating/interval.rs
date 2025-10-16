@@ -6,6 +6,8 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
 
+/// Creates an Observable that emits a sequence of integers spaced by a given time interval.
+/// See <https://reactivex.io/documentation/operators/interval.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Interval<S> {

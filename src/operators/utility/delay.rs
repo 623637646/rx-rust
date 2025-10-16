@@ -15,6 +15,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Shifts the emissions from an Observable forward in time by a specified duration.
+/// See <https://reactivex.io/documentation/operators/delay.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Delay<OE, S> {

@@ -5,6 +5,8 @@ use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
 
+/// Represents an Observable that waits until its `connect()` method is called before it begins emitting items to its Observers.
+/// See <https://reactivex.io/documentation/operators/connect.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ConnectableObservable<OE, S> {

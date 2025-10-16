@@ -7,6 +7,8 @@ use crate::{
 use educe::Educe;
 use std::{collections::HashSet, hash::Hash};
 
+/// Emits all items from the source Observable that are distinct by comparison from previous items.
+/// See <https://reactivex.io/documentation/operators/distinct.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Distinct<OE, F> {

@@ -3,9 +3,10 @@ use crate::utils::types::NecessarySend;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
+        /// Type-erased observer for single-threaded builds to handle this problem https://stackoverflow.com/q/46620790/9315497
         pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + 'or>);
     } else {
-        /// https://stackoverflow.com/a/56447952/9315497
+        /// Type-erased observer for multi-threaded builds to handle this problem https://stackoverflow.com/q/46620790/9315497
         pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + Send + 'or>);
     }
 }

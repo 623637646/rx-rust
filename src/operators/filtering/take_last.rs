@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::collections::VecDeque;
 
+/// Emits only the last N items emitted by an Observable.
+/// See <https://reactivex.io/documentation/operators/takelast.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct TakeLast<OE> {

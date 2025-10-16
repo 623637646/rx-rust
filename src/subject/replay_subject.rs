@@ -9,6 +9,7 @@ use crate::{
 use educe::Educe;
 use std::collections::VecDeque;
 
+/// Buffers emissions and replays them to late subscribers.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ReplaySubject<'or, T, E> {

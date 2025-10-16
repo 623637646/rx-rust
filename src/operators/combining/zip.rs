@@ -9,6 +9,8 @@ use crate::{
 use educe::Educe;
 use std::collections::VecDeque;
 
+/// Combines the emissions of multiple Observables together via a specified function and emits single items for each combination based on the sequence of their emissions.
+/// See <https://reactivex.io/documentation/operators/zip.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Zip<OE1, OE2> {

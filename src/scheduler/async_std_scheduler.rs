@@ -5,10 +5,12 @@ use educe::Educe;
 use futures::stream::{AbortHandle, Abortable};
 use std::time::Duration;
 
+/// Schedules tasks using the async-std runtime utilities.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct AsyncStdScheduler;
 
+/// Provides the async-std-backed `Scheduler` implementation.
 impl Scheduler for AsyncStdScheduler {
     fn schedule_future(
         &self,

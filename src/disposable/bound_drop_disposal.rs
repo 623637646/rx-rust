@@ -1,5 +1,6 @@
 use crate::disposable::Disposable;
 
+/// A disposal that calls the `dispose` method of a `Disposable` when dropped.
 pub struct BoundDropDisposal<T>(Option<T>)
 where
     T: Disposable;

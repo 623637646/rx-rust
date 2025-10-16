@@ -11,6 +11,8 @@ use educe::Educe;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// Discards items emitted by a source Observable until a second Observable emits an item.
+/// See <https://reactivex.io/documentation/operators/skipuntil.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SkipUntil<OE, OE1> {

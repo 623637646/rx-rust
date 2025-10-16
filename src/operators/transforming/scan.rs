@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
+/// Applies a function to each item emitted by an Observable, sequentially, and emits each intermediate accumulated value.
+/// See <https://reactivex.io/documentation/operators/scan.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Scan<T, T1, OE, F> {

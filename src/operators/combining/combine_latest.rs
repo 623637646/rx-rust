@@ -8,6 +8,8 @@ use crate::{
 };
 use educe::Educe;
 
+/// Combines multiple Observables to create an Observable whose values are calculated from the latest values of each of its input Observables.
+/// See <https://reactivex.io/documentation/operators/combinelatest.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct CombineLatest<OE1, OE2> {

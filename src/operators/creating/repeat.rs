@@ -4,6 +4,8 @@ use crate::{disposable::subscription::Subscription, observable::Observable, obse
 use educe::Educe;
 use std::convert::Infallible;
 
+/// Creates an Observable that emits a particular item multiple times.
+/// See <https://reactivex.io/documentation/operators/repeat.html>
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Repeat<T> {
