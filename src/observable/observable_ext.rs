@@ -26,7 +26,7 @@ use crate::{
             take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::{
-            average::Average, count::Count, max::Max, min::Min, reduce::Reduce,
+            average::Average, count::Count, max::Max, min::Min, reduce::Reduce, sum::Sum,
         },
         others::{
             debug::Debug, hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
@@ -490,6 +490,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         FT: FnOnce(Termination<E>) + NecessarySend + 'or,
     {
         self.subscribe(CallbackObserver::new(on_next, on_termination))
+    }
+
+    fn sum(self) -> Sum<Self> {
+        Sum::new(self)
     }
 
     fn switch<T1>(self) -> Switch<Self, T>
