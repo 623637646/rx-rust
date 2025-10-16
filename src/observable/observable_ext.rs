@@ -25,7 +25,7 @@ use crate::{
             last::Last, sample::Sample, skip::Skip, skip_last::SkipLast, take::Take,
             take_last::TakeLast, throttle::Throttle,
         },
-        mathematical_aggregate::{average::Average, reduce::Reduce},
+        mathematical_aggregate::{average::Average, count::Count, reduce::Reduce},
         others::{
             debug::Debug, hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination, map_infallible_to_error::MapInfallibleToError,
@@ -141,6 +141,10 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
 
     fn contains(self, item: T) -> Contains<T, Self> {
         Contains::new(self, item)
+    }
+
+    fn count(self) -> Count<T, Self> {
+        Count::new(self)
     }
 
     fn debounce<S>(self, time_span: Duration, scheduler: S) -> Debounce<Self, S> {
