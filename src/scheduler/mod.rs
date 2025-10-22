@@ -24,7 +24,7 @@ pub enum RecursionAction {
 
 /// Core abstraction for driving asynchronous work across runtimes.
 /// See <https://reactivex.io/documentation/scheduler.html>
-/// This is why the task must be 'static: https://stackoverflow.com/a/65287449/9315497
+/// This is why the task must be 'static: <https://stackoverflow.com/a/65287449/9315497>
 pub trait Scheduler: Clone + NecessarySend + 'static {
     fn schedule_future(
         &self,

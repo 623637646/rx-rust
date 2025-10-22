@@ -1,5 +1,5 @@
 //! We use this mod to avoid deadlocks.
-//! Refer to this case: https://stackoverflow.com/q/79621758/9315497
+//! Refer to this case: <https://stackoverflow.com/q/79621758/9315497>
 //! And this case:
 //!
 //! fn main() {
