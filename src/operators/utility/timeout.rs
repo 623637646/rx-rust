@@ -24,6 +24,52 @@ pub enum Error<E> {
 
 /// Mirrors the source Observable, but issues an error if a specified duration elapses between emissions.
 /// See <https://reactivex.io/documentation/operators/timeout.html>
+///
+/// # Examples
+/// ```rust
+/// # #[cfg(not(feature = "tokio-scheduler"))]
+/// # fn main() {
+/// #     panic!("Use tokio-scheduler feature to run tests.");
+/// # }
+/// # #[cfg(feature = "tokio-scheduler")]
+/// #[tokio::main]
+/// async fn main() {
+///     use rx_rust::{
+///         observable::observable_ext::ObservableExt,
+///         observer::{Observer, Termination},
+///         operators::utility::timeout::{Error, Timeout},
+///         subject::publish_subject::PublishSubject,
+///     };
+///     use std::{convert::Infallible, sync::{Arc, Mutex}};
+///     use tokio::time::{sleep, Duration};
+///
+///     let handle = tokio::runtime::Handle::current();
+///     let values = Arc::new(Mutex::new(Vec::new()));
+///     let terminations = Arc::new(Mutex::new(Vec::new()));
+///     let values_observer = Arc::clone(&values);
+///     let terminations_observer = Arc::clone(&terminations);
+///     let mut subject: PublishSubject<'static, i32, Infallible> = PublishSubject::default();
+///
+///     let subscription = Timeout::new(subject.clone(), Duration::from_millis(5), handle.clone())
+///         .subscribe_with_callback(
+///             move |value| values_observer.lock().unwrap().push(value),
+///             move |termination| terminations_observer
+///                 .lock()
+///                 .unwrap()
+///                 .push(termination),
+///         );
+///
+///     subject.on_next(1);
+///     sleep(Duration::from_millis(10)).await;
+///     drop(subscription);
+///
+///     assert_eq!(&*values.lock().unwrap(), &[1]);
+///     assert_eq!(
+///         &*terminations.lock().unwrap(),
+///         &[Termination::Error(Error::Timeout)]
+///     );
+/// }
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Timeout<OE, S> {

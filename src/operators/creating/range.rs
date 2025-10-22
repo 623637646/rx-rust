@@ -6,6 +6,26 @@ use std::{convert::Infallible, ops::RangeBounds};
 
 /// Creates an Observable that emits a sequence of integers within a specified range.
 /// See <https://reactivex.io/documentation/operators/range.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::creating::range::Range,
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// Range::new(1..=3).subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 2, 3]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Range<I>(I);

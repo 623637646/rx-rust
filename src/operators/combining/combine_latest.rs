@@ -10,6 +10,38 @@ use educe::Educe;
 
 /// Combines multiple Observables to create an Observable whose values are calculated from the latest values of each of its input Observables.
 /// See <https://reactivex.io/documentation/operators/combinelatest.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::{Observer, Termination},
+///     operators::combining::combine_latest::CombineLatest,
+///     subject::behavior_subject::BehaviorSubject,
+/// };
+/// use std::convert::Infallible;
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let mut subject_1 = BehaviorSubject::<'_, i32, Infallible>::new(0);
+/// let mut subject_2 = BehaviorSubject::<'_, i32, Infallible>::new(10);
+///
+/// let subscription =
+///     CombineLatest::new(subject_1.clone(), subject_2.clone()).subscribe_with_callback(
+///         |value| values.push(value),
+///         |termination| terminations.push(termination),
+///     );
+///
+/// subject_1.on_next(1);
+/// subject_2.on_next(11);
+/// subject_1.on_termination(Termination::Completed);
+/// subject_2.on_termination(Termination::Completed);
+/// drop(subscription);
+///
+/// assert_eq!(values, vec![(0, 10), (1, 10), (1, 11)]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct CombineLatest<OE1, OE2> {

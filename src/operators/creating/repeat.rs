@@ -6,6 +6,26 @@ use std::convert::Infallible;
 
 /// Creates an Observable that emits a particular item multiple times.
 /// See <https://reactivex.io/documentation/operators/repeat.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::creating::repeat::Repeat,
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// Repeat::new("ping", 3).subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec!["ping", "ping", "ping"]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Repeat<T> {

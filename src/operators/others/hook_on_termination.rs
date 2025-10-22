@@ -7,6 +7,37 @@ use crate::{
 use educe::Educe;
 
 /// Invokes a callback when the source Observable terminates.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         others::hook_on_termination::HookOnTermination,
+///     },
+/// };
+/// use rx_rust::observer::Observer;
+/// use std::cell::Cell;
+/// use std::rc::Rc;
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable =
+///     HookOnTermination::new(FromIter::new(vec![1]), move |observer, termination| {
+///         // Do whatever you want here
+///         observer.on_termination(termination);
+///     });
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct HookOnTermination<OE, F> {

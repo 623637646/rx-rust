@@ -16,6 +16,58 @@ use std::time::Duration;
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, after a specified time interval.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
+///
+/// # Examples
+/// ```rust
+/// # #[cfg(not(feature = "tokio-scheduler"))]
+/// # fn main() {
+/// #     panic!("Use tokio-scheduler feature to run tests.");
+/// # }
+/// # #[cfg(feature = "tokio-scheduler")]
+/// #[tokio::main]
+/// async fn main() {
+///     use rx_rust::{
+///         observable::observable_ext::ObservableExt,
+///         observer::Termination,
+///         operators::{
+///             creating::from_iter::FromIter,
+///             transforming::buffer_with_time::BufferWithTime,
+///         },
+///     };
+///     use std::sync::{Arc, Mutex};
+///     use std::time::Duration;
+///     use tokio::time::sleep;
+///
+///     let handle = tokio::runtime::Handle::current();
+///     let values = Arc::new(Mutex::new(Vec::new()));
+///     let terminations = Arc::new(Mutex::new(Vec::new()));
+///     let values_observer = Arc::clone(&values);
+///     let terminations_observer = Arc::clone(&terminations);
+///
+///     let subscription = BufferWithTime::new(
+///         FromIter::new(vec![1, 2, 3]),
+///         Duration::from_millis(5),
+///         handle.clone(),
+///         None,
+///     )
+///     .subscribe_with_callback(
+///         move |value| values_observer.lock().unwrap().push(value),
+///         move |termination| terminations_observer
+///             .lock()
+///             .unwrap()
+///             .push(termination),
+///     );
+///
+///     sleep(Duration::from_millis(10)).await;
+///     drop(subscription);
+///
+///     assert_eq!(&*values.lock().unwrap(), &[vec![1, 2, 3]]);
+///     assert_eq!(
+///         &*terminations.lock().unwrap(),
+///         &[Termination::Completed]
+///     );
+/// }
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BufferWithTime<OE, S> {

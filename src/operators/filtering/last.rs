@@ -8,6 +8,30 @@ use educe::Educe;
 
 /// Emits only the last item emitted by an Observable.
 /// See <https://reactivex.io/documentation/operators/last.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         filtering::last::Last,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Last::new(FromIter::new(vec![10, 20, 30]));
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![30]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Last<OE> {

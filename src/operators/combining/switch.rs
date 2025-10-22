@@ -13,6 +13,32 @@ use std::marker::PhantomData;
 
 /// Converts an Observable that emits Observables into a single Observable that emits the items emitted by the most recently emitted of those Observables.
 /// See <https://reactivex.io/documentation/operators/switch.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         combining::switch::Switch,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let inner_1 = FromIter::new(vec![1, 2]);
+/// let inner_2 = FromIter::new(vec![3, 4]);
+/// let observable = Switch::new_from_iter([inner_1, inner_2]);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 2, 3, 4]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Switch<OE, OE1> {

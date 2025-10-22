@@ -17,6 +17,33 @@ use std::{
 
 /// Concatenates an Observable of Observables, emitting all values from each inner Observable in sequence.
 /// See <https://reactivex.io/documentation/operators/concat.html> (referencing concat operator for general concept)
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         combining::concat_all::ConcatAll,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = ConcatAll::new_from_iter([
+///     FromIter::new(vec![1, 2]),
+///     FromIter::new(vec![3, 4]),
+/// ]);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 2, 3, 4]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ConcatAll<OE, OE1> {

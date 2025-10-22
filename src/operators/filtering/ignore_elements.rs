@@ -8,6 +8,30 @@ use educe::Educe;
 
 /// Suppresses all notifications from an Observable but `on_termination`.
 /// See <https://reactivex.io/documentation/operators/ignoreelements.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::just::Just,
+///         filtering::ignore_elements::IgnoreElements,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = IgnoreElements::new(Just::new(42));
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert!(values.is_empty());
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct IgnoreElements<OE> {

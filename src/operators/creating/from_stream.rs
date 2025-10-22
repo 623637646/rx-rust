@@ -11,6 +11,50 @@ use std::convert::Infallible;
 
 /// Converts a `Stream` into an Observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
+///
+/// # Examples
+/// ```rust
+/// # #[cfg(not(feature = "tokio-scheduler"))]
+/// # fn main() {
+/// #     panic!("Use tokio-scheduler feature to run tests.");
+/// # }
+/// # #[cfg(feature = "tokio-scheduler")]
+/// #[tokio::main]
+/// async fn main() {
+///     use futures::stream;
+///     use rx_rust::{
+///         observable::observable_ext::ObservableExt,
+///         observer::Termination,
+///         operators::creating::from_stream::FromStream,
+///     };
+///     use std::sync::{Arc, Mutex};
+///     use tokio::time::{sleep, Duration};
+///
+///     let handle = tokio::runtime::Handle::current();
+///     let values = Arc::new(Mutex::new(Vec::new()));
+///     let terminations = Arc::new(Mutex::new(Vec::new()));
+///     let values_observer = Arc::clone(&values);
+///     let terminations_observer = Arc::clone(&terminations);
+///     let stream = stream::iter([10, 20]);
+///
+///     let subscription = FromStream::new(stream, handle).subscribe_with_callback(
+///         move |value| values_observer.lock().unwrap().push(value),
+///         move |termination| terminations_observer
+///             .lock()
+///             .unwrap()
+///             .push(termination),
+///     );
+///
+///     sleep(Duration::from_millis(10)).await;
+///     drop(subscription);
+///
+///     assert_eq!(&*values.lock().unwrap(), &[10, 20]);
+///     assert_eq!(
+///         &*terminations.lock().unwrap(),
+///         &[Termination::Completed]
+///     );
+/// }
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromStream<SM, S> {

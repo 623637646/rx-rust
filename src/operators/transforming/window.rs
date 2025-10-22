@@ -11,6 +11,67 @@ use educe::Educe;
 
 /// Periodically subdivides items from an Observable into Observable windows, each window being emitted when a `boundary` Observable emits an item.
 /// See <https://reactivex.io/documentation/operators/window.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     disposable::subscription::Subscription,
+///     observable::observable_ext::ObservableExt,
+///     observer::{Observer, Termination},
+///     operators::transforming::window::Window,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+///
+/// let windows = Arc::new(Mutex::new(Vec::<Vec<i32>>::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+/// let inner_subscriptions = Arc::new(Mutex::new(Vec::<Subscription>::new()));
+///
+/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let windows_observer = Arc::clone(&windows);
+/// let terminations_observer = Arc::clone(&terminations);
+/// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
+///
+/// let subscription = Window::new(source.clone(), boundary.clone()).subscribe_with_callback(
+///     move |window| {
+///         let index = {
+///             let mut windows = windows_observer.lock().unwrap();
+///             windows.push(Vec::new());
+///             windows.len() - 1
+///         };
+///         let windows_for_values = Arc::clone(&windows_observer);
+///         let sub = window.subscribe_with_callback(
+///             move |value| {
+///                 windows_for_values.lock().unwrap()[index].push(value);
+///             },
+///             |_| {},
+///         );
+///         inner_subscriptions_observer.lock().unwrap().push(sub);
+///     },
+///     move |termination| terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination),
+/// );
+///
+/// source.on_next(1);
+/// source.on_next(2);
+/// boundary.on_next(());
+/// source.on_next(3);
+/// source.on_termination(Termination::Completed);
+/// drop(subscription);
+/// inner_subscriptions.lock().unwrap().drain(..).for_each(drop);
+///
+/// assert_eq!(
+///     &*windows.lock().unwrap(),
+///     &[vec![1, 2], vec![3]]
+/// );
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Window<OE, OE1> {

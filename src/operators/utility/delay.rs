@@ -17,6 +17,59 @@ use std::{
 
 /// Shifts the emissions from an Observable forward in time by a specified duration.
 /// See <https://reactivex.io/documentation/operators/delay.html>
+///
+/// # Examples
+/// ```rust
+/// # #[cfg(not(feature = "tokio-scheduler"))]
+/// # fn main() {
+/// #     panic!("Use tokio-scheduler feature to run tests.");
+/// # }
+/// # #[cfg(feature = "tokio-scheduler")]
+/// #[tokio::main]
+/// async fn main() {
+///     use rx_rust::{
+///         observable::observable_ext::ObservableExt,
+///         observer::Termination,
+///         operators::{
+///             creating::from_iter::FromIter,
+///             utility::delay::Delay,
+///         },
+///     };
+///     use std::{
+///         sync::{Arc, Mutex},
+///         time::Duration,
+///     };
+///     use tokio::time::sleep;
+///
+///     let handle = tokio::runtime::Handle::current();
+///     let values = Arc::new(Mutex::new(Vec::new()));
+///     let terminations = Arc::new(Mutex::new(Vec::new()));
+///     let values_observer = Arc::clone(&values);
+///     let terminations_observer = Arc::clone(&terminations);
+///
+///     let subscription = Delay::new(
+///         FromIter::new(vec![1, 2, 3]),
+///         Duration::from_millis(5),
+///         handle.clone(),
+///     )
+///     .subscribe_with_callback(
+///         move |value| values_observer.lock().unwrap().push(value),
+///         move |termination| terminations_observer
+///             .lock()
+///             .unwrap()
+///             .push(termination),
+///     );
+///
+///     sleep(Duration::from_millis(10)).await;
+///     drop(subscription);
+///
+///     assert_eq!(&*values.lock().unwrap(), &[1, 2, 3]);
+///     assert_eq!(
+///         &*terminations.lock().unwrap(),
+///         &[Termination::Completed]
+///     );
+/// }
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Delay<OE, S> {

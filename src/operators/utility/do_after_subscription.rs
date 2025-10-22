@@ -8,6 +8,28 @@ use educe::Educe;
 
 /// Invokes a callback when the Observable is subscribed to, after the subscription has been established.
 /// See <https://reactivex.io/documentation/operators/do.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         utility::do_after_subscription::DoAfterSubscription,
+///     },
+/// };
+/// use std::sync::{Arc, Mutex};
+///
+/// let called = Arc::new(Mutex::new(false));
+/// let called_observer = Arc::clone(&called);
+///
+/// DoAfterSubscription::new(FromIter::new(vec![1]), move || {
+///     *called_observer.lock().unwrap() = true;
+/// })
+/// .subscribe_with_callback(|_| {}, |_| {});
+///
+/// assert!(*called.lock().unwrap());
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DoAfterSubscription<OE, F> {

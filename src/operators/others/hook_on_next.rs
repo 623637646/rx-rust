@@ -7,6 +7,32 @@ use crate::{
 use educe::Educe;
 
 /// Invokes a callback for each item emitted by the source Observable.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         others::hook_on_next::HookOnNext,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = HookOnNext::new(FromIter::new(vec![1, 2]), |observer, value| {
+///     observer.on_next(value * 10);
+/// });
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![10, 20]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct HookOnNext<OE, F> {

@@ -10,6 +10,30 @@ use std::marker::PhantomData;
 
 /// Applies a function to each item emitted by an Observable, sequentially, and emits the final accumulated value.
 /// See <https://reactivex.io/documentation/operators/reduce.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         mathematical_aggregate::reduce::Reduce,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Reduce::new(FromIter::new(vec![1, 2, 3]), 0, |acc, value| acc + value);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![6]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Reduce<T, T1, OE, F> {

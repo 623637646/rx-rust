@@ -11,6 +11,33 @@ use slotmap::{DefaultKey, SlotMap};
 
 /// Given two or more source Observables, emit all of the items from only the first of these Observables to emit an item or notification.
 /// See <https://reactivex.io/documentation/operators/amb.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         conditional_boolean::amb::Amb,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Amb::new([
+///     FromIter::new(vec![1, 2]),
+///     FromIter::new(vec![3, 4]),
+/// ]);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 2]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Amb<I> {

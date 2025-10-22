@@ -8,6 +8,30 @@ use educe::Educe;
 
 /// Discards items emitted by an Observable until a specified condition becomes false.
 /// See <https://reactivex.io/documentation/operators/skipwhile.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         conditional_boolean::skip_while::SkipWhile,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = SkipWhile::new(FromIter::new(vec![1, 2, 3, 4]), |value| *value < 3);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![3, 4]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SkipWhile<OE, F> {

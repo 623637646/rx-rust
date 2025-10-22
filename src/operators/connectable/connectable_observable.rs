@@ -7,6 +7,56 @@ use educe::Educe;
 
 /// Represents an Observable that waits until its `connect()` method is called before it begins emitting items to its Observers.
 /// See <https://reactivex.io/documentation/operators/connect.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         connectable::connectable_observable::ConnectableObservable,
+///         creating::from_iter::FromIter,
+///     },
+///     subject::publish_subject::PublishSubject,
+/// };
+///
+/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+///
+/// let values_1 = Arc::new(Mutex::new(Vec::new()));
+/// let values_2 = Arc::new(Mutex::new(Vec::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+///
+/// let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let connectable =
+///     ConnectableObservable::new(FromIter::new(vec![1, 2]), subject.clone());
+/// let values_1_observer = Arc::clone(&values_1);
+/// let values_2_observer = Arc::clone(&values_2);
+/// let terminations_observer = Arc::clone(&terminations);
+///
+/// let subscription_1 = connectable.clone().subscribe_with_callback(
+///     move |value| values_1_observer.lock().unwrap().push(value),
+///     |_| {},
+/// );
+/// let subscription_2 = connectable.clone().subscribe_with_callback(
+///     move |value| values_2_observer.lock().unwrap().push(value),
+///     move |termination| terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination),
+/// );
+///
+/// let connection = connectable.connect();
+/// drop(connection);
+/// drop(subscription_1);
+/// drop(subscription_2);
+///
+/// assert_eq!(&*values_1.lock().unwrap(), &[1, 2]);
+/// assert_eq!(&*values_2.lock().unwrap(), &[1, 2]);
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ConnectableObservable<OE, S> {

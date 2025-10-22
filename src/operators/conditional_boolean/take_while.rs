@@ -9,6 +9,30 @@ use educe::Educe;
 
 /// Emits items emitted by a source Observable as long as a specified condition is true.
 /// See <https://reactivex.io/documentation/operators/takewhile.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         conditional_boolean::take_while::TakeWhile,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = TakeWhile::new(FromIter::new(vec![1, 2, 3, 4]), |value| *value < 3);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 2]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct TakeWhile<OE, F> {

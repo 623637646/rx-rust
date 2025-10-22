@@ -14,6 +14,66 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 
 /// Divides an Observable into a set of Observables, each of which emits a different group of items from the original Observable, organized by key.
 /// See <https://reactivex.io/documentation/operators/groupby.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     disposable::subscription::Subscription,
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         transforming::group_by::GroupBy,
+///     },
+/// };
+/// use std::sync::{Arc, Mutex};
+///
+/// let groups = Arc::new(Mutex::new(Vec::<Vec<i32>>::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+/// let inner_subscriptions = Arc::new(Mutex::new(Vec::<Subscription>::new()));
+/// let groups_observer = Arc::clone(&groups);
+/// let terminations_observer = Arc::clone(&terminations);
+/// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
+///
+/// let subscription = GroupBy::new(FromIter::new(vec![1, 2, 3, 4]), |value| value % 2)
+///     .subscribe_with_callback(
+///         move |group| {
+///             let index = {
+///                 let mut groups = groups_observer.lock().unwrap();
+///                 groups.push(Vec::new());
+///                 groups.len() - 1
+///             };
+///             let groups_for_values = Arc::clone(&groups_observer);
+///             let sub = group.subscribe_with_callback(
+///                 move |value| {
+///                     groups_for_values.lock().unwrap()[index].push(value);
+///                 },
+///                 |_| {},
+///             );
+///             inner_subscriptions_observer.lock().unwrap().push(sub);
+///         },
+///         move |termination| terminations_observer
+///             .lock()
+///             .unwrap()
+///             .push(termination),
+///     );
+///
+/// drop(subscription);
+/// inner_subscriptions
+///     .lock()
+///     .unwrap()
+///     .drain(..)
+///     .for_each(drop);
+///
+/// let mut grouped = groups.lock().unwrap().clone();
+/// grouped.iter_mut().for_each(|values| values.sort());
+/// grouped.sort();
+/// assert_eq!(grouped, vec![vec![1, 3], vec![2, 4]]);
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct GroupBy<OE, F, K> {

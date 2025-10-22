@@ -9,6 +9,30 @@ use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
 
 /// Maps an Observable with an `Infallible` error type to an Observable with a concrete error type.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         others::map_infallible_to_error::MapInfallibleToError,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// MapInfallibleToError::<String, _>::new(FromIter::new(vec![1, 2]))
+///     .subscribe_with_callback(
+///         |value| values.push(value),
+///         |termination| terminations.push(termination),
+///     );
+///
+/// assert_eq!(values, vec![1, 2]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct MapInfallibleToError<E, OE> {

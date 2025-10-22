@@ -8,6 +8,26 @@ use educe::Educe;
 
 /// Converts a `Result` into an Observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::creating::from_result::FromResult,
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// FromResult::new(Ok::<i32, &str>(10)).subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![10]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromResult<T, E>(Result<T, E>);

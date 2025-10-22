@@ -18,6 +18,24 @@ struct ObservableStreamContext<T> {
 }
 
 /// Converts an Observable into a `futures::Stream` that can be used with `async/await`.
+///
+/// # Examples
+/// ```rust
+/// use futures::StreamExt;
+/// use rx_rust::{
+///     operators::{
+///         creating::from_iter::FromIter,
+///         others::observable_stream::ObservableStream,
+///     },
+/// };
+///
+/// futures::executor::block_on(async {
+///     let source = FromIter::new(vec![1, 2, 3]);
+///     let mut stream = ObservableStream::new(source);
+///     let values: Vec<_> = (&mut stream).collect().await;
+///     assert_eq!(values, vec![1, 2, 3]);
+/// });
+/// ```
 pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,

@@ -10,6 +10,65 @@ use std::{cmp::Ordering, num::NonZeroUsize};
 
 /// Periodically subdivides items from an Observable into Observable windows, each containing a specified number of items.
 /// See <https://reactivex.io/documentation/operators/window.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     disposable::subscription::Subscription,
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         transforming::window_with_count::WindowWithCount,
+///     },
+/// };
+/// use std::{num::NonZeroUsize, sync::{Arc, Mutex}};
+///
+/// let windows = Arc::new(Mutex::new(Vec::<Vec<i32>>::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+/// let inner_subscriptions = Arc::new(Mutex::new(Vec::<Subscription>::new()));
+/// let windows_observer = Arc::clone(&windows);
+/// let terminations_observer = Arc::clone(&terminations);
+/// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
+///
+/// let subscription = WindowWithCount::new(
+///     FromIter::new(vec![1, 2, 3, 4]),
+///     NonZeroUsize::new(2).unwrap(),
+/// )
+/// .subscribe_with_callback(
+///     move |window| {
+///         let index = {
+///             let mut windows = windows_observer.lock().unwrap();
+///             windows.push(Vec::new());
+///             windows.len() - 1
+///         };
+///         let windows_for_values = Arc::clone(&windows_observer);
+///         let sub = window.subscribe_with_callback(
+///             move |value| {
+///                 windows_for_values.lock().unwrap()[index].push(value);
+///             },
+///             |_| {},
+///         );
+///         inner_subscriptions_observer.lock().unwrap().push(sub);
+///     },
+///     move |termination| terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination),
+/// );
+///
+/// drop(subscription);
+/// inner_subscriptions.lock().unwrap().drain(..).for_each(drop);
+///
+/// assert_eq!(
+///     &*windows.lock().unwrap(),
+///     &[vec![1, 2], vec![3, 4], vec![]]
+/// );
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct WindowWithCount<OE> {

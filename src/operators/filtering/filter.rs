@@ -8,6 +8,30 @@ use educe::Educe;
 
 /// Emits only those items from an Observable that pass a predicate test.
 /// See <https://reactivex.io/documentation/operators/filter.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         filtering::filter::Filter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Filter::new(FromIter::new(vec![1, 2, 3, 4]), |value| *value % 2 == 0);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![2, 4]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Filter<OE, F> {

@@ -11,6 +11,30 @@ use std::marker::PhantomData;
 
 /// Catches errors on the observable to be handled by returning a new observable or throwing an error.
 /// See <https://reactivex.io/documentation/operators/catch.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::{just::Just, throw::Throw},
+///         error_handling::catch::Catch,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Catch::new(Throw::new("boom").map_infallible_to_value(), |error| Just::new(error));
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec!["boom"]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Catch<E0, OE, F> {

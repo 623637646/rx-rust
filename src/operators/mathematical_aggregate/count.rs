@@ -9,6 +9,30 @@ use std::marker::PhantomData;
 
 /// Counts the number of items emitted by the source Observable and emits this count.
 /// See <https://reactivex.io/documentation/operators/count.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         mathematical_aggregate::count::Count,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Count::new(FromIter::new(vec![1, 2, 3, 4]));
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![4]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Count<T, OE> {

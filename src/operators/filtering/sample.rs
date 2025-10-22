@@ -10,6 +10,47 @@ use educe::Educe;
 
 /// Emits the most recently emitted item from the source Observable whenever the sampler Observable emits an item.
 /// See <https://reactivex.io/documentation/operators/sample.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::{Observer, Termination},
+///     operators::filtering::sample::Sample,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+///
+/// let values = Arc::new(Mutex::new(Vec::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+///
+/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let mut sampler: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let values_observer = Arc::clone(&values);
+/// let terminations_observer = Arc::clone(&terminations);
+///
+/// let subscription = Sample::new(source.clone(), sampler.clone()).subscribe_with_callback(
+///     move |value| values_observer.lock().unwrap().push(value),
+///     move |termination| terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination),
+/// );
+///
+/// source.on_next(1);
+/// sampler.on_next(());
+/// source.on_next(2);
+/// source.on_next(3);
+/// sampler.on_next(());
+/// source.on_termination(Termination::Completed);
+///
+/// drop(subscription);
+/// assert_eq!(&*values.lock().unwrap(), &[1, 3]);
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Sample<OE, OE1> {

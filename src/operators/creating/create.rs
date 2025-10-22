@@ -8,6 +8,33 @@ use educe::Educe;
 
 /// Creates an Observable from scratch by means of a producer function.
 /// See <https://reactivex.io/documentation/operators/create.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     disposable::subscription::Subscription,
+///     observable::observable_ext::ObservableExt,
+///     observer::{boxed_observer::BoxedObserver, Observer, Termination},
+///     operators::creating::create::Create,
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Create::new(|mut observer: BoxedObserver<'_, i32, ()>| {
+///     observer.on_next(42);
+///     observer.on_termination(Termination::Completed);
+///     Subscription::default()
+/// });
+///
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![42]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Create<F>(F);

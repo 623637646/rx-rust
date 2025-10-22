@@ -8,6 +8,30 @@ use educe::Educe;
 
 /// Emits items from the source Observable only if the current item is different from the immediately preceding item.
 /// See <https://reactivex.io/documentation/operators/distinctuntilchanged.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         filtering::distinct_until_changed::DistinctUntilChanged,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = DistinctUntilChanged::new(FromIter::new(vec![1, 1, 2, 2, 1, 3]));
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 2, 1, 3]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DistinctUntilChanged<OE, F> {

@@ -13,6 +13,62 @@ use std::{num::NonZeroUsize, time::Duration};
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, either when the bundle reaches a specified size or after a specified time interval, whichever happens first.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
+///
+/// # Examples
+/// ```rust
+/// # #[cfg(not(feature = "tokio-scheduler"))]
+/// # fn main() {
+/// #     panic!("Use tokio-scheduler feature to run tests.");
+/// # }
+/// # #[cfg(feature = "tokio-scheduler")]
+/// #[tokio::main]
+/// async fn main() {
+///     use rx_rust::{
+///         observable::observable_ext::ObservableExt,
+///         observer::Termination,
+///         operators::{
+///             creating::from_iter::FromIter,
+///             transforming::buffer_with_time_or_count::BufferWithTimeOrCount,
+///         },
+///     };
+///     use std::{
+///         num::NonZeroUsize,
+///         sync::{Arc, Mutex},
+///         time::Duration,
+///     };
+///     use tokio::time::sleep;
+///
+///     let handle = tokio::runtime::Handle::current();
+///     let values = Arc::new(Mutex::new(Vec::new()));
+///     let terminations = Arc::new(Mutex::new(Vec::new()));
+///     let values_observer = Arc::clone(&values);
+///     let terminations_observer = Arc::clone(&terminations);
+///
+///     let subscription = BufferWithTimeOrCount::new(
+///         FromIter::new(vec![1, 2, 3]),
+///         NonZeroUsize::new(2).unwrap(),
+///         Duration::from_millis(10),
+///         handle.clone(),
+///         None,
+///     )
+///     .subscribe_with_callback(
+///         move |value| values_observer.lock().unwrap().push(value),
+///         move |termination| terminations_observer
+///             .lock()
+///             .unwrap()
+///             .push(termination),
+///     );
+///
+///     sleep(Duration::from_millis(20)).await;
+///     drop(subscription);
+///
+///     assert_eq!(&*values.lock().unwrap(), &[vec![1, 2], vec![3]]);
+///     assert_eq!(
+///         &*terminations.lock().unwrap(),
+///         &[Termination::Completed]
+///     );
+/// }
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BufferWithTimeOrCount<OE, S> {

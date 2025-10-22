@@ -8,6 +8,36 @@ use educe::Educe;
 
 /// Invokes a callback for each item emitted by the source Observable after the item has been emitted to the downstream observer.
 /// See <https://reactivex.io/documentation/operators/do.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         utility::do_after_next::DoAfterNext,
+///     },
+/// };
+/// use std::sync::{Arc, Mutex};
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+/// let side_effects = Arc::new(Mutex::new(Vec::new()));
+/// let side_effects_observer = Arc::clone(&side_effects);
+///
+/// DoAfterNext::new(FromIter::new(vec![1, 2]), move |value| {
+///     side_effects_observer.lock().unwrap().push(value * 10);
+/// })
+/// .subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 2]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// assert_eq!(&*side_effects.lock().unwrap(), &[10, 20]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DoAfterNext<OE, F> {

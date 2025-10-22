@@ -11,6 +11,33 @@ use std::collections::VecDeque;
 
 /// Combines the emissions of multiple Observables together via a specified function and emits single items for each combination based on the sequence of their emissions.
 /// See <https://reactivex.io/documentation/operators/zip.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         combining::zip::Zip,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Zip::new(
+///     FromIter::new(vec![1, 2]),
+///     FromIter::new(vec![10, 20]),
+/// );
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![(1, 10), (2, 20)]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Zip<OE1, OE2> {

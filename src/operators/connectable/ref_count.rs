@@ -14,6 +14,46 @@ enum State<'sub> {
 
 /// Makes a `ConnectableObservable` behave like an ordinary `Observable` that automatically connects and disconnects.
 /// See <https://reactivex.io/documentation/operators/refcount.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
+///         creating::from_iter::FromIter,
+///     },
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+///
+/// let values = Arc::new(Mutex::new(Vec::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+///
+/// let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let connectable =
+///     ConnectableObservable::new(FromIter::new(vec![1, 2]), subject.clone());
+/// let observable: RefCount<'_, _, _> = connectable.ref_count();
+/// let values_observer = Arc::clone(&values);
+/// let terminations_observer = Arc::clone(&terminations);
+///
+/// let subscription = observable.clone().subscribe_with_callback(
+///     move |value| values_observer.lock().unwrap().push(value),
+///     move |termination| terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination),
+/// );
+///
+/// drop(subscription);
+///
+/// assert_eq!(&*values.lock().unwrap(), &[1, 2]);
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct RefCount<'sub, OE, S> {

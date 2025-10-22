@@ -11,6 +11,33 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Combines multiple Observables into a single Observable that emits all of their emissions.
 /// See <https://reactivex.io/documentation/operators/merge.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         combining::merge::Merge,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Merge::new(
+///     FromIter::new(vec![1, 3]),
+///     FromIter::new(vec![2, 4]),
+/// );
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 3, 2, 4]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Merge<OE1, OE2> {

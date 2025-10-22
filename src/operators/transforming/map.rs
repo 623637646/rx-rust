@@ -10,6 +10,30 @@ use std::marker::PhantomData;
 
 /// Transforms items emitted by an Observable by applying a function to each item.
 /// See <https://reactivex.io/documentation/operators/map.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         transforming::map::Map,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Map::new(FromIter::new(vec![1, 2]), |value| value * 10);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![10, 20]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Map<T0, OE, F> {

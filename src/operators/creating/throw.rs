@@ -9,6 +9,25 @@ use std::convert::Infallible;
 
 /// Creates an Observable that emits no items and terminates with an error.
 /// See <https://reactivex.io/documentation/operators/empty-never-throw.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::creating::throw::Throw,
+/// };
+/// use std::convert::Infallible;
+///
+/// let mut terminations = Vec::new();
+///
+/// Throw::new("boom").subscribe_with_callback(
+///     |value: Infallible| panic!("`Throw` should not emit values"),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(terminations, vec![Termination::Error("boom")]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Throw<E>(E);

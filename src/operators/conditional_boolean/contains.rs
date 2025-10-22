@@ -9,6 +9,30 @@ use educe::Educe;
 
 /// Emits a single boolean value that indicates whether a source Observable emits a specified item.
 /// See <https://reactivex.io/documentation/operators/contains.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         conditional_boolean::contains::Contains,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Contains::new(FromIter::new(vec![1, 2, 3]), 2);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![true]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Contains<T, OE> {

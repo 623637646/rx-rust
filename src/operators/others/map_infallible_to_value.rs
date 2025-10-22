@@ -9,6 +9,29 @@ use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
 
 /// Maps an Observable with an `Infallible` item type to an Observable with a concrete item type.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::empty::Empty,
+///         others::map_infallible_to_value::MapInfallibleToValue,
+///     },
+/// };
+///
+/// let mut values = Vec::<i32>::new();
+/// let mut terminations = Vec::new();
+///
+/// MapInfallibleToValue::<i32, _>::new(Empty).subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert!(values.is_empty());
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct MapInfallibleToValue<T, OE> {

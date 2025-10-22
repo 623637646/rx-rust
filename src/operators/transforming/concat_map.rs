@@ -11,6 +11,32 @@ use std::marker::PhantomData;
 
 /// Projects each source value to an Observable which is merged in a serialized fashion in the output Observable.
 /// See <https://reactivex.io/documentation/operators/flatmap.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         transforming::concat_map::ConcatMap,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = ConcatMap::new(FromIter::new(vec![1, 2]), |value| {
+///     FromIter::new(vec![value, value + 10])
+/// });
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 11, 2, 12]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ConcatMap<T0, OE, OE1, F> {

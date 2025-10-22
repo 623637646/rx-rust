@@ -13,6 +13,45 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Discards items emitted by a source Observable until a second Observable emits an item.
 /// See <https://reactivex.io/documentation/operators/skipuntil.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::{Observer, Termination},
+///     operators::conditional_boolean::skip_until::SkipUntil,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+///
+/// let values = Arc::new(Mutex::new(Vec::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+///
+/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let mut gate: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let values_observer = Arc::clone(&values);
+/// let terminations_observer = Arc::clone(&terminations);
+///
+/// let subscription = SkipUntil::new(source.clone(), gate.clone()).subscribe_with_callback(
+///     move |value| values_observer.lock().unwrap().push(value),
+///     move |termination| terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination),
+/// );
+///
+/// source.on_next(1);
+/// gate.on_next(());
+/// source.on_next(2);
+/// source.on_termination(Termination::Completed);
+/// drop(subscription);
+///
+/// assert_eq!(&*values.lock().unwrap(), &[2]);
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SkipUntil<OE, OE1> {

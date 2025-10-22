@@ -9,6 +9,31 @@ use educe::Educe;
 
 /// Concatenates multiple Observables to create an Observable that emits all of the values from the first, then all of the values from the second, and so on.
 /// See <https://reactivex.io/documentation/operators/concat.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         combining::concat::Concat,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable =
+///     Concat::new(FromIter::new(vec![1, 2]), FromIter::new(vec![3, 4]));
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![1, 2, 3, 4]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Concat<OE1, OE2> {

@@ -10,6 +10,33 @@ use std::convert::Infallible;
 
 /// Converts an Observable that emits `Event` objects into a "live" Observable that emits the items and notifications embedded in those `Event` objects.
 /// See <https://reactivex.io/documentation/operators/materialize-dematerialize.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         utility::{
+///             dematerialize::Dematerialize,
+///             materialize::Materialize,
+///         },
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// Dematerialize::new(Materialize::new(FromIter::new(vec![1, 2])))
+///     .subscribe_with_callback(
+///         |value| values.push(value),
+///         |termination| terminations.push(termination),
+///     );
+///
+/// assert_eq!(values, vec![1, 2]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Dematerialize<OE>(OE);

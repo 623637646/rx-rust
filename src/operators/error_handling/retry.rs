@@ -16,6 +16,30 @@ pub enum RetryAction<E, OE1> {
 
 /// Retries an Observable in case of an error, based on a retry policy.
 /// See <https://reactivex.io/documentation/operators/retry.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::{just::Just, throw::Throw},
+///         error_handling::retry::{Retry, RetryAction},
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Retry::new(Throw::new("boom").map_infallible_to_value(), |_| RetryAction::Retry(Just::new(42).map_infallible_to_error()));
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![42]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Retry<OE, F> {

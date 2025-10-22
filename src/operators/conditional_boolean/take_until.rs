@@ -11,6 +11,45 @@ use std::marker::PhantomData;
 
 /// Emits the items emitted by a source Observable until a second Observable emits an item or a notification.
 /// See <https://reactivex.io/documentation/operators/takeuntil.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::{Observer, Termination},
+///     operators::conditional_boolean::take_until::TakeUntil,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+///
+/// let values = Arc::new(Mutex::new(Vec::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+///
+/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let mut stop: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let values_observer = Arc::clone(&values);
+/// let terminations_observer = Arc::clone(&terminations);
+///
+/// let subscription = TakeUntil::new(source.clone(), stop.clone()).subscribe_with_callback(
+///     move |value| values_observer.lock().unwrap().push(value),
+///     move |termination| terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination),
+/// );
+///
+/// source.on_next(1);
+/// source.on_next(2);
+/// stop.on_next(());
+/// source.on_next(3);
+/// drop(subscription);
+///
+/// assert_eq!(&*values.lock().unwrap(), &[1, 2]);
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct TakeUntil<OE, OE1> {

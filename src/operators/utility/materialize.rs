@@ -9,6 +9,36 @@ use std::convert::Infallible;
 
 /// Converts an Observable into an Observable that emits `Event` objects, each of which wraps a notification from the source Observable.
 /// See <https://reactivex.io/documentation/operators/materialize-dematerialize.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::{Event, Termination},
+///     operators::{
+///         creating::from_iter::FromIter,
+///         utility::materialize::Materialize,
+///     },
+/// };
+///
+/// let mut events = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// Materialize::new(FromIter::new(vec![1, 2])).subscribe_with_callback(
+///     |event| events.push(event),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(
+///     events,
+///     vec![
+///         Event::Next(1),
+///         Event::Next(2),
+///         Event::Termination(Termination::Completed)
+///     ]
+/// );
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Materialize<OE>(OE);

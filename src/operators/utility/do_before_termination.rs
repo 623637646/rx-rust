@@ -8,6 +8,40 @@ use educe::Educe;
 
 /// Invokes a callback when the source Observable terminates (either completes or errors), before the termination notification has been emitted to the downstream observer.
 /// See <https://reactivex.io/documentation/operators/do.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         utility::do_before_termination::DoBeforeTermination,
+///     },
+/// };
+/// use std::sync::{Arc, Mutex};
+///
+/// let mut terminations = Vec::new();
+/// let callback_terminations = Arc::new(Mutex::new(Vec::new()));
+/// let callback_terminations_observer = Arc::clone(&callback_terminations);
+///
+/// DoBeforeTermination::new(FromIter::new(vec![1, 2]), move |termination| {
+///     callback_terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination.clone());
+/// })
+/// .subscribe_with_callback(
+///     |_| {},
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(
+///     &*callback_terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DoBeforeTermination<OE, F> {

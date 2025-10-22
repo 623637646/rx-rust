@@ -10,6 +10,46 @@ use educe::Educe;
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, when a `boundary` Observable emits an item.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::{Observer, Termination},
+///     operators::transforming::buffer::Buffer,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+///
+/// let values = Arc::new(Mutex::new(Vec::new()));
+/// let terminations = Arc::new(Mutex::new(Vec::new()));
+///
+/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let values_observer = Arc::clone(&values);
+/// let terminations_observer = Arc::clone(&terminations);
+///
+/// let subscription = Buffer::new(source.clone(), boundary.clone()).subscribe_with_callback(
+///     move |value| values_observer.lock().unwrap().push(value),
+///     move |termination| terminations_observer
+///         .lock()
+///         .unwrap()
+///         .push(termination),
+/// );
+///
+/// source.on_next(1);
+/// source.on_next(2);
+/// boundary.on_next(());
+/// source.on_next(3);
+/// source.on_termination(Termination::Completed);
+/// drop(subscription);
+///
+/// assert_eq!(&*values.lock().unwrap(), &[vec![1, 2], vec![3]]);
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed]
+/// );
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Buffer<OE, OE1> {

@@ -10,6 +10,30 @@ use std::marker::PhantomData;
 
 /// Emits a single boolean value that indicates whether all items emitted by a source Observable satisfy a specified condition.
 /// See <https://reactivex.io/documentation/operators/all.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         conditional_boolean::all::All,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = All::new(FromIter::new(vec![1, 2, 3]), |value| value < 5);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![true]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct All<T, OE, F> {

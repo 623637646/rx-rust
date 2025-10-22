@@ -9,6 +9,30 @@ use std::marker::PhantomData;
 
 /// Calculates the average of numbers emitted by an Observable and emits this average.
 /// See <https://reactivex.io/documentation/operators/average.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         creating::from_iter::FromIter,
+///         mathematical_aggregate::average::Average,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = Average::new(FromIter::new(vec![1.0_f64, 3.0, 5.0]));
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![3.0]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Average<T, OE> {

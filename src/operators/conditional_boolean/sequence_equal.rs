@@ -12,6 +12,33 @@ use std::marker::PhantomData;
 
 /// Emits a single boolean value that indicates whether two Observables emit the same sequence of items.
 /// See <https://reactivex.io/documentation/operators/sequenceequal.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         conditional_boolean::sequence_equal::SequenceEqual,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = SequenceEqual::new(
+///     FromIter::new(vec![1, 2]),
+///     FromIter::new(vec![1, 2]),
+/// );
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![true]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SequenceEqual<T, OE1, OE2> {

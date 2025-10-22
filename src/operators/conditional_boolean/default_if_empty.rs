@@ -8,6 +8,30 @@ use educe::Educe;
 
 /// Emits a specified item if the source Observable completes without emitting any items.
 /// See <https://reactivex.io/documentation/operators/defaultifempty.html>
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::observable_ext::ObservableExt,
+///     observer::Termination,
+///     operators::{
+///         conditional_boolean::default_if_empty::DefaultIfEmpty,
+///         creating::from_iter::FromIter,
+///     },
+/// };
+///
+/// let mut values = Vec::new();
+/// let mut terminations = Vec::new();
+///
+/// let observable = DefaultIfEmpty::new(FromIter::new(Vec::<i32>::new()), 42);
+/// observable.subscribe_with_callback(
+///     |value| values.push(value),
+///     |termination| terminations.push(termination),
+/// );
+///
+/// assert_eq!(values, vec![42]);
+/// assert_eq!(terminations, vec![Termination::Completed]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct DefaultIfEmpty<T, OE> {
