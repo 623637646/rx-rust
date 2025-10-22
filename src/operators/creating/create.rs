@@ -13,11 +13,6 @@ use educe::Educe;
 pub struct Create<F>(F);
 
 impl<F> Create<F> {
-    /// Creates a new `Create` observable.
-    ///
-    /// # Arguments
-    ///
-    /// * `builder` - The subscription builder function. It receives a `BoxedObserver` which it can use to emit values and termination events. The function should return a `Subscription` which can be used to manage the subscription.
     pub fn new<'or, 'sub, T, E>(builder: F) -> Self
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_unsubscribe_wrap_observable`.

@@ -14,11 +14,6 @@ use std::convert::Infallible;
 pub struct Just<T>(T);
 
 impl<T> Just<T> {
-    /// Creates a new `Just` observable with the given value.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - The value to emit.
     pub fn new(value: T) -> Self {
         Self(value)
     }
