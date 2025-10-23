@@ -2,6 +2,9 @@
 name = "rx-rust"
 version = "0.1.0"
 edition = "2024"
+license-file = "LICENSE"
+repository = "https://github.com/623637646/rx-rust"
+description = "Reactive Programming in Rust inspired by ReactiveX https://reactivex.io/"
 
 [dependencies]
 educe = "0.6.0" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
