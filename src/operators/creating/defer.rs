@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
 use educe::Educe;
 
@@ -45,7 +45,7 @@ where
     F: FnOnce() -> OE,
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
         let observable = self.0();
         observable.subscribe(observer)
     }

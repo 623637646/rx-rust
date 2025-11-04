@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::{
     disposable::subscription::Subscription, observable::Observable, observer::Observer,
     scheduler::Scheduler,
@@ -76,7 +76,7 @@ where
 {
     fn subscribe(
         self,
-        mut observer: impl Observer<usize, Infallible> + NecessarySend + 'static,
+        mut observer: impl Observer<usize, Infallible> + NecessarySendSync + 'static,
     ) -> Subscription<'sub> {
         let disposal = self.scheduler.schedule_periodically(
             move |count| {

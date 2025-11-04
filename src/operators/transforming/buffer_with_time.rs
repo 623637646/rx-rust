@@ -1,6 +1,6 @@
 use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -90,13 +90,13 @@ impl<OE, S> BufferWithTime<OE, S> {
 
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTime<OE, S>
 where
-    T: NecessarySend + 'static,
+    T: NecessarySendSync + 'static,
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler,
 {
     fn subscribe(
         self,
-        observer: impl Observer<Vec<T>, E> + NecessarySend + 'static,
+        observer: impl Observer<Vec<T>, E> + NecessarySendSync + 'static,
     ) -> Subscription<'sub> {
         let observer = Shared::new(Mutable::new(Some(observer)));
         let context = Shared::new(Mutable::new(BufferWithTimeContext {

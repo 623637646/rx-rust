@@ -3,7 +3,7 @@ use crate::{
     observable::Observable,
     observer::Observer,
     scheduler::Scheduler,
-    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
+    utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared},
 };
 use educe::Educe;
 
@@ -70,12 +70,12 @@ impl<OE, S> SubscribeOn<OE, S> {
 
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for SubscribeOn<OE, S>
 where
-    OE: Observable<'or, 'static, T, E> + NecessarySend + 'static,
+    OE: Observable<'or, 'static, T, E> + NecessarySendSync + 'static,
     S: Scheduler,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySend + 'static,
+        observer: impl Observer<T, E> + NecessarySendSync + 'static,
     ) -> Subscription<'sub> {
         let sub = Shared::new(Mutable::new(Some(Subscription::default()))); // Placeholder
         let sub_cloned = sub.clone();

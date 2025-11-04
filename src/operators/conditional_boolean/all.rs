@@ -1,4 +1,4 @@
-use crate::utils::types::{MarkerType, NecessarySend};
+use crate::utils::types::{MarkerType, NecessarySendSync};
 use crate::utils::unsub_after_termination::subscribe_unsub_after_termination;
 use crate::{
     disposable::subscription::Subscription,
@@ -59,12 +59,12 @@ impl<T, OE, F> All<T, OE, F> {
 impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, bool, E> for All<T, OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(T) -> bool + NecessarySend + 'or,
+    F: FnMut(T) -> bool + NecessarySendSync + 'or,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<bool, E> + NecessarySend + 'or,
+        observer: impl Observer<bool, E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = AllObserver {

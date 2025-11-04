@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -53,7 +53,7 @@ where
     T: 'or,
     OE: Observable<'or, 'sub, Infallible, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
         let observer = MapInfallibleToValueObserver {
             observer,
             _marker: PhantomData,

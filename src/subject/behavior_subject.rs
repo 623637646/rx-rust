@@ -1,6 +1,6 @@
 use super::{Subject, publish_subject::PublishSubject};
 use crate::safe_lock;
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::types::{Mutable, NecessarySendSync, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -34,13 +34,13 @@ impl<T, E> BehaviorSubject<'_, T, E> {
 
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BehaviorSubject<'or, T, E>
 where
-    T: Clone + NecessarySend + 'sub,
-    E: Clone + NecessarySend + 'sub,
+    T: Clone + NecessarySendSync + 'sub,
+    E: Clone + NecessarySendSync + 'sub,
     'or: 'sub,
 {
     fn subscribe(
         self,
-        mut observer: impl Observer<T, E> + NecessarySend + 'or,
+        mut observer: impl Observer<T, E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated() {
             observer.on_termination(terminated);
@@ -54,8 +54,8 @@ where
 
 impl<T, E> Observer<T, E> for BehaviorSubject<'_, T, E>
 where
-    T: Clone + NecessarySend,
-    E: Clone + NecessarySend,
+    T: Clone + NecessarySendSync,
+    E: Clone + NecessarySendSync,
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
@@ -71,8 +71,8 @@ where
 
 impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for BehaviorSubject<'or, T, E>
 where
-    T: Clone + NecessarySend + 'sub,
-    E: Clone + NecessarySend + 'sub,
+    T: Clone + NecessarySendSync + 'sub,
+    E: Clone + NecessarySendSync + 'sub,
     'or: 'sub,
 {
     fn terminated(&self) -> Option<Termination<E>>

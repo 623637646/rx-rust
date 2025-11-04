@@ -8,7 +8,7 @@ use crate::{
     safe_lock, safe_lock_option_observer,
     scheduler::Scheduler,
     utils::{
-        types::{Mutable, MutableHelper, NecessarySend, Shared},
+        types::{Mutable, MutableHelper, NecessarySendSync, Shared},
         unsub_after_termination::subscribe_unsub_after_termination,
     },
 };
@@ -95,7 +95,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, Error<E>> + NecessarySend + 'static,
+        observer: impl Observer<T, Error<E>> + NecessarySendSync + 'static,
     ) -> Subscription<'static> {
         subscribe_unsub_after_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(TimeoutContext {
@@ -164,7 +164,7 @@ struct TimeoutObserver<OR, S> {
 
 impl<T, E, OR, S> Observer<T, E> for TimeoutObserver<OR, S>
 where
-    OR: Observer<T, Error<E>> + NecessarySend + 'static,
+    OR: Observer<T, Error<E>> + NecessarySendSync + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
@@ -222,7 +222,7 @@ fn create_timer<T, E, OR, S>(
     context: Shared<Mutable<TimeoutContext>>,
 ) -> BoxedDisposal<'static>
 where
-    OR: Observer<T, Error<E>> + NecessarySend + 'static,
+    OR: Observer<T, Error<E>> + NecessarySendSync + 'static,
     S: Scheduler,
 {
     BoxedDisposal::new(scheduler.schedule(

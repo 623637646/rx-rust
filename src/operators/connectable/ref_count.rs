@@ -3,7 +3,7 @@ use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::observable::Observable;
 use crate::observer::Observer;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared};
 use educe::Educe;
 
 enum State<'sub> {
@@ -73,9 +73,9 @@ impl<OE, S> RefCount<'_, OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'or, 'sub, T, E> for RefCount<'sub, OE, S>
 where
     OE: Observable<'or, 'sub, T, E>,
-    S: Observable<'or, 'sub, T, E> + Observer<T, E> + Clone + NecessarySend + 'or,
+    S: Observable<'or, 'sub, T, E> + Observer<T, E> + Clone + NecessarySendSync + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
         let sub = self.source.clone().subscribe(observer);
         self.state.lock_mut(|mut lock| {
             match &mut *lock {

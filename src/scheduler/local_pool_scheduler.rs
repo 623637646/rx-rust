@@ -1,5 +1,5 @@
 use super::Scheduler;
-use crate::{disposable::Disposable, utils::types::NecessarySend};
+use crate::{disposable::Disposable, utils::types::NecessarySendSync};
 use futures::{
     executor::LocalSpawner,
     stream::{AbortHandle, Abortable},
@@ -11,8 +11,8 @@ use std::time::Duration;
 impl Scheduler for LocalSpawner {
     fn schedule_future(
         &self,
-        future: impl Future<Output = ()> + NecessarySend + 'static,
-    ) -> impl Disposable + NecessarySend + 'static {
+        future: impl Future<Output = ()> + NecessarySendSync + 'static,
+    ) -> impl Disposable + NecessarySendSync + 'static {
         let (abort_handle, abort_registration) = AbortHandle::new_pair();
         let future = Abortable::new(future, abort_registration);
         self.spawn_local(async {
@@ -22,7 +22,7 @@ impl Scheduler for LocalSpawner {
         abort_handle
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static {
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySendSync + 'static {
         async_io::Timer::after(duration)
     }
 }
