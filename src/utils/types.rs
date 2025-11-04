@@ -59,7 +59,7 @@ cfg_if::cfg_if! {
                 callback(ReadOnlyMutexGuard(self.lock().unwrap()))
             }
         }
-        pub trait NecessarySend: Send {}
-        impl<T> NecessarySend for T where T: Send {}
+        pub trait NecessarySend: Send + Sync {}
+        impl<T> NecessarySend for T where T: Send + Sync {}
     }
 }

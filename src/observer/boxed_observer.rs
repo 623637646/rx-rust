@@ -7,7 +7,7 @@ cfg_if::cfg_if! {
         pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + 'or>);
     } else {
         /// Type-erased observer for multi-threaded builds to handle this problem <https://stackoverflow.com/q/46620790/9315497>
-        pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + Send + 'or>);
+        pub struct BoxedObserver<'or, T, E>(Box<dyn FnMut(Event<T, E>) + Send + Sync + 'or>);
     }
 }
 

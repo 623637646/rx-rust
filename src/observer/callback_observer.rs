@@ -11,8 +11,8 @@ cfg_if::cfg_if! {
     } else {
         /// Observer implementation backed by user-provided callbacks.
         pub struct CallbackObserver<'cb, T, E> {
-            on_next: Box<dyn FnMut(T) + Send + 'cb>,
-            on_termination: Box<dyn FnOnce(Termination<E>) + Send + 'cb>,
+            on_next: Box<dyn FnMut(T) + Send + Sync + 'cb>,
+            on_termination: Box<dyn FnOnce(Termination<E>) + Send + Sync + 'cb>,
         }
     }
 }
