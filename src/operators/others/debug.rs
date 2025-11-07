@@ -42,34 +42,37 @@ pub enum DebugEvent<'a, T, E> {
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Debug<OE, L, F> {
+pub struct Debug<OE, C, F> {
     source: OE,
-    label: L,
+    context: C,
     callback: Shared<F>,
 }
 
-impl<OE, L, F> Debug<OE, L, F> {
-    pub fn new(source: OE, label: L, callback: F) -> Self {
+impl<OE, C, F> Debug<OE, C, F> {
+    pub fn new<T, E>(source: OE, context: C, callback: F) -> Self
+    where
+        F: Fn(C, DebugEvent<'_, T, E>),
+    {
         Self {
             source,
-            label,
+            context,
             callback: Shared::new(callback),
         }
     }
 }
 
-pub type DefaultPrintType<L, T, E> = fn(L, DebugEvent<'_, T, E>);
+pub type DefaultPrintType<C, T, E> = fn(C, DebugEvent<'_, T, E>);
 
-impl<T, E, OE, L> Debug<OE, L, DefaultPrintType<L, T, E>> {
-    pub fn new_default_print(source: OE, label: L) -> Self
+impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
+    pub fn new_default_print(source: OE, label: C) -> Self
     where
-        L: Display,
+        C: Display,
         T: std::fmt::Debug,
         E: std::fmt::Debug,
     {
         Self {
             source,
-            label,
+            context: label,
             callback: Shared::new(|label, event| match event {
                 DebugEvent::OnNext(value) => println!("[{}]: OnNext({:?})", label, value),
                 DebugEvent::OnTermination(termination) => {
@@ -82,48 +85,51 @@ impl<T, E, OE, L> Debug<OE, L, DefaultPrintType<L, T, E>> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, L, F> Observable<'or, 'sub, T, E> for Debug<OE, L, F>
+impl<'or, 'sub, T, E, OE, C, F> Observable<'or, 'sub, T, E> for Debug<OE, C, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    L: Clone + NecessarySendSync + 'or + 'sub,
-    F: Fn(L, DebugEvent<'_, T, E>) + NecessarySendSync + 'or + 'sub,
+    C: Clone + NecessarySendSync + 'or + 'sub,
+    F: Fn(C, DebugEvent<'_, T, E>) + NecessarySendSync + 'or + 'sub,
 {
     fn subscribe(
         self,
         observer: impl Observer<T, E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
-        (self.callback)(self.label.clone(), DebugEvent::Subscribed);
+        (self.callback)(self.context.clone(), DebugEvent::Subscribed);
         let observer = DebugObserver {
             observer,
-            label: self.label.clone(),
+            context: self.context.clone(),
             callback: self.callback.clone(),
         };
         self.source.subscribe(observer)
             + CallbackDisposal::new(move || {
-                (self.callback)(self.label.clone(), DebugEvent::Disposed);
+                (self.callback)(self.context.clone(), DebugEvent::Disposed);
             })
     }
 }
 
-struct DebugObserver<OR, L, F> {
+struct DebugObserver<OR, C, F> {
     observer: OR,
-    label: L,
+    context: C,
     callback: Shared<F>,
 }
 
-impl<T, E, OR, L, F> Observer<T, E> for DebugObserver<OR, L, F>
+impl<T, E, OR, C, F> Observer<T, E> for DebugObserver<OR, C, F>
 where
     OR: Observer<T, E>,
-    L: Clone,
-    F: Fn(L, DebugEvent<'_, T, E>),
+    C: Clone,
+    F: Fn(C, DebugEvent<'_, T, E>),
 {
     fn on_next(&mut self, value: T) {
-        (self.callback)(self.label.clone(), DebugEvent::OnNext(&value));
+        (self.callback)(self.context.clone(), DebugEvent::OnNext(&value));
         self.observer.on_next(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        (self.callback)(self.label.clone(), DebugEvent::OnTermination(&termination));
+        (self.callback)(
+            self.context.clone(),
+            DebugEvent::OnTermination(&termination),
+        );
         self.observer.on_termination(termination);
     }
 }

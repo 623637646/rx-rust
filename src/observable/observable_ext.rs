@@ -29,7 +29,7 @@ use crate::{
             average::Average, count::Count, max::Max, min::Min, reduce::Reduce, sum::Sum,
         },
         others::{
-            debug::{Debug, DefaultPrintType},
+            debug::{Debug, DebugEvent, DefaultPrintType},
             hook_on_next::HookOnNext,
             hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination,
@@ -175,8 +175,11 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     }
 
     /// Attaches a label to the stream and logs lifecycle events for debugging purposes using the provided callback.
-    fn debug<L, F>(self, label: L, callback: F) -> Debug<Self, L, F> {
-        Debug::new(self, label, callback)
+    fn debug<C, F>(self, context: C, callback: F) -> Debug<Self, C, F>
+    where
+        F: Fn(C, DebugEvent<'_, T, E>),
+    {
+        Debug::new(self, context, callback)
     }
 
     /// Attaches a label to the stream and logs lifecycle events for debugging purposes using the default print.
