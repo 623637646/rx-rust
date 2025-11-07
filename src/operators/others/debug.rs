@@ -8,6 +8,8 @@ use crate::{
 use educe::Educe;
 use std::fmt::Display;
 
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq)]
 pub enum DebugEvent<'a, T, E> {
     OnNext(&'a T),
     OnTermination(&'a Termination<E>),
