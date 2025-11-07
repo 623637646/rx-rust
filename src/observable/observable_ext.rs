@@ -29,8 +29,11 @@ use crate::{
             average::Average, count::Count, max::Max, min::Min, reduce::Reduce, sum::Sum,
         },
         others::{
-            debug::Debug, hook_on_next::HookOnNext, hook_on_subscription::HookOnSubscription,
-            hook_on_termination::HookOnTermination, map_infallible_to_error::MapInfallibleToError,
+            debug::{Debug, DefaultPrintType},
+            hook_on_next::HookOnNext,
+            hook_on_subscription::HookOnSubscription,
+            hook_on_termination::HookOnTermination,
+            map_infallible_to_error::MapInfallibleToError,
             map_infallible_to_value::MapInfallibleToValue,
         },
         transforming::{
@@ -54,7 +57,7 @@ use crate::{
     },
     utils::types::NecessarySendSync,
 };
-use std::{num::NonZeroUsize, time::Duration};
+use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 #[cfg(feature = "futures")]
 use {crate::operators::others::observable_stream::ObservableStream, std::convert::Infallible};
 
@@ -171,9 +174,19 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         Debounce::new(self, time_span, scheduler)
     }
 
-    /// Attaches a label to the stream and logs lifecycle events for debugging purposes.
-    fn debug<D>(self, label: D) -> Debug<Self, D> {
-        Debug::new(self, label)
+    /// Attaches a label to the stream and logs lifecycle events for debugging purposes using the provided callback.
+    fn debug<L, F>(self, label: L, callback: F) -> Debug<Self, L, F> {
+        Debug::new(self, label, callback)
+    }
+
+    /// Attaches a label to the stream and logs lifecycle events for debugging purposes using the default print.
+    fn debug_default_print<L>(self, label: L) -> Debug<Self, L, DefaultPrintType<L, T, E>>
+    where
+        L: Display,
+        T: std::fmt::Debug,
+        E: std::fmt::Debug,
+    {
+        Debug::new_default_print(self, label)
     }
 
     /// Emits a default value if the source completes without emitting any items.
