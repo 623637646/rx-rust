@@ -56,7 +56,10 @@ where
     I: IntoIterator<Item = OE>,
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let observer = Shared::new(Mutable::new(Some(observer)));
 
         let mut slop_map = SlotMap::new();

@@ -18,7 +18,10 @@ impl<'or, 'sub, T, E, S> Observable<'or, 'sub, T, E> for SubjectObservable<S>
 where
     S: Subject<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
 }

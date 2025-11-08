@@ -64,7 +64,10 @@ where
     OE: Observable<'or, 'sub, T1, E>,
     F: FnMut(T, T1) -> T + NecessarySendSync + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let observer = ScanObserver {
             observer,
             value: self.initial_value,

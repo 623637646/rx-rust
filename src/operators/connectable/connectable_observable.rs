@@ -91,7 +91,10 @@ impl<'or, 'sub, T, E, OE, S> Observable<'or, 'sub, T, E> for ConnectableObservab
 where
     S: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         self.subject.subscribe(observer)
     }
 }

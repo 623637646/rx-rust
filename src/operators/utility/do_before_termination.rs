@@ -66,7 +66,10 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnOnce(&Termination<E>) + NecessarySendSync + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         self.source
             .hook_on_termination(move |observer, termination| {
                 (self.callback)(&termination);

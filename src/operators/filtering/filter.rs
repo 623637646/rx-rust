@@ -54,7 +54,10 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnMut(&T) -> bool + NecessarySendSync + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let observer = FilterObserver {
             observer,
             callback: self.callback,

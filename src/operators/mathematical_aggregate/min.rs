@@ -52,7 +52,10 @@ where
     T: PartialOrd + NecessarySendSync + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let observer = MinObserver {
             observer,
             min: None,

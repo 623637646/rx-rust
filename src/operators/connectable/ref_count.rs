@@ -75,7 +75,10 @@ where
     OE: Observable<'or, 'sub, T, E>,
     S: Observable<'or, 'sub, T, E> + Observer<T, E> + Clone + NecessarySendSync + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let sub = self.source.clone().subscribe(observer);
         self.state.lock_mut(|mut lock| {
             match &mut *lock {

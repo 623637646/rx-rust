@@ -56,7 +56,10 @@ where
     OE: Observable<'or, 'sub, T, E>,
     T: NecessarySendSync + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let observer = DefaultIfEmptyObserver {
             observer,
             default_value: Some(self.default_value),

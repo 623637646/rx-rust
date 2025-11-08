@@ -100,7 +100,9 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + NecessarySendSync + 'or,
+        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>
+        + NecessarySendSync
+        + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |mut observer| {
             let subject = PublishSubject::default();
