@@ -1,3 +1,4 @@
+pub mod backpressure;
 pub mod combining;
 pub mod conditional_boolean;
 pub mod connectable;

@@ -5,6 +5,10 @@ use crate::{
         Observer, Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver,
     },
     operators::{
+        backpressure::{
+            on_backpressure::OnBackpressure, on_backpressure_buffer::OnBackpressureBuffer,
+            on_backpressure_latest::OnBackpressureLatest,
+        },
         combining::{
             combine_latest::CombineLatest, concat::Concat, concat_all::ConcatAll, merge::Merge,
             merge_all::MergeAll, start_with::StartWith, switch::Switch, zip::Zip,
@@ -454,6 +458,21 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     /// Schedules downstream observation on the provided scheduler.
     fn observe_on<S>(self, scheduler: S) -> ObserveOn<Self, S> {
         ObserveOn::new(self, scheduler)
+    }
+
+    fn on_backpressure<F>(self, receiving_strategy: F) -> OnBackpressure<Self, F>
+    where
+        F: FnMut(&mut Vec<T>, T),
+    {
+        OnBackpressure::new(self, receiving_strategy)
+    }
+
+    fn on_backpressure_buffer(self) -> OnBackpressureBuffer<Self> {
+        OnBackpressureBuffer::new(self)
+    }
+
+    fn on_backpressure_latest(self) -> OnBackpressureLatest<Self> {
+        OnBackpressureLatest::new(self)
     }
 
     /// Multicasts the source using a `PublishSubject`.
