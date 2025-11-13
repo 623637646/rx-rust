@@ -85,10 +85,12 @@
   * fd7a1e528b7c241bcc21617c8c243d421fc6252f  
     * RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final      119.88s user 20.74s system 289% cpu 48.605 total  
   * 5b827281fe3626ce45fd0771e2c1ebadf05f2166  
-    * RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final      183.86s user 28.95s system 372% cpu 57.055 total  
+    * RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final      183.86s user 28.95s system 372% cpu 57.055 total
+  * 6dd8a84347006e2525c49ef3eaf5bb281535880f
+    * RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final      200.73s user 29.72s system 340% cpu 1:07.67 total  
 * reset; time RUST_BACKTRACE=1 cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features default,multi-threaded,single-threaded nextest run --no-fail-fast --failure-output final --status-level=fail
 * cargo test --doc --features tokio-scheduler
-* cargo tarpaulin --out Html  
+* cargo tarpaulin --out Html --features tokio-scheduler  
 * cargo tarpaulin --out Html -- --test utils::unique_key_store  
 * cargo doc --open  
 * cargo expand
