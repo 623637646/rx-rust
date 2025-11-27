@@ -4,6 +4,7 @@ use crate::{
     safe_lock,
     utils::types::{Mutable, MutableHelper, Shared},
 };
+use educe::Educe;
 
 enum SubState<'sub> {
     Initialized,
@@ -45,6 +46,8 @@ where
     Subscription::new_with_disposal(sub_state)
 }
 
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct UnsubAfterTerminationObserver<'sub, OR> {
     observer: OR,
     sub_state: Shared<Mutable<SubState<'sub>>>,

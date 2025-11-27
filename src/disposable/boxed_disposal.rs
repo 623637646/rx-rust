@@ -23,3 +23,9 @@ impl Disposable for BoxedDisposal<'_> {
         self.0();
     }
 }
+
+impl std::fmt::Debug for BoxedDisposal<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(std::any::type_name::<Self>())
+    }
+}

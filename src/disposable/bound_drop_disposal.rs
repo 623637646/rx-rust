@@ -1,6 +1,9 @@
 use crate::disposable::Disposable;
+use educe::Educe;
 
 /// A disposal that calls the `dispose` method of a `Disposable` when dropped.
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct BoundDropDisposal<T>(Option<T>)
 where
     T: Disposable;

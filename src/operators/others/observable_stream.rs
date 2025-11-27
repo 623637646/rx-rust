@@ -4,6 +4,7 @@ use crate::{
     observer::{Observer, Termination},
     utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared},
 };
+use educe::Educe;
 use futures::Stream;
 use std::{
     collections::VecDeque,
@@ -36,6 +37,8 @@ struct ObservableStreamContext<T> {
 ///     assert_eq!(values, vec![1, 2, 3]);
 /// });
 /// ```
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct ObservableStream<'sub, T, OE> {
     source: Option<OE>,
     sub: Option<Subscription<'sub>>,

@@ -35,8 +35,13 @@ cfg_if::cfg_if! {
     } else {
         use std::sync::{Arc, Mutex, MutexGuard};
         use std::ops::Deref;
+        use educe::Educe;
+
         pub type Shared<T> = Arc<T>;
         pub type Mutable<T> = Mutex<T>;
+
+        #[derive(Educe)]
+        #[educe(Debug)]
         pub struct ReadOnlyMutexGuard<'a, T: ?Sized + 'a>(MutexGuard<'a, T>);
         impl<'a, T> ReadOnlyMutexGuard<'a, T> {
             pub fn new(guard: MutexGuard<'a, T>) -> Self {

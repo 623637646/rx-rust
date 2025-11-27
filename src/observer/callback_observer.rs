@@ -39,3 +39,9 @@ impl<T, E> Observer<T, E> for CallbackObserver<'_, T, E> {
         (self.on_termination)(termination);
     }
 }
+
+impl<T, E> std::fmt::Debug for CallbackObserver<'_, T, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(std::any::type_name::<Self>())
+    }
+}

@@ -36,3 +36,9 @@ impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BoxedObservable<'or, 'sub,
         self.0(BoxedObserver::new(observer))
     }
 }
+
+impl<T, E> std::fmt::Debug for BoxedObservable<'_, '_, '_, T, E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(std::any::type_name::<Self>())
+    }
+}
