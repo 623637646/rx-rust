@@ -1,5 +1,5 @@
 use crate::disposable::callback_disposal::CallbackDisposal;
-use crate::utils::types::{NecessarySendSync, Shared};
+use crate::utils::types::NecessarySendSync;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -47,7 +47,7 @@ pub enum DebugEvent<'a, T, E> {
 pub struct Debug<OE, C, F> {
     source: OE,
     context: C,
-    callback: Shared<F>,
+    callback: F,
 }
 
 impl<OE, C, F> Debug<OE, C, F> {
@@ -58,7 +58,7 @@ impl<OE, C, F> Debug<OE, C, F> {
         Self {
             source,
             context,
-            callback: Shared::new(callback),
+            callback,
         }
     }
 }
@@ -75,14 +75,14 @@ impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
         Self {
             source,
             context: label,
-            callback: Shared::new(|label, event| match event {
+            callback: |label, event| match event {
                 DebugEvent::OnNext(value) => println!("[{}]: OnNext({:?})", label, value),
                 DebugEvent::OnTermination(termination) => {
                     println!("[{}]: OnTermination({:?})", label, termination)
                 }
                 DebugEvent::Subscribed => println!("[{}]: Subscription", label),
                 DebugEvent::Disposed => println!("[{}]: Dispose", label),
-            }),
+            },
         }
     }
 }
@@ -91,7 +91,7 @@ impl<'or, 'sub, T, E, OE, C, F> Observable<'or, 'sub, T, E> for Debug<OE, C, F>
 where
     OE: Observable<'or, 'sub, T, E>,
     C: Clone + NecessarySendSync + 'or + 'sub,
-    F: Fn(C, DebugEvent<'_, T, E>) + NecessarySendSync + 'or + 'sub,
+    F: Fn(C, DebugEvent<'_, T, E>) + Clone + NecessarySendSync + 'or + 'sub,
 {
     fn subscribe(
         self,
@@ -113,7 +113,7 @@ where
 struct DebugObserver<OR, C, F> {
     observer: OR,
     context: C,
-    callback: Shared<F>,
+    callback: F,
 }
 
 impl<T, E, OR, C, F> Observer<T, E> for DebugObserver<OR, C, F>
