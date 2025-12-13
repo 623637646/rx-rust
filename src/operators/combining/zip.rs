@@ -1,5 +1,5 @@
 use crate::safe_lock_option_observer;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -57,15 +57,15 @@ impl<OE1, OE2> Zip<OE1, OE2> {
 
 impl<'or, 'sub, T1, T2, E, OE1, OE2> Observable<'or, 'sub, (T1, T2), E> for Zip<OE1, OE2>
 where
-    T1: NecessarySendSync + 'or,
-    T2: NecessarySendSync + 'or,
+    T1: NecessarySend + 'or,
+    T2: NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T1, E>,
     OE2: Observable<'or, 'sub, T2, E>,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<(T1, T2), E> + NecessarySendSync + 'or,
+        observer: impl Observer<(T1, T2), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));

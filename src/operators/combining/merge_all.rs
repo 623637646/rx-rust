@@ -1,6 +1,6 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -83,7 +83,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(MergeAllContext {
@@ -119,7 +119,7 @@ struct MergeAllObserver<'sub, T, OR> {
 
 impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for MergeAllObserver<'sub, T, OR>
 where
-    OR: Observer<T, E> + NecessarySendSync + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {

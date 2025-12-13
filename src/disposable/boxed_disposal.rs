@@ -1,4 +1,4 @@
-use crate::{disposable::Disposable, utils::types::NecessarySendSync};
+use crate::{disposable::Disposable, utils::types::NecessarySend};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
@@ -11,7 +11,7 @@ cfg_if::cfg_if! {
 }
 
 impl<'dis> BoxedDisposal<'dis> {
-    pub fn new(disposal: impl Disposable + NecessarySendSync + 'dis) -> Self {
+    pub fn new(disposal: impl Disposable + NecessarySend + 'dis) -> Self {
         Self(Box::new(|| {
             disposal.dispose();
         }))

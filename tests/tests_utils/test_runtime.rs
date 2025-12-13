@@ -1,6 +1,6 @@
 use crate::tests_utils::join_handle::JoinHandle;
 use educe::Educe;
-use rx_rust::utils::types::NecessarySendSync;
+use rx_rust::utils::types::NecessarySend;
 use rx_rust::utils::types::Shared;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
@@ -68,8 +68,8 @@ cfg_if::cfg_if! {
 impl TestRuntime {
     pub(crate) fn spawn<FU>(&self, future: FU) -> JoinHandle<FU>
     where
-        FU: Future + NecessarySendSync + 'static,
-        FU::Output: NecessarySendSync + 'static,
+        FU: Future + NecessarySend + 'static,
+        FU::Output: NecessarySend + 'static,
     {
         let (join_handle, future) = JoinHandle::wrap(future);
         cfg_if::cfg_if! {

@@ -3,7 +3,7 @@ use rx_rust::{
     disposable::{Disposable, callback_disposal::CallbackDisposal},
     safe_lock_option,
     scheduler::Scheduler,
-    utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared},
+    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 use std::{cell::Cell, time::Duration};
 
@@ -18,8 +18,8 @@ pub(crate) fn get_thread_name() -> Option<&'static str> {
 impl Scheduler for TestRuntime {
     fn schedule_future(
         &self,
-        future: impl Future<Output = ()> + NecessarySendSync + 'static,
-    ) -> impl Disposable + NecessarySendSync + 'static {
+        future: impl Future<Output = ()> + NecessarySend + 'static,
+    ) -> impl Disposable + NecessarySend + 'static {
         // Use this Fn() to avoid sub multiple times.
         let self_cloned = self.clone();
         let count_sub = Shared::new(Mutable::new(Some(move || {
@@ -103,7 +103,7 @@ impl Scheduler for TestRuntime {
         })
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySendSync + 'static {
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static {
         cfg_if::cfg_if! {
             if #[cfg(feature = "local-pool-scheduler")] {
                 self.spawner.sleep(duration)

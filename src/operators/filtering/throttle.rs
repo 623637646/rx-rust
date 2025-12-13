@@ -2,7 +2,7 @@ use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::subscription::Subscription;
 use crate::safe_lock_option_disposable;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -89,7 +89,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'static,
+        observer: impl Observer<T, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
         let disposal = Shared::new(Mutable::new(None));
         self.source.subscribe(ThrottleObserver {

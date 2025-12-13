@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
 use educe::Educe;
 
@@ -52,7 +52,7 @@ where
 {
     fn subscribe(
         self,
-        mut observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        mut observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         for value in self.values.into_iter() {
             observer.on_next(value);

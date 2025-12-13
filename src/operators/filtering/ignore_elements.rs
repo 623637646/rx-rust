@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::{Observable, observable_ext::ObservableExt},
@@ -50,7 +50,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         self.source.filter(|_| false).subscribe(observer)
     }

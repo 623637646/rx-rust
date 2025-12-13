@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -52,11 +52,11 @@ impl<OE, F> SkipWhile<OE, F> {
 impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for SkipWhile<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&T) -> bool + NecessarySendSync + 'or,
+    F: FnMut(&T) -> bool + NecessarySend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let observer = SkipWhileObserver {
             observer,

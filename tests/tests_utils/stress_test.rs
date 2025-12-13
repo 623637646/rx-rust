@@ -1,10 +1,10 @@
 use crate::tests_utils::test_runtime::{TestRuntime, block_on};
-use rx_rust::utils::types::NecessarySendSync;
+use rx_rust::utils::types::NecessarySend;
 
 pub(crate) fn stress_test<FU>(
-    test: impl FnOnce(TestRuntime, usize) -> FU + Clone + NecessarySendSync + 'static,
+    test: impl FnOnce(TestRuntime, usize) -> FU + Clone + NecessarySend + 'static,
 ) where
-    FU: Future<Output = ()> + NecessarySendSync + 'static,
+    FU: Future<Output = ()> + NecessarySend + 'static,
 {
     block_on(|runtime| async move {
         const COUNT: usize = 100000;

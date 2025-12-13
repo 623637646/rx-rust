@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -65,7 +65,7 @@ pub struct FromStream<SM, S> {
 impl<SM, S> FromStream<SM, S> {
     pub fn new(stream: SM, scheduler: S) -> Self
     where
-        SM: Stream + NecessarySendSync + Unpin + 'static,
+        SM: Stream + NecessarySend + Unpin + 'static,
     {
         Self { stream, scheduler }
     }
@@ -73,12 +73,12 @@ impl<SM, S> FromStream<SM, S> {
 
 impl<'sub, T, SM, S> Observable<'static, 'sub, T, Infallible> for FromStream<SM, S>
 where
-    SM: Stream<Item = T> + NecessarySendSync + Unpin + 'static,
+    SM: Stream<Item = T> + NecessarySend + Unpin + 'static,
     S: Scheduler,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, Infallible> + NecessarySendSync + 'static,
+        observer: impl Observer<T, Infallible> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
         let mut observer = Some(observer);
         let disposal = self

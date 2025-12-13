@@ -1,5 +1,5 @@
 use super::from_iter::FromIter;
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
 use educe::Educe;
 use std::{convert::Infallible, ops::RangeBounds};
@@ -45,7 +45,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, Infallible> + NecessarySendSync + 'or,
+        observer: impl Observer<T, Infallible> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         FromIter::new(self.0).subscribe(observer)
     }

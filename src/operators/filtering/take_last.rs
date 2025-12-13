@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -49,13 +49,13 @@ impl<OE> TakeLast<OE> {
 
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for TakeLast<OE>
 where
-    T: NecessarySendSync + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             self.source.subscribe(TakeLastObserver {

@@ -1,4 +1,4 @@
-use crate::utils::types::{Mutable, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -92,8 +92,8 @@ impl<OE, OE1> Window<OE, OE1> {
 impl<'or, 'sub, T, E, OE, OE1>
     Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for Window<OE, OE1>
 where
-    T: Clone + NecessarySendSync + 'or,
-    E: Clone + NecessarySendSync + 'or,
+    T: Clone + NecessarySend + 'or,
+    E: Clone + NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
@@ -101,7 +101,7 @@ where
     fn subscribe(
         self,
         observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>
-        + NecessarySendSync
+        + NecessarySend
         + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |mut observer| {

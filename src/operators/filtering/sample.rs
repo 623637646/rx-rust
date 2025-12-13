@@ -1,4 +1,4 @@
-use crate::utils::types::{Mutable, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -70,14 +70,14 @@ impl<OE, OE1> Sample<OE, OE1> {
 
 impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Sample<OE, OE1>
 where
-    T: NecessarySendSync + 'or,
+    T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));

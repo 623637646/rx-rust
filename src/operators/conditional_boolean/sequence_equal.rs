@@ -1,5 +1,5 @@
 use crate::safe_lock_option_observer;
-use crate::utils::types::{MarkerType, Mutable, MutableHelper, NecessarySendSync, Shared};
+use crate::utils::types::{MarkerType, Mutable, MutableHelper, NecessarySend, Shared};
 use crate::utils::unsub_after_termination::subscribe_unsub_after_termination;
 use crate::{
     disposable::subscription::Subscription,
@@ -63,14 +63,14 @@ impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
 
 impl<'or, 'sub, T, E, OE1, OE2> Observable<'or, 'sub, bool, E> for SequenceEqual<T, OE1, OE2>
 where
-    T: PartialEq + NecessarySendSync + 'or,
+    T: PartialEq + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
     OE2: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<bool, E> + NecessarySendSync + 'or,
+        observer: impl Observer<bool, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));

@@ -3,7 +3,7 @@ use crate::{
     observable::Observable,
     observer::Observer,
     operators::backpressure::on_backpressure::{OnBackpressure, RequestCallbackType},
-    utils::types::NecessarySendSync,
+    utils::types::NecessarySend,
 };
 use educe::Educe;
 
@@ -62,13 +62,13 @@ impl<OE> OnBackpressureBuffer<OE> {
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (Vec<T>, RequestCallbackType<'or>), E>
     for OnBackpressureBuffer<OE>
 where
-    T: NecessarySendSync + 'or + 'sub,
-    E: NecessarySendSync + 'or + 'sub,
+    T: NecessarySend + 'or + 'sub,
+    E: NecessarySend + 'or + 'sub,
     OE: Observable<'or, 'sub, T, E>,
 {
     fn subscribe(
         self,
-        observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + NecessarySendSync + 'or,
+        observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         OnBackpressure::new(self.source, |buffer, value| {
             buffer.push(value);

@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::{Observable, observable_ext::ObservableExt},
@@ -59,11 +59,11 @@ impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoAfterNext<OE, F>
 where
     T: Clone,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(T) + NecessarySendSync + 'or,
+    F: FnMut(T) + NecessarySend + 'or,
 {
     fn subscribe(
         mut self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         self.source
             .hook_on_next(move |observer, value| {

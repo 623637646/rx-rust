@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -50,12 +50,12 @@ impl<OE> Sum<OE> {
 
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for Sum<OE>
 where
-    T: AddAssign + NecessarySendSync + 'or,
+    T: AddAssign + NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let observer = SumObserver {
             observer,

@@ -1,7 +1,7 @@
 use super::ref_count::RefCount;
 use crate::observable::Observable;
 use crate::safe_lock_option;
-use crate::utils::types::{Mutable, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
 
@@ -75,7 +75,7 @@ impl<OE, S> ConnectableObservable<OE, S> {
     pub fn connect<'or, 'sub, T, E>(self) -> Subscription<'sub>
     where
         OE: Observable<'or, 'sub, T, E>,
-        S: Observer<T, E> + NecessarySendSync + 'or,
+        S: Observer<T, E> + NecessarySend + 'or,
     {
         safe_lock_option!(take: self.source)
             .expect("Already connected")
@@ -93,7 +93,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         self.subject.subscribe(observer)
     }
