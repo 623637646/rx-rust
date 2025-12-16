@@ -84,10 +84,7 @@ where
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'sub,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(ConcatAllContext {
                 pending_observables: VecDeque::new(),

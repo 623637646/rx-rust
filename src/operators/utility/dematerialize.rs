@@ -52,10 +52,7 @@ where
     OE: Observable<'or, 'sub, Event<T, E>, Infallible>,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             self.0.subscribe(DematerializeObserver(Some(observer)))
         })

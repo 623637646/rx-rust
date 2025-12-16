@@ -53,10 +53,7 @@ impl<'or, 'sub, T, E, F> Observable<'or, 'sub, T, E> for Create<F>
 where
     F: FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub>,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.0(BoxedObserver::new(observer))
     }
 }

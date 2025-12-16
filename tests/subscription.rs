@@ -8,6 +8,7 @@ use tests_utils::test_struct::TestStruct;
 struct TestDisposal {
     disposed: Shared<AtomicBool>,
 }
+
 impl Disposable for TestDisposal {
     fn dispose(self) {
         assert!(!self.disposed.load(Ordering::SeqCst));

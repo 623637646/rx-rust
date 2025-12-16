@@ -64,10 +64,7 @@ where
     OE: Observable<'or, 'sub, T1, E>,
     F: FnMut(T, T1) -> T + NecessarySend + 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = ReduceObserver {
             observer,
             value: Some(self.initial_value),

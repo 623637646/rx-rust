@@ -57,10 +57,7 @@ where
     OE2: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let sub_2 = Shared::new(Mutable::new(None));
         let onserver = ConcatObserver {
             observer,

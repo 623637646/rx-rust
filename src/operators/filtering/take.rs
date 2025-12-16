@@ -51,10 +51,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
             Subscription::default()

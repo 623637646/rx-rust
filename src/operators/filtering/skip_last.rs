@@ -51,10 +51,7 @@ where
     T: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.source.subscribe(SkipLastObserver {
             observer,
             count: self.count,

@@ -71,10 +71,7 @@ where
     F: FnMut(&T) -> K + NecessarySend + 'or,
     K: Eq + NecessarySend + 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = DistinctUntilChangedObserver {
             observer,
             key_selector: self.key_selector,

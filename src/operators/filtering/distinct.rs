@@ -72,10 +72,7 @@ where
     F: FnMut(&T) -> K + NecessarySend + 'or,
     K: Eq + Hash + NecessarySend + 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = DistinctObserver {
             observer,
             key_selector: self.key_selector,

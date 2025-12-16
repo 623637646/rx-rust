@@ -54,10 +54,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnOnce(),
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.source
             .hook_on_subscription(move |observable, observer| {
                 let sub = observable.subscribe(observer);

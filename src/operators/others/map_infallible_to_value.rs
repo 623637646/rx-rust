@@ -53,10 +53,7 @@ where
     T: 'or,
     OE: Observable<'or, 'sub, Infallible, E>,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = MapInfallibleToValueObserver {
             observer,
             _marker: PhantomData,

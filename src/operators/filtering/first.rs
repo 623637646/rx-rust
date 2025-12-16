@@ -49,10 +49,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         // Or `self.source.take(1).subscribe(observer)`
         self.source.element_at(0).subscribe(observer)
     }
