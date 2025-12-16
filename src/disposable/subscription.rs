@@ -20,12 +20,13 @@ impl<'dis> Subscription<'dis> {
     }
 
     pub fn new_with_disposal(disposable: impl Disposable + NecessarySend + 'dis) -> Self {
-        Self(Vec::default()) + BoundDropDisposal::new(BoxedDisposal::new(disposable))
+        Self(vec![BoundDropDisposal::new(BoxedDisposal::new(disposable))])
     }
 
     pub fn new_with_disposal_callback(callback: impl FnOnce() + NecessarySend + 'dis) -> Self {
-        Self(Vec::default())
-            + BoundDropDisposal::new(BoxedDisposal::new(CallbackDisposal::new(callback)))
+        Self(vec![BoundDropDisposal::new(BoxedDisposal::new(
+            CallbackDisposal::new(callback),
+        ))])
     }
 
     pub fn append_disposable(&mut self, disposable: impl Disposable + NecessarySend + 'dis) {
