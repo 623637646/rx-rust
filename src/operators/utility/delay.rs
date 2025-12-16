@@ -8,7 +8,7 @@ use crate::{
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
-use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
+use crate::{safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::{
     collections::VecDeque,

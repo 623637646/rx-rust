@@ -5,7 +5,7 @@ use crate::{
     observer::{Observer, Termination},
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
-use crate::{safe_lock, safe_lock_option, safe_lock_option_observer, safe_lock_vec};
+use crate::{safe_lock, safe_lock_option_observer, safe_lock_vec};
 use educe::Educe;
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, when a `boundary` Observable emits an item.
