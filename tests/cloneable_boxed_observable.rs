@@ -2,15 +2,19 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
-use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::subscription::Subscription;
+use rx_rust::safe_lock_option;
 use rx_rust::scheduler::Scheduler;
+use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{Observable, boxed_observable::BoxedObservable, observable_ext::ObservableExt},
+    observable::{
+        Observable, cloneable_boxed_observable::CloneableBoxedObservable,
+        observable_ext::ObservableExt,
+    },
     observer::{Observer, Termination},
-    operators::creating::{create::Create, just::Just},
+    operators::creating::create::Create,
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
@@ -22,7 +26,7 @@ fn test_completed() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone().into_boxed();
+    let observable = subject.clone().into_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -45,7 +49,7 @@ fn test_error() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone().into_boxed();
+    let observable = subject.clone().into_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -67,8 +71,8 @@ fn test_unsubscribe() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable_1 = subject.clone().into_boxed();
-    let observable_2 = subject.clone().into_boxed();
+    let observable_1 = subject.clone().into_cloneable_boxed();
+    let observable_2 = observable_1.clone();
 
     let subscription_1 = observable_1.subscribe(observer_1);
     let _subscription_2 = observable_2.subscribe(observer_2);
@@ -111,7 +115,7 @@ fn test_ref() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone().into_boxed();
+    let observable = subject.clone().into_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -127,36 +131,13 @@ fn test_ref() {
 }
 
 #[test]
-fn test_mut_ref() {
-    let mut value = 111;
-
-    let observable = Just::new(&mut value);
-    let observable = observable.into_boxed();
-
-    let (checker, observer) = Checker::new();
-
-    let (mut on_next, on_termination) = observer.into_callbacks();
-    let _subscription = observable.subscribe_with_callback(
-        |value| {
-            on_next(*value);
-            *value *= 2;
-        },
-        on_termination,
-    );
-
-    assert_eq!(checker.values(), [111]);
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(value, 222);
-}
-
-#[test]
 fn test_async() {
     block_on(|runtime| async move {
         let subject = PublishSubject::default();
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = subject.clone().into_boxed();
+        let observable = subject.clone().into_cloneable_boxed();
 
         let subscription = runtime
             .spawn(async move { observable.subscribe(observer) })
@@ -202,8 +183,8 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable_1 = subject.clone().into_boxed();
-    let observable_2 = subject.clone().into_boxed();
+    let observable_1 = subject.clone().into_cloneable_boxed();
+    let observable_2 = subject.clone().into_cloneable_boxed();
 
     let _subscription_1 = observable_1.subscribe(observer_1);
 
@@ -229,21 +210,19 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    let (mut sender, observable, channel_checker) = test_channel();
+    let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = observable.into_boxed().take(1);
+    let observable = subject.clone().into_cloneable_boxed().take(1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    subject.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::<Infallible>::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -252,7 +231,10 @@ fn test_multiple_operation() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone().into_boxed().into_boxed();
+    let observable = subject
+        .clone()
+        .into_cloneable_boxed()
+        .into_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -275,7 +257,7 @@ fn test_without_convenient_api() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = BoxedObservable::new(subject.clone());
+    let observable = CloneableBoxedObservable::new(subject.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -311,7 +293,7 @@ fn test_lifetime_sub() {
             })
         });
 
-        let observable = observable.into_boxed();
+        let observable = observable.into_cloneable_boxed();
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -322,18 +304,18 @@ fn test_lifetime_sub() {
 fn test_lifetime_or() {
     // OK
     let life_marker_2 = TestStruct;
-    let mut life_marker_1 = None;
+    let life_marker_1 = Shared::new(Mutable::new(None));
 
     // Error
-    // let mut life_marker_1 = None;
+    // let life_marker_1 = Shared::new(Mutable::new(None));
     // let life_marker_2 = TestStruct;
 
     {
         let observable = Create::new(|observer| {
-            life_marker_1 = Some(observer);
+            safe_lock_option!(replace: life_marker_1, observer);
             Subscription::default()
         });
-        let observable = observable.into_boxed();
+        let observable = observable.into_cloneable_boxed();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(&life_marker_2);
@@ -359,7 +341,7 @@ fn test_lifetime_oe() {
             Subscription::default()
         });
 
-        _observable = create.into_boxed();
+        _observable = create.into_cloneable_boxed();
     }
 }
 
@@ -367,7 +349,7 @@ fn test_lifetime_oe() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.into_boxed();
+    let observable = subject.into_cloneable_boxed();
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -378,7 +360,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.into_boxed();
+    let observable = subject.into_cloneable_boxed();
 
     observable.filter(|_| true);
 }

@@ -1,4 +1,5 @@
 pub mod boxed_observable;
+pub mod cloneable_boxed_observable;
 pub mod observable_ext;
 
 use crate::{

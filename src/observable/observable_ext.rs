@@ -1,6 +1,7 @@
 use super::{Observable, boxed_observable::BoxedObservable};
 use crate::{
     disposable::subscription::Subscription,
+    observable::cloneable_boxed_observable::CloneableBoxedObservable,
     observer::{
         Observer, Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver,
     },
@@ -382,6 +383,16 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         Self: NecessarySendSync + 'oe,
     {
         BoxedObservable::new(self)
+    }
+
+    /// Boxes the observable and makes it cloneable, erasing its concrete type while preserving lifetime bounds.
+    fn into_cloneable_boxed<'oe>(self) -> CloneableBoxedObservable<'or, 'sub, 'oe, T, E>
+    where
+        T: 'or,
+        E: 'or,
+        Self: NecessarySendSync + Clone + 'oe,
+    {
+        CloneableBoxedObservable::new(self)
     }
 
     #[cfg(feature = "futures")]

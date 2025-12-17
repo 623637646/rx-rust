@@ -56,7 +56,7 @@
           2. test_immediate_completed  
           3. test_immediate_error  
       13. Using schedule(: Scheduler|::from_stream\\() 有的scheduler没有test_immediate_next （如 from future）  
-          1. TESTS IN USING LOCK  
+          1. ALL TESTS IN "Using lock"  
           2. test_complete_after_next  
           3. test_error_after_next  
           4. test_unsub_after_next  
