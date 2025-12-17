@@ -16,7 +16,7 @@ cfg_if::cfg_if! {
     } else {
         /// Callback handed to the downstream observer so it can request the next chunk
         /// once it finishes processing the current batch.
-        pub type RequestCallbackType<'cb> = Box<dyn FnOnce() + Send + 'cb>;
+        pub type RequestCallbackType<'cb> = Box<dyn FnOnce() + Send + Sync + 'cb>;
     }
 }
 

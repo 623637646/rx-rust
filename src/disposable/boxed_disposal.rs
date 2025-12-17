@@ -6,7 +6,7 @@ cfg_if::cfg_if! {
         pub struct BoxedDisposal<'dis>(Box<dyn FnOnce() + 'dis>);
     } else {
         /// Type-erased disposal for multi-threaded builds to handle this problem <https://stackoverflow.com/q/46620790/9315497>
-        pub struct BoxedDisposal<'dis>(Box<dyn FnOnce() + Send + 'dis>);
+        pub struct BoxedDisposal<'dis>(Box<dyn FnOnce() + Send + Sync + 'dis>);
     }
 }
 
