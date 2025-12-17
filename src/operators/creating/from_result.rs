@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -41,7 +41,7 @@ impl<T, E> FromResult<T, E> {
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for FromResult<T, E> {
     fn subscribe(
         self,
-        mut observer: impl Observer<T, E> + NecessarySend + 'or,
+        mut observer: impl Observer<T, E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         match self.0 {
             Ok(value) => {

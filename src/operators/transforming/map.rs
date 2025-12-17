@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -59,9 +59,9 @@ impl<T0, OE, F> Map<T0, OE, F> {
 impl<'or, 'sub, T0, T, E, OE, F> Observable<'or, 'sub, T, E> for Map<T0, OE, F>
 where
     OE: Observable<'or, 'sub, T0, E>,
-    F: FnMut(T0) -> T + NecessarySend + 'or,
+    F: FnMut(T0) -> T + NecessarySendSync + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
         let observer = MapObserver {
             observer,
             callback: self.callback,

@@ -1,5 +1,5 @@
 use crate::disposable::Disposable;
-use crate::utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::types::{MutGuard, Mutable, MutableHelper, NecessarySendSync, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -80,14 +80,14 @@ impl<OE, F> OnBackpressure<OE, F> {
 impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, (Vec<T>, RequestCallbackType<'or>), E>
     for OnBackpressure<OE, F>
 where
-    T: NecessarySend + 'or + 'sub,
-    E: NecessarySend + 'or + 'sub,
+    T: NecessarySendSync + 'or + 'sub,
+    E: NecessarySendSync + 'or + 'sub,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&mut Vec<T>, T) + NecessarySend + 'or,
+    F: FnMut(&mut Vec<T>, T) + NecessarySendSync + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+        observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         let context = Shared::new(Mutable::new(OnBackpressureContext {
             buffer: Some(Vec::new()),
@@ -123,9 +123,9 @@ struct OnBackpressureObserver<T, E, OR, F> {
 
 impl<'cb, T, E, OR, F> Observer<T, E> for OnBackpressureObserver<T, E, OR, F>
 where
-    T: NecessarySend + 'cb,
-    E: NecessarySend + 'cb,
-    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
+    T: NecessarySendSync + 'cb,
+    E: NecessarySendSync + 'cb,
+    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySendSync + 'cb,
     F: FnMut(&mut Vec<T>, T),
 {
     fn on_next(&mut self, value: T) {
@@ -157,9 +157,9 @@ fn emit<'cb, T, E, OR>(
     observer: Shared<Mutable<Option<OR>>>,
     context: Shared<Mutable<OnBackpressureContext<T, E>>>,
 ) where
-    T: NecessarySend + 'cb,
-    E: NecessarySend + 'cb,
-    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
+    T: NecessarySendSync + 'cb,
+    E: NecessarySendSync + 'cb,
+    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySendSync + 'cb,
 {
     let implementation = |mut lock: MutGuard<'_, OnBackpressureContext<T, E>>| {
         if let Some(buffer) = &mut lock.buffer {

@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -99,15 +99,15 @@ impl<OE, F, K> GroupBy<OE, F, K> {
 impl<'or, 'sub, T, E, OE, F, K>
     Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for GroupBy<OE, F, K>
 where
-    T: Clone + NecessarySend + 'or,
-    E: Clone + NecessarySend + 'or,
+    T: Clone + NecessarySendSync + 'or,
+    E: Clone + NecessarySendSync + 'or,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(T) -> K + NecessarySend + 'or,
-    K: Eq + Hash + NecessarySend + 'or,
+    F: FnMut(T) -> K + NecessarySendSync + 'or,
+    K: Eq + Hash + NecessarySendSync + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + NecessarySend + 'or,
+        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         let observer = GroupByObserver {
             observer,
@@ -126,8 +126,8 @@ struct GroupByObserver<'or, T, E, OR, F, K> {
 
 impl<'or, T, E, OR, F, K> Observer<T, E> for GroupByObserver<'or, T, E, OR, F, K>
 where
-    T: Clone + NecessarySend,
-    E: Clone + NecessarySend,
+    T: Clone + NecessarySendSync,
+    E: Clone + NecessarySendSync,
     OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
     F: FnMut(T) -> K,
     K: Eq + Hash,

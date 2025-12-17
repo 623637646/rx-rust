@@ -1,4 +1,4 @@
-use crate::utils::types::{MarkerType, NecessarySend};
+use crate::utils::types::{MarkerType, NecessarySendSync};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -58,7 +58,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<usize, E> + NecessarySend + 'or,
+        observer: impl Observer<usize, E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         let observer = CountObserver { observer, count: 0 };
         self.source.subscribe(observer)

@@ -2,7 +2,7 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
+    utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared},
 };
 use educe::Educe;
 use futures::Stream;
@@ -64,7 +64,7 @@ impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
 
 impl<'or, 'sub, T, OE> Stream for ObservableStream<'sub, T, OE>
 where
-    T: NecessarySend + 'or,
+    T: NecessarySendSync + 'or,
     OE: Observable<'or, 'sub, T, Infallible> + Unpin,
 {
     type Item = T;

@@ -2,7 +2,7 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::types::NecessarySend,
+    utils::types::NecessarySendSync,
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -59,7 +59,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<(T, Duration), E> + NecessarySend + 'or,
+        observer: impl Observer<(T, Duration), E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         let observer = TimeIntervalObserver {
             observer,

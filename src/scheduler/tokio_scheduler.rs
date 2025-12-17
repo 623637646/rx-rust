@@ -1,15 +1,15 @@
 use super::Scheduler;
-use crate::{disposable::Disposable, utils::types::NecessarySend};
+use crate::{disposable::Disposable, utils::types::NecessarySendSync};
 use std::time::Duration;
 
 /// Leverages a Tokio runtime handle to drive scheduled tasks.
 impl Scheduler for tokio::runtime::Handle {
     fn schedule_periodically(
         &self,
-        mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
+        mut task: impl FnMut(usize) -> bool + NecessarySendSync + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> impl Disposable + NecessarySend + 'static {
+    ) -> impl Disposable + NecessarySendSync + 'static {
         let this = self.clone();
         self.schedule_future(async move {
             if let Some(delay) = delay {
@@ -30,12 +30,12 @@ impl Scheduler for tokio::runtime::Handle {
 
     fn schedule_future(
         &self,
-        future: impl Future<Output = ()> + NecessarySend + 'static,
-    ) -> impl Disposable + NecessarySend + 'static {
+        future: impl Future<Output = ()> + NecessarySendSync + 'static,
+    ) -> impl Disposable + NecessarySendSync + 'static {
         self.spawn(future)
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static {
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySendSync + 'static {
         tokio::time::sleep(duration)
     }
 }

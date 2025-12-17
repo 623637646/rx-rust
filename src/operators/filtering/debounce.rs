@@ -1,6 +1,6 @@
 use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -80,13 +80,13 @@ impl<OE, S> Debounce<OE, S> {
 
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Debounce<OE, S>
 where
-    T: NecessarySend + 'static,
+    T: NecessarySendSync + 'static,
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySend + 'static,
+        observer: impl Observer<T, E> + NecessarySendSync + 'static,
     ) -> Subscription<'sub> {
         let context = Shared::new(Mutable::new(DebounceContext {
             current_value: None,
@@ -121,8 +121,8 @@ struct DebounceObserver<T, OR, S> {
 
 impl<T, E, OR, S> Observer<T, E> for DebounceObserver<T, OR, S>
 where
-    T: NecessarySend + 'static,
-    OR: Observer<T, E> + NecessarySend + 'static,
+    T: NecessarySendSync + 'static,
+    OR: Observer<T, E> + NecessarySendSync + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {

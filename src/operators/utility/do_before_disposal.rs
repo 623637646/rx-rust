@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::{
     disposable::subscription::Subscription,
     observable::{Observable, observable_ext::ObservableExt},
@@ -55,9 +55,9 @@ where
     T: 'or,
     E: 'or,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnOnce() + NecessarySend + 'sub,
+    F: FnOnce() + NecessarySendSync + 'sub,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
         self.source
             .hook_on_subscription(move |observable, observer| {
                 Subscription::new_with_disposal_callback(self.callback)

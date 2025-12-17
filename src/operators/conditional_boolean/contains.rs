@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::utils::unsub_after_termination::subscribe_unsub_after_termination;
 use crate::{
     disposable::subscription::Subscription,
@@ -52,12 +52,12 @@ impl<T, OE> Contains<T, OE> {
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, bool, E> for Contains<T, OE>
 where
     OE: Observable<'or, 'sub, T, E>,
-    T: PartialEq + NecessarySend + 'or,
+    T: PartialEq + NecessarySendSync + 'or,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<bool, E> + NecessarySend + 'or,
+        observer: impl Observer<bool, E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = ContainsObserver {

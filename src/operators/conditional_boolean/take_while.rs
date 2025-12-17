@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::NecessarySendSync;
 use crate::utils::unsub_after_termination::subscribe_unsub_after_termination;
 use crate::{
     disposable::subscription::Subscription,
@@ -53,10 +53,10 @@ impl<OE, F> TakeWhile<OE, F> {
 impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for TakeWhile<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&T) -> bool + NecessarySend + 'or,
+    F: FnMut(&T) -> bool + NecessarySendSync + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = TakeWhileObserver {
                 observer: Some(observer),
