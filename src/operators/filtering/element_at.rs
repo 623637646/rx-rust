@@ -51,7 +51,10 @@ where
     OE: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             self.source.subscribe(ElementAtObserver {
                 observer: Some(observer),

@@ -54,7 +54,10 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnOnce(),
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         self.source
             .hook_on_subscription(move |observable, observer| {
                 (self.callback)();

@@ -69,7 +69,10 @@ where
     F: FnMut(T0) -> OE1 + NecessarySendSync + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let observable = Map::new(self.source, self.callback);
         let observable = observable.concat_all();
         observable.subscribe(observer)

@@ -65,7 +65,10 @@ where
     F: FnMut(E) -> RetryAction<E, OE1> + NecessarySendSync + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let sub = Shared::new(Mutable::new(None));
         let onserver = RetryObserver {
             observer,

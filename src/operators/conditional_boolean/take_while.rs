@@ -56,7 +56,10 @@ where
     F: FnMut(&T) -> bool + NecessarySendSync + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = TakeWhileObserver {
                 observer: Some(observer),

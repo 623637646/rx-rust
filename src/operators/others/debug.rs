@@ -93,7 +93,10 @@ where
     C: Clone + NecessarySendSync + 'or + 'sub,
     F: Fn(C, DebugEvent<'_, T, E>) + Clone + NecessarySendSync + 'or + 'sub,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         (self.callback)(self.context.clone(), DebugEvent::Subscribed);
         let observer = DebugObserver {
             observer,

@@ -62,7 +62,10 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>) + NecessarySendSync + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Subscription<'sub> {
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+    ) -> Subscription<'sub> {
         let observer = HookOnTerminationObserver {
             observer: BoxedObserver::new(observer),
             callback: self.callback,
