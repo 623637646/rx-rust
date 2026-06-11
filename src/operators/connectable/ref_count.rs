@@ -9,7 +9,6 @@ use educe::Educe;
 enum State<'sub> {
     Initialized,
     Subscribed(usize, Subscription<'sub>),
-    Unsubscribed,
 }
 
 /// Makes a `ConnectableObservable` behave like an ordinary `Observable` that automatically connects and disconnects.
@@ -72,7 +71,7 @@ impl<OE, S> RefCount<'_, OE, S> {
 
 impl<'or, 'sub, T, E, OE, S> Observable<'or, 'sub, T, E> for RefCount<'sub, OE, S>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, 'sub, T, E> + Clone,
     S: Observable<'or, 'sub, T, E> + Observer<T, E> + Clone + NecessarySendSync + 'or,
 {
     fn subscribe(
@@ -83,10 +82,14 @@ where
         self.state.lock_mut(|mut lock| {
             match &mut *lock {
                 State::Initialized => {
-                    *lock = State::Subscribed(1, self.source.connect());
+                    *lock = State::Subscribed(
+                        1,
+                        self.source
+                            .connect()
+                            .expect("ConnectableObservable should not be connected."),
+                    );
                 }
                 State::Subscribed(count, _) => *count += 1,
-                State::Unsubscribed => panic!("Already Unsubscribed"),
             };
         });
         sub + self.state
@@ -100,18 +103,16 @@ impl Disposable for Shared<Mutable<State<'_>>> {
             State::Subscribed(count, _) => {
                 *count -= 1;
                 if *count == 0 {
-                    let state = std::mem::replace(&mut *lock, State::Unsubscribed);
+                    let state = std::mem::replace(&mut *lock, State::Initialized);
                     drop(lock);
                     match state {
                         State::Initialized => unreachable!(),
                         State::Subscribed(_, subscription) => {
                             subscription.dispose();
                         }
-                        State::Unsubscribed => unreachable!(),
                     }
                 }
             }
-            State::Unsubscribed => unreachable!(),
         });
     }
 }

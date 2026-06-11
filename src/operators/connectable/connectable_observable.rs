@@ -1,9 +1,9 @@
 use super::ref_count::RefCount;
 use crate::observable::Observable;
-use crate::safe_lock_option;
-use crate::utils::types::{Mutable, NecessarySendSync, Shared};
+use crate::utils::types::{NecessarySendSync, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Represents an Observable that waits until its `connect()` method is called before it begins emitting items to its Observers.
 /// See <https://reactivex.io/documentation/operators/connect.html>
@@ -60,26 +60,35 @@ use educe::Educe;
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ConnectableObservable<OE, S> {
-    source: Shared<Mutable<Option<OE>>>,
+    source: OE,
     subject: S,
+    is_connected: Shared<AtomicBool>,
 }
 
 impl<OE, S> ConnectableObservable<OE, S> {
     pub fn new(source: OE, subject: S) -> Self {
         Self {
-            source: Shared::new(Mutable::new(Some(source))),
+            source,
             subject,
+            is_connected: Shared::new(AtomicBool::new(false)),
         }
     }
 
-    pub fn connect<'or, 'sub, T, E>(self) -> Subscription<'sub>
+    // Subscribe the source. Return None if already connected
+    pub fn connect<'or, 'sub, T, E>(self) -> Option<Subscription<'sub>>
     where
         OE: Observable<'or, 'sub, T, E>,
         S: Observer<T, E> + NecessarySendSync + 'or,
     {
-        safe_lock_option!(take: self.source)
-            .expect("Already connected")
-            .subscribe(self.subject)
+        if self
+            .is_connected
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            Some(self.source.subscribe(self.subject) + self.is_connected)
+        } else {
+            None
+        }
     }
 
     pub fn ref_count<'sub>(self) -> RefCount<'sub, OE, S> {
