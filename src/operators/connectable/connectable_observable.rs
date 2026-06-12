@@ -1,9 +1,8 @@
 use super::ref_count::RefCount;
 use crate::observable::Observable;
-use crate::utils::types::{NecessarySendSync, Shared};
+use crate::utils::types::{MutableBool, MutableBoolHelper, NecessarySendSync, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Represents an Observable that waits until its `connect()` method is called before it begins emitting items to its Observers.
 /// See <https://reactivex.io/documentation/operators/connect.html>
@@ -62,7 +61,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub struct ConnectableObservable<OE, S> {
     source: OE,
     subject: S,
-    is_connected: Shared<AtomicBool>,
+    is_connected: Shared<MutableBool>,
 }
 
 impl<OE, S> ConnectableObservable<OE, S> {
@@ -70,7 +69,7 @@ impl<OE, S> ConnectableObservable<OE, S> {
         Self {
             source,
             subject,
-            is_connected: Shared::new(AtomicBool::new(false)),
+            is_connected: Shared::new(MutableBool::new(false)),
         }
     }
 
@@ -80,11 +79,8 @@ impl<OE, S> ConnectableObservable<OE, S> {
         OE: Observable<'or, 'sub, T, E>,
         S: Observer<T, E> + NecessarySendSync + 'or,
     {
-        if self
-            .is_connected
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-        {
+        if !self.is_connected.read() {
+            self.is_connected.write(true);
             Some(self.source.subscribe(self.subject) + self.is_connected)
         } else {
             None

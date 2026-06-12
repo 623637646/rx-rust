@@ -1,5 +1,5 @@
 use crate::safe_lock_option_observer;
-use crate::utils::types::{Mutable, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, MutableBool, MutableBoolHelper, NecessarySendSync, Shared};
 use crate::utils::unsub_after_termination::subscribe_unsub_after_termination;
 use crate::{
     disposable::subscription::Subscription,
@@ -9,7 +9,6 @@ use crate::{
 };
 use educe::Educe;
 use std::marker::PhantomData;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Discards items emitted by a source Observable until a second Observable emits an item.
 /// See <https://reactivex.io/documentation/operators/skipuntil.html>
@@ -82,7 +81,7 @@ where
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
-            let started = Shared::new(AtomicBool::new(false));
+            let started = Shared::new(MutableBool::new(false));
             let start_observer = StartObserver {
                 observer: observer.clone(),
                 started: started.clone(),
@@ -98,7 +97,7 @@ where
 
 struct SkipUntilObserver<OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    started: Shared<AtomicBool>,
+    started: Shared<MutableBool>,
 }
 
 impl<T, E, OR> Observer<T, E> for SkipUntilObserver<OR>
@@ -106,7 +105,7 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        if self.started.load(Ordering::SeqCst) {
+        if self.started.read() {
             safe_lock_option_observer!(on_next: self.observer, value);
         }
     }
@@ -118,7 +117,7 @@ where
 
 struct StartObserver<T, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    started: Shared<AtomicBool>,
+    started: Shared<MutableBool>,
     _marker: MarkerType<T>,
 }
 
@@ -127,7 +126,7 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, _: ()) {
-        self.started.store(true, Ordering::SeqCst);
+        self.started.write(true);
     }
 
     fn on_termination(self, termination: Termination<E>) {

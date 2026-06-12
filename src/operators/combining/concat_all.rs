@@ -1,6 +1,8 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{MutGuard, Mutable, MutableHelper, NecessarySendSync, Shared};
+use crate::utils::types::{
+    MutGuard, Mutable, MutableBool, MutableBoolHelper, MutableHelper, NecessarySendSync, Shared,
+};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -9,11 +11,7 @@ use crate::{
 };
 use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
-use std::{
-    collections::VecDeque,
-    marker::PhantomData,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::{collections::VecDeque, marker::PhantomData};
 
 /// Concatenates an Observable of Observables, emitting all values from each inner Observable in sequence.
 /// See <https://reactivex.io/documentation/operators/concat.html> (referencing concat operator for general concept)
@@ -128,14 +126,14 @@ fn subscribe_next<'or, 'sub, T, E, OR, OE1>(
     let implementation = |mut lock: MutGuard<'_, ConcatAllContext<'sub, OE1>>| {
         if let Some(observable) = lock.pending_observables.pop_front() {
             drop(lock);
-            let terminated = Shared::new(AtomicBool::new(false));
+            let terminated = Shared::new(MutableBool::new(false));
             let observer = ConcatAllInnerObserver {
                 observer: observer.clone(),
                 context: context.clone(),
                 terminated: terminated.clone(),
             };
             let sub = observable.subscribe(observer);
-            if !terminated.load(Ordering::SeqCst) {
+            if !terminated.read() {
                 safe_lock_option!(replace: context, on_going_sub, sub);
             }
         } else if lock.completed {
@@ -194,7 +192,7 @@ where
 struct ConcatAllInnerObserver<'sub, OR, OE1> {
     observer: Shared<Mutable<Option<OR>>>,
     context: Shared<Mutable<ConcatAllContext<'sub, OE1>>>,
-    terminated: Shared<AtomicBool>,
+    terminated: Shared<MutableBool>,
 }
 
 impl<'or, 'sub, T, E, OR, OE1> Observer<T, E> for ConcatAllInnerObserver<'sub, OR, OE1>
@@ -208,7 +206,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.terminated.store(true, Ordering::SeqCst);
+        self.terminated.write(true);
         match termination {
             Termination::Completed => subscribe_next(None, self.context, self.observer),
             Termination::Error(_) => {

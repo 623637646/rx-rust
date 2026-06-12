@@ -1,5 +1,5 @@
 use crate::safe_lock_option_observer;
-use crate::utils::types::{Mutable, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, MutableBool, MutableBoolHelper, NecessarySendSync, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -7,7 +7,6 @@ use crate::{
     utils::unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Combines multiple Observables into a single Observable that emits all of their emissions.
 /// See <https://reactivex.io/documentation/operators/merge.html>
@@ -67,7 +66,7 @@ where
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
-            let one_is_completed = Shared::new(AtomicBool::new(false));
+            let one_is_completed = Shared::new(MutableBool::new(false));
             let onserver_1 = MergeObserver {
                 observer: observer.clone(),
                 one_is_completed: one_is_completed.clone(),
@@ -85,7 +84,7 @@ where
 
 struct MergeObserver<OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    one_is_completed: Shared<AtomicBool>,
+    one_is_completed: Shared<MutableBool>,
 }
 
 impl<T, E, OR> Observer<T, E> for MergeObserver<OR>
@@ -99,10 +98,10 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                if self.one_is_completed.load(Ordering::SeqCst) {
+                if self.one_is_completed.read() {
                     safe_lock_option_observer!(on_termination: self.observer, termination);
                 } else {
-                    self.one_is_completed.store(true, Ordering::SeqCst);
+                    self.one_is_completed.write(true);
                 }
             }
             Termination::Error(_) => {

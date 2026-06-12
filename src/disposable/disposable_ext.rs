@@ -1,9 +1,8 @@
 use crate::{
     disposable::Disposable,
     safe_lock_option_disposable,
-    utils::types::{Mutable, Shared},
+    utils::types::{Mutable, MutableBool, MutableBoolHelper, Shared},
 };
-use std::sync::atomic::{AtomicBool, Ordering};
 
 impl<D> Disposable for Shared<Mutable<Option<D>>>
 where
@@ -14,9 +13,9 @@ where
     }
 }
 
-impl Disposable for Shared<AtomicBool> {
+impl Disposable for Shared<MutableBool> {
     fn dispose(self) {
-        self.store(false, Ordering::SeqCst);
+        self.write(false);
     }
 }
 

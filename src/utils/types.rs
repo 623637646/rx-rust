@@ -12,14 +12,21 @@ pub trait MutableHelper<T> {
     fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R;
 }
 
+pub trait MutableBoolHelper {
+    fn read(&self) -> bool;
+    fn write(&self, value: bool);
+}
+
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
         use std::{
-            cell::{Ref, RefCell, RefMut},
+            cell::{Ref, RefCell, RefMut, Cell},
             rc::Rc,
         };
+
         pub type Shared<T> = Rc<T>;
         pub type Mutable<T> = RefCell<T>;
+
         pub type MutGuard<'a, T> = RefMut<'a, T>;
         pub type RefGuard<'a, T> = Ref<'a, T>;
         impl<T> MutableHelper<T> for RefCell<T> {
@@ -30,12 +37,24 @@ cfg_if::cfg_if! {
                 callback(self.borrow())
             }
         }
+
+        pub type MutableBool = Cell<bool>;
+        impl MutableBoolHelper for Cell<bool> {
+            fn read(&self) -> bool {
+                self.get()
+            }
+            fn write(&self, value: bool) {
+                self.set(value)
+            }
+        }
+
         pub trait NecessarySendSync {}
         impl<T> NecessarySendSync for T {}
     } else {
         use std::sync::{Arc, Mutex, MutexGuard};
         use std::ops::Deref;
         use educe::Educe;
+        use std::sync::atomic::{AtomicBool, Ordering};
 
         pub type Shared<T> = Arc<T>;
         pub type Mutable<T> = Mutex<T>;
@@ -54,6 +73,7 @@ cfg_if::cfg_if! {
                 &self.0
             }
         }
+
         pub type MutGuard<'a, T> = MutexGuard<'a, T>;
         pub type RefGuard<'a, T> = ReadOnlyMutexGuard<'a, T>;
         impl<T> MutableHelper<T> for Mutex<T> {
@@ -64,6 +84,17 @@ cfg_if::cfg_if! {
                 callback(ReadOnlyMutexGuard(self.lock().unwrap()))
             }
         }
+
+        pub type MutableBool = AtomicBool;
+        impl MutableBoolHelper for MutableBool {
+            fn read(&self) -> bool {
+                self.load(Ordering::SeqCst)
+            }
+            fn write(&self, value: bool) {
+                self.store(value, Ordering::SeqCst)
+            }
+        }
+
         pub trait NecessarySendSync: Send + Sync {}
         impl<T> NecessarySendSync for T where T: Send + Sync {}
     }
