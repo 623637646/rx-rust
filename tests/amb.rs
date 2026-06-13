@@ -451,7 +451,7 @@ fn test_without_convenient_api() {
 }
 
 #[test]
-fn test_immediate_next() {
+fn test_next_on_sub() {
     let mut subject = BehaviorSubject::new(111);
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
@@ -479,7 +479,7 @@ fn test_immediate_next() {
 }
 
 #[test]
-fn test_immediate_completed() {
+fn test_complete_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
@@ -493,7 +493,7 @@ fn test_immediate_completed() {
 }
 
 #[test]
-fn test_immediate_error() {
+fn test_error_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 

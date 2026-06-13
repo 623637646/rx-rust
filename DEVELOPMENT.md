@@ -44,18 +44,18 @@
       11. Hot Observable (Subjects, RefCount)  
           1. test_complete_on_next  
           2. test_error_on_next  
-          3. test_unsub_on_next  
+          3. test_unsub_on_next
           4. test_sub_on_next  
           5. test_next_on_next  
           6. test_unsub_on_completed  
           7. test_sub_on_completed  
           8. test_unsub_on_error  
-          9. test_sub_on_error  
+          9. test_sub_on_error    
       12. Using lock(lock_mut|safe_lock.*!) 有的lock没 test_complete_after_next  
-          1. test_immediate_next  
-          2. test_immediate_completed  
-          3. test_immediate_error  
-      13. Using schedule(: Scheduler|::from_stream\\() 有的scheduler没有test_immediate_next （如 from future）  
+          1. test_next_on_sub  
+          2. test_complete_on_sub  
+          3. test_error_on_sub  
+      13. Using schedule(: Scheduler|::from_stream\\() 有的scheduler没有test_next_on_sub （如 from future）  
           1. ALL TESTS IN "Using lock"  
           2. test_complete_after_next  
           3. test_error_after_next  

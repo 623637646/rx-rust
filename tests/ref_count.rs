@@ -1531,7 +1531,7 @@ fn test_sub_on_error() {
 }
 
 #[test]
-fn test_immediate_next() {
+fn test_next_on_sub() {
     let counter = AtomicUsize::new(0);
     let mut subject = BehaviorSubject::new(());
     let (checker_1, observer_1) = Checker::new();
@@ -1589,7 +1589,7 @@ fn test_immediate_next() {
 }
 
 #[test]
-fn test_immediate_completed() {
+fn test_complete_on_sub() {
     let counter = AtomicUsize::new(0);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -1621,7 +1621,7 @@ fn test_immediate_completed() {
 }
 
 #[test]
-fn test_immediate_error() {
+fn test_error_on_sub() {
     let counter = AtomicUsize::new(0);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();

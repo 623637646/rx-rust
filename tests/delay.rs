@@ -920,7 +920,7 @@ fn test_order_with_continuous_next() {
 }
 
 #[test]
-fn test_immediate_next() {
+fn test_next_on_sub() {
     block_on(|runtime| async move {
         let subject = BehaviorSubject::new(111);
         let (checker, observer) = Checker::new();
@@ -955,7 +955,7 @@ fn test_immediate_next() {
 }
 
 #[test]
-fn test_immediate_completed() {
+fn test_complete_on_sub() {
     block_on(|runtime| async move {
         let (checker, observer) = Checker::new();
 
@@ -977,7 +977,7 @@ fn test_immediate_completed() {
 }
 
 #[test]
-fn test_immediate_error() {
+fn test_error_on_sub() {
     block_on(|runtime| async move {
         let (checker, observer) = Checker::new();
 

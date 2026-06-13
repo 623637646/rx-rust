@@ -406,7 +406,7 @@ fn test_order_with_continuous_next() {
 }
 
 #[test]
-fn test_immediate_next() {
+fn test_next_on_sub() {
     block_on(|runtime| async move {
         let subject = BehaviorSubject::new(111);
 
@@ -427,7 +427,7 @@ fn test_immediate_next() {
 }
 
 #[test]
-fn test_immediate_completed() {
+fn test_complete_on_sub() {
     block_on(|runtime| async move {
         // Custom operations
         let stream = Empty.into_stream();
