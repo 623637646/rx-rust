@@ -98,10 +98,8 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                if self.one_is_completed.read() {
+                if self.one_is_completed.change_if_not_equal(true) {
                     safe_lock_option_observer!(on_termination: self.observer, termination);
-                } else {
-                    self.one_is_completed.write(true);
                 }
             }
             Termination::Error(_) => {

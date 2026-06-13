@@ -79,11 +79,10 @@ impl<OE, S> ConnectableObservable<OE, S> {
         OE: Observable<'or, 'sub, T, E>,
         S: Observer<T, E> + NecessarySendSync + 'or,
     {
-        if !self.is_connected.read() {
-            self.is_connected.write(true);
-            Some(self.source.subscribe(self.subject) + self.is_connected)
-        } else {
+        if self.is_connected.change_if_not_equal(true) {
             None
+        } else {
+            Some(self.source.subscribe(self.subject) + self.is_connected)
         }
     }
 
