@@ -62,8 +62,9 @@ impl<OE> OnBackpressureLatest<OE> {
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (T, RequestCallbackType<'or>), E>
     for OnBackpressureLatest<OE>
 where
-    T: NecessarySendSync + 'or + 'sub,
-    E: NecessarySendSync + 'or + 'sub,
+    'or: 'sub,
+    T: NecessarySendSync + 'or,
+    E: NecessarySendSync + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
     fn subscribe(
@@ -71,8 +72,7 @@ where
         observer: impl Observer<(T, RequestCallbackType<'or>), E> + NecessarySendSync + 'or,
     ) -> Subscription<'sub> {
         OnBackpressure::new(self.source, |buffer, value| {
-            *buffer = Vec::with_capacity(1);
-            buffer.push(value);
+            *buffer = vec![value];
         })
         .map(|(values, request_callback)| (values.into_iter().next().unwrap(), request_callback))
         .subscribe(observer)

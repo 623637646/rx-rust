@@ -1,6 +1,7 @@
 pub mod boxed_observable;
 pub mod cloneable_boxed_observable;
 pub mod observable_ext;
+pub mod shared_model_observable;
 
 use crate::{
     disposable::subscription::Subscription, observer::Observer, utils::types::NecessarySendSync,

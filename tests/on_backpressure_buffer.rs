@@ -18,7 +18,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock, safe_lock_option, safe_lock_vec};
+use rx_rust::{safe_lock, safe_lock_option, safe_lock_option_observer, safe_lock_vec};
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
 
@@ -597,14 +597,14 @@ fn test_unsubscribe() {
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [vec![111]]);
-    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![111]]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(request_callback.test_lock_ref().len(), 2);
 
     subject.on_next(333);
     assert_eq!(checker_1.values(), [vec![111]]);
-    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![111]]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(request_callback.test_lock_ref().len(), 2);
@@ -613,7 +613,7 @@ fn test_unsubscribe() {
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [vec![111]]);
-    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![111]]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(request_callback.test_lock_ref().len(), 2);
@@ -1085,6 +1085,59 @@ fn test_without_convenient_api() {
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert!(request_callback.test_lock_ref().is_some());
+
+    safe_lock_option!(take: request_callback).unwrap()();
+    assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert!(request_callback.test_lock_ref().is_none());
+}
+
+#[test]
+fn test_complete_on_next_special_case() {
+    let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.on_backpressure_buffer();
+
+    let request_callback = Shared::new(Mutable::new(None));
+    let request_callback_cloned = request_callback.clone();
+    let sender = Shared::new(Mutable::new(Some(sender)));
+    let sender_cloned = sender.clone();
+    let _subscription = observable
+        .map(move |(values, request)| {
+            if values.len() > 1 {
+                request();
+                safe_lock_option_observer!(on_termination: sender_cloned, Termination::<Infallible>::Completed);
+            } else {
+                safe_lock_option!(replace: request_callback_cloned, request);
+            }
+            values
+        })
+        .subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(request_callback.test_lock_ref().is_none());
+
+    safe_lock_option_observer!(on_next: sender, 111);
+    assert_eq!(checker.values(), [vec![111]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(request_callback.test_lock_ref().is_some());
+
+    safe_lock_option_observer!(on_next: sender, 222);
+    assert_eq!(checker.values(), [vec![111]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(request_callback.test_lock_ref().is_some());
+
+    safe_lock_option_observer!(on_next: sender, 333);
+    assert_eq!(checker.values(), [vec![111]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
     safe_lock_option!(take: request_callback).unwrap()();

@@ -597,14 +597,14 @@ fn test_unsubscribe() {
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [111]);
-    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(request_callback.test_lock_ref().len(), 2);
 
     subject.on_next(333);
     assert_eq!(checker_1.values(), [111]);
-    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(request_callback.test_lock_ref().len(), 2);
@@ -613,7 +613,7 @@ fn test_unsubscribe() {
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [111]);
-    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(request_callback.test_lock_ref().len(), 2);

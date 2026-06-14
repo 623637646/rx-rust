@@ -62,8 +62,9 @@ impl<OE> OnBackpressureBuffer<OE> {
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (Vec<T>, RequestCallbackType<'or>), E>
     for OnBackpressureBuffer<OE>
 where
-    T: NecessarySendSync + 'or + 'sub,
-    E: NecessarySendSync + 'or + 'sub,
+    'or: 'sub,
+    T: NecessarySendSync + 'or,
+    E: NecessarySendSync + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
     fn subscribe(
