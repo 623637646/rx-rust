@@ -60,7 +60,7 @@ use crate::{
     subject::{
         async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
     },
-    utils::types::NecessarySend,
+    utils::types::{NecessarySend, NecessarySync},
 };
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 #[cfg(feature = "futures")]
@@ -390,7 +390,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        Self: NecessarySend + Clone + 'oe,
+        Self: NecessarySend + NecessarySync + Clone + 'oe,
     {
         CloneableBoxedObservable::new(self)
     }
