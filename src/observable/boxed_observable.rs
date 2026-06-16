@@ -1,7 +1,7 @@
 use super::{Observable, Observer};
 use crate::{
     disposable::subscription::Subscription, observer::boxed_observer::BoxedObserver,
-    utils::types::NecessarySendSync,
+    utils::types::NecessarySend,
 };
 
 cfg_if::cfg_if! {
@@ -19,7 +19,7 @@ cfg_if::cfg_if! {
 }
 
 impl<'or, 'sub, 'oe, T, E> BoxedObservable<'or, 'sub, 'oe, T, E> {
-    pub fn new(observable: impl Observable<'or, 'sub, T, E> + NecessarySendSync + 'oe) -> Self
+    pub fn new(observable: impl Observable<'or, 'sub, T, E> + NecessarySend + 'oe) -> Self
     where
         T: 'or,
         E: 'or,
@@ -31,7 +31,7 @@ impl<'or, 'sub, 'oe, T, E> BoxedObservable<'or, 'sub, 'oe, T, E> {
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for BoxedObservable<'or, 'sub, '_, T, E> {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         self.0(BoxedObserver::new(observer))
     }

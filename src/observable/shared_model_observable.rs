@@ -3,7 +3,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{ActionAfterLock, Mutable, MutableHelper, NecessarySendSync, Shared},
+    utils::types::{ActionAfterLock, Mutable, MutableHelper, NecessarySend, Shared},
 };
 use educe::Educe;
 use std::collections::VecDeque;
@@ -18,14 +18,14 @@ pub trait SharedModelObservable<'or, 'sub, T0, E> {
     fn subscribe_with_shared_model<T, OR, EX>(
         self,
         observer: OR,
-        model: impl SharedModel<T0, T, E, OR, EX> + NecessarySendSync + 'or + 'sub,
+        model: impl SharedModel<T0, T, E, OR, EX> + NecessarySend + 'or + 'sub,
         extra: EX,
     ) -> Subscription<'sub>
     where
-        T: NecessarySendSync + 'or + 'sub,
-        E: NecessarySendSync + 'or + 'sub,
-        OR: Observer<T, E> + NecessarySendSync + 'or + 'sub,
-        EX: NecessarySendSync + 'or;
+        T: NecessarySend + 'or + 'sub,
+        E: NecessarySend + 'or + 'sub,
+        OR: Observer<T, E> + NecessarySend + 'or + 'sub,
+        EX: NecessarySend + 'or;
 }
 
 impl<'or, 'sub, T0, E, OE> SharedModelObservable<'or, 'sub, T0, E> for OE
@@ -35,14 +35,14 @@ where
     fn subscribe_with_shared_model<T, OR, EX>(
         self,
         observer: OR,
-        model: impl SharedModel<T0, T, E, OR, EX> + NecessarySendSync + 'or + 'sub,
+        model: impl SharedModel<T0, T, E, OR, EX> + NecessarySend + 'or + 'sub,
         extra: EX,
     ) -> Subscription<'sub>
     where
-        T: NecessarySendSync + 'or + 'sub,
-        E: NecessarySendSync + 'or + 'sub,
-        OR: Observer<T, E> + NecessarySendSync + 'or + 'sub,
-        EX: NecessarySendSync + 'or,
+        T: NecessarySend + 'or + 'sub,
+        E: NecessarySend + 'or + 'sub,
+        OR: Observer<T, E> + NecessarySend + 'or + 'sub,
+        EX: NecessarySend + 'or,
     {
         let state = Shared::new(Mutable::new(State::Idle(observer)));
         let model = Shared::new(Mutable::new(model));

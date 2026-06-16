@@ -60,7 +60,7 @@ use crate::{
     subject::{
         async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
     },
-    utils::types::NecessarySendSync,
+    utils::types::NecessarySend,
 };
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 #[cfg(feature = "futures")]
@@ -380,7 +380,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        Self: NecessarySendSync + 'oe,
+        Self: NecessarySend + 'oe,
     {
         BoxedObservable::new(self)
     }
@@ -390,7 +390,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        Self: NecessarySendSync + Clone + 'oe,
+        Self: NecessarySend + Clone + 'oe,
     {
         CloneableBoxedObservable::new(self)
     }
@@ -607,8 +607,8 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        FN: FnMut(T) + NecessarySendSync + 'or,
-        FT: FnOnce(Termination<E>) + NecessarySendSync + 'or,
+        FN: FnMut(T) + NecessarySend + 'or,
+        FT: FnOnce(Termination<E>) + NecessarySend + 'or,
     {
         self.subscribe(CallbackObserver::new(on_next, on_termination))
     }

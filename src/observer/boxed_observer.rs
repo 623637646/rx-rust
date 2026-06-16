@@ -1,5 +1,5 @@
 use super::{Event, Observer, Termination};
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
@@ -12,7 +12,7 @@ cfg_if::cfg_if! {
 }
 
 impl<'or, T, E> BoxedObserver<'or, T, E> {
-    pub fn new(observer: impl Observer<T, E> + NecessarySendSync + 'or) -> Self {
+    pub fn new(observer: impl Observer<T, E> + NecessarySend + 'or) -> Self {
         let mut observer = Some(observer);
         Self(Box::new(move |event| match event {
             Event::Next(value) => {

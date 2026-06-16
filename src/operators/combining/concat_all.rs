@@ -1,7 +1,7 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::utils::types::{
-    MutGuard, Mutable, MutableBool, MutableBoolHelper, MutableHelper, NecessarySendSync, Shared,
+    MutGuard, Mutable, MutableBool, MutableBoolHelper, MutableHelper, NecessarySend, Shared,
 };
 use crate::{
     observable::Observable,
@@ -79,12 +79,12 @@ impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for ConcatAll<OE, OE1
 where
     T: 'or,
     OE: Observable<'or, 'sub, OE1, E>,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySendSync + 'sub,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'sub,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(ConcatAllContext {
@@ -119,8 +119,8 @@ fn subscribe_next<'or, 'sub, T, E, OR, OE1>(
     context: Shared<Mutable<ConcatAllContext<'sub, OE1>>>,
     observer: Shared<Mutable<Option<OR>>>,
 ) where
-    OR: Observer<T, E> + NecessarySendSync + 'or,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySendSync + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
     'sub: 'or,
 {
     let implementation = |mut lock: MutGuard<'_, ConcatAllContext<'sub, OE1>>| {
@@ -158,8 +158,8 @@ struct ConcatAllObserver<'sub, T, OR, OE1> {
 
 impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for ConcatAllObserver<'sub, T, OR, OE1>
 where
-    OR: Observer<T, E> + NecessarySendSync + 'or,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySendSync + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
     'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
@@ -197,8 +197,8 @@ struct ConcatAllInnerObserver<'sub, OR, OE1> {
 
 impl<'or, 'sub, T, E, OR, OE1> Observer<T, E> for ConcatAllInnerObserver<'sub, OR, OE1>
 where
-    OR: Observer<T, E> + NecessarySendSync + 'or,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySendSync + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
     'sub: 'or,
 {
     fn on_next(&mut self, value: T) {

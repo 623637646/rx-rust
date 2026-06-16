@@ -1,6 +1,6 @@
 use crate::disposable::subscription::Subscription;
 use crate::safe_lock_option;
-use crate::utils::types::{Mutable, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -62,12 +62,12 @@ impl<'or, 'sub, T, E, OE, OE1, F> Observable<'or, 'sub, T, E> for Retry<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, T, E>,
-    F: FnMut(E) -> RetryAction<E, OE1> + NecessarySendSync + 'or,
+    F: FnMut(E) -> RetryAction<E, OE1> + NecessarySend + 'or,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let sub = Shared::new(Mutable::new(None));
         let onserver = RetryObserver {
@@ -87,9 +87,9 @@ struct RetryObserver<'sub, OR, F> {
 
 impl<'or, 'sub, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<'sub, OR, F>
 where
-    OR: Observer<T, E> + NecessarySendSync + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
-    F: FnMut(E) -> RetryAction<E, OE1> + NecessarySendSync + 'or,
+    F: FnMut(E) -> RetryAction<E, OE1> + NecessarySend + 'or,
     'sub: 'or,
 {
     fn on_next(&mut self, value: T) {

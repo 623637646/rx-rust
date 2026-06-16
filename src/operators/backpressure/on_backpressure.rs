@@ -1,5 +1,5 @@
 use crate::observable::shared_model_observable::{Context, SharedModel, SharedModelObservable};
-use crate::utils::types::{ActionAfterLock, MutableHelper, NecessarySendSync};
+use crate::utils::types::{ActionAfterLock, MutableHelper, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -80,14 +80,14 @@ impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, (Vec<T>, RequestCallbackType<
     for OnBackpressure<OE, F>
 where
     'or: 'sub,
-    T: NecessarySendSync + 'or,
-    E: NecessarySendSync + 'or,
+    T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&mut Vec<T>, T) + NecessarySendSync + 'or,
+    F: FnMut(&mut Vec<T>, T) + NecessarySend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + NecessarySendSync + 'or,
+        observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let model = Model {
             buffer: Vec::new(),
@@ -107,9 +107,9 @@ struct Model<T, E> {
 
 impl<'cb, T, E, OR, F> SharedModel<T, (Vec<T>, RequestCallbackType<'cb>), E, OR, F> for Model<T, E>
 where
-    T: NecessarySendSync + 'cb,
-    E: NecessarySendSync + 'cb,
-    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySendSync + 'cb,
+    T: NecessarySend + 'cb,
+    E: NecessarySend + 'cb,
+    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
     F: FnMut(&mut Vec<T>, T),
 {
     fn on_next(
@@ -167,9 +167,9 @@ where
 fn handle_request<'cb, T, E, OR>(
     context: Context<(Vec<T>, RequestCallbackType<'cb>), E, OR, Model<T, E>>,
 ) where
-    T: NecessarySendSync + 'cb,
-    E: NecessarySendSync + 'cb,
-    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySendSync + 'cb,
+    T: NecessarySend + 'cb,
+    E: NecessarySend + 'cb,
+    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
 {
     let action = context.model.safe_lock_mut(|model| {
         if !model.buffer.is_empty() {

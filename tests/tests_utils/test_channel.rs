@@ -5,7 +5,7 @@ use rx_rust::{
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     safe_lock,
-    utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared},
+    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 
 enum State<'or, T, E> {
@@ -68,12 +68,12 @@ pub(crate) struct ReceiverObservable<'or, T, E>(Shared<Mutable<State<'or, T, E>>
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for ReceiverObservable<'or, T, E>
 where
     T: 'sub,
-    E: NecessarySendSync + 'sub,
+    E: NecessarySend + 'sub,
     'or: 'sub,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         match safe_lock!(mem_replace:
             self.0,

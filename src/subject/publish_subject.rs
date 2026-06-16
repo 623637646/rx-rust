@@ -2,7 +2,7 @@ use super::Subject;
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::observer::Event;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -35,13 +35,13 @@ impl<T, E> PublishSubject<'_, T, E> {
 
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for PublishSubject<'or, T, E>
 where
-    T: NecessarySendSync + 'sub,
-    E: Clone + NecessarySendSync + 'sub,
+    T: NecessarySend + 'sub,
+    E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         self.0.clone().lock_mut(|mut lock| match &mut *lock {
             State::Idle(observers) => {
@@ -197,8 +197,8 @@ where
 
 impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for PublishSubject<'or, T, E>
 where
-    T: Clone + NecessarySendSync + 'sub,
-    E: Clone + NecessarySendSync + 'sub,
+    T: Clone + NecessarySend + 'sub,
+    E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
     fn terminated(&self) -> Option<Termination<E>>

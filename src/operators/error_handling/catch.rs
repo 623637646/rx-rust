@@ -1,6 +1,6 @@
 use crate::disposable::subscription::Subscription;
 use crate::safe_lock_option;
-use crate::utils::types::{Mutable, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -63,12 +63,12 @@ where
     E: 'or,
     OE: Observable<'or, 'sub, T, E0>,
     OE1: Observable<'or, 'sub, T, E>,
-    F: FnOnce(E0) -> OE1 + NecessarySendSync + 'or,
+    F: FnOnce(E0) -> OE1 + NecessarySend + 'or,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let sub = Shared::new(Mutable::new(None));
         let onserver = CatchObserver {
@@ -90,7 +90,7 @@ struct CatchObserver<'sub, E, OR, F> {
 
 impl<'or, 'sub, T, E0, E, OR, OE1, F> Observer<T, E0> for CatchObserver<'sub, E, OR, F>
 where
-    OR: Observer<T, E> + NecessarySendSync + 'or,
+    OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
     F: FnOnce(E0) -> OE1,
 {

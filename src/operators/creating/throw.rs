@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -41,7 +41,7 @@ impl<E> Throw<E> {
 impl<'or, 'sub, E> Observable<'or, 'sub, Infallible, E> for Throw<E> {
     fn subscribe(
         self,
-        observer: impl Observer<Infallible, E> + NecessarySendSync + 'or,
+        observer: impl Observer<Infallible, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         observer.on_termination(Termination::Error(self.0));
         Subscription::default()

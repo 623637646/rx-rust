@@ -4,7 +4,7 @@ pub mod observable_ext;
 pub mod shared_model_observable;
 
 use crate::{
-    disposable::subscription::Subscription, observer::Observer, utils::types::NecessarySendSync,
+    disposable::subscription::Subscription, observer::Observer, utils::types::NecessarySend,
 };
 
 /// The `Observable` trait represents a source of events that can be observed by an `Observer`.
@@ -15,6 +15,6 @@ pub trait Observable<'or, 'sub, T, E> {
     /// We use `Subscription` struct instead of trait like `impl Cancellable`, because we need to cancel the subscription when the `Subscription` is dropped. It's not possible to implement Drop for a trait object.
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub>;
 }

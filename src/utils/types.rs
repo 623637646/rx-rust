@@ -1,7 +1,7 @@
 use crate::observer::Termination;
 use std::marker::PhantomData;
 
-/// Using `PhantomData<fn(T) -> T>` instead of `PhantomData<T>` to make MarkerType to be `NecessarySendSync` when T is not `NecessarySendSync`.
+/// Using `PhantomData<fn(T) -> T>` instead of `PhantomData<T>` to make MarkerType to be `NecessarySend` when T is not `NecessarySend`.
 /// For more detail: <https://doc.rust-lang.org/nomicon/phantom-data.html#table-of-phantomdata-patterns>
 /// But the lifetime of MarkerType is affected by T. Which means T and MarkerType have the same lifetime.
 /// TODO: find a better solution, so we can remove some restriction like `T: 'static` in some cases.
@@ -77,8 +77,8 @@ cfg_if::cfg_if! {
             }
         }
 
-        pub trait NecessarySendSync {}
-        impl<T> NecessarySendSync for T {}
+        pub trait NecessarySend {}
+        impl<T> NecessarySend for T {}
     } else {
         use std::sync::{Arc, Mutex, MutexGuard};
         use std::ops::Deref;
@@ -139,7 +139,7 @@ cfg_if::cfg_if! {
             }
         }
 
-        pub trait NecessarySendSync: Send + Sync {}
-        impl<T> NecessarySendSync for T where T: Send + Sync {}
+        pub trait NecessarySend: Send + Sync {}
+        impl<T> NecessarySend for T where T: Send + Sync {}
     }
 }

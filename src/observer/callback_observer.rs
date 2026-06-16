@@ -1,5 +1,5 @@
 use super::{Observer, Termination};
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
@@ -20,8 +20,8 @@ cfg_if::cfg_if! {
 impl<'cb, T, E> CallbackObserver<'cb, T, E> {
     pub fn new<FN, FT>(on_next: FN, on_termination: FT) -> Self
     where
-        FN: FnMut(T) + NecessarySendSync + 'cb,
-        FT: FnOnce(Termination<E>) + NecessarySendSync + 'cb,
+        FN: FnMut(T) + NecessarySend + 'cb,
+        FT: FnOnce(Termination<E>) + NecessarySend + 'cb,
     {
         Self {
             on_next: Box::new(on_next),

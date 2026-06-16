@@ -1,7 +1,7 @@
 use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{MutGuard, Mutable, MutableHelper, NecessarySendSync, Shared};
+use crate::utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -99,13 +99,13 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
 
 impl<'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTimeOrCount<OE, S>
 where
-    T: NecessarySendSync + 'static,
+    T: NecessarySend + 'static,
     OE: Observable<'static, 'sub, T, E>,
     S: Scheduler,
 {
     fn subscribe(
         self,
-        observer: impl Observer<Vec<T>, E> + NecessarySendSync + 'static,
+        observer: impl Observer<Vec<T>, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
         let context = Shared::new(Mutable::new(BufferWithTimeOrCountContext {
             values: Vec::default(),
@@ -155,8 +155,8 @@ fn setup_emit_timer<T, E, OR, S>(
     delay: Option<Duration>,
     time_span: Duration,
 ) where
-    T: NecessarySendSync + 'static,
-    OR: Observer<Vec<T>, E> + NecessarySendSync + 'static,
+    T: NecessarySend + 'static,
+    OR: Observer<Vec<T>, E> + NecessarySend + 'static,
     S: Scheduler,
 {
     let context_cloned = context.clone();
@@ -181,8 +181,8 @@ fn setup_emit_timer<T, E, OR, S>(
 
 impl<T, E, OR, S> Observer<T, E> for BufferWithTimeOrCountObserver<T, OR, S>
 where
-    T: NecessarySendSync + 'static,
-    OR: Observer<Vec<T>, E> + NecessarySendSync + 'static,
+    T: NecessarySend + 'static,
+    OR: Observer<Vec<T>, E> + NecessarySend + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {

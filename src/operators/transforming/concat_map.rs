@@ -1,5 +1,5 @@
 use super::map::Map;
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::{Observable, observable_ext::ObservableExt},
@@ -65,13 +65,13 @@ where
     T: 'or,
     E: 'or,
     OE: Observable<'or, 'sub, T0, E>,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySendSync + 'sub,
-    F: FnMut(T0) -> OE1 + NecessarySendSync + 'or,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'sub,
+    F: FnMut(T0) -> OE1 + NecessarySend + 'or,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let observable = Map::new(self.source, self.callback);
         let observable = observable.concat_all();

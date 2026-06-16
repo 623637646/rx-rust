@@ -1,5 +1,5 @@
 use crate::disposable::callback_disposal::CallbackDisposal;
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -90,12 +90,12 @@ impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
 impl<'or, 'sub, T, E, OE, C, F> Observable<'or, 'sub, T, E> for Debug<OE, C, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    C: Clone + NecessarySendSync + 'or + 'sub,
-    F: Fn(C, DebugEvent<'_, T, E>) + Clone + NecessarySendSync + 'or + 'sub,
+    C: Clone + NecessarySend + 'or + 'sub,
+    F: Fn(C, DebugEvent<'_, T, E>) + Clone + NecessarySend + 'or + 'sub,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         (self.callback)(self.context.clone(), DebugEvent::Subscribed);
         let observer = DebugObserver {

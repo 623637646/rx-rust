@@ -7,7 +7,7 @@ pub mod thread_pool_scheduler;
 #[cfg(feature = "tokio-scheduler")]
 pub mod tokio_scheduler;
 
-use crate::{disposable::Disposable, utils::types::NecessarySendSync};
+use crate::{disposable::Disposable, utils::types::NecessarySend};
 use educe::Educe;
 #[cfg(feature = "futures")]
 use futures::{Stream, stream::StreamExt};
@@ -25,19 +25,19 @@ pub enum RecursionAction {
 /// Core abstraction for driving asynchronous work across runtimes.
 /// See <https://reactivex.io/documentation/scheduler.html>
 /// This is why the task must be 'static: <https://stackoverflow.com/a/65287449/9315497>
-pub trait Scheduler: Clone + NecessarySendSync + 'static {
+pub trait Scheduler: Clone + NecessarySend + 'static {
     fn schedule_future(
         &self,
-        future: impl Future<Output = ()> + NecessarySendSync + 'static,
-    ) -> impl Disposable + NecessarySendSync + 'static;
+        future: impl Future<Output = ()> + NecessarySend + 'static,
+    ) -> impl Disposable + NecessarySend + 'static;
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySendSync + 'static;
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static;
 
     fn schedule(
         &self,
-        task: impl FnOnce() + NecessarySendSync + 'static,
+        task: impl FnOnce() + NecessarySend + 'static,
         delay: Option<Duration>,
-    ) -> impl Disposable + NecessarySendSync + 'static {
+    ) -> impl Disposable + NecessarySend + 'static {
         let this = self.clone();
         self.schedule_future(async move {
             if let Some(delay) = delay {
@@ -49,9 +49,9 @@ pub trait Scheduler: Clone + NecessarySendSync + 'static {
 
     fn schedule_recursively(
         &self,
-        mut task: impl FnMut(usize) -> RecursionAction + NecessarySendSync + 'static,
+        mut task: impl FnMut(usize) -> RecursionAction + NecessarySend + 'static,
         delay: Option<Duration>,
-    ) -> impl Disposable + NecessarySendSync + 'static {
+    ) -> impl Disposable + NecessarySend + 'static {
         let this = self.clone();
         self.schedule_future(async move {
             if let Some(delay) = delay {
@@ -75,10 +75,10 @@ pub trait Scheduler: Clone + NecessarySendSync + 'static {
 
     fn schedule_periodically(
         &self,
-        mut task: impl FnMut(usize) -> bool + NecessarySendSync + 'static,
+        mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> impl Disposable + NecessarySendSync + 'static {
+    ) -> impl Disposable + NecessarySend + 'static {
         let first = Instant::now() + delay.unwrap_or_default();
         self.schedule_recursively(
             move |count| {
@@ -97,10 +97,10 @@ pub trait Scheduler: Clone + NecessarySendSync + 'static {
     fn schedule_stream<SM>(
         &self,
         mut stream: SM,
-        mut result_callback: impl FnMut(Option<SM::Item>) + NecessarySendSync + 'static,
-    ) -> impl Disposable + NecessarySendSync + 'static
+        mut result_callback: impl FnMut(Option<SM::Item>) + NecessarySend + 'static,
+    ) -> impl Disposable + NecessarySend + 'static
     where
-        SM: Stream + NecessarySendSync + Unpin + 'static,
+        SM: Stream + NecessarySend + Unpin + 'static,
     {
         self.schedule_future(async move {
             while let Some(item) = stream.next().await {

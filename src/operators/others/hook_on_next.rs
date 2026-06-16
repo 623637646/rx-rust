@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -53,11 +53,11 @@ impl<OE, F> HookOnNext<OE, F> {
 impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for HookOnNext<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&mut dyn Observer<T, E>, T) + NecessarySendSync + 'or,
+    F: FnMut(&mut dyn Observer<T, E>, T) + NecessarySend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let observer = HookOnNextObserver {
             observer,

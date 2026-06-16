@@ -1,7 +1,7 @@
 use educe::Educe;
 use rx_rust::{
     observer::{Observer, Termination},
-    utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared},
+    utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 use rx_rust::{safe_lock, safe_lock_vec};
 
@@ -61,12 +61,12 @@ impl<T, E> CheckerObserver<T, E> {
     pub(crate) fn into_callbacks(
         self,
     ) -> (
-        impl FnMut(T) + NecessarySendSync,
-        impl FnOnce(Termination<E>) + NecessarySendSync,
+        impl FnMut(T) + NecessarySend,
+        impl FnOnce(Termination<E>) + NecessarySend,
     )
     where
-        T: NecessarySendSync,
-        E: NecessarySendSync,
+        T: NecessarySend,
+        E: NecessarySend,
     {
         let values = self.values.clone();
         (
@@ -112,11 +112,11 @@ use {
 #[cfg(feature = "futures")]
 impl<T> Checker<T, Infallible> {
     pub(crate) fn from_stream(
-        mut stream: impl Stream<Item = T> + NecessarySendSync + Unpin + 'static,
+        mut stream: impl Stream<Item = T> + NecessarySend + Unpin + 'static,
         runtime: TestRuntime,
     ) -> (Self, Subscription<'static>)
     where
-        T: NecessarySendSync + 'static,
+        T: NecessarySend + 'static,
     {
         let values = Shared::new(Mutable::new(Vec::new()));
         let state = Shared::new(Mutable::new(State::Active));

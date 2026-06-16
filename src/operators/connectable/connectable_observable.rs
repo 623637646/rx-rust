@@ -1,6 +1,6 @@
 use super::ref_count::RefCount;
 use crate::observable::Observable;
-use crate::utils::types::{MutableBool, MutableBoolHelper, NecessarySendSync, Shared};
+use crate::utils::types::{MutableBool, MutableBoolHelper, NecessarySend, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
 
@@ -77,7 +77,7 @@ impl<OE, S> ConnectableObservable<OE, S> {
     pub fn connect<'or, 'sub, T, E>(self) -> Option<Subscription<'sub>>
     where
         OE: Observable<'or, 'sub, T, E>,
-        S: Observer<T, E> + NecessarySendSync + 'or,
+        S: Observer<T, E> + NecessarySend + 'or,
     {
         if self.is_connected.change_if_not_equal(true) {
             None
@@ -97,7 +97,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         self.subject.subscribe(observer)
     }

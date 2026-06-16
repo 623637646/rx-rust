@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -60,13 +60,13 @@ impl<T, T1, OE, F> Scan<T, T1, OE, F> {
 
 impl<'or, 'sub, T, T1, E, OE, F> Observable<'or, 'sub, T, E> for Scan<T, T1, OE, F>
 where
-    T: Clone + NecessarySendSync + 'or,
+    T: Clone + NecessarySend + 'or,
     OE: Observable<'or, 'sub, T1, E>,
-    F: FnMut(T, T1) -> T + NecessarySendSync + 'or,
+    F: FnMut(T, T1) -> T + NecessarySend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let observer = ScanObserver {
             observer,

@@ -1,5 +1,5 @@
 use crate::disposable::Disposable;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySendSync, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -58,7 +58,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let observer = Shared::new(Mutable::new(Some(observer)));
 

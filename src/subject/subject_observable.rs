@@ -1,5 +1,5 @@
 use super::Subject;
-use crate::utils::types::NecessarySendSync;
+use crate::utils::types::NecessarySend;
 use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
 use educe::Educe;
 
@@ -20,7 +20,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySendSync + 'or,
+        observer: impl Observer<T, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         self.0.subscribe(observer)
     }
