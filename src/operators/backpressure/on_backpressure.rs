@@ -1,4 +1,5 @@
 use crate::observable::shared_model_observable::{Context, SharedModel, SharedModelObservable};
+use crate::safe_lock;
 use crate::utils::types::{ActionAfterLock, MutableHelper, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
@@ -161,6 +162,10 @@ where
         if let Some(termination) = termination {
             context.send_termination(termination);
         }
+    }
+
+    fn on_dispose(context: Context<(Vec<T>, RequestCallbackType<'cb>), E, OR, Self>) {
+        let _ = safe_lock!(mem_take: context.model, buffer);
     }
 }
 

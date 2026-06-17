@@ -3,15 +3,17 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{ActionAfterLock, Mutable, MutableHelper, NecessarySend, Shared},
+    utils::types::{ActionAfterLock, MarkerType, Mutable, MutableHelper, NecessarySend, Shared},
 };
 use educe::Educe;
-use std::collections::VecDeque;
+use std::{collections::VecDeque, marker::PhantomData};
 
 pub trait SharedModel<T0, T, E, OR, EX>: Sized {
     fn on_next(value: T0, context: Context<T, E, OR, Self>, extra: &mut EX);
 
     fn on_termination(termination: Termination<E>, context: Context<T, E, OR, Self>, extra: EX);
+
+    fn on_dispose(_context: Context<T, E, OR, Self>) {}
 }
 
 pub trait SharedModelObservable<'or, 'sub, T0, E> {
@@ -22,10 +24,11 @@ pub trait SharedModelObservable<'or, 'sub, T0, E> {
         extra: EX,
     ) -> Subscription<'sub>
     where
+        T0: 'sub,
         T: NecessarySend + 'or + 'sub,
         E: NecessarySend + 'or + 'sub,
         OR: Observer<T, E> + NecessarySend + 'or + 'sub,
-        EX: NecessarySend + 'or;
+        EX: NecessarySend + 'or + 'sub;
 }
 
 impl<'or, 'sub, T0, E, OE> SharedModelObservable<'or, 'sub, T0, E> for OE
@@ -39,15 +42,19 @@ where
         extra: EX,
     ) -> Subscription<'sub>
     where
+        T0: 'sub,
         T: NecessarySend + 'or + 'sub,
         E: NecessarySend + 'or + 'sub,
         OR: Observer<T, E> + NecessarySend + 'or + 'sub,
-        EX: NecessarySend + 'or,
+        EX: NecessarySend + 'or + 'sub,
     {
         let state = Shared::new(Mutable::new(State::Idle(observer)));
         let model = Shared::new(Mutable::new(model));
-        let disposable = SharedModelDisposable(state.clone());
         let context = Context { state, model };
+        let disposable = SharedModelDisposable {
+            context: context.clone(),
+            _marker: PhantomData,
+        };
         let observer = SharedModelObserver { context, extra };
         self.subscribe(observer) + disposable
     }
@@ -199,10 +206,17 @@ where
     }
 }
 
-struct SharedModelDisposable<T, E, OR>(Shared<Mutable<State<T, E, OR>>>);
+struct SharedModelDisposable<T0, T, E, OR, M, EX> {
+    context: Context<T, E, OR, M>,
+    _marker: MarkerType<(T0, EX)>,
+}
 
-impl<T, E, OR> Disposable for SharedModelDisposable<T, E, OR> {
+impl<T0, T, E, OR, M, EX> Disposable for SharedModelDisposable<T0, T, E, OR, M, EX>
+where
+    M: SharedModel<T0, T, E, OR, EX>,
+{
     fn dispose(self) {
-        let _old_state = safe_lock!(mem_replace: self.0, State::Stopped);
+        let _old_state = safe_lock!(mem_replace: self.context.state, State::Stopped);
+        M::on_dispose(self.context);
     }
 }
