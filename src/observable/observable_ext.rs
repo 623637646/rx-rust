@@ -605,8 +605,6 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     /// Convenience helper for subscribing with plain callbacks instead of a full observer.
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>
     where
-        T: 'or,
-        E: 'or,
         FN: FnMut(T) + NecessarySend + 'or,
         FT: FnOnce(Termination<E>) + NecessarySend + 'or,
     {
