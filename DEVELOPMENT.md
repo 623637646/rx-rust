@@ -103,6 +103,6 @@
 # Others
 
 正则表达式：查询锁的使用
-lock_mut|lock_ref|safe_lock\w*!|\Wread\(\)|\Wwrite\(|\Wchange_if_not_equal\((true|false)
+lock_mut|lock_ref|safe_lock\w*!|\Wread\(\)|\Wwrite\(|\Wchange_if_not_equal\(
 194 个
 排除路径：src/utils/safe_lock.rs,src/utils/types.rs
