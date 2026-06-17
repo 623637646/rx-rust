@@ -41,7 +41,7 @@
       10. Revertible observable  
           1. test_revert_completed  
           2. test_revert_error  
-      11. Hot Observable (Subjects, RefCount)  
+      11. Hot Observable (e.g. PublishSubject, BehaviorSubject. Only those that can borrow sender or own sender at the same time)  
           1. test_complete_on_next  
           2. test_error_on_next  
           3. test_unsub_on_next
