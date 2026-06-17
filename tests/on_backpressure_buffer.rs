@@ -1095,7 +1095,7 @@ fn test_without_convenient_api() {
 }
 
 #[test]
-fn test_complete_on_next_special_case() {
+fn test_request_on_request() {
     let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
