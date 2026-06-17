@@ -1,6 +1,5 @@
 use crate::observable::shared_model_observable::{Context, SharedModel, SharedModelObservable};
-use crate::safe_lock;
-use crate::utils::types::{ActionAfterLock, MutableHelper, NecessarySend};
+use crate::utils::types::{ActionAfterLock, MarkerType, MutableHelper, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -18,6 +17,11 @@ cfg_if::cfg_if! {
         /// once it finishes processing the current batch.
         pub type RequestCallbackType<'cb> = Box<dyn FnOnce() + Send + Sync + 'cb>;
     }
+}
+
+pub trait BackpressureCollection<T0, T> {
+    fn extend_one(&mut self, item: T0);
+    fn take_next_value(&mut self) -> Option<T>;
 }
 
 /// Low-level primitive that converts a fast upstream into demand-driven chunks by
@@ -38,7 +42,7 @@ cfg_if::cfg_if! {
 ///
 /// let mut received = Vec::new();
 /// let mut subject = PublishSubject::<_, Infallible>::new();
-/// let observable = OnBackpressure::new(subject.clone(), |buffer, value| buffer.push(value));
+/// let observable = OnBackpressure::new(subject.clone(), |collection, value| collection.push(value));
 ///
 /// let subscription = observable.subscribe_with_callback(
 ///     |(values, request_callback)| {
@@ -59,94 +63,89 @@ cfg_if::cfg_if! {
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct OnBackpressure<OE, F> {
+pub struct OnBackpressure<T0, OE, C> {
     source: OE,
-    receiving_strategy: F,
+    collection: C,
+    _marker: MarkerType<T0>,
 }
 
-impl<OE, F> OnBackpressure<OE, F> {
-    pub fn new<'or, 'sub, T, E>(source: OE, receiving_strategy: F) -> Self
+impl<T0, OE, C> OnBackpressure<T0, OE, C> {
+    pub fn new<'or, 'sub, E>(source: OE, collection: C) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
-        F: FnMut(&mut Vec<T>, T),
+        OE: Observable<'or, 'sub, T0, E>,
     {
         Self {
             source,
-            receiving_strategy,
+            collection,
+            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, (Vec<T>, RequestCallbackType<'or>), E>
-    for OnBackpressure<OE, F>
+impl<'or, 'sub, T0, T, E, OE, C> Observable<'or, 'sub, (T, RequestCallbackType<'or>), E>
+    for OnBackpressure<T0, OE, C>
 where
     'or: 'sub,
+    T0: 'sub,
     T: NecessarySend + 'or,
     E: NecessarySend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&mut Vec<T>, T) + NecessarySend + 'or,
+    OE: Observable<'or, 'sub, T0, E>,
+    C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+        observer: impl Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let model = Model {
-            buffer: Vec::new(),
+            collection: self.collection,
             termination: None,
             emit_directly: true,
         };
-        self.source
-            .subscribe_with_shared_model(observer, model, self.receiving_strategy)
+        self.source.subscribe_with_shared_model(observer, model)
     }
 }
 
-struct Model<T, E> {
-    buffer: Vec<T>,
+struct Model<E, C> {
+    collection: C,
     termination: Option<Termination<E>>,
     emit_directly: bool,
 }
 
-impl<'cb, T, E, OR, F> SharedModel<T, (Vec<T>, RequestCallbackType<'cb>), E, OR, F> for Model<T, E>
+impl<'cb, T0, T, E, OR, C> SharedModel<T0, (T, RequestCallbackType<'cb>), E, OR> for Model<E, C>
 where
     T: NecessarySend + 'cb,
     E: NecessarySend + 'cb,
-    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
-    F: FnMut(&mut Vec<T>, T),
+    OR: Observer<(T, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
+    C: BackpressureCollection<T0, T> + NecessarySend + 'cb,
 {
-    fn on_next(
-        value: T,
-        context: Context<(Vec<T>, RequestCallbackType<'cb>), E, OR, Self>,
-        receiving_strategy: &mut F,
-    ) {
-        let buffer = context.model.safe_lock_mut_with_args(
-            (value, receiving_strategy),
-            |model, (value, receiving_strategy)| {
+    fn on_next(context: Context<(T, RequestCallbackType<'cb>), E, OR, Self>, value: T0) {
+        let next = context
+            .model
+            .safe_lock_mut_with_args(value, |model, value| {
                 if model.termination.is_some() {
                     return None;
                 }
-                receiving_strategy(&mut model.buffer, value);
+                model.collection.extend_one(value);
                 if model.emit_directly {
                     model.emit_directly = false;
-                    let buffer = std::mem::take(&mut model.buffer);
-                    Some(buffer)
+                    let next = model.collection.take_next_value().expect("cannot be empty");
+                    Some(next)
                 } else {
                     None
                 }
-            },
-        );
-        if let Some(buffer) = buffer {
+            });
+        if let Some(next) = next {
             let context_cloned = context.clone();
             let callback: RequestCallbackType = Box::new(move || {
                 handle_request(context_cloned);
             });
-            context.send_next((buffer, callback));
+            context.send_next((next, callback));
         }
     }
 
     fn on_termination(
+        context: Context<(T, RequestCallbackType<'cb>), E, OR, Self>,
         termination: Termination<E>,
-        context: Context<(Vec<T>, RequestCallbackType<'cb>), E, OR, Self>,
-        _extra: F,
     ) {
         let termination =
             context
@@ -164,22 +163,25 @@ where
         }
     }
 
-    fn on_dispose(context: Context<(Vec<T>, RequestCallbackType<'cb>), E, OR, Self>) {
-        let _ = safe_lock!(mem_take: context.model, buffer);
+    fn on_dispose(context: Context<(T, RequestCallbackType<'cb>), E, OR, Self>) {
+        // Clean up the collection
+        let _ = context
+            .model
+            .safe_lock_mut(|model| model.collection.take_next_value());
     }
 }
 
-fn handle_request<'cb, T, E, OR>(
-    context: Context<(Vec<T>, RequestCallbackType<'cb>), E, OR, Model<T, E>>,
+fn handle_request<'cb, T0, T, E, OR, C>(
+    context: Context<(T, RequestCallbackType<'cb>), E, OR, Model<E, C>>,
 ) where
     T: NecessarySend + 'cb,
     E: NecessarySend + 'cb,
-    OR: Observer<(Vec<T>, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
+    OR: Observer<(T, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
+    C: BackpressureCollection<T0, T> + NecessarySend + 'cb,
 {
     let action = context.model.safe_lock_mut(|model| {
-        if !model.buffer.is_empty() {
-            let buffer = std::mem::take(&mut model.buffer);
-            ActionAfterLock::Next(buffer)
+        if let Some(next) = model.collection.take_next_value() {
+            ActionAfterLock::Next(next)
         } else if let Some(termination) = model.termination.take() {
             ActionAfterLock::Termination(termination)
         } else {
@@ -188,12 +190,12 @@ fn handle_request<'cb, T, E, OR>(
         }
     });
     match action {
-        ActionAfterLock::Next(buffer) => {
+        ActionAfterLock::Next(next) => {
             let context_cloned = context.clone();
             let callback: RequestCallbackType = Box::new(move || {
                 handle_request(context_cloned);
             });
-            context.send_next((buffer, callback));
+            context.send_next((next, callback));
         }
         ActionAfterLock::Termination(termination) => {
             context.send_termination(termination);

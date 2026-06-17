@@ -1,8 +1,10 @@
 use crate::{
     disposable::subscription::Subscription,
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
     observer::Observer,
-    operators::backpressure::on_backpressure::{OnBackpressure, RequestCallbackType},
+    operators::backpressure::on_backpressure::{
+        BackpressureCollection, OnBackpressure, RequestCallbackType,
+    },
     utils::types::NecessarySend,
 };
 use educe::Educe;
@@ -71,11 +73,18 @@ where
         self,
         observer: impl Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
-        OnBackpressure::new(self.source, |buffer, value| {
-            buffer.clear();
-            buffer.push(value);
-        })
-        .map(|(values, request_callback)| (values.into_iter().next().unwrap(), request_callback))
-        .subscribe(observer)
+        OnBackpressure::new(self.source, Collection(None)).subscribe(observer)
+    }
+}
+
+struct Collection<T>(Option<T>);
+
+impl<T> BackpressureCollection<T, T> for Collection<T> {
+    fn extend_one(&mut self, item: T) {
+        self.0 = Some(item);
+    }
+
+    fn take_next_value(&mut self) -> Option<T> {
+        self.0.take()
     }
 }

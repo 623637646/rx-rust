@@ -2,7 +2,9 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::Observer,
-    operators::backpressure::on_backpressure::{OnBackpressure, RequestCallbackType},
+    operators::backpressure::on_backpressure::{
+        BackpressureCollection, OnBackpressure, RequestCallbackType,
+    },
     utils::types::NecessarySend,
 };
 use educe::Educe;
@@ -71,9 +73,22 @@ where
         self,
         observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
-        OnBackpressure::new(self.source, |buffer, value| {
-            buffer.push(value);
-        })
-        .subscribe(observer)
+        OnBackpressure::new(self.source, Collection(Vec::new())).subscribe(observer)
+    }
+}
+
+struct Collection<T>(Vec<T>);
+
+impl<T> BackpressureCollection<T, Vec<T>> for Collection<T> {
+    fn extend_one(&mut self, item: T) {
+        self.0.push(item);
+    }
+
+    fn take_next_value(&mut self) -> Option<Vec<T>> {
+        if self.0.is_empty() {
+            None
+        } else {
+            Some(std::mem::take(&mut self.0))
+        }
     }
 }

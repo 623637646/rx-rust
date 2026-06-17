@@ -471,11 +471,8 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         ObserveOn::new(self, scheduler)
     }
 
-    fn on_backpressure<F>(self, receiving_strategy: F) -> OnBackpressure<Self, F>
-    where
-        F: FnMut(&mut Vec<T>, T),
-    {
-        OnBackpressure::new(self, receiving_strategy)
+    fn on_backpressure<C>(self, collection: C) -> OnBackpressure<T, Self, C> {
+        OnBackpressure::new(self, collection)
     }
 
     fn on_backpressure_buffer(self) -> OnBackpressureBuffer<Self> {
