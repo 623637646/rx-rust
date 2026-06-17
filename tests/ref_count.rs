@@ -1653,6 +1653,85 @@ fn test_error_on_sub() {
 }
 
 #[test]
+fn test_sub_on_sub() {
+    let counter = AtomicUsize::new(0);
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
+    let sender_cloned = sender.clone();
+    let channel_checker_cloned = channel_checker.clone();
+    let observable = Defer::new(move || {
+        let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        observable
+    });
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = observable
+        .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
+        .publish()
+        .ref_count();
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert!(channel_checker.test_lock_ref().is_none());
+
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_1 = observable_1
+        .hook_on_subscription(|observable, observer| {
+            let sub = observable.subscribe(observer);
+            let sub2 = observable_2.subscribe(observer_2);
+            assert!(safe_lock_option!(replace: subscription_2, sub2).is_none());
+            sub
+        })
+        .subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Subscribed
+    );
+
+    safe_lock_option_observer!(on_next: sender, ());
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [1]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Subscribed
+    );
+
+    subscription_1.dispose();
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [1]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Subscribed
+    );
+
+    subscription_2.dispose();
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [1]);
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Unsubscribed
+    );
+}
+
+#[test]
 fn test_subscribe_after_all_unsubscribed() {
     let counter = AtomicUsize::new(0);
     let sender_channel_checker = Shared::new(Mutable::new(Vec::new()));
