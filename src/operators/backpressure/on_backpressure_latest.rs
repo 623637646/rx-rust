@@ -72,7 +72,8 @@ where
         observer: impl Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         OnBackpressure::new(self.source, |buffer, value| {
-            *buffer = vec![value];
+            buffer.clear();
+            buffer.push(value);
         })
         .map(|(values, request_callback)| (values.into_iter().next().unwrap(), request_callback))
         .subscribe(observer)

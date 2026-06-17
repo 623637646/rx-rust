@@ -3,10 +3,10 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{ActionAfterLock, MarkerType, Mutable, MutableHelper, NecessarySend, Shared},
+    utils::types::{MarkerType, Mutable, MutableHelper, NecessarySend, Shared},
 };
 use educe::Educe;
-use std::{collections::VecDeque, marker::PhantomData};
+use std::marker::PhantomData;
 
 pub trait SharedModel<T0, T, E, OR, EX>: Sized {
     fn on_next(value: T0, context: Context<T, E, OR, Self>, extra: &mut EX);
@@ -63,7 +63,7 @@ where
 enum State<T, E, OR> {
     Idle(OR),
     Processing {
-        next_values: VecDeque<T>,
+        next_values: Vec<T>,
         termination: Option<Termination<E>>,
     },
     Stopped, // Unsubscribed or disposed
@@ -89,7 +89,7 @@ where
                     let idel_state = std::mem::replace(
                         &mut *state,
                         State::Processing {
-                            next_values: VecDeque::new(),
+                            next_values: Vec::new(),
                             termination: None,
                         },
                     );
@@ -103,7 +103,7 @@ where
                     termination,
                 } => {
                     if termination.is_none() {
-                        next_values.push_back(value);
+                        next_values.push(value);
                     }
                     None
                 }
@@ -143,7 +143,7 @@ where
 
     fn send_events_until_finish(&self, mut observer: OR) {
         loop {
-            let (action, returned_observer) =
+            let (returned_observer, next_values, termination) =
                 self.state
                     .safe_lock_mut_with_args(observer, |state, observer| match state {
                         State::Idle(_) => {
@@ -152,36 +152,45 @@ where
                         State::Processing {
                             next_values,
                             termination,
-                        } => {
-                            if let Some(next) = next_values.pop_front() {
-                                (ActionAfterLock::Next(next), Some(observer))
-                            } else if let Some(termination) = termination.take() {
-                                *state = State::Stopped;
-                                (ActionAfterLock::Termination(termination), Some(observer))
-                            } else {
+                        } => match (next_values.is_empty(), termination.take()) {
+                            (true, None) => {
                                 *state = State::Idle(observer);
-                                (ActionAfterLock::None, None)
+                                (None, None, None)
                             }
-                        }
-                        State::Stopped => (ActionAfterLock::None, Some(observer)),
+                            (true, Some(termination)) => {
+                                *state = State::Stopped;
+                                (Some(observer), None, Some(termination))
+                            }
+                            (false, None) => {
+                                let next_values = std::mem::take(next_values);
+                                (Some(observer), Some(next_values), None)
+                            }
+                            (false, Some(termination)) => {
+                                let next_values = std::mem::take(next_values);
+                                *state = State::Stopped;
+                                (Some(observer), Some(next_values), Some(termination)) // Drop observer outside the lock to avoid potential deadlock
+                            }
+                        },
+                        State::Stopped => (Some(observer), None, None),
                     });
 
-            if let Some(mut obs) = returned_observer {
-                match action {
-                    ActionAfterLock::Next(value) => {
-                        obs.on_next(value);
-                        observer = obs; // continue the loop
+            match (returned_observer, next_values, termination) {
+                (None, _, _) | (Some(_), None, None) => break,
+                (Some(mut obs), next_values, Some(termination)) => {
+                    if let Some(next_values) = next_values {
+                        for value in next_values {
+                            obs.on_next(value);
+                        }
                     }
-                    ActionAfterLock::Termination(termination) => {
-                        obs.on_termination(termination);
-                        break;
-                    }
-                    ActionAfterLock::None => {
-                        break;
-                    }
+                    obs.on_termination(termination);
+                    break;
                 }
-            } else {
-                break;
+                (Some(mut obs), Some(next_values), None) => {
+                    for value in next_values {
+                        obs.on_next(value);
+                    }
+                    observer = obs;
+                }
             }
         }
     }
