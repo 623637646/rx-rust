@@ -3,7 +3,7 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
 };
 use crate::{safe_lock, safe_lock_option_observer, safe_lock_vec};
 use educe::Educe;

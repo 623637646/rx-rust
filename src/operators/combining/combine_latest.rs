@@ -4,7 +4,7 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
 

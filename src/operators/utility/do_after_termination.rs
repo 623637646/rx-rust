@@ -66,10 +66,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnOnce(Termination<E>) + NecessarySend + 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.source
             .hook_on_termination(move |observer, termination| {
                 observer.on_termination(termination.clone());

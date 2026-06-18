@@ -55,10 +55,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnMut(&mut dyn Observer<T, E>, T) + NecessarySend + 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = HookOnNextObserver {
             observer,
             callback: self.callback,

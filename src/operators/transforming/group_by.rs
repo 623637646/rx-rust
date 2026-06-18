@@ -107,9 +107,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>
-        + NecessarySend
-        + 'or,
+        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         let observer = GroupByObserver {
             observer,

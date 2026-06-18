@@ -39,10 +39,7 @@ where
     E: Clone + NecessarySend + 'sub,
     'or: 'sub,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.0.clone().lock_mut(|mut lock| match &mut *lock {
             State::Idle(observers) => {
                 let key = observers.insert(Some(BoxedObserver::new(observer)));

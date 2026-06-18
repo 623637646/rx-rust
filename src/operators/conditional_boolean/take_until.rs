@@ -4,7 +4,9 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
+    utils::{
+        subscribe_unsub_after_termination::subscribe_unsub_after_termination, types::MarkerType,
+    },
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -74,10 +76,7 @@ where
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
             let stop_observer = StopObserver {

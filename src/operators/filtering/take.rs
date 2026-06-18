@@ -3,7 +3,7 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
 };
 use educe::Educe;
 
@@ -51,10 +51,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
             Subscription::default()

@@ -71,10 +71,7 @@ where
     E: NecessarySend + 'sub,
     'or: 'sub,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         match safe_lock!(mem_replace:
             self.0,
             State::Subscribed(Some(BoxedObserver::new(observer)))

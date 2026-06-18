@@ -39,10 +39,7 @@ impl<'or, 'sub, 'oe, T, E> CloneableBoxedObservable<'or, 'sub, 'oe, T, E> {
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E>
     for CloneableBoxedObservable<'or, 'sub, '_, T, E>
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.0().subscribe(observer)
     }
 }

@@ -4,7 +4,7 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
-    utils::unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
 };
 use crate::{safe_lock, safe_lock_observer, safe_lock_option_observer};
 use educe::Educe;
@@ -100,9 +100,7 @@ where
 {
     fn subscribe(
         self,
-        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>
-        + NecessarySend
-        + 'or,
+        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |mut observer| {
             let subject = PublishSubject::default();

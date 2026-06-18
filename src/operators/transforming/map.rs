@@ -61,10 +61,7 @@ where
     OE: Observable<'or, 'sub, T0, E>,
     F: FnMut(T0) -> T + NecessarySend + 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observer = MapObserver {
             observer,
             callback: self.callback,

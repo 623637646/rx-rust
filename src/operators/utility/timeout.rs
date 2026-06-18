@@ -8,8 +8,8 @@ use crate::{
     safe_lock, safe_lock_option_observer,
     scheduler::Scheduler,
     utils::{
+        subscribe_unsub_after_termination::subscribe_unsub_after_termination,
         types::{Mutable, MutableHelper, NecessarySend, Shared},
-        unsub_after_termination::subscribe_unsub_after_termination,
     },
 };
 use educe::Educe;

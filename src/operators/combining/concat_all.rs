@@ -7,7 +7,9 @@ use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
-    utils::{types::MarkerType, unsub_after_termination::subscribe_unsub_after_termination},
+    utils::{
+        subscribe_unsub_after_termination::subscribe_unsub_after_termination, types::MarkerType,
+    },
 };
 use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
@@ -82,10 +84,7 @@ where
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'sub,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + NecessarySend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(ConcatAllContext {
                 pending_observables: VecDeque::new(),

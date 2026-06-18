@@ -1,5 +1,5 @@
+use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination;
 use crate::utils::types::NecessarySend;
-use crate::utils::unsub_after_termination::subscribe_unsub_after_termination;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
