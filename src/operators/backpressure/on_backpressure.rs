@@ -1,4 +1,6 @@
-use crate::observable::shared_model_observable::{Context, SharedModel, SharedModelObservable};
+use crate::utils::subscribe_with_shared_model::{
+    Context, SharedModel, subscribe_with_shared_model,
+};
 use crate::utils::types::{ActionAfterLock, MarkerType, MutableHelper, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
@@ -101,7 +103,9 @@ where
             termination: None,
             emit_directly: true,
         };
-        self.source.subscribe_with_shared_model(observer, model)
+        subscribe_with_shared_model(observer, model, |observer, _| {
+            self.source.subscribe(observer)
+        })
     }
 }
 
@@ -119,21 +123,19 @@ where
     C: BackpressureCollection<T0, T> + NecessarySend + 'cb,
 {
     fn on_next(context: Context<(T, RequestCallbackType<'cb>), E, OR, Self>, value: T0) {
-        let next = context
-            .model
-            .safe_lock_mut_with_args(value, |model, value| {
-                if model.termination.is_some() {
-                    return None;
-                }
-                model.collection.extend_one(value);
-                if model.emit_directly {
-                    model.emit_directly = false;
-                    let next = model.collection.take_next_value().expect("cannot be empty");
-                    Some(next)
-                } else {
-                    None
-                }
-            });
+        let next = context.model.lock_mut(|mut lock| {
+            if lock.termination.is_some() {
+                return None;
+            }
+            lock.collection.extend_one(value);
+            if lock.emit_directly {
+                lock.emit_directly = false;
+                let next = lock.collection.take_next_value().expect("cannot be empty");
+                Some(next)
+            } else {
+                None
+            }
+        });
         if let Some(next) = next {
             let context_cloned = context.clone();
             let callback: RequestCallbackType = Box::new(move || {
@@ -147,17 +149,14 @@ where
         context: Context<(T, RequestCallbackType<'cb>), E, OR, Self>,
         termination: Termination<E>,
     ) {
-        let termination =
-            context
-                .model
-                .safe_lock_mut_with_args(termination, |model, termination| {
-                    if model.emit_directly {
-                        Some(termination)
-                    } else {
-                        model.termination = Some(termination);
-                        None
-                    }
-                });
+        let termination = context.model.lock_mut(|mut lock| {
+            if lock.emit_directly {
+                Some(termination)
+            } else {
+                lock.termination = Some(termination);
+                None
+            }
+        });
         if let Some(termination) = termination {
             context.send_termination(termination);
         }
@@ -167,7 +166,7 @@ where
         // Clean up the collection
         let _ = context
             .model
-            .safe_lock_mut(|model| model.collection.take_next_value());
+            .lock_mut(|mut lock| lock.collection.take_next_value());
     }
 }
 
@@ -179,13 +178,13 @@ fn handle_request<'cb, T0, T, E, OR, C>(
     OR: Observer<(T, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
     C: BackpressureCollection<T0, T> + NecessarySend + 'cb,
 {
-    let action = context.model.safe_lock_mut(|model| {
-        if let Some(next) = model.collection.take_next_value() {
+    let action = context.model.lock_mut(|mut lock| {
+        if let Some(next) = lock.collection.take_next_value() {
             ActionAfterLock::Next(next)
-        } else if let Some(termination) = model.termination.take() {
+        } else if let Some(termination) = lock.termination.take() {
             ActionAfterLock::Termination(termination)
         } else {
-            model.emit_directly = true;
+            lock.emit_directly = true;
             ActionAfterLock::None
         }
     });

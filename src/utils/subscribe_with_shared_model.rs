@@ -2,7 +2,7 @@ use crate::{
     disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{MarkerType, Mutable, MutableHelper, Shared},
+    utils::types::{MarkerType, Mutable, MutableHelper, NecessarySend, Shared},
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -15,12 +15,17 @@ pub trait SharedModel<T0, T, E, OR>: Sized {
     fn on_dispose(_context: Context<T, E, OR, Self>) {}
 }
 
-pub fn subscribe_with_shared_model<'sub, T, E, OR, M, F>(
+pub fn subscribe_with_shared_model<'sub, T0, T, E, OR, M, F>(
     observer: OR,
     model: M,
     builder: F,
 ) -> Subscription<'sub>
 where
+    T0: 'sub,
+    T: NecessarySend + 'sub,
+    E: NecessarySend + 'sub,
+    OR: NecessarySend + 'sub,
+    M: SharedModel<T0, T, E, OR> + NecessarySend + 'sub,
     F: FnOnce(SharedModelObserver<T, E, OR, M>, Context<T, E, OR, M>) -> Subscription<'sub>,
 {
     let state = Shared::new(Mutable::new(State::Idle(observer)));
@@ -30,7 +35,7 @@ where
         context: context.clone(),
         _marker: PhantomData,
     };
-    let observer = SharedModelObserver(context);
+    let observer = SharedModelObserver(context.clone());
     let sub = builder(observer, context);
     sub + disposable
 }
@@ -166,7 +171,7 @@ where
     }
 }
 
-struct SharedModelObserver<T, E, OR, M>(Context<T, E, OR, M>);
+pub struct SharedModelObserver<T, E, OR, M>(Context<T, E, OR, M>);
 
 impl<T0, T, E, OR, M> Observer<T0, E> for SharedModelObserver<T, E, OR, M>
 where
