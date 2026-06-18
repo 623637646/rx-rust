@@ -1,9 +1,8 @@
 use crate::{
     disposable::{Disposable, subscription::Subscription},
-    observable::Observable,
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{MarkerType, Mutable, MutableHelper, NecessarySend, Shared},
+    utils::types::{MarkerType, Mutable, MutableHelper, Shared},
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -16,44 +15,24 @@ pub trait SharedModel<T0, T, E, OR>: Sized {
     fn on_dispose(_context: Context<T, E, OR, Self>) {}
 }
 
-pub trait SharedModelObservable<'or, 'sub, T0, E> {
-    fn subscribe_with_shared_model<T, OR>(
-        self,
-        observer: OR,
-        model: impl SharedModel<T0, T, E, OR> + NecessarySend + 'or + 'sub,
-    ) -> Subscription<'sub>
-    where
-        T0: 'sub,
-        T: NecessarySend + 'or + 'sub,
-        E: NecessarySend + 'or + 'sub,
-        OR: Observer<T, E> + NecessarySend + 'or + 'sub;
-}
-
-impl<'or, 'sub, T0, E, OE> SharedModelObservable<'or, 'sub, T0, E> for OE
+pub fn subscribe_with_shared_model<'sub, T, E, OR, M, F>(
+    observer: OR,
+    model: M,
+    builder: F,
+) -> Subscription<'sub>
 where
-    OE: Observable<'or, 'sub, T0, E>,
+    F: FnOnce(SharedModelObserver<T, E, OR, M>, Context<T, E, OR, M>) -> Subscription<'sub>,
 {
-    fn subscribe_with_shared_model<T, OR>(
-        self,
-        observer: OR,
-        model: impl SharedModel<T0, T, E, OR> + NecessarySend + 'or + 'sub,
-    ) -> Subscription<'sub>
-    where
-        T0: 'sub,
-        T: NecessarySend + 'or + 'sub,
-        E: NecessarySend + 'or + 'sub,
-        OR: Observer<T, E> + NecessarySend + 'or + 'sub,
-    {
-        let state = Shared::new(Mutable::new(State::Idle(observer)));
-        let model = Shared::new(Mutable::new(model));
-        let context = Context { state, model };
-        let disposable = SharedModelDisposable {
-            context: context.clone(),
-            _marker: PhantomData,
-        };
-        let observer = SharedModelObserver(context);
-        self.subscribe(observer) + disposable
-    }
+    let state = Shared::new(Mutable::new(State::Idle(observer)));
+    let model = Shared::new(Mutable::new(model));
+    let context = Context { state, model };
+    let disposable = SharedModelDisposable {
+        context: context.clone(),
+        _marker: PhantomData,
+    };
+    let observer = SharedModelObserver(context);
+    let sub = builder(observer, context);
+    sub + disposable
 }
 
 enum State<T, E, OR> {
