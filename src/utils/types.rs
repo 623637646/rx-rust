@@ -17,10 +17,6 @@ pub enum ActionAfterLock<T, E> {
 pub trait MutableHelper<T> {
     fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R;
     fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R;
-    fn safe_lock_mut<R>(&self, callback: fn(&mut T) -> R) -> R;
-    fn safe_lock_ref<R>(&self, callback: fn(&T) -> R) -> R;
-    fn safe_lock_mut_with_args<R, A>(&self, args: A, callback: fn(&mut T, args: A) -> R) -> R;
-    fn safe_lock_ref_with_args<R, A>(&self, args: A, callback: fn(&T, args: A) -> R) -> R;
 }
 
 pub trait MutableBoolHelper {
@@ -48,18 +44,6 @@ cfg_if::cfg_if! {
             }
             fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) ->R) ->R {
                 callback(self.borrow())
-            }
-            fn safe_lock_mut<R>(&self, callback: fn(&mut T) -> R) ->R {
-                callback(&mut self.borrow_mut())
-            }
-            fn safe_lock_ref<R>(&self, callback: fn(&T) -> R) ->R {
-                callback(&self.borrow())
-            }
-            fn safe_lock_mut_with_args<R, A>(&self, args: A, callback: fn(&mut T, args: A) -> R) ->R {
-                callback(&mut self.borrow_mut(), args)
-            }
-            fn safe_lock_ref_with_args<R, A>(&self, args: A, callback: fn(&T, args: A) -> R) ->R {
-                callback(&self.borrow(), args)
             }
         }
 
@@ -113,18 +97,6 @@ cfg_if::cfg_if! {
             }
             fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) ->R) ->R {
                 callback(ReadOnlyMutexGuard(self.lock().unwrap()))
-            }
-            fn safe_lock_mut<R>(&self, callback: fn(&mut T) -> R) -> R {
-                callback(&mut self.lock().unwrap())
-            }
-            fn safe_lock_ref<R>(&self, callback: fn(&T) -> R) -> R {
-                callback(&self.lock().unwrap())
-            }
-            fn safe_lock_mut_with_args<R, A>(&self, args: A, callback: fn(&mut T, args: A) -> R) -> R {
-                callback(&mut self.lock().unwrap(), args)
-            }
-            fn safe_lock_ref_with_args<R, A>(&self, args: A, callback: fn(&T, args: A) -> R) -> R {
-                callback(&self.lock().unwrap(), args)
             }
         }
 

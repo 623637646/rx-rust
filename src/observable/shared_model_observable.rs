@@ -78,33 +78,31 @@ where
 {
     pub fn send_next(&self, value: T) {
         // None means finish, Some means continue
-        let action = self
-            .state
-            .safe_lock_mut_with_args(value, |state, value| match state {
-                State::Idle(_) => {
-                    let idel_state = std::mem::replace(
-                        &mut *state,
-                        State::Processing {
-                            next_values: Vec::new(),
-                            termination: None,
-                        },
-                    );
-                    match idel_state {
-                        State::Idle(observer) => Some((observer, value)),
-                        State::Processing { .. } | State::Stopped => unreachable!(),
-                    }
+        let action = self.state.lock_mut(|mut lock| match &mut *lock {
+            State::Idle(_) => {
+                let idel_state = std::mem::replace(
+                    &mut *lock,
+                    State::Processing {
+                        next_values: Vec::new(),
+                        termination: None,
+                    },
+                );
+                match idel_state {
+                    State::Idle(observer) => Some((observer, value)),
+                    State::Processing { .. } | State::Stopped => unreachable!(),
                 }
-                State::Processing {
-                    next_values,
-                    termination,
-                } => {
-                    if termination.is_none() {
-                        next_values.push(value);
-                    }
-                    None
+            }
+            State::Processing {
+                next_values,
+                termination,
+            } => {
+                if termination.is_none() {
+                    next_values.push(value);
                 }
-                State::Stopped => None,
-            });
+                None
+            }
+            State::Stopped => None,
+        });
         if let Some((mut observer, value)) = action {
             observer.on_next(value);
             self.send_events_until_finish(observer);
@@ -112,26 +110,24 @@ where
     }
 
     pub fn send_termination(&self, termination: Termination<E>) {
-        let action = self
-            .state
-            .safe_lock_mut_with_args(termination, |state, termination| match state {
-                State::Idle(_) => {
-                    let idel_state = std::mem::replace(state, State::Stopped);
-                    match idel_state {
-                        State::Idle(observer) => Some((observer, termination)),
-                        State::Processing { .. } | State::Stopped => unreachable!(),
-                    }
+        let action = self.state.lock_mut(|mut lock| match &mut *lock {
+            State::Idle(_) => {
+                let idel_state = std::mem::replace(&mut *lock, State::Stopped);
+                match idel_state {
+                    State::Idle(observer) => Some((observer, termination)),
+                    State::Processing { .. } | State::Stopped => unreachable!(),
                 }
-                State::Processing {
-                    termination: slot, ..
-                } => {
-                    if slot.is_none() {
-                        *slot = Some(termination);
-                    }
-                    None
+            }
+            State::Processing {
+                termination: slot, ..
+            } => {
+                if slot.is_none() {
+                    *slot = Some(termination);
                 }
-                State::Stopped => None,
-            });
+                None
+            }
+            State::Stopped => None,
+        });
         if let Some((observer, termination)) = action {
             observer.on_termination(termination);
         }
@@ -140,35 +136,34 @@ where
     fn send_events_until_finish(&self, mut observer: OR) {
         loop {
             let (returned_observer, next_values, termination) =
-                self.state
-                    .safe_lock_mut_with_args(observer, |state, observer| match state {
-                        State::Idle(_) => {
-                            panic!("Can't be called in idle state");
+                self.state.lock_mut(|mut lock| match &mut *lock {
+                    State::Idle(_) => {
+                        panic!("Can't be called in idle state");
+                    }
+                    State::Processing {
+                        next_values,
+                        termination,
+                    } => match (next_values.is_empty(), termination.take()) {
+                        (true, None) => {
+                            *lock = State::Idle(observer);
+                            (None, None, None)
                         }
-                        State::Processing {
-                            next_values,
-                            termination,
-                        } => match (next_values.is_empty(), termination.take()) {
-                            (true, None) => {
-                                *state = State::Idle(observer);
-                                (None, None, None)
-                            }
-                            (true, Some(termination)) => {
-                                *state = State::Stopped;
-                                (Some(observer), None, Some(termination))
-                            }
-                            (false, None) => {
-                                let next_values = std::mem::take(next_values);
-                                (Some(observer), Some(next_values), None)
-                            }
-                            (false, Some(termination)) => {
-                                let next_values = std::mem::take(next_values);
-                                *state = State::Stopped;
-                                (Some(observer), Some(next_values), Some(termination)) // Drop observer outside the lock to avoid potential deadlock
-                            }
-                        },
-                        State::Stopped => (Some(observer), None, None),
-                    });
+                        (true, Some(termination)) => {
+                            *lock = State::Stopped;
+                            (Some(observer), None, Some(termination))
+                        }
+                        (false, None) => {
+                            let next_values = std::mem::take(next_values);
+                            (Some(observer), Some(next_values), None)
+                        }
+                        (false, Some(termination)) => {
+                            let next_values = std::mem::take(next_values);
+                            *lock = State::Stopped;
+                            (Some(observer), Some(next_values), Some(termination)) // Drop observer outside the lock to avoid potential deadlock
+                        }
+                    },
+                    State::Stopped => (Some(observer), None, None),
+                });
 
             match (returned_observer, next_values, termination) {
                 (None, _, _) | (Some(_), None, None) => break,
