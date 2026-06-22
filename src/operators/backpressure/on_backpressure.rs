@@ -13,11 +13,11 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
         /// Callback handed to the downstream observer so it can request the next chunk
         /// once it finishes processing the current batch.
-        pub type RequestCallbackType<'cb> = Box<dyn FnOnce() + 'cb>;
+        pub type RequestCallbackType<'or> = Box<dyn FnOnce() + 'or>;
     } else {
         /// Callback handed to the downstream observer so it can request the next chunk
         /// once it finishes processing the current batch.
-        pub type RequestCallbackType<'cb> = Box<dyn FnOnce() + Send + Sync + 'cb>;
+        pub type RequestCallbackType<'or> = Box<dyn FnOnce() + Send + Sync + 'or>;
     }
 }
 
@@ -103,7 +103,7 @@ where
             termination: None,
             emit_directly: true,
         };
-        subscribe_with_shared_model(observer, model, |observer, _| {
+        subscribe_with_shared_model(observer, model, (), |observer, _| {
             self.source.subscribe(observer)
         })
     }
@@ -115,14 +115,19 @@ struct Model<E, C> {
     emit_directly: bool,
 }
 
-impl<'cb, T0, T, E, OR, C> SharedModel<T0, (T, RequestCallbackType<'cb>), E, OR> for Model<E, C>
+impl<'or, T0, T, E, C> SharedModel<'or, T0, (T, RequestCallbackType<'or>), E, ()> for Model<E, C>
 where
-    T: NecessarySend + 'cb,
-    E: NecessarySend + 'cb,
-    OR: Observer<(T, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
-    C: BackpressureCollection<T0, T> + NecessarySend + 'cb,
+    T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
+    C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
-    fn on_next(context: Context<(T, RequestCallbackType<'cb>), E, OR, Self>, value: T0) {
+    fn on_next<OR>(
+        context: Context<(T, RequestCallbackType<'or>), E, OR, Self>,
+        value: T0,
+        _extra: &mut (),
+    ) where
+        OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+    {
         let next = context.model.lock_mut(|mut lock| {
             if lock.termination.is_some() {
                 return None;
@@ -145,10 +150,13 @@ where
         }
     }
 
-    fn on_termination(
-        context: Context<(T, RequestCallbackType<'cb>), E, OR, Self>,
+    fn on_termination<OR>(
+        context: Context<(T, RequestCallbackType<'or>), E, OR, Self>,
         termination: Termination<E>,
-    ) {
+        _extra: (),
+    ) where
+        OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+    {
         let termination = context.model.lock_mut(|mut lock| {
             if lock.emit_directly {
                 Some(termination)
@@ -162,7 +170,10 @@ where
         }
     }
 
-    fn on_dispose(context: Context<(T, RequestCallbackType<'cb>), E, OR, Self>) {
+    fn on_dispose<OR>(context: Context<(T, RequestCallbackType<'or>), E, OR, Self>)
+    where
+        OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+    {
         // Clean up the collection
         let _ = context
             .model
@@ -170,13 +181,13 @@ where
     }
 }
 
-fn handle_request<'cb, T0, T, E, OR, C>(
-    context: Context<(T, RequestCallbackType<'cb>), E, OR, Model<E, C>>,
+fn handle_request<'or, T0, T, E, OR, C>(
+    context: Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>,
 ) where
-    T: NecessarySend + 'cb,
-    E: NecessarySend + 'cb,
-    OR: Observer<(T, RequestCallbackType<'cb>), E> + NecessarySend + 'cb,
-    C: BackpressureCollection<T0, T> + NecessarySend + 'cb,
+    T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
+    OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+    C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
     let action = context.model.lock_mut(|mut lock| {
         if let Some(next) = lock.collection.take_next_value() {

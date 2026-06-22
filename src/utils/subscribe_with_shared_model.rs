@@ -7,26 +7,35 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-pub trait SharedModel<T0, T, E, OR>: Sized {
-    fn on_next(context: Context<T, E, OR, Self>, value: T0);
+pub trait SharedModel<'or, T0, T, E, EX>: Sized {
+    fn on_next<OR>(context: Context<T, E, OR, Self>, value: T0, extra: &mut EX)
+    where
+        OR: Observer<T, E> + NecessarySend + 'or;
 
-    fn on_termination(context: Context<T, E, OR, Self>, termination: Termination<E>);
+    fn on_termination<OR>(context: Context<T, E, OR, Self>, termination: Termination<E>, extra: EX)
+    where
+        OR: Observer<T, E> + NecessarySend + 'or;
 
-    fn on_dispose(_context: Context<T, E, OR, Self>) {}
+    fn on_dispose<OR>(context: Context<T, E, OR, Self>)
+    where
+        OR: Observer<T, E> + NecessarySend + 'or;
 }
 
-pub fn subscribe_with_shared_model<'sub, T0, T, E, OR, M, F>(
+pub fn subscribe_with_shared_model<'or, 'sub, T0, T, E, OR, M, EX, F>(
     observer: OR,
     model: M,
+    extra: EX,
     builder: F,
 ) -> Subscription<'sub>
 where
+    'or: 'sub,
     T0: 'sub,
     T: NecessarySend + 'sub,
     E: NecessarySend + 'sub,
-    OR: NecessarySend + 'sub,
-    M: SharedModel<T0, T, E, OR> + NecessarySend + 'sub,
-    F: FnOnce(SharedModelObserver<T, E, OR, M>, Context<T, E, OR, M>) -> Subscription<'sub>,
+    OR: Observer<T, E> + NecessarySend + 'or,
+    M: SharedModel<'or, T0, T, E, EX> + NecessarySend + 'sub,
+    EX: 'sub,
+    F: FnOnce(SharedModelObserver<T, E, OR, M, EX>, Context<T, E, OR, M>) -> Subscription<'sub>,
 {
     let state = Shared::new(Mutable::new(State::Idle(observer)));
     let model = Shared::new(Mutable::new(model));
@@ -35,7 +44,10 @@ where
         context: context.clone(),
         _marker: PhantomData,
     };
-    let observer = SharedModelObserver(context.clone());
+    let observer = SharedModelObserver {
+        context: context.clone(),
+        extra,
+    };
     let sub = builder(observer, context);
     sub + disposable
 }
@@ -171,30 +183,34 @@ where
     }
 }
 
-pub struct SharedModelObserver<T, E, OR, M>(Context<T, E, OR, M>);
+pub struct SharedModelObserver<T, E, OR, M, EX> {
+    context: Context<T, E, OR, M>,
+    extra: EX,
+}
 
-impl<T0, T, E, OR, M> Observer<T0, E> for SharedModelObserver<T, E, OR, M>
+impl<'or, T0, T, E, OR, M, EX> Observer<T0, E> for SharedModelObserver<T, E, OR, M, EX>
 where
-    OR: Observer<T, E>,
-    M: SharedModel<T0, T, E, OR>,
+    OR: Observer<T, E> + NecessarySend + 'or,
+    M: SharedModel<'or, T0, T, E, EX>,
 {
     fn on_next(&mut self, value: T0) {
-        M::on_next(self.0.clone(), value);
+        M::on_next(self.context.clone(), value, &mut self.extra);
     }
 
     fn on_termination(self, termination: crate::observer::Termination<E>) {
-        M::on_termination(self.0, termination);
+        M::on_termination(self.context, termination, self.extra);
     }
 }
 
-struct SharedModelDisposable<T0, T, E, OR, M> {
+struct SharedModelDisposable<T0, T, E, OR, M, EX> {
     context: Context<T, E, OR, M>,
-    _marker: MarkerType<T0>,
+    _marker: MarkerType<(T0, EX)>,
 }
 
-impl<T0, T, E, OR, M> Disposable for SharedModelDisposable<T0, T, E, OR, M>
+impl<'or, T0, T, E, OR, M, EX> Disposable for SharedModelDisposable<T0, T, E, OR, M, EX>
 where
-    M: SharedModel<T0, T, E, OR>,
+    OR: Observer<T, E> + NecessarySend + 'or,
+    M: SharedModel<'or, T0, T, E, EX>,
 {
     fn dispose(self) {
         let _old_state = safe_lock!(mem_replace: self.context.state, State::Stopped);
