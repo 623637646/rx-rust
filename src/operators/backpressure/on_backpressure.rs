@@ -132,16 +132,6 @@ where
             context.send_termination(termination);
         }
     }
-
-    fn on_dispose<OR>(context: Context<(T, RequestCallbackType<'or>), E, OR, Self>)
-    where
-        OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
-    {
-        // Clean up the collection
-        let _ = context
-            .model
-            .lock_mut(|mut lock| lock.collection.take_next_value());
-    }
 }
 
 fn handle_request<'or, T0, T, E, OR, C>(

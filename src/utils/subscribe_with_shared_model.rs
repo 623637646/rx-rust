@@ -16,9 +16,11 @@ pub trait SharedModel<'or, T0, T, E, EX>: Sized {
     where
         OR: Observer<T, E> + NecessarySend + 'or;
 
-    fn on_dispose<OR>(context: Context<T, E, OR, Self>)
+    fn on_dispose<OR>(_context: Context<T, E, OR, Self>)
     where
-        OR: Observer<T, E> + NecessarySend + 'or;
+        OR: Observer<T, E> + NecessarySend + 'or,
+    {
+    }
 }
 
 pub fn subscribe_with_shared_model<'or, 'sub, T0, T, E, OR, M, EX, F>(
