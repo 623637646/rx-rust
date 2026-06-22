@@ -27,42 +27,9 @@ pub trait BackpressureCollection<T0, T> {
 }
 
 /// Low-level primitive that converts a fast upstream into demand-driven chunks by
-/// accumulating values with a custom `receiving_strategy` and emitting them alongside a
+/// accumulating values with a custom `collection` and emitting them alongside a
 /// [`RequestCallbackType`]. Downstream observers must invoke the callback to resume the
 /// upstream flow. See <https://reactivex.io/documentation/operators/backpressure.html>.
-///
-/// # Examples
-/// ```rust
-/// use rx_rust::{
-///     disposable::Disposable,
-///     observable::observable_ext::ObservableExt,
-///     observer::Observer,
-///     operators::backpressure::on_backpressure::OnBackpressure,
-///     subject::publish_subject::PublishSubject,
-/// };
-/// use std::convert::Infallible;
-///
-/// let mut received = Vec::new();
-/// let mut subject = PublishSubject::<_, Infallible>::new();
-/// let observable = OnBackpressure::new(subject.clone(), |collection, value| collection.push(value));
-///
-/// let subscription = observable.subscribe_with_callback(
-///     |(values, request_callback)| {
-///         received.push(values);
-///         request_callback(); // ready for the next batch
-///     },
-///     |_| {},
-/// );
-///
-/// subject.on_next(1);
-/// subject.on_next(2);
-/// subject.on_next(3);
-///
-/// subscription.dispose();
-/// drop(subject);
-///
-/// assert_eq!(received, vec![vec![1], vec![2], vec![3]]);
-/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct OnBackpressure<T0, OE, C> {
