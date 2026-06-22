@@ -109,11 +109,7 @@ where
             }
         });
         if let Some(next) = next {
-            let context_cloned = context.clone();
-            let callback: RequestCallbackType = Box::new(move || {
-                handle_request(context_cloned);
-            });
-            context.send_next((next, callback));
+            send_next(context, next);
         }
     }
 
@@ -168,15 +164,29 @@ fn handle_request<'or, T0, T, E, OR, C>(
     });
     match action {
         ActionAfterLock::Next(next) => {
-            let context_cloned = context.clone();
-            let callback: RequestCallbackType = Box::new(move || {
-                handle_request(context_cloned);
-            });
-            context.send_next((next, callback));
+            send_next(context, next);
         }
         ActionAfterLock::Termination(termination) => {
             context.send_termination(termination);
         }
         ActionAfterLock::None => {}
     }
+}
+
+fn send_next<'or, T0, T, E, OR, C>(
+    context: Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>,
+    value: T,
+) where
+    T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
+    OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+    C: BackpressureCollection<T0, T> + NecessarySend + 'or,
+{
+    let weak_context = context.downgrade();
+    let callback: RequestCallbackType = Box::new(move || {
+        if let Some(context) = weak_context.upgrade() {
+            handle_request(context);
+        }
+    });
+    context.send_next((value, callback));
 }

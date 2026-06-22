@@ -2,7 +2,7 @@ use crate::{
     disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{MarkerType, Mutable, MutableHelper, NecessarySend, Shared},
+    utils::types::{MarkerType, Mutable, MutableHelper, NecessarySend, Shared, WeakShared},
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -129,6 +129,13 @@ where
         }
     }
 
+    pub fn downgrade(&self) -> WeakContext<T, E, OR, M> {
+        WeakContext {
+            state: Shared::downgrade(&self.state),
+            model: Shared::downgrade(&self.model),
+        }
+    }
+
     fn send_events_until_finish(&self, mut observer: OR) {
         loop {
             let (returned_observer, next_values, termination) =
@@ -215,5 +222,19 @@ where
     fn dispose(self) {
         let _old_state = safe_lock!(mem_replace: self.context.state, State::Stopped);
         M::on_dispose(self.context);
+    }
+}
+
+pub struct WeakContext<T, E, OR, M> {
+    state: WeakShared<Mutable<State<T, E, OR>>>,
+    model: WeakShared<Mutable<M>>,
+}
+
+impl<T, E, OR, M> WeakContext<T, E, OR, M> {
+    pub fn upgrade(&self) -> Option<Context<T, E, OR, M>> {
+        Some(Context {
+            state: self.state.upgrade()?,
+            model: self.model.upgrade()?,
+        })
     }
 }
