@@ -120,12 +120,22 @@ where
         context.lock_model(
             |model| match value {
                 NextEvent::First(latest_1) => {
-                    model.latest_1 = Some(latest_1.clone());
-                    model.latest_2.clone().map(|latest_2| (latest_1, latest_2))
+                    if let Some(latest_2) = &model.latest_2 {
+                        model.latest_1 = Some(latest_1.clone());
+                        Some((latest_1, latest_2.clone()))
+                    } else {
+                        model.latest_1 = Some(latest_1);
+                        None
+                    }
                 }
                 NextEvent::Second(latest_2) => {
-                    model.latest_2 = Some(latest_2.clone());
-                    model.latest_1.clone().map(|latest_1| (latest_1, latest_2))
+                    if let Some(latest_1) = &model.latest_1 {
+                        model.latest_2 = Some(latest_2.clone());
+                        Some((latest_1.clone(), latest_2))
+                    } else {
+                        model.latest_2 = Some(latest_2);
+                        None
+                    }
                 }
             },
             |action, context| {
