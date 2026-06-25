@@ -26,7 +26,6 @@ pub trait SharedModel<'or, T0, T, E, EX>: Sized {
 pub fn subscribe_with_shared_model<'or, 'sub, T0, T, E, OR, M, EX, F>(
     observer: OR,
     model: M,
-    extra: EX,
     builder: F,
 ) -> Subscription<'sub>
 where
@@ -37,7 +36,7 @@ where
     OR: Observer<T, E> + NecessarySend + 'or,
     M: SharedModel<'or, T0, T, E, EX> + NecessarySend + 'sub,
     EX: 'sub,
-    F: FnOnce(SharedModelObserver<T, E, OR, M, EX>, Context<T, E, OR, M>) -> Subscription<'sub>,
+    F: FnOnce(Context<T, E, OR, M>) -> Subscription<'sub>,
 {
     let state = Shared::new(Mutable::new(State::Idle(observer)));
     let model = Shared::new(Mutable::new(model));
@@ -46,11 +45,7 @@ where
         context: context.clone(),
         _marker: PhantomData,
     };
-    let observer = SharedModelObserver {
-        context: context.clone(),
-        extra,
-    };
-    let sub = builder(observer, context);
+    let sub = builder(context);
     sub + disposable
 }
 
@@ -74,6 +69,14 @@ impl<T, E, OR, M> Context<T, E, OR, M>
 where
     OR: Observer<T, E>,
 {
+    pub fn create_observer<EX>(&self, extra: EX) -> SharedModelObserver<T, E, OR, M, EX>
+where {
+        SharedModelObserver {
+            context: self.clone(),
+            extra,
+        }
+    }
+
     pub fn send_next(&self, value: T) {
         // None means finish, Some means continue
         let action = self.state.lock_mut(|mut lock| match &mut *lock {

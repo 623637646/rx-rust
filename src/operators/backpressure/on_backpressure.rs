@@ -70,8 +70,8 @@ where
             termination: None,
             emit_directly: true,
         };
-        subscribe_with_shared_model(observer, model, (), |observer, _| {
-            self.source.subscribe(observer)
+        subscribe_with_shared_model(observer, model, |context| {
+            self.source.subscribe(context.create_observer(()))
         })
     }
 }
