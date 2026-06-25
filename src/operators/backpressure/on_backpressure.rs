@@ -1,6 +1,5 @@
-use crate::observer::Event;
 use crate::utils::subscribe_with_shared_model::{
-    Context, SharedModel, subscribe_with_shared_model,
+    Action, Context, SharedModel, subscribe_with_shared_model,
 };
 use crate::utils::types::{MarkerType, NecessarySend};
 use crate::{
@@ -96,26 +95,19 @@ where
     ) where
         OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     {
-        context.lock_model(
-            |model| {
-                if model.termination.is_some() {
-                    return None;
-                }
-                model.collection.extend_one(value);
-                if model.emit_directly {
-                    model.emit_directly = false;
-                    let next = model.collection.take_next_value().expect("cannot be empty");
-                    Some(next)
-                } else {
-                    None
-                }
-            },
-            |action, context| {
-                if let Some(next) = action {
-                    send_next(context, next);
-                }
-            },
-        );
+        context.lock_model(|model| {
+            if model.termination.is_some() {
+                return Action::None;
+            }
+            model.collection.extend_one(value);
+            if model.emit_directly {
+                model.emit_directly = false;
+                let next = model.collection.take_next_value().expect("cannot be empty");
+                Action::Next((next, create_request_callback(&context)))
+            } else {
+                Action::None
+            }
+        });
     }
 
     fn on_termination<OR>(
@@ -125,21 +117,14 @@ where
     ) where
         OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     {
-        context.lock_model(
-            |model| {
-                if model.emit_directly {
-                    Some(termination)
-                } else {
-                    model.termination = Some(termination);
-                    None
-                }
-            },
-            |action, context| {
-                if let Some(termination) = action {
-                    context.send_termination(termination);
-                }
-            },
-        );
+        context.lock_model(|model| {
+            if model.emit_directly {
+                Action::Termination(termination)
+            } else {
+                model.termination = Some(termination);
+                Action::None
+            }
+        });
     }
 }
 
@@ -151,33 +136,22 @@ fn handle_request<'or, T0, T, E, OR, C>(
     OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
-    context.lock_model(
-        |model| {
-            if let Some(next) = model.collection.take_next_value() {
-                Some(Event::Next(next))
-            } else if let Some(termination) = model.termination.take() {
-                Some(Event::Termination(termination))
-            } else {
-                model.emit_directly = true;
-                None
-            }
-        },
-        |action, context| match action {
-            Some(Event::Next(next)) => {
-                send_next(context, next);
-            }
-            Some(Event::Termination(termination)) => {
-                context.send_termination(termination);
-            }
-            None => {}
-        },
-    );
+    context.lock_model(|model| {
+        if let Some(next) = model.collection.take_next_value() {
+            Action::Next((next, create_request_callback(&context)))
+        } else if let Some(termination) = model.termination.take() {
+            Action::Termination(termination)
+        } else {
+            model.emit_directly = true;
+            Action::None
+        }
+    });
 }
 
-fn send_next<'or, T0, T, E, OR, C>(
-    context: Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>,
-    value: T,
-) where
+fn create_request_callback<'or, T0, T, E, OR, C>(
+    context: &Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>,
+) -> RequestCallbackType<'or>
+where
     T: NecessarySend + 'or,
     E: NecessarySend + 'or,
     OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
@@ -189,5 +163,5 @@ fn send_next<'or, T0, T, E, OR, C>(
             handle_request(context);
         }
     });
-    context.send_next((value, callback));
+    callback
 }

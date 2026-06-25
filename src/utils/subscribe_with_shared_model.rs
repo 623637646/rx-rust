@@ -2,7 +2,9 @@ use crate::{
     disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{MarkerType, Mutable, MutableHelper, NecessarySend, Shared, WeakShared},
+    utils::types::{
+        MarkerType, MutGuard, Mutable, MutableHelper, NecessarySend, Shared, WeakShared,
+    },
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -65,6 +67,12 @@ pub struct Context<T, E, OR, M> {
     model: Shared<Mutable<M>>,
 }
 
+pub enum Action<T, E> {
+    Next(T),
+    Termination(Termination<E>),
+    None,
+}
+
 impl<T, E, OR, M> Context<T, E, OR, M>
 where
     OR: Observer<T, E>,
@@ -77,19 +85,19 @@ where {
         }
     }
 
-    pub fn lock_model<A>(
-        &self,
-        model_modifier: impl FnOnce(&mut M) -> A,
-        post_action: impl FnOnce(A, Self),
-    ) {
-        self.state.debug_lock_clear();
-        let action = self.model.lock_mut(|mut lock| model_modifier(&mut *lock));
-        post_action(action, self.clone());
+    pub fn lock_model(&self, callback: impl FnOnce(&mut M) -> Action<T, E>) {
+        self.model.lock_mut(|mut lock| {
+            let action = callback(&mut *lock);
+            match action {
+                Action::Next(value) => self.send_next(value, lock),
+                Action::Termination(termination) => self.send_termination(termination, lock),
+                Action::None => (),
+            }
+        });
     }
 
-    pub fn send_next(&self, value: T) {
+    fn send_next(&self, value: T, lock: MutGuard<'_, M>) {
         // None means finish, Some means continue
-        self.model.debug_lock_clear();
         let action = self.state.lock_mut(|mut lock| match &mut *lock {
             State::Idle(_) => {
                 let idel_state = std::mem::replace(
@@ -115,14 +123,14 @@ where {
             }
             State::Stopped => None,
         });
+        drop(lock); // Drop lock to avoid potential deadlock
         if let Some((mut observer, value)) = action {
             observer.on_next(value);
             self.send_events_until_finish(observer);
         }
     }
 
-    pub fn send_termination(&self, termination: Termination<E>) {
-        self.model.debug_lock_clear();
+    fn send_termination(&self, termination: Termination<E>, lock: MutGuard<'_, M>) {
         let action = self.state.lock_mut(|mut lock| match &mut *lock {
             State::Idle(_) => {
                 let idel_state = std::mem::replace(&mut *lock, State::Stopped);
@@ -141,6 +149,7 @@ where {
             }
             State::Stopped => None,
         });
+        drop(lock); // Drop lock to avoid potential deadlock
         if let Some((observer, termination)) = action {
             observer.on_termination(termination);
         }
@@ -155,7 +164,6 @@ where {
 
     fn send_events_until_finish(&self, mut observer: OR) {
         loop {
-            self.model.debug_lock_clear();
             let (returned_observer, next_values, termination) =
                 self.state.lock_mut(|mut lock| match &mut *lock {
                     State::Idle(_) => {

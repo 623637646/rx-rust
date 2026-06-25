@@ -1,6 +1,6 @@
 use crate::observable::observable_ext::ObservableExt;
 use crate::utils::subscribe_with_shared_model::{
-    Context, SharedModel, subscribe_with_shared_model,
+    Action, Context, SharedModel, subscribe_with_shared_model,
 };
 use crate::utils::types::NecessarySend;
 use crate::{
@@ -117,33 +117,26 @@ where
     where
         OR: Observer<(T1, T2), E> + NecessarySend + 'or,
     {
-        context.lock_model(
-            |model| match value {
-                NextEvent::First(latest_1) => {
-                    if let Some(latest_2) = &model.latest_2 {
-                        model.latest_1 = Some(latest_1.clone());
-                        Some((latest_1, latest_2.clone()))
-                    } else {
-                        model.latest_1 = Some(latest_1);
-                        None
-                    }
+        context.lock_model(|model| match value {
+            NextEvent::First(latest_1) => {
+                if let Some(latest_2) = &model.latest_2 {
+                    model.latest_1 = Some(latest_1.clone());
+                    Action::Next((latest_1, latest_2.clone()))
+                } else {
+                    model.latest_1 = Some(latest_1);
+                    Action::None
                 }
-                NextEvent::Second(latest_2) => {
-                    if let Some(latest_1) = &model.latest_1 {
-                        model.latest_2 = Some(latest_2.clone());
-                        Some((latest_1.clone(), latest_2))
-                    } else {
-                        model.latest_2 = Some(latest_2);
-                        None
-                    }
+            }
+            NextEvent::Second(latest_2) => {
+                if let Some(latest_1) = &model.latest_1 {
+                    model.latest_2 = Some(latest_2.clone());
+                    Action::Next((latest_1.clone(), latest_2))
+                } else {
+                    model.latest_2 = Some(latest_2);
+                    Action::None
                 }
-            },
-            |action, context| {
-                if let Some(next) = action {
-                    context.send_next(next);
-                }
-            },
-        );
+            }
+        });
     }
 
     fn on_termination<OR>(
@@ -153,26 +146,19 @@ where
     ) where
         OR: Observer<(T1, T2), E> + NecessarySend + 'or,
     {
-        context.lock_model(
-            |model| match termination {
-                Termination::Completed => {
-                    if model.should_completed
-                        || (is_first && model.latest_1.is_none())
-                        || (!is_first && model.latest_2.is_none())
-                    {
-                        Some(Termination::Completed)
-                    } else {
-                        model.should_completed = true;
-                        None
-                    }
+        context.lock_model(|model| match termination {
+            Termination::Completed => {
+                if model.should_completed
+                    || (is_first && model.latest_1.is_none())
+                    || (!is_first && model.latest_2.is_none())
+                {
+                    Action::Termination(Termination::Completed)
+                } else {
+                    model.should_completed = true;
+                    Action::None
                 }
-                Termination::Error(error) => Some(Termination::Error(error)),
-            },
-            |action, context| {
-                if let Some(termination) = action {
-                    context.send_termination(termination);
-                }
-            },
-        );
+            }
+            Termination::Error(error) => Action::Termination(Termination::Error(error)),
+        });
     }
 }
