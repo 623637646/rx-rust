@@ -10,7 +10,6 @@ pub type MarkerType<T> = PhantomData<fn(T) -> T>;
 pub trait MutableHelper<T> {
     fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R;
     fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R;
-    fn debug_lock_clear(&self);
 }
 
 pub trait MutableBoolHelper {
@@ -39,11 +38,6 @@ cfg_if::cfg_if! {
             }
             fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) ->R) ->R {
                 callback(self.borrow())
-            }
-            #[inline(always)]
-            fn debug_lock_clear(&self){
-                #[cfg(debug_assertions)]
-                self.try_borrow_mut().expect("lock should be cleared");
             }
         }
 
@@ -98,11 +92,6 @@ cfg_if::cfg_if! {
             }
             fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) ->R) ->R {
                 callback(ReadOnlyMutexGuard(self.lock().unwrap()))
-            }
-            #[inline(always)]
-            fn debug_lock_clear(&self){
-                #[cfg(debug_assertions)]
-                let _unused = self.try_lock().expect("lock should be cleared");
             }
         }
 
