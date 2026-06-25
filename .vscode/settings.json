@@ -5,5 +5,8 @@
     "rust-analyzer.runnables.extraArgs": [
         "--features",
         "tokio-scheduler"
+    ],
+    "rust-analyzer.cargo.extraArgs": [
+        // "--release"
     ]
 }

@@ -82,12 +82,14 @@ where {
         model_modifier: impl FnOnce(&mut M) -> A,
         post_action: impl FnOnce(A, Self),
     ) {
+        self.state.debug_lock_clear();
         let action = self.model.lock_mut(|mut lock| model_modifier(&mut *lock));
         post_action(action, self.clone());
     }
 
     pub fn send_next(&self, value: T) {
         // None means finish, Some means continue
+        self.model.debug_lock_clear();
         let action = self.state.lock_mut(|mut lock| match &mut *lock {
             State::Idle(_) => {
                 let idel_state = std::mem::replace(
@@ -120,6 +122,7 @@ where {
     }
 
     pub fn send_termination(&self, termination: Termination<E>) {
+        self.model.debug_lock_clear();
         let action = self.state.lock_mut(|mut lock| match &mut *lock {
             State::Idle(_) => {
                 let idel_state = std::mem::replace(&mut *lock, State::Stopped);
@@ -152,6 +155,7 @@ where {
 
     fn send_events_until_finish(&self, mut observer: OR) {
         loop {
+            self.model.debug_lock_clear();
             let (returned_observer, next_values, termination) =
                 self.state.lock_mut(|mut lock| match &mut *lock {
                     State::Idle(_) => {
