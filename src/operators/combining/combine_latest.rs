@@ -1,7 +1,4 @@
-use crate::observable::observable_ext::ObservableExt;
-use crate::utils::subscribe_with_shared_model::{
-    Action, Context, SharedModel, subscribe_with_shared_model,
-};
+use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
 use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
@@ -66,9 +63,9 @@ impl<'or, 'sub, T1, T2, E, OE1, OE2> Observable<'or, 'sub, (T1, T2), E> for Comb
 where
     'or: 'sub,
     'sub: 'or,
-    T1: Clone + NecessarySend + 'or,
-    T2: Clone + NecessarySend + 'or,
-    E: NecessarySend + 'or,
+    T1: Clone + NecessarySend + 'sub,
+    T2: Clone + NecessarySend + 'sub,
+    E: NecessarySend + 'sub,
     OE1: Observable<'or, 'sub, T1, E>,
     OE2: Observable<'or, 'sub, T2, E>,
 {
@@ -83,23 +80,12 @@ where
                 should_completed: false,
             };
             subscribe_with_shared_model(observer, model, |context| {
-                let sub_1 = self
-                    .source_1
-                    .map(NextEvent::First)
-                    .subscribe(context.create_observer(true));
-                let sub_2 = self
-                    .source_2
-                    .map(NextEvent::Second)
-                    .subscribe(context.create_observer(false));
+                let sub_1 = self.source_1.subscribe(ObserverImpl1(context.clone()));
+                let sub_2 = self.source_2.subscribe(ObserverImpl2(context));
                 sub_1 + sub_2
             })
         })
     }
-}
-
-enum NextEvent<T1, T2> {
-    First(T1),
-    Second(T2),
 }
 
 struct Model<T1, T2> {
@@ -108,50 +94,65 @@ struct Model<T1, T2> {
     should_completed: bool,
 }
 
-impl<'or, T1, T2, E> SharedModel<'or, NextEvent<T1, T2>, (T1, T2), E, bool> for Model<T1, T2>
+struct ObserverImpl1<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
+
+impl<T1, T2, E, OR> Observer<T1, E> for ObserverImpl1<T1, T2, E, OR>
 where
+    OR: Observer<(T1, T2), E>,
     T1: Clone,
     T2: Clone,
 {
-    fn on_next<OR>(context: Context<(T1, T2), E, OR, Self>, value: NextEvent<T1, T2>, _: &mut bool)
-    where
-        OR: Observer<(T1, T2), E> + NecessarySend + 'or,
-    {
-        context.lock_model(|model| match value {
-            NextEvent::First(latest_1) => {
-                if let Some(latest_2) = &model.latest_2 {
-                    model.latest_1 = Some(latest_1.clone());
-                    Action::Next((latest_1, latest_2.clone()))
-                } else {
-                    model.latest_1 = Some(latest_1);
-                    Action::None
-                }
-            }
-            NextEvent::Second(latest_2) => {
-                if let Some(latest_1) = &model.latest_1 {
-                    model.latest_2 = Some(latest_2.clone());
-                    Action::Next((latest_1.clone(), latest_2))
-                } else {
-                    model.latest_2 = Some(latest_2);
-                    Action::None
-                }
+    fn on_next(&mut self, latest_1: T1) {
+        self.0.lock_model(|model| {
+            if let Some(latest_2) = &model.latest_2 {
+                model.latest_1 = Some(latest_1.clone());
+                Action::Next((latest_1, latest_2.clone()))
+            } else {
+                model.latest_1 = Some(latest_1);
+                Action::None
             }
         });
     }
 
-    fn on_termination<OR>(
-        context: Context<(T1, T2), E, OR, Self>,
-        termination: Termination<E>,
-        is_first: bool,
-    ) where
-        OR: Observer<(T1, T2), E> + NecessarySend + 'or,
-    {
-        context.lock_model(|model| match termination {
+    fn on_termination(self, termination: Termination<E>) {
+        self.0.lock_model(|model| match termination {
             Termination::Completed => {
-                if model.should_completed
-                    || (is_first && model.latest_1.is_none())
-                    || (!is_first && model.latest_2.is_none())
-                {
+                if model.should_completed || model.latest_1.is_none() {
+                    Action::Termination(Termination::Completed)
+                } else {
+                    model.should_completed = true;
+                    Action::None
+                }
+            }
+            Termination::Error(error) => Action::Termination(Termination::Error(error)),
+        });
+    }
+}
+
+struct ObserverImpl2<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
+
+impl<T1, T2, E, OR> Observer<T2, E> for ObserverImpl2<T1, T2, E, OR>
+where
+    OR: Observer<(T1, T2), E>,
+    T1: Clone,
+    T2: Clone,
+{
+    fn on_next(&mut self, latest_2: T2) {
+        self.0.lock_model(|model| {
+            if let Some(latest_1) = &model.latest_1 {
+                model.latest_2 = Some(latest_2.clone());
+                Action::Next((latest_1.clone(), latest_2))
+            } else {
+                model.latest_2 = Some(latest_2);
+                Action::None
+            }
+        });
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        self.0.lock_model(|model| match termination {
+            Termination::Completed => {
+                if model.should_completed || model.latest_2.is_none() {
                     Action::Termination(Termination::Completed)
                 } else {
                     model.should_completed = true;

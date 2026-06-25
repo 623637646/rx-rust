@@ -1,6 +1,4 @@
-use crate::utils::subscribe_with_shared_model::{
-    Action, Context, SharedModel, subscribe_with_shared_model,
-};
+use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
 use crate::utils::types::{MarkerType, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
@@ -55,7 +53,6 @@ impl<'or, 'sub, T0, T, E, OE, C> Observable<'or, 'sub, (T, RequestCallbackType<'
     for OnBackpressure<T0, OE, C>
 where
     'or: 'sub,
-    T0: 'sub,
     T: NecessarySend + 'or,
     E: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T0, E>,
@@ -71,7 +68,7 @@ where
             emit_directly: true,
         };
         subscribe_with_shared_model(observer, model, |context| {
-            self.source.subscribe(context.create_observer(()))
+            self.source.subscribe(ObserverImpl(context))
         })
     }
 }
@@ -82,20 +79,17 @@ struct Model<E, C> {
     emit_directly: bool,
 }
 
-impl<'or, T0, T, E, C> SharedModel<'or, T0, (T, RequestCallbackType<'or>), E, ()> for Model<E, C>
+struct ObserverImpl<'or, T, E, OR, C>(Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>);
+
+impl<'or, T0, T, E, OR, C> Observer<T0, E> for ObserverImpl<'or, T, E, OR, C>
 where
     T: NecessarySend + 'or,
     E: NecessarySend + 'or,
+    OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
-    fn on_next<OR>(
-        context: Context<(T, RequestCallbackType<'or>), E, OR, Self>,
-        value: T0,
-        _extra: &mut (),
-    ) where
-        OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
-    {
-        context.lock_model(|model| {
+    fn on_next(&mut self, value: T0) {
+        self.0.lock_model(|model| {
             if model.termination.is_some() {
                 return Action::None;
             }
@@ -103,21 +97,19 @@ where
             if model.emit_directly {
                 model.emit_directly = false;
                 let next = model.collection.take_next_value().expect("cannot be empty");
-                Action::Next((next, create_request_callback(&context)))
+                let context = self.0.clone();
+                let callback: RequestCallbackType = Box::new(move || {
+                    handle_request(context);
+                });
+                Action::Next((next, callback))
             } else {
                 Action::None
             }
         });
     }
 
-    fn on_termination<OR>(
-        context: Context<(T, RequestCallbackType<'or>), E, OR, Self>,
-        termination: Termination<E>,
-        _extra: (),
-    ) where
-        OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
-    {
-        context.lock_model(|model| {
+    fn on_termination(self, termination: Termination<E>) {
+        self.0.lock_model(|model| {
             if model.emit_directly {
                 Action::Termination(termination)
             } else {
@@ -138,7 +130,11 @@ fn handle_request<'or, T0, T, E, OR, C>(
 {
     context.lock_model(|model| {
         if let Some(next) = model.collection.take_next_value() {
-            Action::Next((next, create_request_callback(&context)))
+            let context = context.clone();
+            let callback: RequestCallbackType = Box::new(move || {
+                handle_request(context);
+            });
+            Action::Next((next, callback))
         } else if let Some(termination) = model.termination.take() {
             Action::Termination(termination)
         } else {
@@ -146,22 +142,4 @@ fn handle_request<'or, T0, T, E, OR, C>(
             Action::None
         }
     });
-}
-
-fn create_request_callback<'or, T0, T, E, OR, C>(
-    context: &Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>,
-) -> RequestCallbackType<'or>
-where
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
-    OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
-    C: BackpressureCollection<T0, T> + NecessarySend + 'or,
-{
-    let weak_context = context.downgrade();
-    let callback: RequestCallbackType = Box::new(move || {
-        if let Some(context) = weak_context.upgrade() {
-            handle_request(context);
-        }
-    });
-    callback
 }

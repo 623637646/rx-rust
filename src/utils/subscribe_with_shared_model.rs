@@ -2,51 +2,29 @@ use crate::{
     disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{
-        MarkerType, MutGuard, Mutable, MutableHelper, NecessarySend, Shared, WeakShared,
-    },
+    utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared},
 };
 use educe::Educe;
-use std::marker::PhantomData;
 
-pub trait SharedModel<'or, T0, T, E, EX>: Sized {
-    fn on_next<OR>(context: Context<T, E, OR, Self>, value: T0, extra: &mut EX)
-    where
-        OR: Observer<T, E> + NecessarySend + 'or;
-
-    fn on_termination<OR>(context: Context<T, E, OR, Self>, termination: Termination<E>, extra: EX)
-    where
-        OR: Observer<T, E> + NecessarySend + 'or;
-
-    fn on_dispose<OR>(_context: Context<T, E, OR, Self>)
-    where
-        OR: Observer<T, E> + NecessarySend + 'or,
-    {
-    }
-}
-
-pub fn subscribe_with_shared_model<'or, 'sub, T0, T, E, OR, M, EX, F>(
+pub fn subscribe_with_shared_model<'or, 'sub, T, E, OR, M, F>(
     observer: OR,
     model: M,
     builder: F,
 ) -> Subscription<'sub>
 where
     'or: 'sub,
-    T0: 'sub,
     T: NecessarySend + 'sub,
     E: NecessarySend + 'sub,
-    OR: Observer<T, E> + NecessarySend + 'or,
-    M: SharedModel<'or, T0, T, E, EX> + NecessarySend + 'sub,
-    EX: 'sub,
+    OR: NecessarySend + 'or,
     F: FnOnce(Context<T, E, OR, M>) -> Subscription<'sub>,
 {
     let state = Shared::new(Mutable::new(State::Idle(observer)));
     let model = Shared::new(Mutable::new(model));
-    let context = Context { state, model };
-    let disposable = SharedModelDisposable {
-        context: context.clone(),
-        _marker: PhantomData,
+    let context = Context {
+        state: state.clone(),
+        model,
     };
+    let disposable = SharedModelDisposable(state);
     let sub = builder(context);
     sub + disposable
 }
@@ -73,19 +51,11 @@ pub enum Action<T, E> {
     None,
 }
 
-impl<T, E, OR, M> Context<T, E, OR, M>
-where
-    OR: Observer<T, E>,
-{
-    pub fn create_observer<EX>(&self, extra: EX) -> SharedModelObserver<T, E, OR, M, EX>
-where {
-        SharedModelObserver {
-            context: self.clone(),
-            extra,
-        }
-    }
-
-    pub fn lock_model(&self, callback: impl FnOnce(&mut M) -> Action<T, E>) {
+impl<T, E, OR, M> Context<T, E, OR, M> {
+    pub fn lock_model(&self, callback: impl FnOnce(&mut M) -> Action<T, E>)
+    where
+        OR: Observer<T, E>,
+    {
         self.model.lock_mut(|mut lock| {
             let action = callback(&mut *lock);
             match action {
@@ -96,7 +66,10 @@ where {
         });
     }
 
-    fn send_next(&self, value: T, lock: MutGuard<'_, M>) {
+    fn send_next(&self, value: T, lock: MutGuard<'_, M>)
+    where
+        OR: Observer<T, E>,
+    {
         // None means finish, Some means continue
         let action = self.state.lock_mut(|mut lock| match &mut *lock {
             State::Idle(_) => {
@@ -130,7 +103,10 @@ where {
         }
     }
 
-    fn send_termination(&self, termination: Termination<E>, lock: MutGuard<'_, M>) {
+    fn send_termination(&self, termination: Termination<E>, lock: MutGuard<'_, M>)
+    where
+        OR: Observer<T, E>,
+    {
         let action = self.state.lock_mut(|mut lock| match &mut *lock {
             State::Idle(_) => {
                 let idel_state = std::mem::replace(&mut *lock, State::Stopped);
@@ -155,14 +131,17 @@ where {
         }
     }
 
-    pub fn downgrade(&self) -> WeakContext<T, E, OR, M> {
-        WeakContext {
-            state: Shared::downgrade(&self.state),
-            model: Shared::downgrade(&self.model),
-        }
-    }
+    // pub fn downgrade(&self) -> WeakContext<T, E, OR, M> {
+    //     WeakContext {
+    //         state: Shared::downgrade(&self.state),
+    //         model: Shared::downgrade(&self.model),
+    //     }
+    // }
 
-    fn send_events_until_finish(&self, mut observer: OR) {
+    fn send_events_until_finish(&self, mut observer: OR)
+    where
+        OR: Observer<T, E>,
+    {
         loop {
             let (returned_observer, next_values, termination) =
                 self.state.lock_mut(|mut lock| match &mut *lock {
@@ -216,51 +195,24 @@ where {
     }
 }
 
-pub struct SharedModelObserver<T, E, OR, M, EX> {
-    context: Context<T, E, OR, M>,
-    extra: EX,
-}
+struct SharedModelDisposable<T, E, OR>(Shared<Mutable<State<T, E, OR>>>);
 
-impl<'or, T0, T, E, OR, M, EX> Observer<T0, E> for SharedModelObserver<T, E, OR, M, EX>
-where
-    OR: Observer<T, E> + NecessarySend + 'or,
-    M: SharedModel<'or, T0, T, E, EX>,
-{
-    fn on_next(&mut self, value: T0) {
-        M::on_next(self.context.clone(), value, &mut self.extra);
-    }
-
-    fn on_termination(self, termination: crate::observer::Termination<E>) {
-        M::on_termination(self.context, termination, self.extra);
-    }
-}
-
-struct SharedModelDisposable<T0, T, E, OR, M, EX> {
-    context: Context<T, E, OR, M>,
-    _marker: MarkerType<(T0, EX)>,
-}
-
-impl<'or, T0, T, E, OR, M, EX> Disposable for SharedModelDisposable<T0, T, E, OR, M, EX>
-where
-    OR: Observer<T, E> + NecessarySend + 'or,
-    M: SharedModel<'or, T0, T, E, EX>,
-{
+impl<T, E, OR> Disposable for SharedModelDisposable<T, E, OR> {
     fn dispose(self) {
-        let _old_state = safe_lock!(mem_replace: self.context.state, State::Stopped);
-        M::on_dispose(self.context);
+        let _old_state = safe_lock!(mem_replace: self.0, State::Stopped);
     }
 }
 
-pub struct WeakContext<T, E, OR, M> {
-    state: WeakShared<Mutable<State<T, E, OR>>>,
-    model: WeakShared<Mutable<M>>,
-}
+// pub struct WeakContext<T, E, OR, M> {
+//     state: WeakShared<Mutable<State<T, E, OR>>>,
+//     model: WeakShared<Mutable<M>>,
+// }
 
-impl<T, E, OR, M> WeakContext<T, E, OR, M> {
-    pub fn upgrade(&self) -> Option<Context<T, E, OR, M>> {
-        Some(Context {
-            state: self.state.upgrade()?,
-            model: self.model.upgrade()?,
-        })
-    }
-}
+// impl<T, E, OR, M> WeakContext<T, E, OR, M> {
+//     pub fn upgrade(&self) -> Option<Context<T, E, OR, M>> {
+//         Some(Context {
+//             state: self.state.upgrade()?,
+//             model: self.model.upgrade()?,
+//         })
+//     }
+// }
