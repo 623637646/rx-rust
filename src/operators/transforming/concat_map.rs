@@ -62,12 +62,13 @@ impl<T0, OE, OE1, F> ConcatMap<T0, OE, OE1, F> {
 
 impl<'or, 'sub, T0, T, E, OE, OE1, F> Observable<'or, 'sub, T, E> for ConcatMap<T0, OE, OE1, F>
 where
-    T: 'or,
-    E: 'or,
-    OE: Observable<'or, 'sub, T0, E>,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'sub,
-    F: FnMut(T0) -> OE1 + NecessarySend + 'or,
     'sub: 'or,
+    'or: 'sub,
+    T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
+    OE: Observable<'or, 'sub, T0, E>,
+    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
+    F: FnMut(T0) -> OE1 + NecessarySend + 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observable = Map::new(self.source, self.callback);

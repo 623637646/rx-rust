@@ -54,21 +54,58 @@ pub enum Action<T, E> {
 }
 
 impl<T, E, OR, M> Context<T, E, OR, M> {
+    pub fn modify_model<R>(&self, callback: impl FnOnce(&mut M) -> R) -> R
+    where
+        OR: Observer<T, E>,
+    {
+        self.modify_model_with_action_and_result(|model| (Action::None, callback(model)))
+    }
+
     pub fn modify_model_with_action(&self, callback: impl FnOnce(&mut M) -> Action<T, E>)
     where
         OR: Observer<T, E>,
     {
-        self.model.lock_mut(|mut lock| {
-            let action = callback(&mut *lock);
-            match action {
-                Action::SendNext(value) => self.send_next(value, lock),
-                Action::SendTermination(termination) => self.send_termination(termination, lock),
-                Action::None => (),
-            }
-        });
+        self.modify_model_with_action_and_result(|model| {
+            let action = callback(model);
+            (action, ())
+        })
     }
 
-    fn send_next(&self, value: T, lock: MutGuard<'_, M>)
+    pub fn modify_model_with_action_and_result<R>(
+        &self,
+        callback: impl FnOnce(&mut M) -> (Action<T, E>, R),
+    ) -> R
+    where
+        OR: Observer<T, E>,
+    {
+        self.model.lock_mut(|mut lock| {
+            let (action, result) = callback(&mut *lock);
+            match action {
+                Action::SendNext(value) => self.send_next_impl(value, Some(lock)),
+                Action::SendTermination(termination) => {
+                    self.send_termination_impl(termination, Some(lock))
+                }
+                Action::None => (),
+            }
+            result
+        })
+    }
+
+    pub fn send_next(&self, value: T)
+    where
+        OR: Observer<T, E>,
+    {
+        self.send_next_impl(value, None);
+    }
+
+    pub fn send_termination(&self, termination: Termination<E>)
+    where
+        OR: Observer<T, E>,
+    {
+        self.send_termination_impl(termination, None);
+    }
+
+    fn send_next_impl(&self, value: T, lock: Option<MutGuard<'_, M>>)
     where
         OR: Observer<T, E>,
     {
@@ -105,7 +142,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         }
     }
 
-    fn send_termination(&self, termination: Termination<E>, lock: MutGuard<'_, M>)
+    fn send_termination_impl(&self, termination: Termination<E>, lock: Option<MutGuard<'_, M>>)
     where
         OR: Observer<T, E>,
     {
