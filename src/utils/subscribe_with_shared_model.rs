@@ -62,7 +62,7 @@ enum State<T, E, OR> {
 #[educe(Debug, Clone)]
 pub struct Context<T, E, OR, M> {
     state: Shared<Mutable<State<T, E, OR>>>,
-    pub model: Shared<Mutable<M>>,
+    model: Shared<Mutable<M>>,
 }
 
 impl<T, E, OR, M> Context<T, E, OR, M>
@@ -75,6 +75,15 @@ where {
             context: self.clone(),
             extra,
         }
+    }
+
+    pub fn lock_model<A>(
+        &self,
+        model_modifier: impl FnOnce(&mut M) -> A,
+        post_action: impl FnOnce(A, Self),
+    ) {
+        let action = self.model.lock_mut(|mut lock| model_modifier(&mut *lock));
+        post_action(action, self.clone());
     }
 
     pub fn send_next(&self, value: T) {

@@ -1,7 +1,7 @@
 use crate::utils::subscribe_with_shared_model::{
     Context, SharedModel, subscribe_with_shared_model,
 };
-use crate::utils::types::{ActionAfterLock, MarkerType, MutableHelper, NecessarySend};
+use crate::utils::types::{ActionAfterLock, MarkerType, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -95,22 +95,26 @@ where
     ) where
         OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     {
-        let next = context.model.lock_mut(|mut lock| {
-            if lock.termination.is_some() {
-                return None;
-            }
-            lock.collection.extend_one(value);
-            if lock.emit_directly {
-                lock.emit_directly = false;
-                let next = lock.collection.take_next_value().expect("cannot be empty");
-                Some(next)
-            } else {
-                None
-            }
-        });
-        if let Some(next) = next {
-            send_next(context, next);
-        }
+        context.lock_model(
+            |model| {
+                if model.termination.is_some() {
+                    return None;
+                }
+                model.collection.extend_one(value);
+                if model.emit_directly {
+                    model.emit_directly = false;
+                    let next = model.collection.take_next_value().expect("cannot be empty");
+                    Some(next)
+                } else {
+                    None
+                }
+            },
+            |action, context| {
+                if let Some(next) = action {
+                    send_next(context, next);
+                }
+            },
+        );
     }
 
     fn on_termination<OR>(
@@ -120,17 +124,21 @@ where
     ) where
         OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     {
-        let termination = context.model.lock_mut(|mut lock| {
-            if lock.emit_directly {
-                Some(termination)
-            } else {
-                lock.termination = Some(termination);
-                None
-            }
-        });
-        if let Some(termination) = termination {
-            context.send_termination(termination);
-        }
+        context.lock_model(
+            |model| {
+                if model.emit_directly {
+                    Some(termination)
+                } else {
+                    model.termination = Some(termination);
+                    None
+                }
+            },
+            |action, context| {
+                if let Some(termination) = action {
+                    context.send_termination(termination);
+                }
+            },
+        );
     }
 }
 
@@ -142,25 +150,27 @@ fn handle_request<'or, T0, T, E, OR, C>(
     OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
-    let action = context.model.lock_mut(|mut lock| {
-        if let Some(next) = lock.collection.take_next_value() {
-            ActionAfterLock::Next(next)
-        } else if let Some(termination) = lock.termination.take() {
-            ActionAfterLock::Termination(termination)
-        } else {
-            lock.emit_directly = true;
-            ActionAfterLock::None
-        }
-    });
-    match action {
-        ActionAfterLock::Next(next) => {
-            send_next(context, next);
-        }
-        ActionAfterLock::Termination(termination) => {
-            context.send_termination(termination);
-        }
-        ActionAfterLock::None => {}
-    }
+    context.lock_model(
+        |model| {
+            if let Some(next) = model.collection.take_next_value() {
+                ActionAfterLock::Next(next)
+            } else if let Some(termination) = model.termination.take() {
+                ActionAfterLock::Termination(termination)
+            } else {
+                model.emit_directly = true;
+                ActionAfterLock::None
+            }
+        },
+        |action, context| match action {
+            ActionAfterLock::Next(next) => {
+                send_next(context, next);
+            }
+            ActionAfterLock::Termination(termination) => {
+                context.send_termination(termination);
+            }
+            ActionAfterLock::None => {}
+        },
+    );
 }
 
 fn send_next<'or, T0, T, E, OR, C>(

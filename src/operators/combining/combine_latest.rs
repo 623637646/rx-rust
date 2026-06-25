@@ -2,7 +2,7 @@ use crate::observable::observable_ext::ObservableExt;
 use crate::utils::subscribe_with_shared_model::{
     Context, SharedModel, subscribe_with_shared_model,
 };
-use crate::utils::types::{MutableHelper, NecessarySend};
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -117,19 +117,23 @@ where
     where
         OR: Observer<(T1, T2), E> + NecessarySend + 'or,
     {
-        let next = context.model.lock_mut(|mut lock| match value {
-            NextEvent::First(latest_1) => {
-                lock.latest_1 = Some(latest_1.clone());
-                lock.latest_2.clone().map(|latest_2| (latest_1, latest_2))
-            }
-            NextEvent::Second(latest_2) => {
-                lock.latest_2 = Some(latest_2.clone());
-                lock.latest_1.clone().map(|latest_1| (latest_1, latest_2))
-            }
-        });
-        if let Some(next) = next {
-            context.send_next(next);
-        }
+        context.lock_model(
+            |model| match value {
+                NextEvent::First(latest_1) => {
+                    model.latest_1 = Some(latest_1.clone());
+                    model.latest_2.clone().map(|latest_2| (latest_1, latest_2))
+                }
+                NextEvent::Second(latest_2) => {
+                    model.latest_2 = Some(latest_2.clone());
+                    model.latest_1.clone().map(|latest_1| (latest_1, latest_2))
+                }
+            },
+            |action, context| {
+                if let Some(next) = action {
+                    context.send_next(next);
+                }
+            },
+        );
     }
 
     fn on_termination<OR>(
@@ -139,22 +143,26 @@ where
     ) where
         OR: Observer<(T1, T2), E> + NecessarySend + 'or,
     {
-        let termination = match termination {
-            Termination::Completed => context.model.lock_mut(|mut lock| {
-                if lock.should_completed
-                    || (is_first && lock.latest_1.is_none())
-                    || (!is_first && lock.latest_2.is_none())
-                {
-                    Some(Termination::Completed)
-                } else {
-                    lock.should_completed = true;
-                    None
+        context.lock_model(
+            |model| match termination {
+                Termination::Completed => {
+                    if model.should_completed
+                        || (is_first && model.latest_1.is_none())
+                        || (!is_first && model.latest_2.is_none())
+                    {
+                        Some(Termination::Completed)
+                    } else {
+                        model.should_completed = true;
+                        None
+                    }
                 }
-            }),
-            Termination::Error(error) => Some(Termination::Error(error)),
-        };
-        if let Some(termination) = termination {
-            context.send_termination(termination);
-        }
+                Termination::Error(error) => Some(Termination::Error(error)),
+            },
+            |action, context| {
+                if let Some(termination) = action {
+                    context.send_termination(termination);
+                }
+            },
+        );
     }
 }
