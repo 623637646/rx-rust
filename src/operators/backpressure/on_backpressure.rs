@@ -1,7 +1,8 @@
+use crate::observer::Event;
 use crate::utils::subscribe_with_shared_model::{
     Context, SharedModel, subscribe_with_shared_model,
 };
-use crate::utils::types::{ActionAfterLock, MarkerType, NecessarySend};
+use crate::utils::types::{MarkerType, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -153,22 +154,22 @@ fn handle_request<'or, T0, T, E, OR, C>(
     context.lock_model(
         |model| {
             if let Some(next) = model.collection.take_next_value() {
-                ActionAfterLock::Next(next)
+                Some(Event::Next(next))
             } else if let Some(termination) = model.termination.take() {
-                ActionAfterLock::Termination(termination)
+                Some(Event::Termination(termination))
             } else {
                 model.emit_directly = true;
-                ActionAfterLock::None
+                None
             }
         },
         |action, context| match action {
-            ActionAfterLock::Next(next) => {
+            Some(Event::Next(next)) => {
                 send_next(context, next);
             }
-            ActionAfterLock::Termination(termination) => {
+            Some(Event::Termination(termination)) => {
                 context.send_termination(termination);
             }
-            ActionAfterLock::None => {}
+            None => {}
         },
     );
 }

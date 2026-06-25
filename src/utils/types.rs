@@ -1,4 +1,3 @@
-use crate::observer::Termination;
 use std::marker::PhantomData;
 
 /// Using `PhantomData<fn(T) -> T>` instead of `PhantomData<T>` to make MarkerType to be `NecessarySend` when T is not `NecessarySend`.
@@ -7,12 +6,6 @@ use std::marker::PhantomData;
 /// TODO: find a better solution, so we can remove some restriction like `T: 'static` in some cases.
 /// For more detail: <https://users.rust-lang.org/t/getting-phantomdata-to-have-a-static-lifetime/38505>
 pub type MarkerType<T> = PhantomData<fn(T) -> T>;
-
-pub enum ActionAfterLock<T, E> {
-    Next(T),
-    Termination(Termination<E>),
-    None,
-}
 
 pub trait MutableHelper<T> {
     fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R;
