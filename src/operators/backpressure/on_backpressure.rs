@@ -89,7 +89,7 @@ where
     C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
     fn on_next(&mut self, value: T0) {
-        self.0.lock_model(|model| {
+        self.0.modify_model_with_action(|model| {
             if model.termination.is_some() {
                 return Action::None;
             }
@@ -101,7 +101,7 @@ where
                 let callback: RequestCallbackType = Box::new(move || {
                     handle_request(context);
                 });
-                Action::Next((next, callback))
+                Action::SendNext((next, callback))
             } else {
                 Action::None
             }
@@ -109,9 +109,9 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.0.lock_model(|model| {
+        self.0.modify_model_with_action(|model| {
             if model.emit_directly {
-                Action::Termination(termination)
+                Action::SendTermination(termination)
             } else {
                 model.termination = Some(termination);
                 Action::None
@@ -128,15 +128,15 @@ fn handle_request<'or, T0, T, E, OR, C>(
     OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
-    context.lock_model(|model| {
+    context.modify_model_with_action(|model| {
         if let Some(next) = model.collection.take_next_value() {
             let context = context.clone();
             let callback: RequestCallbackType = Box::new(move || {
                 handle_request(context);
             });
-            Action::Next((next, callback))
+            Action::SendNext((next, callback))
         } else if let Some(termination) = model.termination.take() {
-            Action::Termination(termination)
+            Action::SendTermination(termination)
         } else {
             model.emit_directly = true;
             Action::None

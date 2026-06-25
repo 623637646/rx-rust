@@ -45,22 +45,24 @@ pub struct Context<T, E, OR, M> {
     model: Shared<Mutable<M>>,
 }
 
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq)]
 pub enum Action<T, E> {
-    Next(T),
-    Termination(Termination<E>),
+    SendNext(T),
+    SendTermination(Termination<E>),
     None,
 }
 
 impl<T, E, OR, M> Context<T, E, OR, M> {
-    pub fn lock_model(&self, callback: impl FnOnce(&mut M) -> Action<T, E>)
+    pub fn modify_model_with_action(&self, callback: impl FnOnce(&mut M) -> Action<T, E>)
     where
         OR: Observer<T, E>,
     {
         self.model.lock_mut(|mut lock| {
             let action = callback(&mut *lock);
             match action {
-                Action::Next(value) => self.send_next(value, lock),
-                Action::Termination(termination) => self.send_termination(termination, lock),
+                Action::SendNext(value) => self.send_next(value, lock),
+                Action::SendTermination(termination) => self.send_termination(termination, lock),
                 Action::None => (),
             }
         });
