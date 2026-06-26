@@ -1,8 +1,8 @@
-use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -11,7 +11,6 @@ use crate::{
         subscribe_unsub_after_termination::subscribe_unsub_after_termination, types::MarkerType,
     },
 };
-use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::marker::PhantomData;
 
@@ -78,67 +77,55 @@ impl<E, OE1, I> Switch<MapInfallibleToError<E, FromIter<I>>, OE1> {
 
 impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Switch<OE, OE1>
 where
-    T: 'or,
+    'sub: 'or,
+    'or: 'sub,
+    T: NecessarySend + 'sub,
+    E: NecessarySend + 'sub,
     OE: Observable<'or, 'sub, OE1, E>,
     OE1: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let context = Shared::new(Mutable::new(SwitchContext {
+            let model = Model {
                 on_going_sub: None,
-                completed: false,
-            }));
-            let observer = SwitchObserver {
-                observer: Shared::new(Mutable::new(Some(observer))),
-                context: context.clone(),
-                _marker: PhantomData,
+                is_source_completed: false,
             };
-            self.source.subscribe(observer) + context
+            subscribe_with_shared_model(observer, model, |context| {
+                self.source.subscribe(SwitchObserver(context))
+            })
         })
     }
 }
 
-struct SwitchContext<'sub> {
+struct Model<'sub> {
     on_going_sub: Option<Subscription<'sub>>,
-    completed: bool,
+    is_source_completed: bool,
 }
 
-impl Disposable for Shared<Mutable<SwitchContext<'_>>> {
-    fn dispose(self) {
-        safe_lock_option_disposable!(dispose: self, on_going_sub);
-    }
-}
+struct SwitchObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
 
-struct SwitchObserver<'sub, T, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<SwitchContext<'sub>>>,
-    _marker: MarkerType<T>,
-}
-
-impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for SwitchObserver<'sub, T, OR>
+impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for SwitchObserver<'sub, T, E, OR>
 where
+    'sub: 'or,
+    T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
     OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        // Use a placeholder subscription.
-        if let Some(on_going_sub) =
-            safe_lock_option!(replace: self.context, on_going_sub, Subscription::default())
-        {
-            on_going_sub.dispose();
-        }
-        let observer = SwitchInnerObserver {
-            observer: self.observer.clone(),
-            context: self.context.clone(),
-        };
+        let _on_going_sub = self.0.modify_model(|model| {
+            model?.on_going_sub.replace(Subscription::default()) // Use a placeholder subscription.
+        });
+        let observer = SwitchInnerObserver(self.0.clone());
         let sub = value.subscribe(observer);
-        self.context.lock_mut(|mut lock| {
-            if lock.on_going_sub.is_some() {
-                lock.on_going_sub = Some(sub);
+        let _on_going_sub = self.0.modify_model(|model| {
+            let Some(model) = model else {
+                return Some(sub);
+            };
+            if model.on_going_sub.is_some() {
+                model.on_going_sub.replace(sub)
             } else {
-                // already terminated
+                Some(sub) // already terminated
             }
         });
     }
@@ -146,49 +133,51 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.context.lock_mut(|mut lock| {
-                    lock.completed = true;
-                    if lock.on_going_sub.is_none() {
-                        drop(lock);
-                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.0.modify_model_with_action(|model| {
+                    let Some(model) = model else {
+                        return Action::None;
+                    };
+                    model.is_source_completed = true;
+                    if model.on_going_sub.is_none() {
+                        Action::SendTermination(termination)
+                    } else {
+                        Action::None
                     }
                 });
             }
             Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.0.send_termination(termination);
             }
         }
     }
 }
 
-struct SwitchInnerObserver<'sub, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<SwitchContext<'sub>>>,
-}
+struct SwitchInnerObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
 
-impl<T, E, OR> Observer<T, E> for SwitchInnerObserver<'_, OR>
+impl<T, E, OR> Observer<T, E> for SwitchInnerObserver<'_, T, E, OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_option_observer!(on_next: self.observer, value);
+        self.0.send_next(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.context.lock_mut(|mut lock| {
-                    if lock.completed {
-                        drop(lock);
-                        safe_lock_option_observer!(on_termination: self.observer, termination);
-                    } else if let Some(on_going_sub) = lock.on_going_sub.take() {
-                        drop(lock);
-                        on_going_sub.dispose();
+                let _on_going_sub = self.0.modify_model_with_action_and_result(|model| {
+                    let Some(model) = model else {
+                        return (Action::None, None);
+                    };
+                    if model.is_source_completed {
+                        (Action::SendTermination(termination), None)
+                    } else {
+                        (Action::None, model.on_going_sub.take()) // Drop subscription outside the lock to avoid potential deadlock
                     }
                 });
             }
             Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.0.send_termination(termination);
             }
         }
     }

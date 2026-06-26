@@ -62,11 +62,13 @@ impl<T0, OE, OE1, F> SwitchMap<T0, OE, OE1, F> {
 
 impl<'or, 'sub, T0, T, E, OE, OE1, F> Observable<'or, 'sub, T, E> for SwitchMap<T0, OE, OE1, F>
 where
-    T: 'or,
+    'sub: 'or,
+    'or: 'sub,
+    T: NecessarySend + 'sub,
+    E: NecessarySend + 'sub,
     OE: Observable<'or, 'sub, T0, E>,
     OE1: Observable<'or, 'sub, T, E>,
     F: FnMut(T0) -> OE1 + NecessarySend + 'or,
-    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let observable = Map::new(self.source, self.callback);

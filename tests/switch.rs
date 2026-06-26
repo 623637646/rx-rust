@@ -1012,7 +1012,7 @@ fn test_mut_ref() {
     });
     let observable = observable.switch();
 
-    let _subscription = observable.subscribe_with_callback(
+    let subscription = observable.subscribe_with_callback(
         |value| {
             *value *= 2;
         },
@@ -1022,6 +1022,7 @@ fn test_mut_ref() {
         },
     );
 
+    subscription.dispose();
     assert_eq!(value_1, 222);
     assert_eq!(value_2, 444);
     assert_eq!(value_3, 666);
@@ -1045,7 +1046,7 @@ fn test_mut_ref_completed() {
     });
     let observable = observable.switch();
 
-    let _subscription = observable.subscribe_with_callback(
+    let subscription = observable.subscribe_with_callback(
         |value| {
             *value *= 2;
         },
@@ -1057,6 +1058,7 @@ fn test_mut_ref_completed() {
         },
     );
 
+    subscription.dispose();
     assert_eq!(value_1, 222);
     assert_eq!(value_2, 444);
     assert_eq!(value_3, 666);
