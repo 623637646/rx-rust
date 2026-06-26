@@ -59,12 +59,12 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let sub_2 = Shared::new(Mutable::new(None));
-        let onserver = ConcatObserver {
+        let observer = ConcatObserver {
             observer,
             source_2: self.source_2,
             sub_2: sub_2.clone(),
         };
-        self.source_1.subscribe(onserver) + sub_2
+        self.source_1.subscribe(observer) + sub_2
     }
 }
 
