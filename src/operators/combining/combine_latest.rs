@@ -104,6 +104,9 @@ where
 {
     fn on_next(&mut self, latest_1: T1) {
         self.0.modify_model_with_action(|model| {
+            let Some(model) = model else {
+                return Action::None;
+            };
             if let Some(latest_2) = &model.latest_2 {
                 model.latest_1 = Some(latest_1.clone());
                 Action::SendNext((latest_1, latest_2.clone()))
@@ -115,16 +118,21 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.0.modify_model_with_action(|model| match termination {
-            Termination::Completed => {
-                if model.should_completed || model.latest_1.is_none() {
-                    Action::SendTermination(Termination::Completed)
-                } else {
-                    model.should_completed = true;
-                    Action::None
+        self.0.modify_model_with_action(|model| {
+            let Some(model) = model else {
+                return Action::None;
+            };
+            match termination {
+                Termination::Completed => {
+                    if model.should_completed || model.latest_1.is_none() {
+                        Action::SendTermination(Termination::Completed)
+                    } else {
+                        model.should_completed = true;
+                        Action::None
+                    }
                 }
+                Termination::Error(error) => Action::SendTermination(Termination::Error(error)),
             }
-            Termination::Error(error) => Action::SendTermination(Termination::Error(error)),
         });
     }
 }
@@ -139,6 +147,9 @@ where
 {
     fn on_next(&mut self, latest_2: T2) {
         self.0.modify_model_with_action(|model| {
+            let Some(model) = model else {
+                return Action::None;
+            };
             if let Some(latest_1) = &model.latest_1 {
                 model.latest_2 = Some(latest_2.clone());
                 Action::SendNext((latest_1.clone(), latest_2))
@@ -150,16 +161,21 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.0.modify_model_with_action(|model| match termination {
-            Termination::Completed => {
-                if model.should_completed || model.latest_2.is_none() {
-                    Action::SendTermination(Termination::Completed)
-                } else {
-                    model.should_completed = true;
-                    Action::None
+        self.0.modify_model_with_action(|model| {
+            let Some(model) = model else {
+                return Action::None;
+            };
+            match termination {
+                Termination::Completed => {
+                    if model.should_completed || model.latest_2.is_none() {
+                        Action::SendTermination(Termination::Completed)
+                    } else {
+                        model.should_completed = true;
+                        Action::None
+                    }
                 }
+                Termination::Error(error) => Action::SendTermination(Termination::Error(error)),
             }
-            Termination::Error(error) => Action::SendTermination(Termination::Error(error)),
         });
     }
 }

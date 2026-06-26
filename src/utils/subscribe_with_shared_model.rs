@@ -16,34 +16,32 @@ where
     T: NecessarySend + 'sub,
     E: NecessarySend + 'sub,
     OR: NecessarySend + 'or,
+    M: NecessarySend + 'sub,
     F: FnOnce(Context<T, E, OR, M>) -> Subscription<'sub>,
 {
-    let state = Shared::new(Mutable::new(State::Idle(observer)));
-    let model = Shared::new(Mutable::new(model));
-    let context = Context {
-        state: state.clone(),
-        model,
-    };
+    let state = Shared::new(Mutable::new(State::Idle { observer, model }));
+    let context = Context(state.clone());
     let disposable = SharedModelDisposable(state);
     let sub = builder(context);
     sub + disposable
 }
 
-enum State<T, E, OR> {
-    Idle(OR),
+enum State<T, E, OR, M> {
+    Idle {
+        observer: OR,
+        model: M,
+    },
     Processing {
         next_values: Vec<T>,
         termination: Option<Termination<E>>,
+        model: M,
     },
     Stopped, // Unsubscribed or disposed
 }
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Context<T, E, OR, M> {
-    state: Shared<Mutable<State<T, E, OR>>>,
-    model: Shared<Mutable<M>>,
-}
+pub struct Context<T, E, OR, M>(Shared<Mutable<State<T, E, OR, M>>>);
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
@@ -54,14 +52,14 @@ pub enum Action<T, E> {
 }
 
 impl<T, E, OR, M> Context<T, E, OR, M> {
-    pub fn modify_model<R>(&self, callback: impl FnOnce(&mut M) -> R) -> R
+    pub fn modify_model<R>(&self, callback: impl FnOnce(Option<&mut M>) -> R) -> R
     where
         OR: Observer<T, E>,
     {
         self.modify_model_with_action_and_result(|model| (Action::None, callback(model)))
     }
 
-    pub fn modify_model_with_action(&self, callback: impl FnOnce(&mut M) -> Action<T, E>)
+    pub fn modify_model_with_action(&self, callback: impl FnOnce(Option<&mut M>) -> Action<T, E>)
     where
         OR: Observer<T, E>,
     {
@@ -73,17 +71,22 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
 
     pub fn modify_model_with_action_and_result<R>(
         &self,
-        callback: impl FnOnce(&mut M) -> (Action<T, E>, R),
+        callback: impl FnOnce(Option<&mut M>) -> (Action<T, E>, R),
     ) -> R
     where
         OR: Observer<T, E>,
     {
-        self.model.lock_mut(|mut lock| {
-            let (action, result) = callback(&mut *lock);
+        self.0.lock_mut(|mut lock| {
+            let model = match &mut *lock {
+                State::Idle { model, .. } => Some(model),
+                State::Processing { model, .. } => Some(model),
+                State::Stopped => None,
+            };
+            let (action, result) = callback(model);
             match action {
-                Action::SendNext(value) => self.send_next_impl(value, Some(lock)),
+                Action::SendNext(value) => self.send_next_impl(value, lock),
                 Action::SendTermination(termination) => {
-                    self.send_termination_impl(termination, Some(lock))
+                    self.send_termination_impl(termination, lock)
                 }
                 Action::None => (),
             }
@@ -95,62 +98,66 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     where
         OR: Observer<T, E>,
     {
-        self.send_next_impl(value, None);
+        self.0.lock_mut(|lock| self.send_next_impl(value, lock))
     }
 
     pub fn send_termination(&self, termination: Termination<E>)
     where
         OR: Observer<T, E>,
     {
-        self.send_termination_impl(termination, None);
+        self.0
+            .lock_mut(|lock| self.send_termination_impl(termination, lock))
     }
 
-    fn send_next_impl(&self, value: T, lock: Option<MutGuard<'_, M>>)
+    fn send_next_impl(&self, value: T, mut lock: MutGuard<'_, State<T, E, OR, M>>)
     where
         OR: Observer<T, E>,
     {
         // None means finish, Some means continue
-        let action = self.state.lock_mut(|mut lock| match &mut *lock {
-            State::Idle(_) => {
-                let idel_state = std::mem::replace(
-                    &mut *lock,
-                    State::Processing {
-                        next_values: Vec::new(),
-                        termination: None,
-                    },
-                );
-                match idel_state {
-                    State::Idle(observer) => Some((observer, value)),
+        match &mut *lock {
+            State::Idle { .. } => {
+                let idel_state = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
+                let (mut observer, model) = match idel_state {
+                    State::Idle { observer, model } => (observer, model),
                     State::Processing { .. } | State::Stopped => unreachable!(),
-                }
+                };
+                *lock = State::Processing {
+                    next_values: Vec::new(),
+                    termination: None,
+                    model,
+                };
+                drop(lock); // Drop lock to avoid potential deadlock
+                observer.on_next(value);
+                self.send_events_until_finish(observer);
             }
             State::Processing {
                 next_values,
                 termination,
+                ..
             } => {
                 if termination.is_none() {
                     next_values.push(value);
                 }
-                None
             }
-            State::Stopped => None,
-        });
-        drop(lock); // Drop lock to avoid potential deadlock
-        if let Some((mut observer, value)) = action {
-            observer.on_next(value);
-            self.send_events_until_finish(observer);
-        }
+            State::Stopped => {}
+        };
     }
 
-    fn send_termination_impl(&self, termination: Termination<E>, lock: Option<MutGuard<'_, M>>)
-    where
+    fn send_termination_impl(
+        &self,
+        termination: Termination<E>,
+        mut lock: MutGuard<'_, State<T, E, OR, M>>,
+    ) where
         OR: Observer<T, E>,
     {
-        let action = self.state.lock_mut(|mut lock| match &mut *lock {
-            State::Idle(_) => {
+        match &mut *lock {
+            State::Idle { .. } => {
                 let idel_state = std::mem::replace(&mut *lock, State::Stopped);
                 match idel_state {
-                    State::Idle(observer) => Some((observer, termination)),
+                    State::Idle { observer, .. } => {
+                        drop(lock); // Drop lock to avoid potential deadlock
+                        observer.on_termination(termination);
+                    }
                     State::Processing { .. } | State::Stopped => unreachable!(),
                 }
             }
@@ -160,14 +167,9 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                 if slot.is_none() {
                     *slot = Some(termination);
                 }
-                None
             }
-            State::Stopped => None,
-        });
-        drop(lock); // Drop lock to avoid potential deadlock
-        if let Some((observer, termination)) = action {
-            observer.on_termination(termination);
-        }
+            State::Stopped => {}
+        };
     }
 
     // pub fn downgrade(&self) -> WeakContext<T, E, OR, M> {
@@ -183,16 +185,22 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     {
         loop {
             let (returned_observer, next_values, termination) =
-                self.state.lock_mut(|mut lock| match &mut *lock {
-                    State::Idle(_) => {
+                self.0.lock_mut(|mut lock| match &mut *lock {
+                    State::Idle { .. } => {
                         panic!("Can't be called in idle state");
                     }
                     State::Processing {
                         next_values,
                         termination,
+                        ..
                     } => match (next_values.is_empty(), termination.take()) {
                         (true, None) => {
-                            *lock = State::Idle(observer);
+                            let processing = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
+                            let model = match processing {
+                                State::Processing { model, .. } => model,
+                                State::Idle { .. } | State::Stopped => unreachable!(),
+                            };
+                            *lock = State::Idle { observer, model };
                             (None, None, None)
                         }
                         (true, Some(termination)) => {
@@ -234,9 +242,9 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     }
 }
 
-struct SharedModelDisposable<T, E, OR>(Shared<Mutable<State<T, E, OR>>>);
+struct SharedModelDisposable<T, E, OR, M>(Shared<Mutable<State<T, E, OR, M>>>);
 
-impl<T, E, OR> Disposable for SharedModelDisposable<T, E, OR> {
+impl<T, E, OR, M> Disposable for SharedModelDisposable<T, E, OR, M> {
     fn dispose(self) {
         let _old_state = safe_lock!(mem_replace: self.0, State::Stopped);
     }

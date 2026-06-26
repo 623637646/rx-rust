@@ -1,4 +1,3 @@
-use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
@@ -96,7 +95,6 @@ where
             };
             subscribe_with_shared_model(observer, model, |context| {
                 self.source.subscribe(SourceObserver(context.clone()))
-                    + ConcatAllDisposable(context)
             })
         })
     }
@@ -120,12 +118,15 @@ where
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let observable = self.0.modify_model_with_action_and_result(|model| {
+        let (observable, _subscription) = self.0.modify_model_with_action_and_result(|model| {
+            let Some(model) = model else {
+                return (Action::None, (None, None));
+            };
             model.pending_observables.push_back(value);
             if model.on_going_sub.is_none() {
                 process_next_observable(model)
             } else {
-                (Action::None, None)
+                (Action::None, (None, None))
             }
         });
         if let Some(observable) = observable {
@@ -137,6 +138,9 @@ where
         match termination {
             Termination::Completed => {
                 self.0.modify_model_with_action(|model| {
+                    let Some(model) = model else {
+                        return Action::None;
+                    };
                     model.is_source_completed = true;
                     if model.on_going_sub.is_none() && model.pending_observables.is_empty() {
                         Action::SendTermination(termination)
@@ -167,13 +171,17 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let next_source = self.0.modify_model_with_action_and_result(|model| {
+        let (next_source, _subscription) = self.0.modify_model_with_action_and_result(|model| {
+            let Some(model) = model else {
+                return (Action::None, (None, None));
+            };
             model.is_current_terminated = true;
             match termination {
                 Termination::Completed => process_next_observable(model),
-                Termination::Error(error) => {
-                    (Action::SendTermination(Termination::Error(error)), None)
-                }
+                Termination::Error(error) => (
+                    Action::SendTermination(Termination::Error(error)),
+                    (None, None),
+                ),
             }
         });
         if let Some(observable) = next_source {
@@ -184,15 +192,18 @@ where
 
 fn process_next_observable<'sub, T, E, OE1>(
     model: &mut Model<'sub, OE1>,
-) -> (Action<T, E>, Option<OE1>) {
+) -> (Action<T, E>, (Option<OE1>, Option<Subscription<'sub>>)) {
     if let Some(observable) = model.pending_observables.pop_front() {
         model.is_current_terminated = false;
-        (Action::None, Some(observable))
+        (Action::None, (Some(observable), None))
     } else if model.is_source_completed {
-        (Action::SendTermination(Termination::Completed), None)
+        (
+            Action::SendTermination(Termination::Completed),
+            (None, None),
+        )
     } else {
-        model.on_going_sub.take();
-        (Action::None, None)
+        let on_going_sub = model.on_going_sub.take(); // Drop subscription outside the lock to avoid potential deadlock
+        (Action::None, (None, on_going_sub))
     }
 }
 
@@ -208,23 +219,12 @@ fn subscribe_next_observable<'or, 'sub, T, E, OR, OE1>(
 {
     let observer = InnerObserver(context.clone());
     let sub = observable.subscribe(observer);
-    context.modify_model(|model| {
+    let _sub = context.modify_model(|model| {
+        let model = model?;
         if !model.is_current_terminated {
-            model.on_going_sub = Some(sub);
+            Some(model.on_going_sub.replace(sub)) // Drop subscription outside the lock to avoid potential deadlock 
+        } else {
+            None
         }
     });
-}
-
-struct ConcatAllDisposable<'sub, T, E, OR, OE1>(Context<T, E, OR, Model<'sub, OE1>>);
-
-impl<T, E, OR, OE1> Disposable for ConcatAllDisposable<'_, T, E, OR, OE1>
-where
-    OR: Observer<T, E>,
-{
-    fn dispose(self) {
-        let on_going_sub = self.0.modify_model(|model| model.on_going_sub.take());
-        if let Some(sub) = on_going_sub {
-            sub.dispose();
-        }
-    }
 }

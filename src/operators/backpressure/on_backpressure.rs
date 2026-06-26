@@ -90,6 +90,9 @@ where
 {
     fn on_next(&mut self, value: T0) {
         self.0.modify_model_with_action(|model| {
+            let Some(model) = model else {
+                return Action::None;
+            };
             if model.termination.is_some() {
                 return Action::None;
             }
@@ -110,6 +113,9 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.0.modify_model_with_action(|model| {
+            let Some(model) = model else {
+                return Action::None;
+            };
             if model.emit_directly {
                 Action::SendTermination(termination)
             } else {
@@ -129,6 +135,9 @@ fn handle_request<'or, T0, T, E, OR, C>(
     C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
     context.modify_model_with_action(|model| {
+        let Some(model) = model else {
+            return Action::None;
+        };
         if let Some(next) = model.collection.take_next_value() {
             let context = context.clone();
             let callback: RequestCallbackType = Box::new(move || {
