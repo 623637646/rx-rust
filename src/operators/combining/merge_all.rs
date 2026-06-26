@@ -1,5 +1,7 @@
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
+use crate::observable::observable_ext::ObservableExt;
+use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
@@ -63,14 +65,14 @@ impl<OE, OE1> MergeAll<OE, OE1> {
     }
 }
 
-impl<OE1, I> MergeAll<FromIter<I>, OE1> {
-    pub fn new_from_iter<'or, 'sub, T, E>(into_iterator: I) -> Self
+impl<E, OE1, I> MergeAll<MapInfallibleToError<E, FromIter<I>>, OE1> {
+    pub fn new_from_iter<'or, 'sub, T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
         OE1: Observable<'or, 'sub, T, E>,
     {
         Self {
-            source: FromIter::new(into_iterator),
+            source: FromIter::new(into_iterator).map_infallible_to_error(),
             _marker: PhantomData,
         }
     }
