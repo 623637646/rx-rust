@@ -1,8 +1,8 @@
-use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -11,7 +11,6 @@ use crate::{
         subscribe_unsub_after_termination::subscribe_unsub_after_termination, types::MarkerType,
     },
 };
-use crate::{safe_lock, safe_lock_option_observer, safe_lock_slot_map};
 use educe::Educe;
 use slotmap::{DefaultKey, SlotMap};
 use std::marker::PhantomData;
@@ -80,64 +79,62 @@ impl<E, OE1, I> MergeAll<MapInfallibleToError<E, FromIter<I>>, OE1> {
 
 impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for MergeAll<OE, OE1>
 where
-    T: 'or,
+    'sub: 'or,
+    'or: 'sub,
+    T: NecessarySend + 'sub,
+    E: NecessarySend + 'sub,
     OE: Observable<'or, 'sub, OE1, E>,
     OE1: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let context = Shared::new(Mutable::new(MergeAllContext {
+            let model = Model {
                 subscriptions: SlotMap::new(),
                 terminated: false,
-            }));
-            let observer = MergeAllObserver {
-                observer: Shared::new(Mutable::new(Some(observer))),
-                context: context.clone(),
-                _marker: PhantomData,
             };
-            self.source.subscribe(observer) + context
+            subscribe_with_shared_model(observer, model, |context| {
+                self.source.subscribe(MergeAllObserver(context))
+            })
         })
     }
 }
 
-struct MergeAllContext<'sub> {
+struct Model<'sub> {
     subscriptions: SlotMap<DefaultKey, Subscription<'sub>>,
     terminated: bool,
 }
 
-impl Disposable for Shared<Mutable<MergeAllContext<'_>>> {
-    fn dispose(self) {
-        safe_lock!(mem_take: self, subscriptions).clear();
-    }
-}
+struct MergeAllObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
 
-struct MergeAllObserver<'sub, T, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<MergeAllContext<'sub>>>,
-    _marker: MarkerType<T>,
-}
-
-impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for MergeAllObserver<'sub, T, OR>
+impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for MergeAllObserver<'sub, T, E, OR>
 where
+    'sub: 'or,
+    T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
     OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
 {
     fn on_next(&mut self, value: OE1) {
         // Insert a placeholder subscription.
-        let key = safe_lock_slot_map!(insert: self.context, subscriptions, Subscription::default());
+        let key = self
+            .0
+            .modify_model(|model| Some(model?.subscriptions.insert(Subscription::default())));
+        let Some(key) = key else {
+            return;
+        };
 
         let observer = MergeAllInnerObserver {
-            observer: self.observer.clone(),
-            context: self.context.clone(),
+            context: self.0.clone(),
             key,
         };
         let sub = value.subscribe(observer);
 
-        self.context.lock_mut(|mut lock| {
-            if lock.subscriptions.contains_key(key) {
-                lock.subscriptions[key] = sub;
+        self.0.modify_model(|model| {
+            let Some(model) = model else {
+                return;
+            };
+            if model.subscriptions.contains_key(key) {
+                model.subscriptions[key] = sub;
             } else {
                 // already terminated
             }
@@ -147,51 +144,56 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.context.lock_mut(|mut lock| {
-                    if lock.subscriptions.is_empty() {
-                        drop(lock);
-                        safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.0.modify_model_with_action(|model| {
+                    let Some(model) = model else {
+                        return Action::None;
+                    };
+                    if model.subscriptions.is_empty() {
+                        Action::SendTermination(termination)
                     } else {
-                        lock.terminated = true;
+                        model.terminated = true;
+                        Action::None
                     }
                 });
             }
             Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.0.send_termination(termination);
             }
         }
     }
 }
 
-struct MergeAllInnerObserver<'sub, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<MergeAllContext<'sub>>>,
+struct MergeAllInnerObserver<'sub, T, E, OR> {
+    context: Context<T, E, OR, Model<'sub>>,
     key: DefaultKey,
 }
 
-impl<T, E, OR> Observer<T, E> for MergeAllInnerObserver<'_, OR>
+impl<T, E, OR> Observer<T, E> for MergeAllInnerObserver<'_, T, E, OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_option_observer!(on_next: self.observer, value);
+        self.context.send_next(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.context.lock_mut(|mut lock| {
-            lock.subscriptions.remove(self.key);
-            match termination {
-                Termination::Completed => {
-                    if lock.terminated && lock.subscriptions.is_empty() {
-                        drop(lock);
-                        safe_lock_option_observer!(on_termination: self.observer, termination);
+        match termination {
+            Termination::Completed => {
+                let _subscription = self.context.modify_model_with_action_and_result(|model| {
+                    let Some(model) = model else {
+                        return (Action::None, None);
+                    };
+                    let subscription = model.subscriptions.remove(self.key);
+                    if model.terminated && model.subscriptions.is_empty() {
+                        (Action::SendTermination(termination), Some(subscription)) // Drop subscription outside the lock to avoid potential deadlock
+                    } else {
+                        (Action::None, None)
                     }
-                }
-                Termination::Error(_) => {
-                    drop(lock);
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                });
             }
-        });
+            Termination::Error(_) => {
+                self.context.send_termination(termination);
+            }
+        }
     }
 }
