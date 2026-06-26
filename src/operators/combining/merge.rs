@@ -1,5 +1,5 @@
-use crate::safe_lock_option_observer;
-use crate::utils::types::{Mutable, MutableBool, MutableBoolHelper, NecessarySend, Shared};
+use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -56,51 +56,58 @@ impl<OE1, OE2> Merge<OE1, OE2> {
 
 impl<'or, 'sub, T, E, OE1, OE2> Observable<'or, 'sub, T, E> for Merge<OE1, OE2>
 where
+    'sub: 'or,
+    'or: 'sub,
+    T: NecessarySend + 'sub,
+    E: NecessarySend + 'sub,
     OE1: Observable<'or, 'sub, T, E>,
     OE2: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Shared::new(Mutable::new(Some(observer)));
-            let one_is_completed = Shared::new(MutableBool::new(false));
-            let onserver_1 = MergeObserver {
-                observer: observer.clone(),
-                one_is_completed: one_is_completed.clone(),
+            let model = Model {
+                one_is_completed: false,
             };
-            let onserver_2 = MergeObserver {
-                observer,
-                one_is_completed,
-            };
-            let subscription_1 = self.source_1.subscribe(onserver_1);
-            let subscription_2 = self.source_2.subscribe(onserver_2);
-            subscription_1 + subscription_2
+            subscribe_with_shared_model(observer, model, |context| {
+                let subscription_1 = self.source_1.subscribe(MergeObserver(context.clone()));
+                let subscription_2 = self.source_2.subscribe(MergeObserver(context));
+                subscription_1 + subscription_2
+            })
         })
     }
 }
 
-struct MergeObserver<OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    one_is_completed: Shared<MutableBool>,
+struct Model {
+    one_is_completed: bool,
 }
 
-impl<T, E, OR> Observer<T, E> for MergeObserver<OR>
+struct MergeObserver<T, E, OR>(Context<T, E, OR, Model>);
+
+impl<T, E, OR> Observer<T, E> for MergeObserver<T, E, OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_option_observer!(on_next: self.observer, value);
+        self.0.send_next(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                if self.one_is_completed.change_if_not_equal(true) {
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                self.0.modify_model_with_action(|model| {
+                    let Some(model) = model else {
+                        return Action::None;
+                    };
+                    if model.one_is_completed {
+                        Action::SendTermination(termination)
+                    } else {
+                        model.one_is_completed = true;
+                        Action::None
+                    }
+                });
             }
             Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.0.send_termination(termination);
             }
         }
     }
