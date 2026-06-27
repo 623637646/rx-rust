@@ -68,13 +68,13 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let sub = Shared::new(Mutable::new(None));
-        let onserver = CatchObserver {
+        let observer = CatchObserver {
             observer,
             callback: self.callback,
             sub: sub.clone(),
             _marker: PhantomData,
         };
-        self.source.subscribe(onserver) + sub
+        self.source.subscribe(observer) + sub
     }
 }
 
