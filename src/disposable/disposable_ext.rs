@@ -1,7 +1,7 @@
 use crate::{
     disposable::Disposable,
     safe_lock_option_disposable,
-    utils::types::{Mutable, MutableBool, MutableBoolHelper, Shared},
+    utils::types::{Mutable, Shared},
 };
 
 impl<D> Disposable for Shared<Mutable<Option<D>>>
@@ -10,12 +10,6 @@ where
 {
     fn dispose(self) {
         safe_lock_option_disposable!(dispose: self);
-    }
-}
-
-impl Disposable for Shared<MutableBool> {
-    fn dispose(self) {
-        self.write(false);
     }
 }
 

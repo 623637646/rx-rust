@@ -1,4 +1,5 @@
 use super::ref_count::RefCount;
+use crate::disposable::Disposable;
 use crate::observable::Observable;
 use crate::utils::types::{MutableBool, MutableBoolHelper, NecessarySend, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
@@ -82,7 +83,10 @@ impl<OE, S> ConnectableObservable<OE, S> {
         if self.is_connected.change_if_not_equal(true) {
             None
         } else {
-            Some(self.source.subscribe(self.subject) + self.is_connected)
+            Some(
+                self.source.subscribe(self.subject)
+                    + ConnectableObservableDisposable(self.is_connected),
+            )
         }
     }
 
@@ -97,5 +101,13 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         self.subject.subscribe(observer)
+    }
+}
+
+struct ConnectableObservableDisposable(Shared<MutableBool>);
+
+impl Disposable for ConnectableObservableDisposable {
+    fn dispose(self) {
+        self.0.write(false);
     }
 }
