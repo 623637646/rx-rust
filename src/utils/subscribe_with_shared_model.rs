@@ -52,6 +52,8 @@ pub enum Action<T, E> {
 }
 
 impl<T, E, OR, M> Context<T, E, OR, M> {
+    /// Modify the model with callback.
+    /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
     pub fn modify_model<R>(&self, callback: impl FnOnce(Option<&mut M>) -> R) -> R
     where
         OR: Observer<T, E>,
@@ -59,6 +61,8 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         self.modify_model_with_action_and_result(|model| (Action::None, callback(model)))
     }
 
+    /// Modify the model with callback and return action.
+    /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
     pub fn modify_model_with_action(&self, callback: impl FnOnce(Option<&mut M>) -> Action<T, E>)
     where
         OR: Observer<T, E>,
@@ -69,6 +73,8 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         })
     }
 
+    /// Modify the model with callback and return action and custom result.
+    /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
     pub fn modify_model_with_action_and_result<R>(
         &self,
         callback: impl FnOnce(Option<&mut M>) -> (Action<T, E>, R),
