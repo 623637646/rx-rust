@@ -189,7 +189,7 @@ where
                     if model.terminated && model.subscriptions.is_empty() {
                         ActionAndResult {
                             action: Action::SendTermination(termination),
-                            result: Some(subscription), // Drop subscription outside the lock to avoid potential deadlock
+                            result: Some(subscription), // Drop outside the lock to avoid potential deadlock
                         }
                     } else {
                         ActionAndResult::default()

@@ -207,7 +207,7 @@ fn process_next_observable<'sub, T, E, OE1>(
             ..Default::default()
         }
     } else {
-        let on_going_sub = model.on_going_sub.take(); // Drop subscription outside the lock to avoid potential deadlock
+        let on_going_sub = model.on_going_sub.take(); // Drop outside the lock to avoid potential deadlock
         ActionAndResult {
             result: (None, on_going_sub),
             ..Default::default()
@@ -230,7 +230,7 @@ fn subscribe_next_observable<'or, 'sub, T, E, OR, OE1>(
     let _sub = context.modify_model(|model| {
         let model = model?;
         if !model.is_current_terminated {
-            Some(model.on_going_sub.replace(sub)) // Drop subscription outside the lock to avoid potential deadlock 
+            Some(model.on_going_sub.replace(sub)) // Drop outside the lock to avoid potential deadlock 
         } else {
             None
         }

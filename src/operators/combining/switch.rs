@@ -178,7 +178,7 @@ where
                         }
                     } else {
                         ActionAndResult {
-                            result: model.on_going_sub.take(), // Drop subscription outside the lock to avoid potential deadlock
+                            result: model.on_going_sub.take(), // Drop outside the lock to avoid potential deadlock
                             ..Default::default()
                         }
                     }
