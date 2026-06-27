@@ -1454,6 +1454,59 @@ fn test_error_on_sub() {
 }
 
 #[test]
+fn test_inner_observer_pending_subscription_when_terminated() {
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.concat_all();
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+
+    sender.on_next(observable_1.into_boxed());
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    sender.on_next(Just::new(-1).into_boxed());
+    sender.on_next(Just::new(-2).into_boxed());
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    sender_1.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    sender_1.on_next(333);
+    assert_eq!(checker.values(), [111, 333]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    sender_1.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111, 333, -1, -2]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Completed);
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;

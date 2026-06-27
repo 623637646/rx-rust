@@ -91,9 +91,8 @@ where
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 pending_observables: VecDeque::new(),
-                on_going_sub: None,
+                sub_state: SubState::Idle,
                 is_source_completed: false,
-                is_current_terminated: false,
             };
             subscribe_with_shared_model(observer, model, |context| {
                 self.source.subscribe(SourceObserver(context.clone()))
@@ -102,11 +101,16 @@ where
     }
 }
 
+enum SubState<'sub> {
+    Idle,
+    PendingSubscription,
+    Processing(Subscription<'sub>),
+}
+
 struct Model<'sub, OE1> {
     pending_observables: VecDeque<OE1>,
-    on_going_sub: Option<Subscription<'sub>>,
+    sub_state: SubState<'sub>,
     is_source_completed: bool,
-    is_current_terminated: bool,
 }
 
 struct SourceObserver<'sub, T, E, OR, OE1>(Context<T, E, OR, Model<'sub, OE1>>);
@@ -120,20 +124,35 @@ where
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let (observable, _subscription) = self.0.modify_model_with_action_and_result(|model| {
-            let Some(model) = model else {
-                return ActionAndResult::default();
-            };
-            model.pending_observables.push_back(value);
-            if model.on_going_sub.is_none() {
-                process_next_observable(model)
-            } else {
-                ActionAndResult::default()
+        let observable = self.0.modify_model(|model| {
+            let model = model?;
+            match model.sub_state {
+                SubState::Idle => {
+                    let _ = std::mem::replace(&mut model.sub_state, SubState::PendingSubscription);
+                    Some(value)
+                }
+                SubState::PendingSubscription | SubState::Processing(_) => {
+                    model.pending_observables.push_back(value);
+                    None
+                }
             }
         });
-        if let Some(observable) = observable {
-            subscribe_next_observable(self.0.clone(), observable);
-        }
+        let Some(observable) = observable else {
+            return;
+        };
+        let observer = InnerObserver(self.0.clone());
+        let sub = observable.subscribe(observer);
+        let _sub = self.0.modify_model(|model| {
+            let Some(model) = model else { return Some(sub) }; // Drop outside the lock to avoid potential deadlock
+            match &model.sub_state {
+                SubState::Idle => Some(sub), // already terminated // Drop outside the lock to avoid potential deadlock
+                SubState::PendingSubscription => {
+                    let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
+                    None
+                }
+                SubState::Processing(_) => unreachable!(),
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -144,10 +163,13 @@ where
                         return Action::None;
                     };
                     model.is_source_completed = true;
-                    if model.on_going_sub.is_none() && model.pending_observables.is_empty() {
-                        Action::SendTermination(termination)
-                    } else {
-                        Action::None
+                    match model.sub_state {
+                        SubState::Idle => {
+                            // The state is only possible to be PendingSubscription or Processing when the pending_observables is not empty.
+                            assert!(model.pending_observables.is_empty());
+                            Action::SendTermination(termination)
+                        }
+                        SubState::PendingSubscription | SubState::Processing(_) => Action::None,
                     }
                 });
             }
@@ -173,51 +195,17 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let (next_source, _subscription) = self.0.modify_model_with_action_and_result(|model| {
-            let Some(model) = model else {
-                return ActionAndResult::default();
-            };
-            model.is_current_terminated = true;
-            match termination {
-                Termination::Completed => process_next_observable(model),
-                Termination::Error(error) => ActionAndResult {
-                    action: Action::SendTermination(Termination::Error(error)),
-                    ..Default::default()
-                },
+        match termination {
+            Termination::Completed => subscribe_next_observable_until_finished(self.0.clone()),
+            Termination::Error(error) => {
+                self.0.send_termination(Termination::Error(error));
             }
-        });
-        if let Some(observable) = next_source {
-            subscribe_next_observable(self.0.clone(), observable);
         }
     }
 }
 
-fn process_next_observable<'sub, T, E, OE1>(
-    model: &mut Model<'sub, OE1>,
-) -> ActionAndResult<T, E, (Option<OE1>, Option<Subscription<'sub>>)> {
-    if let Some(observable) = model.pending_observables.pop_front() {
-        model.is_current_terminated = false;
-        ActionAndResult {
-            result: (Some(observable), None),
-            ..Default::default()
-        }
-    } else if model.is_source_completed {
-        ActionAndResult {
-            action: Action::SendTermination(Termination::Completed),
-            ..Default::default()
-        }
-    } else {
-        let on_going_sub = model.on_going_sub.take(); // Drop outside the lock to avoid potential deadlock
-        ActionAndResult {
-            result: (None, on_going_sub),
-            ..Default::default()
-        }
-    }
-}
-
-fn subscribe_next_observable<'or, 'sub, T, E, OR, OE1>(
+fn subscribe_next_observable_until_finished<'or, 'sub, T, E, OR, OE1>(
     context: Context<T, E, OR, Model<'sub, OE1>>,
-    observable: OE1,
 ) where
     'sub: 'or,
     T: NecessarySend + 'or,
@@ -225,14 +213,74 @@ fn subscribe_next_observable<'or, 'sub, T, E, OR, OE1>(
     OR: Observer<T, E> + NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
 {
-    let observer = InnerObserver(context.clone());
-    let sub = observable.subscribe(observer);
-    let _sub = context.modify_model(|model| {
-        let model = model?;
-        if !model.is_current_terminated {
-            Some(model.on_going_sub.replace(sub)) // Drop outside the lock to avoid potential deadlock 
+    loop {
+        let (next_source, _subscription) = context.modify_model_with_action_and_result(|model| {
+            let Some(model) = model else {
+                return ActionAndResult::default();
+            };
+            match &model.sub_state {
+                SubState::PendingSubscription => {
+                    // already terminated
+                    let _ = std::mem::replace(&mut model.sub_state, SubState::Idle);
+                    ActionAndResult::default()
+                }
+                SubState::Idle | SubState::Processing(_) => {
+                    if let Some(observable) = model.pending_observables.pop_front() {
+                        match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription)
+                        {
+                            SubState::Idle => ActionAndResult {
+                                result: (Some(observable), None),
+                                ..Default::default()
+                            },
+                            SubState::PendingSubscription => {
+                                unreachable!()
+                            }
+                            SubState::Processing(subscription) => ActionAndResult {
+                                result: (Some(observable), Some(subscription)), // Drop outside the lock to avoid potential deadlock
+                                ..Default::default()
+                            },
+                        }
+                    } else if model.is_source_completed {
+                        ActionAndResult {
+                            action: Action::SendTermination(Termination::Completed),
+                            ..Default::default()
+                        }
+                    } else {
+                        match std::mem::replace(&mut model.sub_state, SubState::Idle) {
+                            SubState::Idle => ActionAndResult::default(),
+                            SubState::PendingSubscription => {
+                                unreachable!()
+                            }
+                            SubState::Processing(subscription) => ActionAndResult {
+                                result: (None, Some(subscription)), // Drop outside the lock to avoid potential deadlock
+                                ..Default::default()
+                            },
+                        }
+                    }
+                }
+            }
+        });
+        if let Some(observable) = next_source {
+            let observer = InnerObserver(context.clone());
+            let sub = observable.subscribe(observer);
+            let (stop, _sub) = context.modify_model(|model| {
+                let Some(model) = model else {
+                    return (true, None);
+                };
+                match &model.sub_state {
+                    SubState::Idle => (false, Some(sub)), // already terminated // Drop outside the lock to avoid potential deadlock
+                    SubState::PendingSubscription => {
+                        let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
+                        (true, None)
+                    }
+                    SubState::Processing(_) => unreachable!(),
+                }
+            });
+            if stop {
+                break;
+            }
         } else {
-            None
+            break;
         }
-    });
+    }
 }
