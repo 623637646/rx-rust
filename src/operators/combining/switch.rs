@@ -89,7 +89,7 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
-                on_going_sub: None,
+                sub_state: SubState::Idle,
                 is_source_completed: false,
             };
             subscribe_with_shared_model(observer, model, |context| {
@@ -99,8 +99,14 @@ where
     }
 }
 
+enum SubState<'sub> {
+    Idle,
+    PendingSubscription,
+    Processing(Subscription<'sub>),
+}
+
 struct Model<'sub> {
-    on_going_sub: Option<Subscription<'sub>>,
+    sub_state: SubState<'sub>,
     is_source_completed: bool,
 }
 
@@ -116,18 +122,23 @@ where
 {
     fn on_next(&mut self, value: OE1) {
         let _on_going_sub = self.0.modify_model(|model| {
-            model?.on_going_sub.replace(Subscription::default()) // Use a placeholder subscription.
+            match std::mem::replace(&mut model?.sub_state, SubState::PendingSubscription) {
+                SubState::Idle => None,
+                SubState::Processing(subscription) => Some(subscription),
+                SubState::PendingSubscription => unreachable!(),
+            }
         });
         let observer = SwitchInnerObserver(self.0.clone());
         let sub = value.subscribe(observer);
         let _on_going_sub = self.0.modify_model(|model| {
-            let Some(model) = model else {
-                return Some(sub);
-            };
-            if model.on_going_sub.is_some() {
-                model.on_going_sub.replace(sub)
-            } else {
-                Some(sub) // already terminated
+            let Some(model) = model else { return Some(sub) };
+            match &mut model.sub_state {
+                SubState::Idle => Some(sub), // already terminated
+                SubState::PendingSubscription => {
+                    let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
+                    None
+                }
+                SubState::Processing(_) => unreachable!(),
             }
         });
     }
@@ -140,10 +151,9 @@ where
                         return Action::None;
                     };
                     model.is_source_completed = true;
-                    if model.on_going_sub.is_none() {
-                        Action::SendTermination(termination)
-                    } else {
-                        Action::None
+                    match model.sub_state {
+                        SubState::Idle => Action::SendTermination(termination),
+                        SubState::Processing(_) | SubState::PendingSubscription => Action::None,
                     }
                 });
             }
@@ -177,9 +187,15 @@ where
                             ..Default::default()
                         }
                     } else {
-                        ActionAndResult {
-                            result: model.on_going_sub.take(), // Drop outside the lock to avoid potential deadlock
-                            ..Default::default()
+                        match std::mem::replace(&mut model.sub_state, SubState::Idle) {
+                            SubState::Idle => unreachable!(),
+                            SubState::PendingSubscription => ActionAndResult::default(),
+                            SubState::Processing(subscription) => {
+                                ActionAndResult {
+                                    result: subscription, // Drop outside the lock to avoid potential deadlock
+                                    ..Default::default()
+                                }
+                            }
                         }
                     }
                 });
