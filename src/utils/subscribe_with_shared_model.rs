@@ -160,8 +160,9 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
             State::Idle { .. } => {
                 let idel_state = std::mem::replace(&mut *lock, State::Stopped);
                 match idel_state {
-                    State::Idle { observer, .. } => {
+                    State::Idle { observer, model } => {
                         drop(lock); // Drop lock to avoid potential deadlock
+                        drop(model); // Drop model outside the lock.
                         observer.on_termination(termination);
                     }
                     State::Processing { .. } | State::Stopped => unreachable!(),
