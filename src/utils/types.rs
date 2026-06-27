@@ -15,7 +15,7 @@ pub trait MutableHelper<T> {
 pub trait MutableBoolHelper {
     fn read(&self) -> bool;
     fn write(&self, value: bool);
-    // Change the contained value to `value`, returns true if it was equal. otherwise false.
+    // Change the contained value to `value`, returns true if it was changed. otherwise false.
     fn change_if_not_equal(&self, value: bool) -> bool;
 }
 
@@ -51,7 +51,7 @@ cfg_if::cfg_if! {
             }
             fn change_if_not_equal(&self, value: bool) -> bool {
                 let old = self.replace(value);
-                old == value
+                old != value
             }
         }
 
@@ -104,7 +104,7 @@ cfg_if::cfg_if! {
                 self.store(value, Ordering::SeqCst)
             }
             fn change_if_not_equal(&self, value: bool) -> bool {
-                self.compare_exchange(!value, value, Ordering::SeqCst, Ordering::SeqCst).is_err()
+                self.compare_exchange(!value, value, Ordering::SeqCst, Ordering::SeqCst).is_ok()
             }
         }
 

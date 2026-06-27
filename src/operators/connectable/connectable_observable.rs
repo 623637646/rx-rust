@@ -81,12 +81,12 @@ impl<OE, S> ConnectableObservable<OE, S> {
         S: Observer<T, E> + NecessarySend + 'or,
     {
         if self.is_connected.change_if_not_equal(true) {
-            None
-        } else {
             Some(
                 self.source.subscribe(self.subject)
                     + ConnectableObservableDisposable(self.is_connected),
             )
+        } else {
+            None
         }
     }
 
