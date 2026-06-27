@@ -1,6 +1,7 @@
 use crate::disposable::subscription::Subscription;
 use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
+use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_shared_model::{
     Action, ActionAndResult, Context, subscribe_with_shared_model,
 };
@@ -91,6 +92,7 @@ where
             let model = Model {
                 sub_state: SubState::Idle,
                 is_source_completed: false,
+                current_sub_id: IncrementId::new(),
             };
             subscribe_with_shared_model(observer, model, |context| {
                 self.source.subscribe(SwitchObserver(context))
@@ -108,6 +110,7 @@ enum SubState<'sub> {
 struct Model<'sub> {
     sub_state: SubState<'sub>,
     is_source_completed: bool,
+    current_sub_id: IncrementId,
 }
 
 struct SwitchObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
@@ -121,14 +124,23 @@ where
     OE1: Observable<'or, 'sub, T, E>,
 {
     fn on_next(&mut self, value: OE1) {
-        let _on_going_sub = self.0.modify_model(|model| {
-            match std::mem::replace(&mut model?.sub_state, SubState::PendingSubscription) {
-                SubState::Idle => None,
-                SubState::Processing(subscription) => Some(subscription),
+        let (sub_id, _on_going_sub) = self.0.modify_model(|model| {
+            let Some(model) = model else {
+                return (None, None);
+            };
+            model.current_sub_id.increment();
+            match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription) {
+                SubState::Idle => (Some(model.current_sub_id), None),
+                SubState::Processing(subscription) => {
+                    (Some(model.current_sub_id), Some(subscription)) // Drop outside the lock to avoid potential deadlock
+                }
                 SubState::PendingSubscription => unreachable!(),
             }
         });
-        let observer = SwitchInnerObserver(self.0.clone());
+        let Some(sub_id) = sub_id else {
+            return;
+        };
+        let observer = SwitchInnerObserver(self.0.clone(), sub_id);
         let sub = value.subscribe(observer);
         let _on_going_sub = self.0.modify_model(|model| {
             let Some(model) = model else { return Some(sub) };
@@ -164,23 +176,34 @@ where
     }
 }
 
-struct SwitchInnerObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
+struct SwitchInnerObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>, IncrementId);
 
 impl<T, E, OR> Observer<T, E> for SwitchInnerObserver<'_, T, E, OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.0.send_next(value);
+        self.0.modify_model_with_action(|model| {
+            let Some(model) = model else {
+                return Action::None;
+            };
+            if model.current_sub_id != self.1 {
+                return Action::None;
+            }
+            Action::SendNext(value)
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                let _on_going_sub = self.0.modify_model_with_action_and_result(|model| {
-                    let Some(model) = model else {
-                        return ActionAndResult::default();
-                    };
+        let _on_going_sub = self.0.modify_model_with_action_and_result(|model| {
+            let Some(model) = model else {
+                return ActionAndResult::default();
+            };
+            if model.current_sub_id != self.1 {
+                return ActionAndResult::default();
+            }
+            match termination {
+                Termination::Completed => {
                     if model.is_source_completed {
                         ActionAndResult {
                             action: Action::SendTermination(termination),
@@ -192,17 +215,18 @@ where
                             SubState::PendingSubscription => ActionAndResult::default(),
                             SubState::Processing(subscription) => {
                                 ActionAndResult {
-                                    result: subscription, // Drop outside the lock to avoid potential deadlock
+                                    result: Some(subscription), // Drop outside the lock to avoid potential deadlock
                                     ..Default::default()
                                 }
                             }
                         }
                     }
-                });
+                }
+                Termination::Error(_) => ActionAndResult {
+                    action: Action::SendTermination(termination),
+                    ..Default::default()
+                },
             }
-            Termination::Error(_) => {
-                self.0.send_termination(termination);
-            }
-        }
+        });
     }
 }

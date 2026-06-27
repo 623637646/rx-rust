@@ -6,6 +6,7 @@ use crate::{
 };
 use educe::Educe;
 
+// Creates a subscription that is based on a shared mutable model.
 pub fn subscribe_with_shared_model<'or, 'sub, T, E, OR, M, F>(
     observer: OR,
     model: M,
