@@ -1,7 +1,9 @@
 use crate::disposable::subscription::Subscription;
 use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
-use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
+use crate::utils::subscribe_with_shared_model::{
+    Action, ActionAndResult, Context, subscribe_with_shared_model,
+};
 use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
@@ -181,13 +183,16 @@ where
             Termination::Completed => {
                 let _subscription = self.context.modify_model_with_action_and_result(|model| {
                     let Some(model) = model else {
-                        return (Action::None, None);
+                        return ActionAndResult::default();
                     };
                     let subscription = model.subscriptions.remove(self.key);
                     if model.terminated && model.subscriptions.is_empty() {
-                        (Action::SendTermination(termination), Some(subscription)) // Drop subscription outside the lock to avoid potential deadlock
+                        ActionAndResult {
+                            action: Action::SendTermination(termination),
+                            result: Some(subscription), // Drop subscription outside the lock to avoid potential deadlock
+                        }
                     } else {
-                        (Action::None, None)
+                        ActionAndResult::default()
                     }
                 });
             }

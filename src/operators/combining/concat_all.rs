@@ -1,7 +1,9 @@
 use crate::disposable::subscription::Subscription;
 use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
-use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
+use crate::utils::subscribe_with_shared_model::{
+    Action, ActionAndResult, Context, subscribe_with_shared_model,
+};
 use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
@@ -120,13 +122,13 @@ where
     fn on_next(&mut self, value: OE1) {
         let (observable, _subscription) = self.0.modify_model_with_action_and_result(|model| {
             let Some(model) = model else {
-                return (Action::None, (None, None));
+                return ActionAndResult::default();
             };
             model.pending_observables.push_back(value);
             if model.on_going_sub.is_none() {
                 process_next_observable(model)
             } else {
-                (Action::None, (None, None))
+                ActionAndResult::default()
             }
         });
         if let Some(observable) = observable {
@@ -173,15 +175,15 @@ where
     fn on_termination(self, termination: Termination<E>) {
         let (next_source, _subscription) = self.0.modify_model_with_action_and_result(|model| {
             let Some(model) = model else {
-                return (Action::None, (None, None));
+                return ActionAndResult::default();
             };
             model.is_current_terminated = true;
             match termination {
                 Termination::Completed => process_next_observable(model),
-                Termination::Error(error) => (
-                    Action::SendTermination(Termination::Error(error)),
-                    (None, None),
-                ),
+                Termination::Error(error) => ActionAndResult {
+                    action: Action::SendTermination(Termination::Error(error)),
+                    ..Default::default()
+                },
             }
         });
         if let Some(observable) = next_source {
@@ -192,18 +194,24 @@ where
 
 fn process_next_observable<'sub, T, E, OE1>(
     model: &mut Model<'sub, OE1>,
-) -> (Action<T, E>, (Option<OE1>, Option<Subscription<'sub>>)) {
+) -> ActionAndResult<T, E, (Option<OE1>, Option<Subscription<'sub>>)> {
     if let Some(observable) = model.pending_observables.pop_front() {
         model.is_current_terminated = false;
-        (Action::None, (Some(observable), None))
+        ActionAndResult {
+            result: (Some(observable), None),
+            ..Default::default()
+        }
     } else if model.is_source_completed {
-        (
-            Action::SendTermination(Termination::Completed),
-            (None, None),
-        )
+        ActionAndResult {
+            action: Action::SendTermination(Termination::Completed),
+            ..Default::default()
+        }
     } else {
         let on_going_sub = model.on_going_sub.take(); // Drop subscription outside the lock to avoid potential deadlock
-        (Action::None, (None, on_going_sub))
+        ActionAndResult {
+            result: (None, on_going_sub),
+            ..Default::default()
+        }
     }
 }
 

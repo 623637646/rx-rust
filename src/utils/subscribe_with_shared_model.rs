@@ -44,11 +44,19 @@ enum State<T, E, OR, M> {
 pub struct Context<T, E, OR, M>(Shared<Mutable<State<T, E, OR, M>>>);
 
 #[derive(Educe)]
-#[educe(Debug, Clone, PartialEq, Eq)]
+#[educe(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Action<T, E> {
     SendNext(T),
     SendTermination(Termination<E>),
+    #[educe(Default)]
     None,
+}
+
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ActionAndResult<T, E, R> {
+    pub action: Action<T, E>,
+    pub result: R,
 }
 
 impl<T, E, OR, M> Context<T, E, OR, M> {
@@ -58,7 +66,10 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     where
         OR: Observer<T, E>,
     {
-        self.modify_model_with_action_and_result(|model| (Action::None, callback(model)))
+        self.modify_model_with_action_and_result(|model| ActionAndResult {
+            action: Action::None,
+            result: callback(model),
+        })
     }
 
     /// Modify the model with callback and return action.
@@ -69,7 +80,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     {
         self.modify_model_with_action_and_result(|model| {
             let action = callback(model);
-            (action, ())
+            ActionAndResult { action, result: () }
         })
     }
 
@@ -77,7 +88,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
     pub fn modify_model_with_action_and_result<R>(
         &self,
-        callback: impl FnOnce(Option<&mut M>) -> (Action<T, E>, R),
+        callback: impl FnOnce(Option<&mut M>) -> ActionAndResult<T, E, R>,
     ) -> R
     where
         OR: Observer<T, E>,
@@ -88,7 +99,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                 State::Processing { model, .. } => Some(model),
                 State::Stopped => None,
             };
-            let (action, result) = callback(model);
+            let ActionAndResult { action, result } = callback(model);
             match action {
                 Action::SendNext(value) => self.send_next_impl(value, lock),
                 Action::SendTermination(termination) => {
