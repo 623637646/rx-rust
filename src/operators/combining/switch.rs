@@ -3,7 +3,7 @@ use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_shared_model::{
-    Action, ActionAndResult, Context, subscribe_with_shared_model,
+    Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::NecessarySend;
 use crate::{
@@ -124,31 +124,28 @@ where
     OE1: Observable<'or, 'sub, T, E>,
 {
     fn on_next(&mut self, value: OE1) {
-        let (sub_id, _on_going_sub) = self.0.modify_model(|model| {
-            let Some(model) = model else {
-                return (None, None);
-            };
+        let result = self.0.modify_model(|model| {
             model.current_sub_id.increment();
             match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription) {
-                SubState::Idle => (Some(model.current_sub_id), None),
+                SubState::Idle => ModificationResult::new(model.current_sub_id),
                 SubState::Processing(subscription) => {
-                    (Some(model.current_sub_id), Some(subscription)) // Drop outside the lock to avoid potential deadlock
+                    ModificationResult::new(model.current_sub_id).drop_outside(subscription)
                 }
                 SubState::PendingSubscription => unreachable!(),
             }
         });
-        let Some(sub_id) = sub_id else {
-            return;
+        let sub_id = match result {
+            Ok(sub_id) => sub_id,
+            Err(_) => return,
         };
         let observer = SwitchInnerObserver(self.0.clone(), sub_id);
         let sub = value.subscribe(observer);
-        let _on_going_sub = self.0.modify_model(|model| {
-            let Some(model) = model else { return Some(sub) };
+        let _ = self.0.modify_model(|model| {
             match &mut model.sub_state {
-                SubState::Idle => Some(sub), // already terminated
+                SubState::Idle => ModificationResult::new_with_drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
-                    None
+                    ModificationResult::default()
                 }
                 SubState::Processing(_) => unreachable!(),
             }
@@ -158,14 +155,13 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.0.modify_model_with_action(|model| {
-                    let Some(model) = model else {
-                        return Action::None;
-                    };
+                let _ = self.0.modify_model(|model| {
                     model.is_source_completed = true;
                     match model.sub_state {
-                        SubState::Idle => Action::SendTermination(termination),
-                        SubState::Processing(_) | SubState::PendingSubscription => Action::None,
+                        SubState::Idle => ModificationResult::new_send_termination(termination),
+                        SubState::Processing(_) | SubState::PendingSubscription => {
+                            ModificationResult::default()
+                        }
                     }
                 });
             }
@@ -183,49 +179,36 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        self.0.modify_model_with_action(|model| {
-            let Some(model) = model else {
-                return Action::None;
-            };
+        let _ = self.0.modify_model(|model| {
             if model.current_sub_id != self.1 {
-                return Action::None;
+                return ModificationResult::default();
             }
-            Action::SendNext(value)
+            ModificationResult::new_send_next(value)
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _on_going_sub = self.0.modify_model_with_action_and_result(|model| {
-            let Some(model) = model else {
-                return ActionAndResult::default();
-            };
+        let _ = self.0.modify_model(|model| {
             if model.current_sub_id != self.1 {
-                return ActionAndResult::default();
+                return ModificationResult::default();
             }
             match termination {
                 Termination::Completed => {
                     if model.is_source_completed {
-                        ActionAndResult {
-                            action: Action::SendTermination(termination),
-                            ..Default::default()
-                        }
+                        ModificationResult::default().send_termination(termination)
                     } else {
                         match std::mem::replace(&mut model.sub_state, SubState::Idle) {
                             SubState::Idle => unreachable!(),
-                            SubState::PendingSubscription => ActionAndResult::default(),
+                            SubState::PendingSubscription => ModificationResult::default(),
                             SubState::Processing(subscription) => {
-                                ActionAndResult {
-                                    result: Some(subscription), // Drop outside the lock to avoid potential deadlock
-                                    ..Default::default()
-                                }
+                                ModificationResult::default().drop_outside(subscription)
                             }
                         }
                     }
                 }
-                Termination::Error(_) => ActionAndResult {
-                    action: Action::SendTermination(termination),
-                    ..Default::default()
-                },
+                Termination::Error(_) => {
+                    ModificationResult::default().send_termination(termination)
+                }
             }
         });
     }

@@ -38,9 +38,18 @@ where
     let sub = builder(observer);
 
     sub_state.lock_mut(|mut lock| match &*lock {
-        SubState::Initialized => *lock = SubState::Subscribed(sub),
-        SubState::Subscribed(_) => unreachable!(),
-        SubState::Unsubscribed => sub.dispose(),
+        SubState::Initialized => {
+            *lock = SubState::Subscribed(sub);
+            drop(lock);
+        }
+        SubState::Subscribed(_) => {
+            drop(lock);
+            unreachable!()
+        }
+        SubState::Unsubscribed => {
+            drop(lock);
+            sub.dispose()
+        }
     });
 
     Subscription::new_with_disposal(sub_state)

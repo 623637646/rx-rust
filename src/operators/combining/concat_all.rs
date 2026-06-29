@@ -2,7 +2,7 @@ use crate::disposable::subscription::Subscription;
 use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::subscribe_with_shared_model::{
-    Action, ActionAndResult, Context, subscribe_with_shared_model,
+    Context, Error, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::NecessarySend;
 use crate::{
@@ -124,31 +124,29 @@ where
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let observable = self.0.modify_model(|model| {
-            let model = model?;
-            match model.sub_state {
-                SubState::Idle => {
-                    let _ = std::mem::replace(&mut model.sub_state, SubState::PendingSubscription);
-                    Some(value)
-                }
-                SubState::PendingSubscription | SubState::Processing(_) => {
-                    model.pending_observables.push_back(value);
-                    None
-                }
+        let result = self.0.modify_model(|model| match model.sub_state {
+            SubState::Idle => {
+                let _ = std::mem::replace(&mut model.sub_state, SubState::PendingSubscription);
+                ModificationResult::new(Some(value)).ignore_drop_outside()
+            }
+            SubState::PendingSubscription | SubState::Processing(_) => {
+                model.pending_observables.push_back(value);
+                ModificationResult::new(None)
             }
         });
-        let Some(observable) = observable else {
-            return;
+        let observable = match result {
+            Ok(Some(observable)) => observable,
+            Ok(None) => return,
+            Err(Error::Stopped) => return,
         };
         let observer = InnerObserver(self.0.clone());
         let sub = observable.subscribe(observer);
-        let _sub = self.0.modify_model(|model| {
-            let Some(model) = model else { return Some(sub) }; // Drop outside the lock to avoid potential deadlock
+        let _ = self.0.modify_model(|model| {
             match &model.sub_state {
-                SubState::Idle => Some(sub), // already terminated // Drop outside the lock to avoid potential deadlock
+                SubState::Idle => ModificationResult::default().drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
-                    None
+                    ModificationResult::default()
                 }
                 SubState::Processing(_) => unreachable!(),
             }
@@ -158,18 +156,17 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.0.modify_model_with_action(|model| {
-                    let Some(model) = model else {
-                        return Action::None;
-                    };
+                let _ = self.0.modify_model(|model| {
                     model.is_source_completed = true;
                     match model.sub_state {
                         SubState::Idle => {
                             // The state is only possible to be PendingSubscription or Processing when the pending_observables is not empty.
                             assert!(model.pending_observables.is_empty());
-                            Action::SendTermination(termination)
+                            ModificationResult::new_send_termination(termination)
                         }
-                        SubState::PendingSubscription | SubState::Processing(_) => Action::None,
+                        SubState::PendingSubscription | SubState::Processing(_) => {
+                            ModificationResult::default()
+                        }
                     }
                 });
             }
@@ -214,73 +211,67 @@ fn subscribe_next_observable_until_finished<'or, 'sub, T, E, OR, OE1>(
     OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
 {
     loop {
-        let (next_source, _subscription) = context.modify_model_with_action_and_result(|model| {
-            let Some(model) = model else {
-                return ActionAndResult::default();
-            };
+        let result = context.modify_model(|model| {
             match &model.sub_state {
                 SubState::PendingSubscription => {
                     // already terminated
                     let _ = std::mem::replace(&mut model.sub_state, SubState::Idle);
-                    ActionAndResult::default()
+                    ModificationResult::new(None)
                 }
                 SubState::Idle | SubState::Processing(_) => {
                     if let Some(observable) = model.pending_observables.pop_front() {
                         match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription)
                         {
-                            SubState::Idle => ActionAndResult {
-                                result: (Some(observable), None),
-                                ..Default::default()
-                            },
+                            SubState::Idle => ModificationResult::new(Some(observable)),
                             SubState::PendingSubscription => {
                                 unreachable!()
                             }
-                            SubState::Processing(subscription) => ActionAndResult {
-                                result: (Some(observable), Some(subscription)), // Drop outside the lock to avoid potential deadlock
-                                ..Default::default()
-                            },
+                            SubState::Processing(subscription) => {
+                                ModificationResult::new(Some(observable)).drop_outside(subscription)
+                            }
                         }
                     } else if model.is_source_completed {
-                        ActionAndResult {
-                            action: Action::SendTermination(Termination::Completed),
-                            ..Default::default()
-                        }
+                        ModificationResult::new(None).send_termination(Termination::Completed)
                     } else {
                         match std::mem::replace(&mut model.sub_state, SubState::Idle) {
-                            SubState::Idle => ActionAndResult::default(),
+                            SubState::Idle => ModificationResult::new(None),
                             SubState::PendingSubscription => {
                                 unreachable!()
                             }
-                            SubState::Processing(subscription) => ActionAndResult {
-                                result: (None, Some(subscription)), // Drop outside the lock to avoid potential deadlock
-                                ..Default::default()
-                            },
+                            SubState::Processing(subscription) => {
+                                ModificationResult::new(None).drop_outside(subscription)
+                            }
                         }
                     }
                 }
             }
         });
-        if let Some(observable) = next_source {
-            let observer = InnerObserver(context.clone());
-            let sub = observable.subscribe(observer);
-            let (stop, _sub) = context.modify_model(|model| {
-                let Some(model) = model else {
-                    return (true, None);
-                };
-                match &model.sub_state {
-                    SubState::Idle => (false, Some(sub)), // already terminated // Drop outside the lock to avoid potential deadlock
-                    SubState::PendingSubscription => {
-                        let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
-                        (true, None)
-                    }
-                    SubState::Processing(_) => unreachable!(),
-                }
-            });
-            if stop {
+        let observable = match result {
+            Ok(Some(observable)) => observable,
+            Ok(None) => break,
+            Err(Error::Stopped) => {
                 break;
             }
-        } else {
-            break;
+        };
+        let observer = InnerObserver(context.clone());
+        let sub = observable.subscribe(observer);
+        let result = context.modify_model(|model| {
+            match &model.sub_state {
+                SubState::Idle => ModificationResult::new(false).drop_outside(sub), // already terminated // Drop outside the lock to avoid potential deadlock
+                SubState::PendingSubscription => {
+                    let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
+                    ModificationResult::new(true)
+                }
+                SubState::Processing(_) => unreachable!(),
+            }
+        });
+        match result {
+            Ok(stop) => {
+                if stop {
+                    break;
+                }
+            }
+            Err(Error::Stopped) => break,
         }
     }
 }

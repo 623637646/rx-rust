@@ -2,7 +2,7 @@ use crate::disposable::subscription::Subscription;
 use crate::observable::observable_ext::ObservableExt;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::subscribe_with_shared_model::{
-    Action, ActionAndResult, Context, subscribe_with_shared_model,
+    Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::NecessarySend;
 use crate::{
@@ -118,27 +118,27 @@ where
 {
     fn on_next(&mut self, value: OE1) {
         // Insert a placeholder subscription.
-        let key = self
-            .0
-            .modify_model(|model| Some(model?.subscriptions.insert(Subscription::default())));
-        let Some(key) = key else {
-            return;
+        let result = self.0.modify_model(|model| {
+            ModificationResult::new(model.subscriptions.insert(Subscription::default()))
+                .ignore_drop_outside()
+        });
+        let key = match result {
+            Ok(key) => key,
+            Err(_) => return,
         };
-
         let observer = MergeAllInnerObserver {
             context: self.0.clone(),
             key,
         };
         let sub = value.subscribe(observer);
 
-        let _sub = self.0.modify_model(|model| {
-            let model = model?;
+        let _ = self.0.modify_model(|model| {
             if model.subscriptions.contains_key(key) {
                 model.subscriptions[key] = sub;
-                None
+                ModificationResult::default()
             } else {
                 // already terminated
-                Some(sub)
+                ModificationResult::new_with_drop_outside(sub)
             }
         });
     }
@@ -146,15 +146,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.0.modify_model_with_action(|model| {
-                    let Some(model) = model else {
-                        return Action::None;
-                    };
+                let _ = self.0.modify_model(|model| {
                     if model.subscriptions.is_empty() {
-                        Action::SendTermination(termination)
+                        ModificationResult::new_send_termination(termination)
                     } else {
                         model.terminated = true;
-                        Action::None
+                        ModificationResult::default()
                     }
                 });
             }
@@ -181,18 +178,14 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _subscription = self.context.modify_model_with_action_and_result(|model| {
-                    let Some(model) = model else {
-                        return ActionAndResult::default();
-                    };
+                let _ = self.context.modify_model(|model| {
                     let subscription = model.subscriptions.remove(self.key);
                     if model.terminated && model.subscriptions.is_empty() {
-                        ActionAndResult {
-                            action: Action::SendTermination(termination),
-                            result: Some(subscription), // Drop outside the lock to avoid potential deadlock
-                        }
+                        ModificationResult::default()
+                            .drop_outside(subscription)
+                            .send_termination(termination)
                     } else {
-                        ActionAndResult::default()
+                        ModificationResult::default().drop_outside(subscription)
                     }
                 });
             }

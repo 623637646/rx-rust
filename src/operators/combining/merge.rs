@@ -1,4 +1,6 @@
-use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
+use crate::utils::subscribe_with_shared_model::{
+    Context, ModificationResult, subscribe_with_shared_model,
+};
 use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
@@ -94,15 +96,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.0.modify_model_with_action(|model| {
-                    let Some(model) = model else {
-                        return Action::None;
-                    };
+                let _ = self.0.modify_model(|model| {
                     if model.one_is_completed {
-                        Action::SendTermination(termination)
+                        ModificationResult::new_send_termination(termination)
                     } else {
                         model.one_is_completed = true;
-                        Action::None
+                        ModificationResult::default()
                     }
                 });
             }

@@ -44,72 +44,138 @@ enum State<T, E, OR, M> {
 #[educe(Debug, Clone)]
 pub struct Context<T, E, OR, M>(Shared<Mutable<State<T, E, OR, M>>>);
 
-#[derive(Educe)]
-#[educe(Debug, Clone, PartialEq, Eq, Default)]
-pub enum Action<T, E> {
+enum SendEvent<T, E> {
     SendNext(T),
     SendTermination(Termination<E>),
-    #[educe(Default)]
-    None,
 }
 
 #[derive(Educe)]
-#[educe(Debug, Clone, PartialEq, Eq, Default)]
-pub struct ActionAndResult<T, E, R> {
-    pub action: Action<T, E>,
-    pub result: R,
+#[educe(Debug)]
+pub struct ModificationResult<T, E, D, R> {
+    send_event: Option<SendEvent<T, E>>,
+    drop_outside: Option<D>,
+    result: R,
+}
+
+impl<T, E, D, R> ModificationResult<T, E, D, R> {
+    pub fn new(result: R) -> Self {
+        Self {
+            send_event: None,
+            drop_outside: None,
+            result,
+        }
+    }
+
+    pub fn send_next(self, next: T) -> Self {
+        Self {
+            send_event: Some(SendEvent::SendNext(next)),
+            ..self
+        }
+    }
+
+    pub fn send_termination(self, termination: Termination<E>) -> Self {
+        Self {
+            send_event: Some(SendEvent::SendTermination(termination)),
+            ..self
+        }
+    }
+
+    pub fn drop_outside(self, object: D) -> Self {
+        Self {
+            drop_outside: Some(object),
+            ..self
+        }
+    }
+}
+
+impl<T, E> ModificationResult<T, E, (), ()> {
+    pub fn new_send_next(next: T) -> Self {
+        Self {
+            send_event: Some(SendEvent::SendNext(next)),
+            drop_outside: None,
+            result: (),
+        }
+    }
+
+    pub fn new_send_termination(termination: Termination<E>) -> Self {
+        Self {
+            send_event: Some(SendEvent::SendTermination(termination)),
+            drop_outside: None,
+            result: (),
+        }
+    }
+}
+
+impl<T, E, R> ModificationResult<T, E, (), R> {
+    pub fn ignore_drop_outside(self) -> Self {
+        self
+    }
+}
+
+impl<T, E, D> ModificationResult<T, E, D, ()> {
+    pub fn new_with_drop_outside(drop_outside: D) -> Self {
+        Self {
+            send_event: None,
+            drop_outside: Some(drop_outside),
+            result: (),
+        }
+    }
+}
+
+impl<T, E, D> Default for ModificationResult<T, E, D, ()> {
+    fn default() -> Self {
+        Self {
+            send_event: None,
+            drop_outside: None,
+            result: (),
+        }
+    }
+}
+
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq)]
+pub enum Error {
+    Stopped,
 }
 
 impl<T, E, OR, M> Context<T, E, OR, M> {
     /// Modify the model with callback.
     /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
-    pub fn modify_model<R>(&self, callback: impl FnOnce(Option<&mut M>) -> R) -> R
-    where
-        OR: Observer<T, E>,
-    {
-        self.modify_model_with_action_and_result(|model| ActionAndResult {
-            action: Action::None,
-            result: callback(model),
-        })
-    }
-
-    /// Modify the model with callback and return action.
-    /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
-    pub fn modify_model_with_action(&self, callback: impl FnOnce(Option<&mut M>) -> Action<T, E>)
-    where
-        OR: Observer<T, E>,
-    {
-        self.modify_model_with_action_and_result(|model| {
-            let action = callback(model);
-            ActionAndResult { action, result: () }
-        })
-    }
-
-    /// Modify the model with callback and return action and custom result.
-    /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
-    pub fn modify_model_with_action_and_result<R>(
+    pub fn modify_model<D, R>(
         &self,
-        callback: impl FnOnce(Option<&mut M>) -> ActionAndResult<T, E, R>,
-    ) -> R
+        callback: impl FnOnce(&mut M) -> ModificationResult<T, E, D, R>,
+    ) -> Result<R, Error>
     where
         OR: Observer<T, E>,
     {
-        self.0.lock_mut(|mut lock| {
+        let (result, drop_outside) = self.0.lock_mut(|mut lock| {
             let model = match &mut *lock {
-                State::Idle { model, .. } => Some(model),
-                State::Processing { model, .. } => Some(model),
-                State::Stopped => None,
-            };
-            let ActionAndResult { action, result } = callback(model);
-            match action {
-                Action::SendNext(value) => self.send_next_impl(value, lock),
-                Action::SendTermination(termination) => {
-                    self.send_termination_impl(termination, lock)
+                State::Idle { model, .. } => model,
+                State::Processing { model, .. } => model,
+                State::Stopped => {
+                    drop(lock);
+                    return Result::Err(Error::Stopped);
                 }
-                Action::None => (),
+            };
+            let ModificationResult {
+                send_event,
+                drop_outside,
+                result,
+            } = callback(model);
+            if let Some(send_event) = send_event {
+                match send_event {
+                    SendEvent::SendNext(value) => self.send_next_impl(value, lock),
+                    SendEvent::SendTermination(termination) => {
+                        self.send_termination_impl(termination, lock)
+                    }
+                }
+            } else {
+                drop(lock);
             }
-            result
-        })
+            Ok((result, drop_outside))
+        })?;
+        drop(drop_outside); // Drop outside the lock to avoid potential deadlock
+        Ok(result)
     }
 
     pub fn send_next(&self, value: T)
@@ -135,18 +201,25 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         match &mut *lock {
             State::Idle { .. } => {
                 let idel_state = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
-                let (mut observer, model) = match idel_state {
-                    State::Idle { observer, model } => (observer, model),
-                    State::Processing { .. } | State::Stopped => unreachable!(),
+                match idel_state {
+                    State::Idle {
+                        mut observer,
+                        model,
+                    } => {
+                        *lock = State::Processing {
+                            next_values: Vec::new(),
+                            termination: None,
+                            model,
+                        };
+                        drop(lock); // Drop lock to avoid potential deadlock
+                        observer.on_next(value);
+                        self.send_events_until_finish(observer);
+                    }
+                    State::Processing { .. } | State::Stopped => {
+                        drop(lock);
+                        unreachable!()
+                    }
                 };
-                *lock = State::Processing {
-                    next_values: Vec::new(),
-                    termination: None,
-                    model,
-                };
-                drop(lock); // Drop lock to avoid potential deadlock
-                observer.on_next(value);
-                self.send_events_until_finish(observer);
             }
             State::Processing {
                 next_values,
@@ -156,8 +229,11 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                 if termination.is_none() {
                     next_values.push(value);
                 }
+                drop(lock);
             }
-            State::Stopped => {}
+            State::Stopped => {
+                drop(lock);
+            }
         };
     }
 
@@ -177,7 +253,10 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                         drop(model); // Drop outside the lock to avoid potential deadlock
                         observer.on_termination(termination);
                     }
-                    State::Processing { .. } | State::Stopped => unreachable!(),
+                    State::Processing { .. } | State::Stopped => {
+                        drop(lock);
+                        unreachable!()
+                    }
                 }
             }
             State::Processing {
@@ -186,8 +265,11 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                 if slot.is_none() {
                     *slot = Some(termination);
                 }
+                drop(lock);
             }
-            State::Stopped => {}
+            State::Stopped => {
+                drop(lock);
+            }
         };
     }
 
@@ -206,6 +288,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
             let (returned_observer, next_values, termination) =
                 self.0.lock_mut(|mut lock| match &mut *lock {
                     State::Idle { .. } => {
+                        drop(lock);
                         panic!("Can't be called in idle state");
                     }
                     State::Processing {
@@ -217,26 +300,36 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                             let processing = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
                             let model = match processing {
                                 State::Processing { model, .. } => model,
-                                State::Idle { .. } | State::Stopped => unreachable!(),
+                                State::Idle { .. } | State::Stopped => {
+                                    drop(lock);
+                                    unreachable!()
+                                }
                             };
                             *lock = State::Idle { observer, model };
+                            drop(lock);
                             (None, None, None)
                         }
                         (true, Some(termination)) => {
                             *lock = State::Stopped;
+                            drop(lock);
                             (Some(observer), None, Some(termination))
                         }
                         (false, None) => {
                             let next_values = std::mem::take(next_values);
+                            drop(lock);
                             (Some(observer), Some(next_values), None)
                         }
                         (false, Some(termination)) => {
                             let next_values = std::mem::take(next_values);
                             *lock = State::Stopped;
+                            drop(lock);
                             (Some(observer), Some(next_values), Some(termination)) // Drop observer outside the lock to avoid potential deadlock
                         }
                     },
-                    State::Stopped => (Some(observer), None, None),
+                    State::Stopped => {
+                        drop(lock);
+                        (Some(observer), None, None)
+                    }
                 });
 
             match (returned_observer, next_values, termination) {

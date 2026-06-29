@@ -1,4 +1,6 @@
-use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
+use crate::utils::subscribe_with_shared_model::{
+    Context, ModificationResult, subscribe_with_shared_model,
+};
 use crate::utils::types::{MarkerType, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
@@ -89,12 +91,9 @@ where
     C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
     fn on_next(&mut self, value: T0) {
-        self.0.modify_model_with_action(|model| {
-            let Some(model) = model else {
-                return Action::None;
-            };
+        let _ = self.0.modify_model(|model| {
             if model.termination.is_some() {
-                return Action::None;
+                return ModificationResult::default();
             }
             model.collection.extend_one(value);
             if model.emit_directly {
@@ -104,23 +103,20 @@ where
                 let callback: RequestCallbackType = Box::new(move || {
                     handle_request(context);
                 });
-                Action::SendNext((next, callback))
+                ModificationResult::new_send_next((next, callback))
             } else {
-                Action::None
+                ModificationResult::default()
             }
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.0.modify_model_with_action(|model| {
-            let Some(model) = model else {
-                return Action::None;
-            };
+        let _ = self.0.modify_model(|model| {
             if model.emit_directly {
-                Action::SendTermination(termination)
+                ModificationResult::new_send_termination(termination)
             } else {
                 model.termination = Some(termination);
-                Action::None
+                ModificationResult::default()
             }
         });
     }
@@ -134,21 +130,18 @@ fn handle_request<'or, T0, T, E, OR, C>(
     OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
     C: BackpressureCollection<T0, T> + NecessarySend + 'or,
 {
-    context.modify_model_with_action(|model| {
-        let Some(model) = model else {
-            return Action::None;
-        };
+    let _ = context.modify_model(|model| {
         if let Some(next) = model.collection.take_next_value() {
             let context = context.clone();
             let callback: RequestCallbackType = Box::new(move || {
                 handle_request(context);
             });
-            Action::SendNext((next, callback))
+            ModificationResult::new_send_next((next, callback))
         } else if let Some(termination) = model.termination.take() {
-            Action::SendTermination(termination)
+            ModificationResult::new_send_termination(termination)
         } else {
             model.emit_directly = true;
-            Action::None
+            ModificationResult::default()
         }
     });
 }

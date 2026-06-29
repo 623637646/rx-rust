@@ -1,4 +1,6 @@
-use crate::utils::subscribe_with_shared_model::{Action, Context, subscribe_with_shared_model};
+use crate::utils::subscribe_with_shared_model::{
+    Context, ModificationResult, subscribe_with_shared_model,
+};
 use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
@@ -103,36 +105,28 @@ where
     T2: Clone,
 {
     fn on_next(&mut self, latest_1: T1) {
-        self.0.modify_model_with_action(|model| {
-            let Some(model) = model else {
-                return Action::None;
-            };
+        let _ = self.0.modify_model(|model| {
             if let Some(latest_2) = &model.latest_2 {
                 model.latest_1 = Some(latest_1.clone());
-                Action::SendNext((latest_1, latest_2.clone()))
+                ModificationResult::new_send_next((latest_1, latest_2.clone()))
             } else {
                 model.latest_1 = Some(latest_1);
-                Action::None
+                ModificationResult::default()
             }
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.0.modify_model_with_action(|model| {
-            let Some(model) = model else {
-                return Action::None;
-            };
-            match termination {
-                Termination::Completed => {
-                    if model.should_completed || model.latest_1.is_none() {
-                        Action::SendTermination(Termination::Completed)
-                    } else {
-                        model.should_completed = true;
-                        Action::None
-                    }
+        let _ = self.0.modify_model(|model| match termination {
+            Termination::Completed => {
+                if model.should_completed || model.latest_1.is_none() {
+                    ModificationResult::new_send_termination(termination)
+                } else {
+                    model.should_completed = true;
+                    ModificationResult::default()
                 }
-                Termination::Error(error) => Action::SendTermination(Termination::Error(error)),
             }
+            Termination::Error(_) => ModificationResult::new_send_termination(termination),
         });
     }
 }
@@ -146,36 +140,28 @@ where
     T2: Clone,
 {
     fn on_next(&mut self, latest_2: T2) {
-        self.0.modify_model_with_action(|model| {
-            let Some(model) = model else {
-                return Action::None;
-            };
+        let _ = self.0.modify_model(|model| {
             if let Some(latest_1) = &model.latest_1 {
                 model.latest_2 = Some(latest_2.clone());
-                Action::SendNext((latest_1.clone(), latest_2))
+                ModificationResult::new_send_next((latest_1.clone(), latest_2))
             } else {
                 model.latest_2 = Some(latest_2);
-                Action::None
+                ModificationResult::default()
             }
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.0.modify_model_with_action(|model| {
-            let Some(model) = model else {
-                return Action::None;
-            };
-            match termination {
-                Termination::Completed => {
-                    if model.should_completed || model.latest_2.is_none() {
-                        Action::SendTermination(Termination::Completed)
-                    } else {
-                        model.should_completed = true;
-                        Action::None
-                    }
+        let _ = self.0.modify_model(|model| match termination {
+            Termination::Completed => {
+                if model.should_completed || model.latest_2.is_none() {
+                    ModificationResult::new_send_termination(termination)
+                } else {
+                    model.should_completed = true;
+                    ModificationResult::default()
                 }
-                Termination::Error(error) => Action::SendTermination(Termination::Error(error)),
             }
+            Termination::Error(_) => ModificationResult::new_send_termination(termination),
         });
     }
 }
