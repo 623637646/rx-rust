@@ -131,14 +131,14 @@ where
         };
         let sub = value.subscribe(observer);
 
-        self.0.modify_model(|model| {
-            let Some(model) = model else {
-                return;
-            };
+        let _sub = self.0.modify_model(|model| {
+            let model = model?;
             if model.subscriptions.contains_key(key) {
                 model.subscriptions[key] = sub;
+                None
             } else {
                 // already terminated
+                Some(sub)
             }
         });
     }
