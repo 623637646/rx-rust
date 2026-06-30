@@ -92,7 +92,7 @@ where
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 subscriptions: SlotMap::new(),
-                terminated: false,
+                is_source_terminated: false,
             };
             subscribe_with_shared_model(observer, model, |context| {
                 self.source.subscribe(MergeAllObserver(context))
@@ -102,8 +102,8 @@ where
 }
 
 struct Model<'sub> {
-    subscriptions: SlotMap<DefaultKey, Subscription<'sub>>,
-    terminated: bool,
+    subscriptions: SlotMap<DefaultKey, Option<Subscription<'sub>>>,
+    is_source_terminated: bool,
 }
 
 struct MergeAllObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
@@ -119,8 +119,7 @@ where
     fn on_next(&mut self, value: OE1) {
         // Insert a placeholder subscription.
         let result = self.0.modify_model(|model| {
-            ModificationResult::new(model.subscriptions.insert(Subscription::default()))
-                .ignore_drop_outside()
+            ModificationResult::new(model.subscriptions.insert(None)).ignore_drop_outside()
         });
         let key = match result {
             Ok(key) => key,
@@ -134,7 +133,7 @@ where
 
         let _ = self.0.modify_model(|model| {
             if model.subscriptions.contains_key(key) {
-                model.subscriptions[key] = sub;
+                model.subscriptions[key] = Some(sub);
                 ModificationResult::default()
             } else {
                 // already terminated
@@ -150,7 +149,7 @@ where
                     if model.subscriptions.is_empty() {
                         ModificationResult::new_send_termination(termination)
                     } else {
-                        model.terminated = true;
+                        model.is_source_terminated = true;
                         ModificationResult::default()
                     }
                 });
@@ -180,7 +179,7 @@ where
             Termination::Completed => {
                 let _ = self.context.modify_model(|model| {
                     let subscription = model.subscriptions.remove(self.key);
-                    if model.terminated && model.subscriptions.is_empty() {
+                    if model.is_source_terminated && model.subscriptions.is_empty() {
                         ModificationResult::default()
                             .drop_outside(subscription)
                             .send_termination(termination)
