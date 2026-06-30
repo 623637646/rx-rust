@@ -148,7 +148,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     where
         OR: Observer<T, E>,
     {
-        let (result, drop_outside) = self.0.lock_mut(|mut lock| {
+        let result = self.0.lock_mut(|mut lock| {
             let model = match &mut *lock {
                 State::Idle { model, .. } => model,
                 State::Processing { model, .. } => model,
@@ -172,9 +172,9 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
             } else {
                 drop(lock);
             }
-            Ok((result, drop_outside))
+            drop(drop_outside); // Drop outside the lock to avoid potential deadlock
+            Ok(result)
         })?;
-        drop(drop_outside); // Drop outside the lock to avoid potential deadlock
         Ok(result)
     }
 
@@ -285,56 +285,58 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         OR: Observer<T, E>,
     {
         loop {
-            let (returned_observer, next_values, termination) =
-                self.0.lock_mut(|mut lock| match &mut *lock {
-                    State::Idle { .. } => {
-                        drop(lock);
-                        panic!("Can't be called in idle state");
+            let result = self.0.lock_mut(|mut lock| match &mut *lock {
+                State::Idle { .. } => {
+                    drop(lock);
+                    panic!("Can't be called in idle state");
+                }
+                State::Processing {
+                    next_values,
+                    termination,
+                    ..
+                } => match (next_values.is_empty(), termination.take()) {
+                    (true, None) => {
+                        let processing = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
+                        match processing {
+                            State::Processing { model, .. } => {
+                                *lock = State::Idle { observer, model };
+                                drop(lock);
+                                None
+                            }
+                            State::Idle { .. } | State::Stopped => {
+                                drop(lock);
+                                unreachable!()
+                            }
+                        }
                     }
-                    State::Processing {
-                        next_values,
-                        termination,
-                        ..
-                    } => match (next_values.is_empty(), termination.take()) {
-                        (true, None) => {
-                            let processing = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
-                            let model = match processing {
-                                State::Processing { model, .. } => model,
-                                State::Idle { .. } | State::Stopped => {
-                                    drop(lock);
-                                    unreachable!()
-                                }
-                            };
-                            *lock = State::Idle { observer, model };
-                            drop(lock);
-                            (None, None, None)
-                        }
-                        (true, Some(termination)) => {
-                            *lock = State::Stopped;
-                            drop(lock);
-                            (Some(observer), None, Some(termination))
-                        }
-                        (false, None) => {
-                            let next_values = std::mem::take(next_values);
-                            drop(lock);
-                            (Some(observer), Some(next_values), None)
-                        }
-                        (false, Some(termination)) => {
-                            let next_values = std::mem::take(next_values);
-                            *lock = State::Stopped;
-                            drop(lock);
-                            (Some(observer), Some(next_values), Some(termination)) // Drop observer outside the lock to avoid potential deadlock
-                        }
-                    },
-                    State::Stopped => {
+                    (true, Some(termination)) => {
+                        *lock = State::Stopped;
                         drop(lock);
-                        (Some(observer), None, None)
+                        Some((observer, None, Some(termination)))
                     }
-                });
-
-            match (returned_observer, next_values, termination) {
-                (None, _, _) | (Some(_), None, None) => break,
-                (Some(mut obs), next_values, Some(termination)) => {
+                    (false, None) => {
+                        let next_values = std::mem::take(next_values);
+                        drop(lock);
+                        Some((observer, Some(next_values), None))
+                    }
+                    (false, Some(termination)) => {
+                        let next_values = std::mem::take(next_values);
+                        *lock = State::Stopped;
+                        drop(lock);
+                        Some((observer, Some(next_values), Some(termination)))
+                    }
+                },
+                State::Stopped => {
+                    drop(lock);
+                    drop(observer);
+                    None
+                }
+            });
+            let Some((mut obs, next_values, termination)) = result else {
+                return;
+            };
+            match termination {
+                Some(termination) => {
                     if let Some(next_values) = next_values {
                         for value in next_values {
                             obs.on_next(value);
@@ -343,8 +345,8 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                     obs.on_termination(termination);
                     break;
                 }
-                (Some(mut obs), Some(next_values), None) => {
-                    for value in next_values {
+                None => {
+                    for value in next_values.unwrap() {
                         obs.on_next(value);
                     }
                     observer = obs;

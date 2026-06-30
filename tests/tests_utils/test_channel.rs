@@ -128,11 +128,20 @@ where
         }
 
         Subscription::new_with_disposal_callback(move || {
-            self.0.lock_mut(|mut lock| match &*lock {
-                State::Initialized => panic!(),
-                State::Subscribed(_) => *lock = State::Unsubscribed,
-                State::Terminated(_) => {}
-                State::Unsubscribed => panic!(),
+            self.0.lock_mut(|mut lock| match &mut *lock {
+                State::Initialized | State::Unsubscribed => {
+                    drop(lock);
+                    panic!()
+                }
+                State::Subscribed(boxed_observer) => {
+                    let boxed_observer = boxed_observer.take();
+                    *lock = State::Unsubscribed;
+                    drop(lock);
+                    drop(boxed_observer) // Drop outside the lock to avoid potential deadlock
+                }
+                State::Terminated(_) => {
+                    drop(lock);
+                }
             });
         })
     }

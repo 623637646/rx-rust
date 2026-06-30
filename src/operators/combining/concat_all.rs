@@ -257,7 +257,7 @@ fn subscribe_next_observable_until_finished<'or, 'sub, T, E, OR, OE1>(
         let sub = observable.subscribe(observer);
         let result = context.modify_model(|model| {
             match &model.sub_state {
-                SubState::Idle => ModificationResult::new(false).drop_outside(sub), // already terminated // Drop outside the lock to avoid potential deadlock
+                SubState::Idle => ModificationResult::new(false).drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
                     ModificationResult::new(true)
