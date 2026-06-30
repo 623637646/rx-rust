@@ -103,7 +103,11 @@
 
 # Others
 
-正则表达式：查询锁的使用
+正则表达式：锁的使用
 lock_mut|lock_ref|safe_lock\w*!|\Wread\(\)|\Wwrite\(|\Wchange_if_not_equal\(
-194 个
+194个结果
 排除路径：src/utils/safe_lock.rs,src/utils/types.rs
+
+正则表达式：unsub 后继续发 event 的 race condition （参考Switch操作符，unsub后，继续发event，会导致 test_race_condition 报错）
+^[ \w:<,>\(\)]*Subscription<'\w+>(?! \{)
+11个结果，排除掉1个脏数据，共10个有效结果
