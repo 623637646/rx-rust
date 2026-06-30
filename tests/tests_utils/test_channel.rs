@@ -32,7 +32,7 @@ pub(crate) struct SenderObserver<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
 impl<'or, T, E> SenderObserver<'or, T, E> {
     pub(crate) fn mock_race_condition_on_next(
-        &mut self,
+        &self,
         value: T,
         preceding_action: impl FnOnce(),
         subsequent_action: impl FnOnce(),
@@ -55,7 +55,7 @@ impl<'or, T, E> SenderObserver<'or, T, E> {
     }
 
     pub(crate) fn mock_race_condition_on_termination(
-        self,
+        &self,
         termination: Termination<E>,
         preceding_action: impl FnOnce(),
         subsequent_action: impl FnOnce(),
