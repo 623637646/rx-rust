@@ -82,7 +82,7 @@ where
                     *lock = State::Subscribed(
                         1,
                         self.source
-                            .connect()
+                            .connect() // TODO: should be outside the lock?
                             .expect("ConnectableObservable should not be connected."),
                     );
                 }
