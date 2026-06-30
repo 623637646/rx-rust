@@ -85,6 +85,13 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
         }
     }
 
+    pub fn send_next_and_termination(self, next: T, termination: Termination<E>) -> Self {
+        Self {
+            send_events: Some(EventGroup::NextAndTermination(next, termination)),
+            ..self
+        }
+    }
+
     pub fn send_events(self, events: EventGroup<T, E>) -> Self {
         Self {
             send_events: Some(events),
@@ -112,6 +119,22 @@ impl<T, E> ModificationResult<T, E, (), ()> {
     pub fn new_send_termination(termination: Termination<E>) -> Self {
         Self {
             send_events: Some(EventGroup::Termination(termination)),
+            drop_outside: None,
+            result: (),
+        }
+    }
+
+    pub fn new_send_next_and_termination(next: T, termination: Termination<E>) -> Self {
+        Self {
+            send_events: Some(EventGroup::NextAndTermination(next, termination)),
+            drop_outside: None,
+            result: (),
+        }
+    }
+
+    pub fn new_send_events(events: EventGroup<T, E>) -> Self {
+        Self {
+            send_events: Some(events),
             drop_outside: None,
             result: (),
         }
@@ -199,6 +222,15 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     {
         self.0
             .lock_mut(|lock| self.sending_impl(EventGroup::Termination(termination), lock))
+    }
+
+    pub fn send_next_and_termination(&self, next: T, termination: Termination<E>)
+    where
+        OR: Observer<T, E>,
+    {
+        self.0.lock_mut(|lock| {
+            self.sending_impl(EventGroup::NextAndTermination(next, termination), lock)
+        })
     }
 
     pub fn send_events(&self, events: EventGroup<T, E>)

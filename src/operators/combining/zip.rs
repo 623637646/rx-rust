@@ -1,5 +1,5 @@
 use crate::utils::subscribe_with_shared_model::{
-    Context, EventGroup, ModificationResult, subscribe_with_shared_model,
+    Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::NecessarySend;
 use crate::{
@@ -102,11 +102,9 @@ macro_rules! impl_zip_observer {
                 let _ = self.0.modify_model(|model| {
                     if let Some(other) = model.$other_field.0.pop_front() {
                         if model.$other_field.1 && model.$other_field.0.is_empty() {
-                            ModificationResult::default().send_events(
-                                EventGroup::NextAndTermination(
-                                    $make_pair(value, other),
-                                    Termination::Completed,
-                                ),
+                            ModificationResult::new_send_next_and_termination(
+                                $make_pair(value, other),
+                                Termination::Completed,
                             )
                         } else {
                             ModificationResult::new_send_next($make_pair(value, other))
