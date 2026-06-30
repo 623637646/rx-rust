@@ -17,7 +17,7 @@ enum State<'or, T, E> {
     Idle(DenseSlotMap<DefaultKey, Option<BoxedObserver<'or, T, E>>>),
     Processing {
         slot_map: DenseSlotMap<DefaultKey, Option<BoxedObserver<'or, T, E>>>,
-        events: Vec<Event<T, E>>,
+        events: Vec<Event<T, E>>, // TODO: Should use EventGroup
     },
     Terminated(Termination<E>),
 }

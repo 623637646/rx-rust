@@ -44,15 +44,20 @@ enum State<T, E, OR, M> {
 #[educe(Debug, Clone)]
 pub struct Context<T, E, OR, M>(Shared<Mutable<State<T, E, OR, M>>>);
 
-enum SendEvent<T, E> {
-    SendNext(T),
-    SendTermination(Termination<E>),
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq)]
+pub enum EventGroup<T, E> {
+    Next(T),
+    Termination(Termination<E>),
+    NextAndTermination(T, Termination<E>),
+    Nexts(Vec<T>),
+    NextsAndTermination(Vec<T>, Termination<E>),
 }
 
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct ModificationResult<T, E, D, R> {
-    send_event: Option<SendEvent<T, E>>,
+    send_events: Option<EventGroup<T, E>>,
     drop_outside: Option<D>,
     result: R,
 }
@@ -60,7 +65,7 @@ pub struct ModificationResult<T, E, D, R> {
 impl<T, E, D, R> ModificationResult<T, E, D, R> {
     pub fn new(result: R) -> Self {
         Self {
-            send_event: None,
+            send_events: None,
             drop_outside: None,
             result,
         }
@@ -68,14 +73,21 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
 
     pub fn send_next(self, next: T) -> Self {
         Self {
-            send_event: Some(SendEvent::SendNext(next)),
+            send_events: Some(EventGroup::Next(next)),
             ..self
         }
     }
 
     pub fn send_termination(self, termination: Termination<E>) -> Self {
         Self {
-            send_event: Some(SendEvent::SendTermination(termination)),
+            send_events: Some(EventGroup::Termination(termination)),
+            ..self
+        }
+    }
+
+    pub fn send_events(self, events: EventGroup<T, E>) -> Self {
+        Self {
+            send_events: Some(events),
             ..self
         }
     }
@@ -91,7 +103,7 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
 impl<T, E> ModificationResult<T, E, (), ()> {
     pub fn new_send_next(next: T) -> Self {
         Self {
-            send_event: Some(SendEvent::SendNext(next)),
+            send_events: Some(EventGroup::Next(next)),
             drop_outside: None,
             result: (),
         }
@@ -99,7 +111,7 @@ impl<T, E> ModificationResult<T, E, (), ()> {
 
     pub fn new_send_termination(termination: Termination<E>) -> Self {
         Self {
-            send_event: Some(SendEvent::SendTermination(termination)),
+            send_events: Some(EventGroup::Termination(termination)),
             drop_outside: None,
             result: (),
         }
@@ -115,7 +127,7 @@ impl<T, E, R> ModificationResult<T, E, (), R> {
 impl<T, E, D> ModificationResult<T, E, D, ()> {
     pub fn new_with_drop_outside(drop_outside: D) -> Self {
         Self {
-            send_event: None,
+            send_events: None,
             drop_outside: Some(drop_outside),
             result: (),
         }
@@ -125,7 +137,7 @@ impl<T, E, D> ModificationResult<T, E, D, ()> {
 impl<T, E, D> Default for ModificationResult<T, E, D, ()> {
     fn default() -> Self {
         Self {
-            send_event: None,
+            send_events: None,
             drop_outside: None,
             result: (),
         }
@@ -158,17 +170,12 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                 }
             };
             let ModificationResult {
-                send_event,
+                send_events,
                 drop_outside,
                 result,
             } = callback(model);
-            if let Some(send_event) = send_event {
-                match send_event {
-                    SendEvent::SendNext(value) => self.send_next_impl(value, lock),
-                    SendEvent::SendTermination(termination) => {
-                        self.send_termination_impl(termination, lock)
-                    }
-                }
+            if let Some(send_events) = send_events {
+                self.sending_impl(send_events, lock);
             } else {
                 drop(lock);
             }
@@ -182,7 +189,8 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     where
         OR: Observer<T, E>,
     {
-        self.0.lock_mut(|lock| self.send_next_impl(value, lock))
+        self.0
+            .lock_mut(|lock| self.sending_impl(EventGroup::Next(value), lock))
     }
 
     pub fn send_termination(&self, termination: Termination<E>)
@@ -190,30 +198,70 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         OR: Observer<T, E>,
     {
         self.0
-            .lock_mut(|lock| self.send_termination_impl(termination, lock))
+            .lock_mut(|lock| self.sending_impl(EventGroup::Termination(termination), lock))
     }
 
-    fn send_next_impl(&self, value: T, mut lock: MutGuard<'_, State<T, E, OR, M>>)
+    pub fn send_events(&self, events: EventGroup<T, E>)
     where
         OR: Observer<T, E>,
     {
-        // None means finish, Some means continue
+        self.0.lock_mut(|lock| self.sending_impl(events, lock))
+    }
+
+    fn sending_impl(&self, events: EventGroup<T, E>, mut lock: MutGuard<'_, State<T, E, OR, M>>)
+    where
+        OR: Observer<T, E>,
+    {
         match &mut *lock {
             State::Idle { .. } => {
-                let idel_state = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
+                let (next_and_rest, termination) = match events {
+                    EventGroup::Next(next) => (Some((next, None)), None),
+                    EventGroup::Termination(termination) => (None, Some(termination)),
+                    EventGroup::NextAndTermination(next, termination) => {
+                        (Some((next, None)), Some(termination))
+                    }
+                    EventGroup::Nexts(mut items) => {
+                        if items.is_empty() {
+                            panic!("Nexts must have at least one item")
+                        } else {
+                            let rest = items.split_off(1);
+                            let rest = if rest.is_empty() { None } else { Some(rest) };
+                            let next = items.pop().unwrap();
+                            (Some((next, rest)), None)
+                        }
+                    }
+                    EventGroup::NextsAndTermination(mut items, termination) => {
+                        if items.is_empty() {
+                            (None, Some(termination))
+                        } else {
+                            let rest = items.split_off(1);
+                            let rest = if rest.is_empty() { None } else { Some(rest) };
+                            let next = items.pop().unwrap();
+                            (Some((next, rest)), Some(termination))
+                        }
+                    }
+                };
+                let idel_state = std::mem::replace(&mut *lock, State::Stopped);
                 match idel_state {
                     State::Idle {
                         mut observer,
                         model,
                     } => {
-                        *lock = State::Processing {
-                            next_values: Vec::new(),
-                            termination: None,
-                            model,
-                        };
-                        drop(lock); // Drop lock to avoid potential deadlock
-                        observer.on_next(value);
-                        self.send_events_until_finish(observer);
+                        if let Some((next, rest)) = next_and_rest {
+                            *lock = State::Processing {
+                                next_values: rest.unwrap_or_default(),
+                                termination,
+                                model,
+                            };
+                            drop(lock); // Drop lock to avoid potential deadlock
+                            observer.on_next(next);
+                            self.send_events_until_finish(observer);
+                        } else {
+                            let termination = termination.expect("Termination must be set");
+                            drop(lock); // Release lock.
+                            drop(model); // Drop outside the lock to avoid potential deadlock
+                            observer.on_termination(termination);
+                        }
                     }
                     State::Processing { .. } | State::Stopped => {
                         drop(lock);
@@ -227,43 +275,21 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                 ..
             } => {
                 if termination.is_none() {
-                    next_values.push(value);
-                }
-                drop(lock);
-            }
-            State::Stopped => {
-                drop(lock);
-            }
-        };
-    }
-
-    fn send_termination_impl(
-        &self,
-        termination: Termination<E>,
-        mut lock: MutGuard<'_, State<T, E, OR, M>>,
-    ) where
-        OR: Observer<T, E>,
-    {
-        match &mut *lock {
-            State::Idle { .. } => {
-                let idel_state = std::mem::replace(&mut *lock, State::Stopped);
-                match idel_state {
-                    State::Idle { observer, model } => {
-                        drop(lock); // Release lock.
-                        drop(model); // Drop outside the lock to avoid potential deadlock
-                        observer.on_termination(termination);
-                    }
-                    State::Processing { .. } | State::Stopped => {
-                        drop(lock);
-                        unreachable!()
-                    }
-                }
-            }
-            State::Processing {
-                termination: slot, ..
-            } => {
-                if slot.is_none() {
-                    *slot = Some(termination);
+                    match events {
+                        EventGroup::Next(value) => next_values.push(value),
+                        EventGroup::Termination(tn) => {
+                            *termination = Some(tn);
+                        }
+                        EventGroup::NextAndTermination(value, tn) => {
+                            next_values.push(value);
+                            *termination = Some(tn);
+                        }
+                        EventGroup::Nexts(items) => next_values.extend(items),
+                        EventGroup::NextsAndTermination(items, tn) => {
+                            next_values.extend(items);
+                            *termination = Some(tn);
+                        }
+                    };
                 }
                 drop(lock);
             }
