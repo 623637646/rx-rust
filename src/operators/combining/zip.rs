@@ -90,90 +90,54 @@ struct Model<T1, T2> {
     second: (VecDeque<T2>, bool), // bool means completed
 }
 
-struct ZipObserver1<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
+macro_rules! impl_zip_observer {
+    ($name:ident, $input_t:ty, $this_field:ident, $other_field:ident, $make_pair:expr) => {
+        struct $name<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
 
-impl<T1, T2, E, OR> Observer<T1, E> for ZipObserver1<T1, T2, E, OR>
-where
-    OR: Observer<(T1, T2), E>,
-{
-    fn on_next(&mut self, value: T1) {
-        let _ = self.0.modify_model(|model| {
-            let second = model.second.0.pop_front();
-            if let Some(second) = second {
-                if model.second.1 && model.second.0.is_empty() {
-                    ModificationResult::default().send_events(EventGroup::NextAndTermination(
-                        (value, second),
-                        Termination::Completed,
-                    ))
-                } else {
-                    ModificationResult::new_send_next((value, second))
-                }
-            } else {
-                model.first.0.push_back(value);
-                ModificationResult::default()
-            }
-        });
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
+        impl<T1, T2, E, OR> Observer<$input_t, E> for $name<T1, T2, E, OR>
+        where
+            OR: Observer<(T1, T2), E>,
+        {
+            fn on_next(&mut self, value: $input_t) {
                 let _ = self.0.modify_model(|model| {
-                    model.first.1 = true;
-                    if model.first.0.is_empty() {
-                        ModificationResult::new_send_termination(termination)
+                    if let Some(other) = model.$other_field.0.pop_front() {
+                        if model.$other_field.1 && model.$other_field.0.is_empty() {
+                            ModificationResult::default().send_events(
+                                EventGroup::NextAndTermination(
+                                    $make_pair(value, other),
+                                    Termination::Completed,
+                                ),
+                            )
+                        } else {
+                            ModificationResult::new_send_next($make_pair(value, other))
+                        }
                     } else {
+                        model.$this_field.0.push_back(value);
                         ModificationResult::default()
                     }
                 });
             }
-            Termination::Error(_) => {
-                self.0.send_termination(termination);
-            }
-        };
-    }
-}
 
-struct ZipObserver2<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
-
-impl<T1, T2, E, OR> Observer<T2, E> for ZipObserver2<T1, T2, E, OR>
-where
-    OR: Observer<(T1, T2), E>,
-{
-    fn on_next(&mut self, value: T2) {
-        let _ = self.0.modify_model(|model| {
-            let first = model.first.0.pop_front();
-            if let Some(first) = first {
-                if model.first.1 && model.first.0.is_empty() {
-                    ModificationResult::default().send_events(EventGroup::NextAndTermination(
-                        (first, value),
-                        Termination::Completed,
-                    ))
-                } else {
-                    ModificationResult::new_send_next((first, value))
-                }
-            } else {
-                model.second.0.push_back(value);
-                ModificationResult::default()
-            }
-        });
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                let _ = self.0.modify_model(|model| {
-                    model.second.1 = true;
-                    if model.second.0.is_empty() {
-                        ModificationResult::new_send_termination(termination)
-                    } else {
-                        ModificationResult::default()
+            fn on_termination(self, termination: Termination<E>) {
+                match termination {
+                    Termination::Completed => {
+                        let _ = self.0.modify_model(|model| {
+                            model.$this_field.1 = true;
+                            if model.$this_field.0.is_empty() {
+                                ModificationResult::new_send_termination(termination)
+                            } else {
+                                ModificationResult::default()
+                            }
+                        });
                     }
-                });
+                    Termination::Error(_) => {
+                        self.0.send_termination(termination);
+                    }
+                };
             }
-            Termination::Error(_) => {
-                self.0.send_termination(termination);
-            }
-        };
-    }
+        }
+    };
 }
+
+impl_zip_observer!(ZipObserver1, T1, first, second, |this, other| (this, other));
+impl_zip_observer!(ZipObserver2, T2, second, first, |this, other| (other, this));
