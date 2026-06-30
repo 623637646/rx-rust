@@ -60,7 +60,8 @@
           6. test_complete_on_unsub (TODO)
           7. test_error_on_unsub (TODO)
           8. test_sub_on_unsub (TODO)
-          9. test_race_condition (WIP)
+          9. test_race_condition_on_next (WIP)
+          10. test_race_condition_on_termination (WIP)
       13. Using schedule(: Scheduler|::from_stream\\() 有的scheduler没有test_next_on_sub （如 from future）  
           1. ALL TESTS IN "Using lock"  
           2. test_complete_after_next  
