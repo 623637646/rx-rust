@@ -64,7 +64,7 @@ where
             .sources
             .into_iter()
             .map(|e| {
-                let key = slop_map.insert(Subscription::default()); // Insert placeholder
+                let key = slop_map.insert(None);
                 (e, key)
             })
             .collect();
@@ -84,7 +84,7 @@ where
                 determined_observer: None,
             };
             let sub = source.subscribe(amb_observer);
-            safe_lock_slot_map!(replace: context, subscriptions, key, sub);
+            safe_lock_slot_map!(replace: context, subscriptions, key, Some(sub));
         }
 
         Subscription::new_with_disposal(context)
@@ -92,7 +92,7 @@ where
 }
 
 struct AmbContext<'sub> {
-    subscriptions: SlotMap<DefaultKey, Subscription<'sub>>,
+    subscriptions: SlotMap<DefaultKey, Option<Subscription<'sub>>>,
 }
 
 impl Disposable for Shared<Mutable<AmbContext<'_>>> {
@@ -101,6 +101,7 @@ impl Disposable for Shared<Mutable<AmbContext<'_>>> {
     }
 }
 
+// TODO: should use state for observer and determined_observer for better performance.
 struct AmbObserver<'sub, OR> {
     observer: Shared<Mutable<Option<OR>>>,
     context: Shared<Mutable<AmbContext<'sub>>>,
