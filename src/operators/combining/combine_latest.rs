@@ -96,72 +96,44 @@ struct Model<T1, T2> {
     should_completed: bool,
 }
 
-struct ObserverImpl1<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
+macro_rules! impl_observer {
+    ($name:ident, $t_self:ident, $field_self:ident, $field_other:ident, $combine:expr) => {
+        struct $name<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
 
-impl<T1, T2, E, OR> Observer<T1, E> for ObserverImpl1<T1, T2, E, OR>
-where
-    OR: Observer<(T1, T2), E>,
-    T1: Clone,
-    T2: Clone,
-{
-    fn on_next(&mut self, latest_1: T1) {
-        let _ = self.0.modify_model(|model| {
-            if let Some(latest_2) = &model.latest_2 {
-                model.latest_1 = Some(latest_1.clone());
-                ModificationResult::new_send_next((latest_1, latest_2.clone()))
-            } else {
-                model.latest_1 = Some(latest_1);
-                ModificationResult::default()
+        impl<T1, T2, E, OR> Observer<$t_self, E> for $name<T1, T2, E, OR>
+        where
+            OR: Observer<(T1, T2), E>,
+            T1: Clone,
+            T2: Clone,
+        {
+            fn on_next(&mut self, val: $t_self) {
+                let _ = self.0.modify_model(|model| {
+                    if let Some(other) = &model.$field_other {
+                        model.$field_self = Some(val.clone());
+                        ModificationResult::new_send_next($combine(val, other.clone()))
+                    } else {
+                        model.$field_self = Some(val);
+                        ModificationResult::default()
+                    }
+                });
             }
-        });
-    }
 
-    fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.modify_model(|model| match termination {
-            Termination::Completed => {
-                if model.should_completed || model.latest_1.is_none() {
-                    ModificationResult::new_send_termination(termination)
-                } else {
-                    model.should_completed = true;
-                    ModificationResult::default()
-                }
+            fn on_termination(self, termination: Termination<E>) {
+                let _ = self.0.modify_model(|model| match termination {
+                    Termination::Completed => {
+                        if model.should_completed || model.$field_self.is_none() {
+                            ModificationResult::new_send_termination(termination)
+                        } else {
+                            model.should_completed = true;
+                            ModificationResult::default()
+                        }
+                    }
+                    Termination::Error(_) => ModificationResult::new_send_termination(termination),
+                });
             }
-            Termination::Error(_) => ModificationResult::new_send_termination(termination),
-        });
-    }
+        }
+    };
 }
 
-struct ObserverImpl2<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
-
-impl<T1, T2, E, OR> Observer<T2, E> for ObserverImpl2<T1, T2, E, OR>
-where
-    OR: Observer<(T1, T2), E>,
-    T1: Clone,
-    T2: Clone,
-{
-    fn on_next(&mut self, latest_2: T2) {
-        let _ = self.0.modify_model(|model| {
-            if let Some(latest_1) = &model.latest_1 {
-                model.latest_2 = Some(latest_2.clone());
-                ModificationResult::new_send_next((latest_1.clone(), latest_2))
-            } else {
-                model.latest_2 = Some(latest_2);
-                ModificationResult::default()
-            }
-        });
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.modify_model(|model| match termination {
-            Termination::Completed => {
-                if model.should_completed || model.latest_2.is_none() {
-                    ModificationResult::new_send_termination(termination)
-                } else {
-                    model.should_completed = true;
-                    ModificationResult::default()
-                }
-            }
-            Termination::Error(_) => ModificationResult::new_send_termination(termination),
-        });
-    }
-}
+impl_observer!(ObserverImpl1, T1, latest_1, latest_2, |v, o| (v, o));
+impl_observer!(ObserverImpl2, T2, latest_2, latest_1, |v, o| (o, v));
