@@ -79,13 +79,11 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
-            let stop_observer = StopObserver {
+            let subscription_1 = self.stop.subscribe(StopObserver {
                 observer: observer.clone(),
                 _marker: PhantomData,
-            };
-            let subscription_1 = self.stop.subscribe(stop_observer);
-            let observer = TakeUntilObserver(observer.clone());
-            let subscription_2 = self.source.subscribe(observer);
+            });
+            let subscription_2 = self.source.subscribe(TakeUntilObserver(observer));
             subscription_1 + subscription_2
         })
     }
