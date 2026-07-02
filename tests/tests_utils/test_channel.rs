@@ -30,51 +30,6 @@ pub(crate) fn test_channel<'or, T, E>() -> (
 
 pub(crate) struct SenderObserver<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
-impl<'or, T, E> SenderObserver<'or, T, E> {
-    pub(crate) fn mock_race_condition_on_next(
-        &self,
-        value: T,
-        preceding_action: impl FnOnce(),
-        subsequent_action: impl FnOnce(),
-    ) {
-        let mut observer = match safe_lock!(mem_replace: self.0, State::Subscribed(None)) {
-            State::Initialized => panic!(),
-            State::Subscribed(boxed_observer) => boxed_observer.unwrap(),
-            State::Terminated(_) => panic!(),
-            State::Unsubscribed => panic!(),
-        };
-        preceding_action();
-        observer.on_next(value);
-        subsequent_action();
-        self.0.lock_mut(|mut lock| match &mut *lock {
-            State::Initialized => panic!(),
-            State::Subscribed(boxed_observer) => *boxed_observer = Some(observer),
-            State::Terminated(_) => panic!(),
-            State::Unsubscribed => {}
-        });
-    }
-
-    pub(crate) fn mock_race_condition_on_termination(
-        &self,
-        termination: Termination<E>,
-        preceding_action: impl FnOnce(),
-        subsequent_action: impl FnOnce(),
-    ) where
-        E: Clone,
-    {
-        let observer = match safe_lock!(mem_replace: self.0, State::Terminated(termination.clone()))
-        {
-            State::Initialized => panic!(),
-            State::Subscribed(boxed_observer) => boxed_observer.unwrap(),
-            State::Terminated(_) => panic!(),
-            State::Unsubscribed => panic!(),
-        };
-        preceding_action();
-        observer.on_termination(termination);
-        subsequent_action();
-    }
-}
-
 impl<T, E> Observer<T, E> for SenderObserver<'_, T, E>
 where
     E: Clone,
