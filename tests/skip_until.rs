@@ -155,20 +155,8 @@ fn test_completed_start_completed() {
 
     start_sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert_eq!(start_channel_checker.state(), ChannelState::Completed);
-
-    sender.on_next(-3);
-    assert_eq!(checker.values(), []);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert_eq!(start_channel_checker.state(), ChannelState::Completed);
-
-    sender.on_termination(Termination::Completed);
-    assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     assert_eq!(start_channel_checker.state(), ChannelState::Completed);
 }
 
