@@ -89,14 +89,15 @@ where
                 State::Subscribed(count, _) => *count += 1,
             };
         });
-        sub + self.state
+        sub + RefCountDisposal(self.state)
     }
 }
 
-// TODO: Disposable should not be Cloneable
-impl Disposable for Shared<Mutable<State<'_>>> {
+struct RefCountDisposal<'sub>(Shared<Mutable<State<'sub>>>);
+
+impl Disposable for RefCountDisposal<'_> {
     fn dispose(self) {
-        self.lock_mut(|mut lock| match &mut *lock {
+        self.0.lock_mut(|mut lock| match &mut *lock {
             State::Initialized => unreachable!(),
             State::Subscribed(count, _) => {
                 *count -= 1;
