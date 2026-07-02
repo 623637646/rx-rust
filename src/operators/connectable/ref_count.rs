@@ -8,7 +8,7 @@ use educe::Educe;
 
 enum State<'sub> {
     Initialized,
-    Subscribed(usize, Subscription<'sub>),
+    Subscribed(usize, Option<Subscription<'sub>>),
 }
 
 /// Makes a `ConnectableObservable` behave like an ordinary `Observable` that automatically connects and disconnects.
@@ -76,19 +76,28 @@ where
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         let sub = self.source.clone().subscribe(observer);
-        self.state.lock_mut(|mut lock| {
-            match &mut *lock {
-                State::Initialized => {
-                    *lock = State::Subscribed(
-                        1,
-                        self.source
-                            .connect() // TODO: should be outside the lock?
-                            .expect("ConnectableObservable should not be connected."),
-                    );
-                }
-                State::Subscribed(count, _) => *count += 1,
-            };
+        let should_connect = self.state.lock_mut(|mut lock| match &mut *lock {
+            State::Initialized => {
+                *lock = State::Subscribed(1, None);
+                true
+            }
+            State::Subscribed(count, _) => {
+                *count += 1;
+                false
+            }
         });
+        if should_connect {
+            let connect_sub = self
+                .source
+                .connect()
+                .expect("ConnectableObservable should not be connected.");
+            self.state.lock_mut(|mut lock| match &mut *lock {
+                State::Initialized => unreachable!(),
+                State::Subscribed(_, subscription) => {
+                    assert!(subscription.replace(connect_sub).is_none())
+                }
+            });
+        }
         sub + RefCountDisposal(self.state)
     }
 }
@@ -107,7 +116,7 @@ impl Disposable for RefCountDisposal<'_> {
                     match state {
                         State::Initialized => unreachable!(),
                         State::Subscribed(_, subscription) => {
-                            subscription.dispose();
+                            subscription.unwrap().dispose();
                         }
                     }
                 }
