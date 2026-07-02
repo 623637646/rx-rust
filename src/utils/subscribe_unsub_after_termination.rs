@@ -12,6 +12,7 @@ enum SubState<'sub> {
     Unsubscribed,
 }
 
+// TODO: Disposable should not be Cloneable
 impl Disposable for Shared<Mutable<SubState<'_>>> {
     fn dispose(self) {
         match safe_lock!(mem_replace: self, SubState::Unsubscribed) {

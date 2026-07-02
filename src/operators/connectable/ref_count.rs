@@ -93,6 +93,7 @@ where
     }
 }
 
+// TODO: Disposable should not be Cloneable
 impl Disposable for Shared<Mutable<State<'_>>> {
     fn dispose(self) {
         self.lock_mut(|mut lock| match &mut *lock {

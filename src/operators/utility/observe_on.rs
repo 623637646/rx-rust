@@ -100,6 +100,7 @@ struct ObserveOnContext<T, E> {
     disposal: Option<BoxedDisposal<'static>>,
 }
 
+// TODO: Disposable should not be Cloneable
 impl<T, E> Disposable for Shared<Mutable<ObserveOnContext<T, E>>> {
     fn dispose(self) {
         safe_lock_option_disposable!(dispose: self, disposal);

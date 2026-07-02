@@ -133,6 +133,7 @@ struct BufferWithTimeOrCountContext<T> {
     timer: Option<BoxedDisposal<'static>>,
 }
 
+// TODO: Disposable should not be Cloneable
 impl<T> Disposable for Shared<Mutable<BufferWithTimeOrCountContext<T>>> {
     fn dispose(self) {
         safe_lock_option_disposable!(dispose: self, timer);

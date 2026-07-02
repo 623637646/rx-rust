@@ -95,6 +95,7 @@ struct AmbContext<'sub> {
     subscriptions: SlotMap<DefaultKey, Option<Subscription<'sub>>>,
 }
 
+// TODO: Disposable should not be Cloneable
 impl Disposable for Shared<Mutable<AmbContext<'_>>> {
     fn dispose(self) {
         safe_lock!(mem_take: self, subscriptions);

@@ -117,6 +117,7 @@ struct DelayContext<T> {
     timer: Option<BoxedDisposal<'static>>,
 }
 
+// TODO: Disposable should not be Cloneable
 impl<T> Disposable for Shared<Mutable<DelayContext<T>>> {
     fn dispose(self) {
         safe_lock_option_disposable!(dispose: self, timer);

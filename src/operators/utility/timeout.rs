@@ -143,6 +143,7 @@ struct TimeoutContext {
     version: usize,
 }
 
+// TODO: Disposable should not be Cloneable
 impl Disposable for Shared<Mutable<TimeoutContext>> {
     fn dispose(self) {
         let timer_state = safe_lock!(mem_replace: self, timer_state, TimerState::Disposed);
