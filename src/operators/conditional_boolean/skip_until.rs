@@ -1,14 +1,14 @@
-use crate::safe_lock_option_observer;
 use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination;
-use crate::utils::types::{Mutable, MutableBool, MutableBoolHelper, NecessarySend, Shared};
+use crate::utils::subscribe_with_shared_model::{
+    Context, ModificationResult, subscribe_with_shared_model,
+};
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::types::MarkerType,
 };
 use educe::Educe;
-use std::marker::PhantomData;
 
 /// Discards items emitted by a source Observable until a second Observable emits an item.
 /// See <https://reactivex.io/documentation/operators/skipuntil.html>
@@ -70,71 +70,81 @@ impl<OE, OE1> SkipUntil<OE, OE1> {
 
 impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for SkipUntil<OE, OE1>
 where
-    T: 'or,
+    'sub: 'or,
+    'or: 'sub,
+    T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
-    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Shared::new(Mutable::new(Some(observer)));
-            let started = Shared::new(MutableBool::new(false));
-            let start_observer = StartObserver {
-                observer: observer.clone(),
-                started: started.clone(),
-                _marker: PhantomData,
-            };
-            let subscription_1 = self.start.subscribe(start_observer);
-            let observer = SkipUntilObserver { observer, started };
-            let subscription_2 = self.source.subscribe(observer);
-            subscription_1 + subscription_2
+            let model = Model { started: false };
+            subscribe_with_shared_model(observer, model, |context| {
+                let subscription_1 = self.start.subscribe(StartObserver {
+                    context: context.clone(),
+                    started: false,
+                });
+                let subscription_2 = self.source.subscribe(SkipUntilObserver(context));
+                subscription_1 + subscription_2
+            })
         })
     }
 }
 
-struct SkipUntilObserver<OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    started: Shared<MutableBool>,
+struct Model {
+    started: bool,
 }
 
-impl<T, E, OR> Observer<T, E> for SkipUntilObserver<OR>
+struct SkipUntilObserver<T, E, OR>(Context<T, E, OR, Model>);
+
+impl<T, E, OR> Observer<T, E> for SkipUntilObserver<T, E, OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        if self.started.read() {
-            safe_lock_option_observer!(on_next: self.observer, value);
-        }
+        let _ = self.0.modify_model(|model| {
+            if model.started {
+                ModificationResult::new_send_next(value)
+            } else {
+                ModificationResult::default()
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock_option_observer!(on_termination: self.observer, termination);
+        self.0.send_termination(termination);
     }
 }
 
-struct StartObserver<T, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    started: Shared<MutableBool>,
-    _marker: MarkerType<T>,
+struct StartObserver<T, E, OR> {
+    context: Context<T, E, OR, Model>,
+    started: bool,
 }
 
-impl<T, E, OR> Observer<(), E> for StartObserver<T, OR>
+impl<T, E, OR> Observer<(), E> for StartObserver<T, E, OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, _: ()) {
-        self.started.write(true);
+        if !self.started {
+            self.started = true;
+            let _ = self.context.modify_model(|model| {
+                model.started = true;
+                ModificationResult::default().ignore_drop_outside()
+            });
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                if !self.started.read() {
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
+                if !self.started {
+                    self.context.send_termination(termination);
                 }
             }
             Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.context.send_termination(termination);
             }
         }
     }
