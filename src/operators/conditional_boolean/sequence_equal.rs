@@ -1,6 +1,8 @@
-use crate::safe_lock_option_observer;
 use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination;
-use crate::utils::types::{MarkerType, Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::subscribe_with_shared_model::{
+    Context, ModificationResult, subscribe_with_shared_model,
+};
+use crate::utils::types::{MarkerType, NecessarySend};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -63,92 +65,89 @@ impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
 
 impl<'or, 'sub, T, E, OE1, OE2> Observable<'or, 'sub, bool, E> for SequenceEqual<T, OE1, OE2>
 where
+    'sub: 'or,
+    'or: 'sub,
     T: PartialEq + NecessarySend + 'or,
+    E: NecessarySend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
     OE2: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
 {
     fn subscribe(
         self,
         observer: impl Observer<bool, E> + NecessarySend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Shared::new(Mutable::new(Some(observer)));
-            let state = Shared::new(Mutable::new(SequenceEqualObserverState::None(false)));
-            let observer_1 = SequenceEqualObserver {
-                observer: observer.clone(),
-                state: state.clone(),
-                is_one: true,
+            let model = Model {
+                first: SourceState {
+                    queue: VecDeque::new(),
+                    completed: false,
+                },
+                second: SourceState {
+                    queue: VecDeque::new(),
+                    completed: false,
+                },
             };
-            let observer_2 = SequenceEqualObserver {
-                observer: observer.clone(),
-                state: state.clone(),
-                is_one: false,
-            };
-            let subscription_1 = self.source_1.subscribe(observer_1);
-            let subscription_2 = self.source_2.subscribe(observer_2);
-            subscription_1 + subscription_2
+            subscribe_with_shared_model(observer, model, |context| {
+                let observer_1 = SequenceEqualObserver {
+                    context: context.clone(),
+                    is_first: true,
+                };
+                let observer_2 = SequenceEqualObserver {
+                    context,
+                    is_first: false,
+                };
+                let subscription_1 = self.source_1.subscribe(observer_1);
+                let subscription_2 = self.source_2.subscribe(observer_2);
+                subscription_1 + subscription_2
+            })
         })
     }
 }
 
-enum SequenceEqualObserverState<T> {
-    None(bool),
-    One(VecDeque<T>, bool),
-    Two(VecDeque<T>, bool),
+struct SourceState<T> {
+    queue: VecDeque<T>,
+    completed: bool,
 }
 
-struct SequenceEqualObserver<T, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    state: Shared<Mutable<SequenceEqualObserverState<T>>>,
-    is_one: bool,
+struct Model<T> {
+    first: SourceState<T>,
+    second: SourceState<T>,
 }
 
-impl<T, E, OR> Observer<T, E> for SequenceEqualObserver<T, OR>
+struct SequenceEqualObserver<T, E, OR> {
+    context: Context<bool, E, OR, Model<T>>,
+    is_first: bool,
+}
+
+impl<T, E, OR> Observer<T, E> for SequenceEqualObserver<T, E, OR>
 where
     OR: Observer<bool, E>,
     T: PartialEq,
 {
     fn on_next(&mut self, value: T) {
-        self.state.lock_mut(|mut lock| match &mut *lock {
-            SequenceEqualObserverState::None(is_completed) => {
-                if *is_completed {
-                    safe_lock_option_observer!(on_next_and_termination: self.observer, false, Termination::Completed);
-                } else if self.is_one {
-                    *lock = SequenceEqualObserverState::One(VecDeque::from([value]), false);
-                } else {
-                    *lock = SequenceEqualObserverState::Two(VecDeque::from([value]), false);
+        let _ = self.context.modify_model(|model| {
+            let (mine, other) = if self.is_first {
+                (&mut model.first, &mut model.second)
+            } else {
+                (&mut model.second, &mut model.first)
+            };
+
+            match (other.queue.pop_front(), other.completed) {
+                (None, true) => {
+                    ModificationResult::new_send_next_and_termination(false, Termination::Completed)
                 }
-            }
-            SequenceEqualObserverState::One(values, is_completed) => {
-                if self.is_one {
-                    assert!(!*is_completed);
-                    values.push_back(value);
-                } else {
-                    let top = values.pop_front().unwrap();
-                    if top == value {
-                        if values.is_empty() {
-                            *lock = SequenceEqualObserverState::None(*is_completed);
-                        }
-                    } else {
-                        drop(lock);
-                        safe_lock_option_observer!(on_next_and_termination: self.observer, false, Termination::Completed);
-                    }
+                (None, false) => {
+                    mine.queue.push_back(value);
+                    ModificationResult::default()
                 }
-            }
-            SequenceEqualObserverState::Two(values, is_completed) => {
-                if !self.is_one {
-                    assert!(!*is_completed);
-                    values.push_back(value);
-                } else {
-                    let top = values.pop_front().unwrap();
-                    if top == value {
-                        if values.is_empty() {
-                            *lock = SequenceEqualObserverState::None(*is_completed);
-                        }
+                (Some(next), _) => {
+                    if value == next {
+                        ModificationResult::default()
                     } else {
-                        drop(lock);
-                        safe_lock_option_observer!(on_next_and_termination: self.observer, false, Termination::Completed);
+                        ModificationResult::new_send_next_and_termination(
+                            false,
+                            Termination::Completed,
+                        )
                     }
                 }
             }
@@ -158,37 +157,27 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                self.state.lock_mut(|mut lock| match &mut *lock {
-                    SequenceEqualObserverState::None(is_completed) => {
-                        if *is_completed {
-                            safe_lock_option_observer!(on_next_and_termination: self.observer, true, Termination::Completed);
-                        } else {
-                            *is_completed = true;
-                        }
-                    }
-                    SequenceEqualObserverState::One(_, is_completed) => {
-                        if *is_completed {
-                            safe_lock_option_observer!(on_next_and_termination: self.observer, false, Termination::Completed);
-                        } else if self.is_one {
-                            *is_completed = true;
-                        } else {
-                            safe_lock_option_observer!(on_next_and_termination: self.observer, false, Termination::Completed);
-                        }
-                    }
-                    SequenceEqualObserverState::Two(_, is_completed) => {
-                        if *is_completed {
-                            safe_lock_option_observer!(on_next_and_termination: self.observer, false, Termination::Completed);
-                        } else if !self.is_one {
-                            *is_completed = true;
-                        } else {
-                            safe_lock_option_observer!(on_next_and_termination: self.observer, false, Termination::Completed);
-                        }
+                let _ = self.context.modify_model(|model| {
+                    let (mine, other) = if self.is_first {
+                        (&mut model.first, &mut model.second)
+                    } else {
+                        (&mut model.second, &mut model.first)
+                    };
+                    mine.completed = true;
+
+                    let mine_empty = mine.queue.is_empty();
+                    let other_completed = other.completed;
+                    let other_empty = other.queue.is_empty();
+
+                    if !other_completed && other_empty {
+                        ModificationResult::default()
+                    } else {
+                        let is_equal = mine_empty && other_completed && other_empty;
+                        ModificationResult::new_send_next_and_termination(is_equal, termination)
                     }
                 });
             }
-            Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
-            }
-        }
+            Termination::Error(_) => self.context.send_termination(termination),
+        };
     }
 }
