@@ -120,11 +120,6 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {}
-            Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
-            }
-        }
+        safe_lock_option_observer!(on_termination: self.observer, termination);
     }
 }
