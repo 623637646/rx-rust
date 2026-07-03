@@ -263,6 +263,76 @@ fn test_completed_different_retry_observable() {
 }
 
 #[test]
+fn test_completed_synchronous_throw() {
+    let sender = Shared::new(Mutable::new(None));
+    let channel_checker = Shared::new(Mutable::new(None));
+    let (checker, observer) = Checker::new();
+    let errors = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = new_channel(sender.clone(), channel_checker.clone());
+    let sender_cloned = sender.clone();
+    let channel_checker_cloned = channel_checker.clone();
+    let errors_cloned = errors.clone();
+    let observable = observable.retry(move |error| {
+        safe_lock_vec!(push: errors_cloned, error);
+        match error {
+            -1 => RetryAction::Retry(Throw::new(0).map_infallible_to_value().into_boxed()),
+            0 => {
+                let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+                RetryAction::Retry(observable.into_boxed())
+            }
+            _ => panic!(),
+        }
+    });
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Subscribed
+    );
+    assert!(safe_lock_vec!(is_empty: errors));
+
+    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Subscribed
+    );
+    assert!(safe_lock_vec!(is_empty: errors));
+
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error(-1)));
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Subscribed
+    );
+    assert_eq!(*errors.test_lock_ref(), [-1, 0]);
+
+    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Subscribed
+    );
+    assert_eq!(*errors.test_lock_ref(), [-1, 0]);
+
+    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(
+        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        ChannelState::Completed
+    );
+    assert_eq!(*errors.test_lock_ref(), [-1, 0]);
+}
+
+#[test]
 fn test_erryr_no_retry() {
     let sender = Shared::new(Mutable::new(None));
     let channel_checker = Shared::new(Mutable::new(None));

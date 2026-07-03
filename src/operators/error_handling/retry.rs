@@ -1,6 +1,7 @@
+use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::safe_lock_option;
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -100,8 +101,18 @@ where
                 let action = (self.callback)(error);
                 match action {
                     RetryAction::Retry(observable) => {
-                        let sub = self.sub.clone();
-                        safe_lock_option!(replace: sub, observable.subscribe(self));
+                        safe_lock_option!(take: self.sub);
+                        let shared_sub = self.sub.clone();
+                        let sub = observable.subscribe(self);
+                        shared_sub.lock_mut(|mut lock| {
+                            if lock.is_none() {
+                                *lock = Some(sub);
+                            } else {
+                                // The sub is set by the synchronous secquence retry when `observable.subscribe(self)`.
+                                drop(lock);
+                                sub.dispose();
+                            }
+                        });
                     }
                     RetryAction::Stop(error) => {
                         self.observer.on_termination(Termination::Error(error))
