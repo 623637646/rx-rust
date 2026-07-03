@@ -1,6 +1,6 @@
+use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::safe_lock_option;
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -67,7 +67,7 @@ where
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        let sub = Shared::new(Mutable::new(None));
+        let sub = SharedDisposal::default();
         let observer = CatchObserver {
             observer,
             callback: self.callback,
@@ -81,7 +81,7 @@ where
 struct CatchObserver<'sub, E, OR, F> {
     observer: OR,
     callback: F,
-    sub: Shared<Mutable<Option<Subscription<'sub>>>>,
+    sub: SharedDisposal<Subscription<'sub>>,
     _marker: MarkerType<E>,
 }
 
@@ -99,9 +99,10 @@ where
         match termination {
             Termination::Completed => self.observer.on_termination(Termination::Completed),
             Termination::Error(error) => {
-                let observable = (self.callback)(error);
-                let sub = observable.subscribe(self.observer);
-                safe_lock_option!(replace: self.sub, sub);
+                self.sub.replace(|| {
+                    let observable = (self.callback)(error);
+                    observable.subscribe(self.observer)
+                });
             }
         }
     }

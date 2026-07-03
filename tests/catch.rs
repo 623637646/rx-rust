@@ -658,8 +658,8 @@ fn test_race_condition_error_after_unsub() {
     assert_eq!(checker.state(), State::Active);
 
     sender.unwrap().on_termination(Termination::Error("error"));
-    assert_eq!(checker.values(), [111, 222]);
-    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]
