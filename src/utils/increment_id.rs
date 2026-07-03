@@ -5,11 +5,8 @@ use educe::Educe;
 pub struct IncrementId(usize);
 
 impl IncrementId {
-    pub fn new() -> Self {
-        Self(0)
-    }
-
-    pub fn increment(&mut self) {
-        self.0 = self.0.wrapping_add(1);
+    pub fn increment(&mut self) -> Self {
+        self.0 += 1; // usize is big enough to never overflow
+        *self
     }
 }

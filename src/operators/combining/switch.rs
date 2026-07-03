@@ -92,7 +92,7 @@ where
             let model = Model {
                 sub_state: SubState::Idle,
                 is_source_completed: false,
-                current_sub_id: IncrementId::new(),
+                current_sub_id: IncrementId::default(),
             };
             subscribe_with_shared_model(observer, model, |context| {
                 self.source.subscribe(SwitchObserver(context))
