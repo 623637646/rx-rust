@@ -630,6 +630,39 @@ fn test_error_on_sub() {
 }
 
 #[test]
+fn test_race_condition_error_after_unsub() {
+    let mut sender = None;
+    let observable = Create::new(|observer| {
+        sender = Some(observer);
+        Subscription::new()
+    });
+
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.catch(move |value| {
+        assert_eq!(value, "error");
+        Just::new(222)
+    });
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    sender.as_mut().unwrap().on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
+    sender.unwrap().on_termination(Termination::Error("error"));
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
