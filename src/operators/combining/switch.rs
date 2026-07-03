@@ -172,6 +172,8 @@ where
     }
 }
 
+// TODO: Improve performance, if is_source_completed is true, stop the context and no more need to lock when sending next.
+// TODO: check all cases using subscribe_with_shared_model whether it can be improved.
 struct SwitchInnerObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>, IncrementId);
 
 impl<T, E, OR> Observer<T, E> for SwitchInnerObserver<'_, T, E, OR>
