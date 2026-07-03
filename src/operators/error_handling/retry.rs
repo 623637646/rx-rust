@@ -8,7 +8,7 @@ use crate::{
 use educe::Educe;
 
 #[derive(Educe)]
-#[educe(Debug, Clone, PartialEq, Eq)]
+#[educe(Debug, Clone)]
 pub enum RetryAction<E, OE1> {
     Retry(OE1),
     Stop(E),
