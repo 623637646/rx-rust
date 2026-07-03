@@ -2,7 +2,7 @@ use crate::{
     disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared},
+    utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared, WeakShared},
 };
 use educe::Educe;
 
@@ -331,12 +331,9 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         };
     }
 
-    // pub fn downgrade(&self) -> WeakContext<T, E, OR, M> {
-    //     WeakContext {
-    //         state: Shared::downgrade(&self.state),
-    //         model: Shared::downgrade(&self.model),
-    //     }
-    // }
+    pub fn downgrade(&self) -> WeakContext<T, E, OR, M> {
+        WeakContext(Shared::downgrade(&self.0))
+    }
 
     fn send_events_until_finish(&self, mut observer: OR)
     where
@@ -422,16 +419,10 @@ impl<T, E, OR, M> Disposable for SharedModelDisposable<T, E, OR, M> {
     }
 }
 
-// pub struct WeakContext<T, E, OR, M> {
-//     state: WeakShared<Mutable<State<T, E, OR>>>,
-//     model: WeakShared<Mutable<M>>,
-// }
+pub struct WeakContext<T, E, OR, M>(WeakShared<Mutable<State<T, E, OR, M>>>);
 
-// impl<T, E, OR, M> WeakContext<T, E, OR, M> {
-//     pub fn upgrade(&self) -> Option<Context<T, E, OR, M>> {
-//         Some(Context {
-//             state: self.state.upgrade()?,
-//             model: self.model.upgrade()?,
-//         })
-//     }
-// }
+impl<T, E, OR, M> WeakContext<T, E, OR, M> {
+    pub fn upgrade(&self) -> Option<Context<T, E, OR, M>> {
+        Some(Context(self.0.upgrade()?))
+    }
+}

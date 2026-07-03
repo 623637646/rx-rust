@@ -1,13 +1,16 @@
-use crate::disposable::Disposable;
+use crate::disposable::bound_drop_disposal::BoundDropDisposal;
 use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::increment_id::IncrementId;
+use crate::utils::subscribe_with_shared_model::{
+    Context, ModificationResult, subscribe_with_shared_model,
+};
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
-use crate::{safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::time::Duration;
 
@@ -81,6 +84,7 @@ impl<OE, S> Debounce<OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Debounce<OE, S>
 where
     T: NecessarySend + 'static,
+    E: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler,
 {
@@ -88,82 +92,105 @@ where
         self,
         observer: impl Observer<T, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let context = Shared::new(Mutable::new(DebounceContext {
+        let model = Model {
             current_value: None,
             timer: None,
-        }));
-        self.source.subscribe(DebounceObserver {
-            observer: Shared::new(Mutable::new(Some(observer))),
-            context: context.clone(),
-            time_span: self.time_span,
-            scheduler: self.scheduler,
-        }) + context
+            timer_id: IncrementId::default(),
+        };
+        subscribe_with_shared_model(observer, model, |context| {
+            self.source.subscribe(DebounceObserver {
+                context,
+                time_span: self.time_span,
+                scheduler: self.scheduler,
+            })
+        })
     }
 }
 
-struct DebounceContext<T> {
+struct Model<T> {
     current_value: Option<T>,
-    timer: Option<BoxedDisposal<'static>>,
+    timer: Option<BoundDropDisposal<BoxedDisposal<'static>>>,
+    timer_id: IncrementId,
 }
 
-// TODO: Disposable should not be Cloneable
-impl<T> Disposable for Shared<Mutable<DebounceContext<T>>> {
-    fn dispose(self) {
-        safe_lock_option_disposable!(dispose: self, timer);
-    }
-}
-
-struct DebounceObserver<T, OR, S> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<DebounceContext<T>>>,
+struct DebounceObserver<T, E, OR, S> {
+    context: Context<T, E, OR, Model<T>>,
     time_span: Duration,
     scheduler: S,
 }
 
-impl<T, E, OR, S> Observer<T, E> for DebounceObserver<T, OR, S>
+impl<T, E, OR, S> Observer<T, E> for DebounceObserver<T, E, OR, S>
 where
     T: NecessarySend + 'static,
+    E: NecessarySend + 'static,
     OR: Observer<T, E> + NecessarySend + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let context = self.context.clone();
-        let observer = self.observer.clone();
+        let timer_id = self.context.modify_model(|model| {
+            model.current_value = Some(value);
+            let timer = model.timer.take();
+            let timer_id = model.timer_id.increment();
+            ModificationResult::new(timer_id).drop_outside(timer)
+        });
+        let Ok(timer_id) = timer_id else { return };
+
+        let weak_context = self.context.downgrade();
         let disposal = self.scheduler.schedule(
             move || {
-                if let Some(current_value) = safe_lock_option!(take: context, current_value) {
-                    safe_lock_option_observer!(on_next: observer, current_value);
-                }
+                let Some(context) = weak_context.upgrade() else {
+                    return;
+                };
+                let _ = context.modify_model(|model| {
+                    if timer_id != model.timer_id {
+                        return ModificationResult::default();
+                    }
+                    let timer = model.timer.take();
+                    if let Some(value) = model.current_value.take() {
+                        ModificationResult::default()
+                            .send_next(value)
+                            .drop_outside(timer)
+                    } else {
+                        ModificationResult::default().drop_outside(timer)
+                    }
+                });
             },
             Some(self.time_span),
         );
 
-        self.context.lock_mut(|mut lock| {
-            lock.current_value = Some(value);
-            if let Some(disposal) = lock.timer.replace(BoxedDisposal::new(disposal)) {
-                drop(lock);
-                disposal.dispose();
+        let _ = self.context.modify_model(|model| {
+            if timer_id != model.timer_id {
+                return ModificationResult::default();
             }
+            assert!(
+                model
+                    .timer
+                    .replace(BoundDropDisposal::new(BoxedDisposal::new(disposal)))
+                    .is_none()
+            );
+            ModificationResult::default().ignore_drop_outside()
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let current_value = self.context.lock_mut(|mut lock| {
-            if let Some(timer) = lock.timer.take() {
-                timer.dispose();
-            }
-            std::mem::take(&mut lock.current_value)
-        });
         match termination {
             Termination::Completed => {
-                if let Some(value) = current_value {
-                    safe_lock_option_observer!(on_next_and_termination: self.observer, value, termination);
-                } else {
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                let _ = self.context.modify_model(|model| {
+                    match (model.current_value.take(), model.timer.take()) {
+                        (None, None) => ModificationResult::default().send_termination(termination),
+                        (None, Some(timer)) => ModificationResult::default()
+                            .send_termination(termination)
+                            .drop_outside(timer),
+                        (Some(value), None) => ModificationResult::default()
+                            .send_next_and_termination(value, termination),
+                        (Some(value), Some(timer)) => ModificationResult::default()
+                            .send_next_and_termination(value, termination)
+                            .drop_outside(timer),
+                    }
+                });
             }
             Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.context.send_termination(termination);
             }
         }
     }

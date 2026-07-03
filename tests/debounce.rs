@@ -245,25 +245,12 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.state(), State::Active);
 
         subscription_2.dispose();
-        check_with_abort_late!(
-            runtime,
-            {
-                assert_eq!(checker_1.values(), [111]);
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert_eq!(checker_2.values(), [111, 222]);
-                assert_eq!(checker_2.state(), State::Active);
-                assert_eq!(checker_3.values(), [111, 222]);
-                assert_eq!(checker_3.state(), State::Active);
-            },
-            {
-                assert_eq!(checker_1.values(), [111]);
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert_eq!(checker_2.values(), [111, 222]);
-                assert_eq!(checker_2.state(), State::Dropped);
-                assert_eq!(checker_3.values(), [111, 222]);
-                assert_eq!(checker_3.state(), State::Active);
-            }
-        );
+        assert_eq!(checker_1.values(), [111]);
+        assert_eq!(checker_1.state(), State::Dropped);
+        assert_eq!(checker_2.values(), [111, 222]);
+        assert_eq!(checker_2.state(), State::Dropped);
+        assert_eq!(checker_3.values(), [111, 222]);
+        assert_eq!(checker_3.state(), State::Active);
 
         runtime.sleep(DURATION_30_MS * 2).await;
         assert_eq!(checker_1.values(), [111]);

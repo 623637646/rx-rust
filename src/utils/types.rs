@@ -27,7 +27,7 @@ cfg_if::cfg_if! {
         };
 
         pub type Shared<T> = Rc<T>;
-        // pub type WeakShared<T> = std::rc::Weak<T>;
+        pub type WeakShared<T> = std::rc::Weak<T>;
         pub type Mutable<T> = RefCell<T>;
 
         pub type MutGuard<'a, T> = RefMut<'a, T>;
@@ -66,7 +66,7 @@ cfg_if::cfg_if! {
         use std::sync::atomic::{AtomicBool, Ordering};
 
         pub type Shared<T> = Arc<T>;
-        // pub type WeakShared<T> = std::sync::Weak<T>;
+        pub type WeakShared<T> = std::sync::Weak<T>;
         pub type Mutable<T> = Mutex<T>;
 
         #[derive(Educe)]
