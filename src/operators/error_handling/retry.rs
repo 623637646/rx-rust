@@ -1,7 +1,6 @@
-use crate::disposable::Disposable;
+use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::safe_lock_option;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -67,20 +66,20 @@ where
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        let sub = Shared::new(Mutable::new(None));
+        let shared_sub = SharedDisposal::default();
         let observer = RetryObserver {
             observer,
             callback: self.callback,
-            sub: sub.clone(),
+            shared_sub: shared_sub.clone(),
         };
-        self.source.subscribe(observer) + sub
+        self.source.subscribe(observer) + shared_sub
     }
 }
 
 struct RetryObserver<'sub, OR, F> {
     observer: OR,
     callback: F,
-    sub: Shared<Mutable<Option<Subscription<'sub>>>>,
+    shared_sub: SharedDisposal<Subscription<'sub>>,
 }
 
 impl<'or, 'sub, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<'sub, OR, F>
@@ -101,18 +100,9 @@ where
                 let action = (self.callback)(error);
                 match action {
                     RetryAction::Retry(observable) => {
-                        safe_lock_option!(take: self.sub);
-                        let shared_sub = self.sub.clone();
-                        let sub = observable.subscribe(self);
-                        shared_sub.lock_mut(|mut lock| {
-                            if lock.is_none() {
-                                *lock = Some(sub);
-                            } else {
-                                // The sub is set by the synchronous secquence retry when `observable.subscribe(self)`.
-                                drop(lock);
-                                sub.dispose();
-                            }
-                        });
+                        self.shared_sub
+                            .clone()
+                            .replace(|| observable.subscribe(self));
                     }
                     RetryAction::Stop(error) => {
                         self.observer.on_termination(Termination::Error(error))
