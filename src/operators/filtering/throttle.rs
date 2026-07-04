@@ -1,8 +1,9 @@
 use crate::disposable::Disposable;
+use crate::disposable::bound_drop_disposal::BoundDropDisposal;
 use crate::disposable::boxed_disposal::BoxedDisposal;
+use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::safe_lock_option_disposable;
-use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::types::{MutableBool, MutableBoolHelper, NecessarySend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -91,13 +92,14 @@ where
         self,
         observer: impl Observer<T, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let disposal = Shared::new(Mutable::new(None));
+        let shared_disposal = SharedDisposal::default();
         self.source.subscribe(ThrottleObserver {
             observer,
             time_span: self.time_span,
             scheduler: self.scheduler,
-            disposal: disposal.clone(),
-        }) + disposal
+            is_cooling: Shared::new(MutableBool::new(false)),
+            shared_disposal: shared_disposal.clone(),
+        }) + shared_disposal
     }
 }
 
@@ -105,7 +107,8 @@ struct ThrottleObserver<OR, S> {
     observer: OR,
     time_span: Duration,
     scheduler: S,
-    disposal: Shared<Mutable<Option<BoxedDisposal<'static>>>>, // Non-Null means is cooling down.
+    is_cooling: Shared<MutableBool>,
+    shared_disposal: SharedDisposal<BoundDropDisposal<BoxedDisposal<'static>>>,
 }
 
 impl<T, E, OR, S> Observer<T, E> for ThrottleObserver<OR, S>
@@ -114,24 +117,23 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        self.disposal.lock_mut(|mut lock| {
-            if lock.is_some() {
-                return;
-            }
-            let disposal = self.disposal.clone();
-            *lock = Some(BoxedDisposal::new(self.scheduler.schedule(
+        if !self.is_cooling.change_if_not_equal(true) {
+            return;
+        }
+        self.observer.on_next(value);
+        let is_cooling_down = self.is_cooling.clone();
+        self.shared_disposal.replace(|| {
+            BoundDropDisposal::new(BoxedDisposal::new(self.scheduler.schedule(
                 move || {
-                    assert!(safe_lock_option_disposable!(dispose: disposal));
+                    is_cooling_down.write(false);
                 },
                 Some(self.time_span),
-            )));
-            drop(lock);
-            self.observer.on_next(value);
+            )))
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.disposal.dispose();
+        self.shared_disposal.dispose();
         self.observer.on_termination(termination);
     }
 }
