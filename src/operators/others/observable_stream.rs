@@ -81,8 +81,9 @@ where
             self.sub = Some(sub);
         }
 
+        let waker = cx.waker().clone();
         self.context.lock_mut(|mut lock| {
-            lock.waker = Some(cx.waker().clone());
+            lock.waker = Some(waker);
             if let Some(event) = lock.values.pop_front() {
                 Poll::Ready(Some(event))
             } else if lock.terminated {
