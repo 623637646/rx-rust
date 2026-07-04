@@ -107,7 +107,7 @@ where
             if model.started {
                 ModificationResult::new_send_next(value)
             } else {
-                ModificationResult::default()
+                ModificationResult::new_without_result()
             }
         });
     }
@@ -131,7 +131,7 @@ where
             self.started = true;
             let _ = self.context.modify_model(|model| {
                 model.started = true;
-                ModificationResult::default().ignore_drop_outside()
+                ModificationResult::new_without_result().ignore_drop_outside()
             });
         }
     }

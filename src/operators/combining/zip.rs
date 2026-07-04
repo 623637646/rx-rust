@@ -111,7 +111,7 @@ macro_rules! impl_zip_observer {
                         }
                     } else {
                         model.$this_field.0.push_back(value);
-                        ModificationResult::default()
+                        ModificationResult::new_without_result()
                     }
                 });
             }
@@ -124,7 +124,7 @@ macro_rules! impl_zip_observer {
                             if model.$this_field.0.is_empty() {
                                 ModificationResult::new_send_termination(termination)
                             } else {
-                                ModificationResult::default()
+                                ModificationResult::new_without_result()
                             }
                         });
                     }

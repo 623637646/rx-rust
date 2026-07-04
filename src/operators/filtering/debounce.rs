@@ -143,15 +143,15 @@ where
                 };
                 let _ = context.modify_model(|model| {
                     if timer_id != model.timer_id {
-                        return ModificationResult::default();
+                        return ModificationResult::new_without_result();
                     }
                     let timer = model.timer.take();
                     if let Some(value) = model.current_value.take() {
-                        ModificationResult::default()
+                        ModificationResult::new_without_result()
                             .send_next(value)
                             .drop_outside(timer)
                     } else {
-                        ModificationResult::default().drop_outside(timer)
+                        ModificationResult::new_without_result().drop_outside(timer)
                     }
                 });
             },
@@ -160,7 +160,7 @@ where
 
         let _ = self.context.modify_model(|model| {
             if timer_id != model.timer_id {
-                return ModificationResult::default();
+                return ModificationResult::new_without_result();
             }
             assert!(
                 model
@@ -168,7 +168,7 @@ where
                     .replace(BoundDropDisposal::new(BoxedDisposal::new(disposal)))
                     .is_none()
             );
-            ModificationResult::default().ignore_drop_outside()
+            ModificationResult::new_without_result().ignore_drop_outside()
         });
     }
 
@@ -177,13 +177,15 @@ where
             Termination::Completed => {
                 let _ = self.context.modify_model(|model| {
                     match (model.current_value.take(), model.timer.take()) {
-                        (None, None) => ModificationResult::default().send_termination(termination),
-                        (None, Some(timer)) => ModificationResult::default()
+                        (None, None) => {
+                            ModificationResult::new_without_result().send_termination(termination)
+                        }
+                        (None, Some(timer)) => ModificationResult::new_without_result()
                             .send_termination(termination)
                             .drop_outside(timer),
-                        (Some(value), None) => ModificationResult::default()
+                        (Some(value), None) => ModificationResult::new_without_result()
                             .send_next_and_termination(value, termination),
-                        (Some(value), Some(timer)) => ModificationResult::default()
+                        (Some(value), Some(timer)) => ModificationResult::new_without_result()
                             .send_next_and_termination(value, termination)
                             .drop_outside(timer),
                     }

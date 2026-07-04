@@ -134,10 +134,10 @@ where
         let _ = self.0.modify_model(|model| {
             if model.subscriptions.contains_key(key) {
                 model.subscriptions[key] = Some(sub);
-                ModificationResult::default()
+                ModificationResult::new_without_result()
             } else {
                 // already terminated
-                ModificationResult::new_with_drop_outside(sub)
+                ModificationResult::new_without_result().drop_outside(sub)
             }
         });
     }
@@ -150,7 +150,7 @@ where
                         ModificationResult::new_send_termination(termination)
                     } else {
                         model.is_source_terminated = true;
-                        ModificationResult::default()
+                        ModificationResult::new_without_result()
                     }
                 });
             }
@@ -180,11 +180,11 @@ where
                 let _ = self.context.modify_model(|model| {
                     let subscription = model.subscriptions.remove(self.key);
                     if model.is_source_terminated && model.subscriptions.is_empty() {
-                        ModificationResult::default()
+                        ModificationResult::new_without_result()
                             .drop_outside(subscription)
                             .send_termination(termination)
                     } else {
-                        ModificationResult::default().drop_outside(subscription)
+                        ModificationResult::new_without_result().drop_outside(subscription)
                     }
                 });
             }

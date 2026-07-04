@@ -138,11 +138,11 @@ where
                 }
                 (None, false) => {
                     mine.queue.push_back(value);
-                    ModificationResult::default()
+                    ModificationResult::new_without_result()
                 }
                 (Some(next), _) => {
                     if value == next {
-                        ModificationResult::default()
+                        ModificationResult::new_without_result()
                     } else {
                         ModificationResult::new_send_next_and_termination(
                             false,
@@ -170,7 +170,7 @@ where
                     let other_empty = other.queue.is_empty();
 
                     if !other_completed && other_empty {
-                        ModificationResult::default()
+                        ModificationResult::new_without_result()
                     } else {
                         let is_equal = mine_empty && other_completed && other_empty;
                         ModificationResult::new_send_next_and_termination(is_equal, termination)

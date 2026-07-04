@@ -113,7 +113,7 @@ macro_rules! impl_observer {
                         ModificationResult::new_send_next($combine(val, other.clone()))
                     } else {
                         model.$field_self = Some(val);
-                        ModificationResult::default()
+                        ModificationResult::new_without_result()
                     }
                 });
             }
@@ -125,7 +125,7 @@ macro_rules! impl_observer {
                             ModificationResult::new_send_termination(termination)
                         } else {
                             model.should_completed = true;
-                            ModificationResult::default()
+                            ModificationResult::new_without_result()
                         }
                     }
                     Termination::Error(_) => ModificationResult::new_send_termination(termination),

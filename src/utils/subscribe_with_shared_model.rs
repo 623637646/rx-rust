@@ -108,6 +108,14 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
 }
 
 impl<T, E> ModificationResult<T, E, (), ()> {
+    pub fn new_empty() -> Self {
+        Self {
+            send_events: None,
+            drop_outside: None,
+            result: (),
+        }
+    }
+
     pub fn new_send_next(next: T) -> Self {
         Self {
             send_events: Some(EventGroup::Next(next)),
@@ -141,29 +149,19 @@ impl<T, E> ModificationResult<T, E, (), ()> {
     }
 }
 
-impl<T, E, R> ModificationResult<T, E, (), R> {
-    pub fn ignore_drop_outside(self) -> Self {
-        self
-    }
-}
-
 impl<T, E, D> ModificationResult<T, E, D, ()> {
-    pub fn new_with_drop_outside(drop_outside: D) -> Self {
-        Self {
-            send_events: None,
-            drop_outside: Some(drop_outside),
-            result: (),
-        }
-    }
-}
-
-impl<T, E, D> Default for ModificationResult<T, E, D, ()> {
-    fn default() -> Self {
+    pub fn new_without_result() -> Self {
         Self {
             send_events: None,
             drop_outside: None,
             result: (),
         }
+    }
+}
+
+impl<T, E, R> ModificationResult<T, E, (), R> {
+    pub fn ignore_drop_outside(self) -> Self {
+        self
     }
 }
 

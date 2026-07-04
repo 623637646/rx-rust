@@ -101,7 +101,7 @@ where
                         ModificationResult::new_send_termination(termination)
                     } else {
                         model.one_is_completed = true;
-                        ModificationResult::default()
+                        ModificationResult::new_without_result()
                     }
                 });
             }

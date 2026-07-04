@@ -142,10 +142,10 @@ where
         let sub = value.subscribe(observer);
         let _ = self.0.modify_model(|model| {
             match &mut model.sub_state {
-                SubState::Idle => ModificationResult::new_with_drop_outside(sub), // already terminated
+                SubState::Idle => ModificationResult::new_without_result().drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
-                    ModificationResult::default()
+                    ModificationResult::new_without_result()
                 }
                 SubState::Processing(_) => unreachable!(),
             }
@@ -160,7 +160,7 @@ where
                     match model.sub_state {
                         SubState::Idle => ModificationResult::new_send_termination(termination),
                         SubState::Processing(_) | SubState::PendingSubscription => {
-                            ModificationResult::default()
+                            ModificationResult::new_without_result()
                         }
                     }
                 });
@@ -183,7 +183,7 @@ where
     fn on_next(&mut self, value: T) {
         let _ = self.0.modify_model(|model| {
             if model.current_sub_id != self.1 {
-                return ModificationResult::default();
+                return ModificationResult::new_without_result();
             }
             ModificationResult::new_send_next(value)
         });
@@ -192,24 +192,26 @@ where
     fn on_termination(self, termination: Termination<E>) {
         let _ = self.0.modify_model(|model| {
             if model.current_sub_id != self.1 {
-                return ModificationResult::default();
+                return ModificationResult::new_without_result();
             }
             match termination {
                 Termination::Completed => {
                     if model.is_source_completed {
-                        ModificationResult::default().send_termination(termination)
+                        ModificationResult::new_without_result().send_termination(termination)
                     } else {
                         match std::mem::replace(&mut model.sub_state, SubState::Idle) {
                             SubState::Idle => unreachable!(),
-                            SubState::PendingSubscription => ModificationResult::default(),
+                            SubState::PendingSubscription => {
+                                ModificationResult::new_without_result()
+                            }
                             SubState::Processing(subscription) => {
-                                ModificationResult::default().drop_outside(subscription)
+                                ModificationResult::new_without_result().drop_outside(subscription)
                             }
                         }
                     }
                 }
                 Termination::Error(_) => {
-                    ModificationResult::default().send_termination(termination)
+                    ModificationResult::new_without_result().send_termination(termination)
                 }
             }
         });

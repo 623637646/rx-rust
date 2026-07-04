@@ -93,7 +93,7 @@ where
     fn on_next(&mut self, value: T0) {
         let _ = self.0.modify_model(|model| {
             if model.termination.is_some() {
-                return ModificationResult::default();
+                return ModificationResult::new_without_result();
             }
             model.collection.extend_one(value);
             if model.emit_directly {
@@ -105,7 +105,7 @@ where
                 });
                 ModificationResult::new_send_next((next, callback))
             } else {
-                ModificationResult::default()
+                ModificationResult::new_without_result()
             }
         });
     }
@@ -116,7 +116,7 @@ where
                 ModificationResult::new_send_termination(termination)
             } else {
                 model.termination = Some(termination);
-                ModificationResult::default()
+                ModificationResult::new_without_result()
             }
         });
     }
@@ -141,7 +141,7 @@ fn handle_request<'or, T0, T, E, OR, C>(
             ModificationResult::new_send_termination(termination)
         } else {
             model.emit_directly = true;
-            ModificationResult::default()
+            ModificationResult::new_without_result()
         }
     });
 }

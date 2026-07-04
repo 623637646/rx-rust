@@ -143,10 +143,10 @@ where
         let sub = observable.subscribe(observer);
         let _ = self.0.modify_model(|model| {
             match &model.sub_state {
-                SubState::Idle => ModificationResult::default().drop_outside(sub), // already terminated
+                SubState::Idle => ModificationResult::new_without_result().drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
-                    ModificationResult::default()
+                    ModificationResult::new_without_result()
                 }
                 SubState::Processing(_) => unreachable!(),
             }
@@ -165,7 +165,7 @@ where
                             ModificationResult::new_send_termination(termination)
                         }
                         SubState::PendingSubscription | SubState::Processing(_) => {
-                            ModificationResult::default()
+                            ModificationResult::new_without_result()
                         }
                     }
                 });
