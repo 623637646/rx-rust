@@ -729,21 +729,10 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.state(), State::Active);
 
         subscription_1.dispose();
-        check_with_abort_late!(
-            runtime,
-            {
-                assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
-                assert_eq!(checker_1.state(), State::Active);
-                assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
-                assert_eq!(checker_2.state(), State::Active);
-            },
-            {
-                assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
-                assert_eq!(checker_2.state(), State::Active);
-            }
-        );
+        assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
+        assert_eq!(checker_1.state(), State::Dropped);
+        assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
+        assert_eq!(checker_2.state(), State::Active);
 
         subject.on_next(333);
         subject.on_next(333);
@@ -1149,21 +1138,10 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.state(), State::Active);
 
         subscription_1.dispose();
-        check_with_abort_late!(
-            runtime,
-            {
-                assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
-                assert_eq!(checker_1.state(), State::Active);
-                assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
-                assert_eq!(checker_2.state(), State::Active);
-            },
-            {
-                assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
-                assert_eq!(checker_2.state(), State::Active);
-            }
-        );
+        assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
+        assert_eq!(checker_1.state(), State::Dropped);
+        assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
+        assert_eq!(checker_2.state(), State::Active);
 
         subject.on_next(333);
         subject.on_next(333);

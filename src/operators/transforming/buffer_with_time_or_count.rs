@@ -1,14 +1,17 @@
-use crate::disposable::Disposable;
+use crate::disposable::bound_drop_disposal::BoundDropDisposal;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared};
+use crate::utils::subscribe_with_shared_model::{
+    Context, ModificationResult, subscribe_with_shared_model,
+};
+use crate::utils::types::NecessarySend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
-use crate::{safe_lock, safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
+use std::time::Instant;
 use std::{num::NonZeroUsize, time::Duration};
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, either when the bundle reaches a specified size or after a specified time interval, whichever happens first.
@@ -100,6 +103,7 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
 impl<'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTimeOrCount<OE, S>
 where
     T: NecessarySend + 'static,
+    E: NecessarySend + 'static,
     OE: Observable<'static, 'sub, T, E>,
     S: Scheduler,
 {
@@ -107,125 +111,125 @@ where
         self,
         observer: impl Observer<Vec<T>, E> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let context = Shared::new(Mutable::new(BufferWithTimeOrCountContext {
-            values: Vec::default(),
+        let model = Model {
+            values: Vec::with_capacity(self.count.get()),
             timer: None,
-        }));
-        let buffer_observer = BufferWithTimeOrCountObserver {
-            observer: Shared::new(Mutable::new(Some(observer))),
-            context: context.clone(),
-            count: self.count,
-            time_span: self.time_span,
-            scheduler: self.scheduler,
+            last_sending_time_from_counting: None,
         };
-        let observer = buffer_observer.observer.clone();
-        let scheduler = buffer_observer.scheduler.clone();
-        let delay = self.delay;
-        let time_span = buffer_observer.time_span;
-        let sub = self.source.subscribe(buffer_observer) + context.clone();
-        setup_emit_timer(None, observer, context, scheduler, delay, time_span);
-        sub
+        subscribe_with_shared_model(observer, model, |context| {
+            let buffer_observer = BufferWithTimeOrCountObserver {
+                context: context.clone(),
+                count: self.count,
+            };
+            let sub = self.source.subscribe(buffer_observer);
+            let disposal = setup_emit_timer(
+                context.clone(),
+                self.scheduler,
+                self.delay,
+                self.time_span,
+                self.count,
+            );
+            let _ = context.modify_model(|model| {
+                model.timer = Some(disposal);
+                ModificationResult::new_empty()
+            });
+            sub
+        })
     }
 }
 
-struct BufferWithTimeOrCountContext<T> {
+struct Model<T> {
     values: Vec<T>,
-    timer: Option<BoxedDisposal<'static>>,
+    timer: Option<BoundDropDisposal<BoxedDisposal<'static>>>,
+    last_sending_time_from_counting: Option<Instant>,
 }
 
-// TODO: Disposable should not be Cloneable
-impl<T> Disposable for Shared<Mutable<BufferWithTimeOrCountContext<T>>> {
-    fn dispose(self) {
-        safe_lock_option_disposable!(dispose: self, timer);
-    }
-}
-
-struct BufferWithTimeOrCountObserver<T, OR, S> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<BufferWithTimeOrCountContext<T>>>,
+struct BufferWithTimeOrCountObserver<T, E, OR> {
+    context: Context<Vec<T>, E, OR, Model<T>>,
     count: NonZeroUsize,
-    time_span: Duration,
-    scheduler: S,
 }
 
-fn setup_emit_timer<T, E, OR, S>(
-    mut lock: Option<MutGuard<'_, BufferWithTimeOrCountContext<T>>>,
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<BufferWithTimeOrCountContext<T>>>,
-    scheduler: S,
-    delay: Option<Duration>,
-    time_span: Duration,
-) where
-    T: NecessarySend + 'static,
-    OR: Observer<Vec<T>, E> + NecessarySend + 'static,
-    S: Scheduler,
-{
-    let context_cloned = context.clone();
-    let disposal = scheduler.schedule_periodically(
-        move |_| {
-            let values = safe_lock!(mem_take: context_cloned, values);
-            !safe_lock_option_observer!(on_next: observer, values)
-        },
-        time_span,
-        delay,
-    );
-    let old_timer = if let Some(lock) = lock.as_mut() {
-        lock.timer.replace(BoxedDisposal::new(disposal))
-    } else {
-        safe_lock_option!(replace: context, timer, BoxedDisposal::new(disposal))
-    };
-    drop(lock);
-    if let Some(timer) = old_timer {
-        timer.dispose();
-    }
-}
-
-impl<T, E, OR, S> Observer<T, E> for BufferWithTimeOrCountObserver<T, OR, S>
+impl<T, E, OR> Observer<T, E> for BufferWithTimeOrCountObserver<T, E, OR>
 where
     T: NecessarySend + 'static,
     OR: Observer<Vec<T>, E> + NecessarySend + 'static,
-    S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        self.context.lock_mut(|mut lock| {
-            lock.values.push(value);
-            if lock.values.len() >= self.count.get() {
-                let values = std::mem::take(&mut lock.values);
-                let observer = self.observer.clone();
-                let context = self.context.clone();
-                let scheduler = self.scheduler.clone();
-                let time_span = self.time_span;
-                setup_emit_timer(
-                    Some(lock),
-                    observer,
-                    context,
-                    scheduler,
-                    Some(self.time_span),
-                    time_span,
-                );
-                safe_lock_option_observer!(on_next: self.observer, values);
+        let _ = self.context.modify_model(|model| {
+            model.values.push(value);
+            if model.values.len() >= self.count.get() {
+                model.last_sending_time_from_counting = Some(Instant::now());
+                let values =
+                    std::mem::replace(&mut model.values, Vec::with_capacity(self.count.get()));
+                ModificationResult::new_send_next(values)
+            } else {
+                ModificationResult::new_empty()
             }
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let values = self.context.lock_mut(|mut lock| {
-            if let Some(timer) = lock.timer.take() {
-                timer.dispose();
-            }
-            std::mem::take(&mut lock.values)
-        });
         match termination {
             Termination::Completed => {
-                if !values.is_empty() {
-                    safe_lock_option_observer!(on_next_and_termination: self.observer, values, termination);
-                } else {
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                let _ = self.context.modify_model(|model| {
+                    if !model.values.is_empty() {
+                        let values = std::mem::take(&mut model.values);
+                        ModificationResult::new_send_next_and_termination(values, termination)
+                    } else {
+                        ModificationResult::new_send_termination(termination)
+                    }
+                });
             }
             Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
+                self.context.send_termination(termination);
             }
         }
     }
+}
+
+fn setup_emit_timer<T, E, OR, S>(
+    context: Context<Vec<T>, E, OR, Model<T>>,
+    scheduler: S,
+    delay: Option<Duration>,
+    time_span: Duration,
+    count: NonZeroUsize,
+) -> BoundDropDisposal<BoxedDisposal<'static>>
+where
+    T: NecessarySend + 'static,
+    E: NecessarySend + 'static,
+    OR: Observer<Vec<T>, E> + NecessarySend + 'static,
+    S: Scheduler,
+{
+    let weak_context = context.downgrade();
+    let disposal = scheduler.clone().schedule_periodically(
+        move |_| {
+            let Some(context) = weak_context.upgrade() else {
+                return true;
+            };
+            context
+                .modify_model(|model| {
+                    if let Some(last_sending_time_from_counting) =
+                        model.last_sending_time_from_counting.take()
+                    {
+                        let disposal = setup_emit_timer(
+                            context.clone(),
+                            scheduler.clone(),
+                            Some(time_span - last_sending_time_from_counting.elapsed()),
+                            time_span,
+                            count,
+                        );
+                        let old_timer = model.timer.replace(disposal);
+                        ModificationResult::new(true).drop_outside(old_timer)
+                    } else {
+                        let values =
+                            std::mem::replace(&mut model.values, Vec::with_capacity(count.get()));
+                        ModificationResult::new(false).send_next(values)
+                    }
+                })
+                .unwrap_or(true)
+        },
+        time_span,
+        delay,
+    );
+    BoundDropDisposal::new(BoxedDisposal::new(disposal))
 }
