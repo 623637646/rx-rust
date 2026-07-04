@@ -1,11 +1,13 @@
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::subscribe_with_shared_model::{
+    Context, ModificationResult, subscribe_with_shared_model,
+};
+use crate::utils::types::NecessarySend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
     utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
 };
-use crate::{safe_lock_option, safe_lock_option_observer};
 use educe::Educe;
 
 /// Emits the most recently emitted item from the source Observable whenever the sampler Observable emits an item.
@@ -70,65 +72,67 @@ impl<OE, OE1> Sample<OE, OE1> {
 
 impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Sample<OE, OE1>
 where
+    'sub: 'or,
+    'or: 'sub,
     T: NecessarySend + 'or,
+    E: NecessarySend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
-    'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
-            let observer = Shared::new(Mutable::new(Some(observer)));
-            let last_value = Shared::new(Mutable::new(None));
-            let sample_observer = SampleObserver {
-                observer: observer.clone(),
-                last_value: last_value.clone(),
-            };
-            let sampler_observer = SamplerObserver {
-                observer,
-                last_value,
-            };
-
-            let subscription_1 = self.sampler.subscribe(sampler_observer);
-            let subscription_2 = self.source.subscribe(sample_observer);
-            subscription_1 + subscription_2
+            let model = Model { last_value: None };
+            subscribe_with_shared_model(observer, model, |context| {
+                let sample_observer = SampleObserver(context.clone());
+                let sampler_observer = SamplerObserver(context);
+                let subscription_1 = self.sampler.subscribe(sampler_observer);
+                let subscription_2 = self.source.subscribe(sample_observer);
+                subscription_1 + subscription_2
+            })
         })
     }
 }
 
-struct SampleObserver<T, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    last_value: Shared<Mutable<Option<T>>>,
+struct Model<T> {
+    last_value: Option<T>,
 }
 
-impl<T, E, OR> Observer<T, E> for SampleObserver<T, OR>
+struct SampleObserver<T, E, OR>(Context<T, E, OR, Model<T>>);
+
+impl<T, E, OR> Observer<T, E> for SampleObserver<T, E, OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_option!(replace: self.last_value, value);
+        let _ = self.0.modify_model(|model| {
+            ModificationResult::new_without_result().drop_outside(model.last_value.replace(value))
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock_option_observer!(on_termination: self.observer, termination);
+        self.0.send_termination(termination);
     }
 }
 
-struct SamplerObserver<T, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    last_value: Shared<Mutable<Option<T>>>,
-}
+struct SamplerObserver<T, E, OR>(Context<T, E, OR, Model<T>>);
 
-impl<T, E, OR> Observer<(), E> for SamplerObserver<T, OR>
+impl<T, E, OR> Observer<(), E> for SamplerObserver<T, E, OR>
 where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, _: ()) {
-        if let Some(value) = safe_lock_option!(take: self.last_value) {
-            safe_lock_option_observer!(on_next: self.observer, value);
-        }
+        let _ = self.0.modify_model(|model| {
+            if let Some(value) = model.last_value.take() {
+                ModificationResult::new_without_result()
+                    .send_next(value)
+                    .ignore_drop_outside()
+            } else {
+                ModificationResult::new_without_result()
+            }
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock_option_observer!(on_termination: self.observer, termination);
+        self.0.send_termination(termination);
     }
 }
