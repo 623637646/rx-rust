@@ -82,11 +82,11 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         let first = Instant::now() + delay.unwrap_or_default();
         self.schedule_recursively(
             move |count| {
-                let stop = task(count);
-                if stop {
-                    RecursionAction::Stop
-                } else {
+                let r#continue = task(count);
+                if r#continue {
                     RecursionAction::ContinueAt(first + period * (count as u32 + 1))
+                } else {
+                    RecursionAction::Stop
                 }
             },
             delay,

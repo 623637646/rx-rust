@@ -111,7 +111,7 @@ where
         let disposal = self.scheduler.schedule_periodically(
             move |_| {
                 let values = safe_lock!(mem_take: context_cloned, values);
-                !safe_lock_option_observer!(on_next: observer, values)
+                safe_lock_option_observer!(on_next: observer, values)
             },
             self.time_span,
             self.delay,

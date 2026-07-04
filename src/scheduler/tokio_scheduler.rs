@@ -19,9 +19,9 @@ impl Scheduler for tokio::runtime::Handle {
             let mut count = 0;
             loop {
                 ticker.tick().await;
-                let stop = task(count);
+                let r#continue = task(count);
                 count += 1;
-                if stop {
+                if !r#continue {
                     break;
                 }
             }

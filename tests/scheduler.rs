@@ -175,10 +175,10 @@ fn test_schedule_periodically_without_delay() {
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
-                    true
+                    false
                 } else {
                     tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
-                    false
+                    true
                 }
             },
             DURATION_10_MS,
@@ -206,10 +206,10 @@ fn test_schedule_periodically_with_delay() {
             move |index| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
-                    true
+                    false
                 } else {
                     tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
-                    false
+                    true
                 }
             },
             DURATION_10_MS,

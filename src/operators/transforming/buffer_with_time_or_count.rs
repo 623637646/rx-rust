@@ -204,7 +204,7 @@ where
     let disposal = scheduler.clone().schedule_periodically(
         move |_| {
             let Some(context) = weak_context.upgrade() else {
-                return true;
+                return false;
             };
             context
                 .modify_model(|model| {
@@ -219,14 +219,14 @@ where
                             count,
                         );
                         let old_timer = model.timer.replace(disposal);
-                        ModificationResult::new(true).drop_outside(old_timer)
+                        ModificationResult::new(false).drop_outside(old_timer)
                     } else {
                         let values =
                             std::mem::replace(&mut model.values, Vec::with_capacity(count.get()));
-                        ModificationResult::new(false).send_next(values)
+                        ModificationResult::new(true).send_next(values)
                     }
                 })
-                .unwrap_or(true)
+                .unwrap_or(false)
         },
         time_span,
         delay,

@@ -81,7 +81,7 @@ where
         let disposal = self.scheduler.schedule_periodically(
             move |count| {
                 observer.on_next(count);
-                false
+                true
             },
             self.period,
             self.delay,
