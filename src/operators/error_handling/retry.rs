@@ -66,20 +66,20 @@ where
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        let shared_sub = SharedDisposal::default();
+        let shared_disposal = SharedDisposal::default();
         let observer = RetryObserver {
             observer,
             callback: self.callback,
-            shared_sub: shared_sub.clone(),
+            shared_disposal: shared_disposal.clone(),
         };
-        self.source.subscribe(observer) + shared_sub
+        self.source.subscribe(observer) + shared_disposal
     }
 }
 
 struct RetryObserver<'sub, OR, F> {
     observer: OR,
     callback: F,
-    shared_sub: SharedDisposal<Subscription<'sub>>,
+    shared_disposal: SharedDisposal<Subscription<'sub>>,
 }
 
 impl<'or, 'sub, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<'sub, OR, F>
@@ -100,7 +100,7 @@ where
                 let action = (self.callback)(error);
                 match action {
                     RetryAction::Retry(observable) => {
-                        self.shared_sub
+                        self.shared_disposal
                             .clone()
                             .replace(|| observable.subscribe(self));
                     }

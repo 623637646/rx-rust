@@ -67,21 +67,21 @@ where
     'sub: 'or,
 {
     fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
-        let sub = SharedDisposal::default();
+        let shared_disposal = SharedDisposal::default();
         let observer = CatchObserver {
             observer,
             callback: self.callback,
-            sub: sub.clone(),
+            shared_disposal: shared_disposal.clone(),
             _marker: PhantomData,
         };
-        self.source.subscribe(observer) + sub
+        self.source.subscribe(observer) + shared_disposal
     }
 }
 
 struct CatchObserver<'sub, E, OR, F> {
     observer: OR,
     callback: F,
-    sub: SharedDisposal<Subscription<'sub>>,
+    shared_disposal: SharedDisposal<Subscription<'sub>>,
     _marker: MarkerType<E>,
 }
 
@@ -99,7 +99,7 @@ where
         match termination {
             Termination::Completed => self.observer.on_termination(Termination::Completed),
             Termination::Error(error) => {
-                self.sub.replace(|| {
+                self.shared_disposal.replace(|| {
                     let observable = (self.callback)(error);
                     observable.subscribe(self.observer)
                 });
