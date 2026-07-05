@@ -1,9 +1,14 @@
 use super::Scheduler;
 use crate::{disposable::Disposable, utils::types::NecessarySend};
+use educe::Educe;
 use std::time::Duration;
 
+#[derive(Educe)]
+#[educe(Debug, Clone)]
+pub struct TokioScheduler;
+
 /// Leverages a Tokio runtime handle to drive scheduled tasks.
-impl Scheduler for tokio::runtime::Handle {
+impl Scheduler for TokioScheduler {
     fn schedule_periodically(
         &self,
         mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
@@ -32,7 +37,7 @@ impl Scheduler for tokio::runtime::Handle {
         &self,
         future: impl Future<Output = ()> + NecessarySend + 'static,
     ) -> impl Disposable + NecessarySend + 'static {
-        self.spawn(future)
+        tokio::task::spawn(future)
     }
 
     fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static {
