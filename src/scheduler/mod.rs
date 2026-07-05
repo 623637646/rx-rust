@@ -55,14 +55,14 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         let this = self.clone();
         self.schedule_future(async move {
             if let Some(delay) = delay {
-                this.clone().sleep(delay).await;
+                this.sleep(delay).await;
             }
             let mut count = 0;
             loop {
                 match task(count) {
                     RecursionAction::ContinueAt(at) => {
                         if let Some(delay) = at.checked_duration_since(Instant::now()) {
-                            this.clone().sleep(delay).await;
+                            this.sleep(delay).await;
                         }
                     }
                     RecursionAction::ContinueImmediately => {}
@@ -79,12 +79,13 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         period: Duration,
         delay: Option<Duration>,
     ) -> impl Disposable + NecessarySend + 'static {
-        let first = Instant::now() + delay.unwrap_or_default();
+        let mut next_time = Instant::now() + delay.unwrap_or_default();
         self.schedule_recursively(
             move |count| {
                 let r#continue = task(count);
                 if r#continue {
-                    RecursionAction::ContinueAt(first + period * (count as u32 + 1))
+                    next_time += period;
+                    RecursionAction::ContinueAt(next_time)
                 } else {
                     RecursionAction::Stop
                 }
