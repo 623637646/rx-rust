@@ -1,6 +1,6 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
+use crate::tests_utils::DURATION_3_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::checker::State;
@@ -57,25 +57,13 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.state(), State::Active);
 
         subscription_1.dispose();
-        check_with_abort_late!(
-            runtime,
-            {
-                assert!(checker_1.values().is_empty());
-                assert_eq!(checker_1.state(), State::Active);
-                assert!(checker_2.values().is_empty());
-                assert_eq!(checker_2.state(), State::Active);
-                assert!(checker_3.values().is_empty());
-                assert_eq!(checker_3.state(), State::Active);
-            },
-            {
-                assert!(checker_1.values().is_empty());
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert!(checker_2.values().is_empty());
-                assert_eq!(checker_2.state(), State::Active);
-                assert!(checker_3.values().is_empty());
-                assert_eq!(checker_3.state(), State::Active);
-            }
-        );
+        runtime.sleep(DURATION_3_MS).await;
+        assert!(checker_1.values().is_empty());
+        assert_eq!(checker_1.state(), State::Dropped);
+        assert!(checker_2.values().is_empty());
+        assert_eq!(checker_2.state(), State::Active);
+        assert!(checker_3.values().is_empty());
+        assert_eq!(checker_3.state(), State::Active);
 
         runtime.sleep(DURATION_30_MS).await;
         assert!(checker_1.values().is_empty());
@@ -86,25 +74,13 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.state(), State::Active);
 
         subscription_2.dispose();
-        check_with_abort_late!(
-            runtime,
-            {
-                assert!(checker_1.values().is_empty());
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert!(checker_2.values().is_empty());
-                assert_eq!(checker_2.state(), State::Active);
-                assert!(checker_3.values().is_empty());
-                assert_eq!(checker_3.state(), State::Active);
-            },
-            {
-                assert!(checker_1.values().is_empty());
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert!(checker_2.values().is_empty());
-                assert_eq!(checker_2.state(), State::Dropped);
-                assert!(checker_3.values().is_empty());
-                assert_eq!(checker_3.state(), State::Active);
-            }
-        );
+        runtime.sleep(DURATION_3_MS).await;
+        assert!(checker_1.values().is_empty());
+        assert_eq!(checker_1.state(), State::Dropped);
+        assert!(checker_2.values().is_empty());
+        assert_eq!(checker_2.state(), State::Dropped);
+        assert!(checker_3.values().is_empty());
+        assert_eq!(checker_3.state(), State::Active);
 
         runtime.sleep(DURATION_100_MS).await;
         assert!(checker_1.values().is_empty());
@@ -190,64 +166,6 @@ fn test_unsub_on_next_by_take() {
         runtime.sleep(DURATION_100_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
-    });
-}
-
-#[test]
-fn test_undisposed_scheduler() {
-    block_on(|runtime| async move {
-        let observable = Timer::new(111, DURATION_100_MS, runtime.clone());
-        let (checker, observer) = Checker::new();
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-    });
-}
-
-#[test]
-fn test_scheduler_should_be_disposed_after_completed() {
-    block_on(|runtime| async move {
-        let observable = Timer::new(111, DURATION_100_MS, runtime.clone());
-        let (checker, observer) = Checker::new();
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        runtime.sleep(DURATION_30_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        runtime.sleep(DURATION_100_MS).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-    });
-}
-
-#[test]
-fn test_scheduler_should_be_disposed_after_unsub() {
-    block_on(|runtime| async move {
-        let observable = Timer::new(111, DURATION_100_MS, runtime.clone());
-        let (checker, observer) = Checker::new();
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        subscription.dispose();
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        runtime.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 

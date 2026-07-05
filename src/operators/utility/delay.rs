@@ -92,7 +92,7 @@ impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Delay<OE, S>
 where
     T: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     fn subscribe(
         self,
@@ -136,7 +136,7 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
     where
         T: NecessarySend + 'static,
         OR: Observer<T, E> + NecessarySend + 'static,
-        S: Scheduler,
+        S: Scheduler + Clone + NecessarySend + 'static,
     {
         self.context.lock_mut(|mut lock| {
             lock.values.push_back((Instant::now() + self.delay, value));
@@ -197,7 +197,7 @@ impl<T, E, OR, S> Observer<T, E> for DelayObserver<T, OR, S>
 where
     T: NecessarySend + 'static,
     OR: Observer<T, E> + NecessarySend + 'static,
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     fn on_next(&mut self, value: T) {
         self.emit_value_and_setup_timer_if_needed(Some(value));

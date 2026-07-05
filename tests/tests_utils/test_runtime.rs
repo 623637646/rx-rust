@@ -1,131 +1,65 @@
-use crate::tests_utils::join_handle::JoinHandle;
 use educe::Educe;
-use rx_rust::utils::types::NecessarySend;
-use rx_rust::utils::types::Shared;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
-
-#[derive(Educe)]
-#[educe(Debug, Clone, Default)]
-struct TestRuntimeContext {
-    alive_tasks_count: Shared<AtomicUsize>,
-    #[cfg(not(feature = "single-threaded"))]
-    is_spawned_late: bool,
-    #[cfg(not(feature = "single-threaded"))]
-    is_abort_late: bool,
-    #[cfg(not(feature = "single-threaded"))]
-    thread_name: Option<&'static str>,
-}
+use futures::FutureExt;
+use rx_rust::{scheduler::Scheduler, utils::types::NecessarySend};
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "local-pool-scheduler")] {
-        use futures::executor::{LocalPool, LocalSpawner};
-        use rx_rust::utils::types::Mutable;
-        #[derive(Educe)]
-        #[educe(Debug, Clone)]
-        pub(crate) struct TestRuntime {
-            pool: Shared<Mutable<LocalPool>>,
-            pub(crate) spawner: LocalSpawner,
-            context: TestRuntimeContext
-        }
-        impl Default for TestRuntime {
-            fn default() -> Self {
-                let pool = LocalPool::new();
-                let spawner = pool.spawner();
-                Self {
-                    pool: Shared::new(Mutable::new(pool)),
-                    spawner,
-                    context: TestRuntimeContext::default(),
-                }
-            }
-        }
+        pub(crate) type TestScheduler = futures::executor::LocalSpawner;
     } else if #[cfg(feature = "thread-pool-scheduler")] {
-        use futures::executor::ThreadPool;
-        #[derive(Educe)]
-        #[educe(Debug, Clone)]
-        pub(crate) struct TestRuntime {
-            pub(crate) pool: ThreadPool,
-            context: TestRuntimeContext
-        }
-        impl Default for TestRuntime {
-            fn default() -> Self {
-                Self {
-                    pool: ThreadPool::new().unwrap(),
-                    context: TestRuntimeContext::default(),
-                }
-            }
-        }
-    } else {
-        #[derive(Educe)]
-        #[educe(Debug, Clone, Default)]
-        pub(crate) struct TestRuntime {
-            context: TestRuntimeContext
-        }
+        pub(crate) type TestScheduler = futures::executor::ThreadPool;
+    } else if #[cfg(feature = "tokio-scheduler")] {
+        pub(crate) type TestScheduler = tokio::runtime::Handle;
+    } else if #[cfg(feature = "async-std-scheduler")] {
+        pub(crate) type TestScheduler = rx_rust::scheduler::async_std_scheduler::AsyncStdScheduler;
     }
-
 }
 
+#[derive(Educe)]
+#[educe(Debug, Clone)]
+pub(crate) struct TestRuntime(TestScheduler);
+
 impl TestRuntime {
-    pub(crate) fn spawn<FU>(&self, future: FU) -> JoinHandle<FU>
+    pub(crate) fn spawn<T>(
+        &self,
+        future: impl Future<Output = T> + NecessarySend + 'static,
+    ) -> impl Future<Output = Option<T>>
     where
-        FU: Future + NecessarySend + 'static,
-        FU::Output: NecessarySend + 'static,
+        T: NecessarySend + 'static,
     {
-        let (join_handle, future) = JoinHandle::wrap(future);
         cfg_if::cfg_if! {
             if #[cfg(feature = "local-pool-scheduler")] {
                 use futures::task::LocalSpawnExt;
-                self.spawner.spawn_local(future).unwrap();
+                self.0.spawn_local_with_handle(future).unwrap().map(Option::Some)
             } else if #[cfg(feature = "thread-pool-scheduler")] {
                 use futures::task::SpawnExt;
-                self.pool.spawn(future).unwrap();
+                self.0.spawn_with_handle(future).unwrap().map(Option::Some)
             } else if #[cfg(feature = "tokio-scheduler")] {
-                tokio::runtime::Handle::current().spawn(future);
+                tokio::spawn(future).map(Result::ok)
             } else if #[cfg(feature = "async-std-scheduler")] {
-                async_std::task::spawn(future);
-            } else {
-                panic!("You need to specify a feature to run tests.");
+                async_std::task::spawn(future).map(Option::Some)
             }
         }
-        join_handle
+    }
+}
+
+impl Scheduler for TestRuntime {
+    fn spawn_future<F>(
+        &self,
+        future: F,
+    ) -> rx_rust::disposable::bound_drop_disposal::BoundDropDisposal<
+        impl rx_rust::disposable::Disposable + rx_rust::utils::types::NecessarySend + 'static + use<F>,
+    >
+    where
+        F: Future<Output = ()> + rx_rust::utils::types::NecessarySend + 'static,
+    {
+        self.0.spawn_future(future)
     }
 
-    #[cfg(not(feature = "single-threaded"))]
-    pub(crate) fn clone_with_thread_name(&self, thread_name: &'static str) -> Self {
-        let mut cloned = self.clone();
-        cloned.context.thread_name = Some(thread_name);
-        cloned
-    }
-
-    pub(crate) fn get_alive_tasks_count(&self) -> usize {
-        self.context.alive_tasks_count.load(Ordering::SeqCst)
-    }
-
-    pub(crate) fn alive_tasks_count_add_1(&self) {
-        self.context
-            .alive_tasks_count
-            .fetch_add(1, Ordering::SeqCst);
-    }
-
-    pub(crate) fn alive_tasks_count_sub_1(&self) {
-        self.context
-            .alive_tasks_count
-            .fetch_sub(1, Ordering::SeqCst);
-    }
-
-    #[cfg(not(feature = "single-threaded"))]
-    pub(crate) fn is_spawned_late(&self) -> bool {
-        self.context.is_spawned_late
-    }
-
-    #[cfg(not(feature = "single-threaded"))]
-    pub(crate) fn is_abort_late(&self) -> bool {
-        self.context.is_abort_late
-    }
-
-    #[cfg(not(feature = "single-threaded"))]
-    pub(crate) fn get_expected_thread_name(&self) -> Option<&'static str> {
-        self.context.thread_name
+    fn sleep(
+        &self,
+        duration: std::time::Duration,
+    ) -> impl Future + rx_rust::utils::types::NecessarySend + 'static + use<> {
+        self.0.sleep(duration)
     }
 }
 
@@ -134,93 +68,27 @@ where
     FU: Future<Output = ()> + 'static,
 {
     cfg_if::cfg_if! {
-        if #[cfg(not(feature = "single-threaded"))] {
-            use rand::random;
-            let mut runtime = TestRuntime::default();
-            runtime.context.is_spawned_late = random();
-            runtime.context.is_abort_late = random();
-        } else {
-            let runtime = TestRuntime::default();
-        }
-    }
-    cfg_if::cfg_if! {
         if #[cfg(feature = "local-pool-scheduler")] {
+            use futures::executor::LocalPool;
             use futures::task::LocalSpawnExt;
-            use rx_rust::utils::types::MutableHelper;
-            runtime.spawner.spawn_local(body(runtime.clone())).unwrap();
-            runtime.pool.lock_mut(|mut lock| lock.run());
+            let mut pool = LocalPool::new();
+            let spawner = pool.spawner();
+            spawner.spawn_local(body(TestRuntime(spawner.clone()))).unwrap();
+            pool.run();
         } else if #[cfg(feature = "thread-pool-scheduler")] {
-            futures::executor::block_on(body(runtime));
+            use futures::executor::ThreadPool;
+            futures::executor::block_on(body(TestRuntime(ThreadPool::new().unwrap())));
         } else if #[cfg(feature = "tokio-scheduler")] {
             tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .expect("Failed building the Runtime")
-            .block_on(body(runtime));
+                .enable_all()
+                .build()
+                .expect("Failed building the Runtime")
+                .block_on(async {
+                    body(TestRuntime(tokio::runtime::Handle::current())).await
+                });
         } else if #[cfg(feature = "async-std-scheduler")] {
-            async_std::task::block_on(body(runtime));
-        } else {
-            panic!("You need to specify a feature to run tests.");
+            use rx_rust::scheduler::async_std_scheduler::AsyncStdScheduler;
+            async_std::task::block_on(body(TestRuntime(AsyncStdScheduler)));
         }
     }
-}
-
-#[macro_export]
-macro_rules! check_with_spawned_late {
-    ($runtime:ident, $not_spawned:expr, $spawned:expr) => {
-        cfg_if::cfg_if! {
-            if #[cfg(not(feature = "single-threaded"))] {
-                if $runtime.is_spawned_late() {
-                    $not_spawned
-                    $runtime.sleep(tests_utils::DURATION_10_MS).await;
-                    $spawned
-                } else {
-                    $runtime.sleep(tests_utils::DURATION_3_MS).await;
-                    $spawned
-                }
-            } else {
-                $not_spawned
-                $runtime.sleep(tests_utils::DURATION_3_MS).await;
-                $spawned
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! check_with_abort_late {
-    ($runtime:ident, $not_spawned:expr, $spawned:expr) => {
-        cfg_if::cfg_if! {
-            if #[cfg(not(feature = "single-threaded"))] {
-                if $runtime.is_abort_late() {
-                    $not_spawned
-                    $runtime.sleep(tests_utils::DURATION_10_MS).await;
-                    $spawned
-                } else {
-                    $runtime.sleep(tests_utils::DURATION_3_MS).await;
-                    $spawned
-                }
-            } else {
-                $not_spawned
-                $runtime.sleep(tests_utils::DURATION_3_MS).await;
-                $spawned
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! check_with_spawned_and_abort_late {
-    ($runtime:ident, $spawned_first:expr, $abort_first:expr) => {
-        #[cfg(not(feature = "single-threaded"))]
-        {
-            $runtime.sleep(tests_utils::DURATION_3_MS).await;
-            match ($runtime.is_spawned_late(), $runtime.is_abort_late()) {
-                (true, true) => {}
-                (false, true) => $spawned_first,
-                (true, false) => $abort_first,
-                (false, false) => {}
-            }
-        }
-    };
 }

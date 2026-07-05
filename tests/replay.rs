@@ -876,8 +876,7 @@ fn test_async() {
 
         runtime
             .spawn( async move { safe_lock_option_observer!(on_termination: sender, Termination::<Infallible>::Completed) })
-            .await
-            .unwrap();
+            .await.unwrap();
         assert_eq!(checker_1.values(), [1, 2]);
         assert_eq!(checker_1.state(), State::Completed);
         assert_eq!(checker_2.values(), [1, 2]);

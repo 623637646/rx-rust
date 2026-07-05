@@ -91,7 +91,7 @@ impl<OE, S> Timeout<OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, Error<E>> for Timeout<OE, S>
 where
     OE: Observable<'or, 'static, T, E>,
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'or, // TODO: can remove this Clone because there is no actually need? Review the S in this file.
 {
     fn subscribe(
         self,
@@ -166,7 +166,7 @@ struct TimeoutObserver<OR, S> {
 impl<T, E, OR, S> Observer<T, E> for TimeoutObserver<OR, S>
 where
     OR: Observer<T, Error<E>> + NecessarySend + 'static,
-    S: Scheduler,
+    S: Scheduler + Clone,
 {
     fn on_next(&mut self, value: T) {
         self.context

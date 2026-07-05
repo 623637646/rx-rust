@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_3_MS;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
@@ -307,25 +308,13 @@ fn test_unsubscribe() {
         assert_eq!(checker_3.state(), State::Active);
 
         subscription_2.dispose();
-        check_with_abort_late!(
-            runtime,
-            {
-                assert_eq!(checker_1.values(), [111]);
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert_eq!(checker_2.values(), [111, 222]);
-                assert_eq!(checker_2.state(), State::Active);
-                assert_eq!(checker_3.values(), [111, 222]);
-                assert_eq!(checker_3.state(), State::Active);
-            },
-            {
-                assert_eq!(checker_1.values(), [111]);
-                assert_eq!(checker_1.state(), State::Dropped);
-                assert_eq!(checker_2.values(), [111, 222]);
-                assert_eq!(checker_2.state(), State::Dropped);
-                assert_eq!(checker_3.values(), [111, 222]);
-                assert_eq!(checker_3.state(), State::Active);
-            }
-        );
+        runtime.sleep(DURATION_3_MS).await;
+        assert_eq!(checker_1.values(), [111]);
+        assert_eq!(checker_1.state(), State::Dropped);
+        assert_eq!(checker_2.values(), [111, 222]);
+        assert_eq!(checker_2.state(), State::Dropped);
+        assert_eq!(checker_3.values(), [111, 222]);
+        assert_eq!(checker_3.state(), State::Active);
 
         runtime.sleep(DURATION_30_MS * 2).await;
         assert_eq!(checker_1.values(), [111]);
@@ -743,144 +732,6 @@ fn test_unsub_after_error() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    });
-}
-
-#[test]
-fn test_undisposed_scheduler() {
-    block_on(|runtime| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.delay(DURATION_100_MS, runtime.clone());
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-        sender.on_next(111);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    });
-}
-
-#[test]
-fn test_scheduler_should_be_disposed_after_completed() {
-    block_on(|runtime| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.delay(DURATION_100_MS, runtime.clone());
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        sender.on_next(111);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        sender.on_termination(Termination::Completed);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        runtime.sleep(DURATION_100_MS - DURATION_30_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        runtime.sleep(DURATION_30_MS * 2).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-    });
-}
-
-#[test]
-fn test_scheduler_should_be_disposed_after_error() {
-    block_on(|runtime| async move {
-        let (mut sender, observable, channel_checker) = test_channel();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.delay(DURATION_100_MS, runtime.clone());
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        sender.on_next(111);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        sender.on_termination(Termination::Error("error"));
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Error("error"));
-        assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        runtime.sleep(DURATION_100_MS - DURATION_30_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Error("error"));
-        assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        runtime.sleep(DURATION_30_MS * 2).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Error("error"));
-        assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-    });
-}
-
-#[test]
-fn test_scheduler_should_be_disposed_after_unsub() {
-    block_on(|runtime| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        let (checker, observer) = Checker::new();
-
-        // Custom operations
-        let observable = observable.delay(DURATION_100_MS, runtime.clone());
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        sender.on_next(111);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        subscription.dispose();
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        runtime.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 

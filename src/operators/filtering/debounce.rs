@@ -86,7 +86,7 @@ where
     T: NecessarySend + 'static,
     E: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler,
+    S: Scheduler + NecessarySend + 'or,
 {
     fn subscribe(
         self,

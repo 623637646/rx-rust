@@ -5,8 +5,9 @@ use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::test_runtime::block_on;
 use futures::StreamExt;
+use rx_rust::disposable::Disposable;
 use rx_rust::scheduler::RecursionAction;
-use rx_rust::{disposable::Disposable, scheduler::Scheduler};
+use rx_rust::scheduler::Scheduler;
 use std::time::Instant;
 
 const RECURSION_EXECUTION_TIMES: usize = 200;

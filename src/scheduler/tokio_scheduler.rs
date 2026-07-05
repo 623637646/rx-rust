@@ -1,22 +1,38 @@
 use super::Scheduler;
-use crate::{disposable::Disposable, utils::types::NecessarySend};
-use educe::Educe;
+use crate::{
+    disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
+    utils::types::NecessarySend,
+};
 use std::time::Duration;
 
-#[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct TokioScheduler;
-
 /// Leverages a Tokio runtime handle to drive scheduled tasks.
-impl Scheduler for TokioScheduler {
-    fn schedule_periodically(
+impl Scheduler for tokio::runtime::Handle {
+    fn spawn_future<F>(
         &self,
-        mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
+        future: F,
+    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<F>>
+    where
+        F: Future<Output = ()> + NecessarySend + 'static,
+    {
+        let handle = tokio::spawn(future);
+        BoundDropDisposal::new(handle)
+    }
+
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static + use<> {
+        tokio::time::sleep(duration)
+    }
+
+    fn schedule_periodically<F>(
+        &self,
+        mut task: F,
         period: Duration,
         delay: Option<Duration>,
-    ) -> impl Disposable + NecessarySend + 'static {
+    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<F>>
+    where
+        F: FnMut(usize) -> bool + NecessarySend + 'static,
+    {
         let this = self.clone();
-        self.schedule_future(async move {
+        self.spawn_future(async move {
             if let Some(delay) = delay {
                 this.sleep(delay).await;
             }
@@ -32,21 +48,9 @@ impl Scheduler for TokioScheduler {
             }
         })
     }
-
-    fn schedule_future(
-        &self,
-        future: impl Future<Output = ()> + NecessarySend + 'static,
-    ) -> impl Disposable + NecessarySend + 'static {
-        tokio::task::spawn(future)
-    }
-
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static {
-        tokio::time::sleep(duration)
-    }
 }
 
-/// Allows aborting spawned Tokio tasks via the `Disposable` interface.
-impl<T> Disposable for tokio::task::JoinHandle<T> {
+impl Disposable for tokio::task::JoinHandle<()> {
     fn dispose(self) {
         self.abort();
     }

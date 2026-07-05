@@ -105,7 +105,7 @@ where
     T: NecessarySend + 'static,
     E: NecessarySend + 'static,
     OE: Observable<'static, 'sub, T, E>,
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     fn subscribe(
         self,
@@ -198,7 +198,7 @@ where
     T: NecessarySend + 'static,
     E: NecessarySend + 'static,
     OR: Observer<Vec<T>, E> + NecessarySend + 'static,
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     let weak_context = context.downgrade();
     let disposal = scheduler.clone().schedule_periodically(

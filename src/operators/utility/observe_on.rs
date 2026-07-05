@@ -74,7 +74,7 @@ where
     T: NecessarySend + 'static,
     E: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     fn subscribe(
         self,
@@ -119,7 +119,7 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
         T: NecessarySend + 'static,
         E: NecessarySend + 'static,
         OR: Observer<T, E> + NecessarySend + 'static,
-        S: Scheduler,
+        S: Scheduler + Clone + NecessarySend + 'static,
     {
         if lock.disposal.is_some() {
             return;
@@ -176,7 +176,7 @@ where
     T: NecessarySend + 'static,
     E: NecessarySend + 'static,
     OR: Observer<T, E> + NecessarySend + 'static,
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     fn on_next(&mut self, value: T) {
         self.context.lock_mut(|mut lock| {

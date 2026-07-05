@@ -72,7 +72,7 @@ impl<S> Interval<S> {
 
 impl<'sub, S> Observable<'static, 'sub, usize, Infallible> for Interval<S>
 where
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     fn subscribe(
         self,

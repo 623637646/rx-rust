@@ -92,7 +92,7 @@ impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWith
 where
     T: NecessarySend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler,
+    S: Scheduler + Clone + NecessarySend + 'static,
 {
     fn subscribe(
         self,

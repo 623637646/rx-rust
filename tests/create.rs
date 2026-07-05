@@ -101,7 +101,7 @@ fn test_unsubscribe() {
         let observable = Create::new(move |mut observer| {
             observer.on_next(1);
             let runtime = runtime_cloned.clone();
-            let handle = runtime_cloned.spawn(async move {
+            let handle = runtime_cloned.spawn_future(async move {
                 runtime.sleep(DURATION_100_MS).await;
                 observer.on_next(2);
                 runtime.sleep(DURATION_100_MS).await;
@@ -237,7 +237,7 @@ fn test_async() {
         let observable = Create::new(move |mut observer| {
             observer.on_next(1);
             let runtime = runtime_cloned.clone();
-            let handle = runtime_cloned.spawn(async move {
+            let handle = runtime_cloned.spawn_future(async move {
                 runtime.sleep(DURATION_100_MS).await;
                 observer.on_next(2);
                 runtime.sleep(DURATION_100_MS).await;

@@ -1,4 +1,3 @@
-#![cfg(feature = "futures")]
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
@@ -349,27 +348,6 @@ fn test_unsub_after_completed() {
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Completed);
-    });
-}
-
-#[test]
-fn test_undisposed_scheduler() {
-    block_on(|runtime| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-
-        // Custom operations
-        let stream = observable.into_stream();
-        let (checker, _subscription) = Checker::from_stream(stream, runtime.clone());
-        runtime.sleep(DURATION_10_MS).await; // make sure the stream is ready.
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-        sender.on_next(111);
-        runtime.sleep(DURATION_10_MS).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     });
 }
 

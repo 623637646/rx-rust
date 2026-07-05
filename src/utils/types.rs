@@ -33,10 +33,10 @@ cfg_if::cfg_if! {
         pub type MutGuard<'a, T> = RefMut<'a, T>;
         pub type RefGuard<'a, T> = Ref<'a, T>;
         impl<T> MutableHelper<T> for RefCell<T> {
-            fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) ->R {
+            fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R {
                 callback(self.borrow_mut())
             }
-            fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) ->R) ->R {
+            fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R {
                 callback(self.borrow())
             }
         }
@@ -87,10 +87,10 @@ cfg_if::cfg_if! {
         pub type MutGuard<'a, T> = MutexGuard<'a, T>;
         pub type RefGuard<'a, T> = ReadOnlyMutexGuard<'a, T>;
         impl<T> MutableHelper<T> for Mutex<T> {
-            fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) ->R {
+            fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R {
                 callback(self.lock().unwrap())
             }
-            fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) ->R) ->R {
+            fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R {
                 callback(ReadOnlyMutexGuard(self.lock().unwrap()))
             }
         }

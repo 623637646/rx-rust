@@ -1,4 +1,6 @@
 use super::{Observable, boxed_observable::BoxedObservable};
+#[cfg(feature = "futures")]
+use crate::operators::others::observable_stream::ObservableStream;
 use crate::{
     disposable::subscription::Subscription,
     observable::cloneable_boxed_observable::CloneableBoxedObservable,
@@ -62,9 +64,9 @@ use crate::{
     },
     utils::types::{NecessarySend, NecessarySync},
 };
-use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 #[cfg(feature = "futures")]
-use {crate::operators::others::observable_stream::ObservableStream, std::convert::Infallible};
+use std::convert::Infallible;
+use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 
 /// Extension trait that exposes the full suite of RxRust operators on any type that
 /// implements [`Observable`]. Each method forwards to the corresponding operator
@@ -395,8 +397,8 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
         CloneableBoxedObservable::new(self)
     }
 
-    #[cfg(feature = "futures")]
     /// Converts the observable into an async stream.
+    #[cfg(feature = "futures")]
     fn into_stream(self) -> ObservableStream<'sub, T, Self>
     where
         Self: Observable<'or, 'sub, T, Infallible>,

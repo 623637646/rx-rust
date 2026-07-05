@@ -77,7 +77,7 @@ where
         self,
         mut observer: impl Observer<T, Infallible> + NecessarySend + 'static,
     ) -> Subscription<'sub> {
-        let disposal = self.scheduler.schedule_future(async {
+        let disposal = self.scheduler.spawn_future(async {
             let result = self.future.await;
             observer.on_next(result);
             observer.on_termination(Termination::Completed);

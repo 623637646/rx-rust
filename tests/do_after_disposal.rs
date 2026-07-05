@@ -317,8 +317,7 @@ fn test_async() {
                     safe_lock_option_observer!(on_termination: boxed_observer, Termination::<Infallible>::Completed)
                 );
             })
-            .await
-            .unwrap();
+            .await.unwrap();
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert!(disposed.load(Ordering::SeqCst));

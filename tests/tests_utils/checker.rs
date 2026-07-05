@@ -1,9 +1,15 @@
+use crate::tests_utils::test_runtime::TestRuntime;
 use educe::Educe;
 use rx_rust::{
     observer::{Observer, Termination},
+    scheduler::Scheduler,
     utils::types::{Mutable, MutableHelper, NecessarySend, Shared},
 };
 use rx_rust::{safe_lock, safe_lock_vec};
+use {
+    futures::Stream, futures::stream::StreamExt, rx_rust::disposable::subscription::Subscription,
+    std::convert::Infallible,
+};
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
@@ -103,17 +109,10 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
     }
 }
 
-#[cfg(feature = "futures")]
-use {
-    crate::tests_utils::test_runtime::TestRuntime, futures::Stream, futures::stream::StreamExt,
-    rx_rust::disposable::subscription::Subscription, std::convert::Infallible,
-};
-
-#[cfg(feature = "futures")]
 impl<T> Checker<T, Infallible> {
     pub(crate) fn from_stream(
         stream: impl Stream<Item = T> + NecessarySend + 'static,
-        runtime: impl Scheduler,
+        runtime: TestRuntime,
     ) -> (Self, Subscription<'static>)
     where
         T: NecessarySend + 'static,
@@ -123,7 +122,7 @@ impl<T> Checker<T, Infallible> {
 
         let values_cloned = values.clone();
         let state_cloned = state.clone();
-        let handle = runtime.spawn(async move {
+        let handle = runtime.spawn_future(async move {
             let mut stream = std::pin::pin!(stream);
             while let Some(value) = stream.next().await {
                 safe_lock_vec!(push: values_cloned, value);

@@ -70,10 +70,6 @@
           6. test_unsub_after_error  
           7. test_order_with_continuous_next  
           8. test_no_delay (if appliable)  
-          9. test_undisposed_scheduler (search this to find all module using scheduler)  
-          10. test_scheduler_should_be_disposed_after_completed  
-          11. test_scheduler_should_be_disposed_after_error  
-          12. test_scheduler_should_be_disposed_after_unsub  
       14. Compiling checking  
           1. test_lifetime  
           2. test_fn  

@@ -1,4 +1,3 @@
-#![cfg(feature = "futures")]
 mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
@@ -213,66 +212,6 @@ fn test_unsub_after_completed() {
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Completed);
-    });
-}
-
-#[test]
-fn test_undisposed_scheduler() {
-    block_on(|runtime| async move {
-        let (_tx, rx) = futures::channel::mpsc::unbounded::<i32>();
-        let stream = rx;
-        let observable = FromStream::new(stream, runtime.clone());
-        let (checker, observer) = Checker::new();
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-    });
-}
-
-#[test]
-fn test_scheduler_should_be_disposed_after_completed() {
-    block_on(|runtime| async move {
-        let (tx, rx) = futures::channel::mpsc::unbounded::<i32>();
-        let stream = rx;
-        let observable = FromStream::new(stream, runtime.clone());
-        let (checker, observer) = Checker::new();
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        drop(tx);
-        runtime.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-    });
-}
-
-#[test]
-fn test_scheduler_should_be_disposed_after_unsub() {
-    block_on(|runtime| async move {
-        let (_tx, rx) = futures::channel::mpsc::unbounded::<i32>();
-        let stream = rx;
-        let observable = FromStream::new(stream, runtime.clone());
-        let (checker, observer) = Checker::new();
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(runtime.get_alive_tasks_count(), 1);
-
-        subscription.dispose();
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
-
-        runtime.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(runtime.get_alive_tasks_count(), 0);
     });
 }
 

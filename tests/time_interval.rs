@@ -7,12 +7,12 @@ use crate::tests_utils::{
     test_runtime::block_on,
     test_struct::TestStruct,
 };
+use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     disposable::{Disposable, subscription::Subscription},
     observable::{Observable, observable_ext::ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::create::Create, utility::time_interval::TimeInterval},
-    scheduler::Scheduler,
     subject::publish_subject::PublishSubject,
 };
 use std::{convert::Infallible, fmt::Debug, ops::Sub, time::Duration};

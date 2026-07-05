@@ -7,7 +7,10 @@ pub mod thread_pool_scheduler;
 #[cfg(feature = "tokio-scheduler")]
 pub mod tokio_scheduler;
 
-use crate::{disposable::Disposable, utils::types::NecessarySend};
+use crate::{
+    disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
+    utils::types::NecessarySend,
+};
 use educe::Educe;
 #[cfg(feature = "futures")]
 use futures::{Stream, stream::StreamExt};
@@ -25,44 +28,54 @@ pub enum RecursionAction {
 /// Core abstraction for driving asynchronous work across runtimes.
 /// See <https://reactivex.io/documentation/scheduler.html>
 /// This is why the task must be 'static: <https://stackoverflow.com/a/65287449/9315497>
-pub trait Scheduler: Clone + NecessarySend + 'static {
-    fn schedule_future(
+pub trait Scheduler {
+    fn spawn_future<F>(
         &self,
-        future: impl Future<Output = ()> + NecessarySend + 'static,
-    ) -> impl Disposable + NecessarySend + 'static;
+        future: F,
+    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<Self, F>>
+    where
+        F: Future<Output = ()> + NecessarySend + 'static;
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static;
+    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static + use<Self>;
 
-    fn schedule(
+    fn schedule<F>(
         &self,
-        task: impl FnOnce() + NecessarySend + 'static,
+        task: F,
         delay: Option<Duration>,
-    ) -> impl Disposable + NecessarySend + 'static {
-        let this = self.clone();
-        self.schedule_future(async move {
+    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<Self, F>>
+    where
+        F: FnOnce() + NecessarySend + 'static,
+    {
+        let delay = delay.map(|duration| self.sleep(duration));
+        self.spawn_future(async move {
             if let Some(delay) = delay {
-                this.sleep(delay).await;
+                delay.await;
             }
-            task();
+            task()
         })
     }
 
-    fn schedule_recursively(
+    fn schedule_recursively<F>(
         &self,
-        mut task: impl FnMut(usize) -> RecursionAction + NecessarySend + 'static,
+        mut task: F,
         delay: Option<Duration>,
-    ) -> impl Disposable + NecessarySend + 'static {
-        let this = self.clone();
-        self.schedule_future(async move {
+    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<Self, F>>
+    where
+        F: FnMut(usize) -> RecursionAction + NecessarySend + 'static,
+        Self: Clone + NecessarySend + 'static,
+    {
+        let delay = delay.map(|duration| self.sleep(duration));
+        let self_cloned = self.clone();
+        self.spawn_future(async move {
             if let Some(delay) = delay {
-                this.sleep(delay).await;
+                delay.await;
             }
             let mut count = 0;
             loop {
                 match task(count) {
                     RecursionAction::ContinueAt(at) => {
                         if let Some(delay) = at.checked_duration_since(Instant::now()) {
-                            this.sleep(delay).await;
+                            self_cloned.sleep(delay).await;
                         }
                     }
                     RecursionAction::ContinueImmediately => {}
@@ -73,12 +86,16 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
         })
     }
 
-    fn schedule_periodically(
+    fn schedule_periodically<F>(
         &self,
-        mut task: impl FnMut(usize) -> bool + NecessarySend + 'static,
+        mut task: F,
         period: Duration,
         delay: Option<Duration>,
-    ) -> impl Disposable + NecessarySend + 'static {
+    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<Self, F>>
+    where
+        F: FnMut(usize) -> bool + NecessarySend + 'static,
+        Self: Clone + NecessarySend + 'static,
+    {
         let mut next_time = Instant::now() + delay.unwrap_or_default();
         self.schedule_recursively(
             move |count| {
@@ -95,16 +112,16 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
     }
 
     #[cfg(feature = "futures")]
-    fn schedule_stream<SM>(
+    fn schedule_stream<SM, F>(
         &self,
         stream: SM,
         mut result_callback: F,
-    ) -> JoinHandle<impl Future<Output = Result<(), Aborted>> + NecessarySend + use<Self, SM, F>>
+    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<Self, SM, F>>
     where
         SM: Stream + NecessarySend + 'static,
         F: FnMut(Option<SM::Item>) + NecessarySend + 'static,
     {
-        self.spawn(async move {
+        self.spawn_future(async move {
             let mut stream = std::pin::pin!(stream);
             while let Some(item) = stream.next().await {
                 result_callback(Some(item));
