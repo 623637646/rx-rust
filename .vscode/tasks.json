@@ -17,6 +17,20 @@
 		},
 		{
 			"type": "shell",
+			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --no-default-features --features async-std-scheduler",
+			"problemMatcher": [],
+			"group": "test",
+			"label": "cargo test async-std-scheduler"
+		},
+		{
+			"type": "shell",
+			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --no-default-features --features thread-pool-scheduler",
+			"problemMatcher": [],
+			"group": "test",
+			"label": "cargo test thread-pool-scheduler"
+		},
+		{
+			"type": "shell",
 			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --no-default-features --features local-pool-scheduler",
 			"problemMatcher": [],
 			"group": "test",
