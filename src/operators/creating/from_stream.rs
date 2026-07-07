@@ -65,7 +65,7 @@ pub struct FromStream<SM, S> {
 impl<SM, S> FromStream<SM, S> {
     pub fn new(stream: SM, scheduler: S) -> Self
     where
-        SM: Stream + NecessarySend + Unpin + 'static,
+        SM: Stream + NecessarySend + 'static,
     {
         Self { stream, scheduler }
     }
@@ -73,7 +73,7 @@ impl<SM, S> FromStream<SM, S> {
 
 impl<'sub, T, SM, S> Observable<'static, 'sub, T, Infallible> for FromStream<SM, S>
 where
-    SM: Stream<Item = T> + NecessarySend + Unpin + 'static,
+    SM: Stream<Item = T> + NecessarySend + 'static,
     S: Scheduler,
 {
     fn subscribe(

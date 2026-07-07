@@ -97,13 +97,15 @@ pub trait Scheduler: Clone + NecessarySend + 'static {
     #[cfg(feature = "futures")]
     fn schedule_stream<SM>(
         &self,
-        mut stream: SM,
-        mut result_callback: impl FnMut(Option<SM::Item>) + NecessarySend + 'static,
-    ) -> impl Disposable + NecessarySend + 'static
+        stream: SM,
+        mut result_callback: F,
+    ) -> JoinHandle<impl Future<Output = Result<(), Aborted>> + NecessarySend + use<Self, SM, F>>
     where
-        SM: Stream + NecessarySend + Unpin + 'static,
+        SM: Stream + NecessarySend + 'static,
+        F: FnMut(Option<SM::Item>) + NecessarySend + 'static,
     {
-        self.schedule_future(async move {
+        self.spawn(async move {
+            let mut stream = std::pin::pin!(stream);
             while let Some(item) = stream.next().await {
                 result_callback(Some(item));
             }

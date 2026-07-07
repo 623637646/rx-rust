@@ -62,10 +62,12 @@ impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
     }
 }
 
+impl<'sub, T, OE> Unpin for ObservableStream<'sub, T, OE> {}
+
 impl<'or, 'sub, T, OE> Stream for ObservableStream<'sub, T, OE>
 where
     T: NecessarySend + 'or,
-    OE: Observable<'or, 'sub, T, Infallible> + Unpin,
+    OE: Observable<'or, 'sub, T, Infallible>,
 {
     type Item = T;
 
