@@ -3,7 +3,7 @@
 	"tasks": [
 		{
 			"type": "shell",
-			"command": "cargo hack --each-feature --no-dev-deps --exclude-all-features check --lib; cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features single-threaded check --tests",
+			"command": "cargo hack --each-feature --no-dev-deps --exclude-all-features check --lib; cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features default,single-threaded check --tests",
 			"problemMatcher": [],
 			"group": "test",
 			"label": "cargo check all features"
@@ -38,7 +38,7 @@
 		},
 		{
 			"type": "shell",
-			"command": "cargo clean; time RUST_BACKTRACE=1 cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features single-threaded nextest run --no-fail-fast --failure-output final --status-level=fail; cargo test --doc --features tokio-scheduler",
+			"command": "cargo clean; time RUST_BACKTRACE=1 cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features default,single-threaded nextest run --no-fail-fast --failure-output final --status-level=fail; cargo test --doc --features tokio-scheduler",
 			"problemMatcher": [],
 			"group": "test",
 			"label": "clean && cargo test all features && test doc"

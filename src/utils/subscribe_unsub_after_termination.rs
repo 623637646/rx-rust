@@ -6,6 +6,8 @@ use crate::{
 };
 use educe::Educe;
 
+#[derive(Educe)]
+#[educe(Debug)]
 enum SubState<'sub> {
     Initialized,
     Subscribed(Subscription<'sub>),

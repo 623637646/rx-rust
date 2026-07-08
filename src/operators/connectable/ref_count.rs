@@ -6,6 +6,8 @@ use crate::observer::Observer;
 use crate::utils::types::{Mutable, MutableHelper, NecessarySend, Shared};
 use educe::Educe;
 
+#[derive(Educe)]
+#[educe(Debug)]
 enum State<'sub> {
     Initialized,
     Subscribed(usize, Option<Subscription<'sub>>),
