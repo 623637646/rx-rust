@@ -11,6 +11,8 @@ cfg_if::cfg_if! {
         pub(crate) type TestScheduler = tokio::runtime::Handle;
     } else if #[cfg(feature = "async-std-scheduler")] {
         pub(crate) type TestScheduler = rx_rust::scheduler::async_std_scheduler::AsyncStdScheduler;
+    } else {
+        compile_error!("At least one scheduler feature must be enabled");
     }
 }
 
@@ -37,6 +39,8 @@ impl TestRuntime {
                 tokio::spawn(future).map(Result::ok)
             } else if #[cfg(feature = "async-std-scheduler")] {
                 async_std::task::spawn(future).map(Option::Some)
+            } else {
+                compile_error!("At least one scheduler feature must be enabled");
             }
         }
     }
@@ -89,6 +93,8 @@ where
         } else if #[cfg(feature = "async-std-scheduler")] {
             use rx_rust::scheduler::async_std_scheduler::AsyncStdScheduler;
             async_std::task::block_on(body(TestRuntime(AsyncStdScheduler)));
+        } else {
+            compile_error!("At least one scheduler feature must be enabled");
         }
     }
 }

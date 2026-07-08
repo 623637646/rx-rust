@@ -11,7 +11,7 @@ while true; do
   start_time=$(date +%s)
   tmpfile=$(mktemp)
 
-  RUST_BACKTRACE=1 cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features default,multi-threaded,single-threaded nextest run --no-fail-fast --failure-output final --status-level=fail 2>&1 | tee "$tmpfile"
+  RUST_BACKTRACE=1 cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features single-threaded nextest run --no-fail-fast --failure-output final --status-level=fail 2>&1 | tee "$tmpfile"
 
   end_time=$(date +%s)
   elapsed=$((end_time - start_time))

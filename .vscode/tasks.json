@@ -3,42 +3,42 @@
 	"tasks": [
 		{
 			"type": "shell",
-			"command": "cargo hack --each-feature --no-dev-deps --exclude-all-features check && cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features default,multi-threaded,single-threaded check --all-targets",
+			"command": "cargo hack --each-feature --no-dev-deps --exclude-all-features check --lib; cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features single-threaded check --tests",
 			"problemMatcher": [],
 			"group": "test",
 			"label": "cargo check all features"
 		},
 		{
 			"type": "shell",
-			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --no-default-features --features tokio-scheduler",
+			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --features tokio-scheduler",
 			"problemMatcher": [],
 			"group": "test",
 			"label": "cargo test tokio-scheduler"
 		},
 		{
 			"type": "shell",
-			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --no-default-features --features async-std-scheduler",
+			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --features async-std-scheduler",
 			"problemMatcher": [],
 			"group": "test",
 			"label": "cargo test async-std-scheduler"
 		},
 		{
 			"type": "shell",
-			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --no-default-features --features thread-pool-scheduler",
+			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --features thread-pool-scheduler",
 			"problemMatcher": [],
 			"group": "test",
 			"label": "cargo test thread-pool-scheduler"
 		},
 		{
 			"type": "shell",
-			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --no-default-features --features local-pool-scheduler",
+			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --features local-pool-scheduler",
 			"problemMatcher": [],
 			"group": "test",
 			"label": "cargo test local-pool-scheduler"
 		},
 		{
 			"type": "shell",
-			"command": "cargo clean; time RUST_BACKTRACE=1 cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features default,multi-threaded,single-threaded nextest run --no-fail-fast --failure-output final --status-level=fail; cargo test --doc --features tokio-scheduler",
+			"command": "cargo clean; time RUST_BACKTRACE=1 cargo hack --each-feature --exclude-all-features --exclude-no-default-features --exclude-features single-threaded nextest run --no-fail-fast --failure-output final --status-level=fail; cargo test --doc --features tokio-scheduler",
 			"problemMatcher": [],
 			"group": "test",
 			"label": "clean && cargo test all features && test doc"

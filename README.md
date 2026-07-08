@@ -17,7 +17,6 @@ rx-rust = { version = "the_latest_version", features = ["tokio-scheduler"] } # U
 ### Feature Flags
 Feature                          | Description | Pulls in
 -------------------------------- | ----------- | --------
-`multi-threaded` (default)       | Core operators with `Send`-friendly observables. | –
 `single-threaded`                | Core operators optimised for single-threaded use. | –
 `local-pool-scheduler`           | Scheduler backed by `futures` local pool (enable for `Interval`, `Timer`, etc.). | `single-threaded`, `futures`, `async-io`
 `thread-pool-scheduler`          | Scheduler backed by `futures` thread pool. | `futures/thread-pool`, `async-io`
