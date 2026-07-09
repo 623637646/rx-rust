@@ -1,7 +1,6 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
@@ -21,7 +20,7 @@ use std::{convert::Infallible, time::Duration};
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::creating::timer::Timer,
 ///     };
@@ -72,22 +71,23 @@ impl<T, S> Timer<T, S> {
     }
 }
 
-impl<'sub, T, S> Observable<'static, 'sub, T, Infallible> for Timer<T, S>
+impl<T, S> Observable<'static, T, Infallible> for Timer<T, S>
 where
     T: MaybeSend + 'static,
     S: Scheduler,
 {
+    type D = S::D;
+
     fn subscribe(
         self,
         mut observer: impl Observer<T, Infallible> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
-        let disposal = self.scheduler.schedule(
+    ) -> Subscription<Self::D> {
+        self.scheduler.schedule(
             || {
                 observer.on_next(self.value);
                 observer.on_termination(Termination::Completed);
             },
             Some(self.delay),
-        );
-        Subscription::new_with_disposal(disposal)
+        )
     }
 }

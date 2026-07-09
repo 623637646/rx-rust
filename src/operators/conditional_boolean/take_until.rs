@@ -1,8 +1,11 @@
+use crate::delegate_disposal;
+use crate::disposable::Disposable;
+use crate::disposable::chain_disposal::ChainDisposal;
 use crate::safe_lock_option_observer;
+use crate::utils::subscribe_unsub_after_termination;
 use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     utils::{
         subscribe_unsub_after_termination::subscribe_unsub_after_termination, types::MarkerType,
@@ -17,7 +20,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::conditional_boolean::take_until::TakeUntil,
 ///     subject::publish_subject::PublishSubject,
@@ -60,23 +63,32 @@ pub struct TakeUntil<OE, OE1> {
 }
 
 impl<OE, OE1> TakeUntil<OE, OE1> {
-    pub fn new<'or, 'sub, T, E>(source: OE, stop: OE1) -> Self
+    pub fn new<'or, T, E>(source: OE, stop: OE1) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
-        OE1: Observable<'or, 'sub, (), E>,
+        OE: Observable<'or, T, E>,
+        OE1: Observable<'or, (), E>,
     {
         Self { source, stop }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for TakeUntil<OE, OE1>
+delegate_disposal!(
+    Disposal<D, D1>,
+    subscribe_unsub_after_termination::Disposal<ChainDisposal<D, D1>>,
+    where D: Disposable, D1: Disposable
+);
+
+impl<'or, T, E, OE, OE1> Observable<'or, T, E> for TakeUntil<OE, OE1>
 where
     T: 'or,
-    OE: Observable<'or, 'sub, T, E>,
-    OE1: Observable<'or, 'sub, (), E>,
-    'sub: 'or,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
+    OE1: Observable<'or, (), E>,
+    OE1::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<OE::D, OE1::D>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
             let subscription_1 = self.stop.subscribe(StopObserver {
@@ -84,8 +96,9 @@ where
                 _marker: PhantomData,
             });
             let subscription_2 = self.source.subscribe(TakeUntilObserver(observer));
-            subscription_1 + subscription_2
+            subscription_1.preceded_by_bound(subscription_2)
         })
+        .map_into()
     }
 }
 

@@ -6,13 +6,14 @@ use crate::tests_utils::test_channel::{ChannelChecker, ReceiverObservable, Sende
 use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::observable::Subscription;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::safe_lock_option;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{
         creating::{create::Create, just::Just, throw::Throw},
@@ -1211,9 +1212,9 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(Just::new(1));
             observer.on_termination(Termination::Error("error"));
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
         let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);
 
@@ -1259,9 +1260,9 @@ fn test_lifetime_or_sub() {
         let observable = Create::new(
             |observer: BoxedObserver<'_, Just<&TestStruct>, Infallible>| {
                 life_marker_or = Some(observer);
-                Subscription::new_with_disposal_callback(|| {
+                Subscription::new(CallbackDisposal::new(|| {
                     life_marker_sub.consume_ref();
-                })
+                }))
             },
         );
         let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);

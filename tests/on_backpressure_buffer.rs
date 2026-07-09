@@ -6,7 +6,8 @@ use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::test_struct::TestStruct;
 use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::observable::Subscription;
 use rx_rust::operators::backpressure::on_backpressure_buffer::OnBackpressureBuffer;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
@@ -14,7 +15,7 @@ use rx_rust::operators::creating::throw::Throw;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     subject::publish_subject::PublishSubject,
 };
@@ -95,7 +96,7 @@ fn test_completed_request_before_emit() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -159,7 +160,7 @@ fn test_completed_request_after_emit() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -211,13 +212,13 @@ fn test_completed_request_before_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -269,7 +270,7 @@ fn test_completed_request_after_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -281,7 +282,7 @@ fn test_completed_request_after_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -361,7 +362,7 @@ fn test_error_request_before_emit() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -425,7 +426,7 @@ fn test_error_request_after_emit() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -477,13 +478,13 @@ fn test_error_request_before_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -535,7 +536,7 @@ fn test_error_request_after_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -547,7 +548,7 @@ fn test_error_request_after_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
@@ -620,7 +621,7 @@ fn test_unsubscribe() {
 
     safe_lock!(mem_take: request_callback)
         .into_iter()
-        .for_each(|f| f());
+        .for_each(|request| request.request());
     assert_eq!(checker_1.values(), [vec![111]]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![111], vec![222, 333]]);
@@ -629,7 +630,7 @@ fn test_unsubscribe() {
 
     safe_lock!(mem_take: request_callback)
         .into_iter()
-        .for_each(|f| f());
+        .for_each(|request| request.request());
     assert_eq!(checker_1.values(), [vec![111]]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [vec![111], vec![222, 333]]);
@@ -681,7 +682,7 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![&value_1], vec![&value_2, &value_3]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -693,7 +694,7 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Error(&error));
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![&value_1], vec![&value_2, &value_3]]);
     assert_eq!(checker.state(), State::Error(&error));
     assert_eq!(channel_checker.state(), ChannelState::Error(&error));
@@ -806,7 +807,9 @@ fn test_async() {
         let request_callback_cloned = request_callback.clone();
         runtime
             .spawn(async move {
-                safe_lock_option!(take: request_callback_cloned).unwrap()();
+                safe_lock_option!(take: request_callback_cloned)
+                    .unwrap()
+                    .request();
             })
             .await
             .unwrap();
@@ -829,7 +832,9 @@ fn test_async() {
         let request_callback_cloned = request_callback.clone();
         runtime
             .spawn(async move {
-                safe_lock_option!(take: request_callback_cloned).unwrap()();
+                safe_lock_option!(take: request_callback_cloned)
+                    .unwrap()
+                    .request();
             })
             .await
             .unwrap();
@@ -900,7 +905,7 @@ fn test_subscribe_by_different_observer() {
 
     safe_lock!(mem_take: request_callback)
         .into_iter()
-        .for_each(|f| f());
+        .for_each(|request| request.request());
     assert_eq!(checker_1.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [vec![111], vec![222, 333]]);
@@ -909,7 +914,7 @@ fn test_subscribe_by_different_observer() {
 
     safe_lock!(mem_take: request_callback)
         .into_iter()
-        .for_each(|f| f());
+        .for_each(|request| request.request());
     assert_eq!(checker_1.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [vec![111], vec![222, 333]]);
@@ -944,7 +949,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -1000,14 +1005,18 @@ fn test_multiple_operation() {
     assert!(request_callback_1.test_lock_ref().is_some());
     assert!(request_callback_2.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback_1).unwrap()();
+    safe_lock_option!(take: request_callback_1)
+        .unwrap()
+        .request();
     assert_eq!(checker.values(), [vec![vec![111]]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback_1.test_lock_ref().is_some());
     assert!(request_callback_2.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback_2).unwrap()();
+    safe_lock_option!(take: request_callback_2)
+        .unwrap()
+        .request();
     assert_eq!(checker.values(), [vec![vec![111]], vec![vec![222, 333]]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1021,14 +1030,18 @@ fn test_multiple_operation() {
     assert!(request_callback_1.test_lock_ref().is_some());
     assert!(request_callback_2.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback_1).unwrap()();
+    safe_lock_option!(take: request_callback_1)
+        .unwrap()
+        .request();
     assert_eq!(checker.values(), [vec![vec![111]], vec![vec![222, 333]]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert!(request_callback_1.test_lock_ref().is_none());
     assert!(request_callback_2.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback_2).unwrap()();
+    safe_lock_option!(take: request_callback_2)
+        .unwrap()
+        .request();
     assert_eq!(checker.values(), [vec![vec![111]], vec![vec![222, 333]]]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -1075,7 +1088,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1087,7 +1100,7 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -1109,7 +1122,7 @@ fn test_request_on_request() {
     let _subscription = observable
         .map(move |(values, request)| {
             if values.len() > 1 {
-                request();
+                request.request();
                 safe_lock_option_observer!(on_termination: sender_cloned, Termination::<Infallible>::Completed);
             } else {
                 safe_lock_option!(replace: request_callback_cloned, request);
@@ -1140,7 +1153,7 @@ fn test_request_on_request() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -1177,7 +1190,7 @@ fn test_next_on_sub() {
     assert_eq!(checker.state(), State::Active);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Active);
     assert!(request_callback.test_lock_ref().is_some());
@@ -1187,7 +1200,7 @@ fn test_next_on_sub() {
     assert_eq!(checker.state(), State::Active);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option!(take: request_callback).unwrap()();
+    safe_lock_option!(take: request_callback).unwrap().request();
     assert_eq!(checker.values(), [vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Completed);
     assert!(request_callback.test_lock_ref().is_none());
@@ -1247,9 +1260,9 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
         let observable = observable.on_backpressure_buffer();
 

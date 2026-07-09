@@ -1,16 +1,15 @@
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::Observer,
     operators::backpressure::on_backpressure::{
-        BackpressureCollection, OnBackpressure, RequestCallbackType,
+        BackpressureCollection, OnBackpressure, RequestToken,
     },
-    utils::types::MaybeSend,
+    utils::{subscribe_with_shared_model, types::MaybeSend},
 };
 use educe::Educe;
 
 /// Keeps only the most recent upstream item while the downstream observer is still processing
-/// the previous one. Once the [`RequestCallbackType`] is invoked, the latest buffered value is
+/// the previous one. Once [`RequestToken::request`] is called, the latest buffered value is
 /// emitted and the cycle repeats. This mirrors `onBackpressureLatest` in other ReactiveX stacks.
 /// See <https://reactivex.io/documentation/operators/backpressure.html>.
 ///
@@ -18,7 +17,7 @@ use educe::Educe;
 /// ```rust
 /// use rx_rust::{
 ///     disposable::Disposable,
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Observer,
 ///     operators::backpressure::on_backpressure_latest::OnBackpressureLatest,
 ///     subject::publish_subject::PublishSubject,
@@ -32,7 +31,7 @@ use educe::Educe;
 /// let subscription = observable.subscribe_with_callback(
 ///     |(value, request_callback)| {
 ///         received.push(value);
-///         request_callback(); // immediately accept the next value
+///         request_callback.request(); // immediately accept the next value
 ///     },
 ///     |_| {},
 /// );
@@ -53,38 +52,42 @@ pub struct OnBackpressureLatest<OE> {
 }
 
 impl<OE> OnBackpressureLatest<OE> {
-    pub fn new<'or, 'sub, T, E>(source: OE) -> Self
+    pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
     {
         Self { source }
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (T, RequestCallbackType<'or>), E>
-    for OnBackpressureLatest<OE>
+impl<'or, T, E, OE> Observable<'or, (T, RequestToken<'or>), E> for OnBackpressureLatest<OE>
 where
-    'or: 'sub,
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
 {
+    type D = subscribe_with_shared_model::Disposal<'or>;
+
     fn subscribe(
         self,
-        observer: impl Observer<(T, RequestCallbackType<'or>), E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+        observer: impl Observer<(T, RequestToken<'or>), E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         OnBackpressure::new(self.source, Collection(None)).subscribe(observer)
     }
 }
 
 struct Collection<T>(Option<T>);
 
-impl<T> BackpressureCollection<T, T> for Collection<T> {
-    fn extend_one(&mut self, item: T) {
+impl<T> BackpressureCollection for Collection<T> {
+    type Input = T;
+    type Output = T;
+
+    fn extend_one(&mut self, item: Self::Input) {
         self.0 = Some(item);
     }
 
-    fn take_next_value(&mut self) -> Option<T> {
+    fn take_next_value(&mut self) -> Option<Self::Output> {
         self.0.take()
     }
 }

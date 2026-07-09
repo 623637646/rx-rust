@@ -1,7 +1,10 @@
 use crate::operators::creating::defer::Defer;
 use crate::operators::creating::just::Just;
 use crate::utils::types::MaybeSend;
-use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
+use crate::{
+    observable::{Observable, Subscription},
+    observer::Observer,
+};
 use educe::Educe;
 use std::convert::Infallible;
 
@@ -11,7 +14,7 @@ use std::convert::Infallible;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::creating::start::Start,
 /// };
@@ -29,27 +32,27 @@ use std::convert::Infallible;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Start<T, F>(F)
-where
-    F: FnOnce() -> T;
+pub struct Start<F>(F);
 
-impl<T, F> Start<T, F>
-where
-    F: FnOnce() -> T,
-{
-    pub fn new(builder: F) -> Self {
+impl<F> Start<F> {
+    pub fn new<T>(builder: F) -> Self
+    where
+        F: FnOnce() -> T,
+    {
         Self(builder)
     }
 }
 
-impl<'or, 'sub, T, F> Observable<'or, 'sub, T, Infallible> for Start<T, F>
+impl<'or, T, F> Observable<'or, T, Infallible> for Start<F>
 where
     F: FnOnce() -> T,
 {
+    type D = ();
+
     fn subscribe(
         self,
         observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         Defer::new(|| Just::new(self.0())).subscribe(observer)
     }
 }

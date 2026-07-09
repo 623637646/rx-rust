@@ -4,12 +4,13 @@ use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
-use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::disposable::{Disposable, DisposableExt};
+use rx_rust::observable::Subscription;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::Shared;
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::create::Create, others::hook_on_subscription::HookOnSubscription},
     subject::publish_subject::PublishSubject,
@@ -27,9 +28,9 @@ fn test_completed() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        sub + Subscription::new_with_disposal_callback(|| {
+        sub.then(CallbackDisposal::new(|| {
             assert_eq!(channel_checker.state(), ChannelState::Completed);
-        })
+        }))
     });
 
     let _subscription = observable.subscribe(observer);
@@ -58,9 +59,9 @@ fn test_error() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        sub + Subscription::new_with_disposal_callback(|| {
+        sub.then(CallbackDisposal::new(|| {
             assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-        })
+        }))
     });
 
     let _subscription = observable.subscribe(observer);
@@ -89,9 +90,9 @@ fn test_unsubscribe() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        sub + Subscription::new_with_disposal_callback(|| {
+        sub.then(CallbackDisposal::new(|| {
             assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-        })
+        }))
     });
 
     let subscription = observable.subscribe(observer);
@@ -123,9 +124,9 @@ fn test_ref() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        sub + Subscription::new_with_disposal_callback(|| {
+        sub.then(CallbackDisposal::new(|| {
             assert_eq!(channel_checker.state(), ChannelState::Error(&error));
-        })
+        }))
     });
 
     let _subscription = observable.subscribe(observer);
@@ -155,9 +156,9 @@ fn test_mut_ref() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        sub + Subscription::new_with_disposal_callback(|| {
+        sub.then(CallbackDisposal::new(|| {
             assert_eq!(channel_checker.state(), ChannelState::Completed);
-        })
+        }))
     });
 
     let subscription = observable.subscribe_with_callback(
@@ -195,9 +196,9 @@ fn test_async() {
             assert_eq!(channel_checker_cloned.state(), ChannelState::Initialized);
             let sub = observable.subscribe(observer);
             assert_eq!(channel_checker_cloned.state(), ChannelState::Subscribed);
-            sub + Subscription::new_with_disposal_callback(move || {
+            sub.then(CallbackDisposal::new(move || {
                 assert_eq!(channel_checker_cloned.state(), ChannelState::Unsubscribed);
-            })
+            }))
         });
 
         let subscription = runtime
@@ -278,9 +279,9 @@ fn test_unsub_on_next_by_take() {
             assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
             let channel_checker = channel_checker.clone();
-            sub + Subscription::new_with_disposal_callback(move || {
+            sub.then(CallbackDisposal::new(move || {
                 assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-            })
+            }))
         })
         .take(1);
 
@@ -306,17 +307,17 @@ fn test_multiple_operation() {
             assert_eq!(channel_checker.state(), ChannelState::Initialized);
             let sub = observable.subscribe(observer);
             assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-            sub + Subscription::new_with_disposal_callback(|| {
+            sub.then(CallbackDisposal::new(|| {
                 assert_eq!(channel_checker.state(), ChannelState::Completed);
-            })
+            }))
         })
         .hook_on_subscription(|observable, observer| {
             assert_eq!(channel_checker.state(), ChannelState::Initialized);
             let sub = observable.subscribe(observer);
             assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-            sub + Subscription::new_with_disposal_callback(|| {
+            sub.then(CallbackDisposal::new(|| {
                 assert_eq!(channel_checker.state(), ChannelState::Completed);
-            })
+            }))
         });
 
     let _subscription = observable.subscribe(observer);
@@ -345,9 +346,9 @@ fn test_without_convenient_api() {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        sub + Subscription::new_with_disposal_callback(|| {
+        sub.then(CallbackDisposal::new(|| {
             assert_eq!(channel_checker.state(), ChannelState::Completed);
-        })
+        }))
     });
 
     let _subscription = observable.subscribe(observer);
@@ -380,9 +381,10 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new_with_disposal_callback(|| {
+            CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             })
+            .into_bound_drop()
         });
 
         let observable =

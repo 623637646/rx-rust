@@ -1,6 +1,9 @@
-use super::from_iter::FromIter;
+use crate::operators::creating::from_iter::FromIter;
 use crate::utils::types::MaybeSend;
-use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
+use crate::{
+    observable::{Observable, Subscription},
+    observer::Observer,
+};
 use educe::Educe;
 use std::convert::Infallible;
 
@@ -10,7 +13,7 @@ use std::convert::Infallible;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::creating::repeat::Repeat,
 /// };
@@ -39,14 +42,16 @@ impl<T> Repeat<T> {
     }
 }
 
-impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Repeat<T>
+impl<'or, T> Observable<'or, T, Infallible> for Repeat<T>
 where
     T: Clone,
 {
+    type D = ();
+
     fn subscribe(
         self,
         observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
     }
 }

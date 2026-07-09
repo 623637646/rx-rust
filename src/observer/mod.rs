@@ -1,6 +1,7 @@
 pub mod boxed_observer;
 pub mod callback_observer;
 
+use crate::{observer::boxed_observer::BoxedObserver, utils::types::MaybeSend};
 use educe::Educe;
 
 /// Represents the termination state of an operation, which can either be completed successfully or with an error.
@@ -28,3 +29,14 @@ pub enum Event<T, E> {
     Next(T),
     Termination(Termination<E>),
 }
+
+pub trait BoxedObserverExt<T, E>: Observer<T, E> + Sized {
+    fn into_boxed<'or>(self) -> BoxedObserver<'or, T, E>
+    where
+        Self: MaybeSend + 'or,
+    {
+        BoxedObserver::new(self)
+    }
+}
+
+impl<T, E, OR> BoxedObserverExt<T, E> for OR where OR: Observer<T, E> {}

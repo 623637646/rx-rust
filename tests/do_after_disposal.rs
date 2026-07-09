@@ -4,13 +4,14 @@ use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::observable::Subscription;
 use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_observer;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, utility::do_after_disposal::DoAfterDisposal},
     subject::publish_subject::PublishSubject,
@@ -29,9 +30,9 @@ fn test_completed() {
 
     let observable = Create::new(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new_with_disposal_callback(|| {
+        Subscription::new(CallbackDisposal::new(|| {
             disposed.store(true, Ordering::SeqCst);
-        })
+        }))
     });
     let (checker, observer) = Checker::new();
 
@@ -71,9 +72,9 @@ fn test_error() {
 
     let observable = Create::new(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new_with_disposal_callback(|| {
+        Subscription::new(CallbackDisposal::new(|| {
             disposed.store(true, Ordering::SeqCst);
-        })
+        }))
     });
     let (checker, observer) = Checker::new();
 
@@ -113,9 +114,9 @@ fn test_unsubscribe() {
 
     let observable = Create::new(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new_with_disposal_callback(|| {
+        Subscription::new(CallbackDisposal::new(|| {
             disposed.store(true, Ordering::SeqCst);
-        })
+        }))
     });
     let (checker, observer) = Checker::new();
 
@@ -164,9 +165,9 @@ fn test_ref() {
 
     let observable = Create::new(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new_with_disposal_callback(|| {
+        Subscription::new(CallbackDisposal::new(|| {
             disposed.store(true, Ordering::SeqCst);
-        })
+        }))
     });
     let (checker, observer) = Checker::new();
 
@@ -215,9 +216,9 @@ fn test_mut_ref() {
 
     let observable = Create::new(|observer: BoxedObserver<'_, &mut i32, &mut i32>| {
         boxed_observer = Some(observer);
-        Subscription::new_with_disposal_callback(|| {
+        Subscription::new(CallbackDisposal::new(|| {
             disposed.store(true, Ordering::SeqCst);
-        })
+        }))
     });
 
     // Custom operations
@@ -266,9 +267,9 @@ fn test_async() {
         let boxed_observer_cloned = boxed_observer.clone();
         let observable = Create::new(move |observer| {
             safe_lock_option!(replace: boxed_observer_cloned, observer);
-            Subscription::new_with_disposal_callback(move || {
+            Subscription::new(CallbackDisposal::new(move || {
                 disposed_cloned.store(true, Ordering::SeqCst);
-            })
+            }))
         });
         let (checker, observer) = Checker::new();
 
@@ -335,17 +336,16 @@ fn test_subscribe_by_different_observer() {
     let boxed_observer_2 = Shared::new(Mutable::new(None));
 
     let observable = Create::new(|observer| {
-        if safe_lock_option!(is_none: boxed_observer_1) {
+        let disposed = if safe_lock_option!(is_none: boxed_observer_1) {
             safe_lock_option!(replace: boxed_observer_1, observer);
-            Subscription::new_with_disposal_callback(|| {
-                disposed_1.store(true, Ordering::SeqCst);
-            })
+            disposed_1.clone()
         } else {
             safe_lock_option!(replace: boxed_observer_2, observer);
-            Subscription::new_with_disposal_callback(|| {
-                disposed_2.store(true, Ordering::SeqCst);
-            })
-        }
+            disposed_2.clone()
+        };
+        Subscription::new(CallbackDisposal::new(move || {
+            disposed.store(true, Ordering::SeqCst);
+        }))
     });
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -428,9 +428,9 @@ fn test_unsub_on_next_by_take() {
 
     let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
         boxed_observer = Some(observer);
-        Subscription::new_with_disposal_callback(|| {
+        Subscription::new(CallbackDisposal::new(|| {
             disposed.store(true, Ordering::SeqCst);
-        })
+        }))
     });
     let (checker, observer) = Checker::new();
 
@@ -464,9 +464,9 @@ fn test_multiple_operation() {
 
     let observable = Create::new(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new_with_disposal_callback(|| {
+        Subscription::new(CallbackDisposal::new(|| {
             disposed.store(true, Ordering::SeqCst);
-        })
+        }))
     });
     let (checker, observer) = Checker::new();
 
@@ -522,9 +522,9 @@ fn test_without_convenient_api() {
 
     let observable = Create::new(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new_with_disposal_callback(|| {
+        Subscription::new(CallbackDisposal::new(|| {
             disposed.store(true, Ordering::SeqCst);
-        })
+        }))
     });
     let (checker, observer) = Checker::new();
 
@@ -576,9 +576,9 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
 
         let observable = observable.do_after_disposal(|| {});

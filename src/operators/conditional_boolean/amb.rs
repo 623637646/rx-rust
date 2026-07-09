@@ -1,8 +1,8 @@
+use crate::delegate_disposal;
 use crate::disposable::Disposable;
 use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use crate::{safe_lock, safe_lock_option, safe_lock_slot_map};
@@ -15,7 +15,7 @@ use slotmap::{DefaultKey, SlotMap};
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         conditional_boolean::amb::Amb,
@@ -50,13 +50,21 @@ impl<I> Amb<I> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, I> Observable<'or, 'sub, T, E> for Amb<I>
+delegate_disposal!(
+    Disposal<D>,
+    Shared<Mutable<AmbContext<D>>>,
+    where D: Disposable
+);
+
+impl<'or, T, E, OE, I> Observable<'or, T, E> for Amb<I>
 where
-    'sub: 'or,
     I: IntoIterator<Item = OE>,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<OE::D>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observer = Shared::new(Mutable::new(Some(observer)));
 
         let mut slop_map = SlotMap::new();
@@ -87,31 +95,35 @@ where
             safe_lock_slot_map!(replace: context, subscriptions, key, Some(sub));
         }
 
-        Subscription::new_with_disposal(context)
+        context.into()
     }
 }
 
-struct AmbContext<'sub> {
-    subscriptions: SlotMap<DefaultKey, Option<Subscription<'sub>>>,
+struct AmbContext<D: Disposable> {
+    subscriptions: SlotMap<DefaultKey, Option<Subscription<D>>>,
 }
 
 // TODO: Disposable should not be Cloneable
-impl Disposable for Shared<Mutable<AmbContext<'_>>> {
+impl<D> Disposable for Shared<Mutable<AmbContext<D>>>
+where
+    D: Disposable,
+{
     fn dispose(self) {
         safe_lock!(mem_take: self, subscriptions);
     }
 }
 
 // TODO: should use state for observer and determined_observer for better performance.
-struct AmbObserver<'sub, OR> {
+struct AmbObserver<D: Disposable, OR> {
     observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<AmbContext<'sub>>>,
+    context: Shared<Mutable<AmbContext<D>>>,
     key: DefaultKey,
     determined_observer: Option<OR>, // Some means this AmbObserver is the first. None means this AmbObserver is not the first or not determined yet.
 }
 
-impl<'sub, T, E, OR> Observer<T, E> for AmbObserver<'sub, OR>
+impl<T, E, D, OR> Observer<T, E> for AmbObserver<D, OR>
 where
+    D: Disposable,
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
@@ -138,7 +150,10 @@ where
     }
 }
 
-fn drop_none_matched_subscriptions<'sub>(context: &Mutable<AmbContext<'sub>>, key: DefaultKey) {
+fn drop_none_matched_subscriptions<D>(context: &Mutable<AmbContext<D>>, key: DefaultKey)
+where
+    D: Disposable,
+{
     let drop_subscriptions = context.lock_mut(|mut lock| {
         let keep = lock.subscriptions.remove(key).unwrap();
         let mut keep_slot_map = SlotMap::new();

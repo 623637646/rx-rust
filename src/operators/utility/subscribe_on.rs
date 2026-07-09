@@ -1,9 +1,10 @@
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal},
+    observable::{Observable, Subscription},
     observer::Observer,
     scheduler::Scheduler,
-    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
+    utils::types::{MarkerType, MaybeSend},
 };
 use educe::Educe;
 
@@ -20,7 +21,7 @@ use educe::Educe;
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::{
 ///             creating::from_iter::FromIter,
@@ -57,37 +58,46 @@ use educe::Educe;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct SubscribeOn<OE, S> {
+pub struct SubscribeOn<'or, OE, S> {
     source: OE,
     scheduler: S,
+    _marker: MarkerType<&'or ()>,
 }
 
-impl<OE, S> SubscribeOn<OE, S> {
+impl<'or, OE, S> SubscribeOn<'or, OE, S> {
     pub fn new(source: OE, scheduler: S) -> Self {
-        Self { source, scheduler }
+        Self {
+            source,
+            scheduler,
+            _marker: Default::default(),
+        }
     }
 }
 
-impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for SubscribeOn<OE, S>
+delegate_disposal!(
+    Disposal<SD, D>,
+    ChainDisposal<SD, SharedDisposal<Subscription<D>>>,
+    where SD: Disposable, D: Disposable
+);
+
+impl<'or, T, E, OE, S> Observable<'static, T, E> for SubscribeOn<'or, OE, S>
 where
-    OE: Observable<'or, 'static, T, E> + MaybeSend + 'static,
+    OE: Observable<'or, T, E> + MaybeSend + 'static,
+    OE::D: MaybeSend + 'static,
     S: Scheduler,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
-        let sub = Shared::new(Mutable::new(Some(Subscription::default()))); // Placeholder
-        let sub_cloned = sub.clone();
+    type D = Disposal<S::D, OE::D>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + MaybeSend + 'static,
+    ) -> Subscription<Self::D> {
+        let shared_sub = SharedDisposal::default();
+        let shared_sub_cloned = shared_sub.clone();
         let disposal = self.scheduler.schedule(
-            move || {
-                sub_cloned.lock_mut(|mut lock| {
-                    if lock.is_some() {
-                        // Only subscribe if not unsubscribed yet.
-                        let sub = self.source.subscribe(observer);
-                        lock.replace(sub);
-                    }
-                });
-            },
+            move || shared_sub_cloned.replace(|| self.source.subscribe(observer)),
             None,
         );
-        Subscription::new_with_disposal(sub) + disposal
+        disposal.then(shared_sub).into()
     }
 }

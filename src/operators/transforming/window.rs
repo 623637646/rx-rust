@@ -1,10 +1,12 @@
 use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
-    disposable::subscription::Subscription,
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal},
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
-    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
 };
 use crate::{safe_lock, safe_lock_observer, safe_lock_option_observer};
 use educe::Educe;
@@ -15,8 +17,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     disposable::subscription::Subscription,
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::transforming::window::Window,
 ///     subject::publish_subject::PublishSubject,
@@ -25,7 +26,7 @@ use educe::Educe;
 ///
 /// let windows = Arc::new(Mutex::new(Vec::<Vec<i32>>::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
-/// let inner_subscriptions = Arc::new(Mutex::new(Vec::<Subscription>::new()));
+/// let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
 ///
 /// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
 /// let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
@@ -80,28 +81,37 @@ pub struct Window<OE, OE1> {
 }
 
 impl<OE, OE1> Window<OE, OE1> {
-    pub fn new<'or, 'sub, T, E>(source: OE, boundary: OE1) -> Self
+    pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
-        OE1: Observable<'or, 'sub, (), E>,
+        OE: Observable<'or, T, E>,
+        OE1: Observable<'or, (), E>,
     {
         Self { source, boundary }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1>
-    Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for Window<OE, OE1>
+delegate_disposal!(
+    Disposal<D, D1>,
+    subscribe_unsub_after_termination::Disposal<ChainDisposal<D, D1>>,
+    where D: Disposable, D1: Disposable
+);
+
+impl<'or, T, E, OE, OE1> Observable<'or, SubjectObservable<PublishSubject<'or, T, E>>, E>
+    for Window<OE, OE1>
 where
     T: Clone + MaybeSend + 'or,
     E: Clone + MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
-    OE1: Observable<'or, 'sub, (), E>,
-    'sub: 'or,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
+    OE1: Observable<'or, (), E>,
+    OE1::D: MaybeSend + 'or,
 {
+    type D = Disposal<OE::D, OE1::D>;
+
     fn subscribe(
         self,
         observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |mut observer| {
             let subject = PublishSubject::default();
             observer.on_next(SubjectObservable::new(subject.clone()));
@@ -115,8 +125,9 @@ where
             let boundary_observer = BoundaryObserver { observer, subject };
             let subscription_1 = self.boundary.subscribe(boundary_observer);
             let subscription_2 = self.source.subscribe(window_observer);
-            subscription_1 + subscription_2
+            subscription_1.preceded_by_bound(subscription_2)
         })
+        .map_into()
     }
 }
 

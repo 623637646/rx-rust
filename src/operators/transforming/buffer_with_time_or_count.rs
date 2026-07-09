@@ -1,8 +1,7 @@
-use crate::disposable::bound_drop_disposal::BoundDropDisposal;
-use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::disposable::subscription::Subscription;
+use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
+use crate::observable::Subscription;
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -27,7 +26,7 @@ use std::{num::NonZeroUsize, time::Duration};
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::{
 ///             creating::from_iter::FromIter,
@@ -100,18 +99,21 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
     }
 }
 
-impl<'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTimeOrCount<OE, S>
+impl<T, E, OE, S> Observable<'static, Vec<T>, E> for BufferWithTimeOrCount<OE, S>
 where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
-    OE: Observable<'static, 'sub, T, E>,
+    OE: Observable<'static, T, E>,
+    OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
+    type D = subscribe_with_shared_model::Disposal<'static>;
+
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
-        let model = Model {
+    ) -> Subscription<Self::D> {
+        let model = Model::<T, S::D> {
             values: Vec::with_capacity(self.count.get()),
             timer: None,
             last_sending_time_from_counting: None,
@@ -138,18 +140,18 @@ where
     }
 }
 
-struct Model<T> {
+struct Model<T, D: Disposable> {
     values: Vec<T>,
-    timer: Option<BoundDropDisposal<BoxedDisposal<'static>>>,
+    timer: Option<BoundDropDisposal<D>>,
     last_sending_time_from_counting: Option<Instant>,
 }
 
-struct BufferWithTimeOrCountObserver<T, E, OR> {
-    context: Context<Vec<T>, E, OR, Model<T>>,
+struct BufferWithTimeOrCountObserver<T, E, OR, D: Disposable> {
+    context: Context<Vec<T>, E, OR, Model<T, D>>,
     count: NonZeroUsize,
 }
 
-impl<T, E, OR> Observer<T, E> for BufferWithTimeOrCountObserver<T, E, OR>
+impl<T, E, OR, D: Disposable> Observer<T, E> for BufferWithTimeOrCountObserver<T, E, OR, D>
 where
     T: MaybeSend + 'static,
     OR: Observer<Vec<T>, E> + MaybeSend + 'static,
@@ -188,12 +190,12 @@ where
 }
 
 fn setup_emit_timer<T, E, OR, S>(
-    context: Context<Vec<T>, E, OR, Model<T>>,
+    context: Context<Vec<T>, E, OR, Model<T, S::D>>,
     scheduler: S,
     delay: Option<Duration>,
     time_span: Duration,
     count: NonZeroUsize,
-) -> BoundDropDisposal<BoxedDisposal<'static>>
+) -> BoundDropDisposal<S::D>
 where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
@@ -201,7 +203,7 @@ where
     S: Scheduler + Clone + MaybeSend + 'static,
 {
     let weak_context = context.downgrade();
-    let disposal = scheduler.clone().schedule_periodically(
+    scheduler.clone().schedule_periodically(
         move |_| {
             let Some(context) = weak_context.upgrade() else {
                 return false;
@@ -214,7 +216,7 @@ where
                         let disposal = setup_emit_timer(
                             context.clone(),
                             scheduler.clone(),
-                            Some(time_span - last_sending_time_from_counting.elapsed()),
+                            Some(time_span - last_sending_time_from_counting.elapsed()), // TODO: May be panic.
                             time_span,
                             count,
                         );
@@ -230,6 +232,5 @@ where
         },
         time_span,
         delay,
-    );
-    BoundDropDisposal::new(BoxedDisposal::new(disposal))
+    )
 }

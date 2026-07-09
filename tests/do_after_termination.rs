@@ -6,12 +6,13 @@ use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::observable::Subscription;
 use rx_rust::safe_lock_vec;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::create::Create, utility::do_after_termination::DoAfterTermination},
     subject::publish_subject::PublishSubject,
@@ -420,9 +421,9 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
 
         let observable = observable.do_after_termination(|_| {});

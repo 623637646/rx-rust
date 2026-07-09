@@ -13,12 +13,12 @@ pub struct AsyncStdScheduler;
 
 /// Provides the async-std-backed `Scheduler` implementation.
 impl Scheduler for AsyncStdScheduler {
-    type DisposableType = async_std::task::JoinHandle<()>;
+    type D = async_std::task::JoinHandle<()>;
 
     fn spawn_future(
         &self,
         future: impl Future<Output = ()> + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::DisposableType> {
+    ) -> BoundDropDisposal<Self::D> {
         let handle = async_std::task::spawn(future);
         BoundDropDisposal::new(handle)
     }

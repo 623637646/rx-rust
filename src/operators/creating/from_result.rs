@@ -1,7 +1,6 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -12,7 +11,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::creating::from_result::FromResult,
 /// };
@@ -38,8 +37,13 @@ impl<T, E> FromResult<T, E> {
     }
 }
 
-impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for FromResult<T, E> {
-    fn subscribe(self, mut observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+impl<'or, T, E> Observable<'or, T, E> for FromResult<T, E> {
+    type D = ();
+
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         match self.0 {
             Ok(value) => {
                 observer.on_next(value);

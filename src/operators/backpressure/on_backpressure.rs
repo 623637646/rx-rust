@@ -1,76 +1,99 @@
+use crate::observable::Subscription;
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, WeakContext, subscribe_with_shared_model,
 };
-use crate::utils::types::{MarkerType, MaybeSend};
+use crate::utils::types::{MaybeSend, MaybeSync, Shared};
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
 };
 use educe::Educe;
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "single-threaded")] {
-        /// Callback handed to the downstream observer so it can request the next chunk
-        /// once it finishes processing the current batch.
-        pub type RequestCallbackType<'or> = Box<dyn FnOnce() + 'or>;
-    } else {
-        /// Callback handed to the downstream observer so it can request the next chunk
-        /// once it finishes processing the current batch.
-        pub type RequestCallbackType<'or> = Box<dyn FnOnce() + Send + Sync + 'or>;
+trait RequestHandler<'or>: MaybeSend + MaybeSync {
+    fn request(self: Shared<Self>);
+}
+
+type SharedRequestHandler<'or> = Shared<dyn RequestHandler<'or> + 'or>;
+
+/// A single-use token handed to the downstream observer to request the next chunk.
+///
+/// Tokens share one request handler allocated when the subscription is created, so
+/// requesting additional chunks does not allocate or clone the shared handler.
+///
+/// The handler holds only a weak reference to the subscription's state, so a token
+/// does not keep the subscription alive: calling [`request`](Self::request) after
+/// the subscription has been disposed is a no-op.
+pub struct RequestToken<'or>(SharedRequestHandler<'or>);
+
+impl RequestToken<'_> {
+    pub fn request(self) {
+        self.0.request();
     }
 }
 
-pub trait BackpressureCollection<T0, T> {
-    fn extend_one(&mut self, item: T0);
-    fn take_next_value(&mut self) -> Option<T>;
+impl std::fmt::Debug for RequestToken<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(std::any::type_name::<Self>())
+    }
+}
+
+pub trait BackpressureCollection {
+    type Input;
+    type Output;
+
+    fn extend_one(&mut self, item: Self::Input);
+
+    /// Returns the next output, or `None` when more input is required.
+    fn take_next_value(&mut self) -> Option<Self::Output>;
 }
 
 /// Low-level primitive that converts a fast upstream into demand-driven chunks by
 /// accumulating values with a custom `collection` and emitting them alongside a
-/// [`RequestCallbackType`]. Downstream observers must invoke the callback to resume the
+/// [`RequestToken`]. Downstream observers must call [`RequestToken::request`] to resume the
 /// upstream flow. See <https://reactivex.io/documentation/operators/backpressure.html>.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct OnBackpressure<T0, OE, C> {
+pub struct OnBackpressure<OE, C> {
     source: OE,
     collection: C,
-    _marker: MarkerType<T0>,
 }
 
-impl<T0, OE, C> OnBackpressure<T0, OE, C> {
-    pub fn new<'or, 'sub, E>(source: OE, collection: C) -> Self
+impl<OE, C> OnBackpressure<OE, C> {
+    pub fn new<'or, E>(source: OE, collection: C) -> Self
     where
-        OE: Observable<'or, 'sub, T0, E>,
+        C: BackpressureCollection,
+        OE: Observable<'or, C::Input, E>,
     {
-        Self {
-            source,
-            collection,
-            _marker: Default::default(),
-        }
+        Self { source, collection }
     }
 }
 
-impl<'or, 'sub, T0, T, E, OE, C> Observable<'or, 'sub, (T, RequestCallbackType<'or>), E>
-    for OnBackpressure<T0, OE, C>
+impl<'or_sub, E, OE, C> Observable<'or_sub, (C::Output, RequestToken<'or_sub>), E>
+    for OnBackpressure<OE, C>
 where
-    'or: 'sub,
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T0, E>,
-    C: BackpressureCollection<T0, T> + MaybeSend + 'or,
+    E: MaybeSend + 'or_sub,
+    OE: Observable<'or_sub, C::Input, E>,
+    OE::D: MaybeSend + 'or_sub,
+    C: BackpressureCollection + MaybeSend + 'or_sub,
+    C::Output: MaybeSend + 'or_sub,
 {
+    type D = subscribe_with_shared_model::Disposal<'or_sub>;
+
     fn subscribe(
         self,
-        observer: impl Observer<(T, RequestCallbackType<'or>), E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+        observer: impl Observer<(C::Output, RequestToken<'or_sub>), E> + MaybeSend + 'or_sub,
+    ) -> Subscription<Self::D> {
         let model = Model {
             collection: self.collection,
             termination: None,
-            emit_directly: true,
+            downstream_ready: true,
         };
         subscribe_with_shared_model(observer, model, |context| {
-            self.source.subscribe(ObserverImpl(context))
+            let request_handler: SharedRequestHandler<'or_sub> = Shared::new(context.downgrade());
+            self.source.subscribe(ObserverImpl {
+                context,
+                request_handler,
+            })
         })
     }
 }
@@ -78,32 +101,66 @@ where
 struct Model<E, C> {
     collection: C,
     termination: Option<Termination<E>>,
-    emit_directly: bool,
+    downstream_ready: bool,
 }
 
-struct ObserverImpl<'or, T, E, OR, C>(Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>);
+type BackpressureContext<'or, E, OR, C> =
+    Context<(<C as BackpressureCollection>::Output, RequestToken<'or>), E, OR, Model<E, C>>;
 
-impl<'or, T0, T, E, OR, C> Observer<T0, E> for ObserverImpl<'or, T, E, OR, C>
+impl<'or, E, OR, C> RequestHandler<'or>
+    for WeakContext<(C::Output, RequestToken<'or>), E, OR, Model<E, C>>
 where
-    T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OR: Observer<(T, RequestCallbackType<'or>), E> + MaybeSend + 'or,
-    C: BackpressureCollection<T0, T> + MaybeSend + 'or,
+    OR: Observer<(C::Output, RequestToken<'or>), E> + MaybeSend + 'or,
+    C: BackpressureCollection + MaybeSend + 'or,
+    C::Output: MaybeSend + 'or,
 {
-    fn on_next(&mut self, value: T0) {
-        let _ = self.0.modify_model(|model| {
+    fn request(self: Shared<Self>) {
+        let Some(context) = self.upgrade() else {
+            return;
+        };
+        let _ = context.modify_model(|model| {
+            if let Some(next) = model.collection.take_next_value() {
+                ModificationResult::new_send_next((next, RequestToken(self)))
+            } else if let Some(termination) = model.termination.take() {
+                ModificationResult::new_send_termination(termination)
+            } else {
+                model.downstream_ready = true;
+                ModificationResult::new_without_result()
+            }
+        });
+    }
+}
+
+struct ObserverImpl<'or, E, OR, C>
+where
+    C: BackpressureCollection,
+{
+    context: BackpressureContext<'or, E, OR, C>,
+    request_handler: SharedRequestHandler<'or>,
+}
+
+impl<'or, E, OR, C> Observer<C::Input, E> for ObserverImpl<'or, E, OR, C>
+where
+    E: MaybeSend + 'or,
+    OR: Observer<(C::Output, RequestToken<'or>), E> + MaybeSend + 'or,
+    C: BackpressureCollection + MaybeSend + 'or,
+    C::Output: MaybeSend + 'or,
+{
+    fn on_next(&mut self, value: C::Input) {
+        let _ = self.context.modify_model(|model| {
             if model.termination.is_some() {
                 return ModificationResult::new_without_result();
             }
             model.collection.extend_one(value);
-            if model.emit_directly {
-                model.emit_directly = false;
-                let next = model.collection.take_next_value().expect("cannot be empty");
-                let context = self.0.clone();
-                let callback: RequestCallbackType = Box::new(move || {
-                    handle_request(context);
-                });
-                ModificationResult::new_send_next((next, callback))
+            if model.downstream_ready {
+                if let Some(next) = model.collection.take_next_value() {
+                    model.downstream_ready = false;
+                    let request = RequestToken(self.request_handler.clone());
+                    ModificationResult::new_send_next((next, request))
+                } else {
+                    ModificationResult::new_without_result()
+                }
             } else {
                 ModificationResult::new_without_result()
             }
@@ -111,8 +168,8 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.modify_model(|model| {
-            if model.emit_directly {
+        let _ = self.context.modify_model(|model| {
+            if model.downstream_ready {
                 ModificationResult::new_send_termination(termination)
             } else {
                 model.termination = Some(termination);
@@ -120,28 +177,4 @@ where
             }
         });
     }
-}
-
-fn handle_request<'or, T0, T, E, OR, C>(
-    context: Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>,
-) where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OR: Observer<(T, RequestCallbackType<'or>), E> + MaybeSend + 'or,
-    C: BackpressureCollection<T0, T> + MaybeSend + 'or,
-{
-    let _ = context.modify_model(|model| {
-        if let Some(next) = model.collection.take_next_value() {
-            let context = context.clone();
-            let callback: RequestCallbackType = Box::new(move || {
-                handle_request(context);
-            });
-            ModificationResult::new_send_next((next, callback))
-        } else if let Some(termination) = model.termination.take() {
-            ModificationResult::new_send_termination(termination)
-        } else {
-            model.emit_directly = true;
-            ModificationResult::new_without_result()
-        }
-    });
 }

@@ -1,7 +1,7 @@
-use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination;
+use crate::observable::Subscription;
+use crate::utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination};
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
 };
@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         conditional_boolean::all::All,
@@ -43,9 +43,9 @@ pub struct All<T, OE, F> {
 }
 
 impl<T, OE, F> All<T, OE, F> {
-    pub fn new<'or, 'sub, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         F: FnMut(T) -> bool,
     {
         Self {
@@ -56,13 +56,18 @@ impl<T, OE, F> All<T, OE, F> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, bool, E> for All<T, OE, F>
+impl<'or, T, E, OE, F> Observable<'or, bool, E> for All<T, OE, F>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
     F: FnMut(T) -> bool + MaybeSend + 'or,
-    'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<bool, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = subscribe_unsub_after_termination::Disposal<OE::D>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<bool, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = AllObserver {
                 observer: Some(observer),

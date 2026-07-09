@@ -1,10 +1,10 @@
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
+use crate::{delegate_disposal, utils::subscribe_unsub_after_termination};
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
 };
@@ -16,7 +16,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         combining::merge::Merge,
@@ -47,25 +47,32 @@ pub struct Merge<OE1, OE2> {
 }
 
 impl<OE1, OE2> Merge<OE1, OE2> {
-    pub fn new<'or, 'sub, T, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<'or, T, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T, E>,
+        OE1: Observable<'or, T, E>,
+        OE2: Observable<'or, T, E>,
     {
         Self { source_1, source_2 }
     }
 }
 
-impl<'or, 'sub, T, E, OE1, OE2> Observable<'or, 'sub, T, E> for Merge<OE1, OE2>
+delegate_disposal!(
+    Disposal<'or>,
+    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+);
+
+impl<'or, T, E, OE1, OE2> Observable<'or, T, E> for Merge<OE1, OE2>
 where
-    'sub: 'or,
-    'or: 'sub,
-    T: MaybeSend + 'sub,
-    E: MaybeSend + 'sub,
-    OE1: Observable<'or, 'sub, T, E>,
-    OE2: Observable<'or, 'sub, T, E>,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OE1: Observable<'or, T, E>,
+    OE1::D: MaybeSend + 'or,
+    OE2: Observable<'or, T, E>,
+    OE2::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<'or>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 one_is_completed: false,
@@ -73,9 +80,10 @@ where
             subscribe_with_shared_model(observer, model, |context| {
                 let subscription_1 = self.source_1.subscribe(MergeObserver(context.clone()));
                 let subscription_2 = self.source_2.subscribe(MergeObserver(context));
-                subscription_1 + subscription_2
+                subscription_1.preceded_by_bound(subscription_2)
             })
         })
+        .map_into()
     }
 }
 

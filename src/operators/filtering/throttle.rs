@@ -1,9 +1,11 @@
-use crate::disposable::Disposable;
 use crate::disposable::bound_drop_disposal::BoundDropDisposal;
-use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::shared_disposal::SharedDisposal;
-use crate::disposable::subscription::Subscription;
-use crate::utils::types::{MaybeSend, MutableBool, MutableBoolHelper, Shared};
+use crate::observable::Subscription;
+use crate::utils::types::{MarkerType, MaybeSend, MutableBool, MutableBoolHelper, Shared};
+use crate::{
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal},
+};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -25,7 +27,7 @@ use std::time::Duration;
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::{
 ///             creating::from_iter::FromIter,
@@ -67,45 +69,64 @@ use std::time::Duration;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Throttle<OE, S> {
+pub struct Throttle<'or, OE, S> {
     source: OE,
     time_span: Duration,
     scheduler: S,
+    _marker: MarkerType<&'or ()>,
 }
 
-impl<OE, S> Throttle<OE, S> {
+impl<'or, OE, S> Throttle<'or, OE, S> {
     pub fn new(source: OE, time_span: Duration, scheduler: S) -> Self {
         Self {
             source,
             time_span,
             scheduler,
+            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Throttle<OE, S>
+delegate_disposal!(
+    Disposal<D, S>,
+    ChainDisposal<SharedDisposal<BoundDropDisposal<S::D>>, D>,
+    where D: Disposable, S: Scheduler
+);
+
+impl<'or, T, E, OE, S> Observable<'static, T, E> for Throttle<'or, OE, S>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     S: Scheduler + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
+    type D = Disposal<OE::D, S>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + MaybeSend + 'static,
+    ) -> Subscription<Self::D> {
         let shared_disposal = SharedDisposal::default();
-        self.source.subscribe(ThrottleObserver {
-            observer,
-            time_span: self.time_span,
-            scheduler: self.scheduler,
-            is_cooling: Shared::new(MutableBool::new(false)),
-            shared_disposal: shared_disposal.clone(),
-        }) + shared_disposal
+        self.source
+            .subscribe(ThrottleObserver {
+                observer,
+                time_span: self.time_span,
+                scheduler: self.scheduler,
+                is_cooling: Shared::new(MutableBool::new(false)),
+                shared_disposal: shared_disposal.clone(),
+            })
+            .preceded_by(shared_disposal)
+            .map_into()
     }
 }
 
-struct ThrottleObserver<OR, S> {
+struct ThrottleObserver<OR, S>
+where
+    S: Scheduler,
+{
     observer: OR,
     time_span: Duration,
     scheduler: S,
     is_cooling: Shared<MutableBool>,
-    shared_disposal: SharedDisposal<BoundDropDisposal<BoxedDisposal<'static>>>,
+    shared_disposal: SharedDisposal<BoundDropDisposal<S::D>>,
 }
 
 impl<T, E, OR, S> Observer<T, E> for ThrottleObserver<OR, S>
@@ -120,12 +141,12 @@ where
         self.observer.on_next(value);
         let is_cooling_down = self.is_cooling.clone();
         self.shared_disposal.replace(|| {
-            BoundDropDisposal::new(BoxedDisposal::new(self.scheduler.schedule(
+            self.scheduler.schedule(
                 move || {
                     is_cooling_down.write(false);
                 },
                 Some(self.time_span),
-            )))
+            )
         });
     }
 

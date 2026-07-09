@@ -1,16 +1,17 @@
-use crate::disposable::subscription::Subscription;
-use crate::observable::observable_ext::ObservableExt;
+use crate::delegate_disposal;
+use crate::disposable::Disposable;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::subscribe_with_shared_model::{
-    Context, Error, ModificationResult, subscribe_with_shared_model,
+    self, Context, Error, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::{
-        subscribe_unsub_after_termination::subscribe_unsub_after_termination, types::MarkerType,
+        subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+        types::MarkerType,
     },
 };
 use educe::Educe;
@@ -22,7 +23,7 @@ use std::{collections::VecDeque, marker::PhantomData};
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         combining::concat_all::ConcatAll,
@@ -53,10 +54,10 @@ pub struct ConcatAll<OE, OE1> {
 }
 
 impl<OE, OE1> ConcatAll<OE, OE1> {
-    pub fn new<'or, 'sub, T, E>(source: OE) -> Self
+    pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, OE1, E>,
-        OE1: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, OE1, E>,
+        OE1: Observable<'or, T, E>,
     {
         Self {
             source,
@@ -66,28 +67,35 @@ impl<OE, OE1> ConcatAll<OE, OE1> {
 }
 
 impl<E, OE1, I> ConcatAll<MapInfallibleToError<E, FromIter<I>>, OE1> {
-    pub fn new_from_iter<'or, 'sub, T>(into_iterator: I) -> Self
+    pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
-        OE1: Observable<'or, 'sub, T, E>,
+        OE1: Observable<'or, T, E>,
     {
         Self {
-            source: FromIter::new(into_iterator).map_infallible_to_error(),
+            source: MapInfallibleToError::new(FromIter::new(into_iterator)),
             _marker: PhantomData,
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for ConcatAll<OE, OE1>
+delegate_disposal!(
+    Disposal<'or>,
+    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+);
+
+impl<'or, T, E, OE, OE1> Observable<'or, T, E> for ConcatAll<OE, OE1>
 where
-    'sub: 'or,
-    'or: 'sub,
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, OE1, E>,
-    OE1: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
+    OE: Observable<'or, OE1, E>,
+    OE::D: MaybeSend + 'or,
+    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<'or>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 pending_observables: VecDeque::new(),
@@ -98,30 +106,36 @@ where
                 self.source.subscribe(SourceObserver(context.clone()))
             })
         })
+        .map_into()
     }
 }
 
-enum SubState<'sub> {
+enum SubState<D: Disposable> {
     Idle,
     PendingSubscription,
-    Processing(Subscription<'sub>),
+    Processing(Subscription<D>),
 }
 
-struct Model<'sub, OE1> {
+struct Model<'or, T, E, OE1>
+where
+    OE1: Observable<'or, T, E>,
+{
     pending_observables: VecDeque<OE1>,
-    sub_state: SubState<'sub>,
+    sub_state: SubState<OE1::D>,
     is_source_completed: bool,
 }
 
-struct SourceObserver<'sub, T, E, OR, OE1>(Context<T, E, OR, Model<'sub, OE1>>);
-
-impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for SourceObserver<'sub, T, E, OR, OE1>
+struct SourceObserver<'or, T, E, OR, OE1>(Context<T, E, OR, Model<'or, T, E, OE1>>)
 where
-    'sub: 'or,
+    OE1: Observable<'or, T, E>;
+
+impl<'or, T, E, OR, OE1> Observer<OE1, E> for SourceObserver<'or, T, E, OR, OE1>
+where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1::D: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
         let result = self.0.modify_model(|model| match model.sub_state {
@@ -177,15 +191,17 @@ where
     }
 }
 
-struct InnerObserver<'sub, T, E, OR, OE1>(Context<T, E, OR, Model<'sub, OE1>>);
-
-impl<'or, 'sub, T, E, OR, OE1> Observer<T, E> for InnerObserver<'sub, T, E, OR, OE1>
+struct InnerObserver<'or, T, E, OR, OE1>(Context<T, E, OR, Model<'or, T, E, OE1>>)
 where
-    'sub: 'or,
+    OE1: Observable<'or, T, E>;
+
+impl<'or, T, E, OR, OE1> Observer<T, E> for InnerObserver<'or, T, E, OR, OE1>
+where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1::D: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: T) {
         self.0.send_next(value);
@@ -201,14 +217,14 @@ where
     }
 }
 
-fn subscribe_next_observable_until_finished<'or, 'sub, T, E, OR, OE1>(
-    context: Context<T, E, OR, Model<'sub, OE1>>,
+fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1>(
+    context: Context<T, E, OR, Model<'or, T, E, OE1>>,
 ) where
-    'sub: 'or,
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1::D: MaybeSend + 'or,
 {
     loop {
         let result = context.modify_model(|model| {

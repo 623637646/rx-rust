@@ -1,5 +1,7 @@
 use crate::{
-    disposable::{Disposable, subscription::Subscription},
+    delegate_disposal,
+    disposable::Disposable,
+    observable::Subscription,
     observer::{Observer, Termination},
     safe_lock,
     utils::types::{Mutable, MutableHelper, Shared},
@@ -8,14 +10,14 @@ use educe::Educe;
 
 #[derive(Educe)]
 #[educe(Debug)]
-enum SubState<'sub> {
+enum SubState<D: Disposable> {
     Initialized,
-    Subscribed(Subscription<'sub>),
+    Subscribed(Subscription<D>),
     Unsubscribed,
 }
 
 // TODO: Disposable should not be Cloneable
-impl Disposable for Shared<Mutable<SubState<'_>>> {
+impl<D: Disposable> Disposable for Shared<Mutable<SubState<D>>> {
     fn dispose(self) {
         match safe_lock!(mem_replace: self, SubState::Unsubscribed) {
             SubState::Initialized => {}
@@ -25,13 +27,20 @@ impl Disposable for Shared<Mutable<SubState<'_>>> {
     }
 }
 
+delegate_disposal!(
+    Disposal<D>,
+    Shared<Mutable<SubState<D>>>,
+    where D: Disposable
+);
+
 /// Wraps subscription creation so that termination from the observer automatically disposes the inner subscription.
-pub fn subscribe_unsub_after_termination<'sub, OR, F>(
+pub fn subscribe_unsub_after_termination<OR, D, F>(
     observer: OR,
     builder: F,
-) -> Subscription<'sub>
+) -> Subscription<Disposal<D>>
 where
-    F: FnOnce(UnsubAfterTerminationObserver<'sub, OR>) -> Subscription<'sub>,
+    D: Disposable,
+    F: FnOnce(UnsubAfterTerminationObserver<OR, D>) -> Subscription<D>,
 {
     let sub_state = Shared::new(Mutable::new(SubState::Initialized));
     let observer = UnsubAfterTerminationObserver {
@@ -55,19 +64,20 @@ where
         }
     });
 
-    Subscription::new_with_disposal(sub_state)
+    sub_state.into()
 }
 
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct UnsubAfterTerminationObserver<'sub, OR> {
+pub struct UnsubAfterTerminationObserver<OR, D: Disposable> {
     observer: OR,
-    sub_state: Shared<Mutable<SubState<'sub>>>,
+    sub_state: Shared<Mutable<SubState<D>>>,
 }
 
-impl<T, E, OR> Observer<T, E> for UnsubAfterTerminationObserver<'_, OR>
+impl<T, E, OR, D> Observer<T, E> for UnsubAfterTerminationObserver<OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         self.observer.on_next(value);

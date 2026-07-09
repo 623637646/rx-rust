@@ -1,8 +1,9 @@
-use crate::disposable::subscription::Subscription;
+use crate::delegate_disposal;
+use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
 use crate::safe_lock_option;
 use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -13,7 +14,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         combining::concat::Concat,
@@ -42,42 +43,53 @@ pub struct Concat<OE1, OE2> {
 }
 
 impl<OE1, OE2> Concat<OE1, OE2> {
-    pub fn new<'or, 'sub, T, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<'or, T, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T, E>,
+        OE1: Observable<'or, T, E>,
+        OE2: Observable<'or, T, E>,
     {
         Self { source_1, source_2 }
     }
 }
 
-impl<'or, 'sub, T, E, OE1, OE2> Observable<'or, 'sub, T, E> for Concat<OE1, OE2>
+delegate_disposal!(
+    Disposal<D1, D2>,
+    ChainDisposal<Shared<Mutable<Option<Subscription<D2>>>>, D1>,
+    where D1: Disposable, D2: Disposable
+);
+
+impl<'or, T, E, OE1, OE2> Observable<'or, T, E> for Concat<OE1, OE2>
 where
-    OE1: Observable<'or, 'sub, T, E>,
-    OE2: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
-    'sub: 'or,
+    OE1: Observable<'or, T, E>,
+    OE2: Observable<'or, T, E> + MaybeSend + 'or,
+    OE2::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<OE1::D, OE2::D>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let sub_2 = Shared::new(Mutable::new(None));
         let observer = ConcatObserver {
             observer,
             source_2: self.source_2,
             sub_2: sub_2.clone(),
         };
-        self.source_1.subscribe(observer) + sub_2
+        self.source_1
+            .subscribe(observer)
+            .preceded_by(sub_2)
+            .map_into()
     }
 }
 
-struct ConcatObserver<'sub, OR, OE2> {
+struct ConcatObserver<OR, OE2, D: Disposable> {
     observer: OR,
     source_2: OE2,
-    sub_2: Shared<Mutable<Option<Subscription<'sub>>>>,
+    sub_2: Shared<Mutable<Option<Subscription<D>>>>,
 }
 
-impl<'or, 'sub, T, E, OR, OE2> Observer<T, E> for ConcatObserver<'sub, OR, OE2>
+impl<'or, T, E, OR, OE2> Observer<T, E> for ConcatObserver<OR, OE2, OE2::D>
 where
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE2: Observable<'or, 'sub, T, E>,
+    OE2: Observable<'or, T, E>,
 {
     fn on_next(&mut self, value: T) {
         self.observer.on_next(value);

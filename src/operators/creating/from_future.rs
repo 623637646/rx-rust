@@ -1,7 +1,6 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
@@ -21,7 +20,7 @@ use std::convert::Infallible;
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::creating::from_future::FromFuture,
 ///     };
@@ -60,28 +59,26 @@ pub struct FromFuture<FU, S> {
 }
 
 impl<FU, S> FromFuture<FU, S> {
-    pub fn new(future: FU, scheduler: S) -> Self
-    where
-        FU: Future + MaybeSend + 'static,
-    {
+    pub fn new(future: FU, scheduler: S) -> Self {
         Self { future, scheduler }
     }
 }
 
-impl<'sub, T, FU, S> Observable<'static, 'sub, T, Infallible> for FromFuture<FU, S>
+impl<T, FU, S> Observable<'static, T, Infallible> for FromFuture<FU, S>
 where
     FU: Future<Output = T> + MaybeSend + 'static,
     S: Scheduler,
 {
+    type D = S::D;
+
     fn subscribe(
         self,
         mut observer: impl Observer<T, Infallible> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
-        let disposal = self.scheduler.spawn_future(async {
+    ) -> Subscription<Self::D> {
+        self.scheduler.spawn_future(async {
             let result = self.future.await;
             observer.on_next(result);
             observer.on_termination(Termination::Completed);
-        });
-        Subscription::new_with_disposal(disposal)
+        })
     }
 }

@@ -1,6 +1,8 @@
 use super::Subject;
+use crate::delegate_disposal;
 use crate::disposable::Disposable;
-use crate::disposable::subscription::Subscription;
+use crate::disposable::option_disposal::OptionDisposal;
+use crate::observable::Subscription;
 use crate::observer::Event;
 use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
 use crate::{
@@ -33,18 +35,24 @@ impl<T, E> PublishSubject<'_, T, E> {
     }
 }
 
-impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for PublishSubject<'or, T, E>
+delegate_disposal!(
+    Disposal<'or, T, E>,
+    OptionDisposal<PublishSubjectDisposal<'or, T, E>>
+);
+
+impl<'or, T, E> Observable<'or, T, E> for PublishSubject<'or, T, E>
 where
-    T: MaybeSend + 'sub,
-    E: Clone + MaybeSend + 'sub,
-    'or: 'sub,
+    T: MaybeSend,
+    E: Clone + MaybeSend,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<'or, T, E>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         self.0.clone().lock_mut(|mut lock| match &mut *lock {
             State::Idle(observers) => {
                 let key = observers.insert(Some(BoxedObserver::new(observer)));
                 drop(lock);
-                Subscription::new_with_disposal(PublishSubjectDisposal { state: self.0, key })
+                OptionDisposal::some(PublishSubjectDisposal { state: self.0, key }).into()
             }
             State::Processing {
                 slot_map,
@@ -52,13 +60,13 @@ where
             } => {
                 let key = slot_map.insert(Some(BoxedObserver::new(observer)));
                 drop(lock);
-                Subscription::new_with_disposal(PublishSubjectDisposal { state: self.0, key })
+                OptionDisposal::some(PublishSubjectDisposal { state: self.0, key }).into()
             }
             State::Terminated(termination) => {
                 let termination = termination.clone();
                 drop(lock);
                 observer.on_termination(termination);
-                Subscription::default()
+                OptionDisposal::none().into()
             }
         })
     }
@@ -192,11 +200,10 @@ where
     }
 }
 
-impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for PublishSubject<'or, T, E>
+impl<'or, T, E> Subject<'or, T, E> for PublishSubject<'or, T, E>
 where
-    T: Clone + MaybeSend + 'sub,
-    E: Clone + MaybeSend + 'sub,
-    'or: 'sub,
+    T: Clone + MaybeSend,
+    E: Clone + MaybeSend,
 {
     fn terminated(&self) -> Option<Termination<E>>
     where

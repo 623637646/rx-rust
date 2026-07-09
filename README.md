@@ -29,7 +29,7 @@ Feature                          | Description | Pulls in
 Build pipelines by combining operators from `ObservableExt` and subscribe with callbacks or custom observers.
 
 ```rust
-use rx_rust::observable::observable_ext::ObservableExt;
+use rx_rust::observable::ObservableExt;
 use rx_rust::observer::Termination;
 use rx_rust::operators::creating::range::Range;
 
@@ -49,7 +49,7 @@ Time-based operators require a scheduler. The example below uses Tokio; similar 
  #[tokio::main]
  async fn main() {
      use rx_rust::{
-         observable::observable_ext::ObservableExt,
+         observable::ObservableExt,
          observer::Termination,
          operators::{
              creating::from_iter::FromIter,

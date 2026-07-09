@@ -1,5 +1,8 @@
 use crate::utils::types::MaybeSend;
-use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
+use crate::{
+    observable::{Observable, Subscription},
+    observer::Observer,
+};
 use educe::Educe;
 
 /// Do not create the Observable until a Observer subscribes, and create a fresh Observable for each Observer.
@@ -8,7 +11,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::creating::{defer::Defer, just::Just},
 /// };
@@ -27,25 +30,25 @@ use educe::Educe;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Defer<OE, F>(F)
-where
-    F: FnOnce() -> OE;
+pub struct Defer<F>(F);
 
-impl<OE, F> Defer<OE, F>
-where
-    F: FnOnce() -> OE,
-{
-    pub fn new(builder: F) -> Self {
+impl<F> Defer<F> {
+    pub fn new<OE>(builder: F) -> Self
+    where
+        F: FnOnce() -> OE,
+    {
         Self(builder)
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for Defer<OE, F>
+impl<'or, T, E, OE, F> Observable<'or, T, E> for Defer<F>
 where
     F: FnOnce() -> OE,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observable = self.0();
         observable.subscribe(observer)
     }

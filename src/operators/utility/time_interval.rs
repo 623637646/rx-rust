@@ -1,6 +1,6 @@
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
     utils::types::MaybeSend,
 };
@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::utility::time_interval::TimeInterval,
 ///     subject::publish_subject::PublishSubject,
@@ -53,14 +53,16 @@ impl<OE> TimeInterval<OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (T, Duration), E> for TimeInterval<OE>
+impl<'or, T, E, OE> Observable<'or, (T, Duration), E> for TimeInterval<OE>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
 {
+    type D = OE::D;
+
     fn subscribe(
         self,
         observer: impl Observer<(T, Duration), E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         let observer = TimeIntervalObserver {
             observer,
             time_stamp: Instant::now(),

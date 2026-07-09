@@ -7,13 +7,12 @@ use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
 use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_disposable;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     operators::creating::interval::Interval,
 };
 use tests_utils::checker::Checker;
@@ -297,7 +296,7 @@ fn test_unsub_after_next() {
         let observable = Interval::new(DURATION_100_MS, runtime.clone(), Some(DURATION_100_MS));
         let (checker, observer) = Checker::new();
 
-        let subscription = Shared::new(Mutable::new(None::<Subscription<'_>>));
+        let subscription = Shared::new(Mutable::new(None));
         let subscription_cloned = subscription.clone();
         let (mut on_next, on_termination) = observer.into_callbacks();
         safe_lock_option!(replace: subscription, observable.subscribe_with_callback(

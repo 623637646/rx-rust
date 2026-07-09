@@ -1,11 +1,11 @@
-use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination;
+use crate::delegate_disposal;
+use crate::utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination};
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -18,7 +18,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         conditional_boolean::sequence_equal::SequenceEqual,
@@ -50,10 +50,10 @@ pub struct SequenceEqual<T, OE1, OE2> {
 }
 
 impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
-    pub fn new<'or, 'sub, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<'or, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, 'sub, T, E>,
-        OE2: Observable<'or, 'sub, T, E>,
+        OE1: Observable<'or, T, E>,
+        OE2: Observable<'or, T, E>,
     {
         Self {
             source_1,
@@ -63,16 +63,26 @@ impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
     }
 }
 
-impl<'or, 'sub, T, E, OE1, OE2> Observable<'or, 'sub, bool, E> for SequenceEqual<T, OE1, OE2>
+delegate_disposal!(
+    Disposal<'or>,
+    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+);
+
+impl<'or, T, E, OE1, OE2> Observable<'or, bool, E> for SequenceEqual<T, OE1, OE2>
 where
-    'sub: 'or,
-    'or: 'sub,
     T: PartialEq + MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE1: Observable<'or, 'sub, T, E>,
-    OE2: Observable<'or, 'sub, T, E>,
+    OE1: Observable<'or, T, E>,
+    OE1::D: MaybeSend + 'or,
+    OE2: Observable<'or, T, E>,
+    OE2::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<bool, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<'or>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<bool, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 first: SourceState {
@@ -95,9 +105,10 @@ where
                 };
                 let subscription_1 = self.source_1.subscribe(observer_1);
                 let subscription_2 = self.source_2.subscribe(observer_2);
-                subscription_1 + subscription_2
+                subscription_1.preceded_by_bound(subscription_2)
             })
         })
+        .map_into()
     }
 }
 

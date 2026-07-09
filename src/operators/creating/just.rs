@@ -1,7 +1,6 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -13,7 +12,7 @@ use std::convert::Infallible;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::creating::just::Just,
 /// };
@@ -39,11 +38,13 @@ impl<T> Just<T> {
     }
 }
 
-impl<'or, 'sub, T> Observable<'or, 'sub, T, Infallible> for Just<T> {
+impl<'or, T> Observable<'or, T, Infallible> for Just<T> {
+    type D = ();
+
     fn subscribe(
         self,
         mut observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         observer.on_next(self.0);
         observer.on_termination(Termination::Completed);
         Subscription::default()

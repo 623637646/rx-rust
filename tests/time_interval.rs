@@ -7,10 +7,12 @@ use crate::tests_utils::{
     test_runtime::block_on,
     test_struct::TestStruct,
 };
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
-    disposable::{Disposable, subscription::Subscription},
-    observable::{Observable, observable_ext::ObservableExt},
+    disposable::Disposable,
+    observable::Subscription,
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::create::Create, utility::time_interval::TimeInterval},
     subject::publish_subject::PublishSubject,
@@ -645,9 +647,9 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
 
         let observable = observable.time_interval();

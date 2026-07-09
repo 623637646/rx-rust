@@ -1,6 +1,6 @@
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
     utils::types::MaybeSend,
 };
@@ -13,7 +13,7 @@ use std::time::Instant;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::utility::timestamp::Timestamp,
 ///     subject::publish_subject::PublishSubject,
@@ -55,14 +55,16 @@ impl<OE> Timestamp<OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (T, Instant), E> for Timestamp<OE>
+impl<'or, T, E, OE> Observable<'or, (T, Instant), E> for Timestamp<OE>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
 {
+    type D = OE::D;
+
     fn subscribe(
         self,
         observer: impl Observer<(T, Instant), E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         let observer = TimestampObserver { observer };
         self.source.subscribe(observer)
     }

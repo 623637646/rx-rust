@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    disposable::Disposable,
+    observable::{Observable, Subscription},
     observer::{Observer, boxed_observer::BoxedObserver},
 };
 use educe::Educe;
@@ -11,7 +11,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -48,21 +48,25 @@ pub struct HookOnSubscription<OE, F> {
 }
 
 impl<OE, F> HookOnSubscription<OE, F> {
-    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, T, E, D>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
-        F: FnOnce(OE, BoxedObserver<'or, T, E>) -> Subscription<'sub>,
+        OE: Observable<'or, T, E>,
+        D: Disposable,
+        F: FnOnce(OE, BoxedObserver<'or, T, E>) -> Subscription<D>,
     {
         Self { source, callback }
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for HookOnSubscription<OE, F>
+impl<'or, T, E, OE, F, D> Observable<'or, T, E> for HookOnSubscription<OE, F>
 where
-    OE: Observable<'or, 'sub, T, E>,
-    F: FnOnce(OE, BoxedObserver<'or, T, E>) -> Subscription<'sub>,
+    OE: Observable<'or, T, E>,
+    D: Disposable,
+    F: FnOnce(OE, BoxedObserver<'or, T, E>) -> Subscription<D>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         (self.callback)(self.source, BoxedObserver::new(observer))
     }
 }

@@ -1,17 +1,18 @@
-use crate::disposable::subscription::Subscription;
-use crate::observable::observable_ext::ObservableExt;
+use crate::delegate_disposal;
+use crate::disposable::Disposable;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::{
-        subscribe_unsub_after_termination::subscribe_unsub_after_termination, types::MarkerType,
+        subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+        types::MarkerType,
     },
 };
 use educe::Educe;
@@ -23,7 +24,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         combining::switch::Switch,
@@ -53,10 +54,10 @@ pub struct Switch<OE, OE1> {
 }
 
 impl<OE, OE1> Switch<OE, OE1> {
-    pub fn new<'or, 'sub, T, E>(source: OE) -> Self
+    pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, OE1, E>,
-        OE1: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, OE1, E>,
+        OE1: Observable<'or, T, E>,
     {
         Self {
             source,
@@ -66,28 +67,35 @@ impl<OE, OE1> Switch<OE, OE1> {
 }
 
 impl<E, OE1, I> Switch<MapInfallibleToError<E, FromIter<I>>, OE1> {
-    pub fn new_from_iter<'or, 'sub, T>(into_iterator: I) -> Self
+    pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
-        OE1: Observable<'or, 'sub, T, E>,
+        OE1: Observable<'or, T, E>,
     {
         Self {
-            source: FromIter::new(into_iterator).map_infallible_to_error(),
+            source: MapInfallibleToError::new(FromIter::new(into_iterator)),
             _marker: PhantomData,
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Switch<OE, OE1>
+delegate_disposal!(
+    Disposal<'or>,
+    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+);
+
+impl<'or, T, E, OE, OE1> Observable<'or, T, E> for Switch<OE, OE1>
 where
-    'sub: 'or,
-    'or: 'sub,
-    T: MaybeSend + 'sub,
-    E: MaybeSend + 'sub,
-    OE: Observable<'or, 'sub, OE1, E>,
-    OE1: Observable<'or, 'sub, T, E>,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OE: Observable<'or, OE1, E>,
+    OE::D: MaybeSend + 'or,
+    OE1: Observable<'or, T, E>,
+    OE1::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<'or>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 sub_state: SubState::Idle,
@@ -98,30 +106,31 @@ where
                 self.source.subscribe(SwitchObserver(context))
             })
         })
+        .map_into()
     }
 }
 
-enum SubState<'sub> {
+enum SubState<D: Disposable> {
     Idle,
     PendingSubscription,
-    Processing(Subscription<'sub>),
+    Processing(Subscription<D>),
 }
 
-struct Model<'sub> {
-    sub_state: SubState<'sub>,
+struct Model<D: Disposable> {
+    sub_state: SubState<D>,
     is_source_completed: bool,
     current_sub_id: IncrementId,
 }
 
-struct SwitchObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
+struct SwitchObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<D>>);
 
-impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for SwitchObserver<'sub, T, E, OR>
+impl<'or, T, E, OR, OE1> Observer<OE1, E> for SwitchObserver<T, E, OR, OE1::D>
 where
-    'sub: 'or,
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, 'sub, T, E>,
+    OE1: Observable<'or, T, E>,
+    OE1::D: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
         let result = self.0.modify_model(|model| {
@@ -174,11 +183,12 @@ where
 
 // TODO: Improve performance, if is_source_completed is true, stop the context and no more need to lock when sending next.
 // TODO: check all cases using subscribe_with_shared_model whether it can be improved.
-struct SwitchInnerObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>, IncrementId);
+struct SwitchInnerObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<D>>, IncrementId);
 
-impl<T, E, OR> Observer<T, E> for SwitchInnerObserver<'_, T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for SwitchInnerObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.modify_model(|model| {

@@ -1,8 +1,7 @@
-use crate::disposable::Disposable;
-use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::disposable::subscription::Subscription;
+use crate::observable::Subscription;
 use crate::scheduler::RecursionAction;
-use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
+use crate::utils::types::{MarkerType, MaybeSend, Mutable, MutableHelper, Shared};
+use crate::{delegate_disposal, disposable::Disposable};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -28,7 +27,7 @@ use std::{
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::{
 ///             creating::from_iter::FromIter,
@@ -72,29 +71,42 @@ use std::{
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Delay<OE, S> {
+pub struct Delay<'or, OE, S> {
     source: OE,
     delay: Duration,
     scheduler: S,
+    _marker: MarkerType<&'or ()>,
 }
 
-impl<OE, S> Delay<OE, S> {
+impl<'or, OE, S> Delay<'or, OE, S> {
     pub fn new(source: OE, delay: Duration, scheduler: S) -> Self {
         Self {
             source,
             delay,
             scheduler,
+            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Delay<OE, S>
+delegate_disposal!(
+    Disposal<T, SD, D>,
+    crate::disposable::chain_disposal::ChainDisposal<Shared<Mutable<DelayContext<T, SD>>>, D>,
+    where SD: Disposable, D: Disposable
+);
+
+impl<'or, T, E, OE, S> Observable<'static, T, E> for Delay<'or, OE, S>
 where
     T: MaybeSend + 'static,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
+    type D = Disposal<T, S::D, OE::D>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + MaybeSend + 'static,
+    ) -> Subscription<Self::D> {
         let context = Shared::new(Mutable::new(DelayContext {
             values: VecDeque::new(),
             timer: None,
@@ -105,30 +117,33 @@ where
             context: context.clone(),
             observer: Shared::new(Mutable::new(Some(observer))),
         };
-        self.source.subscribe(delay_observer) + context
+        self.source
+            .subscribe(delay_observer)
+            .preceded_by(context)
+            .map_into()
     }
 }
 
-struct DelayContext<T> {
+struct DelayContext<T, D: Disposable> {
     values: VecDeque<(Instant, Option<T>)>, // None means completed
-    timer: Option<BoxedDisposal<'static>>,
+    timer: Option<Subscription<D>>,
 }
 
 // TODO: Disposable should not be Cloneable
-impl<T> Disposable for Shared<Mutable<DelayContext<T>>> {
+impl<T, D: Disposable> Disposable for Shared<Mutable<DelayContext<T, D>>> {
     fn dispose(self) {
         safe_lock_option_disposable!(dispose: self, timer);
     }
 }
 
-struct DelayObserver<T, OR, S> {
+struct DelayObserver<T, OR, S: Scheduler> {
     delay: Duration,
     scheduler: S,
-    context: Shared<Mutable<DelayContext<T>>>,
+    context: Shared<Mutable<DelayContext<T, S::D>>>,
     observer: Shared<Mutable<Option<OR>>>, // None means terminated or disposed
 }
 
-impl<T, OR, S> DelayObserver<T, OR, S> {
+impl<T, OR, S: Scheduler> DelayObserver<T, OR, S> {
     fn emit_value_and_setup_timer_if_needed<E>(&self, value: Option<T>)
     where
         T: MaybeSend + 'static,
@@ -142,7 +157,7 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
             }
             let context = self.context.clone();
             let observer = self.observer.clone();
-            lock.timer = Some(BoxedDisposal::new(self.scheduler.schedule_recursively(
+            lock.timer = Some(self.scheduler.schedule_recursively(
                 move |_| {
                     // Get values that should be sent
                     let (values, completed) = context.lock_mut(|mut lock| {
@@ -185,7 +200,7 @@ impl<T, OR, S> DelayObserver<T, OR, S> {
                     }
                 },
                 Some(self.delay),
-            )));
+            ));
         });
     }
 }

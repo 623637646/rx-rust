@@ -1,8 +1,11 @@
-use super::from_iter::FromIter;
+use crate::operators::creating::from_iter::FromIter;
 use crate::utils::types::MaybeSend;
-use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
+use crate::{
+    observable::{Observable, Subscription},
+    observer::Observer,
+};
 use educe::Educe;
-use std::{convert::Infallible, ops::RangeBounds};
+use std::convert::Infallible;
 
 /// Creates an Observable that emits a sequence of integers within a specified range.
 /// See <https://reactivex.io/documentation/operators/range.html>
@@ -10,7 +13,7 @@ use std::{convert::Infallible, ops::RangeBounds};
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::creating::range::Range,
 /// };
@@ -31,22 +34,21 @@ use std::{convert::Infallible, ops::RangeBounds};
 pub struct Range<I>(I);
 
 impl<I> Range<I> {
-    pub fn new<T>(range: I) -> Self
-    where
-        I: IntoIterator<Item = T> + RangeBounds<T>,
-    {
+    pub fn new(range: I) -> Self {
         Self(range)
     }
 }
 
-impl<'or, 'sub, T, I> Observable<'or, 'sub, T, Infallible> for Range<I>
+impl<'or, T, I> Observable<'or, T, Infallible> for Range<I>
 where
     I: IntoIterator<Item = T>,
 {
+    type D = ();
+
     fn subscribe(
         self,
         observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         FromIter::new(self.0).subscribe(observer)
     }
 }

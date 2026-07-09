@@ -1,5 +1,8 @@
-use crate::disposable::shared_disposal::SharedDisposal;
-use crate::disposable::subscription::Subscription;
+use crate::delegate_disposal;
+use crate::disposable::{
+    Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
+};
+use crate::observable::Subscription;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -20,7 +23,7 @@ pub enum RetryAction<E, OE1> {
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::{just::Just, throw::Throw},
@@ -48,46 +51,57 @@ pub struct Retry<OE, F> {
 }
 
 impl<OE, F> Retry<OE, F> {
-    pub fn new<'or, 'sub, T, E, OE1>(source: OE, callback: F) -> Self
+    pub fn new<'or, T, E, OE1>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
-        OE1: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
+        OE1: Observable<'or, T, E>,
         F: FnMut(E) -> RetryAction<E, OE1>,
     {
         Self { source, callback }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1, F> Observable<'or, 'sub, T, E> for Retry<OE, F>
+delegate_disposal!(
+    Disposal<D, D1>,
+    ChainDisposal<SharedDisposal<Subscription<D1>>, D>,
+    where D: Disposable, D1: Disposable
+);
+
+impl<'or, T, E, OE, OE1, F> Observable<'or, T, E> for Retry<OE, F>
 where
-    OE: Observable<'or, 'sub, T, E>,
-    OE1: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
+    OE1: Observable<'or, T, E>,
+    OE1::D: MaybeSend + 'or,
     F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
-    'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<OE::D, OE1::D>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let shared_disposal = SharedDisposal::default();
         let observer = RetryObserver {
             observer,
             callback: self.callback,
             shared_disposal: shared_disposal.clone(),
         };
-        self.source.subscribe(observer) + shared_disposal
+        self.source
+            .subscribe(observer)
+            .preceded_by(shared_disposal)
+            .map_into()
     }
 }
 
-struct RetryObserver<'sub, OR, F> {
+struct RetryObserver<OR, F, D: Disposable> {
     observer: OR,
     callback: F,
-    shared_disposal: SharedDisposal<Subscription<'sub>>,
+    shared_disposal: SharedDisposal<Subscription<D>>,
 }
 
-impl<'or, 'sub, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<'sub, OR, F>
+impl<'or, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<OR, F, OE1::D>
 where
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, 'sub, T, E>,
+    OE1: Observable<'or, T, E>,
+    OE1::D: MaybeSend + 'or,
     F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
-    'sub: 'or,
 {
     fn on_next(&mut self, value: T) {
         self.observer.on_next(value);

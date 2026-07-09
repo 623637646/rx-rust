@@ -6,7 +6,7 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     disposable::Disposable,
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     operators::creating::repeat::Repeat,
 };
 use std::convert::Infallible;

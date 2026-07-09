@@ -1,10 +1,11 @@
+use crate::delegate_disposal;
 use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
+use crate::utils::{subscribe_unsub_after_termination, subscribe_with_shared_model};
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
 };
@@ -16,7 +17,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::combining::combine_latest::CombineLatest,
 ///     subject::behavior_subject::BehaviorSubject,
@@ -52,29 +53,36 @@ pub struct CombineLatest<OE1, OE2> {
 }
 
 impl<OE1, OE2> CombineLatest<OE1, OE2> {
-    pub fn new<'or, 'sub, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<'or, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, 'sub, T1, E>,
-        OE2: Observable<'or, 'sub, T2, E>,
+        OE1: Observable<'or, T1, E>,
+        OE2: Observable<'or, T2, E>,
     {
         Self { source_1, source_2 }
     }
 }
 
-impl<'or, 'sub, T1, T2, E, OE1, OE2> Observable<'or, 'sub, (T1, T2), E> for CombineLatest<OE1, OE2>
+delegate_disposal!(
+    Disposal<'or>,
+    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+);
+
+impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for CombineLatest<OE1, OE2>
 where
-    'or: 'sub,
-    'sub: 'or,
-    T1: Clone + MaybeSend + 'sub,
-    T2: Clone + MaybeSend + 'sub,
-    E: MaybeSend + 'sub,
-    OE1: Observable<'or, 'sub, T1, E>,
-    OE2: Observable<'or, 'sub, T2, E>,
+    T1: Clone + MaybeSend + 'or,
+    T2: Clone + MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OE1: Observable<'or, T1, E>,
+    OE1::D: MaybeSend + 'or,
+    OE2: Observable<'or, T2, E>,
+    OE2::D: MaybeSend + 'or,
 {
+    type D = Disposal<'or>;
+
     fn subscribe(
         self,
         observer: impl Observer<(T1, T2), E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 latest_1: None,
@@ -84,9 +92,10 @@ where
             subscribe_with_shared_model(observer, model, |context| {
                 let sub_1 = self.source_1.subscribe(ObserverImpl1(context.clone()));
                 let sub_2 = self.source_2.subscribe(ObserverImpl2(context));
-                sub_1 + sub_2
+                sub_1.preceded_by_bound(sub_2)
             })
         })
+        .map_into()
     }
 }
 
@@ -102,9 +111,9 @@ macro_rules! impl_observer {
 
         impl<T1, T2, E, OR> Observer<$t_self, E> for $name<T1, T2, E, OR>
         where
-            OR: Observer<(T1, T2), E>,
             T1: Clone,
             T2: Clone,
+            OR: Observer<(T1, T2), E>,
         {
             fn on_next(&mut self, val: $t_self) {
                 let _ = self.0.modify_model(|model| {

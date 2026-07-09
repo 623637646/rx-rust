@@ -1,12 +1,9 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
-    subject::{
-        publish_subject::PublishSubject, subject_ext::SubjectExt,
-        subject_observable::SubjectObservable,
-    },
+    subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
     utils::types::MarkerType,
 };
 use educe::Educe;
@@ -18,8 +15,7 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     disposable::subscription::Subscription,
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -30,7 +26,7 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 ///
 /// let groups = Arc::new(Mutex::new(Vec::<Vec<i32>>::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
-/// let inner_subscriptions = Arc::new(Mutex::new(Vec::<Subscription>::new()));
+/// let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
 /// let groups_observer = Arc::clone(&groups);
 /// let terminations_observer = Arc::clone(&terminations);
 /// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
@@ -83,9 +79,9 @@ pub struct GroupBy<OE, F, K> {
 }
 
 impl<OE, F, K> GroupBy<OE, F, K> {
-    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         F: FnMut(T) -> K,
     {
         Self {
@@ -96,19 +92,21 @@ impl<OE, F, K> GroupBy<OE, F, K> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, F, K>
-    Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for GroupBy<OE, F, K>
+impl<'or, T, E, OE, F, K> Observable<'or, SubjectObservable<PublishSubject<'or, T, E>>, E>
+    for GroupBy<OE, F, K>
 where
     T: Clone + MaybeSend + 'or,
     E: Clone + MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     F: FnMut(T) -> K + MaybeSend + 'or,
     K: Eq + Hash + MaybeSend + 'or,
 {
+    type D = OE::D;
+
     fn subscribe(
         self,
         observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         let observer = GroupByObserver {
             observer,
             callback: self.callback,
@@ -139,7 +137,8 @@ where
             .entry(key)
             .or_insert_with(|| {
                 let subject = PublishSubject::new();
-                self.observer.on_next(subject.clone().into_observable());
+                self.observer
+                    .on_next(SubjectObservable::new(subject.clone()));
                 subject
             })
             .clone();

@@ -1,5 +1,8 @@
 use crate::utils::types::MaybeSend;
-use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
+use crate::{
+    observable::{Observable, Subscription},
+    observer::Observer,
+};
 use educe::Educe;
 use std::convert::Infallible;
 
@@ -9,7 +12,7 @@ use std::convert::Infallible;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     operators::creating::never::Never,
 /// };
 /// use std::convert::Infallible;
@@ -23,11 +26,13 @@ use std::convert::Infallible;
 #[educe(Debug, Clone)]
 pub struct Never;
 
-impl<'or, 'sub> Observable<'or, 'sub, Infallible, Infallible> for Never {
+impl<'or> Observable<'or, Infallible, Infallible> for Never {
+    type D = ();
+
     fn subscribe(
         self,
         _: impl Observer<Infallible, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         Subscription::default()
     }
 }

@@ -13,8 +13,9 @@ use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
-    disposable::{Disposable, subscription::Subscription},
-    observable::{Observable, observable_ext::ObservableExt},
+    disposable::Disposable,
+    observable::Subscription,
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{
         creating::{create::Create, never::Never},

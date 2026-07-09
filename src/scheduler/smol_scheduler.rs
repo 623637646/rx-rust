@@ -13,12 +13,12 @@ pub struct SmolScheduler;
 
 /// Provides the smol-backed `Scheduler` implementation.
 impl Scheduler for SmolScheduler {
-    type DisposableType = smol::Task<()>;
+    type D = smol::Task<()>;
 
     fn spawn_future(
         &self,
         future: impl Future<Output = ()> + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::DisposableType> {
+    ) -> BoundDropDisposal<Self::D> {
         let handle = smol::spawn(future);
         BoundDropDisposal::new(handle)
     }

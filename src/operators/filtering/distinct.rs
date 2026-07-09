@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -13,7 +13,7 @@ use std::{collections::HashSet, hash::Hash};
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -41,9 +41,9 @@ pub struct Distinct<OE, F> {
 }
 
 impl<OE, F> Distinct<OE, F> {
-    pub fn new_with_key_selector<'or, 'sub, T, E, K>(source: OE, key_selector: F) -> Self
+    pub fn new_with_key_selector<'or, T, E, K>(source: OE, key_selector: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         F: FnMut(&T) -> K,
     {
         Self {
@@ -54,10 +54,10 @@ impl<OE, F> Distinct<OE, F> {
 }
 
 impl<T, OE> Distinct<OE, fn(&T) -> T> {
-    pub fn new<'or, 'sub, E>(source: OE) -> Self
+    pub fn new<'or, E>(source: OE) -> Self
     where
         T: Clone,
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
     {
         Self {
             source,
@@ -66,13 +66,15 @@ impl<T, OE> Distinct<OE, fn(&T) -> T> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, F, K> Observable<'or, 'sub, T, E> for Distinct<OE, F>
+impl<'or, T, E, OE, F, K> Observable<'or, T, E> for Distinct<OE, F>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     F: FnMut(&T) -> K + MaybeSend + 'or,
     K: Eq + Hash + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observer = DistinctObserver {
             observer,
             key_selector: self.key_selector,

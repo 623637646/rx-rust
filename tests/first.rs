@@ -4,9 +4,10 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::observable::Subscription;
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, filtering::first::First},
     subject::publish_subject::PublishSubject,
@@ -268,9 +269,9 @@ fn test_lifetime_sub() {
     {
         let observable = Create::new(|mut observer| {
             observer.on_next(111);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
         let observable = observable.first();
 
@@ -315,9 +316,9 @@ fn test_lifetime_or_sub() {
     {
         let observable = Create::new(|observer: BoxedObserver<'_, &TestStruct, Infallible>| {
             life_marker_or = Some(observer);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker_sub.consume_ref();
-            })
+            }))
         });
 
         let observable = observable.first();

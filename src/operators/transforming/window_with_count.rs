@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
 };
@@ -14,8 +14,7 @@ use std::{cmp::Ordering, num::NonZeroUsize};
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     disposable::subscription::Subscription,
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -26,7 +25,7 @@ use std::{cmp::Ordering, num::NonZeroUsize};
 ///
 /// let windows = Arc::new(Mutex::new(Vec::<Vec<i32>>::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
-/// let inner_subscriptions = Arc::new(Mutex::new(Vec::<Subscription>::new()));
+/// let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
 /// let windows_observer = Arc::clone(&windows);
 /// let terminations_observer = Arc::clone(&terminations);
 /// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
@@ -82,17 +81,19 @@ impl<OE> WindowWithCount<OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E>
+impl<'or, T, E, OE> Observable<'or, SubjectObservable<PublishSubject<'or, T, E>>, E>
     for WindowWithCount<OE>
 where
     T: Clone + MaybeSend + 'or,
     E: Clone + MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
 {
+    type D = OE::D;
+
     fn subscribe(
         self,
         mut observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         let subject = PublishSubject::default();
         observer.on_next(SubjectObservable::new(subject.clone()));
 

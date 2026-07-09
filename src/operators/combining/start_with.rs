@@ -1,5 +1,8 @@
 use crate::utils::types::MaybeSend;
-use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
+use crate::{
+    observable::{Observable, Subscription},
+    observer::Observer,
+};
 use educe::Educe;
 
 /// Emits a specified sequence of values before beginning to emit the items from the source Observable.
@@ -8,7 +11,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         combining::start_with::StartWith,
@@ -36,21 +39,26 @@ pub struct StartWith<OE, I> {
 }
 
 impl<OE, I> StartWith<OE, I> {
-    pub fn new<'or, 'sub, T, E>(source: OE, values: I) -> Self
+    pub fn new<'or, T, E>(source: OE, values: I) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         I: IntoIterator<Item = T>,
     {
         Self { source, values }
     }
 }
 
-impl<'or, 'sub, T, E, OE, I> Observable<'or, 'sub, T, E> for StartWith<OE, I>
+impl<'or, T, E, OE, I> Observable<'or, T, E> for StartWith<OE, I>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, mut observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = OE::D;
+
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         for value in self.values.into_iter() {
             observer.on_next(value);
         }

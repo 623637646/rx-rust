@@ -1,9 +1,11 @@
 use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
-    disposable::subscription::Subscription,
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal},
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
-    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
 };
 use crate::{safe_lock, safe_lock_option_observer, safe_lock_vec};
 use educe::Educe;
@@ -14,7 +16,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::transforming::buffer::Buffer,
 ///     subject::publish_subject::PublishSubject,
@@ -58,23 +60,35 @@ pub struct Buffer<OE, OE1> {
 }
 
 impl<OE, OE1> Buffer<OE, OE1> {
-    pub fn new<'or, 'sub, T, E>(source: OE, boundary: OE1) -> Self
+    pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
-        OE1: Observable<'or, 'sub, (), E>,
+        OE: Observable<'or, T, E>,
+        OE1: Observable<'or, (), E>,
     {
         Self { source, boundary }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, Vec<T>, E> for Buffer<OE, OE1>
+delegate_disposal!(
+    Disposal<D, D1>,
+    subscribe_unsub_after_termination::Disposal<ChainDisposal<D, D1>>,
+    where D: Disposable, D1: Disposable
+);
+
+impl<'or, T, E, OE, OE1> Observable<'or, Vec<T>, E> for Buffer<OE, OE1>
 where
     T: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
-    OE1: Observable<'or, 'sub, (), E>,
-    'sub: 'or,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
+    OE1: Observable<'or, (), E>,
+    OE1::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<Vec<T>, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<OE::D, OE1::D>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
             let values = Shared::new(Mutable::new(Vec::default()));
@@ -83,8 +97,9 @@ where
                 values: values.clone(),
             });
             let subscription_2 = self.source.subscribe(BufferObserver { observer, values });
-            subscription_1 + subscription_2
+            subscription_1.preceded_by_bound(subscription_2)
         })
+        .map_into()
     }
 }
 

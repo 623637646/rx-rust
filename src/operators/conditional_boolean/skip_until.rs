@@ -1,11 +1,14 @@
-use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination;
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
+    delegate_disposal,
+    utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+};
+use crate::{
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -16,7 +19,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::conditional_boolean::skip_until::SkipUntil,
 ///     subject::publish_subject::PublishSubject,
@@ -59,25 +62,32 @@ pub struct SkipUntil<OE, OE1> {
 }
 
 impl<OE, OE1> SkipUntil<OE, OE1> {
-    pub fn new<'or, 'sub, T, E>(source: OE, start: OE1) -> Self
+    pub fn new<'or, T, E>(source: OE, start: OE1) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
-        OE1: Observable<'or, 'sub, (), E>,
+        OE: Observable<'or, T, E>,
+        OE1: Observable<'or, (), E>,
     {
         Self { source, start }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for SkipUntil<OE, OE1>
+delegate_disposal!(
+    Disposal<'or>,
+    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+);
+
+impl<'or, T, E, OE, OE1> Observable<'or, T, E> for SkipUntil<OE, OE1>
 where
-    'sub: 'or,
-    'or: 'sub,
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
-    OE1: Observable<'or, 'sub, (), E>,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
+    OE1: Observable<'or, (), E>,
+    OE1::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<'or>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model { started: false };
             subscribe_with_shared_model(observer, model, |context| {
@@ -86,9 +96,10 @@ where
                     started: false,
                 });
                 let subscription_2 = self.source.subscribe(SkipUntilObserver(context));
-                subscription_1 + subscription_2
+                subscription_1.preceded_by_bound(subscription_2)
             })
         })
+        .map_into()
     }
 }
 

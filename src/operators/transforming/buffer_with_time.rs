@@ -1,9 +1,8 @@
-use crate::disposable::Disposable;
-use crate::disposable::boxed_disposal::BoxedDisposal;
-use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
+use crate::utils::types::{MarkerType, MaybeSend, Mutable, MutableHelper, Shared};
+use crate::{delegate_disposal, disposable::Disposable};
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
@@ -27,7 +26,7 @@ use std::time::Duration;
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::{
 ///             creating::from_iter::FromIter,
@@ -70,34 +69,44 @@ use std::time::Duration;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct BufferWithTime<OE, S> {
+pub struct BufferWithTime<'or, OE, S> {
     source: OE,
     time_span: Duration,
     scheduler: S,
     delay: Option<Duration>,
+    _marker: MarkerType<&'or ()>,
 }
 
-impl<OE, S> BufferWithTime<OE, S> {
+impl<'or, OE, S> BufferWithTime<'or, OE, S> {
     pub fn new(source: OE, time_span: Duration, scheduler: S, delay: Option<Duration>) -> Self {
         Self {
             source,
             time_span,
             scheduler,
             delay,
+            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTime<OE, S>
+delegate_disposal!(
+    Disposal<T, SD, D>,
+    crate::disposable::chain_disposal::ChainDisposal<Shared<Mutable<BufferWithTimeContext<T, SD>>>, D>,
+    where SD: Disposable, D: Disposable
+);
+
+impl<'or, T, E, OE, S> Observable<'static, Vec<T>, E> for BufferWithTime<'or, OE, S>
 where
     T: MaybeSend + 'static,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
+    type D = Disposal<T, S::D, OE::D>;
+
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         let observer = Shared::new(Mutable::new(Some(observer)));
         let context = Shared::new(Mutable::new(BufferWithTimeContext {
             values: Vec::new(),
@@ -116,29 +125,29 @@ where
             self.time_span,
             self.delay,
         );
-        safe_lock_option!(replace: context, timer, BoxedDisposal::new(disposal));
-        sub + context
+        safe_lock_option!(replace: context, timer, disposal);
+        sub.preceded_by(context).into()
     }
 }
 
-struct BufferWithTimeContext<T> {
+struct BufferWithTimeContext<T, D: Disposable> {
     values: Vec<T>,
-    timer: Option<BoxedDisposal<'static>>,
+    timer: Option<Subscription<D>>,
 }
 
 // TODO: Disposable should not be Cloneable
-impl<T> Disposable for Shared<Mutable<BufferWithTimeContext<T>>> {
+impl<T, D: Disposable> Disposable for Shared<Mutable<BufferWithTimeContext<T, D>>> {
     fn dispose(self) {
         safe_lock_option_disposable!(dispose: self, timer);
     }
 }
 
-struct BufferWithTimeObserver<T, OR> {
+struct BufferWithTimeObserver<T, OR, D: Disposable> {
     observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<BufferWithTimeContext<T>>>,
+    context: Shared<Mutable<BufferWithTimeContext<T, D>>>,
 }
 
-impl<T, E, OR> Observer<T, E> for BufferWithTimeObserver<T, OR>
+impl<T, E, OR, D: Disposable> Observer<T, E> for BufferWithTimeObserver<T, OR, D>
 where
     OR: Observer<Vec<T>, E>,
 {

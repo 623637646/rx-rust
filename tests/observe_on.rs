@@ -8,13 +8,15 @@ use crate::tests_utils::{
     test_channel::{ChannelState, test_channel},
     test_runtime::block_on,
 };
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
-    disposable::{Disposable, subscription::Subscription},
-    observable::{Observable, observable_ext::ObservableExt},
+    disposable::Disposable,
+    observable::Subscription,
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{
         creating::{create::Create, never::Never},
@@ -1501,9 +1503,9 @@ fn test_lifetime_sub() {
             let observable = Create::new(|mut observer| {
                 observer.on_next(1);
                 observer.on_termination(Termination::<String>::Completed);
-                Subscription::new_with_disposal_callback(|| {
+                Subscription::new(CallbackDisposal::new(|| {
                     life_marker.consume_ref();
-                })
+                }))
             });
 
             let observable = observable.observe_on(ThreadCheckerScheduler::new("thread_1"));

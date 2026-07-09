@@ -8,12 +8,12 @@ use std::time::Duration;
 
 /// Exposes `ThreadPool` as a multithreaded `Scheduler`.
 impl Scheduler for ThreadPool {
-    type DisposableType = ThreadPoolDisposal;
+    type D = ThreadPoolDisposal;
 
     fn spawn_future(
         &self,
         future: impl Future<Output = ()> + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::DisposableType> {
+    ) -> BoundDropDisposal<Self::D> {
         let handle = self
             .spawn_with_handle(future)
             .expect("failed to spawn future");

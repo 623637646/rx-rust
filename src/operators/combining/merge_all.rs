@@ -1,16 +1,17 @@
-use crate::disposable::subscription::Subscription;
-use crate::observable::observable_ext::ObservableExt;
+use crate::delegate_disposal;
+use crate::disposable::Disposable;
 use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::{
-        subscribe_unsub_after_termination::subscribe_unsub_after_termination, types::MarkerType,
+        subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+        types::MarkerType,
     },
 };
 use educe::Educe;
@@ -23,7 +24,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         combining::merge_all::MergeAll,
@@ -54,10 +55,10 @@ pub struct MergeAll<OE, OE1> {
 }
 
 impl<OE, OE1> MergeAll<OE, OE1> {
-    pub fn new<'or, 'sub, T, E>(source: OE) -> Self
+    pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, OE1, E>,
-        OE1: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, OE1, E>,
+        OE1: Observable<'or, T, E>,
     {
         Self {
             source,
@@ -67,28 +68,35 @@ impl<OE, OE1> MergeAll<OE, OE1> {
 }
 
 impl<E, OE1, I> MergeAll<MapInfallibleToError<E, FromIter<I>>, OE1> {
-    pub fn new_from_iter<'or, 'sub, T>(into_iterator: I) -> Self
+    pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
-        OE1: Observable<'or, 'sub, T, E>,
+        OE1: Observable<'or, T, E>,
     {
         Self {
-            source: FromIter::new(into_iterator).map_infallible_to_error(),
+            source: MapInfallibleToError::new(FromIter::new(into_iterator)),
             _marker: PhantomData,
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for MergeAll<OE, OE1>
+delegate_disposal!(
+    Disposal<'or>,
+    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+);
+
+impl<'or, T, E, OE, OE1> Observable<'or, T, E> for MergeAll<OE, OE1>
 where
-    'sub: 'or,
-    'or: 'sub,
-    T: MaybeSend + 'sub,
-    E: MaybeSend + 'sub,
-    OE: Observable<'or, 'sub, OE1, E>,
-    OE1: Observable<'or, 'sub, T, E>,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OE: Observable<'or, OE1, E>,
+    OE::D: MaybeSend + 'or,
+    OE1: Observable<'or, T, E>,
+    OE1::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<'or>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 subscriptions: SlotMap::new(),
@@ -98,23 +106,24 @@ where
                 self.source.subscribe(MergeAllObserver(context))
             })
         })
+        .map_into()
     }
 }
 
-struct Model<'sub> {
-    subscriptions: SlotMap<DefaultKey, Option<Subscription<'sub>>>,
+struct Model<D: Disposable> {
+    subscriptions: SlotMap<DefaultKey, Option<Subscription<D>>>,
     is_source_terminated: bool,
 }
 
-struct MergeAllObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
+struct MergeAllObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<D>>);
 
-impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for MergeAllObserver<'sub, T, E, OR>
+impl<'or, T, E, OR, OE1> Observer<OE1, E> for MergeAllObserver<T, E, OR, OE1::D>
 where
-    'sub: 'or,
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, 'sub, T, E>,
+    OE1: Observable<'or, T, E>,
+    OE1::D: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
         // Insert a placeholder subscription.
@@ -161,14 +170,15 @@ where
     }
 }
 
-struct MergeAllInnerObserver<'sub, T, E, OR> {
-    context: Context<T, E, OR, Model<'sub>>,
+struct MergeAllInnerObserver<T, E, OR, D: Disposable> {
+    context: Context<T, E, OR, Model<D>>,
     key: DefaultKey,
 }
 
-impl<T, E, OR> Observer<T, E> for MergeAllInnerObserver<'_, T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for MergeAllInnerObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         self.context.send_next(value);

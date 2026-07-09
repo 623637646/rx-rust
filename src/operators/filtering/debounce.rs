@@ -1,13 +1,12 @@
-use crate::disposable::bound_drop_disposal::BoundDropDisposal;
-use crate::disposable::boxed_disposal::BoxedDisposal;
+use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::MaybeSend;
+use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
@@ -27,7 +26,7 @@ use std::time::Duration;
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::{
 ///             creating::just::Just,
@@ -65,31 +64,39 @@ use std::time::Duration;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Debounce<OE, S> {
+pub struct Debounce<'or, OE, S> {
     source: OE,
     time_span: Duration,
     scheduler: S,
+    _marker: MarkerType<&'or ()>,
 }
 
-impl<OE, S> Debounce<OE, S> {
+impl<'or, OE, S> Debounce<'or, OE, S> {
     pub fn new(source: OE, time_span: Duration, scheduler: S) -> Self {
         Self {
             source,
             time_span,
             scheduler,
+            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Debounce<OE, S>
+impl<'or, T, E, OE, S> Observable<'static, T, E> for Debounce<'or, OE, S>
 where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
     S: Scheduler + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
-        let model = Model {
+    type D = subscribe_with_shared_model::Disposal<'or>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + MaybeSend + 'static,
+    ) -> Subscription<Self::D> {
+        let model = Model::<T, S::D> {
             current_value: None,
             timer: None,
             timer_id: IncrementId::default(),
@@ -104,19 +111,19 @@ where
     }
 }
 
-struct Model<T> {
+struct Model<T, D: Disposable> {
     current_value: Option<T>,
-    timer: Option<BoundDropDisposal<BoxedDisposal<'static>>>,
+    timer: Option<BoundDropDisposal<D>>,
     timer_id: IncrementId,
 }
 
-struct DebounceObserver<T, E, OR, S> {
-    context: Context<T, E, OR, Model<T>>,
+struct DebounceObserver<T, E, OR, S: Scheduler> {
+    context: Context<T, E, OR, Model<T, S::D>>,
     time_span: Duration,
     scheduler: S,
 }
 
-impl<T, E, OR, S> Observer<T, E> for DebounceObserver<T, E, OR, S>
+impl<T, E, OR, S: Scheduler> Observer<T, E> for DebounceObserver<T, E, OR, S>
 where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
@@ -159,12 +166,7 @@ where
             if timer_id != model.timer_id {
                 return ModificationResult::new_without_result();
             }
-            assert!(
-                model
-                    .timer
-                    .replace(BoundDropDisposal::new(BoxedDisposal::new(disposal)))
-                    .is_none()
-            );
+            assert!(model.timer.replace(disposal).is_none());
             ModificationResult::new_without_result().ignore_drop_outside()
         });
     }

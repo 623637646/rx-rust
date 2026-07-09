@@ -1,9 +1,5 @@
 use crate::utils::types::MaybeSend;
-use crate::{
-    disposable::subscription::Subscription,
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
-};
+use crate::{observable::Observable, observable::Subscription, observer::Observer};
 use educe::Educe;
 
 /// Invokes a callback for each item emitted by the source Observable before the item is emitted to the downstream observer.
@@ -12,7 +8,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -46,26 +42,46 @@ pub struct DoBeforeNext<OE, F> {
 }
 
 impl<OE, F> DoBeforeNext<OE, F> {
-    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         F: FnMut(&T),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoBeforeNext<OE, F>
+impl<'or, T, E, OE, F> Observable<'or, T, E> for DoBeforeNext<OE, F>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     F: FnMut(&T) + MaybeSend + 'or,
 {
-    fn subscribe(mut self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
-        self.source
-            .hook_on_next(move |observer, value| {
-                (self.callback)(&value);
-                observer.on_next(value);
-            })
-            .subscribe(observer)
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        self.source.subscribe(DoBeforeNextObserver {
+            observer,
+            callback: self.callback,
+        })
+    }
+}
+
+struct DoBeforeNextObserver<OR, F> {
+    observer: OR,
+    callback: F,
+}
+
+impl<T, E, OR, F> Observer<T, E> for DoBeforeNextObserver<OR, F>
+where
+    OR: Observer<T, E>,
+    F: FnMut(&T),
+{
+    fn on_next(&mut self, value: T) {
+        (self.callback)(&value);
+        self.observer.on_next(value);
+    }
+
+    fn on_termination(self, termination: crate::observer::Termination<E>) {
+        self.observer.on_termination(termination);
     }
 }

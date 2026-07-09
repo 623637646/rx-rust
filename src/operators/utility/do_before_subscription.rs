@@ -1,9 +1,5 @@
 use crate::utils::types::MaybeSend;
-use crate::{
-    disposable::subscription::Subscription,
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
-};
+use crate::{observable::Observable, observable::Subscription, observer::Observer};
 use educe::Educe;
 
 /// Invokes a callback when the Observable is subscribed to, before the subscription is established.
@@ -12,7 +8,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     operators::{
 ///         creating::from_iter::FromIter,
 ///         utility::do_before_subscription::DoBeforeSubscription,
@@ -38,28 +34,26 @@ pub struct DoBeforeSubscription<OE, F> {
 }
 
 impl<OE, F> DoBeforeSubscription<OE, F> {
-    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         F: FnOnce(),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoBeforeSubscription<OE, F>
+impl<'or, T, E, OE, F> Observable<'or, T, E> for DoBeforeSubscription<OE, F>
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     F: FnOnce(),
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
-        self.source
-            .hook_on_subscription(move |observable, observer| {
-                (self.callback)();
-                observable.subscribe(observer)
-            })
-            .subscribe(observer)
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        (self.callback)();
+        self.source.subscribe(observer)
     }
 }

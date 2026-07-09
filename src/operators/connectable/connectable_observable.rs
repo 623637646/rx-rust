@@ -1,8 +1,8 @@
 use super::ref_count::RefCount;
-use crate::disposable::Disposable;
-use crate::observable::Observable;
+use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
+use crate::observable::{Observable, Subscription};
+use crate::observer::Observer;
 use crate::utils::types::{MaybeSend, MutableBool, MutableBoolHelper, Shared};
-use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
 
 /// Represents an Observable that waits until its `connect()` method is called before it begins emitting items to its Observers.
@@ -11,7 +11,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         connectable::connectable_observable::ConnectableObservable,
@@ -75,36 +75,44 @@ impl<OE, S> ConnectableObservable<OE, S> {
     }
 
     // Subscribe the source. Return None if already connected
-    pub fn connect<'or, 'sub, T, E>(self) -> Option<Subscription<'sub>>
+    pub fn connect<'or, T, E>(
+        self,
+    ) -> Option<Subscription<ChainDisposal<ConnectableObservableDisposable, OE::D>>>
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         S: Observer<T, E> + MaybeSend + 'or,
     {
         if self.is_connected.change_if_not_equal(true) {
             Some(
-                self.source.subscribe(self.subject)
-                    + ConnectableObservableDisposable(self.is_connected),
+                self.source
+                    .subscribe(self.subject)
+                    .preceded_by(ConnectableObservableDisposable(self.is_connected)),
             )
         } else {
             None
         }
     }
 
-    pub fn ref_count<'sub>(self) -> RefCount<'sub, OE, S> {
+    pub fn ref_count<'or, T, E>(self) -> RefCount<'or, T, E, OE, S>
+    where
+        OE: Observable<'or, T, E>,
+    {
         RefCount::new(self)
     }
 }
 
-impl<'or, 'sub, T, E, OE, S> Observable<'or, 'sub, T, E> for ConnectableObservable<OE, S>
+impl<'or, T, E, OE, S> Observable<'or, T, E> for ConnectableObservable<OE, S>
 where
-    S: Observable<'or, 'sub, T, E>,
+    S: Observable<'or, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = S::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         self.subject.subscribe(observer)
     }
 }
 
-struct ConnectableObservableDisposable(Shared<MutableBool>);
+pub struct ConnectableObservableDisposable(Shared<MutableBool>);
 
 impl Disposable for ConnectableObservableDisposable {
     fn dispose(self) {

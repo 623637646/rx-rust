@@ -1,8 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
+    observable::Observable, observable::Subscription, observer::Observer,
+    operators::filtering::take_last::TakeLast,
 };
 use educe::Educe;
 
@@ -12,7 +11,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -44,13 +43,15 @@ impl<OE> Last<OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for Last<OE>
+impl<'or, T, E, OE> Observable<'or, T, E> for Last<OE>
 where
     T: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
-        self.source.take_last(1).subscribe(observer)
+    type D = crate::utils::subscribe_unsub_after_termination::Disposal<OE::D>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        TakeLast::new(self.source, 1).subscribe(observer)
     }
 }
