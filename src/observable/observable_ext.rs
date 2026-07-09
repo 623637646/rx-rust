@@ -62,7 +62,7 @@ use crate::{
     subject::{
         async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
     },
-    utils::types::{MaybeSend, NecessarySync},
+    utils::types::{MaybeSend, MaybeSync},
 };
 #[cfg(feature = "futures")]
 use std::convert::Infallible;
@@ -392,7 +392,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        Self: MaybeSend + NecessarySync + Clone + 'oe,
+        Self: MaybeSend + MaybeSync + Clone + 'oe,
     {
         CloneableBoxedObservable::new(self)
     }

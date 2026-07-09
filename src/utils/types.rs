@@ -57,8 +57,8 @@ cfg_if::cfg_if! {
 
         pub trait MaybeSend {}
         impl<T> MaybeSend for T {}
-        pub trait NecessarySync {}
-        impl<T> NecessarySync for T {}
+        pub trait MaybeSync {}
+        impl<T> MaybeSync for T {}
     } else {
         use std::sync::{Arc, Mutex, MutexGuard};
         use std::ops::Deref;
@@ -110,7 +110,7 @@ cfg_if::cfg_if! {
 
         pub trait MaybeSend: Send {}
         impl<T> MaybeSend for T where T: Send {}
-        pub trait NecessarySync: Sync {}
-        impl<T> NecessarySync for T where T: Sync {}
+        pub trait MaybeSync: Sync {}
+        impl<T> MaybeSync for T where T: Sync {}
     }
 }
