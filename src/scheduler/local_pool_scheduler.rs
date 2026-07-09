@@ -8,17 +8,16 @@ use std::time::Duration;
 
 /// Adapts `LocalSpawner` to the `Scheduler` trait for single-threaded pools.
 impl Scheduler for LocalSpawner {
-    fn spawn_future<F>(
+    type DisposableType = LocalSpawnerDisposal;
+
+    fn spawn_future(
         &self,
-        future: F,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
-    where
-        F: Future<Output = ()> + MaybeSend + 'static,
-    {
-        let handel = self
+        future: impl Future<Output = ()> + MaybeSend + 'static,
+    ) -> BoundDropDisposal<Self::DisposableType> {
+        let handle = self
             .spawn_local_with_handle(future)
             .expect("failed to spawn future");
-        BoundDropDisposal::new(LocalSpawnerDisposal(handel))
+        BoundDropDisposal::new(LocalSpawnerDisposal(handle))
     }
 
     fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
@@ -26,10 +25,11 @@ impl Scheduler for LocalSpawner {
     }
 }
 
-struct LocalSpawnerDisposal<T>(futures::future::RemoteHandle<T>);
+pub struct LocalSpawnerDisposal(futures::future::RemoteHandle<()>);
 
-impl<T> Disposable for LocalSpawnerDisposal<T> {
+impl Disposable for LocalSpawnerDisposal {
     fn dispose(self) {
         // Drop to call the dispose
+        drop(self.0);
     }
 }

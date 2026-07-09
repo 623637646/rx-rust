@@ -8,17 +8,16 @@ use std::time::Duration;
 
 /// Exposes `ThreadPool` as a multithreaded `Scheduler`.
 impl Scheduler for ThreadPool {
-    fn spawn_future<F>(
+    type DisposableType = ThreadPoolDisposal;
+
+    fn spawn_future(
         &self,
-        future: F,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
-    where
-        F: Future<Output = ()> + MaybeSend + 'static,
-    {
-        let handel = self
+        future: impl Future<Output = ()> + MaybeSend + 'static,
+    ) -> BoundDropDisposal<Self::DisposableType> {
+        let handle = self
             .spawn_with_handle(future)
             .expect("failed to spawn future");
-        BoundDropDisposal::new(ThreadPoolDisposal(handel))
+        BoundDropDisposal::new(ThreadPoolDisposal(handle))
     }
 
     fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
@@ -26,10 +25,11 @@ impl Scheduler for ThreadPool {
     }
 }
 
-struct ThreadPoolDisposal<T>(futures::future::RemoteHandle<T>);
+pub struct ThreadPoolDisposal(futures::future::RemoteHandle<()>);
 
-impl<T> Disposable for ThreadPoolDisposal<T> {
+impl Disposable for ThreadPoolDisposal {
     fn dispose(self) {
         // Drop to call the dispose
+        drop(self.0);
     }
 }

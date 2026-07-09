@@ -1,6 +1,10 @@
 use educe::Educe;
 use futures::FutureExt;
-use rx_rust::{scheduler::Scheduler, utils::types::MaybeSend};
+use rx_rust::{
+    disposable::bound_drop_disposal::BoundDropDisposal, scheduler::Scheduler,
+    utils::types::MaybeSend,
+};
+use std::time::Duration;
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "local-pool-scheduler")] {
@@ -51,22 +55,16 @@ impl TestRuntime {
 }
 
 impl Scheduler for TestRuntime {
-    fn spawn_future<F>(
+    type DisposableType = <TestScheduler as Scheduler>::DisposableType;
+
+    fn spawn_future(
         &self,
-        future: F,
-    ) -> rx_rust::disposable::bound_drop_disposal::BoundDropDisposal<
-        impl rx_rust::disposable::Disposable + rx_rust::utils::types::MaybeSend + 'static + use<F>,
-    >
-    where
-        F: Future<Output = ()> + rx_rust::utils::types::MaybeSend + 'static,
-    {
+        future: impl Future<Output = ()> + MaybeSend + 'static,
+    ) -> BoundDropDisposal<Self::DisposableType> {
         self.0.spawn_future(future)
     }
 
-    fn sleep(
-        &self,
-        duration: std::time::Duration,
-    ) -> impl Future + rx_rust::utils::types::MaybeSend + 'static + use<> {
+    fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
         self.0.sleep(duration)
     }
 }

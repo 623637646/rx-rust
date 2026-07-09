@@ -31,23 +31,20 @@ pub enum RecursionAction {
 /// See <https://reactivex.io/documentation/scheduler.html>
 /// This is why the task must be 'static: <https://stackoverflow.com/a/65287449/9315497>
 pub trait Scheduler {
-    fn spawn_future<F>(
+    type DisposableType: Disposable + MaybeSend + 'static;
+
+    fn spawn_future(
         &self,
-        future: F,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<Self, F>>
-    where
-        F: Future<Output = ()> + MaybeSend + 'static;
+        future: impl Future<Output = ()> + MaybeSend + 'static,
+    ) -> BoundDropDisposal<Self::DisposableType>;
 
     fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<Self>;
 
-    fn schedule<F>(
+    fn schedule(
         &self,
-        task: F,
+        task: impl FnOnce() + MaybeSend + 'static,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<Self, F>>
-    where
-        F: FnOnce() + MaybeSend + 'static,
-    {
+    ) -> BoundDropDisposal<Self::DisposableType> {
         let delay = delay.map(|duration| self.sleep(duration));
         self.spawn_future(async move {
             if let Some(delay) = delay {
@@ -57,13 +54,12 @@ pub trait Scheduler {
         })
     }
 
-    fn schedule_recursively<F>(
+    fn schedule_recursively(
         &self,
-        mut task: F,
+        mut task: impl FnMut(usize) -> RecursionAction + MaybeSend + 'static,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<Self, F>>
+    ) -> BoundDropDisposal<Self::DisposableType>
     where
-        F: FnMut(usize) -> RecursionAction + MaybeSend + 'static,
         Self: Clone + MaybeSend + 'static,
     {
         let delay = delay.map(|duration| self.sleep(duration));
@@ -88,14 +84,13 @@ pub trait Scheduler {
         })
     }
 
-    fn schedule_periodically<F>(
+    fn schedule_periodically(
         &self,
-        mut task: F,
+        mut task: impl FnMut(usize) -> bool + MaybeSend + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<Self, F>>
+    ) -> BoundDropDisposal<Self::DisposableType>
     where
-        F: FnMut(usize) -> bool + MaybeSend + 'static,
         Self: Clone + MaybeSend + 'static,
     {
         let mut next_time = Instant::now() + delay.unwrap_or_default();
@@ -114,14 +109,13 @@ pub trait Scheduler {
     }
 
     #[cfg(feature = "futures")]
-    fn schedule_stream<SM, F>(
+    fn schedule_stream<SM>(
         &self,
         stream: SM,
-        mut result_callback: F,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<Self, SM, F>>
+        mut result_callback: impl FnMut(Option<SM::Item>) + MaybeSend + 'static,
+    ) -> BoundDropDisposal<Self::DisposableType>
     where
         SM: Stream + MaybeSend + 'static,
-        F: FnMut(Option<SM::Item>) + MaybeSend + 'static,
     {
         self.spawn_future(async move {
             let mut stream = std::pin::pin!(stream);

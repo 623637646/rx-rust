@@ -6,6 +6,7 @@ use rx_rust::disposable::bound_drop_disposal::BoundDropDisposal;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::MaybeSend;
 use std::cell::Cell;
+use std::time::Duration;
 
 thread_local! {
     static THREAD_NAME: Cell<Option<&'static str>> = const { Cell::new(None) };
@@ -27,7 +28,7 @@ impl ThreadCheckerScheduler {
     }
 }
 
-struct ThreadCheckerDisposal(AbortHandle);
+pub(crate) struct ThreadCheckerDisposal(AbortHandle);
 
 impl Disposable for ThreadCheckerDisposal {
     fn dispose(self) {
@@ -36,13 +37,12 @@ impl Disposable for ThreadCheckerDisposal {
 }
 
 impl Scheduler for ThreadCheckerScheduler {
-    fn spawn_future<F>(
+    type DisposableType = ThreadCheckerDisposal;
+
+    fn spawn_future(
         &self,
-        future: F,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
-    where
-        F: Future<Output = ()> + MaybeSend + 'static,
-    {
+        future: impl Future<Output = ()> + MaybeSend + 'static,
+    ) -> BoundDropDisposal<Self::DisposableType> {
         let thread_name = self.name;
         let (abortable, abort_handle) = abortable(future);
         std::thread::spawn(move || {
@@ -52,7 +52,7 @@ impl Scheduler for ThreadCheckerScheduler {
         BoundDropDisposal::new(ThreadCheckerDisposal(abort_handle))
     }
 
-    fn sleep(&self, duration: std::time::Duration) -> impl Future + MaybeSend + 'static + use<> {
+    fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
         async_io::Timer::after(duration)
     }
 }

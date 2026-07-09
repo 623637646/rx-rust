@@ -7,13 +7,12 @@ use std::time::Duration;
 
 /// Leverages a Tokio runtime handle to drive scheduled tasks.
 impl Scheduler for tokio::runtime::Handle {
-    fn spawn_future<F>(
+    type DisposableType = tokio::task::JoinHandle<()>;
+
+    fn spawn_future(
         &self,
-        future: F,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
-    where
-        F: Future<Output = ()> + MaybeSend + 'static,
-    {
+        future: impl Future<Output = ()> + MaybeSend + 'static,
+    ) -> BoundDropDisposal<Self::DisposableType> {
         let handle = tokio::spawn(future);
         BoundDropDisposal::new(handle)
     }
@@ -22,15 +21,12 @@ impl Scheduler for tokio::runtime::Handle {
         tokio::time::sleep(duration)
     }
 
-    fn schedule_periodically<F>(
+    fn schedule_periodically(
         &self,
-        mut task: F,
+        mut task: impl FnMut(usize) -> bool + MaybeSend + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
-    where
-        F: FnMut(usize) -> bool + MaybeSend + 'static,
-    {
+    ) -> BoundDropDisposal<Self::DisposableType> {
         let this = self.clone();
         self.spawn_future(async move {
             if let Some(delay) = delay {
