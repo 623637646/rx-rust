@@ -88,10 +88,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler + MaybeSend + 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
         let model = Model {
             current_value: None,
             timer: None,

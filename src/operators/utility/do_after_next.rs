@@ -61,10 +61,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     F: FnMut(T) + MaybeSend + 'or,
 {
-    fn subscribe(
-        mut self,
-        observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(mut self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         self.source
             .hook_on_next(move |observer, value| {
                 observer.on_next(value.clone());

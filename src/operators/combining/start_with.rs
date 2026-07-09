@@ -50,10 +50,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, mut observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         for value in self.values.into_iter() {
             observer.on_next(value);
         }

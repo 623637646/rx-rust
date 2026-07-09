@@ -1,5 +1,5 @@
 use crate::disposable::Disposable;
-use crate::utils::types::{Mutable, MutableHelper, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,

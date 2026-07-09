@@ -9,7 +9,7 @@ use crate::{
     scheduler::Scheduler,
     utils::{
         subscribe_unsub_after_termination::subscribe_unsub_after_termination,
-        types::{Mutable, MutableHelper, MaybeSend, Shared},
+        types::{MaybeSend, Mutable, MutableHelper, Shared},
     },
 };
 use educe::Educe;

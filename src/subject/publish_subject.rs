@@ -2,7 +2,7 @@ use super::Subject;
 use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::observer::Event;
-use crate::utils::types::{Mutable, MutableHelper, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},

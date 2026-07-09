@@ -52,10 +52,7 @@ impl Scheduler for ThreadCheckerScheduler {
         BoundDropDisposal::new(ThreadCheckerDisposal(abort_handle))
     }
 
-    fn sleep(
-        &self,
-        duration: std::time::Duration,
-    ) -> impl Future + MaybeSend + 'static + use<> {
+    fn sleep(&self, duration: std::time::Duration) -> impl Future + MaybeSend + 'static + use<> {
         async_io::Timer::after(duration)
     }
 }

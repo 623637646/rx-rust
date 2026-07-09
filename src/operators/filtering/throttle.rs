@@ -3,7 +3,7 @@ use crate::disposable::bound_drop_disposal::BoundDropDisposal;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{MutableBool, MutableBoolHelper, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, MutableBool, MutableBoolHelper, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -88,10 +88,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler + MaybeSend + 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
         let shared_disposal = SharedDisposal::default();
         self.source.subscribe(ThrottleObserver {
             observer,

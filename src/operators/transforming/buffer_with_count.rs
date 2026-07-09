@@ -52,10 +52,7 @@ where
     T: MaybeSend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<Vec<T>, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let observer = BufferWithCountObserver {
             observer,
             values: Vec::default(),

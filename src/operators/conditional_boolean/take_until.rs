@@ -1,5 +1,5 @@
 use crate::safe_lock_option_observer;
-use crate::utils::types::{Mutable, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,

@@ -4,7 +4,7 @@ use crate::{
     observer::{Observer, Termination},
     safe_lock_option_disposable, safe_lock_option_observer,
     scheduler::{RecursionAction, Scheduler},
-    utils::types::{MutGuard, Mutable, MutableHelper, MaybeSend, Shared},
+    utils::types::{MaybeSend, MutGuard, Mutable, MutableHelper, Shared},
 };
 use educe::Educe;
 
@@ -76,10 +76,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
         let context = Shared::new(Mutable::new(ObserveOnContext {
             values: Vec::new(),
             termination: None,

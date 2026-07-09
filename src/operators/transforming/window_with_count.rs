@@ -91,9 +91,7 @@ where
 {
     fn subscribe(
         self,
-        mut observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>
-        + MaybeSend
-        + 'or,
+        mut observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + MaybeSend + 'or,
     ) -> Subscription<'sub> {
         let subject = PublishSubject::default();
         observer.on_next(SubjectObservable::new(subject.clone()));

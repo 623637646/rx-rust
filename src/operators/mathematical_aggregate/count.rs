@@ -56,10 +56,7 @@ impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, usize, E> for Count<T, OE>
 where
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<usize, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<usize, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let observer = CountObserver { observer, count: 0 };
         self.source.subscribe(observer)
     }

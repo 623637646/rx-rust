@@ -2,7 +2,7 @@ use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
-    utils::types::{Mutable, MutableHelper, MaybeSend, Shared},
+    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
 };
 use educe::Educe;
 use futures::Stream;

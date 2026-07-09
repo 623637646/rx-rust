@@ -3,7 +3,7 @@ use crate::{
     observable::Observable,
     observer::Observer,
     scheduler::Scheduler,
-    utils::types::{Mutable, MutableHelper, MaybeSend, Shared},
+    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
 };
 use educe::Educe;
 
@@ -73,10 +73,7 @@ where
     OE: Observable<'or, 'static, T, E> + MaybeSend + 'static,
     S: Scheduler,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
         let sub = Shared::new(Mutable::new(Some(Subscription::default()))); // Placeholder
         let sub_cloned = sub.clone();
         let disposal = self.scheduler.schedule(

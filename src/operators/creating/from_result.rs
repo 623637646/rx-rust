@@ -39,10 +39,7 @@ impl<T, E> FromResult<T, E> {
 }
 
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for FromResult<T, E> {
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, mut observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         match self.0 {
             Ok(value) => {
                 observer.on_next(value);

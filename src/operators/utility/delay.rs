@@ -2,7 +2,7 @@ use crate::disposable::Disposable;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::subscription::Subscription;
 use crate::scheduler::RecursionAction;
-use crate::utils::types::{Mutable, MutableHelper, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -94,10 +94,7 @@ where
     OE: Observable<'or, 'sub, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
         let context = Shared::new(Mutable::new(DelayContext {
             values: VecDeque::new(),
             timer: None,

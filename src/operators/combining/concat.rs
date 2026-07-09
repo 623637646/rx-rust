@@ -1,6 +1,6 @@
 use crate::disposable::subscription::Subscription;
 use crate::safe_lock_option;
-use crate::utils::types::{Mutable, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},

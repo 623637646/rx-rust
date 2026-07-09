@@ -1,4 +1,4 @@
-use crate::utils::types::{Mutable, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -74,10 +74,7 @@ where
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<Vec<T>, E> + MaybeSend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
             let values = Shared::new(Mutable::new(Vec::default()));

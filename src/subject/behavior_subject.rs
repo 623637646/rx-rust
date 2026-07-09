@@ -1,6 +1,6 @@
 use super::{Subject, publish_subject::PublishSubject};
 use crate::safe_lock;
-use crate::utils::types::{Mutable, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -38,10 +38,7 @@ where
     E: Clone + MaybeSend + 'sub,
     'or: 'sub,
 {
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, mut observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated() {
             observer.on_termination(terminated);
             Subscription::default()

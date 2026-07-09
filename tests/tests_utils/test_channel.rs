@@ -5,7 +5,7 @@ use rx_rust::{
     observable::Observable,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     safe_lock,
-    utils::types::{Mutable, MutableHelper, MaybeSend, Shared},
+    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
 };
 
 enum State<'or, T, E> {

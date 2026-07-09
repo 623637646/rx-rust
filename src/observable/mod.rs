@@ -2,9 +2,7 @@ pub mod boxed_observable;
 pub mod cloneable_boxed_observable;
 pub mod observable_ext;
 
-use crate::{
-    disposable::subscription::Subscription, observer::Observer, utils::types::MaybeSend,
-};
+use crate::{disposable::subscription::Subscription, observer::Observer, utils::types::MaybeSend};
 
 /// The `Observable` trait represents a source of events that can be observed by an `Observer`.
 /// See <https://reactivex.io/documentation/observable.html>

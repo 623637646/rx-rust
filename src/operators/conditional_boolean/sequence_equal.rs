@@ -72,10 +72,7 @@ where
     OE1: Observable<'or, 'sub, T, E>,
     OE2: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(
-        self,
-        observer: impl Observer<bool, E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<bool, E> + MaybeSend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 first: SourceState {

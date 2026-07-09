@@ -2,7 +2,7 @@ use crate::{
     disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{MutGuard, Mutable, MutableHelper, MaybeSend, Shared, WeakShared},
+    utils::types::{MaybeSend, MutGuard, Mutable, MutableHelper, Shared, WeakShared},
 };
 use educe::Educe;
 

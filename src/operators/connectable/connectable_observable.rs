@@ -1,7 +1,7 @@
 use super::ref_count::RefCount;
 use crate::disposable::Disposable;
 use crate::observable::Observable;
-use crate::utils::types::{MutableBool, MutableBoolHelper, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, MutableBool, MutableBoolHelper, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
 

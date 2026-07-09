@@ -3,7 +3,7 @@ use crate::disposable::Disposable;
 use crate::disposable::subscription::Subscription;
 use crate::observable::Observable;
 use crate::observer::Observer;
-use crate::utils::types::{Mutable, MutableHelper, MaybeSend, Shared};
+use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
 use educe::Educe;
 
 #[derive(Educe)]

@@ -3,7 +3,7 @@ use educe::Educe;
 use rx_rust::{
     observer::{Observer, Termination},
     scheduler::Scheduler,
-    utils::types::{Mutable, MutableHelper, MaybeSend, Shared},
+    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
 };
 use rx_rust::{safe_lock, safe_lock_vec};
 use {
