@@ -2,14 +2,12 @@
 # TODO
 
 * Features  
-  * 可以用过程宏实现：impl Disposable for Shared\<Mutable\<Context\>\>  
   * Async 转换 + Single 抽象（[最后验证操作符是不是全](https://reactivex.io/documentation/single.html)）  
     * Future 转 Single，可以删掉 Future 转 Observable  
     * Single 转 Future，可以删掉 Observable 转 Future（应该没有这个）  
 * NotBigDeal  
   * 用 test_channel 代替 test 里的PublishSubject和create，just  
   * Infallible 替换为Never  
-  * 去掉test_without_convenient_api
 
 # Check List
 
