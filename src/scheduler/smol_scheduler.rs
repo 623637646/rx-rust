@@ -3,11 +3,16 @@ use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
     utils::types::NecessarySend,
 };
-use futures::{executor::LocalSpawner, task::LocalSpawnExt};
+use educe::Educe;
 use std::time::Duration;
 
-/// Adapts `LocalSpawner` to the `Scheduler` trait for single-threaded pools.
-impl Scheduler for LocalSpawner {
+/// Schedules tasks using the smol runtime utilities.
+#[derive(Educe)]
+#[educe(Debug, Clone)]
+pub struct SmolScheduler;
+
+/// Provides the smol-backed `Scheduler` implementation.
+impl Scheduler for SmolScheduler {
     fn spawn_future<F>(
         &self,
         future: F,
@@ -15,20 +20,16 @@ impl Scheduler for LocalSpawner {
     where
         F: Future<Output = ()> + NecessarySend + 'static,
     {
-        let handel = self
-            .spawn_local_with_handle(future)
-            .expect("failed to spawn future");
-        BoundDropDisposal::new(LocalSpawnerDisposal(handel))
+        let handle = smol::spawn(future);
+        BoundDropDisposal::new(handle)
     }
 
     fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static + use<> {
-        async_io::Timer::after(duration)
+        smol::Timer::after(duration)
     }
 }
 
-struct LocalSpawnerDisposal<T>(futures::future::RemoteHandle<T>);
-
-impl<T> Disposable for LocalSpawnerDisposal<T> {
+impl Disposable for smol::Task<()> {
     fn dispose(self) {
         // Drop to call the dispose
     }

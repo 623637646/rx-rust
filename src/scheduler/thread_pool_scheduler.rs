@@ -31,6 +31,5 @@ struct ThreadPoolDisposal<T>(futures::future::RemoteHandle<T>);
 impl<T> Disposable for ThreadPoolDisposal<T> {
     fn dispose(self) {
         // Drop to call the dispose
-        drop(self.0);
     }
 }

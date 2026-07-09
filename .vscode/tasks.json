@@ -24,6 +24,13 @@
 		},
 		{
 			"type": "shell",
+			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --features smol-scheduler",
+			"problemMatcher": [],
+			"group": "test",
+			"label": "cargo test smol-scheduler"
+		},
+		{
+			"type": "shell",
 			"command": "time RUST_BACKTRACE=1 cargo nextest run --no-fail-fast --failure-output final --status-level=fail --features thread-pool-scheduler",
 			"problemMatcher": [],
 			"group": "test",

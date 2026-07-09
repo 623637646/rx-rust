@@ -22,7 +22,7 @@ where
     T: Disposable,
 {
     fn dispose(self) {
-        // drop self to call the dispose
+        // Drop to call the dispose
     }
 }
 

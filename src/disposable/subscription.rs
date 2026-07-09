@@ -37,7 +37,7 @@ impl<'dis> Subscription<'dis> {
 
 impl Disposable for Subscription<'_> {
     fn dispose(self) {
-        // drop self to call the dispose
+        // Drop to call the dispose
     }
 }
 

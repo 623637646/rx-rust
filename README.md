@@ -9,6 +9,7 @@ Reactive Extensions for Rust. `rx-rust` offers a comprehensive, zero-unsafe tool
 [dependencies]
 rx-rust = { version = "the_latest_version", features = ["tokio-scheduler"] } # Use tokio runtime
 rx-rust = { version = "the_latest_version", features = ["async-std-scheduler"] } # Use async-std runtime
+rx-rust = { version = "the_latest_version", features = ["smol-scheduler"] } # Use smol runtime
 rx-rust = { version = "the_latest_version", features = ["thread-pool-scheduler"] } # Use futures thread pool
 rx-rust = { version = "the_latest_version", features = ["tokio-scheduler"] } # Use futures local pool
 
@@ -22,6 +23,7 @@ Feature                          | Description | Pulls in
 `thread-pool-scheduler`          | Scheduler backed by `futures` thread pool. | `futures/thread-pool`, `async-io`
 `tokio-scheduler`                | Scheduler integration for Tokio runtimes. | `futures`, `tokio/rt`, `tokio/time`
 `async-std-scheduler`            | Scheduler based on async-std. | `futures`, `async-std`
+`smol-scheduler`                 | Scheduler based on smol. | `futures`, `smol`
 
 ## Quick Start
 Build pipelines by combining operators from `ObservableExt` and subscribe with callbacks or custom observers.

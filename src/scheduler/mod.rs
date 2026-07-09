@@ -2,6 +2,8 @@
 pub mod async_std_scheduler;
 #[cfg(feature = "local-pool-scheduler")]
 pub mod local_pool_scheduler;
+#[cfg(feature = "smol-scheduler")]
+pub mod smol_scheduler;
 #[cfg(feature = "thread-pool-scheduler")]
 pub mod thread_pool_scheduler;
 #[cfg(feature = "tokio-scheduler")]
