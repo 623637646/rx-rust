@@ -1,7 +1,7 @@
 use super::Scheduler;
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
-    utils::types::NecessarySend,
+    utils::types::MaybeSend,
 };
 use educe::Educe;
 use std::time::Duration;
@@ -16,15 +16,15 @@ impl Scheduler for SmolScheduler {
     fn spawn_future<F>(
         &self,
         future: F,
-    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<F>>
+    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
     where
-        F: Future<Output = ()> + NecessarySend + 'static,
+        F: Future<Output = ()> + MaybeSend + 'static,
     {
         let handle = smol::spawn(future);
         BoundDropDisposal::new(handle)
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static + use<> {
+    fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
         smol::Timer::after(duration)
     }
 }

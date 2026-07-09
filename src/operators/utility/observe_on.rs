@@ -4,7 +4,7 @@ use crate::{
     observer::{Observer, Termination},
     safe_lock_option_disposable, safe_lock_option_observer,
     scheduler::{RecursionAction, Scheduler},
-    utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared},
+    utils::types::{MutGuard, Mutable, MutableHelper, MaybeSend, Shared},
 };
 use educe::Educe;
 
@@ -71,14 +71,14 @@ impl<OE, S> ObserveOn<OE, S> {
 
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for ObserveOn<OE, S>
 where
-    T: NecessarySend + 'static,
-    E: NecessarySend + 'static,
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler + Clone + NecessarySend + 'static,
+    S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySend + 'static,
+        observer: impl Observer<T, E> + MaybeSend + 'static,
     ) -> Subscription<'sub> {
         let context = Shared::new(Mutable::new(ObserveOnContext {
             values: Vec::new(),
@@ -116,10 +116,10 @@ struct ObserveOnObserver<T, E, OR, S> {
 impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
     fn setup_scheduler_if_needed(&self, mut lock: MutGuard<'_, ObserveOnContext<T, E>>)
     where
-        T: NecessarySend + 'static,
-        E: NecessarySend + 'static,
-        OR: Observer<T, E> + NecessarySend + 'static,
-        S: Scheduler + Clone + NecessarySend + 'static,
+        T: MaybeSend + 'static,
+        E: MaybeSend + 'static,
+        OR: Observer<T, E> + MaybeSend + 'static,
+        S: Scheduler + Clone + MaybeSend + 'static,
     {
         if lock.disposal.is_some() {
             return;
@@ -173,10 +173,10 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
 
 impl<T, E, OR, S> Observer<T, E> for ObserveOnObserver<T, E, OR, S>
 where
-    T: NecessarySend + 'static,
-    E: NecessarySend + 'static,
-    OR: Observer<T, E> + NecessarySend + 'static,
-    S: Scheduler + Clone + NecessarySend + 'static,
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
+    OR: Observer<T, E> + MaybeSend + 'static,
+    S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
         self.context.lock_mut(|mut lock| {

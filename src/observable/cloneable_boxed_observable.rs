@@ -2,7 +2,7 @@ use super::{Observable, Observer};
 use crate::{
     disposable::subscription::Subscription,
     observable::{boxed_observable::BoxedObservable, observable_ext::ObservableExt},
-    utils::types::{NecessarySend, NecessarySync, Shared},
+    utils::types::{MaybeSend, NecessarySync, Shared},
 };
 use educe::Educe;
 
@@ -26,7 +26,7 @@ cfg_if::cfg_if! {
 
 impl<'or, 'sub, 'oe, T, E> CloneableBoxedObservable<'or, 'sub, 'oe, T, E> {
     pub fn new(
-        observable: impl Observable<'or, 'sub, T, E> + Clone + NecessarySend + NecessarySync + 'oe,
+        observable: impl Observable<'or, 'sub, T, E> + Clone + MaybeSend + NecessarySync + 'oe,
     ) -> Self
     where
         T: 'or,
@@ -39,7 +39,7 @@ impl<'or, 'sub, 'oe, T, E> CloneableBoxedObservable<'or, 'sub, 'oe, T, E> {
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E>
     for CloneableBoxedObservable<'or, 'sub, '_, T, E>
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         self.0().subscribe(observer)
     }
 }

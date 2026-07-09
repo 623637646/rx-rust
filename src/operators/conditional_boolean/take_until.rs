@@ -1,5 +1,5 @@
 use crate::safe_lock_option_observer;
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::types::{Mutable, MaybeSend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -76,7 +76,7 @@ where
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
             let subscription_1 = self.stop.subscribe(StopObserver {

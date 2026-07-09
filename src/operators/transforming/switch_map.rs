@@ -1,5 +1,5 @@
 use super::map::Map;
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::{Observable, observable_ext::ObservableExt},
@@ -64,13 +64,13 @@ impl<'or, 'sub, T0, T, E, OE, OE1, F> Observable<'or, 'sub, T, E> for SwitchMap<
 where
     'sub: 'or,
     'or: 'sub,
-    T: NecessarySend + 'sub,
-    E: NecessarySend + 'sub,
+    T: MaybeSend + 'sub,
+    E: MaybeSend + 'sub,
     OE: Observable<'or, 'sub, T0, E>,
     OE1: Observable<'or, 'sub, T, E>,
-    F: FnMut(T0) -> OE1 + NecessarySend + 'or,
+    F: FnMut(T0) -> OE1 + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let observable = Map::new(self.source, self.callback);
         let observable = observable.switch();
         observable.subscribe(observer)

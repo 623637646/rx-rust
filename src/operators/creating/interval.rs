@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription, observable::Observable, observer::Observer,
     scheduler::Scheduler,
@@ -72,11 +72,11 @@ impl<S> Interval<S> {
 
 impl<'sub, S> Observable<'static, 'sub, usize, Infallible> for Interval<S>
 where
-    S: Scheduler + Clone + NecessarySend + 'static,
+    S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn subscribe(
         self,
-        mut observer: impl Observer<usize, Infallible> + NecessarySend + 'static,
+        mut observer: impl Observer<usize, Infallible> + MaybeSend + 'static,
     ) -> Subscription<'sub> {
         let disposal = self.scheduler.schedule_periodically(
             move |count| {

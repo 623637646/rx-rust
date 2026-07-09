@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -49,7 +49,7 @@ impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for Skip<OE>
 where
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         self.source.subscribe(SkipObserver {
             observer,
             count: self.count,

@@ -2,7 +2,7 @@ use crate::{
     disposable::{Disposable, subscription::Subscription},
     observer::{Observer, Termination},
     safe_lock,
-    utils::types::{MutGuard, Mutable, MutableHelper, NecessarySend, Shared, WeakShared},
+    utils::types::{MutGuard, Mutable, MutableHelper, MaybeSend, Shared, WeakShared},
 };
 use educe::Educe;
 
@@ -14,10 +14,10 @@ pub fn subscribe_with_shared_model<'or, 'sub, T, E, OR, M, F>(
 ) -> Subscription<'sub>
 where
     'or: 'sub,
-    T: NecessarySend + 'sub,
-    E: NecessarySend + 'sub,
-    OR: NecessarySend + 'or,
-    M: NecessarySend + 'sub,
+    T: MaybeSend + 'sub,
+    E: MaybeSend + 'sub,
+    OR: MaybeSend + 'or,
+    M: MaybeSend + 'sub,
     F: FnOnce(Context<T, E, OR, M>) -> Subscription<'sub>,
 {
     let state = Shared::new(Mutable::new(State::Idle { observer, model }));

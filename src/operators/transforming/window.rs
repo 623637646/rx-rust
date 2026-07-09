@@ -1,4 +1,4 @@
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::types::{Mutable, MaybeSend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -92,15 +92,15 @@ impl<OE, OE1> Window<OE, OE1> {
 impl<'or, 'sub, T, E, OE, OE1>
     Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E> for Window<OE, OE1>
 where
-    T: Clone + NecessarySend + 'or,
-    E: Clone + NecessarySend + 'or,
+    T: Clone + MaybeSend + 'or,
+    E: Clone + MaybeSend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
     'sub: 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + NecessarySend + 'or,
+        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + MaybeSend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |mut observer| {
             let subject = PublishSubject::default();

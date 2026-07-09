@@ -5,7 +5,7 @@ use crate::{
     operators::backpressure::on_backpressure::{
         BackpressureCollection, OnBackpressure, RequestCallbackType,
     },
-    utils::types::NecessarySend,
+    utils::types::MaybeSend,
 };
 use educe::Educe;
 
@@ -65,13 +65,13 @@ impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (T, RequestCallbackType<'or>), E
     for OnBackpressureLatest<OE>
 where
     'or: 'sub,
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
     fn subscribe(
         self,
-        observer: impl Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+        observer: impl Observer<(T, RequestCallbackType<'or>), E> + MaybeSend + 'or,
     ) -> Subscription<'sub> {
         OnBackpressure::new(self.source, Collection(None)).subscribe(observer)
     }

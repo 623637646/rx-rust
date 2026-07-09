@@ -1,7 +1,7 @@
 use super::ref_count::RefCount;
 use crate::disposable::Disposable;
 use crate::observable::Observable;
-use crate::utils::types::{MutableBool, MutableBoolHelper, NecessarySend, Shared};
+use crate::utils::types::{MutableBool, MutableBoolHelper, MaybeSend, Shared};
 use crate::{disposable::subscription::Subscription, observer::Observer};
 use educe::Educe;
 
@@ -78,7 +78,7 @@ impl<OE, S> ConnectableObservable<OE, S> {
     pub fn connect<'or, 'sub, T, E>(self) -> Option<Subscription<'sub>>
     where
         OE: Observable<'or, 'sub, T, E>,
-        S: Observer<T, E> + NecessarySend + 'or,
+        S: Observer<T, E> + MaybeSend + 'or,
     {
         if self.is_connected.change_if_not_equal(true) {
             Some(
@@ -99,7 +99,7 @@ impl<'or, 'sub, T, E, OE, S> Observable<'or, 'sub, T, E> for ConnectableObservab
 where
     S: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         self.subject.subscribe(observer)
     }
 }

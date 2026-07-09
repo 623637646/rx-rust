@@ -1,7 +1,7 @@
 use super::Scheduler;
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
-    utils::types::NecessarySend,
+    utils::types::MaybeSend,
 };
 use educe::Educe;
 use std::time::Duration;
@@ -16,15 +16,15 @@ impl Scheduler for AsyncStdScheduler {
     fn spawn_future<F>(
         &self,
         future: F,
-    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<F>>
+    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
     where
-        F: Future<Output = ()> + NecessarySend + 'static,
+        F: Future<Output = ()> + MaybeSend + 'static,
     {
         let handle = async_std::task::spawn(future);
         BoundDropDisposal::new(handle)
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static + use<> {
+    fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
         async_std::task::sleep(duration)
     }
 }

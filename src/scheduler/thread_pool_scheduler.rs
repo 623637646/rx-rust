@@ -1,7 +1,7 @@
 use super::Scheduler;
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
-    utils::types::NecessarySend,
+    utils::types::MaybeSend,
 };
 use futures::{executor::ThreadPool, task::SpawnExt};
 use std::time::Duration;
@@ -11,9 +11,9 @@ impl Scheduler for ThreadPool {
     fn spawn_future<F>(
         &self,
         future: F,
-    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<F>>
+    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
     where
-        F: Future<Output = ()> + NecessarySend + 'static,
+        F: Future<Output = ()> + MaybeSend + 'static,
     {
         let handel = self
             .spawn_with_handle(future)
@@ -21,7 +21,7 @@ impl Scheduler for ThreadPool {
         BoundDropDisposal::new(ThreadPoolDisposal(handel))
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static + use<> {
+    fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
         async_io::Timer::after(duration)
     }
 }

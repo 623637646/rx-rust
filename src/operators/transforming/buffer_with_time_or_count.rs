@@ -4,7 +4,7 @@ use crate::disposable::subscription::Subscription;
 use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -102,14 +102,14 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
 
 impl<'sub, T, E, OE, S> Observable<'static, 'sub, Vec<T>, E> for BufferWithTimeOrCount<OE, S>
 where
-    T: NecessarySend + 'static,
-    E: NecessarySend + 'static,
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OE: Observable<'static, 'sub, T, E>,
-    S: Scheduler + Clone + NecessarySend + 'static,
+    S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn subscribe(
         self,
-        observer: impl Observer<Vec<T>, E> + NecessarySend + 'static,
+        observer: impl Observer<Vec<T>, E> + MaybeSend + 'static,
     ) -> Subscription<'sub> {
         let model = Model {
             values: Vec::with_capacity(self.count.get()),
@@ -151,8 +151,8 @@ struct BufferWithTimeOrCountObserver<T, E, OR> {
 
 impl<T, E, OR> Observer<T, E> for BufferWithTimeOrCountObserver<T, E, OR>
 where
-    T: NecessarySend + 'static,
-    OR: Observer<Vec<T>, E> + NecessarySend + 'static,
+    T: MaybeSend + 'static,
+    OR: Observer<Vec<T>, E> + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
         let _ = self.context.modify_model(|model| {
@@ -195,10 +195,10 @@ fn setup_emit_timer<T, E, OR, S>(
     count: NonZeroUsize,
 ) -> BoundDropDisposal<BoxedDisposal<'static>>
 where
-    T: NecessarySend + 'static,
-    E: NecessarySend + 'static,
-    OR: Observer<Vec<T>, E> + NecessarySend + 'static,
-    S: Scheduler + Clone + NecessarySend + 'static,
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
+    OR: Observer<Vec<T>, E> + MaybeSend + 'static,
+    S: Scheduler + Clone + MaybeSend + 'static,
 {
     let weak_context = context.downgrade();
     let disposal = scheduler.clone().schedule_periodically(

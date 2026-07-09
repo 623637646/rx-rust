@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -49,10 +49,10 @@ impl<OE> Min<OE> {
 
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for Min<OE>
 where
-    T: PartialOrd + NecessarySend + 'or,
+    T: PartialOrd + MaybeSend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let observer = MinObserver {
             observer,
             min: None,

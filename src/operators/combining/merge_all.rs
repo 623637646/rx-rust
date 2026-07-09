@@ -4,7 +4,7 @@ use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -83,12 +83,12 @@ impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for MergeAll<OE, OE1>
 where
     'sub: 'or,
     'or: 'sub,
-    T: NecessarySend + 'sub,
-    E: NecessarySend + 'sub,
+    T: MaybeSend + 'sub,
+    E: MaybeSend + 'sub,
     OE: Observable<'or, 'sub, OE1, E>,
     OE1: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 subscriptions: SlotMap::new(),
@@ -111,9 +111,9 @@ struct MergeAllObserver<'sub, T, E, OR>(Context<T, E, OR, Model<'sub>>);
 impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for MergeAllObserver<'sub, T, E, OR>
 where
     'sub: 'or,
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
-    OR: Observer<T, E> + NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: Observer<T, E> + MaybeSend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
 {
     fn on_next(&mut self, value: OE1) {

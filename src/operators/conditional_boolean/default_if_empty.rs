@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -54,9 +54,9 @@ impl<T, OE> DefaultIfEmpty<T, OE> {
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for DefaultIfEmpty<T, OE>
 where
     OE: Observable<'or, 'sub, T, E>,
-    T: NecessarySend + 'or,
+    T: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let observer = DefaultIfEmptyObserver {
             observer,
             default_value: Some(self.default_value),

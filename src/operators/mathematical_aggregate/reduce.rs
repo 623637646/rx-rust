@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -60,11 +60,11 @@ impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
 
 impl<'or, 'sub, T, T1, E, OE, F> Observable<'or, 'sub, T, E> for Reduce<T, T1, OE, F>
 where
-    T: NecessarySend + 'or,
+    T: MaybeSend + 'or,
     OE: Observable<'or, 'sub, T1, E>,
-    F: FnMut(T, T1) -> T + NecessarySend + 'or,
+    F: FnMut(T, T1) -> T + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let observer = ReduceObserver {
             observer,
             value: Some(self.initial_value),

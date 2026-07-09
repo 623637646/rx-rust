@@ -1,6 +1,6 @@
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -62,10 +62,10 @@ impl<'or, 'sub, T, E, OE, OE1, F> Observable<'or, 'sub, T, E> for Retry<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, T, E>,
-    F: FnMut(E) -> RetryAction<E, OE1> + NecessarySend + 'or,
+    F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let shared_disposal = SharedDisposal::default();
         let observer = RetryObserver {
             observer,
@@ -84,9 +84,9 @@ struct RetryObserver<'sub, OR, F> {
 
 impl<'or, 'sub, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<'sub, OR, F>
 where
-    OR: Observer<T, E> + NecessarySend + 'or,
+    OR: Observer<T, E> + MaybeSend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
-    F: FnMut(E) -> RetryAction<E, OE1> + NecessarySend + 'or,
+    F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
     'sub: 'or,
 {
     fn on_next(&mut self, value: T) {

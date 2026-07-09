@@ -1,7 +1,7 @@
 use super::Scheduler;
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
-    utils::types::NecessarySend,
+    utils::types::MaybeSend,
 };
 use std::time::Duration;
 
@@ -10,15 +10,15 @@ impl Scheduler for tokio::runtime::Handle {
     fn spawn_future<F>(
         &self,
         future: F,
-    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<F>>
+    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
     where
-        F: Future<Output = ()> + NecessarySend + 'static,
+        F: Future<Output = ()> + MaybeSend + 'static,
     {
         let handle = tokio::spawn(future);
         BoundDropDisposal::new(handle)
     }
 
-    fn sleep(&self, duration: Duration) -> impl Future + NecessarySend + 'static + use<> {
+    fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
         tokio::time::sleep(duration)
     }
 
@@ -27,9 +27,9 @@ impl Scheduler for tokio::runtime::Handle {
         mut task: F,
         period: Duration,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<F>>
+    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
     where
-        F: FnMut(usize) -> bool + NecessarySend + 'static,
+        F: FnMut(usize) -> bool + MaybeSend + 'static,
     {
         let this = self.clone();
         self.spawn_future(async move {

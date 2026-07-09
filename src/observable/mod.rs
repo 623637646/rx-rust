@@ -3,7 +3,7 @@ pub mod cloneable_boxed_observable;
 pub mod observable_ext;
 
 use crate::{
-    disposable::subscription::Subscription, observer::Observer, utils::types::NecessarySend,
+    disposable::subscription::Subscription, observer::Observer, utils::types::MaybeSend,
 };
 
 /// The `Observable` trait represents a source of events that can be observed by an `Observer`.
@@ -12,5 +12,5 @@ pub trait Observable<'or, 'sub, T, E> {
     /// Subscribes an observer to this observable. When an observer is subscribed, it will start receiving events from the observable.
     /// The `subscribe` method returns a `Subscription` which can be used to unsubscribe the observer from the observable.
     /// We use `Subscription` struct instead of trait like `impl Cancellable`, because we need to cancel the subscription when the `Subscription` is dropped. It's not possible to implement Drop for a trait object.
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub>;
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub>;
 }

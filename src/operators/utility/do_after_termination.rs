@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::{Observable, observable_ext::ObservableExt},
@@ -64,9 +64,9 @@ where
     T: 'or,
     E: Clone + 'or,
     OE: Observable<'or, 'sub, T, E>,
-    F: FnOnce(Termination<E>) + NecessarySend + 'or,
+    F: FnOnce(Termination<E>) + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         self.source
             .hook_on_termination(move |observer, termination| {
                 observer.on_termination(termination.clone());

@@ -1,7 +1,7 @@
 use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -74,12 +74,12 @@ impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for Sample<OE, OE1>
 where
     'sub: 'or,
     'or: 'sub,
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
     OE: Observable<'or, 'sub, T, E>,
     OE1: Observable<'or, 'sub, (), E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model { last_value: None };
             subscribe_with_shared_model(observer, model, |context| {

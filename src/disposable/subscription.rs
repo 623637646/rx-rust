@@ -3,7 +3,7 @@ use crate::{
         Disposable, bound_drop_disposal::BoundDropDisposal, boxed_disposal::BoxedDisposal,
         callback_disposal::CallbackDisposal,
     },
-    utils::types::NecessarySend,
+    utils::types::MaybeSend,
 };
 use educe::Educe;
 use std::ops::Add;
@@ -19,17 +19,17 @@ impl<'dis> Subscription<'dis> {
         Self(Vec::default())
     }
 
-    pub fn new_with_disposal(disposable: impl Disposable + NecessarySend + 'dis) -> Self {
+    pub fn new_with_disposal(disposable: impl Disposable + MaybeSend + 'dis) -> Self {
         Self(vec![BoundDropDisposal::new(BoxedDisposal::new(disposable))])
     }
 
-    pub fn new_with_disposal_callback(callback: impl FnOnce() + NecessarySend + 'dis) -> Self {
+    pub fn new_with_disposal_callback(callback: impl FnOnce() + MaybeSend + 'dis) -> Self {
         Self(vec![BoundDropDisposal::new(BoxedDisposal::new(
             CallbackDisposal::new(callback),
         ))])
     }
 
-    pub fn append_disposable(&mut self, disposable: impl Disposable + NecessarySend + 'dis) {
+    pub fn append_disposable(&mut self, disposable: impl Disposable + MaybeSend + 'dis) {
         self.0
             .push(BoundDropDisposal::new(BoxedDisposal::new(disposable)));
     }
@@ -43,7 +43,7 @@ impl Disposable for Subscription<'_> {
 
 impl<'dis, T> Add<T> for Subscription<'dis>
 where
-    T: Disposable + NecessarySend + 'dis,
+    T: Disposable + MaybeSend + 'dis,
 {
     type Output = Subscription<'dis>;
 

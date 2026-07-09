@@ -2,7 +2,7 @@ use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termi
 use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::{MarkerType, NecessarySend};
+use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -67,14 +67,14 @@ impl<'or, 'sub, T, E, OE1, OE2> Observable<'or, 'sub, bool, E> for SequenceEqual
 where
     'sub: 'or,
     'or: 'sub,
-    T: PartialEq + NecessarySend + 'or,
-    E: NecessarySend + 'or,
+    T: PartialEq + MaybeSend + 'or,
+    E: MaybeSend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
     OE2: Observable<'or, 'sub, T, E>,
 {
     fn subscribe(
         self,
-        observer: impl Observer<bool, E> + NecessarySend + 'or,
+        observer: impl Observer<bool, E> + MaybeSend + 'or,
     ) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {

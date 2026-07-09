@@ -1,5 +1,5 @@
 use super::{Subject, publish_subject::PublishSubject};
-use crate::utils::types::{Mutable, NecessarySend, Shared};
+use crate::utils::types::{Mutable, MaybeSend, Shared};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -27,13 +27,13 @@ impl<T, E> AsyncSubject<'_, T, E> {
 
 impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for AsyncSubject<'or, T, E>
 where
-    T: Clone + NecessarySend + 'sub,
-    E: Clone + NecessarySend + 'sub,
+    T: Clone + MaybeSend + 'sub,
+    E: Clone + MaybeSend + 'sub,
     'or: 'sub,
 {
     fn subscribe(
         self,
-        mut observer: impl Observer<T, E> + NecessarySend + 'or,
+        mut observer: impl Observer<T, E> + MaybeSend + 'or,
     ) -> Subscription<'sub> {
         if let Some(terminated) = self.terminated() {
             match &terminated {
@@ -54,8 +54,8 @@ where
 
 impl<T, E> Observer<T, E> for AsyncSubject<'_, T, E>
 where
-    T: Clone + NecessarySend,
-    E: Clone + NecessarySend,
+    T: Clone + MaybeSend,
+    E: Clone + MaybeSend,
 {
     fn on_next(&mut self, value: T) {
         if self.terminated().is_none() {
@@ -78,8 +78,8 @@ where
 
 impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for AsyncSubject<'or, T, E>
 where
-    T: Clone + NecessarySend + 'sub,
-    E: Clone + NecessarySend + 'sub,
+    T: Clone + MaybeSend + 'sub,
+    E: Clone + MaybeSend + 'sub,
     'or: 'sub,
 {
     fn terminated(&self) -> Option<Termination<E>>

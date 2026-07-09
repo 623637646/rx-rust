@@ -1,6 +1,6 @@
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -63,10 +63,10 @@ where
     E: 'or,
     OE: Observable<'or, 'sub, T, E0>,
     OE1: Observable<'or, 'sub, T, E>,
-    F: FnOnce(E0) -> OE1 + NecessarySend + 'or,
+    F: FnOnce(E0) -> OE1 + MaybeSend + 'or,
     'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let shared_disposal = SharedDisposal::default();
         let observer = CatchObserver {
             observer,
@@ -87,7 +87,7 @@ struct CatchObserver<'sub, E, OR, F> {
 
 impl<'or, 'sub, T, E0, E, OR, OE1, F> Observer<T, E0> for CatchObserver<'sub, E, OR, F>
 where
-    OR: Observer<T, E> + NecessarySend + 'or,
+    OR: Observer<T, E> + MaybeSend + 'or,
     OE1: Observable<'or, 'sub, T, E>,
     F: FnOnce(E0) -> OE1,
 {

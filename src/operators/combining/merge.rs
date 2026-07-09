@@ -1,7 +1,7 @@
 use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -60,12 +60,12 @@ impl<'or, 'sub, T, E, OE1, OE2> Observable<'or, 'sub, T, E> for Merge<OE1, OE2>
 where
     'sub: 'or,
     'or: 'sub,
-    T: NecessarySend + 'sub,
-    E: NecessarySend + 'sub,
+    T: MaybeSend + 'sub,
+    E: MaybeSend + 'sub,
     OE1: Observable<'or, 'sub, T, E>,
     OE2: Observable<'or, 'sub, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 one_is_completed: false,

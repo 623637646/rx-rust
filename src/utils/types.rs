@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-/// Using `PhantomData<fn(T) -> T>` instead of `PhantomData<T>` to make MarkerType to be `NecessarySend` when T is not `NecessarySend`.
+/// Using `PhantomData<fn(T) -> T>` instead of `PhantomData<T>` to make MarkerType to be `MaybeSend` when T is not `MaybeSend`.
 /// For more detail: <https://doc.rust-lang.org/nomicon/phantom-data.html#table-of-phantomdata-patterns>
 /// But the lifetime of MarkerType is affected by T. Which means T and MarkerType have the same lifetime.
 /// TODO: find a better solution, so we can remove some restriction like `T: 'static` in some cases.
@@ -55,8 +55,8 @@ cfg_if::cfg_if! {
             }
         }
 
-        pub trait NecessarySend {}
-        impl<T> NecessarySend for T {}
+        pub trait MaybeSend {}
+        impl<T> MaybeSend for T {}
         pub trait NecessarySync {}
         impl<T> NecessarySync for T {}
     } else {
@@ -108,8 +108,8 @@ cfg_if::cfg_if! {
             }
         }
 
-        pub trait NecessarySend: Send {}
-        impl<T> NecessarySend for T where T: Send {}
+        pub trait MaybeSend: Send {}
+        impl<T> MaybeSend for T where T: Send {}
         pub trait NecessarySync: Sync {}
         impl<T> NecessarySync for T where T: Sync {}
     }

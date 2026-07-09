@@ -3,7 +3,7 @@ use crate::disposable::bound_drop_disposal::BoundDropDisposal;
 use crate::disposable::boxed_disposal::BoxedDisposal;
 use crate::disposable::shared_disposal::SharedDisposal;
 use crate::disposable::subscription::Subscription;
-use crate::utils::types::{MutableBool, MutableBoolHelper, NecessarySend, Shared};
+use crate::utils::types::{MutableBool, MutableBoolHelper, MaybeSend, Shared};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -86,11 +86,11 @@ impl<OE, S> Throttle<OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Throttle<OE, S>
 where
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler + NecessarySend + 'or,
+    S: Scheduler + MaybeSend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySend + 'static,
+        observer: impl Observer<T, E> + MaybeSend + 'static,
     ) -> Subscription<'sub> {
         let shared_disposal = SharedDisposal::default();
         self.source.subscribe(ThrottleObserver {

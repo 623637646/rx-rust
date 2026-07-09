@@ -4,7 +4,7 @@ use futures::stream::AbortHandle;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::bound_drop_disposal::BoundDropDisposal;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::NecessarySend;
+use rx_rust::utils::types::MaybeSend;
 use std::cell::Cell;
 
 thread_local! {
@@ -39,9 +39,9 @@ impl Scheduler for ThreadCheckerScheduler {
     fn spawn_future<F>(
         &self,
         future: F,
-    ) -> BoundDropDisposal<impl Disposable + NecessarySend + 'static + use<F>>
+    ) -> BoundDropDisposal<impl Disposable + MaybeSend + 'static + use<F>>
     where
-        F: Future<Output = ()> + NecessarySend + 'static,
+        F: Future<Output = ()> + MaybeSend + 'static,
     {
         let thread_name = self.name;
         let (abortable, abort_handle) = abortable(future);
@@ -55,7 +55,7 @@ impl Scheduler for ThreadCheckerScheduler {
     fn sleep(
         &self,
         duration: std::time::Duration,
-    ) -> impl Future + NecessarySend + 'static + use<> {
+    ) -> impl Future + MaybeSend + 'static + use<> {
         async_io::Timer::after(duration)
     }
 }

@@ -4,7 +4,7 @@ use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -83,14 +83,14 @@ impl<OE, S> Debounce<OE, S> {
 
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for Debounce<OE, S>
 where
-    T: NecessarySend + 'static,
-    E: NecessarySend + 'static,
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OE: Observable<'or, 'sub, T, E>,
-    S: Scheduler + NecessarySend + 'or,
+    S: Scheduler + MaybeSend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, E> + NecessarySend + 'static,
+        observer: impl Observer<T, E> + MaybeSend + 'static,
     ) -> Subscription<'sub> {
         let model = Model {
             current_value: None,
@@ -121,9 +121,9 @@ struct DebounceObserver<T, E, OR, S> {
 
 impl<T, E, OR, S> Observer<T, E> for DebounceObserver<T, E, OR, S>
 where
-    T: NecessarySend + 'static,
-    E: NecessarySend + 'static,
-    OR: Observer<T, E> + NecessarySend + 'static,
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
+    OR: Observer<T, E> + MaybeSend + 'static,
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {

@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -49,12 +49,12 @@ impl<OE> BufferWithCount<OE> {
 
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, Vec<T>, E> for BufferWithCount<OE>
 where
-    T: NecessarySend + 'or,
+    T: MaybeSend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
     fn subscribe(
         self,
-        observer: impl Observer<Vec<T>, E> + NecessarySend + 'or,
+        observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
     ) -> Subscription<'sub> {
         let observer = BufferWithCountObserver {
             observer,

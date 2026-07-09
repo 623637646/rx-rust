@@ -9,7 +9,7 @@ use crate::{
     scheduler::Scheduler,
     utils::{
         subscribe_unsub_after_termination::subscribe_unsub_after_termination,
-        types::{Mutable, MutableHelper, NecessarySend, Shared},
+        types::{Mutable, MutableHelper, MaybeSend, Shared},
     },
 };
 use educe::Educe;
@@ -91,11 +91,11 @@ impl<OE, S> Timeout<OE, S> {
 impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, Error<E>> for Timeout<OE, S>
 where
     OE: Observable<'or, 'static, T, E>,
-    S: Scheduler + Clone + NecessarySend + 'or, // TODO: can remove this Clone because there is no actually need? Review the S in this file.
+    S: Scheduler + Clone + MaybeSend + 'or, // TODO: can remove this Clone because there is no actually need? Review the S in this file.
 {
     fn subscribe(
         self,
-        observer: impl Observer<T, Error<E>> + NecessarySend + 'static,
+        observer: impl Observer<T, Error<E>> + MaybeSend + 'static,
     ) -> Subscription<'static> {
         subscribe_unsub_after_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(TimeoutContext {
@@ -165,7 +165,7 @@ struct TimeoutObserver<OR, S> {
 
 impl<T, E, OR, S> Observer<T, E> for TimeoutObserver<OR, S>
 where
-    OR: Observer<T, Error<E>> + NecessarySend + 'static,
+    OR: Observer<T, Error<E>> + MaybeSend + 'static,
     S: Scheduler + Clone,
 {
     fn on_next(&mut self, value: T) {
@@ -223,7 +223,7 @@ fn create_timer<T, E, OR, S>(
     context: Shared<Mutable<TimeoutContext>>,
 ) -> BoxedDisposal<'static>
 where
-    OR: Observer<T, Error<E>> + NecessarySend + 'static,
+    OR: Observer<T, Error<E>> + MaybeSend + 'static,
     S: Scheduler,
 {
     BoxedDisposal::new(scheduler.schedule(

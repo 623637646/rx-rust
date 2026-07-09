@@ -1,4 +1,4 @@
-use crate::utils::types::{MarkerType, NecessarySend};
+use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -65,7 +65,7 @@ macro_rules! average_observer_impl {
         where
             OE: Observable<'or, 'sub, $t, E>,
         {
-            fn subscribe(self, observer: impl Observer<f64, E> + NecessarySend + 'or) -> Subscription<'sub> {
+            fn subscribe(self, observer: impl Observer<f64, E> + MaybeSend + 'or) -> Subscription<'sub> {
                 let observer = AverageObserver {
                     observer,
                     sum: 0 as $t,

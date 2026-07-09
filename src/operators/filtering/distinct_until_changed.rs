@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -68,10 +68,10 @@ impl<T, OE> DistinctUntilChanged<OE, fn(&T) -> T> {
 impl<'or, 'sub, T, E, OE, F, K> Observable<'or, 'sub, T, E> for DistinctUntilChanged<OE, F>
 where
     OE: Observable<'or, 'sub, T, E>,
-    F: FnMut(&T) -> K + NecessarySend + 'or,
-    K: Eq + NecessarySend + 'or,
+    F: FnMut(&T) -> K + MaybeSend + 'or,
+    K: Eq + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         let observer = DistinctUntilChangedObserver {
             observer,
             key_selector: self.key_selector,

@@ -1,7 +1,7 @@
 use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::{MarkerType, NecessarySend};
+use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -55,14 +55,14 @@ impl<'or, 'sub, T0, T, E, OE, C> Observable<'or, 'sub, (T, RequestCallbackType<'
     for OnBackpressure<T0, OE, C>
 where
     'or: 'sub,
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
     OE: Observable<'or, 'sub, T0, E>,
-    C: BackpressureCollection<T0, T> + NecessarySend + 'or,
+    C: BackpressureCollection<T0, T> + MaybeSend + 'or,
 {
     fn subscribe(
         self,
-        observer: impl Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
+        observer: impl Observer<(T, RequestCallbackType<'or>), E> + MaybeSend + 'or,
     ) -> Subscription<'sub> {
         let model = Model {
             collection: self.collection,
@@ -85,10 +85,10 @@ struct ObserverImpl<'or, T, E, OR, C>(Context<(T, RequestCallbackType<'or>), E, 
 
 impl<'or, T0, T, E, OR, C> Observer<T0, E> for ObserverImpl<'or, T, E, OR, C>
 where
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
-    OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
-    C: BackpressureCollection<T0, T> + NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: Observer<(T, RequestCallbackType<'or>), E> + MaybeSend + 'or,
+    C: BackpressureCollection<T0, T> + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: T0) {
         let _ = self.0.modify_model(|model| {
@@ -125,10 +125,10 @@ where
 fn handle_request<'or, T0, T, E, OR, C>(
     context: Context<(T, RequestCallbackType<'or>), E, OR, Model<E, C>>,
 ) where
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
-    OR: Observer<(T, RequestCallbackType<'or>), E> + NecessarySend + 'or,
-    C: BackpressureCollection<T0, T> + NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: Observer<(T, RequestCallbackType<'or>), E> + MaybeSend + 'or,
+    C: BackpressureCollection<T0, T> + MaybeSend + 'or,
 {
     let _ = context.modify_model(|model| {
         if let Some(next) = model.collection.take_next_value() {

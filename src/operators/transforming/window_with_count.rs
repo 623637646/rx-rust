@@ -1,4 +1,4 @@
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     disposable::subscription::Subscription,
     observable::Observable,
@@ -85,14 +85,14 @@ impl<OE> WindowWithCount<OE> {
 impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, SubjectObservable<PublishSubject<'or, T, E>>, E>
     for WindowWithCount<OE>
 where
-    T: Clone + NecessarySend + 'or,
-    E: Clone + NecessarySend + 'or,
+    T: Clone + MaybeSend + 'or,
+    E: Clone + MaybeSend + 'or,
     OE: Observable<'or, 'sub, T, E>,
 {
     fn subscribe(
         self,
         mut observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>
-        + NecessarySend
+        + MaybeSend
         + 'or,
     ) -> Subscription<'sub> {
         let subject = PublishSubject::default();

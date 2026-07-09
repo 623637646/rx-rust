@@ -62,7 +62,7 @@ use crate::{
     subject::{
         async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
     },
-    utils::types::{NecessarySend, NecessarySync},
+    utils::types::{MaybeSend, NecessarySync},
 };
 #[cfg(feature = "futures")]
 use std::convert::Infallible;
@@ -382,7 +382,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        Self: NecessarySend + 'oe,
+        Self: MaybeSend + 'oe,
     {
         BoxedObservable::new(self)
     }
@@ -392,7 +392,7 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     where
         T: 'or,
         E: 'or,
-        Self: NecessarySend + NecessarySync + Clone + 'oe,
+        Self: MaybeSend + NecessarySync + Clone + 'oe,
     {
         CloneableBoxedObservable::new(self)
     }
@@ -604,8 +604,8 @@ pub trait ObservableExt<'or, 'sub, T, E>: Observable<'or, 'sub, T, E> + Sized {
     /// Convenience helper for subscribing with plain callbacks instead of a full observer.
     fn subscribe_with_callback<FN, FT>(self, on_next: FN, on_termination: FT) -> Subscription<'sub>
     where
-        FN: FnMut(T) + NecessarySend + 'or,
-        FT: FnOnce(Termination<E>) + NecessarySend + 'or,
+        FN: FnMut(T) + MaybeSend + 'or,
+        FT: FnOnce(Termination<E>) + MaybeSend + 'or,
     {
         self.subscribe(CallbackObserver::new(on_next, on_termination))
     }

@@ -4,7 +4,7 @@ use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
 use crate::utils::subscribe_with_shared_model::{
     Context, Error, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::NecessarySend;
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -82,12 +82,12 @@ impl<'or, 'sub, T, E, OE, OE1> Observable<'or, 'sub, T, E> for ConcatAll<OE, OE1
 where
     'sub: 'or,
     'or: 'sub,
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
     OE: Observable<'or, 'sub, OE1, E>,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + NecessarySend + 'or) -> Subscription<'sub> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 pending_observables: VecDeque::new(),
@@ -118,10 +118,10 @@ struct SourceObserver<'sub, T, E, OR, OE1>(Context<T, E, OR, Model<'sub, OE1>>);
 impl<'or, 'sub, T, E, OR, OE1> Observer<OE1, E> for SourceObserver<'sub, T, E, OR, OE1>
 where
     'sub: 'or,
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
-    OR: Observer<T, E> + NecessarySend + 'or,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: Observer<T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
         let result = self.0.modify_model(|model| match model.sub_state {
@@ -182,10 +182,10 @@ struct InnerObserver<'sub, T, E, OR, OE1>(Context<T, E, OR, Model<'sub, OE1>>);
 impl<'or, 'sub, T, E, OR, OE1> Observer<T, E> for InnerObserver<'sub, T, E, OR, OE1>
 where
     'sub: 'or,
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
-    OR: Observer<T, E> + NecessarySend + 'or,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: Observer<T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: T) {
         self.0.send_next(value);
@@ -205,10 +205,10 @@ fn subscribe_next_observable_until_finished<'or, 'sub, T, E, OR, OE1>(
     context: Context<T, E, OR, Model<'sub, OE1>>,
 ) where
     'sub: 'or,
-    T: NecessarySend + 'or,
-    E: NecessarySend + 'or,
-    OR: Observer<T, E> + NecessarySend + 'or,
-    OE1: Observable<'or, 'sub, T, E> + NecessarySend + 'or,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: Observer<T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, 'sub, T, E> + MaybeSend + 'or,
 {
     loop {
         let result = context.modify_model(|model| {
