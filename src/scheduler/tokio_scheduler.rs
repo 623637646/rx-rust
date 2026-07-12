@@ -13,11 +13,12 @@ impl Scheduler for tokio::runtime::Handle {
         &self,
         future: impl Future<Output = ()> + MaybeSend + 'static,
     ) -> BoundDropDisposal<Self::DisposableType> {
-        let handle = tokio::spawn(future);
+        let handle = self.spawn(future);
         BoundDropDisposal::new(handle)
     }
 
     fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
+        let _guard = self.enter();
         tokio::time::sleep(duration)
     }
 
@@ -27,6 +28,7 @@ impl Scheduler for tokio::runtime::Handle {
         period: Duration,
         delay: Option<Duration>,
     ) -> BoundDropDisposal<Self::DisposableType> {
+        assert!(!period.is_zero(), "period must be non-zero");
         let this = self.clone();
         self.spawn_future(async move {
             if let Some(delay) = delay {

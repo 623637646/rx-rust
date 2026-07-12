@@ -8,7 +8,7 @@ use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::scheduler::RecursionAction;
 use rx_rust::scheduler::Scheduler;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 const RECURSION_EXECUTION_TIMES: usize = 200;
 
@@ -226,4 +226,31 @@ fn test_schedule_periodically_with_delay() {
         assert_eq!(count, RECURSION_EXECUTION_TIMES);
         disposal.dispose();
     });
+}
+
+#[test]
+#[should_panic(expected = "period must be non-zero")]
+fn test_schedule_periodically_rejects_zero_period() {
+    block_on(|runtime| async move {
+        let _disposal = runtime.schedule_periodically(|_| false, Duration::ZERO, None);
+    });
+}
+
+#[cfg(feature = "tokio-scheduler")]
+#[test]
+fn test_tokio_handle_schedules_outside_runtime_context() {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed building the Runtime");
+    let handle = runtime.handle().clone();
+    let (tx, rx) = futures::channel::oneshot::channel();
+
+    let disposal = handle.schedule(
+        move || tx.send(()).expect("receiver should remain alive"),
+        Some(DURATION_10_MS),
+    );
+
+    assert!(runtime.block_on(rx).is_ok());
+    disposal.dispose();
 }

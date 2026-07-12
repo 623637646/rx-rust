@@ -93,6 +93,7 @@ pub trait Scheduler {
     where
         Self: Clone + MaybeSend + 'static,
     {
+        assert!(!period.is_zero(), "period must be non-zero");
         let mut next_time = Instant::now() + delay.unwrap_or_default();
         self.schedule_recursively(
             move |count| {
