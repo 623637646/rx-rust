@@ -37,12 +37,12 @@ impl Disposable for ThreadCheckerDisposal {
 }
 
 impl Scheduler for ThreadCheckerScheduler {
-    type DisposableType = ThreadCheckerDisposal;
+    type D = ThreadCheckerDisposal;
 
     fn spawn_future(
         &self,
         future: impl Future<Output = ()> + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::DisposableType> {
+    ) -> BoundDropDisposal<Self::D> {
         let thread_name = self.name;
         let (abortable, abort_handle) = abortable(future);
         std::thread::spawn(move || {

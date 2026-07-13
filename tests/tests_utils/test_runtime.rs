@@ -55,12 +55,12 @@ impl TestRuntime {
 }
 
 impl Scheduler for TestRuntime {
-    type DisposableType = <TestScheduler as Scheduler>::DisposableType;
+    type D = <TestScheduler as Scheduler>::D;
 
     fn spawn_future(
         &self,
         future: impl Future<Output = ()> + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::DisposableType> {
+    ) -> BoundDropDisposal<Self::D> {
         self.0.spawn_future(future)
     }
 

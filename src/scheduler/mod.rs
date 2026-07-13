@@ -1,12 +1,12 @@
-#[cfg(feature = "async-std-scheduler")]
+#[cfg(all(feature = "async-std-scheduler", not(feature = "single-threaded")))]
 pub mod async_std_scheduler;
 #[cfg(feature = "local-pool-scheduler")]
 pub mod local_pool_scheduler;
-#[cfg(feature = "smol-scheduler")]
+#[cfg(all(feature = "smol-scheduler", not(feature = "single-threaded")))]
 pub mod smol_scheduler;
-#[cfg(feature = "thread-pool-scheduler")]
+#[cfg(all(feature = "thread-pool-scheduler", not(feature = "single-threaded")))]
 pub mod thread_pool_scheduler;
-#[cfg(feature = "tokio-scheduler")]
+#[cfg(all(feature = "tokio-scheduler", not(feature = "single-threaded")))]
 pub mod tokio_scheduler;
 
 use crate::{
@@ -31,12 +31,12 @@ pub enum RecursionAction {
 /// See <https://reactivex.io/documentation/scheduler.html>
 /// This is why the task must be 'static: <https://stackoverflow.com/a/65287449/9315497>
 pub trait Scheduler {
-    type DisposableType: Disposable + MaybeSend + 'static;
+    type D: Disposable + MaybeSend + 'static;
 
     fn spawn_future(
         &self,
         future: impl Future<Output = ()> + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::DisposableType>;
+    ) -> BoundDropDisposal<Self::D>;
 
     fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<Self>;
 
@@ -44,7 +44,7 @@ pub trait Scheduler {
         &self,
         task: impl FnOnce() + MaybeSend + 'static,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<Self::DisposableType> {
+    ) -> BoundDropDisposal<Self::D> {
         let delay = delay.map(|duration| self.sleep(duration));
         self.spawn_future(async move {
             if let Some(delay) = delay {
@@ -58,7 +58,7 @@ pub trait Scheduler {
         &self,
         mut task: impl FnMut(usize) -> RecursionAction + MaybeSend + 'static,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<Self::DisposableType>
+    ) -> BoundDropDisposal<Self::D>
     where
         Self: Clone + MaybeSend + 'static,
     {
@@ -89,7 +89,7 @@ pub trait Scheduler {
         mut task: impl FnMut(usize) -> bool + MaybeSend + 'static,
         period: Duration,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<Self::DisposableType>
+    ) -> BoundDropDisposal<Self::D>
     where
         Self: Clone + MaybeSend + 'static,
     {
@@ -114,7 +114,7 @@ pub trait Scheduler {
         &self,
         stream: SM,
         mut result_callback: impl FnMut(Option<SM::Item>) + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::DisposableType>
+    ) -> BoundDropDisposal<Self::D>
     where
         SM: Stream + MaybeSend + 'static,
     {

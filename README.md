@@ -25,6 +25,10 @@ Feature                          | Description | Pulls in
 `async-std-scheduler`            | Scheduler based on async-std. | `futures`, `async-std`
 `smol-scheduler`                 | Scheduler based on smol. | `futures`, `smol`
 
+`single-threaded` (including `local-pool-scheduler`) is mutually exclusive with
+`thread-pool-scheduler`, `tokio-scheduler`, `async-std-scheduler`, and
+`smol-scheduler`.
+
 ## Quick Start
 Build pipelines by combining operators from `ObservableExt` and subscribe with callbacks or custom observers.
 
