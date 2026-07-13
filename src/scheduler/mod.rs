@@ -16,7 +16,11 @@ use crate::{
 use educe::Educe;
 #[cfg(feature = "futures")]
 use futures::{Stream, stream::StreamExt};
-use std::time::{Duration, Instant};
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+    time::{Duration, Instant},
+};
 
 /// Indicates how a recursive scheduling step should continue.
 #[derive(Educe)]
@@ -25,6 +29,29 @@ pub enum RecursionAction {
     ContinueAt(Instant),
     ContinueImmediately,
     Stop,
+}
+
+/// A future that yields to the executor exactly once before completing.
+///
+/// Runtime-agnostic replacement for `yield_now`: it guarantees an await point
+/// so other tasks can make progress and disposal/abort can take effect.
+/// Note that `sleep(Duration::ZERO)` is NOT a substitute — e.g. tokio's
+/// `sleep` with an already-elapsed deadline completes on the first poll
+/// without ever yielding.
+struct YieldNow(bool);
+
+impl Future for YieldNow {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
+        if self.0 {
+            Poll::Ready(())
+        } else {
+            self.0 = true;
+            cx.waker().wake_by_ref();
+            Poll::Pending
+        }
+    }
 }
 
 /// Core abstraction for driving asynchronous work across runtimes.
@@ -38,6 +65,10 @@ pub trait Scheduler {
         future: impl Future<Output = ()> + MaybeSend + 'static,
     ) -> BoundDropDisposal<Self::D>;
 
+    /// Returns a future that completes `duration` after this call.
+    ///
+    /// Contract for implementors: the deadline is captured when `sleep` is
+    /// *called*, not when the returned future is first polled.
     fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<Self>;
 
     fn schedule(
@@ -54,6 +85,11 @@ pub trait Scheduler {
         })
     }
 
+    /// Repeatedly runs `task` until it returns [`RecursionAction::Stop`].
+    ///
+    /// The loop yields to the executor between iterations (even for
+    /// `ContinueImmediately` and already-elapsed `ContinueAt` instants), so
+    /// other tasks can make progress and disposal can take effect.
     fn schedule_recursively(
         &self,
         mut task: impl FnMut(usize) -> RecursionAction + MaybeSend + 'static,
@@ -74,9 +110,16 @@ pub trait Scheduler {
                     RecursionAction::ContinueAt(at) => {
                         if let Some(delay) = at.checked_duration_since(Instant::now()) {
                             self_cloned.sleep(delay).await;
+                        } else {
+                            // The requested instant has already passed;
+                            // still yield so the loop stays cancellable.
+                            YieldNow(false).await;
                         }
                     }
-                    RecursionAction::ContinueImmediately => {}
+                    RecursionAction::ContinueImmediately => {
+                        // Yield so other tasks can run and disposal can take effect.
+                        YieldNow(false).await;
+                    }
                     RecursionAction::Stop => break,
                 }
                 count += 1;
@@ -84,6 +127,15 @@ pub trait Scheduler {
         })
     }
 
+    /// Runs `task` at a fixed rate anchored to the time of this call
+    /// (plus `delay`), until `task` returns `false`.
+    ///
+    /// Fixed-rate semantics: if an execution overruns `period`, missed runs
+    /// are executed back-to-back to catch up — they are never skipped.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `period` is zero.
     fn schedule_periodically(
         &self,
         mut task: impl FnMut(usize) -> bool + MaybeSend + 'static,

@@ -10,6 +10,9 @@ use std::time::Duration;
 impl Scheduler for ThreadPool {
     type D = ThreadPoolDisposal;
 
+    /// # Panics
+    ///
+    /// Panics if the pool has been shut down.
     fn spawn_future(
         &self,
         future: impl Future<Output = ()> + MaybeSend + 'static,
@@ -29,7 +32,7 @@ pub struct ThreadPoolDisposal(futures::future::RemoteHandle<()>);
 
 impl Disposable for ThreadPoolDisposal {
     fn dispose(self) {
-        // Drop to call the dispose
+        // Dropping a `RemoteHandle` cancels the remote future.
         drop(self.0);
     }
 }

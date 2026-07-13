@@ -5,7 +5,7 @@ use crate::{
 };
 use educe::Educe;
 use futures::future::abortable;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Schedules tasks using the async-std runtime utilities.
 #[derive(Educe)]
@@ -26,7 +26,14 @@ impl Scheduler for AsyncStdScheduler {
     }
 
     fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
-        async_std::task::sleep(duration)
+        // `async_std::task::sleep` is an `async fn`, so it would start timing
+        // lazily on first poll. Capture the deadline eagerly instead, to honor
+        // the `Scheduler::sleep` contract (deadline measured from this call),
+        // matching the other scheduler implementations.
+        let deadline = Instant::now() + duration;
+        async move {
+            async_std::task::sleep(deadline.saturating_duration_since(Instant::now())).await;
+        }
     }
 }
 

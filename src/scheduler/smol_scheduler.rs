@@ -30,6 +30,6 @@ impl Scheduler for SmolScheduler {
 
 impl Disposable for smol::Task<()> {
     fn dispose(self) {
-        // Drop to call the dispose
+        // Dropping a `smol::Task` cancels it.
     }
 }

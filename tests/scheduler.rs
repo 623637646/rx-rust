@@ -166,6 +166,50 @@ fn test_schedule_recursively_small_delay() {
     });
 }
 
+// `ContinueImmediately` must yield between iterations: otherwise the first
+// receive below would starve on a single-threaded pool, and disposal could
+// never take effect (abort/cancel only happens at await points).
+#[test]
+fn test_schedule_recursively_continue_immediately_yields_and_disposes() {
+    block_on(|runtime| async move {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let disposal = runtime.schedule_recursively(
+            move |index| {
+                // The receiver may be gone after disposal races; ignore errors.
+                let _ = tx.unbounded_send(index);
+                RecursionAction::ContinueImmediately
+            },
+            None,
+        );
+        // Requires the recursive loop to yield to this task.
+        assert!(rx.next().await.is_some());
+        disposal.dispose();
+        // After disposal the task is dropped, dropping `tx` and closing the
+        // channel. If disposal didn't stop the loop, this would hang forever.
+        while rx.next().await.is_some() {}
+    });
+}
+
+// Same guarantee for `ContinueAt` with an instant that has already passed.
+#[test]
+fn test_schedule_recursively_continue_at_past_instant_yields_and_disposes() {
+    block_on(|runtime| async move {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let past = Instant::now();
+        let disposal = runtime.schedule_recursively(
+            move |index| {
+                let _ = tx.unbounded_send(index);
+                // Always in the past by the time it is evaluated.
+                RecursionAction::ContinueAt(past)
+            },
+            None,
+        );
+        assert!(rx.next().await.is_some());
+        disposal.dispose();
+        while rx.next().await.is_some() {}
+    });
+}
+
 #[test]
 fn test_schedule_periodically_without_delay() {
     block_on(|runtime| async move {

@@ -18,33 +18,9 @@ impl Scheduler for tokio::runtime::Handle {
     }
 
     fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
+        // Enter the runtime so the timer can be created outside a runtime context.
         let _guard = self.enter();
         tokio::time::sleep(duration)
-    }
-
-    fn schedule_periodically(
-        &self,
-        mut task: impl FnMut(usize) -> bool + MaybeSend + 'static,
-        period: Duration,
-        delay: Option<Duration>,
-    ) -> BoundDropDisposal<Self::D> {
-        assert!(!period.is_zero(), "period must be non-zero");
-        let this = self.clone();
-        self.spawn_future(async move {
-            if let Some(delay) = delay {
-                this.sleep(delay).await;
-            }
-            let mut ticker = tokio::time::interval(period);
-            let mut count = 0;
-            loop {
-                ticker.tick().await;
-                let r#continue = task(count);
-                count += 1;
-                if !r#continue {
-                    break;
-                }
-            }
-        })
     }
 }
 
