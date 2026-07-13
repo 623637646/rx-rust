@@ -72,6 +72,7 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
     }
 
     pub fn send_next(self, next: T) -> Self {
+        self.assert_no_events_set();
         Self {
             send_events: Some(EventGroup::Next(next)),
             ..self
@@ -79,6 +80,7 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
     }
 
     pub fn send_termination(self, termination: Termination<E>) -> Self {
+        self.assert_no_events_set();
         Self {
             send_events: Some(EventGroup::Termination(termination)),
             ..self
@@ -86,6 +88,7 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
     }
 
     pub fn send_next_and_termination(self, next: T, termination: Termination<E>) -> Self {
+        self.assert_no_events_set();
         Self {
             send_events: Some(EventGroup::NextAndTermination(next, termination)),
             ..self
@@ -93,6 +96,7 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
     }
 
     pub fn send_events(self, events: EventGroup<T, E>) -> Self {
+        self.assert_no_events_set();
         Self {
             send_events: Some(events),
             ..self
@@ -100,10 +104,21 @@ impl<T, E, D, R> ModificationResult<T, E, D, R> {
     }
 
     pub fn drop_outside(self, object: D) -> Self {
+        debug_assert!(
+            self.drop_outside.is_none(),
+            "drop_outside is already set; calling it again would silently overwrite (and drop) the previous object"
+        );
         Self {
             drop_outside: Some(object),
             ..self
         }
+    }
+
+    fn assert_no_events_set(&self) {
+        debug_assert!(
+            self.send_events.is_none(),
+            "send_events is already set; calling a send_* method again would silently overwrite the previous events"
+        );
     }
 }
 
@@ -181,7 +196,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     where
         OR: Observer<T, E>,
     {
-        let result = self.0.lock_mut(|mut lock| {
+        self.0.lock_mut(|mut lock| {
             let model = match &mut *lock {
                 State::Idle { model, .. } => model,
                 State::Processing { model, .. } => model,
@@ -202,8 +217,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
             }
             drop(drop_outside); // Drop outside the lock to avoid potential deadlock
             Ok(result)
-        })?;
-        Ok(result)
+        })
     }
 
     pub fn send_next(&self, value: T)
@@ -250,29 +264,18 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                     EventGroup::NextAndTermination(next, termination) => {
                         (Some((next, None)), Some(termination))
                     }
-                    EventGroup::Nexts(mut items) => {
-                        if items.is_empty() {
-                            panic!("Nexts must have at least one item")
-                        } else {
-                            let rest = items.split_off(1);
-                            let rest = if rest.is_empty() { None } else { Some(rest) };
-                            let next = items.pop().unwrap();
-                            (Some((next, rest)), None)
-                        }
-                    }
-                    EventGroup::NextsAndTermination(mut items, termination) => {
-                        if items.is_empty() {
-                            (None, Some(termination))
-                        } else {
-                            let rest = items.split_off(1);
-                            let rest = if rest.is_empty() { None } else { Some(rest) };
-                            let next = items.pop().unwrap();
-                            (Some((next, rest)), Some(termination))
-                        }
+                    EventGroup::Nexts(items) => (split_first(items), None),
+                    EventGroup::NextsAndTermination(items, termination) => {
+                        (split_first(items), Some(termination))
                     }
                 };
-                let idel_state = std::mem::replace(&mut *lock, State::Stopped);
-                match idel_state {
+                if next_and_rest.is_none() && termination.is_none() {
+                    // Empty `Nexts` is a no-op, consistent with the `Processing` state.
+                    drop(lock);
+                    return;
+                }
+                let idle_state = std::mem::replace(&mut *lock, State::Stopped);
+                match idle_state {
                     State::Idle {
                         mut observer,
                         model,
@@ -284,6 +287,14 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                                 model,
                             };
                             drop(lock); // Drop lock to avoid potential deadlock
+                            // If the observer panics (in `on_next` here or inside
+                            // `send_events_until_finish`), the state would otherwise stay
+                            // `Processing` forever: later events get queued but never
+                            // delivered, and the model leaks until dispose. The guard stops
+                            // the state machine on panic; on normal return it is a no-op.
+                            // NOTE: This is the only call site of `send_events_until_finish`,
+                            // which relies on this guard.
+                            let _stop_on_panic = StopOnPanic(&self.0);
                             observer.on_next(next);
                             self.send_events_until_finish(observer);
                         } else {
@@ -337,6 +348,9 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
     where
         OR: Observer<T, E>,
     {
+        // Panic safety is provided by the `StopOnPanic` guard at the (only) call site
+        // in `sending_impl`. If this function gains a new caller, that caller must set
+        // up the same guard.
         loop {
             let result = self.0.lock_mut(|mut lock| match &mut *lock {
                 State::Idle { .. } => {
@@ -405,6 +419,29 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
                     observer = obs;
                 }
             }
+        }
+    }
+}
+
+/// Splits a `Vec` into its first element and the (non-empty) rest.
+/// Returns `None` if the vec is empty.
+fn split_first<T>(items: Vec<T>) -> Option<(T, Option<Vec<T>>)> {
+    let mut iter = items.into_iter();
+    let next = iter.next()?;
+    let rest: Vec<T> = iter.collect();
+    let rest = if rest.is_empty() { None } else { Some(rest) };
+    Some((next, rest))
+}
+
+/// Sets the state to `Stopped` when dropped while panicking.
+/// The panic must have happened outside the lock (observer calls are made outside the lock),
+/// so locking here is safe on the panicking thread.
+struct StopOnPanic<'a, T, E, OR, M>(&'a Shared<Mutable<State<T, E, OR, M>>>);
+
+impl<T, E, OR, M> Drop for StopOnPanic<'_, T, E, OR, M> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            let _old_state = safe_lock!(mem_replace: self.0, State::Stopped);
         }
     }
 }
