@@ -169,9 +169,7 @@ fn test_unsub_after_completed() {
         let (tx, rx) = futures::channel::oneshot::channel();
 
         let observable = FromFuture::new(rx, runtime.clone());
-        let observable = observable
-            .map_infallible_to_error()
-            .flat_map(FromResult::new);
+        let observable = observable.with_error_type().flat_map(FromResult::new);
         let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(observer);
@@ -193,9 +191,7 @@ fn test_unsub_after_completed_drop() {
         let (tx, rx) = futures::channel::oneshot::channel::<i32>();
 
         let observable = FromFuture::new(rx, runtime.clone());
-        let observable = observable
-            .map_infallible_to_error()
-            .flat_map(FromResult::new);
+        let observable = observable.with_error_type().flat_map(FromResult::new);
         let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(observer);

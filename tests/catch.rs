@@ -681,7 +681,7 @@ fn test_lifetime_sub() {
                 life_marker.consume_ref();
             }))
         });
-        let observable = observable.catch(move |value| Throw::new(value).map_infallible_to_value());
+        let observable = observable.catch(move |value| Throw::new(value).with_item_type());
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -703,7 +703,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
-        let observable = observable.catch(move |value| Throw::new(value).map_infallible_to_value());
+        let observable = observable.catch(move |value| Throw::new(value).with_item_type());
 
         let (_, mut observer) = Checker::new();
         observer.on_next(&life_marker_2);
@@ -730,7 +730,7 @@ fn test_lifetime_or_sub() {
                 }))
             },
         );
-        let observable = observable.catch(move |value| Throw::new(value).map_infallible_to_value());
+        let observable = observable.catch(move |value| Throw::new(value).with_item_type());
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
@@ -744,7 +744,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let observable = observable.catch(move |value| Throw::new(value).map_infallible_to_value());
+    let observable = observable.catch(move |value| Throw::new(value).with_item_type());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -752,7 +752,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, String> = PublishSubject::default();
-    let observable = subject.catch(move |value| Throw::new(value).map_infallible_to_value());
+    let observable = subject.catch(move |value| Throw::new(value).with_item_type());
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -763,7 +763,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, Just<i32>, Infallible> = PublishSubject::default();
-    let observable = subject.catch(move |value| Throw::new(value).map_infallible_to_value());
+    let observable = subject.catch(move |value| Throw::new(value).with_item_type());
 
     observable.filter(|_| true);
 }

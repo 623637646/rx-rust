@@ -29,7 +29,7 @@ use std::marker::PhantomData;
 /// let mut values = Vec::new();
 /// let mut terminations = Vec::new();
 ///
-/// let observable = Catch::new(Throw::new("boom").map_infallible_to_value(), |error| Just::new(error));
+/// let observable = Catch::new(Throw::new("boom").with_item_type(), |error| Just::new(error));
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| terminations.push(termination),
