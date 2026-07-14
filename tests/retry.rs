@@ -238,12 +238,12 @@ fn test_completed_different_retry_observable() {
     let observable = observable.retry(move |error| match error {
         -1 => RetryAction::Retry(
             Just::new(222)
-                .map_infallible_to_error()
-                .concat_with(Throw::new(0).map_infallible_to_value())
+                .with_error_type()
+                .concat_with(Throw::new(0).with_item_type())
                 .into_boxed(),
         ),
-        0 => RetryAction::Retry(Throw::new(1).map_infallible_to_value().into_boxed()),
-        1 => RetryAction::Retry(Just::new(333).map_infallible_to_error().into_boxed()),
+        0 => RetryAction::Retry(Throw::new(1).with_item_type().into_boxed()),
+        1 => RetryAction::Retry(Just::new(333).with_error_type().into_boxed()),
         _ => panic!(),
     });
 
@@ -278,7 +278,7 @@ fn test_completed_synchronous_throw() {
     let observable = observable.retry(move |error| {
         safe_lock_vec!(push: errors_cloned, error);
         match error {
-            -1 => RetryAction::Retry(Throw::new(0).map_infallible_to_value().into_boxed()),
+            -1 => RetryAction::Retry(Throw::new(0).with_item_type().into_boxed()),
             0 => {
                 let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
                 RetryAction::Retry(observable.into_boxed())
@@ -1160,7 +1160,7 @@ fn test_next_on_sub() {
     // Custom operations
     let observable = subject.clone().retry(move |error| {
         assert_eq!(error, "error");
-        RetryAction::Retry(Just::new(222).map_infallible_to_error())
+        RetryAction::Retry(Just::new(222).with_error_type())
     });
 
     let _subscription = observable.subscribe(observer);
@@ -1178,7 +1178,7 @@ fn test_complete_on_sub() {
 
     // Custom operations
     let observable = Empty
-        .map_infallible_to_error()
+        .with_error_type()
         .retry(move |_| RetryAction::<_, Throw<_>>::Stop("error"));
 
     let _subscription = observable.subscribe(observer);

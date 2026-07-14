@@ -29,6 +29,7 @@ use crate::{
         connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
         error_handling::{
             catch::Catch,
+            map_err::MapErr,
             retry::{Retry, RetryAction},
         },
         filtering::{
@@ -45,8 +46,8 @@ use crate::{
             hook_on_next::HookOnNext,
             hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination,
-            map_infallible_to_error::MapInfallibleToError,
-            map_infallible_to_value::MapInfallibleToValue,
+            with_error_type::WithErrorType,
+            with_item_type::WithItemType,
         },
         transforming::{
             buffer::Buffer, buffer_with_count::BufferWithCount, buffer_with_time::BufferWithTime,
@@ -244,14 +245,6 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         Distinct::new(self)
     }
 
-    /// Filters out duplicates based on a key selector, keeping only unique keys.
-    fn distinct_with_key_selector<F, K>(self, key_selector: F) -> Distinct<Self, F>
-    where
-        F: FnMut(&T) -> K,
-    {
-        Distinct::new_with_key_selector(self, key_selector)
-    }
-
     /// Suppresses consecutive duplicate items, comparing the values directly.
     fn distinct_until_changed(self) -> DistinctUntilChanged<Self, fn(&T) -> T>
     where
@@ -269,6 +262,14 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         F: FnMut(&T) -> K,
     {
         DistinctUntilChanged::new_with_key_selector(self, key_selector)
+    }
+
+    /// Filters out duplicates based on a key selector, keeping only unique keys.
+    fn distinct_with_key_selector<F, K>(self, key_selector: F) -> Distinct<Self, F>
+    where
+        F: FnMut(&T) -> K,
+    {
+        Distinct::new_with_key_selector(self, key_selector)
     }
 
     /// Invokes a callback after the downstream subscription is disposed.
@@ -444,14 +445,12 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         Map::new(self, callback)
     }
 
-    /// Maps an Observable with an `Infallible` error type to an Observable with a concrete error type.
-    fn map_infallible_to_error<E1>(self) -> MapInfallibleToError<E1, Self> {
-        MapInfallibleToError::new(self)
-    }
-
-    /// Maps an Observable with an `Infallible` item type to an Observable with a concrete item type.
-    fn map_infallible_to_value<V1>(self) -> MapInfallibleToValue<V1, Self> {
-        MapInfallibleToValue::new(self)
+    /// Transforms an error emitted by the source while leaving its items unchanged.
+    fn map_err<E1, F>(self, callback: F) -> MapErr<E, Self, F>
+    where
+        F: FnOnce(E) -> E1,
+    {
+        MapErr::new(self, callback)
     }
 
     /// Wraps each item into a notification, turning the stream into explicit events.
@@ -721,6 +720,16 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Collects items into windows containing a fixed number of elements.
     fn window_with_count(self, count: NonZeroUsize) -> WindowWithCount<Self> {
         WindowWithCount::new(self, count)
+    }
+
+    /// Gives an Observable whose error type is `Infallible` a concrete error type.
+    fn with_error_type<E1>(self) -> WithErrorType<E1, Self> {
+        WithErrorType::new(self)
+    }
+
+    /// Gives an Observable whose item type is `Infallible` a concrete item type.
+    fn with_item_type<T1>(self) -> WithItemType<T1, Self> {
+        WithItemType::new(self)
     }
 
     /// Pairs items from both observables by index and emits tuples of corresponding values.

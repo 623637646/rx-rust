@@ -11,7 +11,7 @@ use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::{creating::create::Create, others::map_infallible_to_value::MapInfallibleToValue},
+    operators::{creating::create::Create, others::with_error_type::WithErrorType},
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
@@ -19,46 +19,33 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    let subject = PublishSubject::default();
+    let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::<i32, String>::new();
 
     // Custom operations
-    let observable = subject.clone().map_infallible_to_value();
+    let observable = subject.clone().with_error_type();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
+    subject.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker.values().is_empty());
+    assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
-fn test_error() {
-    let subject = PublishSubject::default();
-    let (checker, observer) = Checker::<i32, _>::new();
-
-    // Custom operations
-    let observable = subject.clone().map_infallible_to_value();
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-
-    subject.clone().on_termination(Termination::Error("error"));
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Error("error"));
-}
-
-#[test]
 fn test_unsubscribe() {
-    let subject = PublishSubject::default();
-    let (checker_1, observer_1) = Checker::<i32, String>::new();
+    let mut subject = PublishSubject::default();
+    let (checker_1, observer_1) = Checker::<_, String>::new();
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone().map_infallible_to_value();
+    let observable = subject.clone().with_error_type();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -69,64 +56,80 @@ fn test_unsubscribe() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Active);
+
     subscription_1.dispose();
-    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    subject.on_next(222);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Active);
 
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]
 fn test_ref() {
-    let error = 111;
+    let value = 111;
 
-    let subject = PublishSubject::default();
-    let (checker, observer) = Checker::<&i32, _>::new();
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::<&i32, String>::new();
 
     // Custom operations
-    let observable = subject.clone().map_infallible_to_value();
+    let observable = subject.clone().with_error_type();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.clone().on_termination(Termination::Error(&error));
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Error(&error));
+    subject.on_next(&value);
+    assert_eq!(checker.values(), [&value]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.clone().on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [&value]);
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
 fn test_mut_ref() {
-    let mut error = 111;
+    let mut value_1 = 111;
+    let mut value_2 = 222;
+    let mut value_3 = 333;
 
     // Custom operations
-    let observable = Create::new(|observer| {
-        observer.on_termination(Termination::Error(&mut error));
+    let observable = Create::new(|mut observer| {
+        observer.on_next(&mut value_1);
+        observer.on_next(&mut value_2);
+        observer.on_next(&mut value_3);
+        observer.on_termination(Termination::Completed);
         Subscription::default()
     });
-    let observable = observable.map_infallible_to_value();
+    let observable = observable.with_error_type();
 
     let _subscription = observable.subscribe_with_callback(
-        |value: &mut i32| {
+        |value| {
             *value *= 2;
         },
-        |termination| {
-            match termination {
-                Termination::Completed => unreachable!(),
-                Termination::Error(error) => {
-                    *error *= 2;
-                }
-            };
-        },
+        |termination: Termination<String>| assert!(matches!(termination, Termination::Completed)),
     );
 
-    assert_eq!(error, 222);
+    assert_eq!(value_1, 222);
+    assert_eq!(value_2, 444);
+    assert_eq!(value_3, 666);
 }
 
 #[test]
@@ -136,7 +139,7 @@ fn test_async() {
         let (checker, observer) = Checker::<&i32, String>::new();
 
         // Custom operations
-        let observable = subject.clone().map_infallible_to_value();
+        let observable = subject.clone().with_error_type();
 
         let subscription = runtime
             .spawn(async move { observable.subscribe(observer) })
@@ -145,12 +148,22 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
+        let mut subject_cloned = subject.clone();
+        runtime
+            .spawn(async move {
+                subject_cloned.on_next(&111);
+            })
+            .await
+            .unwrap();
+        assert_eq!(checker.values(), [&111]);
+        assert_eq!(checker.state(), State::Active);
+
         runtime
             .spawn(async { subscription.dispose() })
             .await
             .unwrap();
         runtime.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
+        assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Dropped);
 
         let subject_cloned = subject.clone();
@@ -160,19 +173,19 @@ fn test_async() {
             })
             .await
             .unwrap();
-        assert!(checker.values().is_empty());
+        assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Dropped);
     });
 }
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let subject = PublishSubject::default();
-    let (checker_1, observer_1) = Checker::<i32, String>::new();
+    let mut subject = PublishSubject::default();
+    let (checker_1, observer_1) = Checker::<_, String>::new();
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone().map_infallible_to_value();
+    let observable = subject.clone().with_error_type();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -185,61 +198,78 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
+    subject.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Active);
+
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Completed);
-    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    let (_sender, observable, channel_checker) = test_channel();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::<i32, String>::new();
 
     // Custom operations
-    let observable = observable.map_infallible_to_value().take(0);
+    let observable = observable.with_error_type().take(1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_next(111);
+    assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Initialized);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
 fn test_multiple_operation() {
-    let subject = PublishSubject::default();
-    let (checker, observer) = Checker::<i32, String>::new();
+    let mut subject = PublishSubject::default();
+    let (checker, observer) = Checker::<_, String>::new();
 
     // Custom operations
     let observable = subject.clone();
-    let observable = observable
-        .map_infallible_to_value()
-        .map_infallible_to_value();
+    let observable = observable.with_error_type().with_error_type();
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
+    subject.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
     subject.on_termination(Termination::Completed);
-    assert!(checker.values().is_empty());
+    assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
 fn test_without_convenient_api() {
-    let subject = PublishSubject::default();
+    let mut subject = PublishSubject::default();
     let (checker, observer) = Checker::<i32, String>::new();
 
     // Custom operations
-    let observable = MapInfallibleToValue::new(subject.clone());
+    let observable = WithErrorType::new(subject.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
+    subject.on_next(111);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
     subject.clone().on_termination(Termination::Completed);
-    assert!(checker.values().is_empty());
+    assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
 
@@ -254,12 +284,13 @@ fn test_lifetime_sub() {
     // let life_marker = TestStruct;
 
     {
-        let observable = Create::new(|_| {
+        let observable = Create::new(|mut observer| {
+            observer.on_next(1);
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
-        let observable = observable.map_infallible_to_value();
+        let observable = observable.with_error_type();
 
         let (_, observer) = Checker::<i32, String>::new();
         _subscription = observable.subscribe(observer);
@@ -281,7 +312,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
-        let observable = observable.map_infallible_to_value();
+        let observable = observable.with_error_type();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(&life_marker_2);
@@ -296,26 +327,26 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let observable = observable.map_infallible_to_value::<String>();
+    let observable = observable.with_error_type::<String>();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject = PublishSubject::default();
-    let observable = subject.map_infallible_to_value();
+    let subject: PublishSubject<'_, i32, _> = PublishSubject::default();
+    let observable = subject.with_error_type();
 
     let observable = observable.filter(|_| true);
-    let (_, observer) = Checker::<Vec<i32>, String>::new();
+    let (_, observer) = Checker::<_, String>::new();
     let _ = observable.subscribe(observer);
 }
 
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, _, String> = PublishSubject::default();
-    let observable = subject.map_infallible_to_value::<String>();
+    let subject: PublishSubject<'_, i32, _> = PublishSubject::default();
+    let observable = subject.with_error_type::<String>();
 
     observable.filter(|_| true);
 }

@@ -990,9 +990,9 @@ fn test_mut_ref() {
 
     // Custom operations
     let observable = Create::new(|mut observer| {
-        observer.on_next(Just::new(&mut value_1).map_infallible_to_error());
-        observer.on_next(Just::new(&mut value_2).map_infallible_to_error());
-        observer.on_next(Just::new(&mut value_3).map_infallible_to_error());
+        observer.on_next(Just::new(&mut value_1).with_error_type());
+        observer.on_next(Just::new(&mut value_2).with_error_type());
+        observer.on_next(Just::new(&mut value_3).with_error_type());
         observer.on_termination(Termination::Error(&mut error));
         Subscription::default()
     });
@@ -1024,9 +1024,9 @@ fn test_mut_ref_completed() {
 
     // Custom operations
     let observable = Create::new(|mut observer| {
-        observer.on_next(Just::new(&mut value_1).map_infallible_to_error());
-        observer.on_next(Just::new(&mut value_2).map_infallible_to_error());
-        observer.on_next(Just::new(&mut value_3).map_infallible_to_error());
+        observer.on_next(Just::new(&mut value_1).with_error_type());
+        observer.on_next(Just::new(&mut value_2).with_error_type());
+        observer.on_next(Just::new(&mut value_3).with_error_type());
         observer.on_termination(Termination::<Infallible>::Completed);
         Subscription::default()
     });
@@ -1433,7 +1433,7 @@ fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = Empty.map_infallible_to_value::<Empty>().concat_all();
+    let observable = Empty.with_item_type::<Empty>().concat_all();
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -1446,7 +1446,7 @@ fn test_error_on_sub() {
 
     // Custom operations
     let observable = Throw::new("error")
-        .map_infallible_to_value::<Throw<_>>()
+        .with_item_type::<Throw<_>>()
         .concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1588,7 +1588,7 @@ fn test_lifetime_or_sub() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(Just::new(TestStruct).map_infallible_to_error());
+        observer.on_next(Just::new(TestStruct).with_error_type());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });

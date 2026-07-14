@@ -182,7 +182,7 @@ fn test_ref() {
 fn test_mut_ref() {
     let mut value = 111;
 
-    let observable = Empty.map_infallible_to_value();
+    let observable = Empty.with_item_type();
     let (checker, observer) = Checker::new();
 
     // Custom operations

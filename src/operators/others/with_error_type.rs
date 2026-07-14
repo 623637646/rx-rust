@@ -7,23 +7,21 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
 
-/// Maps an Observable with an `Infallible` error type to an Observable with a concrete error type.
+/// Gives an Observable whose error type is `Infallible` a concrete error type.
 ///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
 ///     observer::Termination,
-///     operators::{
-///         creating::from_iter::FromIter,
-///         others::map_infallible_to_error::MapInfallibleToError,
-///     },
+///     operators::creating::from_iter::FromIter,
 /// };
 ///
 /// let mut values = Vec::new();
 /// let mut terminations = Vec::new();
 ///
-/// MapInfallibleToError::<String, _>::new(FromIter::new(vec![1, 2]))
+/// FromIter::new(vec![1, 2])
+///     .with_error_type::<String>()
 ///     .subscribe_with_callback(
 ///         |value| values.push(value),
 ///         |termination| terminations.push(termination),
@@ -34,12 +32,12 @@ use std::{convert::Infallible, marker::PhantomData};
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct MapInfallibleToError<E, OE> {
+pub struct WithErrorType<E, OE> {
     source: OE,
     _marker: MarkerType<E>,
 }
 
-impl<E, OE> MapInfallibleToError<E, OE> {
+impl<E, OE> WithErrorType<E, OE> {
     pub fn new(source: OE) -> Self {
         Self {
             source,
@@ -48,7 +46,7 @@ impl<E, OE> MapInfallibleToError<E, OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for MapInfallibleToError<E, OE>
+impl<'or, T, E, OE> Observable<'or, T, E> for WithErrorType<E, OE>
 where
     E: 'or,
     OE: Observable<'or, T, Infallible>,
@@ -56,7 +54,7 @@ where
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        let observer = MapInfallibleToErrorObserver {
+        let observer = WithErrorTypeObserver {
             observer,
             _marker: PhantomData,
         };
@@ -64,12 +62,12 @@ where
     }
 }
 
-struct MapInfallibleToErrorObserver<E, OR> {
+struct WithErrorTypeObserver<E, OR> {
     observer: OR,
     _marker: MarkerType<E>,
 }
 
-impl<T, E, OR> Observer<T, Infallible> for MapInfallibleToErrorObserver<E, OR>
+impl<T, E, OR> Observer<T, Infallible> for WithErrorTypeObserver<E, OR>
 where
     OR: Observer<T, E>,
 {
@@ -80,7 +78,7 @@ where
     fn on_termination(self, termination: Termination<Infallible>) {
         match termination {
             Termination::Completed => self.observer.on_termination(Termination::Completed),
-            Termination::Error(_) => unreachable!(),
+            Termination::Error(error) => match error {},
         }
     }
 }

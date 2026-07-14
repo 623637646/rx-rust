@@ -7,23 +7,20 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
 
-/// Maps an Observable with an `Infallible` item type to an Observable with a concrete item type.
+/// Gives an Observable whose item type is `Infallible` a concrete item type.
 ///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
 ///     observer::Termination,
-///     operators::{
-///         creating::empty::Empty,
-///         others::map_infallible_to_value::MapInfallibleToValue,
-///     },
+///     operators::creating::empty::Empty,
 /// };
 ///
 /// let mut values = Vec::<i32>::new();
 /// let mut terminations = Vec::new();
 ///
-/// MapInfallibleToValue::<i32, _>::new(Empty).subscribe_with_callback(
+/// Empty.with_item_type::<i32>().subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| terminations.push(termination),
 /// );
@@ -33,12 +30,12 @@ use std::{convert::Infallible, marker::PhantomData};
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct MapInfallibleToValue<T, OE> {
+pub struct WithItemType<T, OE> {
     source: OE,
     _marker: MarkerType<T>,
 }
 
-impl<T, OE> MapInfallibleToValue<T, OE> {
+impl<T, OE> WithItemType<T, OE> {
     pub fn new(source: OE) -> Self {
         Self {
             source,
@@ -47,7 +44,7 @@ impl<T, OE> MapInfallibleToValue<T, OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for MapInfallibleToValue<T, OE>
+impl<'or, T, E, OE> Observable<'or, T, E> for WithItemType<T, OE>
 where
     T: 'or,
     OE: Observable<'or, Infallible, E>,
@@ -55,7 +52,7 @@ where
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        let observer = MapInfallibleToValueObserver {
+        let observer = WithItemTypeObserver {
             observer,
             _marker: PhantomData,
         };
@@ -63,17 +60,17 @@ where
     }
 }
 
-struct MapInfallibleToValueObserver<T, OR> {
+struct WithItemTypeObserver<T, OR> {
     observer: OR,
     _marker: MarkerType<T>,
 }
 
-impl<T, E, OR> Observer<Infallible, E> for MapInfallibleToValueObserver<T, OR>
+impl<T, E, OR> Observer<Infallible, E> for WithItemTypeObserver<T, OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, _: Infallible) {
-        unreachable!()
+    fn on_next(&mut self, value: Infallible) {
+        match value {}
     }
 
     fn on_termination(self, termination: Termination<E>) {

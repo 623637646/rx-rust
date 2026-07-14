@@ -896,9 +896,9 @@ fn test_mut_ref() {
 
     // Custom operations
     let observable = Create::new(|mut observer| {
-        observer.on_next(Just::new(&mut value_1).map_infallible_to_error());
-        observer.on_next(Just::new(&mut value_2).map_infallible_to_error());
-        observer.on_next(Just::new(&mut value_3).map_infallible_to_error());
+        observer.on_next(Just::new(&mut value_1).with_error_type());
+        observer.on_next(Just::new(&mut value_2).with_error_type());
+        observer.on_next(Just::new(&mut value_3).with_error_type());
         observer.on_termination(Termination::Error(&mut error));
         Subscription::default()
     });
@@ -1372,7 +1372,7 @@ fn test_lifetime_or_sub() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(Just::new(TestStruct).map_infallible_to_error());
+        observer.on_next(Just::new(TestStruct).with_error_type());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });

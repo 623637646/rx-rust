@@ -2466,7 +2466,7 @@ fn test_complete_on_sub() {
     let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
-    let observable = Empty.window(Empty.map_infallible_to_value());
+    let observable = Empty.window(Empty.with_item_type());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(
@@ -2498,7 +2498,7 @@ fn test_error_on_sub() {
     let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
-    let observable = Throw::new("error").window(Throw::new("error").map_infallible_to_value());
+    let observable = Throw::new("error").window(Throw::new("error").with_item_type());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(

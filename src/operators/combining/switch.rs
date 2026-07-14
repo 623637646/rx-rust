@@ -1,6 +1,6 @@
 use crate::delegate_disposal;
 use crate::disposable::Disposable;
-use crate::operators::others::map_infallible_to_error::MapInfallibleToError;
+use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_shared_model::{
     self, Context, ModificationResult, subscribe_with_shared_model,
@@ -66,14 +66,14 @@ impl<OE, OE1> Switch<OE, OE1> {
     }
 }
 
-impl<E, OE1, I> Switch<MapInfallibleToError<E, FromIter<I>>, OE1> {
+impl<E, OE1, I> Switch<WithErrorType<E, FromIter<I>>, OE1> {
     pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
         OE1: Observable<'or, T, E>,
     {
         Self {
-            source: MapInfallibleToError::new(FromIter::new(into_iterator)),
+            source: WithErrorType::new(FromIter::new(into_iterator)),
             _marker: PhantomData,
         }
     }

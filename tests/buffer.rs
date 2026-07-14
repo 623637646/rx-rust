@@ -899,7 +899,7 @@ fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = Empty.buffer(Empty.map_infallible_to_value());
+    let observable = Empty.buffer(Empty.with_item_type());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -911,7 +911,7 @@ fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = Throw::new("error").buffer(Throw::new("error").map_infallible_to_value());
+    let observable = Throw::new("error").buffer(Throw::new("error").with_item_type());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
