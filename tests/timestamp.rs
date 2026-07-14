@@ -608,7 +608,7 @@ fn test_type_inference_with_subscribe() {
 
     let observable = observable.timestamp();
     let (_, observer) = Checker::new();
-    observable.subscribe(observer);
+    let _ = observable.subscribe(observer);
 }
 
 #[test]

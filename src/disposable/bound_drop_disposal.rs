@@ -2,6 +2,7 @@ use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
 use educe::Educe;
 
 /// A disposal that calls the `dispose` method of a `Disposable` when dropped.
+#[must_use = "dropping this disposal immediately dispose the inner disposable"]
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct BoundDropDisposal<D: Disposable>(Option<D>);

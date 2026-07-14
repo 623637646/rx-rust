@@ -483,7 +483,7 @@ fn test_type_inference_with_subscribe() {
 
     let observable = observable.skip(1);
     let (_, observer) = Checker::new();
-    observable.subscribe(observer);
+    let _ = observable.subscribe(observer);
 }
 
 #[test]

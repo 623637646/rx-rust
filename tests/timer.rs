@@ -185,7 +185,7 @@ fn test_type_inference_with_subscribe() {
 
         let observable = observable.filter(|_| true);
         let (_, observer) = Checker::new();
-        observable.subscribe(observer);
+        let _ = observable.subscribe(observer);
 
         runtime.sleep(DURATION_100_MS).await;
     });

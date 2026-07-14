@@ -583,7 +583,7 @@ fn test_fn() {
         true
     });
 
-    observable.subscribe_with_callback(|_| {}, |_| {});
+    let _ = observable.subscribe_with_callback(|_| {}, |_| {});
 }
 
 #[test]
@@ -604,7 +604,7 @@ fn test_type_inference_with_subscribe() {
 
     let observable = observable.all(|_| true);
     let (_, observer) = Checker::new();
-    observable.subscribe(observer);
+    let _ = observable.subscribe(observer);
 }
 
 #[test]

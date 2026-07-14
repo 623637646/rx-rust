@@ -700,7 +700,7 @@ fn test_type_inference_with_subscribe() {
 
     let observable = observable.time_interval();
     let (_, observer) = Checker::new();
-    observable.subscribe(observer);
+    let _ = observable.subscribe(observer);
 }
 
 #[test]

@@ -598,7 +598,7 @@ fn test_type_inference_with_subscribe() {
 
     let observable = observable.amb_with(test_channel::<'_, i32, Infallible>().1);
     let (_, observer) = Checker::new();
-    observable.subscribe(observer);
+    let _ = observable.subscribe(observer);
 }
 
 #[test]

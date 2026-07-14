@@ -616,7 +616,7 @@ fn test_type_inference_with_subscribe() {
 
         let observable = observable.timeout(DURATION_100_MS, runtime.clone());
         let (_, observer) = Checker::new();
-        observable.subscribe(observer);
+        let _ = observable.subscribe(observer);
     });
 }
 
