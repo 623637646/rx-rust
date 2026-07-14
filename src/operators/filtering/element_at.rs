@@ -3,7 +3,7 @@ use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 
@@ -51,10 +51,10 @@ where
     OE: Observable<'or, T, E>,
     OE::D: MaybeSend + 'or,
 {
-    type D = crate::utils::subscribe_unsub_after_termination::Disposal<OE::D>;
+    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |observer| {
             self.source.subscribe(ElementAtObserver {
                 observer: Some(observer),
                 index: self.index,

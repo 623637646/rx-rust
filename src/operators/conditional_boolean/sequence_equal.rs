@@ -1,5 +1,5 @@
 use crate::delegate_disposal;
-use crate::utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination};
+use crate::utils::subscribe_with_auto_dispose_on_termination::{self, subscribe_with_auto_dispose_on_termination};
 use crate::utils::subscribe_with_shared_model::{
     self, Context, ModificationResult, subscribe_with_shared_model,
 };
@@ -65,7 +65,7 @@ impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
 
 delegate_disposal!(
     Disposal<'or>,
-    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
 impl<'or, T, E, OE1, OE2> Observable<'or, bool, E> for SequenceEqual<T, OE1, OE2>
@@ -83,7 +83,7 @@ where
         self,
         observer: impl Observer<bool, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let model = Model {
                 first: SourceState {
                     queue: VecDeque::new(),

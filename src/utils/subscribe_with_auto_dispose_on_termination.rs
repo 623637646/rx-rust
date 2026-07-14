@@ -13,7 +13,7 @@ delegate_disposal!(
 );
 
 /// Wraps subscription creation so that termination from the observer automatically disposes the inner subscription.
-pub fn subscribe_unsub_after_termination<OR, D, F>(
+pub fn subscribe_with_auto_dispose_on_termination<OR, D, F>(
     observer: OR,
     builder: F,
 ) -> Subscription<Disposal<D>>

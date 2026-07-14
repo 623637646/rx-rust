@@ -3,11 +3,11 @@ use crate::utils::subscribe_with_shared_model::{
     Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
-use crate::utils::{subscribe_unsub_after_termination, subscribe_with_shared_model};
+use crate::utils::{subscribe_with_auto_dispose_on_termination, subscribe_with_shared_model};
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
-    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 
@@ -64,7 +64,7 @@ impl<OE1, OE2> CombineLatest<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<'or>,
-    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
 impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for CombineLatest<OE1, OE2>
@@ -83,7 +83,7 @@ where
         self,
         observer: impl Observer<(T1, T2), E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let model = Model {
                 latest_1: None,
                 latest_2: None,

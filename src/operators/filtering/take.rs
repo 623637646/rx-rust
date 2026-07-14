@@ -2,12 +2,12 @@ use crate::delegate_disposal;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::disposable::{Disposable, DisposableExt};
 use crate::observable::Subscription;
-use crate::utils::subscribe_unsub_after_termination;
+use crate::utils::subscribe_with_auto_dispose_on_termination;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
-    utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
+    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 
@@ -52,7 +52,7 @@ impl<OE> Take<OE> {
 
 delegate_disposal!(
     Disposal<D>,
-    OptionDisposal<Subscription<subscribe_unsub_after_termination::Disposal<D>>>,
+    OptionDisposal<Subscription<subscribe_with_auto_dispose_on_termination::Disposal<D>>>,
     where D: Disposable
 );
 
@@ -68,7 +68,7 @@ where
             observer.on_termination(Termination::Completed);
             OptionDisposal::none().into()
         } else {
-            subscribe_unsub_after_termination(observer, |observer| {
+            subscribe_with_auto_dispose_on_termination(observer, |observer| {
                 self.source.subscribe(TakeObserver {
                     observer: Some(observer),
                     count: self.count,

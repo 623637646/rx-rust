@@ -48,7 +48,7 @@ where
     OE: Observable<'or, T, E>,
     OE::D: MaybeSend + 'or,
 {
-    type D = crate::utils::subscribe_unsub_after_termination::Disposal<OE::D>;
+    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         // Or `self.source.take(1).subscribe(observer)`

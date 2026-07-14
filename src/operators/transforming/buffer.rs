@@ -5,7 +5,9 @@ use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+    utils::subscribe_with_auto_dispose_on_termination::{
+        self, subscribe_with_auto_dispose_on_termination,
+    },
 };
 use crate::{safe_lock, safe_lock_option_observer, safe_lock_vec};
 use educe::Educe;
@@ -71,7 +73,7 @@ impl<OE, OE1> Buffer<OE, OE1> {
 
 delegate_disposal!(
     Disposal<D, D1>,
-    subscribe_unsub_after_termination::Disposal<ChainDisposal<D, D1>>,
+    subscribe_with_auto_dispose_on_termination::Disposal<ChainDisposal<D, D1>>,
     where D: Disposable, D1: Disposable
 );
 
@@ -89,7 +91,7 @@ where
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let observer = Shared::new(Mutable::new(Some(observer)));
             let values = Shared::new(Mutable::new(Vec::default()));
             let subscription_1 = self.boundary.subscribe(BoundaryObserver {

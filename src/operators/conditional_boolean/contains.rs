@@ -1,5 +1,5 @@
-use crate::utils::subscribe_unsub_after_termination;
-use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination;
+use crate::utils::subscribe_with_auto_dispose_on_termination;
+use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -55,13 +55,13 @@ where
     OE::D: MaybeSend + 'or,
     T: PartialEq + MaybeSend + 'or,
 {
-    type D = subscribe_unsub_after_termination::Disposal<OE::D>;
+    type D = subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
 
     fn subscribe(
         self,
         observer: impl Observer<bool, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let observer = ContainsObserver {
                 observer: Some(observer),
                 item: self.item,

@@ -6,7 +6,9 @@ use crate::{
     observable::Subscription,
     observer::{Observer, Termination},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
-    utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+    utils::subscribe_with_auto_dispose_on_termination::{
+        self, subscribe_with_auto_dispose_on_termination,
+    },
 };
 use crate::{safe_lock, safe_lock_observer, safe_lock_option_observer};
 use educe::Educe;
@@ -92,7 +94,7 @@ impl<OE, OE1> Window<OE, OE1> {
 
 delegate_disposal!(
     Disposal<D, D1>,
-    subscribe_unsub_after_termination::Disposal<ChainDisposal<D, D1>>,
+    subscribe_with_auto_dispose_on_termination::Disposal<ChainDisposal<D, D1>>,
     where D: Disposable, D1: Disposable
 );
 
@@ -112,7 +114,7 @@ where
         self,
         observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |mut observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |mut observer| {
             let subject = PublishSubject::default();
             observer.on_next(SubjectObservable::new(subject.clone()));
 

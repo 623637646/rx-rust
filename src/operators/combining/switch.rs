@@ -11,7 +11,7 @@ use crate::{
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::{
-        subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+        subscribe_with_auto_dispose_on_termination::{self, subscribe_with_auto_dispose_on_termination},
         types::MarkerType,
     },
 };
@@ -81,7 +81,7 @@ impl<E, OE1, I> Switch<WithErrorType<E, FromIter<I>>, OE1> {
 
 delegate_disposal!(
     Disposal<'or>,
-    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for Switch<OE, OE1>
@@ -96,7 +96,7 @@ where
     type D = Disposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let model = Model {
                 sub_state: SubState::Idle,
                 is_source_completed: false,

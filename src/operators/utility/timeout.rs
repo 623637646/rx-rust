@@ -8,7 +8,9 @@ use crate::{
     safe_lock, safe_lock_option_observer,
     scheduler::Scheduler,
     utils::{
-        subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+        subscribe_with_auto_dispose_on_termination::{
+            self, subscribe_with_auto_dispose_on_termination,
+        },
         types::{MarkerType, MaybeSend, Mutable, MutableHelper, Shared},
     },
 };
@@ -92,7 +94,7 @@ impl<'or, OE, S> Timeout<'or, OE, S> {
 
 delegate_disposal!(
     Disposal<D, S>,
-    subscribe_unsub_after_termination::Disposal<ChainDisposal<Shared<Mutable<TimeoutContext<BoundDropDisposal<S::D>>>>, D>>,
+    subscribe_with_auto_dispose_on_termination::Disposal<ChainDisposal<Shared<Mutable<TimeoutContext<BoundDropDisposal<S::D>>>>, D>>,
     where D: Disposable, S: Scheduler
 );
 
@@ -108,7 +110,7 @@ where
         self,
         observer: impl Observer<T, Error<E>> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(TimeoutContext {
                 timer_state: TimerState::Initialized,
                 version: 0,

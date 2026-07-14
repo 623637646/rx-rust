@@ -4,7 +4,7 @@ use crate::utils::subscribe_with_shared_model::{
 use crate::utils::types::MaybeSend;
 use crate::{
     delegate_disposal,
-    utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+    utils::subscribe_with_auto_dispose_on_termination::{self, subscribe_with_auto_dispose_on_termination},
 };
 use crate::{
     observable::Observable,
@@ -73,7 +73,7 @@ impl<OE, OE1> SkipUntil<OE, OE1> {
 
 delegate_disposal!(
     Disposal<'or>,
-    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for SkipUntil<OE, OE1>
@@ -88,7 +88,7 @@ where
     type D = Disposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_unsub_after_termination(observer, |observer| {
+        subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let model = Model { started: false };
             subscribe_with_shared_model(observer, model, |context| {
                 let subscription_1 = self.start.subscribe(StartObserver {
