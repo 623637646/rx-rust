@@ -110,7 +110,7 @@ macro_rules! safe_lock_option_observer {
         use $crate::utils::types::MutableHelper;
         let value = $value;
         $lock_name.lock_mut(|mut lock| if let Some(observer) = lock.as_mut() {
-                Observer::on_next(observer, value);
+                Observer::on_next(observer, value); // TODO: shoud call this outside of the lock. Use shared model API instead.
                 true
             } else {
                 false
@@ -123,7 +123,7 @@ macro_rules! safe_lock_option_observer {
         let values = $values;
         $lock_name.lock_mut(|mut lock| if let Some(observer) = lock.as_mut() {
                 for value in values {
-                    Observer::on_next(observer, value);
+                    Observer::on_next(observer, value); // TODO: shoud call this outside of the lock. Use shared model API instead.
                 }
                 true
             } else {

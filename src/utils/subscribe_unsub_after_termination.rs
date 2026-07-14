@@ -49,6 +49,6 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
-        self.shared_disposal.dispose();
+        self.shared_disposal.dispose(); // TODO: if on_termination panic, the disposal is not disposed
     }
 }

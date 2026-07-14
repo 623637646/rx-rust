@@ -113,7 +113,7 @@ where
         if should_connect {
             let connect_sub = self
                 .source
-                .connect()
+                .connect() // TODO: if panics, should we dispose of the subscription?
                 .expect("ConnectableObservable should not be connected.");
             self.state.lock_mut(|mut lock| match &mut *lock {
                 State::Initialized => unreachable!(),
