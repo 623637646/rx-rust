@@ -82,7 +82,7 @@ fn record_observable<'or, T, E, OE>(observable: OE) -> (Recorder<'or, T, E>, Sub
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, (Vec<T>, RequestToken<'or>), E>,
+    OE: Observable<'or, T = (Vec<T>, RequestToken<'or>), E = E>,
 {
     let recorder = Recorder::new();
     let values = recorder.values.clone();
@@ -107,7 +107,7 @@ fn subscribe_chunks<'or, T, E, OE>(
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
 {
     record_observable(OnBackpressure::new(source, ChunksOfThree::default()))

@@ -47,11 +47,13 @@ impl<OE> BufferWithCount<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, Vec<T>, E> for BufferWithCount<OE>
+impl<'or, T, E, OE> Observable<'or> for BufferWithCount<OE>
 where
     T: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = Vec<T>;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(

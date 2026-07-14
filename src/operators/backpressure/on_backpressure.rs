@@ -62,21 +62,22 @@ impl<OE, C> OnBackpressure<OE, C> {
     pub fn new<'or, E>(source: OE, collection: C) -> Self
     where
         C: BackpressureCollection,
-        OE: Observable<'or, C::Input, E>,
+        OE: Observable<'or, T = C::Input, E = E>,
     {
         Self { source, collection }
     }
 }
 
-impl<'or_sub, E, OE, C> Observable<'or_sub, (C::Output, RequestToken<'or_sub>), E>
-    for OnBackpressure<OE, C>
+impl<'or_sub, E, OE, C> Observable<'or_sub> for OnBackpressure<OE, C>
 where
     E: MaybeSend + 'or_sub,
-    OE: Observable<'or_sub, C::Input, E>,
+    OE: Observable<'or_sub, T = C::Input, E = E>,
     OE::D: MaybeSend + 'or_sub,
     C: BackpressureCollection + MaybeSend + 'or_sub,
     C::Output: MaybeSend + 'or_sub,
 {
+    type T = (C::Output, RequestToken<'or_sub>);
+    type E = E;
     type D = subscribe_with_shared_model::Disposal<'or_sub>;
 
     fn subscribe(

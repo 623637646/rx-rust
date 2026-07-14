@@ -65,8 +65,8 @@ pub struct TakeUntil<OE, OE1> {
 impl<OE, OE1> TakeUntil<OE, OE1> {
     pub fn new<'or, T, E>(source: OE, stop: OE1) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), E>,
+        OE: Observable<'or, T = T, E = E>,
+        OE1: Observable<'or, T = (), E = E>,
     {
         Self { source, stop }
     }
@@ -78,14 +78,16 @@ delegate_disposal!(
     where D: Disposable, D1: Disposable
 );
 
-impl<'or, T, E, OE, OE1> Observable<'or, T, E> for TakeUntil<OE, OE1>
+impl<'or, T, E, OE, OE1> Observable<'or> for TakeUntil<OE, OE1>
 where
     T: 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), E>,
+    OE1: Observable<'or, T = (), E = E>,
     OE1::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<OE::D, OE1::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

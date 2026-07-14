@@ -96,12 +96,14 @@ delegate_disposal!(
     where D: Disposable, S: Scheduler
 );
 
-impl<'or, T, E, OE, S> Observable<'static, T, Error<E>> for Timeout<'or, OE, S>
+impl<'or, T, E, OE, S> Observable<'static> for Timeout<'or, OE, S>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'or,
 {
+    type T = T;
+    type E = Error<E>;
     type D = Disposal<OE::D, S>;
 
     fn subscribe(

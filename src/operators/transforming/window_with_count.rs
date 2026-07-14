@@ -81,13 +81,14 @@ impl<OE> WindowWithCount<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, SubjectObservable<PublishSubject<'or, T, E>>, E>
-    for WindowWithCount<OE>
+impl<'or, T, E, OE> Observable<'or> for WindowWithCount<OE>
 where
     T: Clone + MaybeSend + 'or,
     E: Clone + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = SubjectObservable<PublishSubject<'or, T, E>>;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(

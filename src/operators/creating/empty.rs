@@ -31,7 +31,9 @@ use std::convert::Infallible;
 #[educe(Debug, Clone)]
 pub struct Empty;
 
-impl<'or> Observable<'or, Infallible, Infallible> for Empty {
+impl<'or> Observable<'or> for Empty {
+    type T = Infallible;
+    type E = Infallible;
     type D = ();
 
     fn subscribe(

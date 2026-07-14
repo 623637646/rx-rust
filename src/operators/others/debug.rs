@@ -86,12 +86,14 @@ impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
     }
 }
 
-impl<'or, T, E, OE, C, F> Observable<'or, T, E> for Debug<OE, C, F>
+impl<'or, T, E, OE, C, F> Observable<'or> for Debug<OE, C, F>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     C: Clone + MaybeSend + 'or,
     F: Fn(C, DebugEvent<'_, T, E>) + Clone + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = DebugDisposal<Subscription<OE::D>, C, F, T, E>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

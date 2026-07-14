@@ -49,10 +49,12 @@ impl<OE> Materialize<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, Event<T, E>, Infallible> for Materialize<OE>
+impl<'or, T, E, OE> Observable<'or> for Materialize<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = Event<T, E>;
+    type E = Infallible;
     type D = OE::D;
 
     fn subscribe(

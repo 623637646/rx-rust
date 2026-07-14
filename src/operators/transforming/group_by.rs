@@ -4,10 +4,9 @@ use crate::{
     observable::Subscription,
     observer::{Observer, Termination},
     subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
-    utils::types::MarkerType,
 };
 use educe::Educe;
-use std::{collections::HashMap, hash::Hash, marker::PhantomData};
+use std::{collections::HashMap, hash::Hash};
 
 /// Divides an Observable into a set of Observables, each of which emits a different group of items from the original Observable, organized by key.
 /// See <https://reactivex.io/documentation/operators/groupby.html>
@@ -72,35 +71,31 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData};
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct GroupBy<OE, F, K> {
+pub struct GroupBy<OE, F> {
     source: OE,
     callback: F,
-    _marker: MarkerType<K>,
 }
 
-impl<OE, F, K> GroupBy<OE, F, K> {
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+impl<OE, F> GroupBy<OE, F> {
+    pub fn new<'or, T, E, K>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         F: FnMut(T) -> K,
     {
-        Self {
-            source,
-            callback,
-            _marker: PhantomData,
-        }
+        Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F, K> Observable<'or, SubjectObservable<PublishSubject<'or, T, E>>, E>
-    for GroupBy<OE, F, K>
+impl<'or, T, E, OE, F, K> Observable<'or> for GroupBy<OE, F>
 where
     T: Clone + MaybeSend + 'or,
     E: Clone + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     F: FnMut(T) -> K + MaybeSend + 'or,
     K: Eq + Hash + MaybeSend + 'or,
 {
+    type T = SubjectObservable<PublishSubject<'or, T, E>>;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(

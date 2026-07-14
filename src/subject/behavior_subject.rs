@@ -41,11 +41,13 @@ delegate_disposal!(
     OptionDisposal<Subscription<publish_subject::Disposal<'or, T, E>>>
 );
 
-impl<'or, T, E> Observable<'or, T, E> for BehaviorSubject<'or, T, E>
+impl<'or, T, E> Observable<'or> for BehaviorSubject<'or, T, E>
 where
     T: Clone + MaybeSend,
     E: Clone + MaybeSend,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<'or, T, E>;
 
     fn subscribe(
@@ -82,7 +84,7 @@ where
     }
 }
 
-impl<'or, T, E> Subject<'or, T, E> for BehaviorSubject<'or, T, E>
+impl<'or, T, E> Subject<'or> for BehaviorSubject<'or, T, E>
 where
     T: Clone + MaybeSend,
     E: Clone + MaybeSend,

@@ -55,10 +55,12 @@ impl<OE> Timestamp<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, (T, Instant), E> for Timestamp<OE>
+impl<'or, T, E, OE> Observable<'or> for Timestamp<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = (T, Instant);
+    type E = E;
     type D = OE::D;
 
     fn subscribe(

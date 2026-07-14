@@ -1,12 +1,11 @@
 use crate::observable::Subscription;
 use crate::utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination};
-use crate::utils::types::{MarkerType, MaybeSend};
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
 };
 use educe::Educe;
-use std::marker::PhantomData;
 
 /// Emits a single boolean value that indicates whether all items emitted by a source Observable satisfy a specified condition.
 /// See <https://reactivex.io/documentation/operators/all.html>
@@ -36,32 +35,29 @@ use std::marker::PhantomData;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct All<T, OE, F> {
+pub struct All<OE, F> {
     source: OE,
     callback: F,
-    _marker: MarkerType<T>,
 }
 
-impl<T, OE, F> All<T, OE, F> {
-    pub fn new<'or, E>(source: OE, callback: F) -> Self
+impl<OE, F> All<OE, F> {
+    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         F: FnMut(T) -> bool,
     {
-        Self {
-            source,
-            callback,
-            _marker: PhantomData,
-        }
+        Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, bool, E> for All<T, OE, F>
+impl<'or, T, E, OE, F> Observable<'or> for All<OE, F>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
     F: FnMut(T) -> bool + MaybeSend + 'or,
 {
+    type T = bool;
+    type E = E;
     type D = subscribe_unsub_after_termination::Disposal<OE::D>;
 
     fn subscribe(

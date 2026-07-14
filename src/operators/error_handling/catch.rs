@@ -40,24 +40,19 @@ use std::marker::PhantomData;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Catch<E0, OE, F> {
+pub struct Catch<OE, F> {
     source: OE,
     callback: F,
-    _marker: MarkerType<E0>,
 }
 
-impl<E0, OE, F> Catch<E0, OE, F> {
-    pub fn new<'or, T, E, OE1>(source: OE, callback: F) -> Self
+impl<OE, F> Catch<OE, F> {
+    pub fn new<'or, T, E0, E, OE1>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E0>,
-        OE1: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E0>,
+        OE1: Observable<'or, T = T, E = E>,
         F: FnOnce(E0) -> OE1,
     {
-        Self {
-            source,
-            callback,
-            _marker: PhantomData,
-        }
+        Self { source, callback }
     }
 }
 
@@ -67,14 +62,16 @@ delegate_disposal!(
     where D: Disposable, D1: Disposable
 );
 
-impl<'or, T, E0, E, OE, OE1, F> Observable<'or, T, E> for Catch<E0, OE, F>
+impl<'or, T, E0, E, OE, OE1, F> Observable<'or> for Catch<OE, F>
 where
     E: 'or,
-    OE: Observable<'or, T, E0>,
-    OE1: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E0>,
+    OE1: Observable<'or, T = T, E = E>,
     OE1::D: MaybeSend + 'or,
     F: FnOnce(E0) -> OE1 + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<OE::D, OE1::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
@@ -102,7 +99,7 @@ struct CatchObserver<E, OR, F, D: Disposable> {
 impl<'or, T, E0, E, OR, OE1, F> Observer<T, E0> for CatchObserver<E, OR, F, OE1::D>
 where
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
+    OE1: Observable<'or, T = T, E = E>,
     F: FnOnce(E0) -> OE1,
 {
     fn on_next(&mut self, value: T) {

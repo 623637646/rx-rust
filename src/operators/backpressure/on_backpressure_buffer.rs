@@ -54,19 +54,21 @@ pub struct OnBackpressureBuffer<OE> {
 impl<OE> OnBackpressureBuffer<OE> {
     pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
     {
         Self { source }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, (Vec<T>, RequestToken<'or>), E> for OnBackpressureBuffer<OE>
+impl<'or, T, E, OE> Observable<'or> for OnBackpressureBuffer<OE>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
 {
+    type T = (Vec<T>, RequestToken<'or>);
+    type E = E;
     type D = subscribe_with_shared_model::Disposal<'or>;
 
     fn subscribe(

@@ -41,17 +41,19 @@ pub struct Max<OE> {
 impl<OE> Max<OE> {
     pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
     {
         Self { source }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Max<OE>
+impl<'or, T, E, OE> Observable<'or> for Max<OE>
 where
     T: PartialOrd + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

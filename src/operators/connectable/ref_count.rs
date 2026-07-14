@@ -64,17 +64,17 @@ where
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct RefCount<'or, T, E, OE, S>
+pub struct RefCount<'or, OE, S>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or>,
 {
     source: ConnectableObservable<OE, S>,
     state: Shared<Mutable<State<OE::D>>>,
 }
 
-impl<'or, T, E, OE, S> RefCount<'or, T, E, OE, S>
+impl<'or, OE, S> RefCount<'or, OE, S>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or>,
 {
     pub fn new(source: ConnectableObservable<OE, S>) -> Self {
         Self {
@@ -91,11 +91,13 @@ delegate_disposal!(
         OED: Disposable
 );
 
-impl<'or, T, E, OE, S> Observable<'or, T, E> for RefCount<'or, T, E, OE, S>
+impl<'or, T, E, OE, S> Observable<'or> for RefCount<'or, OE, S>
 where
-    OE: Observable<'or, T, E> + Clone,
-    S: Observable<'or, T, E> + Observer<T, E> + Clone + MaybeSend + 'or,
+    OE: Observable<'or, T = T, E = E> + Clone,
+    S: Observable<'or, T = T, E = E> + Observer<T, E> + Clone + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<S::D, OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

@@ -18,7 +18,7 @@ impl<'or, 'sub, 'oe, T, E, OE, D> ErasedCloneableObservable<'or, 'sub, 'oe, T, E
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, T, E, D = D> + Clone + MaybeSend + 'oe,
+    OE: Observable<'or, T = T, E = E, D = D> + Clone + MaybeSend + 'oe,
     D: Disposable + MaybeSend + 'sub,
 {
     fn subscribe_cloned(
@@ -49,7 +49,7 @@ cfg_if::cfg_if! {
 
 impl<'or, 'sub, 'oe, T, E> CloneableBoxedObservable<'or, 'sub, 'oe, T, E> {
     pub fn new(
-        observable: impl Observable<'or, T, E, D = impl Disposable + MaybeSend + 'sub>
+        observable: impl Observable<'or, T = T, E = E, D = impl Disposable + MaybeSend + 'sub>
         + Clone
         + MaybeSend
         + MaybeSync
@@ -63,7 +63,9 @@ impl<'or, 'sub, 'oe, T, E> CloneableBoxedObservable<'or, 'sub, 'oe, T, E> {
     }
 }
 
-impl<'or, 'sub, T, E> Observable<'or, T, E> for CloneableBoxedObservable<'or, 'sub, '_, T, E> {
+impl<'or, 'sub, T, E> Observable<'or> for CloneableBoxedObservable<'or, 'sub, '_, T, E> {
+    type T = T;
+    type E = E;
     type D = BoxedDisposal<'sub>;
 
     #[inline]

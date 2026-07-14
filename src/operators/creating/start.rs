@@ -43,10 +43,12 @@ impl<F> Start<F> {
     }
 }
 
-impl<'or, T, F> Observable<'or, T, Infallible> for Start<F>
+impl<'or, T, F> Observable<'or> for Start<F>
 where
     F: FnOnce() -> T,
 {
+    type T = T;
+    type E = Infallible;
     type D = ();
 
     fn subscribe(

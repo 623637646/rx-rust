@@ -26,7 +26,9 @@ use std::convert::Infallible;
 #[educe(Debug, Clone)]
 pub struct Never;
 
-impl<'or> Observable<'or, Infallible, Infallible> for Never {
+impl<'or> Observable<'or> for Never {
+    type T = Infallible;
+    type E = Infallible;
     type D = ();
 
     fn subscribe(

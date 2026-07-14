@@ -62,8 +62,8 @@ pub struct Buffer<OE, OE1> {
 impl<OE, OE1> Buffer<OE, OE1> {
     pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), E>,
+        OE: Observable<'or, T = T, E = E>,
+        OE1: Observable<'or, T = (), E = E>,
     {
         Self { source, boundary }
     }
@@ -75,14 +75,16 @@ delegate_disposal!(
     where D: Disposable, D1: Disposable
 );
 
-impl<'or, T, E, OE, OE1> Observable<'or, Vec<T>, E> for Buffer<OE, OE1>
+impl<'or, T, E, OE, OE1> Observable<'or> for Buffer<OE, OE1>
 where
     T: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), E>,
+    OE1: Observable<'or, T = (), E = E>,
     OE1::D: MaybeSend + 'or,
 {
+    type T = Vec<T>;
+    type E = E;
     type D = Disposal<OE::D, OE1::D>;
 
     fn subscribe(

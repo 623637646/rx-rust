@@ -56,11 +56,13 @@ delegate_disposal!(
     where D: Disposable
 );
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Take<OE>
+impl<'or, T, E, OE> Observable<'or> for Take<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

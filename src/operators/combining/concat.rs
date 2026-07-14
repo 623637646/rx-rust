@@ -45,8 +45,8 @@ pub struct Concat<OE1, OE2> {
 impl<OE1, OE2> Concat<OE1, OE2> {
     pub fn new<'or, T, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T, E>,
-        OE2: Observable<'or, T, E>,
+        OE1: Observable<'or, T = T, E = E>,
+        OE2: Observable<'or, T = T, E = E>,
     {
         Self { source_1, source_2 }
     }
@@ -58,12 +58,14 @@ delegate_disposal!(
     where D1: Disposable, D2: Disposable
 );
 
-impl<'or, T, E, OE1, OE2> Observable<'or, T, E> for Concat<OE1, OE2>
+impl<'or, T, E, OE1, OE2> Observable<'or> for Concat<OE1, OE2>
 where
-    OE1: Observable<'or, T, E>,
-    OE2: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T = T, E = E>,
+    OE2: Observable<'or, T = T, E = E> + MaybeSend + 'or,
     OE2::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<OE1::D, OE2::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
@@ -89,7 +91,7 @@ struct ConcatObserver<OR, OE2, D: Disposable> {
 impl<'or, T, E, OR, OE2> Observer<T, E> for ConcatObserver<OR, OE2, OE2::D>
 where
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE2: Observable<'or, T, E>,
+    OE2: Observable<'or, T = T, E = E>,
 {
     fn on_next(&mut self, value: T) {
         self.observer.on_next(value);

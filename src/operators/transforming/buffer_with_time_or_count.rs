@@ -99,14 +99,16 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
     }
 }
 
-impl<T, E, OE, S> Observable<'static, Vec<T>, E> for BufferWithTimeOrCount<OE, S>
+impl<T, E, OE, S> Observable<'static> for BufferWithTimeOrCount<OE, S>
 where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
-    OE: Observable<'static, T, E>,
+    OE: Observable<'static, T = T, E = E>,
     OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
+    type T = Vec<T>;
+    type E = E;
     type D = subscribe_with_shared_model::Disposal<'static>;
 
     fn subscribe(

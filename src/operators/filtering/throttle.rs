@@ -93,11 +93,13 @@ delegate_disposal!(
     where D: Disposable, S: Scheduler
 );
 
-impl<'or, T, E, OE, S> Observable<'static, T, E> for Throttle<'or, OE, S>
+impl<'or, T, E, OE, S> Observable<'static> for Throttle<'or, OE, S>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     S: Scheduler + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<OE::D, S>;
 
     fn subscribe(

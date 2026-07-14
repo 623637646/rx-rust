@@ -42,10 +42,12 @@ impl<T> Repeat<T> {
     }
 }
 
-impl<'or, T> Observable<'or, T, Infallible> for Repeat<T>
+impl<'or, T> Observable<'or> for Repeat<T>
 where
     T: Clone,
 {
+    type T = T;
+    type E = Infallible;
     type D = ();
 
     fn subscribe(

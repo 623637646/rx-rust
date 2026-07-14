@@ -44,19 +44,21 @@ pub struct DoAfterNext<OE, F> {
 impl<OE, F> DoAfterNext<OE, F> {
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         F: FnMut(T),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for DoAfterNext<OE, F>
+impl<'or, T, E, OE, F> Observable<'or> for DoAfterNext<OE, F>
 where
     T: Clone,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     F: FnMut(T) + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

@@ -1,11 +1,8 @@
 use super::map::Map;
 use crate::operators::combining::concat_all::{ConcatAll, Disposal};
 use crate::utils::types::MaybeSend;
-use crate::{
-    observable::Observable, observable::Subscription, observer::Observer, utils::types::MarkerType,
-};
+use crate::{observable::Observable, observable::Subscription, observer::Observer};
 use educe::Educe;
-use std::marker::PhantomData;
 
 /// Projects each source value to an Observable which is merged in a serialized fashion in the output Observable.
 /// See <https://reactivex.io/documentation/operators/flatmap.html>
@@ -37,37 +34,34 @@ use std::marker::PhantomData;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct ConcatMap<T0, OE, OE1, F> {
+pub struct ConcatMap<OE, F> {
     source: OE,
     callback: F,
-    _marker: MarkerType<(T0, OE1)>,
 }
 
-impl<T0, OE, OE1, F> ConcatMap<T0, OE, OE1, F> {
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+impl<OE, F> ConcatMap<OE, F> {
+    pub fn new<'or, T0, T, E, OE1>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T0, E>,
-        OE1: Observable<'or, T, E>,
+        OE: Observable<'or, T = T0, E = E>,
+        OE1: Observable<'or, T = T, E = E>,
         F: FnMut(T0) -> OE1,
     {
-        Self {
-            source,
-            callback,
-            _marker: PhantomData,
-        }
+        Self { source, callback }
     }
 }
 
-impl<'or, T0, T, E, OE, OE1, F> Observable<'or, T, E> for ConcatMap<T0, OE, OE1, F>
+impl<'or, T0, T, E, OE, OE1, F> Observable<'or> for ConcatMap<OE, F>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, T0, E>,
+    OE: Observable<'or, T = T0, E = E>,
     OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T = T, E = E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
     F: FnMut(T0) -> OE1 + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

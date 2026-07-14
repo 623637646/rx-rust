@@ -64,8 +64,8 @@ pub struct SkipUntil<OE, OE1> {
 impl<OE, OE1> SkipUntil<OE, OE1> {
     pub fn new<'or, T, E>(source: OE, start: OE1) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), E>,
+        OE: Observable<'or, T = T, E = E>,
+        OE1: Observable<'or, T = (), E = E>,
     {
         Self { source, start }
     }
@@ -76,15 +76,17 @@ delegate_disposal!(
     subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
-impl<'or, T, E, OE, OE1> Observable<'or, T, E> for SkipUntil<OE, OE1>
+impl<'or, T, E, OE, OE1> Observable<'or> for SkipUntil<OE, OE1>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), E>,
+    OE1: Observable<'or, T = (), E = E>,
     OE1::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

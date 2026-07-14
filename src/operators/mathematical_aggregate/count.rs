@@ -1,11 +1,10 @@
-use crate::utils::types::{MarkerType, MaybeSend};
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
 };
 use educe::Educe;
-use std::marker::PhantomData;
 
 /// Counts the number of items emitted by the source Observable and emits this count.
 /// See <https://reactivex.io/documentation/operators/count.html>
@@ -35,27 +34,25 @@ use std::marker::PhantomData;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Count<T, OE> {
+pub struct Count<OE> {
     source: OE,
-    _marker: MarkerType<T>,
 }
 
-impl<T, OE> Count<T, OE> {
-    pub fn new<'or, E>(source: OE) -> Self
+impl<OE> Count<OE> {
+    pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
     {
-        Self {
-            source,
-            _marker: PhantomData,
-        }
+        Self { source }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, usize, E> for Count<T, OE>
+impl<'or, T, E, OE> Observable<'or> for Count<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = usize;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(

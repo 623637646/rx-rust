@@ -43,19 +43,21 @@ pub struct TakeWhile<OE, F> {
 impl<OE, F> TakeWhile<OE, F> {
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         F: FnMut(&T) -> bool,
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for TakeWhile<OE, F>
+impl<'or, T, E, OE, F> Observable<'or> for TakeWhile<OE, F>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
     F: FnMut(&T) -> bool + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = subscribe_unsub_after_termination::Disposal<OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

@@ -37,7 +37,9 @@ impl<T, E> FromResult<T, E> {
     }
 }
 
-impl<'or, T, E> Observable<'or, T, E> for FromResult<T, E> {
+impl<'or, T, E> Observable<'or> for FromResult<T, E> {
+    type T = T;
+    type E = E;
     type D = ();
 
     fn subscribe(

@@ -50,8 +50,8 @@ pub struct Zip<OE1, OE2> {
 impl<OE1, OE2> Zip<OE1, OE2> {
     pub fn new<'or, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T1, E>,
-        OE2: Observable<'or, T2, E>,
+        OE1: Observable<'or, T = T1, E = E>,
+        OE2: Observable<'or, T = T2, E = E>,
     {
         Self { source_1, source_2 }
     }
@@ -62,16 +62,18 @@ delegate_disposal!(
     subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
-impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for Zip<OE1, OE2>
+impl<'or, T1, T2, E, OE1, OE2> Observable<'or> for Zip<OE1, OE2>
 where
     T1: MaybeSend + 'or,
     T2: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE1: Observable<'or, T1, E>,
+    OE1: Observable<'or, T = T1, E = E>,
     OE1::D: MaybeSend + 'or,
-    OE2: Observable<'or, T2, E>,
+    OE2: Observable<'or, T = T2, E = E>,
     OE2::D: MaybeSend + 'or,
 {
+    type T = (T1, T2);
+    type E = E;
     type D = Disposal<'or>;
 
     fn subscribe(

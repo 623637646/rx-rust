@@ -53,8 +53,8 @@ pub struct Retry<OE, F> {
 impl<OE, F> Retry<OE, F> {
     pub fn new<'or, T, E, OE1>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
+        OE1: Observable<'or, T = T, E = E>,
         F: FnMut(E) -> RetryAction<E, OE1>,
     {
         Self { source, callback }
@@ -67,13 +67,15 @@ delegate_disposal!(
     where D: Disposable, D1: Disposable
 );
 
-impl<'or, T, E, OE, OE1, F> Observable<'or, T, E> for Retry<OE, F>
+impl<'or, T, E, OE, OE1, F> Observable<'or> for Retry<OE, F>
 where
-    OE: Observable<'or, T, E>,
-    OE1: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
+    OE1: Observable<'or, T = T, E = E>,
     OE1::D: MaybeSend + 'or,
     F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<OE::D, OE1::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
@@ -99,7 +101,7 @@ struct RetryObserver<OR, F, D: Disposable> {
 impl<'or, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<OR, F, OE1::D>
 where
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
+    OE1: Observable<'or, T = T, E = E>,
     OE1::D: MaybeSend + 'or,
     F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
 {

@@ -71,11 +71,13 @@ impl<T, S> Timer<T, S> {
     }
 }
 
-impl<T, S> Observable<'static, T, Infallible> for Timer<T, S>
+impl<T, S> Observable<'static> for Timer<T, S>
 where
     T: MaybeSend + 'static,
     S: Scheduler,
 {
+    type T = T;
+    type E = Infallible;
     type D = S::D;
 
     fn subscribe(

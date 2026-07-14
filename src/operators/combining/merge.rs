@@ -49,8 +49,8 @@ pub struct Merge<OE1, OE2> {
 impl<OE1, OE2> Merge<OE1, OE2> {
     pub fn new<'or, T, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T, E>,
-        OE2: Observable<'or, T, E>,
+        OE1: Observable<'or, T = T, E = E>,
+        OE2: Observable<'or, T = T, E = E>,
     {
         Self { source_1, source_2 }
     }
@@ -61,15 +61,17 @@ delegate_disposal!(
     subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
-impl<'or, T, E, OE1, OE2> Observable<'or, T, E> for Merge<OE1, OE2>
+impl<'or, T, E, OE1, OE2> Observable<'or> for Merge<OE1, OE2>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
+    OE1: Observable<'or, T = T, E = E>,
     OE1::D: MaybeSend + 'or,
-    OE2: Observable<'or, T, E>,
+    OE2: Observable<'or, T = T, E = E>,
     OE2::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

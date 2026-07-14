@@ -40,7 +40,7 @@ struct ObservableStreamContext<T> {
 #[educe(Debug)]
 pub struct ObservableStream<'or, T, OE>
 where
-    OE: Observable<'or, T, Infallible>,
+    OE: Observable<'or, T = T, E = Infallible>,
 {
     source: Option<OE>,
     sub: Option<Subscription<OE::D>>,
@@ -49,11 +49,11 @@ where
 
 impl<'or, T, OE> ObservableStream<'or, T, OE>
 where
-    OE: Observable<'or, T, Infallible>,
+    OE: Observable<'or, T = T, E = Infallible>,
 {
     pub fn new(source: OE) -> Self
     where
-        OE: Observable<'or, T, Infallible>,
+        OE: Observable<'or, T = T, E = Infallible>,
     {
         Self {
             source: Some(source),
@@ -67,12 +67,15 @@ where
     }
 }
 
-impl<'or, T, OE> Unpin for ObservableStream<'or, T, OE> where OE: Observable<'or, T, Infallible> {}
+impl<'or, T, OE> Unpin for ObservableStream<'or, T, OE> where
+    OE: Observable<'or, T = T, E = Infallible>
+{
+}
 
 impl<'or, T, OE> Stream for ObservableStream<'or, T, OE>
 where
     T: MaybeSend + 'or,
-    OE: Observable<'or, T, Infallible>,
+    OE: Observable<'or, T = T, E = Infallible>,
 {
     type Item = T;
 

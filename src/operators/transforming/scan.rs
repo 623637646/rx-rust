@@ -3,10 +3,8 @@ use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    utils::types::MarkerType,
 };
 use educe::Educe;
-use std::marker::PhantomData;
 
 /// Applies a function to each item emitted by an Observable, sequentially, and emits each intermediate accumulated value.
 /// See <https://reactivex.io/documentation/operators/scan.html>
@@ -36,34 +34,34 @@ use std::marker::PhantomData;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Scan<T, T1, OE, F> {
+pub struct Scan<T, OE, F> {
     source: OE,
     initial_value: T,
     callback: F,
-    _marker: MarkerType<T1>,
 }
 
-impl<T, T1, OE, F> Scan<T, T1, OE, F> {
-    pub fn new<'or, E>(source: OE, initial_value: T, callback: F) -> Self
+impl<T, OE, F> Scan<T, OE, F> {
+    pub fn new<'or, T1, E>(source: OE, initial_value: T, callback: F) -> Self
     where
-        OE: Observable<'or, T1, E>,
+        OE: Observable<'or, T = T1, E = E>,
         F: FnMut(T, T1) -> T,
     {
         Self {
             source,
             initial_value,
             callback,
-            _marker: PhantomData,
         }
     }
 }
 
-impl<'or, T, T1, E, OE, F> Observable<'or, T, E> for Scan<T, T1, OE, F>
+impl<'or, T, T1, E, OE, F> Observable<'or> for Scan<T, OE, F>
 where
     T: Clone + MaybeSend + 'or,
-    OE: Observable<'or, T1, E>,
+    OE: Observable<'or, T = T1, E = E>,
     F: FnMut(T, T1) -> T + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

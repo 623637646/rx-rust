@@ -43,18 +43,20 @@ pub struct Contains<T, OE> {
 impl<T, OE> Contains<T, OE> {
     pub fn new<'or, E>(source: OE, item: T) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
     {
         Self { source, item }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, bool, E> for Contains<T, OE>
+impl<'or, T, E, OE> Observable<'or> for Contains<T, OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
     T: PartialEq + MaybeSend + 'or,
 {
+    type T = bool;
+    type E = E;
     type D = subscribe_unsub_after_termination::Disposal<OE::D>;
 
     fn subscribe(

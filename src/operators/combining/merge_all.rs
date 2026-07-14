@@ -9,14 +9,10 @@ use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
-    utils::{
-        subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
-        types::MarkerType,
-    },
+    utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
 };
 use educe::Educe;
 use slotmap::{DefaultKey, SlotMap};
-use std::marker::PhantomData;
 
 /// Merges an Observable of Observables into a single Observable that emits all of their emissions.
 /// See <https://reactivex.io/documentation/operators/merge.html> (referencing merge operator for general concept)
@@ -49,33 +45,28 @@ use std::marker::PhantomData;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct MergeAll<OE, OE1> {
+pub struct MergeAll<OE> {
     source: OE,
-    _marker: MarkerType<OE1>,
 }
 
-impl<OE, OE1> MergeAll<OE, OE1> {
-    pub fn new<'or, T, E>(source: OE) -> Self
+impl<OE> MergeAll<OE> {
+    pub fn new<'or, T, E, OE1>(source: OE) -> Self
     where
-        OE: Observable<'or, OE1, E>,
-        OE1: Observable<'or, T, E>,
+        OE: Observable<'or, T = OE1, E = E>,
+        OE1: Observable<'or, T = T, E = E>,
     {
-        Self {
-            source,
-            _marker: PhantomData,
-        }
+        Self { source }
     }
 }
 
-impl<E, OE1, I> MergeAll<MapInfallibleToError<E, FromIter<I>>, OE1> {
-    pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
+impl<E, I> MergeAll<MapInfallibleToError<E, FromIter<I>>> {
+    pub fn new_from_iter<'or, T, OE1>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
-        OE1: Observable<'or, T, E>,
+        OE1: Observable<'or, T = T, E = E>,
     {
         Self {
             source: MapInfallibleToError::new(FromIter::new(into_iterator)),
-            _marker: PhantomData,
         }
     }
 }
@@ -85,15 +76,17 @@ delegate_disposal!(
     subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
-impl<'or, T, E, OE, OE1> Observable<'or, T, E> for MergeAll<OE, OE1>
+impl<'or, T, E, OE, OE1> Observable<'or> for MergeAll<OE>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, OE1, E>,
+    OE: Observable<'or, T = OE1, E = E>,
     OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
+    OE1: Observable<'or, T = T, E = E>,
     OE1::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
@@ -122,7 +115,7 @@ where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
+    OE1: Observable<'or, T = T, E = E>,
     OE1::D: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {

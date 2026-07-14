@@ -50,7 +50,7 @@ pub struct HookOnSubscription<OE, F> {
 impl<OE, F> HookOnSubscription<OE, F> {
     pub fn new<'or, T, E, D>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         D: Disposable,
         F: FnOnce(OE, BoxedObserver<'or, T, E>) -> Subscription<D>,
     {
@@ -58,12 +58,14 @@ impl<OE, F> HookOnSubscription<OE, F> {
     }
 }
 
-impl<'or, T, E, OE, F, D> Observable<'or, T, E> for HookOnSubscription<OE, F>
+impl<'or, T, E, OE, F, D> Observable<'or> for HookOnSubscription<OE, F>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     D: Disposable,
     F: FnOnce(OE, BoxedObserver<'or, T, E>) -> Subscription<D>,
 {
+    type T = T;
+    type E = E;
     type D = D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

@@ -3,10 +3,8 @@ use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    utils::types::MarkerType,
 };
 use educe::Educe;
-use std::marker::PhantomData;
 
 /// Transforms items emitted by an Observable by applying a function to each item.
 /// See <https://reactivex.io/documentation/operators/map.html>
@@ -36,31 +34,28 @@ use std::marker::PhantomData;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Map<T0, OE, F> {
+pub struct Map<OE, F> {
     source: OE,
     callback: F,
-    _marker: MarkerType<T0>,
 }
 
-impl<T0, OE, F> Map<T0, OE, F> {
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+impl<OE, F> Map<OE, F> {
+    pub fn new<'or, T0, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T0, E>,
+        OE: Observable<'or, T = T0, E = E>,
         F: FnMut(T0) -> T,
     {
-        Self {
-            source,
-            callback,
-            _marker: PhantomData,
-        }
+        Self { source, callback }
     }
 }
 
-impl<'or, T0, T, E, OE, F> Observable<'or, T, E> for Map<T0, OE, F>
+impl<'or, T0, T, E, OE, F> Observable<'or> for Map<OE, F>
 where
-    OE: Observable<'or, T0, E>,
+    OE: Observable<'or, T = T0, E = E>,
     F: FnMut(T0) -> T + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

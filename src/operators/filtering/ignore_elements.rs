@@ -43,10 +43,12 @@ impl<OE> IgnoreElements<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for IgnoreElements<OE>
+impl<'or, T, E, OE> Observable<'or> for IgnoreElements<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

@@ -53,10 +53,12 @@ impl<OE> TimeInterval<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, (T, Duration), E> for TimeInterval<OE>
+impl<'or, T, E, OE> Observable<'or> for TimeInterval<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = (T, Duration);
+    type E = E;
     type D = OE::D;
 
     fn subscribe(

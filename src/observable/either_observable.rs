@@ -44,11 +44,13 @@ where
     }
 }
 
-impl<'or, T, E, A, B> Observable<'or, T, E> for EitherObservable<A, B>
+impl<'or, T, E, A, B> Observable<'or> for EitherObservable<A, B>
 where
-    A: Observable<'or, T, E>,
-    B: Observable<'or, T, E>,
+    A: Observable<'or, T = T, E = E>,
+    B: Observable<'or, T = T, E = E>,
 {
+    type T = T;
+    type E = E;
     type D = EitherDisposal<A::D, B::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

@@ -71,10 +71,12 @@ impl<S> Interval<S> {
     }
 }
 
-impl<S> Observable<'static, usize, Infallible> for Interval<S>
+impl<S> Observable<'static> for Interval<S>
 where
     S: Scheduler + Clone + MaybeSend + 'static,
 {
+    type T = usize;
+    type E = Infallible;
     type D = S::D;
 
     fn subscribe(

@@ -38,7 +38,9 @@ impl<T> Just<T> {
     }
 }
 
-impl<'or, T> Observable<'or, T, Infallible> for Just<T> {
+impl<'or, T> Observable<'or> for Just<T> {
+    type T = T;
+    type E = Infallible;
     type D = ();
 
     fn subscribe(

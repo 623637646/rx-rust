@@ -48,11 +48,13 @@ impl<E, OE> MapInfallibleToError<E, OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for MapInfallibleToError<E, OE>
+impl<'or, T, E, OE> Observable<'or> for MapInfallibleToError<E, OE>
 where
     E: 'or,
-    OE: Observable<'or, T, Infallible>,
+    OE: Observable<'or, T = T, E = Infallible>,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

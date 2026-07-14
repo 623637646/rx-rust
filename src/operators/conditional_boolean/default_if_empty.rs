@@ -41,7 +41,7 @@ pub struct DefaultIfEmpty<T, OE> {
 impl<T, OE> DefaultIfEmpty<T, OE> {
     pub fn new<'or, E>(source: OE, item: T) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
     {
         Self {
             source,
@@ -50,11 +50,13 @@ impl<T, OE> DefaultIfEmpty<T, OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for DefaultIfEmpty<T, OE>
+impl<'or, T, E, OE> Observable<'or> for DefaultIfEmpty<T, OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     T: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

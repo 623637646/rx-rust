@@ -41,18 +41,20 @@ pub struct StartWith<OE, I> {
 impl<OE, I> StartWith<OE, I> {
     pub fn new<'or, T, E>(source: OE, values: I) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         I: IntoIterator<Item = T>,
     {
         Self { source, values }
     }
 }
 
-impl<'or, T, E, OE, I> Observable<'or, T, E> for StartWith<OE, I>
+impl<'or, T, E, OE, I> Observable<'or> for StartWith<OE, I>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     I: IntoIterator<Item = T>,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(

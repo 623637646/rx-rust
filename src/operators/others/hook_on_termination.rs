@@ -47,20 +47,22 @@ pub struct HookOnTermination<OE, F> {
 impl<OE, F> HookOnTermination<OE, F> {
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for HookOnTermination<OE, F>
+impl<'or, T, E, OE, F> Observable<'or> for HookOnTermination<OE, F>
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>) + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

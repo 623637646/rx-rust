@@ -39,10 +39,12 @@ impl<I> Range<I> {
     }
 }
 
-impl<'or, T, I> Observable<'or, T, Infallible> for Range<I>
+impl<'or, T, I> Observable<'or> for Range<I>
 where
     I: IntoIterator<Item = T>,
 {
+    type T = T;
+    type E = Infallible;
     type D = ();
 
     fn subscribe(

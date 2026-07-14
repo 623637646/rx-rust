@@ -47,11 +47,13 @@ impl<OE> Dematerialize<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Dematerialize<OE>
+impl<'or, T, E, OE> Observable<'or> for Dematerialize<OE>
 where
-    OE: Observable<'or, Event<T, E>, Infallible>,
+    OE: Observable<'or, T = Event<T, E>, E = Infallible>,
     OE::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = crate::utils::subscribe_unsub_after_termination::Disposal<OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

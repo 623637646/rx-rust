@@ -9,13 +9,10 @@ use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
-    utils::{
-        subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
-        types::MarkerType,
-    },
+    utils::subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
 };
 use educe::Educe;
-use std::{collections::VecDeque, marker::PhantomData};
+use std::collections::VecDeque;
 
 /// Concatenates an Observable of Observables, emitting all values from each inner Observable in sequence.
 /// See <https://reactivex.io/documentation/operators/concat.html> (referencing concat operator for general concept)
@@ -48,33 +45,28 @@ use std::{collections::VecDeque, marker::PhantomData};
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct ConcatAll<OE, OE1> {
+pub struct ConcatAll<OE> {
     source: OE,
-    _marker: MarkerType<OE1>,
 }
 
-impl<OE, OE1> ConcatAll<OE, OE1> {
-    pub fn new<'or, T, E>(source: OE) -> Self
+impl<OE> ConcatAll<OE> {
+    pub fn new<'or, T, E, OE1>(source: OE) -> Self
     where
-        OE: Observable<'or, OE1, E>,
-        OE1: Observable<'or, T, E>,
+        OE: Observable<'or, T = OE1, E = E>,
+        OE1: Observable<'or, T = T, E = E>,
     {
-        Self {
-            source,
-            _marker: PhantomData,
-        }
+        Self { source }
     }
 }
 
-impl<E, OE1, I> ConcatAll<MapInfallibleToError<E, FromIter<I>>, OE1> {
-    pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
+impl<E, I> ConcatAll<MapInfallibleToError<E, FromIter<I>>> {
+    pub fn new_from_iter<'or, T, OE1>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
-        OE1: Observable<'or, T, E>,
+        OE1: Observable<'or, T = T, E = E>,
     {
         Self {
             source: MapInfallibleToError::new(FromIter::new(into_iterator)),
-            _marker: PhantomData,
         }
     }
 }
@@ -84,15 +76,17 @@ delegate_disposal!(
     subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
-impl<'or, T, E, OE, OE1> Observable<'or, T, E> for ConcatAll<OE, OE1>
+impl<'or, T, E, OE, OE1> Observable<'or> for ConcatAll<OE>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, OE1, E>,
+    OE: Observable<'or, T = OE1, E = E>,
     OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T = T, E = E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = Disposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
@@ -118,7 +112,7 @@ enum SubState<D: Disposable> {
 
 struct Model<'or, T, E, OE1>
 where
-    OE1: Observable<'or, T, E>,
+    OE1: Observable<'or, T = T, E = E>,
 {
     pending_observables: VecDeque<OE1>,
     sub_state: SubState<OE1::D>,
@@ -127,14 +121,14 @@ where
 
 struct SourceObserver<'or, T, E, OR, OE1>(Context<T, E, OR, Model<'or, T, E, OE1>>)
 where
-    OE1: Observable<'or, T, E>;
+    OE1: Observable<'or, T = T, E = E>;
 
 impl<'or, T, E, OR, OE1> Observer<OE1, E> for SourceObserver<'or, T, E, OR, OE1>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T = T, E = E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
@@ -193,14 +187,14 @@ where
 
 struct InnerObserver<'or, T, E, OR, OE1>(Context<T, E, OR, Model<'or, T, E, OE1>>)
 where
-    OE1: Observable<'or, T, E>;
+    OE1: Observable<'or, T = T, E = E>;
 
 impl<'or, T, E, OR, OE1> Observer<T, E> for InnerObserver<'or, T, E, OR, OE1>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T = T, E = E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: T) {
@@ -223,7 +217,7 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1>(
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
+    OE1: Observable<'or, T = T, E = E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
 {
     loop {

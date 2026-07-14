@@ -43,7 +43,7 @@ pub struct Distinct<OE, F> {
 impl<OE, F> Distinct<OE, F> {
     pub fn new_with_key_selector<'or, T, E, K>(source: OE, key_selector: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         F: FnMut(&T) -> K,
     {
         Self {
@@ -57,7 +57,7 @@ impl<T, OE> Distinct<OE, fn(&T) -> T> {
     pub fn new<'or, E>(source: OE) -> Self
     where
         T: Clone,
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
     {
         Self {
             source,
@@ -66,12 +66,14 @@ impl<T, OE> Distinct<OE, fn(&T) -> T> {
     }
 }
 
-impl<'or, T, E, OE, F, K> Observable<'or, T, E> for Distinct<OE, F>
+impl<'or, T, E, OE, F, K> Observable<'or> for Distinct<OE, F>
 where
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     F: FnMut(&T) -> K + MaybeSend + 'or,
     K: Eq + Hash + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

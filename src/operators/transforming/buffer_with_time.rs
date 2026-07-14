@@ -95,12 +95,14 @@ delegate_disposal!(
     where SD: Disposable, D: Disposable
 );
 
-impl<'or, T, E, OE, S> Observable<'static, Vec<T>, E> for BufferWithTime<'or, OE, S>
+impl<'or, T, E, OE, S> Observable<'static> for BufferWithTime<'or, OE, S>
 where
     T: MaybeSend + 'static,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
+    type T = Vec<T>;
+    type E = E;
     type D = Disposal<T, S::D, OE::D>;
 
     fn subscribe(

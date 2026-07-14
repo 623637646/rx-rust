@@ -78,23 +78,31 @@ pub type Subscription<D> = BoundDropDisposal<D>;
 
 /// The `Observable` trait represents a source of events that can be observed by an `Observer`.
 /// See <https://reactivex.io/documentation/observable.html>
-pub trait Observable<'or, T, E> {
+pub trait Observable<'or> {
+    /// The type of the items emitted by this observable.
+    type T;
+    /// The type of the error that terminates this observable.
+    type E;
+    /// The type of the disposable that can be used to cancel the subscription to this observable.
     type D: Disposable;
 
     /// Subscribes an observer to this observable. When an observer is subscribed, it will start receiving events from the observable.
     /// The `subscribe` method returns a `Subscription` which can be used to unsubscribe the observer from the observable.
     /// We use `Subscription` struct instead of trait like `impl Cancellable`, because we need to cancel the subscription when the `Subscription` is dropped. It's not possible to implement Drop for a trait object.
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D>;
+    fn subscribe(
+        self,
+        observer: impl Observer<Self::T, Self::E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D>;
 }
 
 /// Extension trait that exposes the full suite of RxRust operators on any type that
 /// implements [`Observable`]. Each method forwards to the corresponding operator
 /// constructor, allowing a fluent, ergonomic style when composing observable pipelines.
-pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
+pub trait ObservableExt<'or>: Observable<'or> + Sized {
     /// Emits a single `bool` indicating whether every item satisfies the provided predicate.
-    fn all<F>(self, callback: F) -> All<T, Self, F>
+    fn all<F>(self, callback: F) -> All<Self, F>
     where
-        F: FnMut(T) -> bool,
+        F: FnMut(Self::T) -> bool,
     {
         All::new(self, callback)
     }
@@ -102,20 +110,20 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Competes two observables and mirrors whichever one produces an item or error first.
     fn amb_with<OE1>(self, other: OE1) -> Amb<[EitherObservable<Self, OE1>; 2]>
     where
-        OE1: Observable<'or, T, E>,
+        OE1: Observable<'or, T = Self::T, E = Self::E>,
     {
         Amb::new([EitherObservable::Left(self), EitherObservable::Right(other)])
     }
 
     /// Calculates the arithmetic mean of all numeric items emitted by the source.
-    fn average(self) -> Average<T, Self> {
+    fn average(self) -> Average<Self::T, Self> {
         Average::new(self)
     }
 
     /// Collects the items emitted by the source into buffers delimited by another observable.
     fn buffer<OE1>(self, boundary: OE1) -> Buffer<Self, OE1>
     where
-        OE1: Observable<'or, (), E>,
+        OE1: Observable<'or, T = (), E = Self::E>,
     {
         Buffer::new(self, boundary)
     }
@@ -147,10 +155,10 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Recovers from errors by switching to another observable yielded by the callback.
-    fn catch<E1, OE1, F>(self, callback: F) -> Catch<E, Self, F>
+    fn catch<E1, OE1, F>(self, callback: F) -> Catch<Self, F>
     where
-        OE1: Observable<'or, T, E1>,
-        F: FnOnce(E) -> OE1,
+        OE1: Observable<'or, T = Self::T, E = E1>,
+        F: FnOnce(Self::E) -> OE1,
     {
         Catch::new(self, callback)
     }
@@ -158,24 +166,24 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Combines the latest values from both observables whenever either produces a new item.
     fn combine_latest<T1, OE2>(self, another_source: OE2) -> CombineLatest<Self, OE2>
     where
-        OE2: Observable<'or, T1, E>,
+        OE2: Observable<'or, T = T1, E = Self::E>,
     {
         CombineLatest::new(self, another_source)
     }
 
     /// Flattens an observable-of-observables by concatenating each inner observable sequentially.
-    fn concat_all<T1>(self) -> ConcatAll<Self, T>
+    fn concat_all<T1>(self) -> ConcatAll<Self>
     where
-        T: Observable<'or, T1, E>,
+        Self::T: Observable<'or, T = T1, E = Self::E>,
     {
         ConcatAll::new(self)
     }
 
     /// Maps each item to an observable and concatenates the resulting inner sequences.
-    fn concat_map<T1, OE1, F>(self, callback: F) -> ConcatMap<T, Self, OE1, F>
+    fn concat_map<T1, OE1, F>(self, callback: F) -> ConcatMap<Self, F>
     where
-        OE1: Observable<'or, T1, E>,
-        F: FnMut(T) -> OE1,
+        OE1: Observable<'or, T = T1, E = Self::E>,
+        F: FnMut(Self::T) -> OE1,
     {
         ConcatMap::new(self, callback)
     }
@@ -183,18 +191,18 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Concatenates the source with another observable, waiting for the first to complete.
     fn concat_with<OE2>(self, source_2: OE2) -> Concat<Self, OE2>
     where
-        OE2: Observable<'or, T, E>,
+        OE2: Observable<'or, T = Self::T, E = Self::E>,
     {
         Concat::new(self, source_2)
     }
 
     /// Emits `true` if the sequence contains the provided item, `false` otherwise.
-    fn contains(self, item: T) -> Contains<T, Self> {
+    fn contains(self, item: Self::T) -> Contains<Self::T, Self> {
         Contains::new(self, item)
     }
 
     /// Counts the number of items emitted and emits that count as a single value.
-    fn count(self) -> Count<T, Self> {
+    fn count(self) -> Count<Self> {
         Count::new(self)
     }
 
@@ -206,23 +214,26 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Attaches a label to the stream and logs lifecycle events for debugging purposes using the provided callback.
     fn debug<C, F>(self, context: C, callback: F) -> Debug<Self, C, F>
     where
-        F: Fn(C, DebugEvent<'_, T, E>),
+        F: Fn(C, DebugEvent<'_, Self::T, Self::E>),
     {
         Debug::new(self, context, callback)
     }
 
     /// Attaches a label to the stream and logs lifecycle events for debugging purposes using the default print.
-    fn debug_default_print<L>(self, label: L) -> Debug<Self, L, DefaultPrintType<L, T, E>>
+    fn debug_default_print<L>(
+        self,
+        label: L,
+    ) -> Debug<Self, L, DefaultPrintType<L, Self::T, Self::E>>
     where
         L: Display,
-        T: std::fmt::Debug,
-        E: std::fmt::Debug,
+        Self::T: std::fmt::Debug,
+        Self::E: std::fmt::Debug,
     {
         Debug::new_default_print(self, label)
     }
 
     /// Emits a default value if the source completes without emitting any items.
-    fn default_if_empty(self, default_value: T) -> DefaultIfEmpty<T, Self> {
+    fn default_if_empty(self, default_value: Self::T) -> DefaultIfEmpty<Self::T, Self> {
         DefaultIfEmpty::new(self, default_value)
     }
 
@@ -237,9 +248,9 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Filters out duplicate items, keeping only the first occurrence of each value.
-    fn distinct(self) -> Distinct<Self, fn(&T) -> T>
+    fn distinct(self) -> Distinct<Self, fn(&Self::T) -> Self::T>
     where
-        T: Clone,
+        Self::T: Clone,
     {
         Distinct::new(self)
     }
@@ -247,15 +258,15 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Filters out duplicates based on a key selector, keeping only unique keys.
     fn distinct_with_key_selector<F, K>(self, key_selector: F) -> Distinct<Self, F>
     where
-        F: FnMut(&T) -> K,
+        F: FnMut(&Self::T) -> K,
     {
         Distinct::new_with_key_selector(self, key_selector)
     }
 
     /// Suppresses consecutive duplicate items, comparing the values directly.
-    fn distinct_until_changed(self) -> DistinctUntilChanged<Self, fn(&T) -> T>
+    fn distinct_until_changed(self) -> DistinctUntilChanged<Self, fn(&Self::T) -> Self::T>
     where
-        T: Clone,
+        Self::T: Clone,
     {
         DistinctUntilChanged::new(self)
     }
@@ -266,7 +277,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         key_selector: F,
     ) -> DistinctUntilChanged<Self, F>
     where
-        F: FnMut(&T) -> K,
+        F: FnMut(&Self::T) -> K,
     {
         DistinctUntilChanged::new_with_key_selector(self, key_selector)
     }
@@ -282,7 +293,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Invokes a callback after each item is forwarded downstream.
     fn do_after_next<F>(self, callback: F) -> DoAfterNext<Self, F>
     where
-        F: FnMut(T),
+        F: FnMut(Self::T),
     {
         DoAfterNext::new(self, callback)
     }
@@ -298,7 +309,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Invokes a callback after the source terminates, regardless of completion or error.
     fn do_after_termination<F>(self, callback: F) -> DoAfterTermination<Self, F>
     where
-        F: FnOnce(Termination<E>),
+        F: FnOnce(Termination<Self::E>),
     {
         DoAfterTermination::new(self, callback)
     }
@@ -314,7 +325,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Invokes a callback with a reference to each item before it is sent downstream.
     fn do_before_next<F>(self, callback: F) -> DoBeforeNext<Self, F>
     where
-        F: FnMut(&T),
+        F: FnMut(&Self::T),
     {
         DoBeforeNext::new(self, callback)
     }
@@ -330,7 +341,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Invokes a callback before the stream terminates, receiving the termination reason.
     fn do_before_termination<F>(self, callback: F) -> DoBeforeTermination<Self, F>
     where
-        F: FnOnce(&Termination<E>),
+        F: FnOnce(&Termination<Self::E>),
     {
         DoBeforeTermination::new(self, callback)
     }
@@ -343,7 +354,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Filters items using a predicate, forwarding only values that return `true`.
     fn filter<F>(self, callback: F) -> Filter<Self, F>
     where
-        F: FnMut(&T) -> bool,
+        F: FnMut(&Self::T) -> bool,
     {
         Filter::new(self, callback)
     }
@@ -354,18 +365,18 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Maps each item to an observable and merges the resulting inner sequences concurrently.
-    fn flat_map<T1, OE1, F>(self, callback: F) -> FlatMap<T, Self, OE1, F>
+    fn flat_map<T1, OE1, F>(self, callback: F) -> FlatMap<Self, F>
     where
-        OE1: Observable<'or, T1, E>,
-        F: FnMut(T) -> OE1,
+        OE1: Observable<'or, T = T1, E = Self::E>,
+        F: FnMut(Self::T) -> OE1,
     {
         FlatMap::new(self, callback)
     }
 
     /// Groups items by key into multiple observable sequences.
-    fn group_by<F, K>(self, callback: F) -> GroupBy<Self, F, K>
+    fn group_by<F, K>(self, callback: F) -> GroupBy<Self, F>
     where
-        F: FnMut(T) -> K,
+        F: FnMut(Self::T) -> K,
     {
         GroupBy::new(self, callback)
     }
@@ -373,7 +384,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Hooks into the emission of items, allowing mutation of the downstream observer.
     fn hook_on_next<F>(self, callback: F) -> HookOnNext<Self, F>
     where
-        F: FnMut(&mut dyn Observer<T, E>, T),
+        F: FnMut(&mut dyn Observer<Self::T, Self::E>, Self::T),
     {
         HookOnNext::new(self, callback)
     }
@@ -382,7 +393,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     fn hook_on_subscription<D, F>(self, callback: F) -> HookOnSubscription<Self, F>
     where
         D: Disposable,
-        F: FnOnce(Self, BoxedObserver<'or, T, E>) -> Subscription<D>,
+        F: FnOnce(Self, BoxedObserver<'or, Self::T, Self::E>) -> Subscription<D>,
     {
         HookOnSubscription::new(self, callback)
     }
@@ -390,7 +401,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Hooks into termination, providing access to the observer and termination payload.
     fn hook_on_termination<F>(self, callback: F) -> HookOnTermination<Self, F>
     where
-        F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>),
+        F: FnOnce(BoxedObserver<'or, Self::T, Self::E>, Termination<Self::E>),
     {
         HookOnTermination::new(self, callback)
     }
@@ -401,10 +412,10 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Boxes the observable, erasing its concrete type while preserving lifetime bounds.
-    fn into_boxed<'sub, 'oe>(self) -> BoxedObservable<'or, 'sub, 'oe, T, E>
+    fn into_boxed<'sub, 'oe>(self) -> BoxedObservable<'or, 'sub, 'oe, Self::T, Self::E>
     where
-        T: 'or,
-        E: 'or,
+        Self::T: 'or,
+        Self::E: 'or,
         Self: MaybeSend + 'oe,
         Self::D: MaybeSend + 'sub,
     {
@@ -412,10 +423,12 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Boxes the observable and makes it cloneable, erasing its concrete type while preserving lifetime bounds.
-    fn into_cloneable_boxed<'sub, 'oe>(self) -> CloneableBoxedObservable<'or, 'sub, 'oe, T, E>
+    fn into_cloneable_boxed<'sub, 'oe>(
+        self,
+    ) -> CloneableBoxedObservable<'or, 'sub, 'oe, Self::T, Self::E>
     where
-        T: 'or,
-        E: 'or,
+        Self::T: 'or,
+        Self::E: 'or,
         Self: MaybeSend + MaybeSync + Clone + 'oe,
         Self::D: MaybeSend + 'sub,
     {
@@ -424,9 +437,9 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
 
     /// Converts the observable into an async stream.
     #[cfg(feature = "futures")]
-    fn into_stream(self) -> ObservableStream<'or, T, Self>
+    fn into_stream(self) -> ObservableStream<'or, Self::T, Self>
     where
-        Self: Observable<'or, T, Infallible>,
+        Self: Observable<'or, E = Infallible>,
     {
         ObservableStream::new(self)
     }
@@ -437,9 +450,9 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Transforms each item by applying a user-supplied mapping function.
-    fn map<T1, F>(self, callback: F) -> Map<T, Self, F>
+    fn map<T1, F>(self, callback: F) -> Map<Self, F>
     where
-        F: FnMut(T) -> T1,
+        F: FnMut(Self::T) -> T1,
     {
         Map::new(self, callback)
     }
@@ -465,9 +478,9 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Merges an observable-of-observables by interleaving items from inner streams.
-    fn merge_all<T1>(self) -> MergeAll<Self, T>
+    fn merge_all<T1>(self) -> MergeAll<Self>
     where
-        T: Observable<'or, T1, E>,
+        Self::T: Observable<'or, T = T1, E = Self::E>,
     {
         MergeAll::new(self)
     }
@@ -475,7 +488,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Merges the source with another observable, interleaving both streams concurrently.
     fn merge_with<OE2>(self, source_2: OE2) -> Merge<Self, OE2>
     where
-        OE2: Observable<'or, T, E>,
+        OE2: Observable<'or, T = Self::T, E = Self::E>,
     {
         Merge::new(self, source_2)
     }
@@ -500,7 +513,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
 
     fn on_backpressure<C>(self, collection: C) -> OnBackpressure<Self, C>
     where
-        C: BackpressureCollection<Input = T>,
+        C: BackpressureCollection<Input = Self::T>,
     {
         OnBackpressure::new(self, collection)
     }
@@ -514,19 +527,19 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Multicasts the source using a `PublishSubject`.
-    fn publish(self) -> ConnectableObservable<Self, PublishSubject<'or, T, E>> {
+    fn publish(self) -> ConnectableObservable<Self, PublishSubject<'or, Self::T, Self::E>> {
         self.multicast(PublishSubject::default)
     }
 
     /// Multicasts the source using an `AsyncSubject`, emitting only the last value.
-    fn publish_last(self) -> ConnectableObservable<Self, AsyncSubject<'or, T, E>> {
+    fn publish_last(self) -> ConnectableObservable<Self, AsyncSubject<'or, Self::T, Self::E>> {
         self.multicast(AsyncSubject::default)
     }
 
     /// Aggregates the sequence using an initial seed and an accumulator function.
-    fn reduce<T0, F>(self, initial_value: T0, callback: F) -> Reduce<T0, T, Self, F>
+    fn reduce<T0, F>(self, initial_value: T0, callback: F) -> Reduce<T0, Self, F>
     where
-        F: FnMut(T0, T) -> T0,
+        F: FnMut(T0, Self::T) -> T0,
     {
         Reduce::new(self, initial_value, callback)
     }
@@ -535,15 +548,15 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     fn replay(
         self,
         buffer_size: Option<usize>,
-    ) -> ConnectableObservable<Self, ReplaySubject<'or, T, E>> {
+    ) -> ConnectableObservable<Self, ReplaySubject<'or, Self::T, Self::E>> {
         self.multicast(|| ReplaySubject::new(buffer_size))
     }
 
     /// Re-subscribes to the source based on the retry strategy returned by the callback.
     fn retry<OE1, F>(self, callback: F) -> Retry<Self, F>
     where
-        OE1: Observable<'or, T, E>,
-        F: FnMut(E) -> RetryAction<E, OE1>,
+        OE1: Observable<'or, T = Self::T, E = Self::E>,
+        F: FnMut(Self::E) -> RetryAction<Self::E, OE1>,
     {
         Retry::new(self, callback)
     }
@@ -551,34 +564,34 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Samples the source whenever the sampler observable emits an event.
     fn sample<OE1>(self, sampler: OE1) -> Sample<Self, OE1>
     where
-        OE1: Observable<'or, (), E>,
+        OE1: Observable<'or, T = (), E = Self::E>,
     {
         Sample::new(self, sampler)
     }
 
     /// Accumulates values over time, emitting each intermediate result.
-    fn scan<T0, F>(self, initial_value: T0, callback: F) -> Scan<T0, T, Self, F>
+    fn scan<T0, F>(self, initial_value: T0, callback: F) -> Scan<T0, Self, F>
     where
-        F: FnMut(T0, T) -> T0,
+        F: FnMut(T0, Self::T) -> T0,
     {
         Scan::new(self, initial_value, callback)
     }
 
     /// Compares two sequences element by element for equality.
-    fn sequence_equal<OE2>(self, another_source: OE2) -> SequenceEqual<T, Self, OE2>
+    fn sequence_equal<OE2>(self, another_source: OE2) -> SequenceEqual<Self, OE2>
     where
-        OE2: Observable<'or, T, E>,
+        OE2: Observable<'or, T = Self::T, E = Self::E>,
     {
         SequenceEqual::new(self, another_source)
     }
 
     /// Shares a single subscription to the source using `PublishSubject` semantics.
-    fn share(self) -> RefCount<'or, T, E, Self, PublishSubject<'or, T, E>> {
+    fn share(self) -> RefCount<'or, Self, PublishSubject<'or, Self::T, Self::E>> {
         self.publish().ref_count()
     }
 
     /// Shares a single subscription, replaying only the last item to new subscribers.
-    fn share_last(self) -> RefCount<'or, T, E, Self, AsyncSubject<'or, T, E>> {
+    fn share_last(self) -> RefCount<'or, Self, AsyncSubject<'or, Self::T, Self::E>> {
         self.publish_last().ref_count()
     }
 
@@ -586,7 +599,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     fn share_replay(
         self,
         buffer_size: Option<usize>,
-    ) -> RefCount<'or, T, E, Self, ReplaySubject<'or, T, E>> {
+    ) -> RefCount<'or, Self, ReplaySubject<'or, Self::T, Self::E>> {
         self.replay(buffer_size).ref_count()
     }
 
@@ -603,7 +616,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Ignores items from the source until the notifier observable fires.
     fn skip_until<OE1>(self, start: OE1) -> SkipUntil<Self, OE1>
     where
-        OE1: Observable<'or, (), E>,
+        OE1: Observable<'or, T = (), E = Self::E>,
     {
         SkipUntil::new(self, start)
     }
@@ -611,7 +624,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Skips items while the predicate returns `true`, then emits the remaining items.
     fn skip_while<F>(self, callback: F) -> SkipWhile<Self, F>
     where
-        F: FnMut(&T) -> bool,
+        F: FnMut(&Self::T) -> bool,
     {
         SkipWhile::new(self, callback)
     }
@@ -619,7 +632,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Pre-pends the provided values before the source starts emitting.
     fn start_with<I>(self, values: I) -> StartWith<Self, I>
     where
-        I: IntoIterator<Item = T>,
+        I: IntoIterator<Item = Self::T>,
     {
         StartWith::new(self, values)
     }
@@ -636,8 +649,8 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         on_termination: FT,
     ) -> Subscription<Self::D>
     where
-        FN: FnMut(T) + MaybeSend + 'or,
-        FT: FnOnce(Termination<E>) + MaybeSend + 'or,
+        FN: FnMut(Self::T) + MaybeSend + 'or,
+        FT: FnOnce(Termination<Self::E>) + MaybeSend + 'or,
     {
         self.subscribe(CallbackObserver::new(on_next, on_termination))
     }
@@ -648,18 +661,18 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Switches to the most recent inner observable emitted by the source.
-    fn switch<T1>(self) -> Switch<Self, T>
+    fn switch<T1>(self) -> Switch<Self>
     where
-        T: Observable<'or, T1, E>,
+        Self::T: Observable<'or, T = T1, E = Self::E>,
     {
         Switch::new(self)
     }
 
     /// Maps each item to an observable and switches to the latest inner sequence.
-    fn switch_map<T1, OE1, F>(self, callback: F) -> SwitchMap<T, Self, OE1, F>
+    fn switch_map<T1, OE1, F>(self, callback: F) -> SwitchMap<Self, F>
     where
-        OE1: Observable<'or, T1, E>,
-        F: FnMut(T) -> OE1,
+        OE1: Observable<'or, T = T1, E = Self::E>,
+        F: FnMut(Self::T) -> OE1,
     {
         SwitchMap::new(self, callback)
     }
@@ -677,7 +690,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Relays items until the notifier observable emits, then completes.
     fn take_until<OE1>(self, stop: OE1) -> TakeUntil<Self, OE1>
     where
-        OE1: Observable<'or, (), E>,
+        OE1: Observable<'or, T = (), E = Self::E>,
     {
         TakeUntil::new(self, stop)
     }
@@ -685,7 +698,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Emits items while the predicate holds `true`, then completes.
     fn take_while<F>(self, callback: F) -> TakeWhile<Self, F>
     where
-        F: FnMut(&T) -> bool,
+        F: FnMut(&Self::T) -> bool,
     {
         TakeWhile::new(self, callback)
     }
@@ -713,7 +726,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Collects items into windows that are opened and closed by another observable.
     fn window<OE1>(self, boundary: OE1) -> Window<Self, OE1>
     where
-        OE1: Observable<'or, (), E>,
+        OE1: Observable<'or, T = (), E = Self::E>,
     {
         Window::new(self, boundary)
     }
@@ -726,10 +739,10 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Pairs items from both observables by index and emits tuples of corresponding values.
     fn zip<T1, OE2>(self, another_source: OE2) -> Zip<Self, OE2>
     where
-        OE2: Observable<'or, T1, E>,
+        OE2: Observable<'or, T = T1, E = Self::E>,
     {
         Zip::new(self, another_source)
     }
 }
 
-impl<'or, T, E, OE> ObservableExt<'or, T, E> for OE where OE: Observable<'or, T, E> {}
+impl<'or, OE> ObservableExt<'or> for OE where OE: Observable<'or> {}

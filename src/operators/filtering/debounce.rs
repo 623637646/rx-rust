@@ -82,14 +82,16 @@ impl<'or, OE, S> Debounce<'or, OE, S> {
     }
 }
 
-impl<'or, T, E, OE, S> Observable<'static, T, E> for Debounce<'or, OE, S>
+impl<'or, T, E, OE, S> Observable<'static> for Debounce<'or, OE, S>
 where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
     S: Scheduler + MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = subscribe_with_shared_model::Disposal<'or>;
 
     fn subscribe(

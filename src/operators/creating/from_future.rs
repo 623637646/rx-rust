@@ -64,11 +64,13 @@ impl<FU, S> FromFuture<FU, S> {
     }
 }
 
-impl<T, FU, S> Observable<'static, T, Infallible> for FromFuture<FU, S>
+impl<T, FU, S> Observable<'static> for FromFuture<FU, S>
 where
     FU: Future<Output = T> + MaybeSend + 'static,
     S: Scheduler,
 {
+    type T = T;
+    type E = Infallible;
     type D = S::D;
 
     fn subscribe(

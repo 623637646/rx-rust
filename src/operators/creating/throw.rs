@@ -37,7 +37,9 @@ impl<E> Throw<E> {
     }
 }
 
-impl<'or, E> Observable<'or, Infallible, E> for Throw<E> {
+impl<'or, E> Observable<'or> for Throw<E> {
+    type T = Infallible;
+    type E = E;
     type D = ();
 
     fn subscribe(

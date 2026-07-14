@@ -15,13 +15,18 @@ impl<S> SubjectObservable<S> {
     }
 }
 
-impl<'or, T, E, S> Observable<'or, T, E> for SubjectObservable<S>
+impl<'or, S> Observable<'or> for SubjectObservable<S>
 where
-    S: Subject<'or, T, E>,
+    S: Subject<'or>,
 {
+    type T = S::T;
+    type E = S::E;
     type D = S::D;
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+    fn subscribe(
+        self,
+        observer: impl Observer<S::T, S::E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         self.0.subscribe(observer)
     }
 }

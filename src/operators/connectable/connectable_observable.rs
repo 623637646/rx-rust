@@ -79,7 +79,7 @@ impl<OE, S> ConnectableObservable<OE, S> {
         self,
     ) -> Option<Subscription<ChainDisposal<ConnectableObservableDisposable, OE::D>>>
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         S: Observer<T, E> + MaybeSend + 'or,
     {
         if self.is_connected.change_if_not_equal(true) {
@@ -93,18 +93,20 @@ impl<OE, S> ConnectableObservable<OE, S> {
         }
     }
 
-    pub fn ref_count<'or, T, E>(self) -> RefCount<'or, T, E, OE, S>
+    pub fn ref_count<'or>(self) -> RefCount<'or, OE, S>
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or>,
     {
         RefCount::new(self)
     }
 }
 
-impl<'or, T, E, OE, S> Observable<'or, T, E> for ConnectableObservable<OE, S>
+impl<'or, T, E, OE, S> Observable<'or> for ConnectableObservable<OE, S>
 where
-    S: Observable<'or, T, E>,
+    S: Observable<'or, T = T, E = E>,
 {
+    type T = T;
+    type E = E;
     type D = S::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

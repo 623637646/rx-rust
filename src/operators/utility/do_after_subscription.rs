@@ -36,20 +36,22 @@ pub struct DoAfterSubscription<OE, F> {
 impl<OE, F> DoAfterSubscription<OE, F> {
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
         F: FnOnce(),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for DoAfterSubscription<OE, F>
+impl<'or, T, E, OE, F> Observable<'or> for DoAfterSubscription<OE, F>
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     F: FnOnce(),
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

@@ -65,7 +65,9 @@ where
 
 pub(crate) struct ReceiverObservable<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
-impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
+impl<'or, T, E> Observable<'or> for ReceiverObservable<'or, T, E> {
+    type T = T;
+    type E = E;
     type D = ReceiverObservableDisposaler<'or, T, E>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

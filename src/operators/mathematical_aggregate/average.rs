@@ -43,7 +43,7 @@ pub struct Average<T, OE> {
 impl<T, OE> Average<T, OE> {
     pub fn new<'or, E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
     {
         Self {
             source,
@@ -61,10 +61,12 @@ struct AverageObserver<T, OR> {
 macro_rules! average_observer_impl {
     ($($t:ty)*) => ($(
 
-        impl<'or, E, OE> Observable<'or, f64, E> for Average<$t, OE>
+        impl<'or, E, OE> Observable<'or> for Average<$t, OE>
         where
-            OE: Observable<'or, $t, E>,
+            OE: Observable<'or, T = $t, E = E>,
         {
+    type T = f64;
+    type E = E;
             type D = OE::D;
 
             fn subscribe(self, observer: impl Observer<f64, E> + MaybeSend + 'or) -> Subscription<Self::D> {

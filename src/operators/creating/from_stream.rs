@@ -67,11 +67,13 @@ impl<SM, S> FromStream<SM, S> {
     }
 }
 
-impl<T, SM, S> Observable<'static, T, Infallible> for FromStream<SM, S>
+impl<T, SM, S> Observable<'static> for FromStream<SM, S>
 where
     SM: Stream<Item = T> + MaybeSend + 'static,
     S: Scheduler,
 {
+    type T = T;
+    type E = Infallible;
     type D = S::D;
 
     fn subscribe(

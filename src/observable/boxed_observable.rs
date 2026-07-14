@@ -17,7 +17,7 @@ impl<'or, 'sub, T, E, OE, D> ErasedObservable<'or, 'sub, T, E> for OE
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, T, E, D = D>,
+    OE: Observable<'or, T = T, E = E, D = D>,
     D: Disposable + MaybeSend + 'sub,
 {
     fn subscribe_boxed(
@@ -44,7 +44,9 @@ cfg_if::cfg_if! {
 
 impl<'or, 'sub, 'oe, T, E> BoxedObservable<'or, 'sub, 'oe, T, E> {
     pub fn new(
-        observable: impl Observable<'or, T, E, D = impl Disposable + MaybeSend + 'sub> + MaybeSend + 'oe,
+        observable: impl Observable<'or, T = T, E = E, D = impl Disposable + MaybeSend + 'sub>
+        + MaybeSend
+        + 'oe,
     ) -> Self
     where
         T: 'or,
@@ -54,7 +56,9 @@ impl<'or, 'sub, 'oe, T, E> BoxedObservable<'or, 'sub, 'oe, T, E> {
     }
 }
 
-impl<'or, 'sub, T, E> Observable<'or, T, E> for BoxedObservable<'or, 'sub, '_, T, E> {
+impl<'or, 'sub, T, E> Observable<'or> for BoxedObservable<'or, 'sub, '_, T, E> {
+    type T = T;
+    type E = E;
     type D = BoxedDisposal<'sub>;
 
     #[inline]

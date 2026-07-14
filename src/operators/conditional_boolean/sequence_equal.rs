@@ -3,14 +3,13 @@ use crate::utils::subscribe_unsub_after_termination::{self, subscribe_unsub_afte
 use crate::utils::subscribe_with_shared_model::{
     self, Context, ModificationResult, subscribe_with_shared_model,
 };
-use crate::utils::types::{MarkerType, MaybeSend};
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
 use std::collections::VecDeque;
-use std::marker::PhantomData;
 
 /// Emits a single boolean value that indicates whether two Observables emit the same sequence of items.
 /// See <https://reactivex.io/documentation/operators/sequenceequal.html>
@@ -43,23 +42,18 @@ use std::marker::PhantomData;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct SequenceEqual<T, OE1, OE2> {
+pub struct SequenceEqual<OE1, OE2> {
     source_1: OE1,
     source_2: OE2,
-    _marker: MarkerType<T>,
 }
 
-impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
-    pub fn new<'or, E>(source_1: OE1, source_2: OE2) -> Self
+impl<OE1, OE2> SequenceEqual<OE1, OE2> {
+    pub fn new<'or, T, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T, E>,
-        OE2: Observable<'or, T, E>,
+        OE1: Observable<'or, T = T, E = E>,
+        OE2: Observable<'or, T = T, E = E>,
     {
-        Self {
-            source_1,
-            source_2,
-            _marker: PhantomData,
-        }
+        Self { source_1, source_2 }
     }
 }
 
@@ -68,15 +62,17 @@ delegate_disposal!(
     subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
 );
 
-impl<'or, T, E, OE1, OE2> Observable<'or, bool, E> for SequenceEqual<T, OE1, OE2>
+impl<'or, T, E, OE1, OE2> Observable<'or> for SequenceEqual<OE1, OE2>
 where
     T: PartialEq + MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
+    OE1: Observable<'or, T = T, E = E>,
     OE1::D: MaybeSend + 'or,
-    OE2: Observable<'or, T, E>,
+    OE2: Observable<'or, T = T, E = E>,
     OE2::D: MaybeSend + 'or,
 {
+    type T = bool;
+    type E = E;
     type D = Disposal<'or>;
 
     fn subscribe(

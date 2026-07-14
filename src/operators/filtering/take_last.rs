@@ -47,12 +47,14 @@ impl<OE> TakeLast<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for TakeLast<OE>
+impl<'or, T, E, OE> Observable<'or> for TakeLast<OE>
 where
     T: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
     OE::D: MaybeSend + 'or,
 {
+    type T = T;
+    type E = E;
     type D = crate::utils::subscribe_unsub_after_termination::Disposal<OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

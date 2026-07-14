@@ -41,11 +41,13 @@ impl<F> Defer<F> {
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for Defer<F>
+impl<'or, T, E, OE, F> Observable<'or> for Defer<F>
 where
     F: FnOnce() -> OE,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

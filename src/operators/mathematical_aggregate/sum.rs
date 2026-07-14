@@ -42,17 +42,19 @@ pub struct Sum<OE> {
 impl<OE> Sum<OE> {
     pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: Observable<'or, T = T, E = E>,
     {
         Self { source }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Sum<OE>
+impl<'or, T, E, OE> Observable<'or> for Sum<OE>
 where
     T: AddAssign + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: Observable<'or, T = T, E = E>,
 {
+    type T = T;
+    type E = E;
     type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {

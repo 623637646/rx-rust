@@ -38,10 +38,12 @@ impl<I> FromIter<I> {
     }
 }
 
-impl<'or, T, I> Observable<'or, T, Infallible> for FromIter<I>
+impl<'or, T, I> Observable<'or> for FromIter<I>
 where
     I: IntoIterator<Item = T>,
 {
+    type T = T;
+    type E = Infallible;
     type D = ();
 
     fn subscribe(
