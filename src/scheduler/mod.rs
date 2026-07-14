@@ -161,6 +161,14 @@ pub trait Scheduler {
         )
     }
 
+    /// Drives `stream` to completion, invoking `result_callback` with
+    /// `Some(item)` for each element and a final `None` when the stream ends.
+    ///
+    /// Disposal aborts the task without delivering the final `None`.
+    ///
+    /// The loop yields to the executor after each element (even when the
+    /// stream is always ready), so other tasks can make progress and
+    /// disposal can take effect.
     #[cfg(feature = "futures")]
     fn schedule_stream<SM>(
         &self,
@@ -172,8 +180,16 @@ pub trait Scheduler {
     {
         self.spawn_future(async move {
             let mut stream = std::pin::pin!(stream);
-            while let Some(item) = stream.next().await {
-                result_callback(Some(item));
+            loop {
+                // A `while let` would keep the `Option<Item>` temporary alive
+                // across the yield below, requiring `SM::Item: Send`.
+                match stream.next().await {
+                    Some(item) => result_callback(Some(item)),
+                    None => break,
+                }
+                // Yield so other tasks can run and disposal can take effect,
+                // even when the stream is always ready.
+                YieldNow(false).await;
             }
             result_callback(None);
         })

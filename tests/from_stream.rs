@@ -80,6 +80,31 @@ fn test_unsubscribe() {
 }
 
 #[test]
+fn test_unsubscribe_with_always_ready_stream() {
+    block_on(|runtime| async move {
+        // `repeat` is infinite and always ready: without a yield between
+        // items the task would never hit a pending await point, so disposal
+        // could never take effect.
+        let stream = stream::repeat(111);
+        let observable = FromStream::new(stream, runtime.clone());
+        let (checker, observer) = Checker::new();
+
+        let subscription = observable.subscribe(observer);
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(!checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        // Let the abort take effect before sampling the count.
+        runtime.sleep(DURATION_10_MS).await;
+        let count = checker.values().len();
+        runtime.sleep(DURATION_10_MS).await;
+        assert_eq!(checker.values().len(), count);
+        assert_eq!(checker.state(), State::Dropped);
+    });
+}
+
+#[test]
 fn test_async() {
     block_on(|runtime| async move {
         let (mut tx, rx) = futures::channel::mpsc::unbounded();
