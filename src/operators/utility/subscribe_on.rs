@@ -98,6 +98,6 @@ where
             move || shared_sub_cloned.replace(|| self.source.subscribe(observer)),
             None,
         );
-        disposal.then(shared_sub).into()
+        disposal.then(shared_sub).map_into()
     }
 }

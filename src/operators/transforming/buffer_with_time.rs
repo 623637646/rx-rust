@@ -126,7 +126,7 @@ where
             self.delay,
         );
         safe_lock_option!(replace: context, timer, disposal);
-        sub.preceded_by(context).into()
+        sub.preceded_by(context).map_into()
     }
 }
 

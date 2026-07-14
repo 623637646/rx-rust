@@ -85,18 +85,6 @@ macro_rules! delegate_disposal {
             }
         }
 
-        impl<$($generic),+, D0> From<$crate::observable::Subscription<D0>>
-            for $crate::observable::Subscription<$name<$($generic),+>>
-        where
-            D0: $crate::disposable::Disposable,
-            $inner: From<D0>
-            $($where_clause)*
-        {
-            fn from(value: $crate::observable::Subscription<D0>) -> Self {
-                value.map_into::<$inner>().map_into()
-            }
-        }
-
         impl<$($generic),+, D0> From<D0>
             for $crate::observable::Subscription<$name<$($generic),+>>
         where
