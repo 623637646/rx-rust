@@ -1,7 +1,11 @@
 use super::{Subject, publish_subject::PublishSubject};
+use crate::delegate_disposal;
+use crate::disposable::DisposableExt;
+use crate::disposable::option_disposal::OptionDisposal;
+use crate::observable::Subscription;
+use crate::subject::publish_subject;
 use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
 };
@@ -25,13 +29,22 @@ impl<T, E> AsyncSubject<'_, T, E> {
     }
 }
 
-impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for AsyncSubject<'or, T, E>
+delegate_disposal!(
+    Disposal<'or, T, E>,
+    OptionDisposal<Subscription<publish_subject::Disposal<'or, T, E>>>
+);
+
+impl<'or, T, E> Observable<'or, T, E> for AsyncSubject<'or, T, E>
 where
-    T: Clone + MaybeSend + 'sub,
-    E: Clone + MaybeSend + 'sub,
-    'or: 'sub,
+    T: Clone + MaybeSend,
+    E: Clone + MaybeSend,
 {
-    fn subscribe(self, mut observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<'or, T, E>;
+
+    fn subscribe(
+        self,
+        mut observer: impl Observer<T, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         if let Some(terminated) = self.terminated() {
             match &terminated {
                 Termination::Completed => {
@@ -42,9 +55,12 @@ where
                 Termination::Error(_) => {}
             }
             observer.on_termination(terminated);
-            Subscription::default()
+            OptionDisposal::none().into()
         } else {
-            self.publish_subject.subscribe(observer)
+            self.publish_subject
+                .subscribe(observer)
+                .into_option()
+                .into()
         }
     }
 }
@@ -73,11 +89,10 @@ where
     }
 }
 
-impl<'or, 'sub, T, E> Subject<'or, 'sub, T, E> for AsyncSubject<'or, T, E>
+impl<'or, T, E> Subject<'or, T, E> for AsyncSubject<'or, T, E>
 where
-    T: Clone + MaybeSend + 'sub,
-    E: Clone + MaybeSend + 'sub,
-    'or: 'sub,
+    T: Clone + MaybeSend,
+    E: Clone + MaybeSend,
 {
     fn terminated(&self) -> Option<Termination<E>>
     where

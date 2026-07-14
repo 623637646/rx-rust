@@ -1,6 +1,5 @@
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
 };
@@ -39,16 +38,22 @@ struct ObservableStreamContext<T> {
 /// ```
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ObservableStream<'sub, T, OE> {
+pub struct ObservableStream<'or, T, OE>
+where
+    OE: Observable<'or, T, Infallible>,
+{
     source: Option<OE>,
-    sub: Option<Subscription<'sub>>,
+    sub: Option<Subscription<OE::D>>,
     context: Shared<Mutable<ObservableStreamContext<T>>>,
 }
 
-impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
+impl<'or, T, OE> ObservableStream<'or, T, OE>
+where
+    OE: Observable<'or, T, Infallible>,
+{
     pub fn new(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, T, Infallible>,
+        OE: Observable<'or, T, Infallible>,
     {
         Self {
             source: Some(source),
@@ -62,12 +67,12 @@ impl<'or, 'sub, T, OE> ObservableStream<'sub, T, OE> {
     }
 }
 
-impl<'sub, T, OE> Unpin for ObservableStream<'sub, T, OE> {}
+impl<'or, T, OE> Unpin for ObservableStream<'or, T, OE> where OE: Observable<'or, T, Infallible> {}
 
-impl<'or, 'sub, T, OE> Stream for ObservableStream<'sub, T, OE>
+impl<'or, T, OE> Stream for ObservableStream<'or, T, OE>
 where
     T: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, Infallible>,
+    OE: Observable<'or, T, Infallible>,
 {
     type Item = T;
 

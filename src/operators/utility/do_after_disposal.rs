@@ -1,7 +1,8 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::{Observable, observable_ext::ObservableExt},
+    disposable::{callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal},
+    observable::Observable,
+    observable::Subscription,
     observer::Observer,
 };
 use educe::Educe;
@@ -12,7 +13,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -45,28 +46,27 @@ pub struct DoAfterDisposal<OE, F> {
 }
 
 impl<OE, F> DoAfterDisposal<OE, F> {
-    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         F: FnOnce(),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoAfterDisposal<OE, F>
+impl<'or, T, E, OE, F> Observable<'or, T, E> for DoAfterDisposal<OE, F>
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, 'sub, T, E>,
-    F: FnOnce() + MaybeSend + 'sub,
+    OE: Observable<'or, T, E>,
+    F: FnOnce(),
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = ChainDisposal<OE::D, CallbackDisposal<F>>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         self.source
-            .hook_on_subscription(move |observable, observer| {
-                observable.subscribe(observer)
-                    + Subscription::new_with_disposal_callback(self.callback)
-            })
             .subscribe(observer)
+            .then(CallbackDisposal::new(self.callback))
     }
 }

@@ -1,7 +1,6 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     utils::types::MarkerType,
 };
@@ -13,7 +12,7 @@ use std::{convert::Infallible, marker::PhantomData};
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -49,12 +48,14 @@ impl<E, OE> MapInfallibleToError<E, OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for MapInfallibleToError<E, OE>
+impl<'or, T, E, OE> Observable<'or, T, E> for MapInfallibleToError<E, OE>
 where
     E: 'or,
-    OE: Observable<'or, 'sub, T, Infallible>,
+    OE: Observable<'or, T, Infallible>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observer = MapInfallibleToErrorObserver {
             observer,
             _marker: PhantomData,

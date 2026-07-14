@@ -9,8 +9,9 @@ use crate::tests_utils::{
 };
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
-    disposable::{Disposable, subscription::Subscription},
-    observable::{Observable, observable_ext::ObservableExt},
+    disposable::Disposable,
+    observable::Subscription,
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{
         creating::{create::Create, empty::Empty, throw::Throw},

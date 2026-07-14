@@ -1,7 +1,6 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     scheduler::Scheduler,
 };
@@ -23,7 +22,7 @@ use std::convert::Infallible;
 /// async fn main() {
 ///     use futures::stream;
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::creating::from_stream::FromStream,
 ///     };
@@ -63,26 +62,24 @@ pub struct FromStream<SM, S> {
 }
 
 impl<SM, S> FromStream<SM, S> {
-    pub fn new(stream: SM, scheduler: S) -> Self
-    where
-        SM: Stream + MaybeSend + 'static,
-    {
+    pub fn new(stream: SM, scheduler: S) -> Self {
         Self { stream, scheduler }
     }
 }
 
-impl<'sub, T, SM, S> Observable<'static, 'sub, T, Infallible> for FromStream<SM, S>
+impl<T, SM, S> Observable<'static, T, Infallible> for FromStream<SM, S>
 where
     SM: Stream<Item = T> + MaybeSend + 'static,
     S: Scheduler,
 {
+    type D = S::D;
+
     fn subscribe(
         self,
         observer: impl Observer<T, Infallible> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         let mut observer = Some(observer);
-        let disposal = self
-            .scheduler
+        self.scheduler
             .schedule_stream(self.stream, move |result| match result {
                 Some(value) => {
                     if let Some(observer) = observer.as_mut() {
@@ -94,7 +91,6 @@ where
                         observer.on_termination(Termination::Completed)
                     }
                 }
-            });
-        Subscription::new_with_disposal(disposal)
+            })
     }
 }

@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    disposable::Disposable,
+    observable::{Observable, Subscription},
     observer::{Observer, boxed_observer::BoxedObserver},
 };
 use educe::Educe;
@@ -12,8 +12,8 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     disposable::subscription::Subscription,
-///     observable::observable_ext::ObservableExt,
+///     observable::Subscription,
+///     observable::ObservableExt,
 ///     observer::{boxed_observer::BoxedObserver, Observer, Termination},
 ///     operators::creating::create::Create,
 /// };
@@ -40,20 +40,24 @@ use educe::Educe;
 pub struct Create<F>(F);
 
 impl<F> Create<F> {
-    pub fn new<'or, 'sub, T, E>(builder: F) -> Self
+    pub fn new<'or, T, E, D>(builder: F) -> Self
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_unsubscribe_wrap_observable`.
-        F: FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub>,
+        D: Disposable,
+        F: FnOnce(BoxedObserver<'or, T, E>) -> Subscription<D>,
     {
         Self(builder)
     }
 }
 
-impl<'or, 'sub, T, E, F> Observable<'or, 'sub, T, E> for Create<F>
+impl<'or, T, E, F, D> Observable<'or, T, E> for Create<F>
 where
-    F: FnOnce(BoxedObserver<'or, T, E>) -> Subscription<'sub>,
+    D: Disposable,
+    F: FnOnce(BoxedObserver<'or, T, E>) -> Subscription<D>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         self.0(BoxedObserver::new(observer))
     }
 }

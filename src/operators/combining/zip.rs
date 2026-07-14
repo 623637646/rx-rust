@@ -1,10 +1,10 @@
 use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
+    self, Context, ModificationResult, subscribe_with_shared_model,
 };
 use crate::utils::types::MaybeSend;
+use crate::{delegate_disposal, utils::subscribe_unsub_after_termination};
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
 };
@@ -17,7 +17,7 @@ use std::collections::VecDeque;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         combining::zip::Zip,
@@ -48,29 +48,36 @@ pub struct Zip<OE1, OE2> {
 }
 
 impl<OE1, OE2> Zip<OE1, OE2> {
-    pub fn new<'or, 'sub, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<'or, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, 'sub, T1, E>,
-        OE2: Observable<'or, 'sub, T2, E>,
+        OE1: Observable<'or, T1, E>,
+        OE2: Observable<'or, T2, E>,
     {
         Self { source_1, source_2 }
     }
 }
 
-impl<'or, 'sub, T1, T2, E, OE1, OE2> Observable<'or, 'sub, (T1, T2), E> for Zip<OE1, OE2>
+delegate_disposal!(
+    Disposal<'or>,
+    subscribe_unsub_after_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+);
+
+impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for Zip<OE1, OE2>
 where
-    'sub: 'or,
-    'or: 'sub,
     T1: MaybeSend + 'or,
     T2: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE1: Observable<'or, 'sub, T1, E>,
-    OE2: Observable<'or, 'sub, T2, E>,
+    OE1: Observable<'or, T1, E>,
+    OE1::D: MaybeSend + 'or,
+    OE2: Observable<'or, T2, E>,
+    OE2::D: MaybeSend + 'or,
 {
+    type D = Disposal<'or>;
+
     fn subscribe(
         self,
         observer: impl Observer<(T1, T2), E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let model = Model {
                 first: (VecDeque::new(), false),
@@ -79,9 +86,10 @@ where
             subscribe_with_shared_model(observer, model, |context| {
                 let subscription_1 = self.source_1.subscribe(ZipObserver1(context.clone()));
                 let subscription_2 = self.source_2.subscribe(ZipObserver2(context));
-                subscription_1 + subscription_2
+                subscription_1.preceded_by_bound(subscription_2)
             })
         })
+        .map_into()
     }
 }
 

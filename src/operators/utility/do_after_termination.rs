@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -12,7 +12,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -50,28 +50,49 @@ pub struct DoAfterTermination<OE, F> {
 }
 
 impl<OE, F> DoAfterTermination<OE, F> {
-    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
         F: FnOnce(Termination<E>),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, 'sub, T, E, OE, F> Observable<'or, 'sub, T, E> for DoAfterTermination<OE, F>
+impl<'or, T, E, OE, F> Observable<'or, T, E> for DoAfterTermination<OE, F>
 where
     T: 'or,
     E: Clone + 'or,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     F: FnOnce(Termination<E>) + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
-        self.source
-            .hook_on_termination(move |observer, termination| {
-                observer.on_termination(termination.clone());
-                (self.callback)(termination);
-            })
-            .subscribe(observer)
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        self.source.subscribe(DoAfterTerminationObserver {
+            observer,
+            callback: self.callback,
+        })
+    }
+}
+
+struct DoAfterTerminationObserver<OR, F> {
+    observer: OR,
+    callback: F,
+}
+
+impl<T, E, OR, F> Observer<T, E> for DoAfterTerminationObserver<OR, F>
+where
+    E: Clone,
+    OR: Observer<T, E>,
+    F: FnOnce(Termination<E>),
+{
+    fn on_next(&mut self, value: T) {
+        self.observer.on_next(value);
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        self.observer.on_termination(termination.clone());
+        (self.callback)(termination);
     }
 }

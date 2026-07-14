@@ -1,8 +1,8 @@
+use crate::utils::subscribe_unsub_after_termination;
 use crate::utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination;
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -13,7 +13,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         conditional_boolean::contains::Contains,
@@ -41,21 +41,26 @@ pub struct Contains<T, OE> {
 }
 
 impl<T, OE> Contains<T, OE> {
-    pub fn new<'or, 'sub, E>(source: OE, item: T) -> Self
+    pub fn new<'or, E>(source: OE, item: T) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
     {
         Self { source, item }
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, bool, E> for Contains<T, OE>
+impl<'or, T, E, OE> Observable<'or, bool, E> for Contains<T, OE>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
     T: PartialEq + MaybeSend + 'or,
-    'sub: 'or,
 {
-    fn subscribe(self, observer: impl Observer<bool, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = subscribe_unsub_after_termination::Disposal<OE::D>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<bool, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let observer = ContainsObserver {
                 observer: Some(observer),

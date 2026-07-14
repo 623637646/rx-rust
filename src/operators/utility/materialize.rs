@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Event, Observer, Termination},
 };
 use educe::Educe;
@@ -13,7 +13,7 @@ use std::convert::Infallible;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::{Event, Termination},
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -49,14 +49,16 @@ impl<OE> Materialize<OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, Event<T, E>, Infallible> for Materialize<OE>
+impl<'or, T, E, OE> Observable<'or, Event<T, E>, Infallible> for Materialize<OE>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
 {
+    type D = OE::D;
+
     fn subscribe(
         self,
         observer: impl Observer<Event<T, E>, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         self.0.subscribe(MaterializeObserver(observer))
     }
 }

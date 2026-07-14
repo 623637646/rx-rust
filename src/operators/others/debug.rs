@@ -1,12 +1,11 @@
-use crate::disposable::callback_disposal::CallbackDisposal;
-use crate::utils::types::MaybeSend;
+use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    disposable::Disposable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
-use std::fmt::Display;
+use std::{fmt::Display, marker::PhantomData};
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
@@ -22,7 +21,7 @@ pub enum DebugEvent<'a, T, E> {
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -87,23 +86,46 @@ impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
     }
 }
 
-impl<'or, 'sub, T, E, OE, C, F> Observable<'or, 'sub, T, E> for Debug<OE, C, F>
+impl<'or, T, E, OE, C, F> Observable<'or, T, E> for Debug<OE, C, F>
 where
-    OE: Observable<'or, 'sub, T, E>,
-    C: Clone + MaybeSend + 'or + 'sub,
-    F: Fn(C, DebugEvent<'_, T, E>) + Clone + MaybeSend + 'or + 'sub,
+    OE: Observable<'or, T, E>,
+    C: Clone + MaybeSend + 'or,
+    F: Fn(C, DebugEvent<'_, T, E>) + Clone + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = DebugDisposal<Subscription<OE::D>, C, F, T, E>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         (self.callback)(self.context.clone(), DebugEvent::Subscribed);
         let observer = DebugObserver {
             observer,
             context: self.context.clone(),
             callback: self.callback.clone(),
         };
-        self.source.subscribe(observer)
-            + CallbackDisposal::new(move || {
-                (self.callback)(self.context.clone(), DebugEvent::Disposed);
-            })
+        let source_disposal = self.source.subscribe(observer);
+        Subscription::new(DebugDisposal {
+            source_disposal,
+            context: self.context,
+            callback: self.callback,
+            _marker: PhantomData,
+        })
+    }
+}
+
+pub struct DebugDisposal<D, C, F, T, E> {
+    source_disposal: D,
+    context: C,
+    callback: F,
+    _marker: MarkerType<(T, E)>,
+}
+
+impl<D, C, F, T, E> Disposable for DebugDisposal<D, C, F, T, E>
+where
+    D: Disposable,
+    F: Fn(C, DebugEvent<'_, T, E>),
+{
+    fn dispose(self) {
+        self.source_disposal.dispose();
+        (self.callback)(self.context, DebugEvent::Disposed);
     }
 }
 

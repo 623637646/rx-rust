@@ -1,16 +1,15 @@
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::Observer,
     operators::backpressure::on_backpressure::{
-        BackpressureCollection, OnBackpressure, RequestCallbackType,
+        BackpressureCollection, OnBackpressure, RequestToken,
     },
-    utils::types::MaybeSend,
+    utils::{subscribe_with_shared_model, types::MaybeSend},
 };
 use educe::Educe;
 
 /// Buffers every upstream item into a `Vec<T>` and only delivers the collected batch once
-/// the downstream observer calls the accompanying [`RequestCallbackType`]. This mirrors the
+/// the downstream observer requests another batch with the accompanying [`RequestToken`]. This mirrors the
 /// behavior of `onBackpressureBuffer` from other ReactiveX implementations.
 /// See <https://reactivex.io/documentation/operators/backpressure.html>.
 ///
@@ -18,7 +17,7 @@ use educe::Educe;
 /// ```rust
 /// use rx_rust::{
 ///     disposable::Disposable,
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Observer,
 ///     operators::backpressure::on_backpressure_buffer::OnBackpressureBuffer,
 ///     subject::publish_subject::PublishSubject,
@@ -32,7 +31,7 @@ use educe::Educe;
 /// let subscription = observable.subscribe_with_callback(
 ///     |(values, request_callback)| {
 ///         received.push(values);
-///         request_callback(); // immediately allow the next batch
+///         request_callback.request(); // immediately allow the next batch
 ///     },
 ///     |_| {},
 /// );
@@ -53,38 +52,42 @@ pub struct OnBackpressureBuffer<OE> {
 }
 
 impl<OE> OnBackpressureBuffer<OE> {
-    pub fn new<'or, 'sub, T, E>(source: OE) -> Self
+    pub fn new<'or, T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
     {
         Self { source }
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, (Vec<T>, RequestCallbackType<'or>), E>
-    for OnBackpressureBuffer<OE>
+impl<'or, T, E, OE> Observable<'or, (Vec<T>, RequestToken<'or>), E> for OnBackpressureBuffer<OE>
 where
-    'or: 'sub,
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
 {
+    type D = subscribe_with_shared_model::Disposal<'or>;
+
     fn subscribe(
         self,
-        observer: impl Observer<(Vec<T>, RequestCallbackType<'or>), E> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+        observer: impl Observer<(Vec<T>, RequestToken<'or>), E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         OnBackpressure::new(self.source, Collection(Vec::new())).subscribe(observer)
     }
 }
 
 struct Collection<T>(Vec<T>);
 
-impl<T> BackpressureCollection<T, Vec<T>> for Collection<T> {
-    fn extend_one(&mut self, item: T) {
+impl<T> BackpressureCollection for Collection<T> {
+    type Input = T;
+    type Output = Vec<T>;
+
+    fn extend_one(&mut self, item: Self::Input) {
         self.0.push(item);
     }
 
-    fn take_next_value(&mut self) -> Option<Vec<T>> {
+    fn take_next_value(&mut self) -> Option<Self::Output> {
         if self.0.is_empty() {
             None
         } else {

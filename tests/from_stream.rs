@@ -7,7 +7,7 @@ use futures::{SinkExt, stream};
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     disposable::Disposable,
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     operators::creating::from_stream::FromStream,
 };
 use tests_utils::checker::Checker;

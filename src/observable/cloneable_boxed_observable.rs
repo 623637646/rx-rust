@@ -1,10 +1,33 @@
 use super::{Observable, Observer};
 use crate::{
-    disposable::subscription::Subscription,
-    observable::{boxed_observable::BoxedObservable, observable_ext::ObservableExt},
+    disposable::{Disposable, DisposableExt, boxed_disposal::BoxedDisposal},
+    observable::Subscription,
+    observer::boxed_observer::BoxedObserver,
     utils::types::{MaybeSend, MaybeSync, Shared},
 };
 use educe::Educe;
+
+trait ErasedCloneableObservable<'or, 'sub, 'oe, T, E> {
+    fn subscribe_cloned(
+        &self,
+        observer: BoxedObserver<'or, T, E>,
+    ) -> Subscription<BoxedDisposal<'sub>>;
+}
+
+impl<'or, 'sub, 'oe, T, E, OE, D> ErasedCloneableObservable<'or, 'sub, 'oe, T, E> for OE
+where
+    T: 'or,
+    E: 'or,
+    OE: Observable<'or, T, E, D = D> + Clone + MaybeSend + 'oe,
+    D: Disposable + MaybeSend + 'sub,
+{
+    fn subscribe_cloned(
+        &self,
+        observer: BoxedObserver<'or, T, E>,
+    ) -> Subscription<BoxedDisposal<'sub>> {
+        Subscription::new(self.clone().subscribe(observer).into_boxed())
+    }
+}
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
@@ -12,35 +35,40 @@ cfg_if::cfg_if! {
         #[derive(Educe)]
         #[educe(Clone)]
         pub struct CloneableBoxedObservable<'or, 'sub, 'oe, T, E>(
-            Shared<dyn Fn() -> BoxedObservable<'or, 'sub, 'oe, T, E> + 'oe>,
+            Shared<dyn ErasedCloneableObservable<'or, 'sub, 'oe, T, E> + 'oe>,
         );
     } else {
         /// Cloneable `BoxedObservable` for multi-threaded builds.
         #[derive(Educe)]
         #[educe(Clone)]
         pub struct CloneableBoxedObservable<'or, 'sub, 'oe, T, E>(
-            Shared<dyn Fn() -> BoxedObservable<'or, 'sub, 'oe, T, E> + Send + Sync + 'oe>,
+            Shared<dyn ErasedCloneableObservable<'or, 'sub, 'oe, T, E> + Send + Sync + 'oe>,
         );
     }
 }
 
 impl<'or, 'sub, 'oe, T, E> CloneableBoxedObservable<'or, 'sub, 'oe, T, E> {
     pub fn new(
-        observable: impl Observable<'or, 'sub, T, E> + Clone + MaybeSend + MaybeSync + 'oe,
+        observable: impl Observable<'or, T, E, D = impl Disposable + MaybeSend + 'sub>
+        + Clone
+        + MaybeSend
+        + MaybeSync
+        + 'oe,
     ) -> Self
     where
         T: 'or,
         E: 'or,
     {
-        Self(Shared::new(move || observable.clone().into_boxed()))
+        Self(Shared::new(observable))
     }
 }
 
-impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E>
-    for CloneableBoxedObservable<'or, 'sub, '_, T, E>
-{
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
-        self.0().subscribe(observer)
+impl<'or, 'sub, T, E> Observable<'or, T, E> for CloneableBoxedObservable<'or, 'sub, '_, T, E> {
+    type D = BoxedDisposal<'sub>;
+
+    #[inline]
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        self.0.subscribe_cloned(BoxedObserver::new(observer))
     }
 }
 

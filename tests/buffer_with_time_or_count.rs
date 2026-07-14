@@ -9,13 +9,14 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::observable::Subscription;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{
         creating::create::Create, transforming::buffer_with_time_or_count::BufferWithTimeOrCount,
@@ -1823,11 +1824,11 @@ fn test_lifetime_sub() {
         // let life_marker = TestStruct;
 
         {
-            let observable = Create::new(|mut observer| {
+            let observable = Create::new(move |mut observer| {
                 observer.on_next(111);
-                Subscription::new_with_disposal_callback(|| {
+                Subscription::new(CallbackDisposal::new(move || {
                     life_marker.consume_ref();
-                })
+                }))
             });
 
             let observable = observable.buffer_with_time_or_count(

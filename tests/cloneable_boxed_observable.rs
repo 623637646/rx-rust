@@ -4,15 +4,13 @@ use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::observable::Subscription;
 use rx_rust::safe_lock_option;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{
-        Observable, cloneable_boxed_observable::CloneableBoxedObservable,
-        observable_ext::ObservableExt,
-    },
+    observable::{Observable, ObservableExt, cloneable_boxed_observable::CloneableBoxedObservable},
     observer::{Observer, Termination},
     operators::creating::create::Create,
     subject::publish_subject::PublishSubject,
@@ -288,9 +286,9 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
 
         let observable = observable.into_cloneable_boxed();

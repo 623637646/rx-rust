@@ -4,9 +4,8 @@ use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
 use rx_rust::observable::Observable;
-use rx_rust::observable::observable_ext::ObservableExt;
+use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_disposable;
@@ -438,7 +437,7 @@ fn test_unsub_on_next() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_next
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable
@@ -451,7 +450,7 @@ fn test_unsub_on_next() {
     );
 
     // unsubscribe after on_next
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable
@@ -598,7 +597,7 @@ fn test_unsub_on_completed() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable
@@ -611,7 +610,7 @@ fn test_unsub_on_completed() {
     );
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable
@@ -726,7 +725,7 @@ fn test_unsub_on_error() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable
@@ -739,7 +738,7 @@ fn test_unsub_on_error() {
     );
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable

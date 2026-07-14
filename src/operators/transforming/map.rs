@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
     utils::types::MarkerType,
 };
@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -43,9 +43,9 @@ pub struct Map<T0, OE, F> {
 }
 
 impl<T0, OE, F> Map<T0, OE, F> {
-    pub fn new<'or, 'sub, T, E>(source: OE, callback: F) -> Self
+    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T0, E>,
+        OE: Observable<'or, T0, E>,
         F: FnMut(T0) -> T,
     {
         Self {
@@ -56,12 +56,14 @@ impl<T0, OE, F> Map<T0, OE, F> {
     }
 }
 
-impl<'or, 'sub, T0, T, E, OE, F> Observable<'or, 'sub, T, E> for Map<T0, OE, F>
+impl<'or, T0, T, E, OE, F> Observable<'or, T, E> for Map<T0, OE, F>
 where
-    OE: Observable<'or, 'sub, T0, E>,
+    OE: Observable<'or, T0, E>,
     F: FnMut(T0) -> T + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observer = MapObserver {
             observer,
             callback: self.callback,

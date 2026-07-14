@@ -1,6 +1,10 @@
+use crate::delegate_disposal;
+use crate::disposable::option_disposal::OptionDisposal;
+use crate::disposable::{Disposable, DisposableExt};
+use crate::observable::Subscription;
+use crate::utils::subscribe_unsub_after_termination;
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
     observer::{Observer, Termination},
     utils::subscribe_unsub_after_termination::subscribe_unsub_after_termination,
@@ -13,7 +17,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -46,15 +50,23 @@ impl<OE> Take<OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for Take<OE>
+delegate_disposal!(
+    Disposal<D>,
+    OptionDisposal<Subscription<subscribe_unsub_after_termination::Disposal<D>>>,
+    where D: Disposable
+);
+
+impl<'or, T, E, OE> Observable<'or, T, E> for Take<OE>
 where
-    OE: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = Disposal<OE::D>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
-            Subscription::default()
+            OptionDisposal::none().into()
         } else {
             subscribe_unsub_after_termination(observer, |observer| {
                 self.source.subscribe(TakeObserver {
@@ -62,6 +74,8 @@ where
                     count: self.count,
                 })
             })
+            .into_option()
+            .into()
         }
     }
 }

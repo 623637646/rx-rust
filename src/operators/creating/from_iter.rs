@@ -1,7 +1,6 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -13,7 +12,7 @@ use std::convert::Infallible;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::creating::from_iter::FromIter,
 /// };
@@ -34,22 +33,21 @@ use std::convert::Infallible;
 pub struct FromIter<I>(I);
 
 impl<I> FromIter<I> {
-    pub fn new(into_iterator: I) -> Self
-    where
-        I: IntoIterator,
-    {
+    pub fn new(into_iterator: I) -> Self {
         Self(into_iterator)
     }
 }
 
-impl<'or, 'sub, T, I> Observable<'or, 'sub, T, Infallible> for FromIter<I>
+impl<'or, T, I> Observable<'or, T, Infallible> for FromIter<I>
 where
     I: IntoIterator<Item = T>,
 {
+    type D = ();
+
     fn subscribe(
         self,
         mut observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<'sub> {
+    ) -> Subscription<Self::D> {
         for value in self.0.into_iter() {
             observer.on_next(value);
         }

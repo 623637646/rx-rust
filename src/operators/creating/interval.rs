@@ -1,6 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription, observable::Observable, observer::Observer,
+    observable::{Observable, Subscription},
+    observer::Observer,
     scheduler::Scheduler,
 };
 use educe::Educe;
@@ -19,7 +20,7 @@ use std::{convert::Infallible, time::Duration};
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::creating::interval::Interval,
 ///     };
@@ -70,22 +71,23 @@ impl<S> Interval<S> {
     }
 }
 
-impl<'sub, S> Observable<'static, 'sub, usize, Infallible> for Interval<S>
+impl<S> Observable<'static, usize, Infallible> for Interval<S>
 where
     S: Scheduler + Clone + MaybeSend + 'static,
 {
+    type D = S::D;
+
     fn subscribe(
         self,
         mut observer: impl Observer<usize, Infallible> + MaybeSend + 'static,
-    ) -> Subscription<'sub> {
-        let disposal = self.scheduler.schedule_periodically(
+    ) -> Subscription<Self::D> {
+        self.scheduler.schedule_periodically(
             move |count| {
                 observer.on_next(count);
                 true
             },
             self.period,
             self.delay,
-        );
-        Subscription::new_with_disposal(disposal)
+        )
     }
 }

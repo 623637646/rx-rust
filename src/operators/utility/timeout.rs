@@ -1,15 +1,15 @@
 use crate::{
+    delegate_disposal,
     disposable::{
-        Disposable, boxed_disposal::BoxedDisposal, callback_disposal::CallbackDisposal,
-        subscription::Subscription,
+        Disposable, bound_drop_disposal::BoundDropDisposal, chain_disposal::ChainDisposal,
     },
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     safe_lock, safe_lock_option_observer,
     scheduler::Scheduler,
     utils::{
-        subscribe_unsub_after_termination::subscribe_unsub_after_termination,
-        types::{MaybeSend, Mutable, MutableHelper, Shared},
+        subscribe_unsub_after_termination::{self, subscribe_unsub_after_termination},
+        types::{MarkerType, MaybeSend, Mutable, MutableHelper, Shared},
     },
 };
 use educe::Educe;
@@ -35,7 +35,7 @@ pub enum Error<E> {
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::{Observer, Termination},
 ///         operators::utility::timeout::{Error, Timeout},
 ///         subject::publish_subject::PublishSubject,
@@ -72,36 +72,48 @@ pub enum Error<E> {
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Timeout<OE, S> {
+pub struct Timeout<'or, OE, S> {
     source: OE,
     duration: Duration,
     scheduler: S,
+    _marker: MarkerType<&'or ()>,
 }
 
-impl<OE, S> Timeout<OE, S> {
+impl<'or, OE, S> Timeout<'or, OE, S> {
     pub fn new(source: OE, duration: Duration, scheduler: S) -> Self {
         Self {
             source,
             duration,
             scheduler,
+            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, Error<E>> for Timeout<OE, S>
+delegate_disposal!(
+    Disposal<D, S>,
+    subscribe_unsub_after_termination::Disposal<ChainDisposal<Shared<Mutable<TimeoutContext<BoundDropDisposal<S::D>>>>, D>>,
+    where D: Disposable, S: Scheduler
+);
+
+impl<'or, T, E, OE, S> Observable<'static, T, Error<E>> for Timeout<'or, OE, S>
 where
-    OE: Observable<'or, 'static, T, E>,
-    S: Scheduler + Clone + MaybeSend + 'or, // TODO: can remove this Clone because there is no actually need? Review the S in this file.
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'static,
+    S: Scheduler + Clone + MaybeSend + 'or,
 {
+    type D = Disposal<OE::D, S>;
+
     fn subscribe(
         self,
         observer: impl Observer<T, Error<E>> + MaybeSend + 'static,
-    ) -> Subscription<'static> {
+    ) -> Subscription<Self::D> {
         subscribe_unsub_after_termination(observer, |observer| {
             let context = Shared::new(Mutable::new(TimeoutContext {
                 timer_state: TimerState::Initialized,
                 version: 0,
             }));
+
             let observer = Shared::new(Mutable::new(Some(observer)));
             let timeout_observer = TimeoutObserver {
                 observer: observer.clone(),
@@ -115,7 +127,7 @@ where
                 0,
                 observer.clone(),
                 self.duration,
-                self.scheduler.clone(),
+                &self.scheduler,
                 context.clone(),
             );
             let timer_state =
@@ -126,25 +138,29 @@ where
                 TimerState::DidTimeout => {} // Scheduled task is too fast.
                 TimerState::Disposed => unreachable!(),
             }
-            sub + context
+            sub.preceded_by(context)
         })
+        .map_into()
     }
 }
 
-enum TimerState {
+enum TimerState<D> {
     Initialized,
-    Scheduled(BoxedDisposal<'static>),
+    Scheduled(D),
     DidTimeout,
     Disposed,
 }
 
-struct TimeoutContext {
-    timer_state: TimerState,
+struct TimeoutContext<D> {
+    timer_state: TimerState<D>,
     version: usize,
 }
 
 // TODO: Disposable should not be Cloneable
-impl Disposable for Shared<Mutable<TimeoutContext>> {
+impl<D> Disposable for Shared<Mutable<TimeoutContext<D>>>
+where
+    D: Disposable,
+{
     fn dispose(self) {
         let timer_state = safe_lock!(mem_replace: self, timer_state, TimerState::Disposed);
         match timer_state {
@@ -156,17 +172,20 @@ impl Disposable for Shared<Mutable<TimeoutContext>> {
     }
 }
 
-struct TimeoutObserver<OR, S> {
+struct TimeoutObserver<OR, S>
+where
+    S: Scheduler,
+{
     observer: Shared<Mutable<Option<OR>>>,
     duration: Duration,
     scheduler: S,
-    context: Shared<Mutable<TimeoutContext>>,
+    context: Shared<Mutable<TimeoutContext<BoundDropDisposal<S::D>>>>,
 }
 
 impl<T, E, OR, S> Observer<T, E> for TimeoutObserver<OR, S>
 where
     OR: Observer<T, Error<E>> + MaybeSend + 'static,
-    S: Scheduler + Clone,
+    S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
         self.context
@@ -175,27 +194,29 @@ where
                     drop(lock);
                     safe_lock_option_observer!(on_next: self.observer, value);
                 }
-                TimerState::Scheduled(disposal) => {
-                    // dispose old timer
-                    let disposal = std::mem::replace(
-                        disposal,
-                        BoxedDisposal::new(CallbackDisposal::new(|| {})), // Plcaceholder
-                    );
-                    disposal.dispose();
-
+                TimerState::Scheduled(_) => {
                     // schedule new timer
                     lock.version += 1;
                     let timer = create_timer(
                         lock.version,
                         self.observer.clone(),
                         self.duration,
-                        self.scheduler.clone(),
+                        &self.scheduler,
                         self.context.clone(),
                     );
-                    lock.timer_state = TimerState::Scheduled(timer);
+                    let old_disposal = match std::mem::replace(
+                        &mut lock.timer_state,
+                        TimerState::Scheduled(timer),
+                    ) {
+                        TimerState::Initialized | TimerState::DidTimeout | TimerState::Disposed => {
+                            unreachable!()
+                        }
+                        TimerState::Scheduled(disposal) => disposal,
+                    };
 
                     // emit
                     drop(lock);
+                    old_disposal.dispose();
                     safe_lock_option_observer!(on_next: self.observer, value);
                 }
                 TimerState::DidTimeout => {}
@@ -219,14 +240,14 @@ fn create_timer<T, E, OR, S>(
     version: usize,
     observer: Shared<Mutable<Option<OR>>>,
     duration: Duration,
-    scheduler: S,
-    context: Shared<Mutable<TimeoutContext>>,
-) -> BoxedDisposal<'static>
+    scheduler: &S,
+    context: Shared<Mutable<TimeoutContext<BoundDropDisposal<S::D>>>>,
+) -> BoundDropDisposal<S::D>
 where
     OR: Observer<T, Error<E>> + MaybeSend + 'static,
     S: Scheduler,
 {
-    BoxedDisposal::new(scheduler.schedule(
+    scheduler.schedule(
         move || {
             context.lock_mut(|mut lock| {
                 if lock.version != version {
@@ -239,12 +260,12 @@ where
                 safe_lock_option_observer!(on_termination: observer, Termination::Error(Error::Timeout));
                 match timer_state {
                     TimerState::Initialized => {} //  Scheduled task is too fast.
-                    TimerState::Scheduled(disposal) => disposal.dispose(), // Dispose the old timer as soon as possible to make the `EntryExitChecker` correct.
+                    TimerState::Scheduled(disposal) => disposal.dispose(),
                     TimerState::DidTimeout => unreachable!(),
                     TimerState::Disposed => {},
                 }
             });
         },
         Some(duration),
-    ))
+    )
 }

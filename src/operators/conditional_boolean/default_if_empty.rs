@@ -1,7 +1,6 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -12,7 +11,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         conditional_boolean::default_if_empty::DefaultIfEmpty,
@@ -40,9 +39,9 @@ pub struct DefaultIfEmpty<T, OE> {
 }
 
 impl<T, OE> DefaultIfEmpty<T, OE> {
-    pub fn new<'or, 'sub, E>(source: OE, item: T) -> Self
+    pub fn new<'or, E>(source: OE, item: T) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
     {
         Self {
             source,
@@ -51,12 +50,14 @@ impl<T, OE> DefaultIfEmpty<T, OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for DefaultIfEmpty<T, OE>
+impl<'or, T, E, OE> Observable<'or, T, E> for DefaultIfEmpty<T, OE>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     T: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observer = DefaultIfEmptyObserver {
             observer,
             default_value: Some(self.default_value),

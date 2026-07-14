@@ -1,6 +1,7 @@
 use super::Subject;
+use crate::observable::Subscription;
 use crate::utils::types::MaybeSend;
-use crate::{disposable::subscription::Subscription, observable::Observable, observer::Observer};
+use crate::{observable::Observable, observer::Observer};
 use educe::Educe;
 
 /// An observable from a subject without the observer behavior of the subject.
@@ -14,11 +15,13 @@ impl<S> SubjectObservable<S> {
     }
 }
 
-impl<'or, 'sub, T, E, S> Observable<'or, 'sub, T, E> for SubjectObservable<S>
+impl<'or, T, E, S> Observable<'or, T, E> for SubjectObservable<S>
 where
-    S: Subject<'or, 'sub, T, E>,
+    S: Subject<'or, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = S::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         self.0.subscribe(observer)
     }
 }

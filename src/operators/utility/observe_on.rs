@@ -1,10 +1,11 @@
 use crate::{
-    disposable::{Disposable, boxed_disposal::BoxedDisposal, subscription::Subscription},
-    observable::Observable,
+    delegate_disposal,
+    disposable::Disposable,
+    observable::{Observable, Subscription},
     observer::{Observer, Termination},
     safe_lock_option_disposable, safe_lock_option_observer,
     scheduler::{RecursionAction, Scheduler},
-    utils::types::{MaybeSend, MutGuard, Mutable, MutableHelper, Shared},
+    utils::types::{MarkerType, MaybeSend, MutGuard, Mutable, MutableHelper, Shared},
 };
 use educe::Educe;
 
@@ -21,7 +22,7 @@ use educe::Educe;
 /// #[tokio::main]
 /// async fn main() {
 ///     use rx_rust::{
-///         observable::observable_ext::ObservableExt,
+///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::{
 ///             creating::from_iter::FromIter,
@@ -58,25 +59,41 @@ use educe::Educe;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct ObserveOn<OE, S> {
+pub struct ObserveOn<'or, OE, S> {
     source: OE,
     scheduler: S,
+    _marker: MarkerType<&'or ()>,
 }
 
-impl<OE, S> ObserveOn<OE, S> {
+impl<'or, OE, S> ObserveOn<'or, OE, S> {
     pub fn new(source: OE, scheduler: S) -> Self {
-        Self { source, scheduler }
+        Self {
+            source,
+            scheduler,
+            _marker: Default::default(),
+        }
     }
 }
 
-impl<'or, 'sub, T, E, OE, S> Observable<'static, 'sub, T, E> for ObserveOn<OE, S>
+delegate_disposal!(
+    Disposal<T, E, SD, D>,
+    crate::disposable::chain_disposal::ChainDisposal<Shared<Mutable<ObserveOnContext<T, E, SD>>>, D>,
+    where SD: Disposable, D: Disposable
+);
+
+impl<'or, T, E, OE, S> Observable<'static, T, E> for ObserveOn<'or, OE, S>
 where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'static) -> Subscription<'sub> {
+    type D = Disposal<T, E, S::D, OE::D>;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<T, E> + MaybeSend + 'static,
+    ) -> Subscription<Self::D> {
         let context = Shared::new(Mutable::new(ObserveOnContext {
             values: Vec::new(),
             termination: None,
@@ -87,31 +104,34 @@ where
             observer: Shared::new(Mutable::new(Some(observer))),
             scheduler: self.scheduler,
         };
-        self.source.subscribe(observer) + context
+        self.source
+            .subscribe(observer)
+            .preceded_by(context)
+            .map_into()
     }
 }
 
-struct ObserveOnContext<T, E> {
+struct ObserveOnContext<T, E, D: Disposable> {
     values: Vec<T>,
     termination: Option<Termination<E>>,
-    disposal: Option<BoxedDisposal<'static>>,
+    disposal: Option<Subscription<D>>,
 }
 
 // TODO: Disposable should not be Cloneable
-impl<T, E> Disposable for Shared<Mutable<ObserveOnContext<T, E>>> {
+impl<T, E, D: Disposable> Disposable for Shared<Mutable<ObserveOnContext<T, E, D>>> {
     fn dispose(self) {
         safe_lock_option_disposable!(dispose: self, disposal);
     }
 }
 
-struct ObserveOnObserver<T, E, OR, S> {
-    context: Shared<Mutable<ObserveOnContext<T, E>>>,
+struct ObserveOnObserver<T, E, OR, S: Scheduler> {
+    context: Shared<Mutable<ObserveOnContext<T, E, S::D>>>,
     observer: Shared<Mutable<Option<OR>>>,
     scheduler: S,
 }
 
-impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
-    fn setup_scheduler_if_needed(&self, mut lock: MutGuard<'_, ObserveOnContext<T, E>>)
+impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
+    fn setup_scheduler_if_needed(&self, mut lock: MutGuard<'_, ObserveOnContext<T, E, S::D>>)
     where
         T: MaybeSend + 'static,
         E: MaybeSend + 'static,
@@ -123,8 +143,9 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
         }
         let context = self.context.clone();
         let observer = self.observer.clone();
+        // TODO: can remove this recursion? because the values will be sent in a single batch.
         lock.disposal
-            .replace(BoxedDisposal::new(self.scheduler.schedule_recursively(
+            .replace(self.scheduler.schedule_recursively(
                 move |_| {
                     context.lock_mut(|mut lock| {
                         let termination = lock.termination.take();
@@ -164,7 +185,7 @@ impl<T, E, OR, S> ObserveOnObserver<T, E, OR, S> {
                     })
                 },
                 None,
-            )));
+            ));
     }
 }
 

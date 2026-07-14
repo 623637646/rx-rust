@@ -1,13 +1,17 @@
 use rx_rust::utils::types::RefGuard;
 
-pub(crate) trait TestMutableHelper<T> {
-    fn test_lock_ref(&self) -> RefGuard<'_, T>;
+pub(crate) trait TestMutableHelper {
+    type Value;
+
+    fn test_lock_ref(&self) -> RefGuard<'_, Self::Value>;
 }
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
         use std::cell::RefCell;
-        impl<T> TestMutableHelper<T> for RefCell<T> {
+        impl<T> TestMutableHelper for RefCell<T> {
+            type Value = T;
+
             fn test_lock_ref(&self) -> RefGuard<'_, T> {
                 self.borrow()
             }
@@ -15,7 +19,9 @@ cfg_if::cfg_if! {
     } else {
         use std::sync::{Mutex};
         use rx_rust::utils::types::ReadOnlyMutexGuard;
-        impl<T> TestMutableHelper<T> for Mutex<T> {
+        impl<T> TestMutableHelper for Mutex<T> {
+            type Value = T;
+
             fn test_lock_ref(&self) -> RefGuard<'_, T> {
                 ReadOnlyMutexGuard::new(self.lock().unwrap())
             }

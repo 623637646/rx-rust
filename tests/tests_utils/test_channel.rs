@@ -1,8 +1,8 @@
 use crate::tests_utils::types::TestMutableHelper;
 use educe::Educe;
 use rx_rust::{
-    disposable::subscription::Subscription,
-    observable::Observable,
+    disposable::{Disposable, DisposableExt},
+    observable::{Observable, Subscription},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     safe_lock,
     utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
@@ -65,13 +65,10 @@ where
 
 pub(crate) struct ReceiverObservable<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
-impl<'or, 'sub, T, E> Observable<'or, 'sub, T, E> for ReceiverObservable<'or, T, E>
-where
-    T: 'sub,
-    E: MaybeSend + 'sub,
-    'or: 'sub,
-{
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
+    type D = ReceiverObservableDisposaler<'or, T, E>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         match safe_lock!(mem_replace:
             self.0,
             State::Subscribed(Some(BoxedObserver::new(observer)))
@@ -81,24 +78,29 @@ where
             State::Terminated(_) => panic!(),
             State::Unsubscribed => panic!(),
         }
+        ReceiverObservableDisposaler(self.0).into_bound_drop()
+    }
+}
 
-        Subscription::new_with_disposal_callback(move || {
-            self.0.lock_mut(|mut lock| match &mut *lock {
-                State::Initialized | State::Unsubscribed => {
-                    drop(lock);
-                    panic!()
-                }
-                State::Subscribed(boxed_observer) => {
-                    let boxed_observer = boxed_observer.take();
-                    *lock = State::Unsubscribed;
-                    drop(lock);
-                    drop(boxed_observer) // Drop outside the lock to avoid potential deadlock
-                }
-                State::Terminated(_) => {
-                    drop(lock);
-                }
-            });
-        })
+pub(crate) struct ReceiverObservableDisposaler<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
+
+impl<'or, T, E> Disposable for ReceiverObservableDisposaler<'or, T, E> {
+    fn dispose(self) {
+        self.0.lock_mut(|mut lock| match &mut *lock {
+            State::Initialized | State::Unsubscribed => {
+                drop(lock);
+                panic!()
+            }
+            State::Subscribed(boxed_observer) => {
+                let boxed_observer = boxed_observer.take();
+                *lock = State::Unsubscribed;
+                drop(lock);
+                drop(boxed_observer) // Drop outside the lock to avoid potential deadlock
+            }
+            State::Terminated(_) => {
+                drop(lock);
+            }
+        });
     }
 }
 

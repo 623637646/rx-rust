@@ -1,8 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
-    observable::{Observable, observable_ext::ObservableExt},
-    observer::Observer,
+    observable::Observable, observable::Subscription, observer::Observer,
+    operators::filtering::element_at::ElementAt,
 };
 use educe::Educe;
 
@@ -12,7 +11,7 @@ use educe::Educe;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -44,13 +43,15 @@ impl<OE> First<OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, T, E> for First<OE>
+impl<'or, T, E, OE> Observable<'or, T, E> for First<OE>
 where
-    OE: Observable<'or, 'sub, T, E>,
-    'sub: 'or,
+    OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = crate::utils::subscribe_unsub_after_termination::Disposal<OE::D>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         // Or `self.source.take(1).subscribe(observer)`
-        self.source.element_at(0).subscribe(observer)
+        ElementAt::new(self.source, 0).subscribe(observer)
     }
 }

@@ -1,7 +1,7 @@
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -13,7 +13,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -41,9 +41,9 @@ pub struct Count<T, OE> {
 }
 
 impl<T, OE> Count<T, OE> {
-    pub fn new<'or, 'sub, E>(source: OE) -> Self
+    pub fn new<'or, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
     {
         Self {
             source,
@@ -52,11 +52,16 @@ impl<T, OE> Count<T, OE> {
     }
 }
 
-impl<'or, 'sub, T, E, OE> Observable<'or, 'sub, usize, E> for Count<T, OE>
+impl<'or, T, E, OE> Observable<'or, usize, E> for Count<T, OE>
 where
-    OE: Observable<'or, 'sub, T, E>,
+    OE: Observable<'or, T, E>,
 {
-    fn subscribe(self, observer: impl Observer<usize, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = OE::D;
+
+    fn subscribe(
+        self,
+        observer: impl Observer<usize, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
         let observer = CountObserver { observer, count: 0 };
         self.source.subscribe(observer)
     }

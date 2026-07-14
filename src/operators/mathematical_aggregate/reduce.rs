@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
     utils::types::MarkerType,
 };
@@ -14,7 +14,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -44,9 +44,9 @@ pub struct Reduce<T, T1, OE, F> {
 }
 
 impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
-    pub fn new<'or, 'sub, E>(source: OE, initial_value: T, callback: F) -> Self
+    pub fn new<'or, E>(source: OE, initial_value: T, callback: F) -> Self
     where
-        OE: Observable<'or, 'sub, T1, E>,
+        OE: Observable<'or, T1, E>,
         F: FnMut(T, T1) -> T,
     {
         Self {
@@ -58,13 +58,15 @@ impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
     }
 }
 
-impl<'or, 'sub, T, T1, E, OE, F> Observable<'or, 'sub, T, E> for Reduce<T, T1, OE, F>
+impl<'or, T, T1, E, OE, F> Observable<'or, T, E> for Reduce<T, T1, OE, F>
 where
     T: MaybeSend + 'or,
-    OE: Observable<'or, 'sub, T1, E>,
+    OE: Observable<'or, T1, E>,
     F: FnMut(T, T1) -> T + MaybeSend + 'or,
 {
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<'sub> {
+    type D = OE::D;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observer = ReduceObserver {
             observer,
             value: Some(self.initial_value),

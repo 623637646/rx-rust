@@ -6,7 +6,8 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::subscription::Subscription;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::observable::Subscription;
 use rx_rust::operators::connectable::ref_count::RefCount;
 use rx_rust::operators::creating::defer::Defer;
 use rx_rust::operators::creating::empty::Empty;
@@ -21,7 +22,7 @@ use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::MutableHelper;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
-    observable::{Observable, observable_ext::ObservableExt},
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
     subject::publish_subject::PublishSubject,
@@ -966,7 +967,7 @@ fn test_unsub_on_next() {
     let subscription = observable_1.subscribe(observer_1);
 
     // unsubscribe before on_next
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable_2
@@ -978,7 +979,7 @@ fn test_unsub_on_next() {
     );
 
     // unsubscribe after on_next
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable_3
@@ -1186,7 +1187,7 @@ fn test_unsub_on_completed() {
     let _subscription = observable_1.subscribe(observer_1);
 
     // unsubscribe before termination
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable_2
@@ -1198,7 +1199,7 @@ fn test_unsub_on_completed() {
     );
 
     // unsubscribe after on_next
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable_3
@@ -1377,7 +1378,7 @@ fn test_unsub_on_error() {
     let _subscription = observable_1.subscribe(observer_1);
 
     // unsubscribe before termination
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable_2
@@ -1389,7 +1390,7 @@ fn test_unsub_on_error() {
     );
 
     // unsubscribe after on_next
-    let sub = Shared::new(Mutable::new(None::<Subscription<'static>>));
+    let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
     safe_lock_option!(replace: sub,
         observable_3
@@ -1971,9 +1972,9 @@ fn test_lifetime_sub() {
     {
         let observable = Create::new(|mut observer| {
             observer.on_next(111);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
         let observable = observable.publish().ref_count();
 

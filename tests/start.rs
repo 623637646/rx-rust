@@ -2,7 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
-use rx_rust::observable::{Observable, observable_ext::ObservableExt};
+use rx_rust::observable::{Observable, ObservableExt};
 use rx_rust::operators::creating::start::Start;
 use rx_rust::utils::types::Shared;
 use std::sync::atomic::{AtomicBool, Ordering};

@@ -1,30 +1,34 @@
 use crate::{
-    disposable::{Disposable, subscription::Subscription},
+    delegate_disposal,
+    disposable::{Disposable, DisposableExt, boxed_disposal::BoxedDisposal},
+    observable::Subscription,
     observer::{Observer, Termination},
     safe_lock,
     utils::types::{MaybeSend, MutGuard, Mutable, MutableHelper, Shared, WeakShared},
 };
 use educe::Educe;
 
+delegate_disposal!(Disposal<'or_sub>, BoxedDisposal<'or_sub>);
+
 // Creates a subscription that is based on a shared mutable model.
-pub fn subscribe_with_shared_model<'or, 'sub, T, E, OR, M, F>(
+pub fn subscribe_with_shared_model<'or_sub, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
     builder: F,
-) -> Subscription<'sub>
+) -> Subscription<Disposal<'or_sub>>
 where
-    'or: 'sub,
-    T: MaybeSend + 'sub,
-    E: MaybeSend + 'sub,
-    OR: MaybeSend + 'or,
-    M: MaybeSend + 'sub,
-    F: FnOnce(Context<T, E, OR, M>) -> Subscription<'sub>,
+    T: MaybeSend + 'or_sub,
+    E: MaybeSend + 'or_sub,
+    OR: MaybeSend + 'or_sub,
+    D: Disposable + MaybeSend + 'or_sub,
+    M: MaybeSend + 'or_sub,
+    F: FnOnce(Context<T, E, OR, M>) -> Subscription<D>,
 {
     let state = Shared::new(Mutable::new(State::Idle { observer, model }));
     let context = Context(state.clone());
     let disposable = SharedModelDisposable(state);
     let sub = builder(context);
-    sub + disposable
+    sub.preceded_by(disposable).into_boxed().into()
 }
 
 enum State<T, E, OR, M> {
@@ -186,16 +190,16 @@ pub enum Error {
     Stopped,
 }
 
-impl<T, E, OR, M> Context<T, E, OR, M> {
+impl<T, E, OR, M> Context<T, E, OR, M>
+where
+    OR: Observer<T, E>,
+{
     /// Modify the model with callback.
     /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
     pub fn modify_model<D, R>(
         &self,
         callback: impl FnOnce(&mut M) -> ModificationResult<T, E, D, R>,
-    ) -> Result<R, Error>
-    where
-        OR: Observer<T, E>,
-    {
+    ) -> Result<R, Error> {
         self.0.lock_mut(|mut lock| {
             let model = match &mut *lock {
                 State::Idle { model, .. } => model,
@@ -220,42 +224,27 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         })
     }
 
-    pub fn send_next(&self, value: T)
-    where
-        OR: Observer<T, E>,
-    {
+    pub fn send_next(&self, value: T) {
         self.0
             .lock_mut(|lock| self.sending_impl(EventGroup::Next(value), lock))
     }
 
-    pub fn send_termination(&self, termination: Termination<E>)
-    where
-        OR: Observer<T, E>,
-    {
+    pub fn send_termination(&self, termination: Termination<E>) {
         self.0
             .lock_mut(|lock| self.sending_impl(EventGroup::Termination(termination), lock))
     }
 
-    pub fn send_next_and_termination(&self, next: T, termination: Termination<E>)
-    where
-        OR: Observer<T, E>,
-    {
+    pub fn send_next_and_termination(&self, next: T, termination: Termination<E>) {
         self.0.lock_mut(|lock| {
             self.sending_impl(EventGroup::NextAndTermination(next, termination), lock)
         })
     }
 
-    pub fn send_events(&self, events: EventGroup<T, E>)
-    where
-        OR: Observer<T, E>,
-    {
+    pub fn send_events(&self, events: EventGroup<T, E>) {
         self.0.lock_mut(|lock| self.sending_impl(events, lock))
     }
 
-    fn sending_impl(&self, events: EventGroup<T, E>, mut lock: MutGuard<'_, State<T, E, OR, M>>)
-    where
-        OR: Observer<T, E>,
-    {
+    fn sending_impl(&self, events: EventGroup<T, E>, mut lock: MutGuard<'_, State<T, E, OR, M>>) {
         match &mut *lock {
             State::Idle { .. } => {
                 let (next_and_rest, termination) = match events {
@@ -344,10 +333,7 @@ impl<T, E, OR, M> Context<T, E, OR, M> {
         WeakContext(Shared::downgrade(&self.0))
     }
 
-    fn send_events_until_finish(&self, mut observer: OR)
-    where
-        OR: Observer<T, E>,
-    {
+    fn send_events_until_finish(&self, mut observer: OR) {
         // Panic safety is provided by the `StopOnPanic` guard at the (only) call site
         // in `sending_impl`. If this function gains a new caller, that caller must set
         // up the same guard.

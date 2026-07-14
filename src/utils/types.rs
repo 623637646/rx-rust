@@ -7,9 +7,11 @@ use std::marker::PhantomData;
 /// For more detail: <https://users.rust-lang.org/t/getting-phantomdata-to-have-a-static-lifetime/38505>
 pub type MarkerType<T> = PhantomData<fn(T) -> T>;
 
-pub trait MutableHelper<T> {
-    fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R;
-    fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R;
+pub trait MutableHelper {
+    type Value;
+
+    fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, Self::Value>) -> R) -> R;
+    fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, Self::Value>) -> R) -> R;
 }
 
 pub trait MutableBoolHelper {
@@ -32,7 +34,9 @@ cfg_if::cfg_if! {
 
         pub type MutGuard<'a, T> = RefMut<'a, T>;
         pub type RefGuard<'a, T> = Ref<'a, T>;
-        impl<T> MutableHelper<T> for RefCell<T> {
+        impl<T> MutableHelper for RefCell<T> {
+            type Value = T;
+
             fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R {
                 callback(self.borrow_mut())
             }
@@ -86,7 +90,9 @@ cfg_if::cfg_if! {
 
         pub type MutGuard<'a, T> = MutexGuard<'a, T>;
         pub type RefGuard<'a, T> = ReadOnlyMutexGuard<'a, T>;
-        impl<T> MutableHelper<T> for Mutex<T> {
+        impl<T> MutableHelper for Mutex<T> {
+            type Value = T;
+
             fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R {
                 callback(self.lock().unwrap())
             }

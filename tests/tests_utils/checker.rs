@@ -1,13 +1,15 @@
 use crate::tests_utils::test_runtime::TestRuntime;
 use educe::Educe;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::{
+    disposable::Disposable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
     utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
 };
 use rx_rust::{safe_lock, safe_lock_vec};
 use {
-    futures::Stream, futures::stream::StreamExt, rx_rust::disposable::subscription::Subscription,
+    futures::Stream, futures::stream::StreamExt, rx_rust::observable::Subscription,
     std::convert::Infallible,
 };
 
@@ -113,7 +115,7 @@ impl<T> Checker<T, Infallible> {
     pub(crate) fn from_stream(
         stream: impl Stream<Item = T> + MaybeSend + 'static,
         runtime: TestRuntime,
-    ) -> (Self, Subscription<'static>)
+    ) -> (Self, Subscription<impl Disposable + MaybeSend + 'static>)
     where
         T: MaybeSend + 'static,
     {
@@ -137,7 +139,7 @@ impl<T> Checker<T, Infallible> {
                 values,
                 state: state.clone(),
             },
-            Subscription::new_with_disposal_callback(move || {
+            Subscription::new(CallbackDisposal::new(move || {
                 use rx_rust::disposable::Disposable;
                 handle.dispose();
                 state.lock_mut(|mut lock| match &*lock {
@@ -145,7 +147,7 @@ impl<T> Checker<T, Infallible> {
                     State::Completed | State::Error(_) => {}
                     State::Dropped => panic!(),
                 });
-            }),
+            })),
         )
     }
 }

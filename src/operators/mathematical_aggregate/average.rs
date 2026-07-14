@@ -1,7 +1,7 @@
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
-    disposable::subscription::Subscription,
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -13,7 +13,7 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::observable_ext::ObservableExt,
+///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
 ///         creating::from_iter::FromIter,
@@ -41,9 +41,9 @@ pub struct Average<T, OE> {
 }
 
 impl<T, OE> Average<T, OE> {
-    pub fn new<'or, 'sub, E>(source: OE) -> Self
+    pub fn new<'or, E>(source: OE) -> Self
     where
-        OE: Observable<'or, 'sub, T, E>,
+        OE: Observable<'or, T, E>,
     {
         Self {
             source,
@@ -61,11 +61,13 @@ struct AverageObserver<T, OR> {
 macro_rules! average_observer_impl {
     ($($t:ty)*) => ($(
 
-        impl<'or, 'sub, E, OE> Observable<'or, 'sub, f64, E> for Average<$t, OE>
+        impl<'or, E, OE> Observable<'or, f64, E> for Average<$t, OE>
         where
-            OE: Observable<'or, 'sub, $t, E>,
+            OE: Observable<'or, $t, E>,
         {
-            fn subscribe(self, observer: impl Observer<f64, E> + MaybeSend + 'or) -> Subscription<'sub> {
+            type D = OE::D;
+
+            fn subscribe(self, observer: impl Observer<f64, E> + MaybeSend + 'or) -> Subscription<Self::D> {
                 let observer = AverageObserver {
                     observer,
                     sum: 0 as $t,

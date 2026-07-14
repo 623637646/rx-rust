@@ -6,9 +6,11 @@ use crate::tests_utils::{
     test_runtime::block_on,
     test_struct::TestStruct,
 };
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::{
-    disposable::{Disposable, subscription::Subscription},
-    observable::{Observable, observable_ext::ObservableExt},
+    disposable::Disposable,
+    observable::Subscription,
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{
         conditional_boolean::amb::Amb,
@@ -457,10 +459,7 @@ fn test_next_on_sub() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject
-        .clone()
-        .into_boxed()
-        .amb_with(observable.into_boxed());
+    let observable = subject.clone().amb_with(observable);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![111]);
@@ -484,7 +483,7 @@ fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = Empty.into_boxed().amb_with(observable.into_boxed());
+    let observable = Empty.amb_with(observable);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -498,9 +497,7 @@ fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = Throw::new("error")
-        .into_boxed()
-        .amb_with(observable.into_boxed());
+    let observable = Throw::new("error").amb_with(observable);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -522,14 +519,12 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
+            }))
         });
 
-        let observable = observable
-            .into_boxed()
-            .amb_with(PublishSubject::new().into_boxed());
+        let observable = observable.amb_with(PublishSubject::new());
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -551,9 +546,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
-        let observable = observable
-            .into_boxed()
-            .amb_with(PublishSubject::new().into_boxed());
+        let observable = observable.amb_with(PublishSubject::new());
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next((Some(&life_marker_2), Instant::now()));
@@ -574,14 +567,12 @@ fn test_lifetime_or_sub() {
     {
         let observable = Create::new(|observer: BoxedObserver<'_, &TestStruct, Infallible>| {
             life_marker_or = Some(observer);
-            Subscription::new_with_disposal_callback(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker_sub.consume_ref();
-            })
+            }))
         });
 
-        let observable = observable
-            .into_boxed()
-            .amb_with(PublishSubject::new().into_boxed());
+        let observable = observable.amb_with(PublishSubject::new());
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
