@@ -140,7 +140,7 @@ where
     fn on_next(&mut self, value: OE1) {
         let result = self.0.modify_model(|model| match model.sub_state {
             SubState::Idle => {
-                let _ = std::mem::replace(&mut model.sub_state, SubState::PendingSubscription);
+                model.sub_state = SubState::PendingSubscription;
                 ModificationResult::new(Some(value)).ignore_drop_outside()
             }
             SubState::PendingSubscription | SubState::Processing(_) => {
@@ -159,7 +159,7 @@ where
             match &model.sub_state {
                 SubState::Idle => ModificationResult::new_without_result().drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
-                    let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
+                    model.sub_state = SubState::Processing(sub);
                     ModificationResult::new_without_result()
                 }
                 SubState::Processing(_) => unreachable!(),
@@ -231,7 +231,7 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1>(
             match &model.sub_state {
                 SubState::PendingSubscription => {
                     // already terminated
-                    let _ = std::mem::replace(&mut model.sub_state, SubState::Idle);
+                    model.sub_state = SubState::Idle;
                     ModificationResult::new(None)
                 }
                 SubState::Idle | SubState::Processing(_) => {
@@ -275,7 +275,7 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1>(
             match &model.sub_state {
                 SubState::Idle => ModificationResult::new(false).drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
-                    let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
+                    model.sub_state = SubState::Processing(sub);
                     ModificationResult::new(true)
                 }
                 SubState::Processing(_) => unreachable!(),

@@ -153,7 +153,7 @@ where
             match &mut model.sub_state {
                 SubState::Idle => ModificationResult::new_without_result().drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
-                    let _ = std::mem::replace(&mut model.sub_state, SubState::Processing(sub));
+                    model.sub_state = SubState::Processing(sub);
                     ModificationResult::new_without_result()
                 }
                 SubState::Processing(_) => unreachable!(),
