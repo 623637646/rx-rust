@@ -13,12 +13,12 @@ trait ErasedObservable<'or, 'sub, T, E> {
     ) -> Subscription<BoxedDisposal<'sub>>;
 }
 
-impl<'or, 'sub, T, E, OE, D> ErasedObservable<'or, 'sub, T, E> for OE
+impl<'or, 'sub, T, E, OE> ErasedObservable<'or, 'sub, T, E> for OE
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, T, E, D = D>,
-    D: Disposable + MaybeSend + 'sub,
+    OE: Observable<'or, T, E>,
+    OE::D: Disposable + MaybeSend + 'sub,
 {
     fn subscribe_boxed(
         self: Box<Self>,

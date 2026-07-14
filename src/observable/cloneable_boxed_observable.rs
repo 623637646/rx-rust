@@ -14,12 +14,12 @@ trait ErasedCloneableObservable<'or, 'sub, 'oe, T, E> {
     ) -> Subscription<BoxedDisposal<'sub>>;
 }
 
-impl<'or, 'sub, 'oe, T, E, OE, D> ErasedCloneableObservable<'or, 'sub, 'oe, T, E> for OE
+impl<'or, 'sub, 'oe, T, E, OE> ErasedCloneableObservable<'or, 'sub, 'oe, T, E> for OE
 where
     T: 'or,
     E: 'or,
-    OE: Observable<'or, T, E, D = D> + Clone + MaybeSend + 'oe,
-    D: Disposable + MaybeSend + 'sub,
+    OE: Observable<'or, T, E> + Clone + MaybeSend + 'oe,
+    OE::D: Disposable + MaybeSend + 'sub,
 {
     fn subscribe_cloned(
         &self,
