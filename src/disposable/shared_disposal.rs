@@ -13,7 +13,7 @@ enum State<D> {
     #[educe(Default)]
     Idle,
     Building,
-    Processing(D),
+    Active(D),
     Disposed,
 }
 
@@ -32,11 +32,11 @@ impl<D> SharedDisposal<D> {
                 Some(lock.1.increment())
             }
             State::Building => Some(lock.1.increment()),
-            State::Processing(_) => match std::mem::replace(&mut lock.0, State::Building) {
+            State::Active(_) => match std::mem::replace(&mut lock.0, State::Building) {
                 State::Idle | State::Disposed | State::Building => {
                     unreachable!()
                 }
-                State::Processing(disposal) => {
+                State::Active(disposal) => {
                     let id = lock.1.increment();
                     drop(lock);
                     disposal.dispose();
@@ -66,9 +66,9 @@ impl<D> SharedDisposal<D> {
                     disposable.dispose();
                 }
                 State::Building => {
-                    lock.0 = State::Processing(disposable);
+                    lock.0 = State::Active(disposable);
                 }
-                State::Processing(_) => {
+                State::Active(_) => {
                     unreachable!()
                 }
                 State::Disposed => {
@@ -90,7 +90,7 @@ where
             drop(lock);
             match state {
                 State::Idle | State::Building | State::Disposed => {}
-                State::Processing(disposable) => {
+                State::Active(disposable) => {
                     Disposable::dispose(disposable);
                 }
             }
