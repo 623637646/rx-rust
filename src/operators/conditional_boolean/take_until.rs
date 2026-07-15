@@ -8,7 +8,8 @@ use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
     utils::{
-        subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination, types::MarkerType,
+        subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
+        types::MarkerType,
     },
 };
 use educe::Educe;

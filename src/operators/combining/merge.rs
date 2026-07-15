@@ -1,5 +1,5 @@
-use crate::utils::subscribe_with_shared_model::{
-    self, Context, ModificationResult, subscribe_with_shared_model,
+use crate::utils::subscribe_with_context::{
+    self, Context, ModificationResult, subscribe_with_context,
 };
 use crate::utils::types::MaybeSend;
 use crate::{delegate_disposal, utils::subscribe_with_auto_dispose_on_termination};
@@ -58,7 +58,7 @@ impl<OE1, OE2> Merge<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<'or>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or>>
 );
 
 impl<'or, T, E, OE1, OE2> Observable<'or, T, E> for Merge<OE1, OE2>
@@ -77,7 +77,7 @@ where
             let model = Model {
                 one_is_completed: false,
             };
-            subscribe_with_shared_model(observer, model, |context| {
+            subscribe_with_context(observer, model, |context| {
                 let subscription_1 = self.source_1.subscribe(MergeObserver(context.clone()));
                 let subscription_2 = self.source_2.subscribe(MergeObserver(context));
                 subscription_1.preceded_by_bound(subscription_2)

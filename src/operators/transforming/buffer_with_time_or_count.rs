@@ -1,7 +1,7 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::observable::Subscription;
-use crate::utils::subscribe_with_shared_model::{
-    self, Context, ModificationResult, subscribe_with_shared_model,
+use crate::utils::subscribe_with_context::{
+    self, Context, ModificationResult, subscribe_with_context,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -107,7 +107,7 @@ where
     OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = subscribe_with_shared_model::Disposal<'static>;
+    type D = subscribe_with_context::Disposal<'static>;
 
     fn subscribe(
         self,
@@ -118,7 +118,7 @@ where
             timer: None,
             last_sending_time_from_counting: None,
         };
-        subscribe_with_shared_model(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             let buffer_observer = BufferWithTimeOrCountObserver {
                 context: context.clone(),
                 count: self.count,

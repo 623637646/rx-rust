@@ -10,8 +10,8 @@ use educe::Educe;
 
 delegate_disposal!(Disposal<'or_sub>, BoxedDisposal<'or_sub>);
 
-// Creates a subscription that is based on a shared mutable model.
-pub fn subscribe_with_shared_model<'or_sub, T, E, OR, D, M, F>(
+// Creates a subscription that is based on a shared mutable model and a observer.
+pub fn subscribe_with_context<'or_sub, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
     builder: F,

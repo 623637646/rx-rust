@@ -1,7 +1,7 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::increment_id::IncrementId;
-use crate::utils::subscribe_with_shared_model::{
-    self, Context, ModificationResult, subscribe_with_shared_model,
+use crate::utils::subscribe_with_context::{
+    self, Context, ModificationResult, subscribe_with_context,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
@@ -90,7 +90,7 @@ where
     OE::D: MaybeSend + 'or,
     S: Scheduler + MaybeSend + 'or,
 {
-    type D = subscribe_with_shared_model::Disposal<'or>;
+    type D = subscribe_with_context::Disposal<'or>;
 
     fn subscribe(
         self,
@@ -101,7 +101,7 @@ where
             timer: None,
             timer_id: IncrementId::default(),
         };
-        subscribe_with_shared_model(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             self.source.subscribe(DebounceObserver {
                 context,
                 time_span: self.time_span,

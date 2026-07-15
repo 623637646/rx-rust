@@ -2,8 +2,8 @@ use crate::delegate_disposal;
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::increment_id::IncrementId;
-use crate::utils::subscribe_with_shared_model::{
-    self, Context, ModificationResult, subscribe_with_shared_model,
+use crate::utils::subscribe_with_context::{
+    self, Context, ModificationResult, subscribe_with_context,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -11,7 +11,9 @@ use crate::{
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::{
-        subscribe_with_auto_dispose_on_termination::{self, subscribe_with_auto_dispose_on_termination},
+        subscribe_with_auto_dispose_on_termination::{
+            self, subscribe_with_auto_dispose_on_termination,
+        },
         types::MarkerType,
     },
 };
@@ -81,7 +83,7 @@ impl<E, OE1, I> Switch<WithErrorType<E, FromIter<I>>, OE1> {
 
 delegate_disposal!(
     Disposal<'or>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or>>
 );
 
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for Switch<OE, OE1>
@@ -102,7 +104,7 @@ where
                 is_source_completed: false,
                 current_sub_id: IncrementId::default(),
             };
-            subscribe_with_shared_model(observer, model, |context| {
+            subscribe_with_context(observer, model, |context| {
                 self.source.subscribe(SwitchObserver(context))
             })
         })
@@ -182,7 +184,7 @@ where
 }
 
 // TODO: Improve performance, if is_source_completed is true, stop the context and no more need to lock when sending next.
-// TODO: check all cases using subscribe_with_shared_model whether it can be improved.
+// TODO: check all cases using subscribe_with_context whether it can be improved.
 struct SwitchInnerObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<D>>, IncrementId);
 
 impl<T, E, OR, D> Observer<T, E> for SwitchInnerObserver<T, E, OR, D>

@@ -8,7 +8,7 @@ use rx_rust::{
     },
     subject::{behavior_subject::BehaviorSubject, publish_subject::PublishSubject},
     utils::{
-        subscribe_with_shared_model,
+        subscribe_with_context,
         types::{MaybeSend, Mutable, MutableHelper, Shared},
     },
 };
@@ -102,7 +102,7 @@ fn subscribe_chunks<'or, T, E, OE>(
     source: OE,
 ) -> (
     Recorder<'or, T, E>,
-    Subscription<subscribe_with_shared_model::Disposal<'or>>,
+    Subscription<subscribe_with_context::Disposal<'or>>,
 )
 where
     T: MaybeSend + 'or,

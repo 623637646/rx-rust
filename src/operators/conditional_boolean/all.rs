@@ -1,5 +1,7 @@
 use crate::observable::Subscription;
-use crate::utils::subscribe_with_auto_dispose_on_termination::{self, subscribe_with_auto_dispose_on_termination};
+use crate::utils::subscribe_with_auto_dispose_on_termination::{
+    self, subscribe_with_auto_dispose_on_termination,
+};
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,

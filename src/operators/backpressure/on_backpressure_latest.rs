@@ -4,7 +4,7 @@ use crate::{
     operators::backpressure::on_backpressure::{
         BackpressureCollection, OnBackpressure, RequestToken,
     },
-    utils::{subscribe_with_shared_model, types::MaybeSend},
+    utils::{subscribe_with_context, types::MaybeSend},
 };
 use educe::Educe;
 
@@ -67,7 +67,7 @@ where
     OE: Observable<'or, T, E>,
     OE::D: MaybeSend + 'or,
 {
-    type D = subscribe_with_shared_model::Disposal<'or>;
+    type D = subscribe_with_context::Disposal<'or>;
 
     fn subscribe(
         self,

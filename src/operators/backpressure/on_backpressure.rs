@@ -1,6 +1,6 @@
 use crate::observable::Subscription;
-use crate::utils::subscribe_with_shared_model::{
-    self, Context, ModificationResult, WeakContext, subscribe_with_shared_model,
+use crate::utils::subscribe_with_context::{
+    self, Context, ModificationResult, WeakContext, subscribe_with_context,
 };
 use crate::utils::types::{MaybeSend, MaybeSync, Shared};
 use crate::{
@@ -77,7 +77,7 @@ where
     C: BackpressureCollection + MaybeSend + 'or_sub,
     C::Output: MaybeSend + 'or_sub,
 {
-    type D = subscribe_with_shared_model::Disposal<'or_sub>;
+    type D = subscribe_with_context::Disposal<'or_sub>;
 
     fn subscribe(
         self,
@@ -88,7 +88,7 @@ where
             termination: None,
             downstream_ready: true,
         };
-        subscribe_with_shared_model(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             let request_handler: SharedRequestHandler<'or_sub> = Shared::new(context.downgrade());
             self.source.subscribe(ObserverImpl {
                 context,

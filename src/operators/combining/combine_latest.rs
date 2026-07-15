@@ -1,9 +1,7 @@
 use crate::delegate_disposal;
-use crate::utils::subscribe_with_shared_model::{
-    Context, ModificationResult, subscribe_with_shared_model,
-};
+use crate::utils::subscribe_with_context::{Context, ModificationResult, subscribe_with_context};
 use crate::utils::types::MaybeSend;
-use crate::utils::{subscribe_with_auto_dispose_on_termination, subscribe_with_shared_model};
+use crate::utils::{subscribe_with_auto_dispose_on_termination, subscribe_with_context};
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
@@ -64,7 +62,7 @@ impl<OE1, OE2> CombineLatest<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<'or>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or>>
 );
 
 impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for CombineLatest<OE1, OE2>
@@ -89,7 +87,7 @@ where
                 latest_2: None,
                 should_completed: false,
             };
-            subscribe_with_shared_model(observer, model, |context| {
+            subscribe_with_context(observer, model, |context| {
                 let sub_1 = self.source_1.subscribe(ObserverImpl1(context.clone()));
                 let sub_2 = self.source_2.subscribe(ObserverImpl2(context));
                 sub_1.preceded_by_bound(sub_2)

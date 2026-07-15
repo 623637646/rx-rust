@@ -1,5 +1,5 @@
-use crate::utils::subscribe_with_shared_model::{
-    self, Context, ModificationResult, subscribe_with_shared_model,
+use crate::utils::subscribe_with_context::{
+    self, Context, ModificationResult, subscribe_with_context,
 };
 use crate::utils::types::MaybeSend;
 use crate::{delegate_disposal, utils::subscribe_with_auto_dispose_on_termination};
@@ -59,7 +59,7 @@ impl<OE1, OE2> Zip<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<'or>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_shared_model::Disposal<'or>>
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or>>
 );
 
 impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for Zip<OE1, OE2>
@@ -83,7 +83,7 @@ where
                 first: (VecDeque::new(), false),
                 second: (VecDeque::new(), false),
             };
-            subscribe_with_shared_model(observer, model, |context| {
+            subscribe_with_context(observer, model, |context| {
                 let subscription_1 = self.source_1.subscribe(ZipObserver1(context.clone()));
                 let subscription_2 = self.source_2.subscribe(ZipObserver2(context));
                 subscription_1.preceded_by_bound(subscription_2)
