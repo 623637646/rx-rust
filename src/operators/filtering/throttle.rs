@@ -1,11 +1,7 @@
+use crate::disposable::Disposable;
 use crate::disposable::bound_drop_disposal::BoundDropDisposal;
-use crate::disposable::shared_disposal::SharedDisposal;
 use crate::observable::Subscription;
 use crate::utils::types::{MarkerType, MaybeSend, MutableBool, MutableBoolHelper, Shared};
-use crate::{
-    delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal},
-};
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -87,34 +83,24 @@ impl<'or, OE, S> Throttle<'or, OE, S> {
     }
 }
 
-delegate_disposal!(
-    Disposal<D, S>,
-    ChainDisposal<SharedDisposal<BoundDropDisposal<S::D>>, D>,
-    where D: Disposable, S: Scheduler
-);
-
 impl<'or, T, E, OE, S> Observable<'static, T, E> for Throttle<'or, OE, S>
 where
     OE: Observable<'or, T, E>,
     S: Scheduler + MaybeSend + 'or,
 {
-    type D = Disposal<OE::D, S>;
+    type D = OE::D;
 
     fn subscribe(
         self,
         observer: impl Observer<T, E> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        let shared_disposal = SharedDisposal::default();
-        self.source
-            .subscribe(ThrottleObserver {
-                observer,
-                time_span: self.time_span,
-                scheduler: self.scheduler,
-                is_cooling: Shared::new(MutableBool::new(false)),
-                shared_disposal: shared_disposal.clone(),
-            })
-            .preceded_by(shared_disposal)
-            .map_into()
+        self.source.subscribe(ThrottleObserver {
+            observer,
+            time_span: self.time_span,
+            scheduler: self.scheduler,
+            is_cooling: Shared::new(MutableBool::new(false)),
+            disposal: None,
+        })
     }
 }
 
@@ -126,7 +112,7 @@ where
     time_span: Duration,
     scheduler: S,
     is_cooling: Shared<MutableBool>,
-    shared_disposal: SharedDisposal<BoundDropDisposal<S::D>>,
+    disposal: Option<BoundDropDisposal<S::D>>,
 }
 
 impl<T, E, OR, S> Observer<T, E> for ThrottleObserver<OR, S>
@@ -140,18 +126,18 @@ where
         }
         self.observer.on_next(value);
         let is_cooling_down = self.is_cooling.clone();
-        self.shared_disposal.replace(|| {
-            self.scheduler.schedule(
-                move || {
-                    is_cooling_down.write(false);
-                },
-                Some(self.time_span),
-            )
-        });
+        self.disposal = Some(self.scheduler.schedule(
+            move || {
+                is_cooling_down.write(false);
+            },
+            Some(self.time_span),
+        ))
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.shared_disposal.dispose();
+        if let Some(disposal) = self.disposal {
+            disposal.dispose();
+        }
         self.observer.on_termination(termination);
     }
 }
