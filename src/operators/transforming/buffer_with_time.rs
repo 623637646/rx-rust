@@ -1,14 +1,13 @@
-use crate::utils::types::{MarkerType, MaybeSend, Mutable, MutableHelper, Shared};
-use crate::{delegate_disposal, disposable::Disposable};
+use crate::disposable::{bound_drop_disposal::BoundDropDisposal, chain_disposal::ChainDisposal};
+use crate::utils::subscribe_with_context::{
+    self, Context, ModificationResult, subscribe_with_context,
+};
+use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
     scheduler::Scheduler,
-};
-use crate::{
-    safe_lock, safe_lock_option, safe_lock_option_disposable, safe_lock_option_observer,
-    safe_lock_vec,
 };
 use educe::Educe;
 use std::time::Duration;
@@ -89,90 +88,87 @@ impl<'or, OE, S> BufferWithTime<'or, OE, S> {
     }
 }
 
-delegate_disposal!(
-    Disposal<T, SD, D>,
-    crate::disposable::chain_disposal::ChainDisposal<Shared<Mutable<BufferWithTimeContext<T, SD>>>, D>,
-    where SD: Disposable, D: Disposable
-);
-
 impl<'or, T, E, OE, S> Observable<'static, Vec<T>, E> for BufferWithTime<'or, OE, S>
 where
     T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OE: Observable<'or, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = Disposal<T, S::D, OE::D>;
+    type D = subscribe_with_context::Disposal<'or, ChainDisposal<S::D, OE::D>>;
 
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        let observer = Shared::new(Mutable::new(Some(observer)));
-        let context = Shared::new(Mutable::new(BufferWithTimeContext {
-            values: Vec::new(),
-            timer: None,
-        }));
-        let sub = self.source.subscribe(BufferWithTimeObserver {
-            observer: observer.clone(),
-            context: context.clone(),
-        });
-        let context_cloned = context.clone();
-        let disposal = self.scheduler.schedule_periodically(
-            move |_| {
-                let values = safe_lock!(mem_take: context_cloned, values);
-                safe_lock_option_observer!(on_next: observer, values)
-            },
-            self.time_span,
-            self.delay,
-        );
-        safe_lock_option!(replace: context, timer, disposal);
-        sub.preceded_by(context).map_into()
+        subscribe_with_context(observer, Vec::new(), |context| {
+            let sub = self
+                .source
+                .subscribe(BufferWithTimeObserver(context.clone()));
+            let disposal = setup_emit_timer(context, self.scheduler, self.time_span, self.delay);
+            sub.preceded_by_bound(disposal)
+        })
     }
 }
 
-struct BufferWithTimeContext<T, D: Disposable> {
-    values: Vec<T>,
-    timer: Option<Subscription<D>>,
-}
+struct BufferWithTimeObserver<T, E, OR>(Context<Vec<T>, E, OR, Vec<T>>);
 
-// TODO: Disposable should not be Cloneable
-impl<T, D: Disposable> Disposable for Shared<Mutable<BufferWithTimeContext<T, D>>> {
-    fn dispose(self) {
-        safe_lock_option_disposable!(dispose: self, timer);
-    }
-}
-
-struct BufferWithTimeObserver<T, OR, D: Disposable> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<BufferWithTimeContext<T, D>>>,
-}
-
-impl<T, E, OR, D: Disposable> Observer<T, E> for BufferWithTimeObserver<T, OR, D>
+impl<T, E, OR> Observer<T, E> for BufferWithTimeObserver<T, E, OR>
 where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_vec!(push: self.context, values, value);
+        let _ = self.0.modify_model(|values| {
+            values.push(value);
+            ModificationResult::new_empty()
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let values = self.context.lock_mut(|mut lock| {
-            if let Some(timer) = lock.timer.take() {
-                timer.dispose();
-            }
-            std::mem::take(&mut lock.values)
-        });
         match termination {
             Termination::Completed => {
-                if !values.is_empty() {
-                    safe_lock_option_observer!(on_next_and_termination: self.observer, values, termination);
-                } else {
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                let _ = self.0.modify_model(|values| {
+                    if !values.is_empty() {
+                        ModificationResult::new_without_result()
+                            .send_next_and_termination(std::mem::take(values), termination)
+                            .ignore_drop_outside()
+                    } else {
+                        ModificationResult::new_without_result().send_termination(termination)
+                    }
+                });
             }
-            Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
-            }
+            Termination::Error(_) => self.0.send_termination(termination),
         }
     }
+}
+
+fn setup_emit_timer<T, E, OR, S>(
+    context: Context<Vec<T>, E, OR, Vec<T>>,
+    scheduler: S,
+    time_span: Duration,
+    delay: Option<Duration>,
+) -> BoundDropDisposal<S::D>
+where
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
+    OR: Observer<Vec<T>, E> + MaybeSend + 'static,
+    S: Scheduler + Clone + MaybeSend + 'static,
+{
+    let weak_context = context.downgrade();
+    scheduler.schedule_periodically(
+        move |_| {
+            let Some(context) = weak_context.upgrade() else {
+                return false;
+            };
+            context
+                .modify_model(|values| {
+                    ModificationResult::new(true)
+                        .send_next(std::mem::replace(values, Vec::with_capacity(values.len())))
+                        .ignore_drop_outside()
+                })
+                .unwrap_or(false)
+        },
+        time_span,
+        delay,
+    )
 }
