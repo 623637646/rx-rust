@@ -1,4 +1,7 @@
-use crate::utils::types::{MaybeSend, Mutable, Shared};
+use crate::utils::subscribe_with_context::{
+    self, Context, ModificationResult, subscribe_with_context,
+};
+use crate::utils::types::MaybeSend;
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal},
@@ -9,7 +12,6 @@ use crate::{
         self, subscribe_with_auto_dispose_on_termination,
     },
 };
-use crate::{safe_lock, safe_lock_option_observer, safe_lock_vec};
 use educe::Educe;
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, when a `boundary` Observable emits an item.
@@ -72,96 +74,99 @@ impl<OE, OE1> Buffer<OE, OE1> {
 }
 
 delegate_disposal!(
-    Disposal<D, D1>,
-    subscribe_with_auto_dispose_on_termination::Disposal<ChainDisposal<D, D1>>,
+    Disposal<'or, D, D1>,
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D, D1>>>,
     where D: Disposable, D1: Disposable
 );
 
 impl<'or, T, E, OE, OE1> Observable<'or, Vec<T>, E> for Buffer<OE, OE1>
 where
     T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
     OE: Observable<'or, T, E>,
     OE::D: MaybeSend + 'or,
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<OE::D, OE1::D>;
+    type D = Disposal<'or, OE::D, OE1::D>;
 
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            let observer = Shared::new(Mutable::new(Some(observer)));
-            let values = Shared::new(Mutable::new(Vec::default()));
-            let subscription_1 = self.boundary.subscribe(BoundaryObserver {
-                observer: observer.clone(),
-                values: values.clone(),
-            });
-            let subscription_2 = self.source.subscribe(BufferObserver { observer, values });
-            subscription_1.preceded_by_bound(subscription_2)
+            subscribe_with_context(observer, Vec::new(), |context| {
+                let subscription_1 = self.boundary.subscribe(BoundaryObserver(context.clone()));
+                let subscription_2 = self.source.subscribe(BufferObserver(context));
+                subscription_1.preceded_by_bound(subscription_2)
+            })
         })
         .map_into()
     }
 }
 
-struct BufferObserver<T, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    values: Shared<Mutable<Vec<T>>>,
-}
+struct BufferObserver<T, E, OR>(Context<Vec<T>, E, OR, Vec<T>>);
 
-impl<T, E, OR> Observer<T, E> for BufferObserver<T, OR>
+impl<T, E, OR> Observer<T, E> for BufferObserver<T, E, OR>
 where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_vec!(push: self.values, value);
+        let _ = self.0.modify_model(|values| {
+            values.push(value);
+            ModificationResult::new_empty()
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let values = safe_lock!(mem_take: self.values);
-                if !values.is_empty() {
-                    safe_lock_option_observer!(on_next_and_termination: self.observer, values, termination);
-                } else {
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                let _ = self.0.modify_model(|values| {
+                    if values.is_empty() {
+                        ModificationResult::new_send_termination(termination)
+                    } else {
+                        ModificationResult::new_send_next_and_termination(
+                            std::mem::take(values),
+                            termination,
+                        )
+                    }
+                });
             }
-            Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
-            }
+            Termination::Error(_) => self.0.send_termination(termination),
         }
     }
 }
 
-struct BoundaryObserver<T, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    values: Shared<Mutable<Vec<T>>>,
-}
+struct BoundaryObserver<T, E, OR>(Context<Vec<T>, E, OR, Vec<T>>);
 
-impl<T, E, OR> Observer<(), E> for BoundaryObserver<T, OR>
+impl<T, E, OR> Observer<(), E> for BoundaryObserver<T, E, OR>
 where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, _: ()) {
-        let values = safe_lock!(mem_take: self.values);
-        safe_lock_option_observer!(on_next: self.observer, values);
+        let _ = self.0.modify_model(|values| {
+            ModificationResult::new_send_next(std::mem::replace(
+                values,
+                Vec::with_capacity(values.len()),
+            ))
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let values = safe_lock!(mem_take: self.values);
-                if !values.is_empty() {
-                    safe_lock_option_observer!(on_next_and_termination: self.observer, values, termination);
-                } else {
-                    safe_lock_option_observer!(on_termination: self.observer, termination);
-                }
+                let _ = self.0.modify_model(|values| {
+                    if values.is_empty() {
+                        ModificationResult::new_send_termination(termination)
+                    } else {
+                        ModificationResult::new_send_next_and_termination(
+                            std::mem::take(values),
+                            termination,
+                        )
+                    }
+                });
             }
-            Termination::Error(_) => {
-                safe_lock_option_observer!(on_termination: self.observer, termination);
-            }
+            Termination::Error(_) => self.0.send_termination(termination),
         }
     }
 }
