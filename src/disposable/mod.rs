@@ -10,11 +10,13 @@ pub use crate::delegate_disposal;
 use crate::{
     disposable::{
         bound_drop_disposal::BoundDropDisposal, boxed_disposal::BoxedDisposal,
-        chain_disposal::ChainDisposal, option_disposal::OptionDisposal,
+        chain_disposal::ChainDisposal, either_disposal::EitherDisposal,
+        option_disposal::OptionDisposal,
     },
     safe_lock_option_disposable,
     utils::types::{MaybeSend, Mutable, Shared},
 };
+pub mod either_disposal;
 
 /// A trait that represents a disposable resource.
 pub trait Disposable {
@@ -50,6 +52,14 @@ pub trait DisposableExt: Disposable + Sized {
 
     fn then<D: Disposable>(self, other: D) -> ChainDisposal<Self, D> {
         ChainDisposal::new(self, other)
+    }
+
+    fn into_left<D2: Disposable>(self) -> EitherDisposal<Self, D2> {
+        EitherDisposal::Left(self)
+    }
+
+    fn into_right<D1: Disposable>(self) -> EitherDisposal<D1, Self> {
+        EitherDisposal::Right(self)
     }
 }
 

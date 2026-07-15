@@ -1,5 +1,7 @@
 use super::{Observable, Subscription};
-use crate::{disposable::Disposable, observer::Observer, utils::types::MaybeSend};
+use crate::{
+    disposable::either_disposal::EitherDisposal, observer::Observer, utils::types::MaybeSend,
+};
 use educe::Educe;
 
 /// An observable that is one of two concrete observable types.
@@ -14,42 +16,12 @@ pub enum EitherObservable<A, B> {
     Right(B),
 }
 
-/// The subscription produced by an [`EitherObservable`].
-pub enum EitherDisposal<A, B>
-where
-    A: Disposable,
-    B: Disposable,
-{
-    Left(Subscription<A>),
-    Right(Subscription<B>),
-}
-
-impl<A, B> Disposable for EitherDisposal<A, B>
-where
-    A: Disposable,
-    B: Disposable,
-{
-    fn dispose(self) {
-        // Dropping the contained subscription disposes the selected branch.
-    }
-}
-
-impl<A, B> std::fmt::Debug for EitherDisposal<A, B>
-where
-    A: Disposable,
-    B: Disposable,
-{
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(std::any::type_name::<Self>())
-    }
-}
-
 impl<'or, T, E, A, B> Observable<'or, T, E> for EitherObservable<A, B>
 where
     A: Observable<'or, T, E>,
     B: Observable<'or, T, E>,
 {
-    type D = EitherDisposal<A::D, B::D>;
+    type D = EitherDisposal<Subscription<A::D>, Subscription<B::D>>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         match self {
