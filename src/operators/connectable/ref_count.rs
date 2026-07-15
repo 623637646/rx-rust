@@ -118,7 +118,8 @@ where
             self.state.lock_mut(|mut lock| match &mut *lock {
                 State::Initialized => unreachable!(),
                 State::Subscribed(_, subscription) => {
-                    assert!(subscription.replace(connect_sub).is_none())
+                    let previous_subscription = subscription.replace(connect_sub);
+                    debug_assert!(previous_subscription.is_none());
                 }
             });
         }

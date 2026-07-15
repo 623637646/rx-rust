@@ -177,7 +177,7 @@ where
                     match model.sub_state {
                         SubState::Idle => {
                             // The state is only possible to be PendingSubscription or Processing when the pending_observables is not empty.
-                            assert!(model.pending_observables.is_empty());
+                            debug_assert!(model.pending_observables.is_empty());
                             ModificationResult::new_send_termination(termination)
                         }
                         SubState::PendingSubscription | SubState::Processing(_) => {

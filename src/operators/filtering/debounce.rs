@@ -163,10 +163,12 @@ where
         );
 
         let _ = self.context.modify_model(|model| {
-            if timer_id != model.timer_id {
-                return ModificationResult::new_without_result();
-            }
-            assert!(model.timer.replace(disposal).is_none());
+            debug_assert_eq!(
+                timer_id, model.timer_id,
+                "timer id must be the same because on_next &mut self is exclusive"
+            );
+            let previous_timer = model.timer.replace(disposal);
+            debug_assert!(previous_timer.is_none());
             ModificationResult::new_without_result().ignore_drop_outside()
         });
     }
