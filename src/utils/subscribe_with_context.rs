@@ -5,7 +5,6 @@ use crate::{
     },
     observable::Subscription,
     observer::{Observer, Termination},
-    safe_lock,
     utils::types::{MaybeSend, MutGuard, Mutable, MutableHelper, Shared, WeakShared},
 };
 use educe::Educe;
@@ -16,6 +15,8 @@ delegate_disposal!(
     ChainDisposal<BoxedDisposal<'or>, D>,
     where D: Disposable
 );
+
+fn default_model_mapper<M>(_: &mut M) {}
 
 // TODO: Rename?
 // Creates a subscription that is based on a shared mutable model and a observer.
@@ -32,14 +33,40 @@ where
     M: MaybeSend + 'or,
     F: FnOnce(Context<T, E, OR, M>) -> Subscription<D>,
 {
+    subscribe_with_context_map_model(observer, model, builder, default_model_mapper)
+}
+
+/// `model_mapper` runs while the context state is locked. It must only move the data needed
+/// after stopping out of the model; it must not call external APIs or panic.
+pub fn subscribe_with_context_map_model<'or, T, E, OR, D, M, M1, F>(
+    observer: OR,
+    model: M,
+    builder: F,
+    model_mapper: fn(&mut M) -> M1,
+) -> Subscription<Disposal<'or, D>>
+where
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: MaybeSend + 'or,
+    D: Disposable,
+    M: MaybeSend + 'or,
+    M1: MaybeSend + 'or,
+    F: FnOnce(Context<T, E, OR, M, (), M1>) -> Subscription<D>,
+{
     assert_observer::<OR>();
     let state = Shared::new(Mutable::new(State::Idle {
         observer,
         model,
         sub: Subscription::default(),
     }));
-    let context = Context(state.clone());
-    let disposable = ContextDisposable(state);
+    let context = Context {
+        state: state.clone(),
+        model_mapper,
+    };
+    let disposable = ContextDisposable {
+        state,
+        model_mapper,
+    };
     let sub = builder(context);
     sub.preceded_by(disposable.into_boxed()).map_into()
 }
@@ -57,15 +84,41 @@ where
     OR: MaybeSend + 'or,
     D: Disposable + MaybeSend + 'or,
     M: MaybeSend + 'or,
-    F: FnOnce(Context<T, E, OR, M, D>) -> Subscription<D>,
+    F: FnOnce(Context<T, E, OR, M, D, ()>) -> Subscription<D>,
+{
+    subscribe_with_context_bound_disposal_map_model(observer, model, builder, default_model_mapper)
+}
+
+/// `model_mapper` runs while the context state is locked. It must only move the data needed
+/// after stopping out of the model; it must not call external APIs or panic.
+pub fn subscribe_with_context_bound_disposal_map_model<'or, T, E, OR, D, M, M1, F>(
+    observer: OR,
+    model: M,
+    builder: F,
+    model_mapper: fn(&mut M) -> M1,
+) -> Subscription<BoundDisposal<'or>>
+where
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: MaybeSend + 'or,
+    D: Disposable + MaybeSend + 'or,
+    M: MaybeSend + 'or,
+    M1: MaybeSend + 'or,
+    F: FnOnce(Context<T, E, OR, M, D, M1>) -> Subscription<D>,
 {
     assert_observer::<OR>();
     let state = Shared::new(Mutable::new(State::Subscribing { observer, model }));
-    let context = Context(state.clone());
-    let disposable = ContextDisposable(state.clone());
+    let context = Context {
+        state: state.clone(),
+        model_mapper,
+    };
+    let disposable = ContextDisposable {
+        state: state.clone(),
+        model_mapper,
+    };
     let sub = builder(context);
     let sub_to_drop = state.lock_mut(|mut lock| {
-        let state = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
+        let state = std::mem::replace(&mut *lock, State::Placeholder);
         match state {
             State::Subscribing { observer, model } => {
                 *lock = State::Idle {
@@ -91,7 +144,11 @@ where
                 None
             }
             State::Processing { sub: Some(_), .. } => unreachable!(),
-            State::Stopped => Some(sub),
+            State::Stopped(model_in_stop) => {
+                *lock = State::Stopped(model_in_stop);
+                Some(sub)
+            }
+            State::Placeholder => unreachable!(),
         }
     });
     drop(sub_to_drop); // Drop outside the lock to avoid potential deadlock
@@ -100,7 +157,7 @@ where
 
 #[derive(Educe)]
 #[educe(Debug)]
-enum State<T, E, OR, M, D: Disposable> {
+enum State<T, E, OR, M, D: Disposable, M1> {
     Subscribing {
         observer: OR,
         model: M,
@@ -116,15 +173,19 @@ enum State<T, E, OR, M, D: Disposable> {
         model: M,
         sub: Option<Subscription<D>>, // Back to Subscribing if None, otherwise to Idle.
     },
-    Stopped, // Unsubscribed or disposed
+    Stopped(M1), // Unsubscribed or disposed
+    Placeholder,
 }
 
-type SharedState<T, E, OR, M, D> = Shared<Mutable<State<T, E, OR, M, D>>>;
-type WeakSharedState<T, E, OR, M, D> = WeakShared<Mutable<State<T, E, OR, M, D>>>;
+type SharedState<T, E, OR, M, D, M1> = Shared<Mutable<State<T, E, OR, M, D, M1>>>;
+type WeakSharedState<T, E, OR, M, D, M1> = WeakShared<Mutable<State<T, E, OR, M, D, M1>>>;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Context<T, E, OR, M, D: Disposable = ()>(SharedState<T, E, OR, M, D>);
+pub struct Context<T, E, OR, M, D: Disposable = (), M1 = ()> {
+    state: SharedState<T, E, OR, M, D, M1>,
+    model_mapper: fn(&mut M) -> M1,
+}
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
@@ -134,23 +195,6 @@ pub enum EventGroup<T, E> {
     NextAndTermination(T, Termination<E>),
     Nexts(Vec<T>),
     NextsAndTermination(Vec<T>, Termination<E>),
-}
-
-impl<T, E> EventGroup<T, E> {
-    /// Splits the group into the next values to queue and an optional termination.
-    fn into_parts(self) -> (VecDeque<T>, Option<Termination<E>>) {
-        match self {
-            EventGroup::Next(next) => (VecDeque::from([next]), None),
-            EventGroup::Termination(termination) => (VecDeque::new(), Some(termination)),
-            EventGroup::NextAndTermination(next, termination) => {
-                (VecDeque::from([next]), Some(termination))
-            }
-            EventGroup::Nexts(items) => (items.into(), None),
-            EventGroup::NextsAndTermination(items, termination) => {
-                (items.into(), Some(termination))
-            }
-        }
-    }
 }
 
 #[derive(Educe)]
@@ -285,7 +329,7 @@ pub enum Error {
     Stopped,
 }
 
-impl<T, E, OR, M, D> Context<T, E, OR, M, D>
+impl<T, E, OR, M, D, M1> Context<T, E, OR, M, D, M1>
 where
     OR: Observer<T, E>,
     D: Disposable,
@@ -296,15 +340,16 @@ where
         &self,
         callback: impl FnOnce(&mut M) -> ModificationResult<T, E, A, R>,
     ) -> Result<R, Error> {
-        self.0.lock_mut(|mut lock| {
+        self.state.lock_mut(|mut lock| {
             let model = match &mut *lock {
                 State::Subscribing { model, .. } => model,
                 State::Idle { model, .. } => model,
                 State::Processing { model, .. } => model,
-                State::Stopped => {
+                State::Stopped(_) => {
                     drop(lock);
                     return Result::Err(Error::Stopped);
                 }
+                State::Placeholder => unreachable!(),
             };
             let ModificationResult {
                 send_events,
@@ -321,48 +366,93 @@ where
         })
     }
 
+    pub fn modify_model_or_model_in_stop<A, R>(
+        &self,
+        callback: impl FnOnce(Result<&mut M, &mut M1>) -> ModificationResult<T, E, A, R>,
+    ) -> R {
+        self.state.lock_mut(|mut lock| {
+            let model = match &mut *lock {
+                State::Subscribing { model, .. } => Ok(model),
+                State::Idle { model, .. } => Ok(model),
+                State::Processing { model, .. } => Ok(model),
+                State::Stopped(model_in_stop) => Err(model_in_stop),
+                State::Placeholder => unreachable!(),
+            };
+            let ModificationResult {
+                send_events,
+                drop_outside,
+                result,
+            } = callback(model);
+            if let Some(send_events) = send_events {
+                self.sending_impl(send_events, lock);
+            } else {
+                drop(lock);
+            }
+            drop(drop_outside); // Drop outside the lock to avoid potential deadlock
+            result
+        })
+    }
+
     pub fn send_next(&self, value: T) {
-        self.0
+        self.state
             .lock_mut(|lock| self.sending_impl(EventGroup::Next(value), lock))
     }
 
     pub fn send_termination(&self, termination: Termination<E>) {
-        self.0
+        self.state
             .lock_mut(|lock| self.sending_impl(EventGroup::Termination(termination), lock))
     }
 
     pub fn send_next_and_termination(&self, next: T, termination: Termination<E>) {
-        self.0.lock_mut(|lock| {
+        self.state.lock_mut(|lock| {
             self.sending_impl(EventGroup::NextAndTermination(next, termination), lock)
         })
     }
 
     pub fn send_events(&self, events: EventGroup<T, E>) {
-        self.0.lock_mut(|lock| self.sending_impl(events, lock))
+        self.state.lock_mut(|lock| self.sending_impl(events, lock))
     }
 
     fn sending_impl(
         &self,
         events: EventGroup<T, E>,
-        mut lock: MutGuard<'_, State<T, E, OR, M, D>>,
+        mut lock: MutGuard<'_, State<T, E, OR, M, D, M1>>,
     ) {
         match &mut *lock {
             State::Idle { .. } | State::Subscribing { .. } => {
-                let (next_values, termination) = events.into_parts();
-                if next_values.is_empty() && termination.is_none() {
+                let (first_next, next_values, termination) = match events {
+                    EventGroup::Next(next) => (Some(next), VecDeque::new(), None),
+                    EventGroup::Termination(termination) => {
+                        (None, VecDeque::new(), Some(termination))
+                    }
+                    EventGroup::NextAndTermination(next, termination) => {
+                        (Some(next), VecDeque::new(), Some(termination))
+                    }
+                    EventGroup::Nexts(items) => {
+                        let mut next_values = VecDeque::from(items);
+                        let first_next = next_values.pop_front();
+                        (first_next, next_values, None)
+                    }
+                    EventGroup::NextsAndTermination(items, termination) => {
+                        let mut next_values = VecDeque::from(items);
+                        let first_next = next_values.pop_front();
+                        (first_next, next_values, Some(termination))
+                    }
+                };
+                if first_next.is_none() && termination.is_none() {
                     // Empty `Nexts` is a no-op, consistent with the `Processing` state.
                     drop(lock);
                     return;
                 }
-                let idle_state = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
-                let (observer, model, sub) = match idle_state {
+                let idle_or_subscribing = std::mem::replace(&mut *lock, State::Placeholder);
+                let (mut observer, model, sub) = match idle_or_subscribing {
                     State::Subscribing { observer, model } => (observer, model, None),
                     State::Idle {
                         observer,
                         model,
                         sub,
                     } => (observer, model, Some(sub)),
-                    State::Processing { .. } | State::Stopped => {
+                    _ => {
                         drop(lock);
                         unreachable!()
                     }
@@ -374,13 +464,14 @@ where
                     sub,
                 };
                 drop(lock); // Deliver events outside the lock to avoid potential deadlock
-                // If the observer panics inside `deliver_pending_events`, the state
-                // would otherwise stay `Processing` forever: later events get queued
-                // but never delivered, and the model leaks until dispose. The guard
-                // stops the state machine on panic; on normal return it is a no-op.
-                // NOTE: This is the only call site of `deliver_pending_events`,
-                // which relies on this guard.
-                let _stop_on_panic = StopOnPanic(&self.0);
+                if let Some(first_next) = first_next {
+                    let stop_on_panic = StopOnPanic {
+                        state: &self.state,
+                        model_mapper: &self.model_mapper,
+                    };
+                    observer.on_next(first_next);
+                    drop(stop_on_panic);
+                }
                 self.deliver_pending_events(observer);
             }
             State::Processing {
@@ -407,28 +498,28 @@ where
                 }
                 drop(lock);
             }
-            State::Stopped => {
+            State::Stopped(_) => {
                 drop(lock);
             }
+            State::Placeholder => unreachable!(),
         };
     }
 
-    pub fn downgrade(&self) -> WeakContext<T, E, OR, M, D> {
-        WeakContext(Shared::downgrade(&self.0))
+    pub fn downgrade(&self) -> WeakContext<T, E, OR, M, D, M1> {
+        WeakContext {
+            state: Shared::downgrade(&self.state),
+            model_mapper: self.model_mapper,
+        }
     }
 
     /// Delivers queued events to the observer one at a time, reacquiring the lock
     /// between events. Every observer call happens outside the lock, and disposal
     /// (`Stopped`) takes effect between any two events — including within a batch
     /// queued via `EventGroup::Nexts`.
-    ///
-    /// Panic safety is provided by the `StopOnPanic` guard at the (only) call site
-    /// in `sending_impl`. If this function gains a new caller, that caller must set
-    /// up the same guard.
     fn deliver_pending_events(&self, mut observer: OR) {
         loop {
-            let step = self.0.lock_mut(|mut lock| match &mut *lock {
-                State::Idle { .. } | State::Subscribing { .. } => {
+            let step = self.state.lock_mut(|mut lock| match &mut *lock {
+                State::Idle { .. } | State::Subscribing { .. } | State::Placeholder => {
                     drop(lock);
                     unreachable!()
                 }
@@ -437,10 +528,10 @@ where
                         drop(lock);
                         return DeliveryStep::Next(observer, value);
                     }
-                    let old_state = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
+                    let old_state = std::mem::replace(&mut *lock, State::Placeholder);
                     let State::Processing {
                         termination,
-                        model,
+                        mut model,
                         sub,
                         ..
                     } = old_state
@@ -450,9 +541,11 @@ where
                     };
                     match termination {
                         Some(termination) => {
+                            let model_in_stop = (self.model_mapper)(&mut model);
+                            *lock = State::Stopped(model_in_stop);
                             // The state stays `Stopped`: the subscription is over.
                             drop(lock);
-                            drop(model); // Drop outside the lock to avoid potential deadlock
+                            drop(model); // Drop the remaining model outside the lock.
                             DeliveryStep::Terminate(observer, termination, sub)
                         }
                         None => {
@@ -469,18 +562,28 @@ where
                         }
                     }
                 }
-                State::Stopped => {
+                State::Stopped(_) => {
                     drop(lock);
                     DeliveryStep::Stopped(observer)
                 }
             });
             match step {
                 DeliveryStep::Next(mut obs, value) => {
+                    let stop_on_panic = StopOnPanic {
+                        state: &self.state,
+                        model_mapper: &self.model_mapper,
+                    };
                     obs.on_next(value);
+                    drop(stop_on_panic);
                     observer = obs;
                 }
                 DeliveryStep::Terminate(obs, termination, sub_to_drop) => {
+                    let stop_on_panic = StopOnPanic {
+                        state: &self.state,
+                        model_mapper: &self.model_mapper,
+                    };
                     obs.on_termination(termination);
+                    drop(stop_on_panic);
                     // Preserve termination-before-disposal ordering. If the callback panics,
                     // stack unwinding still drops the subscription.
                     drop(sub_to_drop);
@@ -513,31 +616,103 @@ enum DeliveryStep<T, E, OR, D: Disposable> {
 /// Sets the state to `Stopped` when dropped while panicking.
 /// The panic must have happened outside the lock (observer calls are made outside the lock),
 /// so locking here is safe on the panicking thread.
-struct StopOnPanic<'a, T, E, OR, M, D: Disposable>(&'a SharedState<T, E, OR, M, D>);
+struct StopOnPanic<'a, T, E, OR, M, D: Disposable, M1> {
+    state: &'a SharedState<T, E, OR, M, D, M1>,
+    model_mapper: &'a fn(&mut M) -> M1,
+}
 
-impl<T, E, OR, M, D: Disposable> Drop for StopOnPanic<'_, T, E, OR, M, D> {
+impl<T, E, OR, M, D: Disposable, M1> Drop for StopOnPanic<'_, T, E, OR, M, D, M1> {
     fn drop(&mut self) {
         if std::thread::panicking() {
-            let _old_state = safe_lock!(mem_replace: self.0, State::Stopped);
+            dispose_state(self.state, self.model_mapper);
         }
     }
 }
 
-struct ContextDisposable<T, E, OR, M, D: Disposable>(SharedState<T, E, OR, M, D>);
+struct ContextDisposable<T, E, OR, M, D: Disposable, M1> {
+    state: SharedState<T, E, OR, M, D, M1>,
+    model_mapper: fn(&mut M) -> M1,
+}
 
-impl<T, E, OR, M, D: Disposable> Disposable for ContextDisposable<T, E, OR, M, D> {
+impl<T, E, OR, M, D: Disposable, M1> Disposable for ContextDisposable<T, E, OR, M, D, M1> {
     fn dispose(self) {
-        let _old_state = safe_lock!(mem_replace: self.0, State::Stopped);
+        dispose_state(&self.state, &self.model_mapper);
     }
+}
+
+fn dispose_state<T, E, OR, M, D: Disposable, M1>(
+    state: &SharedState<T, E, OR, M, D, M1>,
+    model_mapper: &fn(&mut M) -> M1,
+) {
+    struct DropOutside<T, E, OR, D: Disposable> {
+        _observer: Option<OR>,
+        _sub: Option<Subscription<D>>,
+        _events: Option<(VecDeque<T>, Option<Termination<E>>)>,
+    }
+
+    let _drop_outside = state.lock_mut(|mut lock| {
+        if matches!(&*lock, State::Stopped(_)) {
+            return None;
+        }
+
+        let state = std::mem::replace(&mut *lock, State::Placeholder);
+        let (mut model, drop_outside) = match state {
+            State::Subscribing { observer, model } => {
+                let drop_outside = DropOutside {
+                    _observer: Some(observer),
+                    _sub: None,
+                    _events: None,
+                };
+                (model, drop_outside)
+            }
+            State::Idle {
+                observer,
+                model,
+                sub,
+            } => {
+                let drop_outside = DropOutside {
+                    _observer: Some(observer),
+                    _sub: Some(sub),
+                    _events: None,
+                };
+                (model, drop_outside)
+            }
+            State::Processing {
+                next_values,
+                termination,
+                model,
+                sub,
+            } => {
+                let drop_outside = DropOutside {
+                    _observer: None,
+                    _sub: sub,
+                    _events: Some((next_values, termination)),
+                };
+                (model, drop_outside)
+            }
+            State::Stopped(_) | State::Placeholder => unreachable!(),
+        };
+
+        let model_in_stop = model_mapper(&mut model);
+        *lock = State::Stopped(model_in_stop);
+
+        Some((drop_outside, model))
+    });
 }
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct WeakContext<T, E, OR, M, D: Disposable = ()>(WeakSharedState<T, E, OR, M, D>);
+pub struct WeakContext<T, E, OR, M, D: Disposable = (), M1 = ()> {
+    state: WeakSharedState<T, E, OR, M, D, M1>,
+    model_mapper: fn(&mut M) -> M1,
+}
 
-impl<T, E, OR, M, D: Disposable> WeakContext<T, E, OR, M, D> {
-    pub fn upgrade(&self) -> Option<Context<T, E, OR, M, D>> {
-        Some(Context(self.0.upgrade()?))
+impl<T, E, OR, M, D: Disposable, M1> WeakContext<T, E, OR, M, D, M1> {
+    pub fn upgrade(&self) -> Option<Context<T, E, OR, M, D, M1>> {
+        self.state.upgrade().map(|state| Context {
+            state,
+            model_mapper: self.model_mapper,
+        })
     }
 }
 

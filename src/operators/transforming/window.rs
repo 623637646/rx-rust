@@ -1,19 +1,26 @@
-use crate::utils::types::{MaybeSend, Mutable, Shared};
 use crate::{
-    delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal},
-    observable::Observable,
-    observable::Subscription,
-    observer::{Observer, Termination},
-    subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
-    utils::subscribe_with_auto_dispose_on_termination::{
-        self, subscribe_with_auto_dispose_on_termination,
+    disposable::{
+        Disposable, DisposableExt, chain_disposal::ChainDisposal, option_disposal::OptionDisposal,
+    },
+    observable::{Observable, Subscription},
+    observer::{BoxedObserverExt, Observer, Termination, boxed_observer::BoxedObserver},
+    utils::{
+        subscribe_with_context::{
+            self, Context, EventGroup, ModificationResult,
+            subscribe_with_context_bound_disposal_map_model,
+        },
+        types::{MaybeSend, MutableBool, MutableBoolHelper, Shared},
     },
 };
-use crate::{safe_lock, safe_lock_observer, safe_lock_option_observer};
 use educe::Educe;
+use slotmap::{DefaultKey, SlotMap};
+use std::convert::Infallible;
 
-/// Periodically subdivides items from an Observable into Observable windows, each window being emitted when a `boundary` Observable emits an item.
+/// Periodically subdivides items from an Observable into Observable windows.
+///
+/// A new window is emitted whenever the `boundary` Observable emits an item.
+/// Completing the `boundary` stops future window rotation without terminating the current window
+/// or the outer Observable.
 /// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// # Examples
@@ -86,94 +93,406 @@ impl<OE, OE1> Window<OE, OE1> {
     pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
     where
         OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), E>,
+        OE1: Observable<'or, (), Infallible>,
     {
         Self { source, boundary }
     }
 }
 
-delegate_disposal!(
-    Disposal<D, D1>,
-    subscribe_with_auto_dispose_on_termination::Disposal<ChainDisposal<D, D1>>,
-    where D: Disposable, D1: Disposable
-);
-
-impl<'or, T, E, OE, OE1> Observable<'or, SubjectObservable<PublishSubject<'or, T, E>>, E>
+impl<'or, T, E, OE, OE1> Observable<'or, InnerObservable<'or, T, E, OE::D, OE1::D>, E>
     for Window<OE, OE1>
 where
-    T: Clone + MaybeSend + 'or,
+    T: MaybeSend + 'or,
     E: Clone + MaybeSend + 'or,
     OE: Observable<'or, T, E>,
     OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), E>,
+    OE1: Observable<'or, (), Infallible>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<OE::D, OE1::D>;
+    type D = subscribe_with_context::BoundDisposal<'or>;
 
     fn subscribe(
         self,
-        observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + MaybeSend + 'or,
+        observer: impl Observer<InnerObservable<'or, T, E, OE::D, OE1::D>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |mut observer| {
-            let subject = PublishSubject::default();
-            observer.on_next(SubjectObservable::new(subject.clone()));
-
-            let subject = Shared::new(Mutable::new(subject));
-            let observer = Shared::new(Mutable::new(Some(observer)));
-            let window_observer = WindowObserver {
-                observer: observer.clone(),
-                subject: subject.clone(),
-            };
-            let boundary_observer = BoundaryObserver { observer, subject };
-            let subscription_1 = self.boundary.subscribe(boundary_observer);
-            let subscription_2 = self.source.subscribe(window_observer);
-            subscription_1.preceded_by_bound(subscription_2)
-        })
-        .map_into()
+        let observer = DelegateObserver {
+            outer_observer: observer.into_boxed(),
+            inner_observer: None,
+        };
+        let model = Model::new();
+        subscribe_with_context_bound_disposal_map_model(
+            observer,
+            model,
+            |context| {
+                let mut boundary_observer = BoundaryObserver(context.clone());
+                boundary_observer.on_next(());
+                let boundary_subscription = self.boundary.subscribe(boundary_observer);
+                let source_subscription = self.source.subscribe(SourceObserver(context));
+                boundary_subscription.preceded_by_bound(source_subscription)
+            },
+            |model| std::mem::take(&mut model.buffered_windows),
+        )
     }
 }
 
-struct WindowObserver<'or, T, E, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    subject: Shared<Mutable<PublishSubject<'or, T, E>>>,
+struct BufferedWindow<T, E> {
+    values: Vec<T>,
+    termination: Option<Termination<E>>,
 }
 
-impl<'or, T, E, OR> Observer<T, E> for WindowObserver<'or, T, E, OR>
+impl<T, E> BufferedWindow<T, E> {
+    fn open() -> Self {
+        Self {
+            values: Vec::new(),
+            termination: None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WindowState {
+    /// No window currently accepts source values.
+    Vacant,
+    /// The window was emitted, but no inner observer has subscribed yet.
+    Pending(DefaultKey),
+    /// The inner observer is attached, so source values can be forwarded directly.
+    Subscribed(DefaultKey),
+}
+
+type BufferedWindows<T, E> = SlotMap<DefaultKey, BufferedWindow<T, E>>;
+
+struct Model<T, E> {
+    buffered_windows: BufferedWindows<T, E>,
+    window_state: WindowState,
+}
+
+impl<T, E> Model<T, E> {
+    fn new() -> Self {
+        Self {
+            buffered_windows: SlotMap::new(),
+            window_state: WindowState::Vacant,
+        }
+    }
+
+    fn open_window(&mut self) -> (DefaultKey, WindowState) {
+        let key = self.buffered_windows.insert(BufferedWindow::open());
+        let previous_state = std::mem::replace(&mut self.window_state, WindowState::Pending(key));
+        (key, previous_state)
+    }
+
+    fn buffered_window_mut(&mut self, key: DefaultKey) -> &mut BufferedWindow<T, E> {
+        self.buffered_windows
+            .get_mut(key)
+            .expect("buffered window must exist")
+    }
+}
+
+type WindowContext<'or, T, E, D1, D2> = Context<
+    DelegateAction<'or, T, E, D1, D2>,
+    E,
+    DelegateObserver<'or, T, E, D1, D2>,
+    Model<T, E>,
+    ChainDisposal<D1, D2>,
+    BufferedWindows<T, E>,
+>;
+
+struct SourceObserver<'or, T, E, D1, D2>(WindowContext<'or, T, E, D1, D2>)
 where
-    T: Clone,
+    D1: Disposable,
+    D2: Disposable;
+
+impl<'or, T, E, D1, D2> Observer<T, E> for SourceObserver<'or, T, E, D1, D2>
+where
     E: Clone,
-    OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
+    D1: Disposable,
+    D2: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        safe_lock_observer!(on_next: self.subject, value);
+        let _ = self.0.modify_model(|model| match model.window_state {
+            WindowState::Subscribed(_) => ModificationResult::new_without_result()
+                .send_next(DelegateAction::ForwardValue(value)),
+            WindowState::Pending(key) => {
+                model.buffered_window_mut(key).values.push(value);
+                ModificationResult::new_without_result()
+            }
+            WindowState::Vacant => ModificationResult::new_without_result().drop_outside(value),
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock!(clone: self.subject).on_termination(termination.clone());
-        safe_lock_option_observer!(on_termination: self.observer, termination);
+        let _ = self.0.modify_model(|model| {
+            match std::mem::replace(&mut model.window_state, WindowState::Vacant) {
+                WindowState::Pending(key) => {
+                    model.buffered_window_mut(key).termination = Some(termination.clone());
+                    ModificationResult::new_send_termination(termination)
+                }
+                WindowState::Subscribed(_) => ModificationResult::new_send_next_and_termination(
+                    DelegateAction::TerminateInner(termination.clone()),
+                    termination,
+                ),
+                WindowState::Vacant => ModificationResult::new_send_termination(termination),
+            }
+        });
     }
 }
 
-struct BoundaryObserver<'or, T, E, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    subject: Shared<Mutable<PublishSubject<'or, T, E>>>,
-}
-
-impl<'or, T, E, OR> Observer<(), E> for BoundaryObserver<'or, T, E, OR>
+struct BoundaryObserver<'or, T, E, D1, D2>(WindowContext<'or, T, E, D1, D2>)
 where
-    T: Clone,
-    E: Clone,
-    OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
+    D1: Disposable,
+    D2: Disposable;
+
+impl<'or, T, E, D1, D2> Observer<(), Infallible> for BoundaryObserver<'or, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
 {
     fn on_next(&mut self, _: ()) {
-        let new_subject = PublishSubject::default();
-        let old_subject = safe_lock!(mem_replace: self.subject, new_subject.clone());
-        old_subject.on_termination(Termination::Completed);
-        safe_lock_option_observer!(on_next: self.observer, SubjectObservable::new(new_subject));
+        let _ = self.0.modify_model(|model| {
+            let (key, previous_state) = model.open_window();
+
+            let emit_window = DelegateAction::EmitWindow(InnerObservable {
+                context: Some(self.0.clone()),
+                key,
+            });
+            let events = match previous_state {
+                WindowState::Pending(key) => {
+                    model.buffered_window_mut(key).termination = Some(Termination::Completed);
+                    EventGroup::Next(emit_window)
+                }
+                WindowState::Subscribed(_) => EventGroup::Nexts(vec![
+                    DelegateAction::TerminateInner(Termination::Completed),
+                    emit_window,
+                ]),
+                WindowState::Vacant => EventGroup::Next(emit_window),
+            };
+
+            ModificationResult::new_without_result()
+                .send_events(events)
+                .ignore_drop_outside()
+        });
+    }
+
+    fn on_termination(self, _: Termination<Infallible>) {}
+}
+
+pub struct InnerObservable<'or, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
+{
+    context: Option<WindowContext<'or, T, E, D1, D2>>,
+    key: DefaultKey,
+}
+
+impl<T, E, D1, D2> Drop for InnerObservable<'_, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
+{
+    fn drop(&mut self) {
+        let Some(context) = self.context.take() else {
+            return;
+        };
+        let key = self.key;
+        context.modify_model_or_model_in_stop(|model| {
+            let buffered_window = match model {
+                Ok(model) => {
+                    let buffered_window = model.buffered_windows.remove(key);
+                    if model.window_state == WindowState::Pending(key) {
+                        model.window_state = WindowState::Vacant;
+                    }
+                    buffered_window
+                }
+                Err(buffered_windows) => buffered_windows.remove(key),
+            };
+            ModificationResult::new_without_result().drop_outside(buffered_window)
+        });
+    }
+}
+
+impl<'or, T, E, D1, D2> Observable<'or, T, E> for InnerObservable<'or, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
+{
+    type D = OptionDisposal<InnerDisposal<'or, T, E, D1, D2>>;
+
+    fn subscribe(
+        mut self,
+        observer: impl Observer<T, E> + MaybeSend + 'or,
+    ) -> Subscription<Self::D> {
+        let context = self
+            .context
+            .take()
+            .expect("inner observable context must exist");
+        let key = self.key;
+        let is_disposed = Shared::new(MutableBool::new(false));
+        let result = context.modify_model_or_model_in_stop(|model| match model {
+            Ok(model) => {
+                if model.window_state == WindowState::Pending(key) {
+                    let buffered_window = model
+                        .buffered_windows
+                        .remove(key)
+                        .expect("pending window must exist");
+                    debug_assert!(buffered_window.termination.is_none());
+                    model.window_state = WindowState::Subscribed(key);
+
+                    let mut actions = Vec::with_capacity(buffered_window.values.len() + 1);
+                    actions.push(DelegateAction::AttachInnerObserver(
+                        observer.into_boxed(),
+                        is_disposed.clone(),
+                    ));
+                    actions.extend(
+                        buffered_window
+                            .values
+                            .into_iter()
+                            .map(DelegateAction::ForwardValue),
+                    );
+
+                    ModificationResult::new(None)
+                        .send_events(EventGroup::Nexts(actions))
+                        .ignore_drop_outside()
+                } else {
+                    ModificationResult::new(Some((
+                        observer,
+                        model
+                            .buffered_windows
+                            .remove(key)
+                            .expect("buffered window must exist"),
+                    )))
+                }
+            }
+            Err(buffered_windows) => ModificationResult::new(Some((
+                observer,
+                buffered_windows
+                    .remove(key)
+                    .expect("buffered window must exist"),
+            ))),
+        });
+        if let Some((mut observer, buffered_window)) = result {
+            for item in buffered_window.values {
+                observer.on_next(item);
+            }
+            if let Some(termination) = buffered_window.termination {
+                observer.on_termination(termination);
+            }
+            OptionDisposal::none().into_subscription()
+        } else {
+            InnerDisposal {
+                context,
+                key,
+                is_disposed,
+            }
+            .into_option()
+            .into_subscription()
+        }
+    }
+}
+
+pub struct InnerDisposal<'or, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
+{
+    context: WindowContext<'or, T, E, D1, D2>,
+    key: DefaultKey,
+    is_disposed: Shared<MutableBool>,
+}
+
+impl<'or, T, E, D1, D2> Disposable for InnerDisposal<'or, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
+{
+    fn dispose(self) {
+        self.is_disposed.write(true);
+        let _ = self.context.modify_model(|model| {
+            if model.window_state == WindowState::Subscribed(self.key) {
+                model.window_state = WindowState::Vacant;
+                ModificationResult::new_without_result()
+                    .send_next(DelegateAction::DetachInnerObserver)
+            } else {
+                ModificationResult::new_empty()
+            }
+        });
+    }
+}
+
+enum DelegateAction<'or, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
+{
+    ForwardValue(T),
+    EmitWindow(InnerObservable<'or, T, E, D1, D2>),
+    AttachInnerObserver(BoxedObserver<'or, T, E>, Shared<MutableBool>),
+    TerminateInner(Termination<E>),
+    DetachInnerObserver,
+}
+
+struct AttachedInnerObserver<'or, T, E> {
+    observer: BoxedObserver<'or, T, E>,
+    is_disposed: Shared<MutableBool>,
+}
+
+struct DelegateObserver<'or, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
+{
+    outer_observer: BoxedObserver<'or, InnerObservable<'or, T, E, D1, D2>, E>,
+    inner_observer: Option<AttachedInnerObserver<'or, T, E>>,
+}
+
+impl<'or, T, E, D1, D2> Observer<DelegateAction<'or, T, E, D1, D2>, E>
+    for DelegateObserver<'or, T, E, D1, D2>
+where
+    D1: Disposable,
+    D2: Disposable,
+{
+    fn on_next(&mut self, action: DelegateAction<'or, T, E, D1, D2>) {
+        match action {
+            DelegateAction::ForwardValue(value) => {
+                let inner_observer = self
+                    .inner_observer
+                    .as_mut()
+                    .expect("subscribed window must have an inner observer");
+                if !inner_observer.is_disposed.read() {
+                    inner_observer.observer.on_next(value);
+                }
+            }
+            DelegateAction::EmitWindow(inner_observable) => {
+                debug_assert!(self.inner_observer.is_none());
+                self.outer_observer.on_next(inner_observable);
+            }
+            DelegateAction::AttachInnerObserver(observer, is_disposed) => {
+                debug_assert!(self.inner_observer.is_none());
+                self.inner_observer = Some(AttachedInnerObserver {
+                    observer,
+                    is_disposed,
+                });
+            }
+            DelegateAction::TerminateInner(termination) => {
+                let inner_observer = self
+                    .inner_observer
+                    .take()
+                    .expect("subscribed window must have an inner observer");
+                if !inner_observer.is_disposed.read() {
+                    inner_observer.observer.on_termination(termination);
+                }
+            }
+            DelegateAction::DetachInnerObserver => {
+                let inner_observer = self
+                    .inner_observer
+                    .take()
+                    .expect("subscribed window must have an inner observer");
+                drop(inner_observer);
+            }
+        };
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        safe_lock!(clone: self.subject).on_termination(termination.clone());
-        safe_lock_option_observer!(on_termination: self.observer, termination);
+        debug_assert!(self.inner_observer.is_none());
+        self.outer_observer.on_termination(termination);
     }
 }

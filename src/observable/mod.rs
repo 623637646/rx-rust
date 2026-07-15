@@ -71,7 +71,6 @@ use crate::{
     utils::types::MaybeSend,
     utils::types::MaybeSync,
 };
-#[cfg(feature = "futures")]
 use std::convert::Infallible;
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 
@@ -710,9 +709,10 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Collects items into windows that are opened and closed by another observable.
+    /// Completing the boundary stops future window rotation without terminating the source.
     fn window<OE1>(self, boundary: OE1) -> Window<Self, OE1>
     where
-        OE1: Observable<'or, (), E>,
+        OE1: Observable<'or, (), Infallible>,
     {
         Window::new(self, boundary)
     }
