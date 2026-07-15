@@ -104,10 +104,9 @@ where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
     OE: Observable<'static, T, E>,
-    OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = subscribe_with_context::Disposal<'static>;
+    type D = subscribe_with_context::Disposal<'static, OE::D>;
 
     fn subscribe(
         self,

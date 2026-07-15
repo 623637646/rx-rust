@@ -7,6 +7,7 @@ use crate::utils::subscribe_with_context::{
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
+    disposable::{Disposable, chain_disposal::ChainDisposal},
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
@@ -66,8 +67,9 @@ impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
 }
 
 delegate_disposal!(
-    Disposal<'or>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or>>
+    Disposal<'or, D1, D2>,
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D2, D1>>>,
+    where D1: Disposable, D2: Disposable
 );
 
 impl<'or, T, E, OE1, OE2> Observable<'or, bool, E> for SequenceEqual<T, OE1, OE2>
@@ -79,7 +81,7 @@ where
     OE2: Observable<'or, T, E>,
     OE2::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or>;
+    type D = Disposal<'or, OE1::D, OE2::D>;
 
     fn subscribe(
         self,

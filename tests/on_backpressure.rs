@@ -102,13 +102,12 @@ fn subscribe_chunks<'or, T, E, OE>(
     source: OE,
 ) -> (
     Recorder<'or, T, E>,
-    Subscription<subscribe_with_context::Disposal<'or>>,
+    Subscription<subscribe_with_context::Disposal<'or, OE::D>>,
 )
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
 {
     record_observable(OnBackpressure::new(source, ChunksOfThree::default()))
 }

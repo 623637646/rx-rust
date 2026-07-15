@@ -1,6 +1,8 @@
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, DisposableExt, boxed_disposal::BoxedDisposal},
+    disposable::{
+        Disposable, DisposableExt, boxed_disposal::BoxedDisposal, chain_disposal::ChainDisposal,
+    },
     observable::Subscription,
     observer::{Observer, Termination},
     safe_lock,
@@ -8,27 +10,31 @@ use crate::{
 };
 use educe::Educe;
 
-delegate_disposal!(Disposal<'or_sub>, BoxedDisposal<'or_sub>);
+delegate_disposal!(
+    Disposal<'or, D>,
+    ChainDisposal<BoxedDisposal<'or>, D>,
+    where D: Disposable
+);
 
 // Creates a subscription that is based on a shared mutable model and a observer.
-pub fn subscribe_with_context<'or_sub, T, E, OR, D, M, F>(
+pub fn subscribe_with_context<'or, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
     builder: F,
-) -> Subscription<Disposal<'or_sub>>
+) -> Subscription<Disposal<'or, D>>
 where
-    T: MaybeSend + 'or_sub,
-    E: MaybeSend + 'or_sub,
-    OR: MaybeSend + 'or_sub,
-    D: Disposable + MaybeSend + 'or_sub,
-    M: MaybeSend + 'or_sub,
+    T: MaybeSend + 'or,
+    E: MaybeSend + 'or,
+    OR: MaybeSend + 'or,
+    D: Disposable,
+    M: MaybeSend + 'or,
     F: FnOnce(Context<T, E, OR, M>) -> Subscription<D>,
 {
     let state = Shared::new(Mutable::new(State::Idle { observer, model }));
     let context = Context(state.clone());
     let disposable = SharedModelDisposable(state);
     let sub = builder(context);
-    sub.preceded_by(disposable).into_boxed().into()
+    sub.preceded_by(disposable.into_boxed()).map_into()
 }
 
 enum State<T, E, OR, M> {

@@ -68,20 +68,18 @@ impl<OE, C> OnBackpressure<OE, C> {
     }
 }
 
-impl<'or_sub, E, OE, C> Observable<'or_sub, (C::Output, RequestToken<'or_sub>), E>
-    for OnBackpressure<OE, C>
+impl<'or, E, OE, C> Observable<'or, (C::Output, RequestToken<'or>), E> for OnBackpressure<OE, C>
 where
-    E: MaybeSend + 'or_sub,
-    OE: Observable<'or_sub, C::Input, E>,
-    OE::D: MaybeSend + 'or_sub,
-    C: BackpressureCollection + MaybeSend + 'or_sub,
-    C::Output: MaybeSend + 'or_sub,
+    E: MaybeSend + 'or,
+    OE: Observable<'or, C::Input, E>,
+    C: BackpressureCollection + MaybeSend + 'or,
+    C::Output: MaybeSend + 'or,
 {
-    type D = subscribe_with_context::Disposal<'or_sub>;
+    type D = subscribe_with_context::Disposal<'or, OE::D>;
 
     fn subscribe(
         self,
-        observer: impl Observer<(C::Output, RequestToken<'or_sub>), E> + MaybeSend + 'or_sub,
+        observer: impl Observer<(C::Output, RequestToken<'or>), E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
         let model = Model {
             collection: self.collection,
@@ -89,7 +87,7 @@ where
             downstream_ready: true,
         };
         subscribe_with_context(observer, model, |context| {
-            let request_handler: SharedRequestHandler<'or_sub> = Shared::new(context.downgrade());
+            let request_handler: SharedRequestHandler<'or> = Shared::new(context.downgrade());
             self.source.subscribe(ObserverImpl {
                 context,
                 request_handler,

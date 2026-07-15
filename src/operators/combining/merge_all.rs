@@ -83,8 +83,9 @@ impl<E, OE1, I> MergeAll<WithErrorType<E, FromIter<I>>, OE1> {
 }
 
 delegate_disposal!(
-    Disposal<'or>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or>>
+    Disposal<'or, D>,
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, D>>,
+    where D: Disposable
 );
 
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for MergeAll<OE, OE1>
@@ -96,7 +97,7 @@ where
     OE1: Observable<'or, T, E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or>;
+    type D = Disposal<'or, OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {

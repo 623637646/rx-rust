@@ -65,9 +65,8 @@ where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
 {
-    type D = subscribe_with_context::Disposal<'or>;
+    type D = subscribe_with_context::Disposal<'or, OE::D>;
 
     fn subscribe(
         self,

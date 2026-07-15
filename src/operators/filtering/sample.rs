@@ -4,6 +4,7 @@ use crate::utils::subscribe_with_context::{
 use crate::utils::types::MaybeSend;
 use crate::{
     delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal},
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
@@ -74,8 +75,9 @@ impl<OE, OE1> Sample<OE, OE1> {
 }
 
 delegate_disposal!(
-    Disposal<'or>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or>>
+    Disposal<'or, D, D1>,
+    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D, D1>>>,
+    where D: Disposable, D1: Disposable
 );
 
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for Sample<OE, OE1>
@@ -87,7 +89,7 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or>;
+    type D = Disposal<'or, OE::D, OE1::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {

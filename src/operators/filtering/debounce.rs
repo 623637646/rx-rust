@@ -87,10 +87,9 @@ where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
     OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
     S: Scheduler + MaybeSend + 'or,
 {
-    type D = subscribe_with_context::Disposal<'or>;
+    type D = subscribe_with_context::Disposal<'or, OE::D>;
 
     fn subscribe(
         self,
