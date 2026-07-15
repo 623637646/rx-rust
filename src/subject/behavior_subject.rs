@@ -54,13 +54,13 @@ where
     ) -> Subscription<Self::D> {
         if let Some(terminated) = self.terminated() {
             observer.on_termination(terminated);
-            OptionDisposal::none().into()
+            OptionDisposal::none().into_subscription()
         } else {
             observer.on_next(safe_lock!(clone: self.value));
             self.publish_subject
                 .subscribe(observer)
                 .into_option()
-                .into()
+                .into_subscription()
         }
     }
 }

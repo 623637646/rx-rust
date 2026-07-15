@@ -13,6 +13,7 @@ use crate::{
         chain_disposal::ChainDisposal, either_disposal::EitherDisposal,
         option_disposal::OptionDisposal,
     },
+    observable::Subscription,
     safe_lock_option_disposable,
     utils::types::{MaybeSend, Mutable, Shared},
 };
@@ -44,6 +45,15 @@ pub trait DisposableExt: Disposable + Sized {
 
     fn into_bound_drop(self) -> BoundDropDisposal<Self> {
         BoundDropDisposal::new(self)
+    }
+
+    /// Converts this disposal into a subscription whose inner disposal is
+    /// created through [`From`].
+    fn into_subscription<D>(self) -> Subscription<D>
+    where
+        D: Disposable + From<Self>,
+    {
+        Subscription::new(self.into())
     }
 
     fn into_option(self) -> OptionDisposal<Self> {

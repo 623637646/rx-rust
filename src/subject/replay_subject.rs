@@ -63,7 +63,7 @@ where
                 Termination::Error(_) => {}
             }
             observer.on_termination(terminated);
-            OptionDisposal::none().into()
+            OptionDisposal::none().into_subscription()
         } else {
             let values = safe_lock!(clone: self.values);
             for value in values {
@@ -72,7 +72,7 @@ where
             self.publish_subject
                 .subscribe(observer)
                 .into_option()
-                .into()
+                .into_subscription()
         }
     }
 }

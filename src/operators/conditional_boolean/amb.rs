@@ -1,5 +1,5 @@
 use crate::delegate_disposal;
-use crate::disposable::Disposable;
+use crate::disposable::{Disposable, DisposableExt};
 use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
 use crate::{
     observable::{Observable, Subscription},
@@ -95,7 +95,7 @@ where
             safe_lock_slot_map!(replace: context, subscriptions, key, Some(sub));
         }
 
-        context.into()
+        context.into_subscription()
     }
 }
 

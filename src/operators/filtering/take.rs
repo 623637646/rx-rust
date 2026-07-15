@@ -66,7 +66,7 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
-            OptionDisposal::none().into()
+            OptionDisposal::none().into_subscription()
         } else {
             subscribe_with_auto_dispose_on_termination(observer, |observer| {
                 self.source.subscribe(TakeObserver {
@@ -75,7 +75,7 @@ where
                 })
             })
             .into_option()
-            .into()
+            .into_subscription()
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, shared_disposal::SharedDisposal},
+    disposable::{Disposable, DisposableExt, shared_disposal::SharedDisposal},
     observable::Subscription,
     observer::{Observer, Termination},
 };
@@ -28,7 +28,7 @@ where
     };
     shared_disposal.replace(|| builder(observer));
 
-    shared_disposal.into()
+    shared_disposal.into_subscription()
 }
 
 #[derive(Educe)]

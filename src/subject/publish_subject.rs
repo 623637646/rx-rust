@@ -1,7 +1,7 @@
 use super::Subject;
 use crate::delegate_disposal;
-use crate::disposable::Disposable;
 use crate::disposable::option_disposal::OptionDisposal;
+use crate::disposable::{Disposable, DisposableExt};
 use crate::observable::Subscription;
 use crate::observer::Event;
 use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
@@ -52,7 +52,8 @@ where
             State::Idle(observers) => {
                 let key = observers.insert(Some(BoxedObserver::new(observer)));
                 drop(lock);
-                OptionDisposal::some(PublishSubjectDisposal { state: self.0, key }).into()
+                OptionDisposal::some(PublishSubjectDisposal { state: self.0, key })
+                    .into_subscription()
             }
             State::Processing {
                 slot_map,
@@ -60,13 +61,14 @@ where
             } => {
                 let key = slot_map.insert(Some(BoxedObserver::new(observer)));
                 drop(lock);
-                OptionDisposal::some(PublishSubjectDisposal { state: self.0, key }).into()
+                OptionDisposal::some(PublishSubjectDisposal { state: self.0, key })
+                    .into_subscription()
             }
             State::Terminated(termination) => {
                 let termination = termination.clone();
                 drop(lock);
                 observer.on_termination(termination);
-                OptionDisposal::none().into()
+                OptionDisposal::none().into_subscription()
             }
         })
     }

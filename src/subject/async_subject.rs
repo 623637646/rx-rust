@@ -55,12 +55,12 @@ where
                 Termination::Error(_) => {}
             }
             observer.on_termination(terminated);
-            OptionDisposal::none().into()
+            OptionDisposal::none().into_subscription()
         } else {
             self.publish_subject
                 .subscribe(observer)
                 .into_option()
-                .into()
+                .into_subscription()
         }
     }
 }

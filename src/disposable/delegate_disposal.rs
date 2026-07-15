@@ -12,11 +12,13 @@
 /// and return that concrete type directly instead.
 ///
 /// The generated type implements [`Disposable`] by forwarding to the inner
-/// value. It also implements conversions from the inner value to both the
-/// generated type and [`Subscription`] of the generated type.
+/// value. It also implements conversion from the inner value to the generated
+/// type. Use [`DisposableExt::into_subscription`] to convert the inner value
+/// directly into a [`Subscription`] of the generated type.
 ///
 /// [`Disposable`]: crate::disposable::Disposable
 /// [`Disposable::dispose`]: crate::disposable::Disposable::dispose
+/// [`DisposableExt::into_subscription`]: crate::disposable::DisposableExt::into_subscription
 /// [`Subscription`]: crate::observable::Subscription
 #[macro_export]
 macro_rules! delegate_disposal {
@@ -82,18 +84,6 @@ macro_rules! delegate_disposal {
         {
             fn from(value: $inner) -> Self {
                 Self(value)
-            }
-        }
-
-        impl<$($generic),+, D0> From<D0>
-            for $crate::observable::Subscription<$name<$($generic),+>>
-        where
-            D0: $crate::disposable::Disposable,
-            $inner: From<D0>
-            $($where_clause)*
-        {
-            fn from(value: D0) -> Self {
-                $crate::observable::Subscription::new($name(value.into()))
             }
         }
     };
