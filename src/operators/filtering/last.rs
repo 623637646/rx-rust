@@ -47,9 +47,8 @@ impl<'or, T, E, OE> Observable<'or, T, E> for Last<OE>
 where
     T: MaybeSend + 'or,
     OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
 {
-    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
+    type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         TakeLast::new(self.source, 1).subscribe(observer)

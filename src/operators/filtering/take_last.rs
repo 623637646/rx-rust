@@ -3,7 +3,6 @@ use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 use std::collections::VecDeque;
@@ -51,17 +50,14 @@ impl<'or, T, E, OE> Observable<'or, T, E> for TakeLast<OE>
 where
     T: MaybeSend + 'or,
     OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
 {
-    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
+    type D = OE::D;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            self.source.subscribe(TakeLastObserver {
-                observer,
-                buffer: VecDeque::default(),
-                count: self.count,
-            })
+        self.source.subscribe(TakeLastObserver {
+            observer,
+            buffer: VecDeque::default(),
+            count: self.count,
         })
     }
 }
