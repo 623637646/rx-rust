@@ -32,7 +32,7 @@ where
 {
     let state = Shared::new(Mutable::new(State::Idle { observer, model }));
     let context = Context(state.clone());
-    let disposable = SharedModelDisposable(state);
+    let disposable = ContextDisposable(state);
     let sub = builder(context);
     sub.preceded_by(disposable.into_boxed()).map_into()
 }
@@ -438,9 +438,9 @@ impl<T, E, OR, M> Drop for StopOnPanic<'_, T, E, OR, M> {
     }
 }
 
-struct SharedModelDisposable<T, E, OR, M>(Shared<Mutable<State<T, E, OR, M>>>);
+struct ContextDisposable<T, E, OR, M>(Shared<Mutable<State<T, E, OR, M>>>);
 
-impl<T, E, OR, M> Disposable for SharedModelDisposable<T, E, OR, M> {
+impl<T, E, OR, M> Disposable for ContextDisposable<T, E, OR, M> {
     fn dispose(self) {
         let _old_state = safe_lock!(mem_replace: self.0, State::Stopped);
     }
