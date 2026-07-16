@@ -276,12 +276,16 @@ where
                         model,
                     } => {
                         if let Some((next, rest)) = next_and_rest {
-                            *lock = State::Processing {
-                                next_values: rest.unwrap_or_default(),
-                                termination,
-                                model,
-                            };
+                            let old_state = std::mem::replace(
+                                &mut *lock,
+                                State::Processing {
+                                    next_values: rest.unwrap_or_default(),
+                                    termination,
+                                    model,
+                                },
+                            );
                             drop(lock); // Drop lock to avoid potential deadlock
+                            drop(old_state);
                             // If the observer panics (in `on_next` here or inside
                             // `send_events_until_finish`), the state would otherwise stay
                             // `Processing` forever: later events get queued but never
@@ -358,8 +362,10 @@ where
                         let processing = std::mem::replace(&mut *lock, State::Stopped); // Placeholder
                         match processing {
                             State::Processing { model, .. } => {
-                                *lock = State::Idle { observer, model };
+                                let old_state =
+                                    std::mem::replace(&mut *lock, State::Idle { observer, model });
                                 drop(lock);
+                                drop(old_state);
                                 None
                             }
                             State::Idle { .. } | State::Stopped => {
@@ -369,8 +375,9 @@ where
                         }
                     }
                     (true, Some(termination)) => {
-                        *lock = State::Stopped;
+                        let old_state = std::mem::replace(&mut *lock, State::Stopped);
                         drop(lock);
+                        drop(old_state);
                         Some((observer, None, Some(termination)))
                     }
                     (false, None) => {
@@ -380,8 +387,9 @@ where
                     }
                     (false, Some(termination)) => {
                         let next_values = std::mem::take(next_values);
-                        *lock = State::Stopped;
+                        let old_state = std::mem::replace(&mut *lock, State::Stopped);
                         drop(lock);
+                        drop(old_state);
                         Some((observer, Some(next_values), Some(termination)))
                     }
                 },
