@@ -19,10 +19,10 @@ pub fn subscribe_with_auto_dispose_on_termination<OR, D, F>(
 ) -> Subscription<Disposal<D>>
 where
     D: Disposable,
-    F: FnOnce(UnsubAfterTerminationObserver<OR, D>) -> Subscription<D>,
+    F: FnOnce(AutoDisposeOnTerminationObserver<OR, D>) -> Subscription<D>,
 {
     let shared_disposal = SharedDisposal::default();
-    let observer = UnsubAfterTerminationObserver {
+    let observer = AutoDisposeOnTerminationObserver {
         observer,
         shared_disposal: shared_disposal.clone(),
     };
@@ -33,12 +33,12 @@ where
 
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct UnsubAfterTerminationObserver<OR, D: Disposable> {
+pub struct AutoDisposeOnTerminationObserver<OR, D: Disposable> {
     observer: OR,
     shared_disposal: SharedDisposal<Subscription<D>>,
 }
 
-impl<T, E, OR, D> Observer<T, E> for UnsubAfterTerminationObserver<OR, D>
+impl<T, E, OR, D> Observer<T, E> for AutoDisposeOnTerminationObserver<OR, D>
 where
     OR: Observer<T, E>,
     D: Disposable,
