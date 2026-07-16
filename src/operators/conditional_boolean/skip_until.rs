@@ -1,14 +1,8 @@
+use crate::disposable::Disposable;
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
 };
 use crate::utils::types::MaybeSend;
-use crate::{
-    delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal},
-    utils::subscribe_with_auto_dispose_on_termination::{
-        self, subscribe_with_auto_dispose_on_termination,
-    },
-};
 use crate::{
     observable::Observable,
     observable::Subscription,
@@ -74,12 +68,6 @@ impl<OE, OE1> SkipUntil<OE, OE1> {
     }
 }
 
-delegate_disposal!(
-    Disposal<'or, D, D1>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D, D1>>>,
-    where D: Disposable, D1: Disposable
-);
-
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for SkipUntil<OE, OE1>
 where
     T: MaybeSend + 'or,
@@ -89,21 +77,18 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or, OE::D, OE1::D>;
+    type D = BoundDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            let model = Model { started: false };
-            subscribe_with_context(observer, model, |context| {
-                let subscription_1 = self.start.subscribe(StartObserver {
-                    context: context.clone(),
-                    started: false,
-                });
-                let subscription_2 = self.source.subscribe(SkipUntilObserver(context));
-                subscription_1.preceded_by_bound(subscription_2)
-            })
+        let model = Model { started: false };
+        subscribe_with_context_bound_disposal(observer, model, |context| {
+            let subscription_1 = self.start.subscribe(StartObserver {
+                context: context.clone(),
+                started: false,
+            });
+            let subscription_2 = self.source.subscribe(SkipUntilObserver(context));
+            subscription_1.preceded_by_bound(subscription_2)
         })
-        .map_into()
     }
 }
 
@@ -111,11 +96,12 @@ struct Model {
     started: bool,
 }
 
-struct SkipUntilObserver<T, E, OR>(Context<T, E, OR, Model>);
+struct SkipUntilObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model, D>);
 
-impl<T, E, OR> Observer<T, E> for SkipUntilObserver<T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for SkipUntilObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.modify_model(|model| {
@@ -132,14 +118,15 @@ where
     }
 }
 
-struct StartObserver<T, E, OR> {
-    context: Context<T, E, OR, Model>,
+struct StartObserver<T, E, OR, D: Disposable> {
+    context: Context<T, E, OR, Model, D>,
     started: bool,
 }
 
-impl<T, E, OR> Observer<(), E> for StartObserver<T, E, OR>
+impl<T, E, OR, D> Observer<(), E> for StartObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
         if !self.started {

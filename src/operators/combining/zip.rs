@@ -1,13 +1,11 @@
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
 };
 use crate::utils::types::MaybeSend;
-use crate::{delegate_disposal, utils::subscribe_with_auto_dispose_on_termination};
 use crate::{
-    disposable::{Disposable, chain_disposal::ChainDisposal},
+    disposable::Disposable,
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
-    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 use std::collections::VecDeque;
@@ -58,12 +56,6 @@ impl<OE1, OE2> Zip<OE1, OE2> {
     }
 }
 
-delegate_disposal!(
-    Disposal<'or, D1, D2>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D2, D1>>>,
-    where D1: Disposable, D2: Disposable
-);
-
 impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for Zip<OE1, OE2>
 where
     T1: MaybeSend + 'or,
@@ -74,24 +66,21 @@ where
     OE2: Observable<'or, T2, E>,
     OE2::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or, OE1::D, OE2::D>;
+    type D = BoundDisposal<'or>;
 
     fn subscribe(
         self,
         observer: impl Observer<(T1, T2), E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            let model = Model {
-                first: (VecDeque::new(), false),
-                second: (VecDeque::new(), false),
-            };
-            subscribe_with_context(observer, model, |context| {
-                let subscription_1 = self.source_1.subscribe(ZipObserver1(context.clone()));
-                let subscription_2 = self.source_2.subscribe(ZipObserver2(context));
-                subscription_1.preceded_by_bound(subscription_2)
-            })
+        let model = Model {
+            first: (VecDeque::new(), false),
+            second: (VecDeque::new(), false),
+        };
+        subscribe_with_context_bound_disposal(observer, model, |context| {
+            let subscription_1 = self.source_1.subscribe(ZipObserver1(context.clone()));
+            let subscription_2 = self.source_2.subscribe(ZipObserver2(context));
+            subscription_1.preceded_by_bound(subscription_2)
         })
-        .map_into()
     }
 }
 
@@ -102,11 +91,12 @@ struct Model<T1, T2> {
 
 macro_rules! impl_zip_observer {
     ($name:ident, $input_t:ty, $this_field:ident, $other_field:ident, $make_pair:expr) => {
-        struct $name<T1, T2, E, OR>(Context<(T1, T2), E, OR, Model<T1, T2>>);
+        struct $name<T1, T2, E, OR, D: Disposable>(Context<(T1, T2), E, OR, Model<T1, T2>, D>);
 
-        impl<T1, T2, E, OR> Observer<$input_t, E> for $name<T1, T2, E, OR>
+        impl<T1, T2, E, OR, D> Observer<$input_t, E> for $name<T1, T2, E, OR, D>
         where
             OR: Observer<(T1, T2), E>,
+            D: Disposable,
         {
             fn on_next(&mut self, value: $input_t) {
                 let _ = self.0.modify_model(|model| {

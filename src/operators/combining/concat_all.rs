@@ -1,20 +1,14 @@
-use crate::delegate_disposal;
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::subscribe_with_context::{
-    self, Context, Error, ModificationResult, subscribe_with_context,
+    BoundDisposal, Context, Error, ModificationResult, subscribe_with_context_bound_disposal,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
-    utils::{
-        subscribe_with_auto_dispose_on_termination::{
-            self, subscribe_with_auto_dispose_on_termination,
-        },
-        types::MarkerType,
-    },
+    utils::types::MarkerType,
 };
 use educe::Educe;
 use std::{collections::VecDeque, marker::PhantomData};
@@ -81,12 +75,6 @@ impl<E, OE1, I> ConcatAll<WithErrorType<E, FromIter<I>>, OE1> {
     }
 }
 
-delegate_disposal!(
-    Disposal<'or, D>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, D>>,
-    where D: Disposable
-);
-
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for ConcatAll<OE, OE1>
 where
     T: MaybeSend + 'or,
@@ -96,20 +84,17 @@ where
     OE1: Observable<'or, T, E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or, OE::D>;
+    type D = BoundDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            let model = Model {
-                pending_observables: VecDeque::new(),
-                sub_state: SubState::Idle,
-                is_source_completed: false,
-            };
-            subscribe_with_context(observer, model, |context| {
-                self.source.subscribe(SourceObserver(context.clone()))
-            })
+        let model = Model {
+            pending_observables: VecDeque::new(),
+            sub_state: SubState::Idle,
+            is_source_completed: false,
+        };
+        subscribe_with_context_bound_disposal(observer, model, |context| {
+            self.source.subscribe(SourceObserver(context.clone()))
         })
-        .map_into()
     }
 }
 
@@ -128,17 +113,19 @@ where
     is_source_completed: bool,
 }
 
-struct SourceObserver<'or, T, E, OR, OE1>(Context<T, E, OR, Model<'or, T, E, OE1>>)
+struct SourceObserver<'or, T, E, OR, OE1, SD>(Context<T, E, OR, Model<'or, T, E, OE1>, SD>)
 where
-    OE1: Observable<'or, T, E>;
+    OE1: Observable<'or, T, E>,
+    SD: Disposable;
 
-impl<'or, T, E, OR, OE1> Observer<OE1, E> for SourceObserver<'or, T, E, OR, OE1>
+impl<'or, T, E, OR, OE1, SD> Observer<OE1, E> for SourceObserver<'or, T, E, OR, OE1, SD>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
     OE1: Observable<'or, T, E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
+    SD: Disposable + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
         let result = self.0.modify_model(|model| match model.sub_state {
@@ -194,17 +181,19 @@ where
     }
 }
 
-struct InnerObserver<'or, T, E, OR, OE1>(Context<T, E, OR, Model<'or, T, E, OE1>>)
+struct InnerObserver<'or, T, E, OR, OE1, SD>(Context<T, E, OR, Model<'or, T, E, OE1>, SD>)
 where
-    OE1: Observable<'or, T, E>;
+    OE1: Observable<'or, T, E>,
+    SD: Disposable;
 
-impl<'or, T, E, OR, OE1> Observer<T, E> for InnerObserver<'or, T, E, OR, OE1>
+impl<'or, T, E, OR, OE1, SD> Observer<T, E> for InnerObserver<'or, T, E, OR, OE1, SD>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
     OE1: Observable<'or, T, E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
+    SD: Disposable + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: T) {
         self.0.send_next(value);
@@ -220,14 +209,15 @@ where
     }
 }
 
-fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1>(
-    context: Context<T, E, OR, Model<'or, T, E, OE1>>,
+fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
+    context: Context<T, E, OR, Model<'or, T, E, OE1>, SD>,
 ) where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
     OE1: Observable<'or, T, E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
+    SD: Disposable + MaybeSend + 'or,
 {
     loop {
         let result = context.modify_model(|model| {

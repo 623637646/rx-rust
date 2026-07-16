@@ -1,12 +1,11 @@
-use crate::delegate_disposal;
-use crate::utils::subscribe_with_auto_dispose_on_termination;
-use crate::utils::subscribe_with_context::{self, Context, subscribe_with_context};
+use crate::utils::subscribe_with_context::{
+    BoundDisposal, Context, subscribe_with_context_bound_disposal,
+};
 use crate::utils::types::MaybeSend;
 use crate::{
-    disposable::{Disposable, chain_disposal::ChainDisposal},
+    disposable::Disposable,
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
-    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 
@@ -68,12 +67,6 @@ impl<OE, OE1> TakeUntil<OE, OE1> {
     }
 }
 
-delegate_disposal!(
-    Disposal<'or, D, D1>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D, D1>>>,
-    where D: Disposable, D1: Disposable
-);
-
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for TakeUntil<OE, OE1>
 where
     T: MaybeSend + 'or,
@@ -83,25 +76,23 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or, OE::D, OE1::D>;
+    type D = BoundDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            subscribe_with_context(observer, (), |context| {
-                let subscription_1 = self.stop.subscribe(StopObserver(context.clone()));
-                let subscription_2 = self.source.subscribe(TakeUntilObserver(context));
-                subscription_1.preceded_by_bound(subscription_2)
-            })
+        subscribe_with_context_bound_disposal(observer, (), |context| {
+            let subscription_1 = self.stop.subscribe(StopObserver(context.clone()));
+            let subscription_2 = self.source.subscribe(TakeUntilObserver(context));
+            subscription_1.preceded_by_bound(subscription_2)
         })
-        .map_into()
     }
 }
 
-struct TakeUntilObserver<T, E, OR>(Context<T, E, OR, ()>);
+struct TakeUntilObserver<T, E, OR, D: Disposable>(Context<T, E, OR, (), D>);
 
-impl<T, E, OR> Observer<T, E> for TakeUntilObserver<T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for TakeUntilObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         self.0.send_next(value);
@@ -112,11 +103,12 @@ where
     }
 }
 
-struct StopObserver<T, E, OR>(Context<T, E, OR, ()>);
+struct StopObserver<T, E, OR, D: Disposable>(Context<T, E, OR, (), D>);
 
-impl<T, E, OR> Observer<(), E> for StopObserver<T, E, OR>
+impl<T, E, OR, D> Observer<(), E> for StopObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
         self.0.send_termination(Termination::Completed);

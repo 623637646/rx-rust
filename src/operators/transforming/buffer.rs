@@ -1,16 +1,12 @@
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
-    delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal},
+    disposable::Disposable,
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    utils::subscribe_with_auto_dispose_on_termination::{
-        self, subscribe_with_auto_dispose_on_termination,
-    },
 };
 use educe::Educe;
 
@@ -73,12 +69,6 @@ impl<OE, OE1> Buffer<OE, OE1> {
     }
 }
 
-delegate_disposal!(
-    Disposal<'or, D, D1>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D, D1>>>,
-    where D: Disposable, D1: Disposable
-);
-
 impl<'or, T, E, OE, OE1> Observable<'or, Vec<T>, E> for Buffer<OE, OE1>
 where
     T: MaybeSend + 'or,
@@ -88,28 +78,26 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or, OE::D, OE1::D>;
+    type D = BoundDisposal<'or>;
 
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            subscribe_with_context(observer, Vec::new(), |context| {
-                let subscription_1 = self.boundary.subscribe(BoundaryObserver(context.clone()));
-                let subscription_2 = self.source.subscribe(BufferObserver(context));
-                subscription_1.preceded_by_bound(subscription_2)
-            })
+        subscribe_with_context_bound_disposal(observer, Vec::new(), |context| {
+            let subscription_1 = self.boundary.subscribe(BoundaryObserver(context.clone()));
+            let subscription_2 = self.source.subscribe(BufferObserver(context));
+            subscription_1.preceded_by_bound(subscription_2)
         })
-        .map_into()
     }
 }
 
-struct BufferObserver<T, E, OR>(Context<Vec<T>, E, OR, Vec<T>>);
+struct BufferObserver<T, E, OR, D: Disposable>(Context<Vec<T>, E, OR, Vec<T>, D>);
 
-impl<T, E, OR> Observer<T, E> for BufferObserver<T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for BufferObserver<T, E, OR, D>
 where
     OR: Observer<Vec<T>, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.modify_model(|values| {
@@ -137,11 +125,12 @@ where
     }
 }
 
-struct BoundaryObserver<T, E, OR>(Context<Vec<T>, E, OR, Vec<T>>);
+struct BoundaryObserver<T, E, OR, D: Disposable>(Context<Vec<T>, E, OR, Vec<T>, D>);
 
-impl<T, E, OR> Observer<(), E> for BoundaryObserver<T, E, OR>
+impl<T, E, OR, D> Observer<(), E> for BoundaryObserver<T, E, OR, D>
 where
     OR: Observer<Vec<T>, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
         let _ = self.0.modify_model(|values| {

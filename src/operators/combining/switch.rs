@@ -1,21 +1,15 @@
-use crate::delegate_disposal;
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
     operators::creating::from_iter::FromIter,
-    utils::{
-        subscribe_with_auto_dispose_on_termination::{
-            self, subscribe_with_auto_dispose_on_termination,
-        },
-        types::MarkerType,
-    },
+    utils::types::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -81,12 +75,6 @@ impl<E, OE1, I> Switch<WithErrorType<E, FromIter<I>>, OE1> {
     }
 }
 
-delegate_disposal!(
-    Disposal<'or, D>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, D>>,
-    where D: Disposable
-);
-
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for Switch<OE, OE1>
 where
     T: MaybeSend + 'or,
@@ -96,20 +84,17 @@ where
     OE1: Observable<'or, T, E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or, OE::D>;
+    type D = BoundDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            let model = Model {
-                sub_state: SubState::Idle,
-                is_source_completed: false,
-                current_sub_id: IncrementId::default(),
-            };
-            subscribe_with_context(observer, model, |context| {
-                self.source.subscribe(SwitchObserver(context))
-            })
+        let model = Model {
+            sub_state: SubState::Idle,
+            is_source_completed: false,
+            current_sub_id: IncrementId::default(),
+        };
+        subscribe_with_context_bound_disposal(observer, model, |context| {
+            self.source.subscribe(SwitchObserver(context))
         })
-        .map_into()
     }
 }
 
@@ -125,15 +110,16 @@ struct Model<D: Disposable> {
     current_sub_id: IncrementId,
 }
 
-struct SwitchObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<D>>);
+struct SwitchObserver<T, E, OR, ID: Disposable, SD: Disposable>(Context<T, E, OR, Model<ID>, SD>);
 
-impl<'or, T, E, OR, OE1> Observer<OE1, E> for SwitchObserver<T, E, OR, OE1::D>
+impl<'or, T, E, OR, OE1, SD> Observer<OE1, E> for SwitchObserver<T, E, OR, OE1::D, SD>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
     OE1: Observable<'or, T, E>,
     OE1::D: MaybeSend + 'or,
+    SD: Disposable + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
         let result = self.0.modify_model(|model| {
@@ -186,12 +172,16 @@ where
 
 // TODO: Improve performance, if is_source_completed is true, stop the context and no more need to lock when sending next.
 // TODO: check all cases using subscribe_with_context whether it can be improved.
-struct SwitchInnerObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<D>>, IncrementId);
+struct SwitchInnerObserver<T, E, OR, ID: Disposable, SD: Disposable>(
+    Context<T, E, OR, Model<ID>, SD>,
+    IncrementId,
+);
 
-impl<T, E, OR, D> Observer<T, E> for SwitchInnerObserver<T, E, OR, D>
+impl<T, E, OR, ID, SD> Observer<T, E> for SwitchInnerObserver<T, E, OR, ID, SD>
 where
     OR: Observer<T, E>,
-    D: Disposable,
+    ID: Disposable,
+    SD: Disposable,
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.modify_model(|model| {

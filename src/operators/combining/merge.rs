@@ -1,13 +1,11 @@
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
 };
 use crate::utils::types::MaybeSend;
-use crate::{delegate_disposal, utils::subscribe_with_auto_dispose_on_termination};
 use crate::{
-    disposable::{Disposable, chain_disposal::ChainDisposal},
+    disposable::Disposable,
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
-    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 
@@ -57,12 +55,6 @@ impl<OE1, OE2> Merge<OE1, OE2> {
     }
 }
 
-delegate_disposal!(
-    Disposal<'or, D1, D2>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D2, D1>>>,
-    where D1: Disposable, D2: Disposable
-);
-
 impl<'or, T, E, OE1, OE2> Observable<'or, T, E> for Merge<OE1, OE2>
 where
     T: MaybeSend + 'or,
@@ -72,20 +64,17 @@ where
     OE2: Observable<'or, T, E>,
     OE2::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or, OE1::D, OE2::D>;
+    type D = BoundDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            let model = Model {
-                one_is_completed: false,
-            };
-            subscribe_with_context(observer, model, |context| {
-                let subscription_1 = self.source_1.subscribe(MergeObserver(context.clone()));
-                let subscription_2 = self.source_2.subscribe(MergeObserver(context));
-                subscription_1.preceded_by_bound(subscription_2)
-            })
+        let model = Model {
+            one_is_completed: false,
+        };
+        subscribe_with_context_bound_disposal(observer, model, |context| {
+            let subscription_1 = self.source_1.subscribe(MergeObserver(context.clone()));
+            let subscription_2 = self.source_2.subscribe(MergeObserver(context));
+            subscription_1.preceded_by_bound(subscription_2)
         })
-        .map_into()
     }
 }
 
@@ -93,11 +82,12 @@ struct Model {
     one_is_completed: bool,
 }
 
-struct MergeObserver<T, E, OR>(Context<T, E, OR, Model>);
+struct MergeObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model, D>);
 
-impl<T, E, OR> Observer<T, E> for MergeObserver<T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for MergeObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         self.0.send_next(value);

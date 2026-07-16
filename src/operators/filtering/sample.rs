@@ -1,16 +1,12 @@
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
-    delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal},
+    disposable::Disposable,
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    utils::subscribe_with_auto_dispose_on_termination::{
-        self, subscribe_with_auto_dispose_on_termination,
-    },
 };
 use educe::Educe;
 
@@ -74,12 +70,6 @@ impl<OE, OE1> Sample<OE, OE1> {
     }
 }
 
-delegate_disposal!(
-    Disposal<'or, D, D1>,
-    subscribe_with_auto_dispose_on_termination::Disposal<subscribe_with_context::Disposal<'or, ChainDisposal<D, D1>>>,
-    where D: Disposable, D1: Disposable
-);
-
 impl<'or, T, E, OE, OE1> Observable<'or, T, E> for Sample<OE, OE1>
 where
     T: MaybeSend + 'or,
@@ -89,20 +79,17 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = Disposal<'or, OE::D, OE1::D>;
+    type D = BoundDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            let model = Model { last_value: None };
-            subscribe_with_context(observer, model, |context| {
-                let sample_observer = SampleObserver(context.clone());
-                let sampler_observer = SamplerObserver(context);
-                let subscription_1 = self.sampler.subscribe(sampler_observer);
-                let subscription_2 = self.source.subscribe(sample_observer);
-                subscription_1.preceded_by_bound(subscription_2)
-            })
+        let model = Model { last_value: None };
+        subscribe_with_context_bound_disposal(observer, model, |context| {
+            let sample_observer = SampleObserver(context.clone());
+            let sampler_observer = SamplerObserver(context);
+            let subscription_1 = self.sampler.subscribe(sampler_observer);
+            let subscription_2 = self.source.subscribe(sample_observer);
+            subscription_1.preceded_by_bound(subscription_2)
         })
-        .map_into()
     }
 }
 
@@ -110,11 +97,12 @@ struct Model<T> {
     last_value: Option<T>,
 }
 
-struct SampleObserver<T, E, OR>(Context<T, E, OR, Model<T>>);
+struct SampleObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<T>, D>);
 
-impl<T, E, OR> Observer<T, E> for SampleObserver<T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for SampleObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.modify_model(|model| {
@@ -127,11 +115,12 @@ where
     }
 }
 
-struct SamplerObserver<T, E, OR>(Context<T, E, OR, Model<T>>);
+struct SamplerObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<T>, D>);
 
-impl<T, E, OR> Observer<(), E> for SamplerObserver<T, E, OR>
+impl<T, E, OR, D> Observer<(), E> for SamplerObserver<T, E, OR, D>
 where
     OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
         let _ = self.0.modify_model(|model| {
