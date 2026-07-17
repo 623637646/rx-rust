@@ -9,9 +9,8 @@ pub mod shared_disposal;
 pub use crate::delegate_disposal;
 use crate::{
     disposable::{
-        bound_drop_disposal::BoundDropDisposal, boxed_disposal::BoxedDisposal,
-        chain_disposal::ChainDisposal, either_disposal::EitherDisposal,
-        option_disposal::OptionDisposal,
+        boxed_disposal::BoxedDisposal, chain_disposal::ChainDisposal,
+        either_disposal::EitherDisposal, option_disposal::OptionDisposal,
     },
     observable::Subscription,
     safe_lock_option_disposable,
@@ -41,10 +40,6 @@ pub trait DisposableExt: Disposable + Sized {
         Self: MaybeSend + 'dis,
     {
         BoxedDisposal::new(self)
-    }
-
-    fn into_bound_drop(self) -> BoundDropDisposal<Self> {
-        BoundDropDisposal::new(self)
     }
 
     /// Converts this disposal into a subscription whose inner disposal is

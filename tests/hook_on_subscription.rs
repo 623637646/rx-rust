@@ -4,8 +4,8 @@ use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
+use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::disposable::{Disposable, DisposableExt};
 use rx_rust::observable::Subscription;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::Shared;
@@ -381,10 +381,9 @@ fn test_lifetime_sub() {
         let observable = Create::new(|mut observer| {
             observer.on_next(1);
             observer.on_termination(Termination::<String>::Completed);
-            CallbackDisposal::new(|| {
+            Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
-            })
-            .into_bound_drop()
+            }))
         });
 
         let observable =

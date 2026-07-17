@@ -66,7 +66,7 @@ where
 pub(crate) struct ReceiverObservable<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
 impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
-    type D = ReceiverObservableDisposaler<'or, T, E>;
+    type D = ReceiverObservableDisposal<'or, T, E>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         match safe_lock!(mem_replace:
@@ -78,13 +78,13 @@ impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
             State::Terminated(_) => panic!(),
             State::Unsubscribed => panic!(),
         }
-        ReceiverObservableDisposaler(self.0).into_bound_drop()
+        ReceiverObservableDisposal(self.0).into_subscription()
     }
 }
 
-pub(crate) struct ReceiverObservableDisposaler<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
+pub(crate) struct ReceiverObservableDisposal<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
 
-impl<'or, T, E> Disposable for ReceiverObservableDisposaler<'or, T, E> {
+impl<'or, T, E> Disposable for ReceiverObservableDisposal<'or, T, E> {
     fn dispose(self) {
         self.0.lock_mut(|mut lock| match &mut *lock {
             State::Initialized | State::Unsubscribed => {
