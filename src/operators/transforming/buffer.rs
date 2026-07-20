@@ -107,21 +107,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                let _ = self.0.modify_model(|values| {
-                    if values.is_empty() {
-                        ModificationResult::new_send_termination(termination)
-                    } else {
-                        ModificationResult::new_send_next_and_termination(
-                            std::mem::take(values),
-                            termination,
-                        )
-                    }
-                });
-            }
-            Termination::Error(_) => self.0.send_termination(termination),
-        }
+        terminate(self.0, termination);
     }
 }
 
@@ -142,20 +128,28 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                let _ = self.0.modify_model(|values| {
-                    if values.is_empty() {
-                        ModificationResult::new_send_termination(termination)
-                    } else {
-                        ModificationResult::new_send_next_and_termination(
-                            std::mem::take(values),
-                            termination,
-                        )
-                    }
-                });
-            }
-            Termination::Error(_) => self.0.send_termination(termination),
+        terminate(self.0, termination);
+    }
+}
+
+fn terminate<T, E, OR, D>(context: Context<Vec<T>, E, OR, Vec<T>, D>, termination: Termination<E>)
+where
+    OR: Observer<Vec<T>, E>,
+    D: Disposable,
+{
+    match termination {
+        Termination::Completed => {
+            let _ = context.modify_model(|values| {
+                if values.is_empty() {
+                    ModificationResult::new_send_termination(termination)
+                } else {
+                    ModificationResult::new_send_next_and_termination(
+                        std::mem::take(values),
+                        termination,
+                    )
+                }
+            });
         }
+        Termination::Error(_) => context.send_termination(termination),
     }
 }
