@@ -9,6 +9,7 @@ use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::utils::types::Shared;
+use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -16,7 +17,6 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -341,10 +341,10 @@ fn test_clone() {
 #[test]
 fn test_boxed_observable() {
     // Custom operations
-    let switch = Shared::new(AtomicBool::new(false));
+    let switch = Shared::new(MutableBool::new(false));
     let observable = Defer::new(|| {
         let observable = Just::new(111);
-        if switch.load(Ordering::SeqCst) {
+        if switch.read() {
             observable.into_boxed()
         } else {
             observable.map(|value| value * 2).into_boxed()
@@ -355,7 +355,7 @@ fn test_boxed_observable() {
     assert_eq!(checker.values(), [222]);
     assert_eq!(checker.state(), State::Completed);
 
-    switch.store(true, Ordering::SeqCst);
+    switch.write(true);
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);

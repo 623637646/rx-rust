@@ -11,15 +11,15 @@ use educe::Educe;
 use std::collections::VecDeque;
 
 delegate_disposal!(
-    Disposal<'or, D>, // TODO: Rename?
+    Disposal<'or, D>,
     ChainDisposal<BoxedDisposal<'or>, D>,
     where D: Disposable
 );
 
-fn default_model_mapper<M>(_: &mut M) {}
+fn retain_nothing_on_stop<M>(_: &mut M) {}
 
-// TODO: Rename?
-// Creates a subscription that is based on a shared mutable model and a observer.
+/// Creates a subscription backed by a shared, serialized context containing the downstream
+/// observer and a mutable model.
 pub fn subscribe_with_context<'or, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
@@ -31,18 +31,21 @@ where
     OR: MaybeSend + 'or,
     D: Disposable,
     M: MaybeSend + 'or,
-    F: FnOnce(Context<T, E, OR, M>) -> Subscription<D>,
+    F: FnOnce(SubscriptionContext<T, E, OR, M>) -> Subscription<D>,
 {
-    subscribe_with_context_map_model(observer, model, builder, default_model_mapper)
+    subscribe_with_context_retain_state_on_stop(observer, model, builder, retain_nothing_on_stop)
 }
 
-/// `model_mapper` runs while the context state is locked. It must only move the data needed
-/// after stopping out of the model; it must not call external APIs or panic.
-pub fn subscribe_with_context_map_model<'or, T, E, OR, D, M, M1, F>(
+/// Creates a context subscription that retains selected model state after stopping.
+///
+/// `retain_state_on_stop` runs while the context is locked during the transition to `Stopped`.
+/// It must only move out the state that needs to remain available; it must not call external
+/// APIs, drop values that can re-enter the context, or panic.
+pub fn subscribe_with_context_retain_state_on_stop<'or, T, E, OR, D, M, S, F>(
     observer: OR,
     model: M,
     builder: F,
-    model_mapper: fn(&mut M) -> M1,
+    retain_state_on_stop: fn(&mut M) -> S,
 ) -> Subscription<Disposal<'or, D>>
 where
     T: MaybeSend + 'or,
@@ -50,114 +53,130 @@ where
     OR: MaybeSend + 'or,
     D: Disposable,
     M: MaybeSend + 'or,
-    M1: MaybeSend + 'or,
-    F: FnOnce(Context<T, E, OR, M, (), M1>) -> Subscription<D>,
+    S: MaybeSend + 'or,
+    F: FnOnce(SubscriptionContext<T, E, OR, M, (), S>) -> Subscription<D>,
 {
-    assert_observer::<OR>();
+    debug_assert_observer_compatibility::<OR>();
     let state = Shared::new(Mutable::new(State::Idle {
         observer,
         model,
-        sub: Subscription::default(),
+        subscription: Subscription::default(),
     }));
-    let context = Context {
+    let context = SubscriptionContext {
         state: state.clone(),
-        model_mapper,
+        retain_state_on_stop,
     };
-    let disposable = ContextDisposable {
+    let disposable = SubscriptionContextDisposal {
         state,
-        model_mapper,
+        retain_state_on_stop,
     };
-    let sub = builder(context);
-    sub.preceded_by(disposable.into_boxed()).map_into()
+    let subscription = builder(context);
+    subscription.preceded_by(disposable.into_boxed()).map_into()
 }
 
-pub type BoundDisposal<'or> = BoxedDisposal<'or>;
+/// Type-erased disposal returned when the context owns the source subscription.
+pub type BoundSubscriptionDisposal<'or> = BoxedDisposal<'or>;
 
-pub fn subscribe_with_context_bound_disposal<'or, T, E, OR, D, M, F>(
+/// Creates a context subscription whose source subscription is owned by the context.
+///
+/// Owning the source subscription lets the context dispose it automatically when the observer
+/// terminates, including when termination occurs synchronously while `builder` is running.
+pub fn subscribe_with_context_bound_subscription<'or, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
     builder: F,
-) -> Subscription<BoundDisposal<'or>>
+) -> Subscription<BoundSubscriptionDisposal<'or>>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: MaybeSend + 'or,
     D: Disposable + MaybeSend + 'or,
     M: MaybeSend + 'or,
-    F: FnOnce(Context<T, E, OR, M, D, ()>) -> Subscription<D>,
+    F: FnOnce(SubscriptionContext<T, E, OR, M, D, ()>) -> Subscription<D>,
 {
-    subscribe_with_context_bound_disposal_map_model(observer, model, builder, default_model_mapper)
+    subscribe_with_context_bound_subscription_retain_state_on_stop(
+        observer,
+        model,
+        builder,
+        retain_nothing_on_stop,
+    )
 }
 
-/// `model_mapper` runs while the context state is locked. It must only move the data needed
-/// after stopping out of the model; it must not call external APIs or panic.
-pub fn subscribe_with_context_bound_disposal_map_model<'or, T, E, OR, D, M, M1, F>(
+/// Creates a context-owned subscription that retains selected model state after stopping.
+///
+/// `retain_state_on_stop` runs while the context is locked during the transition to `Stopped`.
+/// It must only move out the state that needs to remain available; it must not call external
+/// APIs, drop values that can re-enter the context, or panic.
+pub fn subscribe_with_context_bound_subscription_retain_state_on_stop<'or, T, E, OR, D, M, S, F>(
     observer: OR,
     model: M,
     builder: F,
-    model_mapper: fn(&mut M) -> M1,
-) -> Subscription<BoundDisposal<'or>>
+    retain_state_on_stop: fn(&mut M) -> S,
+) -> Subscription<BoundSubscriptionDisposal<'or>>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: MaybeSend + 'or,
     D: Disposable + MaybeSend + 'or,
     M: MaybeSend + 'or,
-    M1: MaybeSend + 'or,
-    F: FnOnce(Context<T, E, OR, M, D, M1>) -> Subscription<D>,
+    S: MaybeSend + 'or,
+    F: FnOnce(SubscriptionContext<T, E, OR, M, D, S>) -> Subscription<D>,
 {
-    assert_observer::<OR>();
+    debug_assert_observer_compatibility::<OR>();
     let state = Shared::new(Mutable::new(State::Subscribing { observer, model }));
-    let context = Context {
+    let context = SubscriptionContext {
         state: state.clone(),
-        model_mapper,
+        retain_state_on_stop,
     };
-    let disposable = ContextDisposable {
+    let disposable = SubscriptionContextDisposal {
         state: state.clone(),
-        model_mapper,
+        retain_state_on_stop,
     };
-    let sub = builder(context);
-    let sub_to_drop = state.lock_mut(|mut lock| {
+    let subscription = builder(context);
+    let subscription_to_drop = state.lock_mut(|mut lock| {
         let state = std::mem::replace(&mut *lock, State::Placeholder);
         match state {
             State::Subscribing { observer, model } => {
                 *lock = State::Idle {
                     observer,
                     model,
-                    sub,
+                    subscription,
                 };
                 None
             }
             State::Idle { .. } => unreachable!(),
-            State::Processing {
+            State::Delivering {
                 next_values,
                 termination,
                 model,
-                sub: None,
+                subscription: None,
             } => {
-                *lock = State::Processing {
+                *lock = State::Delivering {
                     next_values,
                     termination,
                     model,
-                    sub: Some(sub),
+                    subscription: Some(subscription),
                 };
                 None
             }
-            State::Processing { sub: Some(_), .. } => unreachable!(),
-            State::Stopped(model_in_stop) => {
-                *lock = State::Stopped(model_in_stop);
-                Some(sub)
+            State::Delivering {
+                subscription: Some(_),
+                ..
+            } => unreachable!(),
+            State::Stopped { retained_state } => {
+                *lock = State::Stopped { retained_state };
+                Some(subscription)
             }
             State::Placeholder => unreachable!(),
         }
     });
-    drop(sub_to_drop); // Drop outside the lock to avoid potential deadlock
+    drop(subscription_to_drop); // Drop outside the lock to avoid potential deadlock
     disposable.into_boxed().into_subscription()
 }
 
 #[derive(Educe)]
 #[educe(Debug)]
-enum State<T, E, OR, M, D: Disposable, M1> {
+enum State<T, E, OR, M, D: Disposable, S> {
     Subscribing {
         observer: OR,
         model: M,
@@ -165,50 +184,55 @@ enum State<T, E, OR, M, D: Disposable, M1> {
     Idle {
         observer: OR,
         model: M,
-        sub: Subscription<D>,
+        subscription: Subscription<D>,
     },
-    Processing {
+    Delivering {
         next_values: VecDeque<T>,
         termination: Option<Termination<E>>,
         model: M,
-        sub: Option<Subscription<D>>, // Back to Subscribing if None, otherwise to Idle.
+        subscription: Option<Subscription<D>>, // Back to Subscribing if None, otherwise to Idle.
     },
-    Stopped(M1), // Unsubscribed or disposed
+    Stopped {
+        retained_state: S,
+    },
     Placeholder,
 }
 
-type SharedState<T, E, OR, M, D, M1> = Shared<Mutable<State<T, E, OR, M, D, M1>>>;
-type WeakSharedState<T, E, OR, M, D, M1> = WeakShared<Mutable<State<T, E, OR, M, D, M1>>>;
+type SharedState<T, E, OR, M, D, S> = Shared<Mutable<State<T, E, OR, M, D, S>>>;
+type WeakSharedState<T, E, OR, M, D, S> = WeakShared<Mutable<State<T, E, OR, M, D, S>>>;
 
+/// Shared state used by operator observers to serialize model updates and downstream events.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Context<T, E, OR, M, D: Disposable = (), M1 = ()> {
-    state: SharedState<T, E, OR, M, D, M1>,
-    model_mapper: fn(&mut M) -> M1,
+pub struct SubscriptionContext<T, E, OR, M, D: Disposable = (), S = ()> {
+    state: SharedState<T, E, OR, M, D, S>,
+    retain_state_on_stop: fn(&mut M) -> S,
 }
 
+/// One atomic batch of downstream observer events.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
-pub enum EventGroup<T, E> {
+pub enum EventBatch<T, E> {
     Next(T),
     Termination(Termination<E>),
     NextAndTermination(T, Termination<E>),
-    Nexts(Vec<T>),
-    NextsAndTermination(Vec<T>, Termination<E>),
+    NextBatch(Vec<T>),
+    NextBatchAndTermination(Vec<T>, Termination<E>),
 }
 
+/// Effects produced by a model update while the subscription context is locked.
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ModificationResult<T, E, A, R> {
-    send_events: Option<EventGroup<T, E>>,
+pub struct ModelUpdate<T, E, A, R> {
+    events: Option<EventBatch<T, E>>,
     drop_outside: Option<A>,
     result: R,
 }
 
-impl<T, E, A, R> ModificationResult<T, E, A, R> {
+impl<T, E, A, R> ModelUpdate<T, E, A, R> {
     pub fn new(result: R) -> Self {
         Self {
-            send_events: None,
+            events: None,
             drop_outside: None,
             result,
         }
@@ -217,7 +241,7 @@ impl<T, E, A, R> ModificationResult<T, E, A, R> {
     pub fn send_next(self, next: T) -> Self {
         self.assert_no_events_set();
         Self {
-            send_events: Some(EventGroup::Next(next)),
+            events: Some(EventBatch::Next(next)),
             ..self
         }
     }
@@ -225,7 +249,7 @@ impl<T, E, A, R> ModificationResult<T, E, A, R> {
     pub fn send_termination(self, termination: Termination<E>) -> Self {
         self.assert_no_events_set();
         Self {
-            send_events: Some(EventGroup::Termination(termination)),
+            events: Some(EventBatch::Termination(termination)),
             ..self
         }
     }
@@ -233,15 +257,15 @@ impl<T, E, A, R> ModificationResult<T, E, A, R> {
     pub fn send_next_and_termination(self, next: T, termination: Termination<E>) -> Self {
         self.assert_no_events_set();
         Self {
-            send_events: Some(EventGroup::NextAndTermination(next, termination)),
+            events: Some(EventBatch::NextAndTermination(next, termination)),
             ..self
         }
     }
 
-    pub fn send_events(self, events: EventGroup<T, E>) -> Self {
+    pub fn send_events(self, events: EventBatch<T, E>) -> Self {
         self.assert_no_events_set();
         Self {
-            send_events: Some(events),
+            events: Some(events),
             ..self
         }
     }
@@ -259,16 +283,16 @@ impl<T, E, A, R> ModificationResult<T, E, A, R> {
 
     fn assert_no_events_set(&self) {
         debug_assert!(
-            self.send_events.is_none(),
+            self.events.is_none(),
             "send_events is already set; calling a send_* method again would silently overwrite the previous events"
         );
     }
 }
 
-impl<T, E> ModificationResult<T, E, (), ()> {
+impl<T, E> ModelUpdate<T, E, (), ()> {
     pub fn new_empty() -> Self {
         Self {
-            send_events: None,
+            events: None,
             drop_outside: None,
             result: (),
         }
@@ -276,7 +300,7 @@ impl<T, E> ModificationResult<T, E, (), ()> {
 
     pub fn new_send_next(next: T) -> Self {
         Self {
-            send_events: Some(EventGroup::Next(next)),
+            events: Some(EventBatch::Next(next)),
             drop_outside: None,
             result: (),
         }
@@ -284,7 +308,7 @@ impl<T, E> ModificationResult<T, E, (), ()> {
 
     pub fn new_send_termination(termination: Termination<E>) -> Self {
         Self {
-            send_events: Some(EventGroup::Termination(termination)),
+            events: Some(EventBatch::Termination(termination)),
             drop_outside: None,
             result: (),
         }
@@ -292,99 +316,108 @@ impl<T, E> ModificationResult<T, E, (), ()> {
 
     pub fn new_send_next_and_termination(next: T, termination: Termination<E>) -> Self {
         Self {
-            send_events: Some(EventGroup::NextAndTermination(next, termination)),
+            events: Some(EventBatch::NextAndTermination(next, termination)),
             drop_outside: None,
             result: (),
         }
     }
 
-    pub fn new_send_events(events: EventGroup<T, E>) -> Self {
+    pub fn new_send_events(events: EventBatch<T, E>) -> Self {
         Self {
-            send_events: Some(events),
+            events: Some(events),
             drop_outside: None,
             result: (),
         }
     }
 }
 
-impl<T, E, A> ModificationResult<T, E, A, ()> {
+impl<T, E, A> ModelUpdate<T, E, A, ()> {
     pub fn new_without_result() -> Self {
         Self {
-            send_events: None,
+            events: None,
             drop_outside: None,
             result: (),
         }
     }
 }
 
-impl<T, E, R> ModificationResult<T, E, (), R> {
+impl<T, E, R> ModelUpdate<T, E, (), R> {
     pub fn ignore_drop_outside(self) -> Self {
         self
     }
 }
 
+/// Returned when an update requires the active model after the context has stopped.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
-pub enum Error {
-    Stopped,
+pub struct ContextStopped;
+
+/// A mutable view of the model storage for either phase of a subscription context.
+pub enum ModelState<'a, M, S> {
+    Active(&'a mut M),
+    Stopped(&'a mut S),
 }
 
-impl<T, E, OR, M, D, M1> Context<T, E, OR, M, D, M1>
+impl<T, E, OR, M, D, S> SubscriptionContext<T, E, OR, M, D, S>
 where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    /// Modify the model with callback.
-    /// IMPORTANT: It may cause deadlock if call outside APIs inside callback (even drop object inside).
-    pub fn modify_model<A, R>(
+    /// Tries to update the active model while the context is locked.
+    ///
+    /// The callback must not call external APIs or drop values that can re-enter this context.
+    /// Return such values through [`ModelUpdate::drop_outside`] instead.
+    /// If the context has stopped, the callback is not invoked and [`ContextStopped`] is returned.
+    pub fn try_update_model<A, R>(
         &self,
-        callback: impl FnOnce(&mut M) -> ModificationResult<T, E, A, R>,
-    ) -> Result<R, Error> {
-        self.state.lock_mut(|mut lock| {
-            let model = match &mut *lock {
-                State::Subscribing { model, .. } => model,
-                State::Idle { model, .. } => model,
-                State::Processing { model, .. } => model,
-                State::Stopped(_) => {
-                    drop(lock);
-                    return Result::Err(Error::Stopped);
+        callback: impl FnOnce(&mut M) -> ModelUpdate<T, E, A, R>,
+    ) -> Result<R, ContextStopped> {
+        // Keep the callback outside the closure so that, if the context is already stopped, its
+        // captures are dropped only after `update_model_or_retained_state` has released the lock.
+        let mut callback = Some(callback);
+        self.update_model_or_retained_state(|model| match model {
+            ModelState::Active(model) => {
+                let callback = callback
+                    .take()
+                    .expect("active model callback must only be called once");
+                let ModelUpdate {
+                    events,
+                    drop_outside,
+                    result,
+                } = callback(model);
+                ModelUpdate {
+                    events,
+                    drop_outside,
+                    result: Ok(result),
                 }
-                State::Placeholder => unreachable!(),
-            };
-            let ModificationResult {
-                send_events,
-                drop_outside,
-                result,
-            } = callback(model);
-            if let Some(send_events) = send_events {
-                self.sending_impl(send_events, lock);
-            } else {
-                drop(lock);
             }
-            drop(drop_outside); // Drop outside the lock to avoid potential deadlock
-            Ok(result)
+            ModelState::Stopped(_) => ModelUpdate::new(Err(ContextStopped)),
         })
     }
 
-    pub fn modify_model_or_model_in_stop<A, R>(
+    /// Updates either the active model or the state retained after stopping.
+    ///
+    /// The callback runs while the context is locked and follows the same restrictions as
+    /// [`SubscriptionContext::try_update_model`].
+    pub fn update_model_or_retained_state<A, R>(
         &self,
-        callback: impl FnOnce(Result<&mut M, &mut M1>) -> ModificationResult<T, E, A, R>,
+        callback: impl FnOnce(ModelState<'_, M, S>) -> ModelUpdate<T, E, A, R>,
     ) -> R {
         self.state.lock_mut(|mut lock| {
             let model = match &mut *lock {
-                State::Subscribing { model, .. } => Ok(model),
-                State::Idle { model, .. } => Ok(model),
-                State::Processing { model, .. } => Ok(model),
-                State::Stopped(model_in_stop) => Err(model_in_stop),
+                State::Subscribing { model, .. } => ModelState::Active(model),
+                State::Idle { model, .. } => ModelState::Active(model),
+                State::Delivering { model, .. } => ModelState::Active(model),
+                State::Stopped { retained_state } => ModelState::Stopped(retained_state),
                 State::Placeholder => unreachable!(),
             };
-            let ModificationResult {
-                send_events,
+            let ModelUpdate {
+                events,
                 drop_outside,
                 result,
             } = callback(model);
-            if let Some(send_events) = send_events {
-                self.sending_impl(send_events, lock);
+            if let Some(events) = events {
+                self.dispatch_events(events, lock);
             } else {
                 drop(lock);
             }
@@ -395,102 +428,103 @@ where
 
     pub fn send_next(&self, value: T) {
         self.state
-            .lock_mut(|lock| self.sending_impl(EventGroup::Next(value), lock))
+            .lock_mut(|lock| self.dispatch_events(EventBatch::Next(value), lock))
     }
 
     pub fn send_termination(&self, termination: Termination<E>) {
         self.state
-            .lock_mut(|lock| self.sending_impl(EventGroup::Termination(termination), lock))
+            .lock_mut(|lock| self.dispatch_events(EventBatch::Termination(termination), lock))
     }
 
     pub fn send_next_and_termination(&self, next: T, termination: Termination<E>) {
         self.state.lock_mut(|lock| {
-            self.sending_impl(EventGroup::NextAndTermination(next, termination), lock)
+            self.dispatch_events(EventBatch::NextAndTermination(next, termination), lock)
         })
     }
 
-    pub fn send_events(&self, events: EventGroup<T, E>) {
-        self.state.lock_mut(|lock| self.sending_impl(events, lock))
+    pub fn send_events(&self, events: EventBatch<T, E>) {
+        self.state
+            .lock_mut(|lock| self.dispatch_events(events, lock))
     }
 
-    fn sending_impl(
+    fn dispatch_events(
         &self,
-        events: EventGroup<T, E>,
-        mut lock: MutGuard<'_, State<T, E, OR, M, D, M1>>,
+        events: EventBatch<T, E>,
+        mut lock: MutGuard<'_, State<T, E, OR, M, D, S>>,
     ) {
         match &mut *lock {
             State::Idle { .. } | State::Subscribing { .. } => {
                 let (first_next, next_values, termination) = match events {
-                    EventGroup::Next(next) => (Some(next), VecDeque::new(), None),
-                    EventGroup::Termination(termination) => {
+                    EventBatch::Next(next) => (Some(next), VecDeque::new(), None),
+                    EventBatch::Termination(termination) => {
                         (None, VecDeque::new(), Some(termination))
                     }
-                    EventGroup::NextAndTermination(next, termination) => {
+                    EventBatch::NextAndTermination(next, termination) => {
                         (Some(next), VecDeque::new(), Some(termination))
                     }
-                    EventGroup::Nexts(items) => {
+                    EventBatch::NextBatch(items) => {
                         let mut next_values = VecDeque::from(items);
                         let first_next = next_values.pop_front();
                         (first_next, next_values, None)
                     }
-                    EventGroup::NextsAndTermination(items, termination) => {
+                    EventBatch::NextBatchAndTermination(items, termination) => {
                         let mut next_values = VecDeque::from(items);
                         let first_next = next_values.pop_front();
                         (first_next, next_values, Some(termination))
                     }
                 };
                 if first_next.is_none() && termination.is_none() {
-                    // Empty `Nexts` is a no-op, consistent with the `Processing` state.
+                    // Empty `NextBatch` is a no-op, consistent with the `Delivering` state.
                     drop(lock);
                     return;
                 }
                 let idle_or_subscribing = std::mem::replace(&mut *lock, State::Placeholder);
-                let (mut observer, model, sub) = match idle_or_subscribing {
+                let (mut observer, model, subscription) = match idle_or_subscribing {
                     State::Subscribing { observer, model } => (observer, model, None),
                     State::Idle {
                         observer,
                         model,
-                        sub,
-                    } => (observer, model, Some(sub)),
+                        subscription,
+                    } => (observer, model, Some(subscription)),
                     _ => {
                         drop(lock);
                         unreachable!()
                     }
                 };
-                *lock = State::Processing {
+                *lock = State::Delivering {
                     next_values,
                     termination,
                     model,
-                    sub,
+                    subscription,
                 };
                 drop(lock); // Deliver events outside the lock to avoid potential deadlock
                 if let Some(first_next) = first_next {
                     let stop_on_panic = StopOnPanic {
                         state: &self.state,
-                        model_mapper: &self.model_mapper,
+                        retain_state_on_stop: &self.retain_state_on_stop,
                     };
                     observer.on_next(first_next);
                     drop(stop_on_panic);
                 }
                 self.deliver_pending_events(observer);
             }
-            State::Processing {
+            State::Delivering {
                 next_values,
                 termination,
                 ..
             } => {
                 if termination.is_none() {
                     match events {
-                        EventGroup::Next(value) => next_values.push_back(value),
-                        EventGroup::Termination(tn) => {
+                        EventBatch::Next(value) => next_values.push_back(value),
+                        EventBatch::Termination(tn) => {
                             *termination = Some(tn);
                         }
-                        EventGroup::NextAndTermination(value, tn) => {
+                        EventBatch::NextAndTermination(value, tn) => {
                             next_values.push_back(value);
                             *termination = Some(tn);
                         }
-                        EventGroup::Nexts(items) => next_values.extend(items),
-                        EventGroup::NextsAndTermination(items, tn) => {
+                        EventBatch::NextBatch(items) => next_values.extend(items),
+                        EventBatch::NextBatchAndTermination(items, tn) => {
                             next_values.extend(items);
                             *termination = Some(tn);
                         }
@@ -498,24 +532,24 @@ where
                 }
                 drop(lock);
             }
-            State::Stopped(_) => {
+            State::Stopped { .. } => {
                 drop(lock);
             }
             State::Placeholder => unreachable!(),
         };
     }
 
-    pub fn downgrade(&self) -> WeakContext<T, E, OR, M, D, M1> {
-        WeakContext {
+    pub fn downgrade(&self) -> WeakSubscriptionContext<T, E, OR, M, D, S> {
+        WeakSubscriptionContext {
             state: Shared::downgrade(&self.state),
-            model_mapper: self.model_mapper,
+            retain_state_on_stop: self.retain_state_on_stop,
         }
     }
 
     /// Delivers queued events to the observer one at a time, reacquiring the lock
     /// between events. Every observer call happens outside the lock, and disposal
     /// (`Stopped`) takes effect between any two events — including within a batch
-    /// queued via `EventGroup::Nexts`.
+    /// queued via `EventBatch::NextBatch`.
     fn deliver_pending_events(&self, mut observer: OR) {
         loop {
             let step = self.state.lock_mut(|mut lock| match &mut *lock {
@@ -523,16 +557,16 @@ where
                     drop(lock);
                     unreachable!()
                 }
-                State::Processing { next_values, .. } => {
+                State::Delivering { next_values, .. } => {
                     if let Some(value) = next_values.pop_front() {
                         drop(lock);
                         return DeliveryStep::Next(observer, value);
                     }
                     let old_state = std::mem::replace(&mut *lock, State::Placeholder);
-                    let State::Processing {
+                    let State::Delivering {
                         termination,
                         mut model,
-                        sub,
+                        subscription,
                         ..
                     } = old_state
                     else {
@@ -541,19 +575,19 @@ where
                     };
                     match termination {
                         Some(termination) => {
-                            let model_in_stop = (self.model_mapper)(&mut model);
-                            *lock = State::Stopped(model_in_stop);
+                            let retained_state = (self.retain_state_on_stop)(&mut model);
+                            *lock = State::Stopped { retained_state };
                             // The state stays `Stopped`: the subscription is over.
                             drop(lock);
                             drop(model); // Drop the remaining model outside the lock.
-                            DeliveryStep::Terminate(observer, termination, sub)
+                            DeliveryStep::Terminate(observer, termination, subscription)
                         }
                         None => {
-                            *lock = match sub {
-                                Some(sub) => State::Idle {
+                            *lock = match subscription {
+                                Some(subscription) => State::Idle {
                                     observer,
                                     model,
-                                    sub,
+                                    subscription,
                                 },
                                 None => State::Subscribing { observer, model },
                             };
@@ -562,7 +596,7 @@ where
                         }
                     }
                 }
-                State::Stopped(_) => {
+                State::Stopped { .. } => {
                     drop(lock);
                     DeliveryStep::Stopped(observer)
                 }
@@ -571,22 +605,22 @@ where
                 DeliveryStep::Next(mut obs, value) => {
                     let stop_on_panic = StopOnPanic {
                         state: &self.state,
-                        model_mapper: &self.model_mapper,
+                        retain_state_on_stop: &self.retain_state_on_stop,
                     };
                     obs.on_next(value);
                     drop(stop_on_panic);
                     observer = obs;
                 }
-                DeliveryStep::Terminate(obs, termination, sub_to_drop) => {
+                DeliveryStep::Terminate(obs, termination, subscription_to_drop) => {
                     let stop_on_panic = StopOnPanic {
                         state: &self.state,
-                        model_mapper: &self.model_mapper,
+                        retain_state_on_stop: &self.retain_state_on_stop,
                     };
                     obs.on_termination(termination);
                     drop(stop_on_panic);
                     // Preserve termination-before-disposal ordering. If the callback panics,
                     // stack unwinding still drops the subscription.
-                    drop(sub_to_drop);
+                    drop(subscription_to_drop);
                     return;
                 }
                 DeliveryStep::Finished => return,
@@ -616,107 +650,108 @@ enum DeliveryStep<T, E, OR, D: Disposable> {
 /// Sets the state to `Stopped` when dropped while panicking.
 /// The panic must have happened outside the lock (observer calls are made outside the lock),
 /// so locking here is safe on the panicking thread.
-struct StopOnPanic<'a, T, E, OR, M, D: Disposable, M1> {
-    state: &'a SharedState<T, E, OR, M, D, M1>,
-    model_mapper: &'a fn(&mut M) -> M1,
+struct StopOnPanic<'a, T, E, OR, M, D: Disposable, S> {
+    state: &'a SharedState<T, E, OR, M, D, S>,
+    retain_state_on_stop: &'a fn(&mut M) -> S,
 }
 
-impl<T, E, OR, M, D: Disposable, M1> Drop for StopOnPanic<'_, T, E, OR, M, D, M1> {
+impl<T, E, OR, M, D: Disposable, S> Drop for StopOnPanic<'_, T, E, OR, M, D, S> {
     fn drop(&mut self) {
         if std::thread::panicking() {
-            dispose_state(self.state, self.model_mapper);
+            stop_state(self.state, self.retain_state_on_stop);
         }
     }
 }
 
-struct ContextDisposable<T, E, OR, M, D: Disposable, M1> {
-    state: SharedState<T, E, OR, M, D, M1>,
-    model_mapper: fn(&mut M) -> M1,
+struct SubscriptionContextDisposal<T, E, OR, M, D: Disposable, S> {
+    state: SharedState<T, E, OR, M, D, S>,
+    retain_state_on_stop: fn(&mut M) -> S,
 }
 
-impl<T, E, OR, M, D: Disposable, M1> Disposable for ContextDisposable<T, E, OR, M, D, M1> {
+impl<T, E, OR, M, D: Disposable, S> Disposable for SubscriptionContextDisposal<T, E, OR, M, D, S> {
     fn dispose(self) {
-        dispose_state(&self.state, &self.model_mapper);
+        stop_state(&self.state, &self.retain_state_on_stop);
     }
 }
 
-fn dispose_state<T, E, OR, M, D: Disposable, M1>(
-    state: &SharedState<T, E, OR, M, D, M1>,
-    model_mapper: &fn(&mut M) -> M1,
+fn stop_state<T, E, OR, M, D: Disposable, S>(
+    state: &SharedState<T, E, OR, M, D, S>,
+    retain_state_on_stop: &fn(&mut M) -> S,
 ) {
-    struct DropOutside<T, E, OR, D: Disposable> {
+    struct DeferredDrop<T, E, OR, D: Disposable> {
         _observer: Option<OR>,
-        _sub: Option<Subscription<D>>,
+        _subscription: Option<Subscription<D>>,
         _events: Option<(VecDeque<T>, Option<Termination<E>>)>,
     }
 
-    let _drop_outside = state.lock_mut(|mut lock| {
-        if matches!(&*lock, State::Stopped(_)) {
+    let _deferred_drop = state.lock_mut(|mut lock| {
+        if matches!(&*lock, State::Stopped { .. }) {
             return None;
         }
 
         let state = std::mem::replace(&mut *lock, State::Placeholder);
-        let (mut model, drop_outside) = match state {
+        let (mut model, deferred_drop) = match state {
             State::Subscribing { observer, model } => {
-                let drop_outside = DropOutside {
+                let deferred_drop = DeferredDrop {
                     _observer: Some(observer),
-                    _sub: None,
+                    _subscription: None,
                     _events: None,
                 };
-                (model, drop_outside)
+                (model, deferred_drop)
             }
             State::Idle {
                 observer,
                 model,
-                sub,
+                subscription,
             } => {
-                let drop_outside = DropOutside {
+                let deferred_drop = DeferredDrop {
                     _observer: Some(observer),
-                    _sub: Some(sub),
+                    _subscription: Some(subscription),
                     _events: None,
                 };
-                (model, drop_outside)
+                (model, deferred_drop)
             }
-            State::Processing {
+            State::Delivering {
                 next_values,
                 termination,
                 model,
-                sub,
+                subscription,
             } => {
-                let drop_outside = DropOutside {
+                let deferred_drop = DeferredDrop {
                     _observer: None,
-                    _sub: sub,
+                    _subscription: subscription,
                     _events: Some((next_values, termination)),
                 };
-                (model, drop_outside)
+                (model, deferred_drop)
             }
-            State::Stopped(_) | State::Placeholder => unreachable!(),
+            State::Stopped { .. } | State::Placeholder => unreachable!(),
         };
 
-        let model_in_stop = model_mapper(&mut model);
-        *lock = State::Stopped(model_in_stop);
+        let retained_state = retain_state_on_stop(&mut model);
+        *lock = State::Stopped { retained_state };
 
-        Some((drop_outside, model))
+        Some((deferred_drop, model))
     });
 }
 
+/// A non-owning reference to a [`SubscriptionContext`].
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct WeakContext<T, E, OR, M, D: Disposable = (), M1 = ()> {
-    state: WeakSharedState<T, E, OR, M, D, M1>,
-    model_mapper: fn(&mut M) -> M1,
+pub struct WeakSubscriptionContext<T, E, OR, M, D: Disposable = (), S = ()> {
+    state: WeakSharedState<T, E, OR, M, D, S>,
+    retain_state_on_stop: fn(&mut M) -> S,
 }
 
-impl<T, E, OR, M, D: Disposable, M1> WeakContext<T, E, OR, M, D, M1> {
-    pub fn upgrade(&self) -> Option<Context<T, E, OR, M, D, M1>> {
-        self.state.upgrade().map(|state| Context {
+impl<T, E, OR, M, D: Disposable, S> WeakSubscriptionContext<T, E, OR, M, D, S> {
+    pub fn upgrade(&self) -> Option<SubscriptionContext<T, E, OR, M, D, S>> {
+        self.state.upgrade().map(|state| SubscriptionContext {
             state,
-            model_mapper: self.model_mapper,
+            retain_state_on_stop: self.retain_state_on_stop,
         })
     }
 }
 
-fn assert_observer<OR>() {
+fn debug_assert_observer_compatibility<OR>() {
     debug_assert!(
         {
             fn type_name_without_generics<T>() -> &'static str {
@@ -733,6 +768,6 @@ fn assert_observer<OR>() {
                     >,
                 >()
         },
-        "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. Using subscribe_with_context_bound_disposal handles \"auto dispose on termination\"."
+        "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. Using subscribe_with_context_bound_subscription handles \"auto dispose on termination\"."
     );
 }

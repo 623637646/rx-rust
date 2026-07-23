@@ -1,6 +1,6 @@
 use super::map::Map;
 use crate::operators::combining::switch::Switch;
-use crate::utils::subscribe_with_context::BoundDisposal;
+use crate::utils::subscribe_with_context::BoundSubscriptionDisposal;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable, observable::Subscription, observer::Observer, utils::types::MarkerType,
@@ -69,7 +69,7 @@ where
     OE1::D: MaybeSend + 'or,
     F: FnMut(T0) -> OE1 + MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observable = Map::new(self.source, self.callback);

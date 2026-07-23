@@ -1,7 +1,7 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::observable::Subscription;
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    self, ModelUpdate, SubscriptionContext, subscribe_with_context,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -130,9 +130,9 @@ where
                 self.time_span,
                 self.count,
             );
-            let _ = context.modify_model(|model| {
+            let _ = context.try_update_model(|model| {
                 model.timer = Some(disposal);
-                ModificationResult::new_empty()
+                ModelUpdate::new_empty()
             });
             sub
         })
@@ -146,7 +146,7 @@ struct Model<T, D: Disposable> {
 }
 
 struct BufferWithTimeOrCountObserver<T, E, OR, D: Disposable> {
-    context: Context<Vec<T>, E, OR, Model<T, D>>,
+    context: SubscriptionContext<Vec<T>, E, OR, Model<T, D>>,
     count: NonZeroUsize,
 }
 
@@ -156,15 +156,15 @@ where
     OR: Observer<Vec<T>, E> + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.context.modify_model(|model| {
+        let _ = self.context.try_update_model(|model| {
             model.values.push(value);
             if model.values.len() >= self.count.get() {
                 model.last_sending_time_from_counting = Some(Instant::now());
                 let values =
                     std::mem::replace(&mut model.values, Vec::with_capacity(self.count.get()));
-                ModificationResult::new_send_next(values)
+                ModelUpdate::new_send_next(values)
             } else {
-                ModificationResult::new_empty()
+                ModelUpdate::new_empty()
             }
         });
     }
@@ -172,12 +172,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _ = self.context.modify_model(|model| {
+                let _ = self.context.try_update_model(|model| {
                     if !model.values.is_empty() {
                         let values = std::mem::take(&mut model.values);
-                        ModificationResult::new_send_next_and_termination(values, termination)
+                        ModelUpdate::new_send_next_and_termination(values, termination)
                     } else {
-                        ModificationResult::new_send_termination(termination)
+                        ModelUpdate::new_send_termination(termination)
                     }
                 });
             }
@@ -189,7 +189,7 @@ where
 }
 
 fn setup_emit_timer<T, E, OR, S>(
-    context: Context<Vec<T>, E, OR, Model<T, S::D>>,
+    context: SubscriptionContext<Vec<T>, E, OR, Model<T, S::D>>,
     scheduler: S,
     delay: Option<Duration>,
     time_span: Duration,
@@ -208,7 +208,7 @@ where
                 return false;
             };
             context
-                .modify_model(|model| {
+                .try_update_model(|model| {
                     if let Some(last_sending_time_from_counting) =
                         model.last_sending_time_from_counting.take()
                     {
@@ -220,11 +220,11 @@ where
                             count,
                         );
                         let old_timer = model.timer.replace(disposal);
-                        ModificationResult::new(false).drop_outside(old_timer)
+                        ModelUpdate::new(false).drop_outside(old_timer)
                     } else {
                         let values =
                             std::mem::replace(&mut model.values, Vec::with_capacity(count.get()));
-                        ModificationResult::new(true).send_next(values)
+                        ModelUpdate::new(true).send_next(values)
                     }
                 })
                 .unwrap_or(false)

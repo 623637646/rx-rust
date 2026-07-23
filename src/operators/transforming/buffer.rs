@@ -1,5 +1,6 @@
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -78,13 +79,13 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_with_context_bound_disposal(observer, Vec::new(), |context| {
+        subscribe_with_context_bound_subscription(observer, Vec::new(), |context| {
             let subscription_1 = self.boundary.subscribe(BoundaryObserver(context.clone()));
             let subscription_2 = self.source.subscribe(BufferObserver(context));
             subscription_1.preceded_by_bound(subscription_2)
@@ -92,7 +93,7 @@ where
     }
 }
 
-struct BufferObserver<T, E, OR, D: Disposable>(Context<Vec<T>, E, OR, Vec<T>, D>);
+struct BufferObserver<T, E, OR, D: Disposable>(SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>);
 
 impl<T, E, OR, D> Observer<T, E> for BufferObserver<T, E, OR, D>
 where
@@ -100,9 +101,9 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.modify_model(|values| {
+        let _ = self.0.try_update_model(|values| {
             values.push(value);
-            ModificationResult::new_empty()
+            ModelUpdate::new_empty()
         });
     }
 
@@ -111,7 +112,7 @@ where
     }
 }
 
-struct BoundaryObserver<T, E, OR, D: Disposable>(Context<Vec<T>, E, OR, Vec<T>, D>);
+struct BoundaryObserver<T, E, OR, D: Disposable>(SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>);
 
 impl<T, E, OR, D> Observer<(), E> for BoundaryObserver<T, E, OR, D>
 where
@@ -119,11 +120,8 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
-        let _ = self.0.modify_model(|values| {
-            ModificationResult::new_send_next(std::mem::replace(
-                values,
-                Vec::with_capacity(values.len()),
-            ))
+        let _ = self.0.try_update_model(|values| {
+            ModelUpdate::new_send_next(std::mem::replace(values, Vec::with_capacity(values.len())))
         });
     }
 
@@ -132,21 +130,20 @@ where
     }
 }
 
-fn terminate<T, E, OR, D>(context: Context<Vec<T>, E, OR, Vec<T>, D>, termination: Termination<E>)
-where
+fn terminate<T, E, OR, D>(
+    context: SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>,
+    termination: Termination<E>,
+) where
     OR: Observer<Vec<T>, E>,
     D: Disposable,
 {
     match termination {
         Termination::Completed => {
-            let _ = context.modify_model(|values| {
+            let _ = context.try_update_model(|values| {
                 if values.is_empty() {
-                    ModificationResult::new_send_termination(termination)
+                    ModelUpdate::new_send_termination(termination)
                 } else {
-                    ModificationResult::new_send_next_and_termination(
-                        std::mem::take(values),
-                        termination,
-                    )
+                    ModelUpdate::new_send_next_and_termination(std::mem::take(values), termination)
                 }
             });
         }

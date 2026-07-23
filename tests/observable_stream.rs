@@ -12,6 +12,7 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::Shared;
+use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use rx_rust::{
     observable::ObservableExt,
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -19,7 +20,6 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicBool, Ordering};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -60,25 +60,25 @@ fn test_completed() {
 #[test]
 fn test_completed_lazy_subscription() {
     block_on(|runtime| async move {
-        let subscribed = Shared::new(AtomicBool::new(false));
+        let subscribed = Shared::new(MutableBool::new(false));
         let subscribed_cloned = subscribed.clone();
         let observable = Create::new(move |mut observer| {
-            subscribed_cloned.store(true, Ordering::SeqCst);
+            subscribed_cloned.write(true);
             observer.on_next(111);
             observer.on_termination(Termination::Completed);
             Subscription::default()
         });
 
         let stream = observable.into_stream();
-        assert!(!subscribed.load(Ordering::SeqCst));
+        assert!(!subscribed.read());
 
         runtime.sleep(DURATION_10_MS).await;
-        assert!(!subscribed.load(Ordering::SeqCst));
+        assert!(!subscribed.read());
 
         let (checker, _subscription) =
             Checker::<_, Infallible>::from_stream(stream, runtime.clone());
         runtime.sleep(DURATION_10_MS).await;
-        assert!(subscribed.load(Ordering::SeqCst));
+        assert!(subscribed.read());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });

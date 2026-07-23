@@ -1,5 +1,6 @@
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -70,7 +71,7 @@ where
     OE2: Observable<'or, T2, E>,
     OE2::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(
         self,
@@ -81,7 +82,7 @@ where
             latest_2: None,
             should_completed: false,
         };
-        subscribe_with_context_bound_disposal(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             let sub_1 = self.source_1.subscribe(ObserverImpl1(context.clone()));
             let sub_2 = self.source_2.subscribe(ObserverImpl2(context));
             sub_1.preceded_by_bound(sub_2)
@@ -97,7 +98,9 @@ struct Model<T1, T2> {
 
 macro_rules! impl_observer {
     ($name:ident, $t_self:ident, $field_self:ident, $field_other:ident, $combine:expr) => {
-        struct $name<T1, T2, E, OR, D: Disposable>(Context<(T1, T2), E, OR, Model<T1, T2>, D>);
+        struct $name<T1, T2, E, OR, D: Disposable>(
+            SubscriptionContext<(T1, T2), E, OR, Model<T1, T2>, D>,
+        );
 
         impl<T1, T2, E, OR, D> Observer<$t_self, E> for $name<T1, T2, E, OR, D>
         where
@@ -107,28 +110,28 @@ macro_rules! impl_observer {
             D: Disposable,
         {
             fn on_next(&mut self, val: $t_self) {
-                let _ = self.0.modify_model(|model| {
+                let _ = self.0.try_update_model(|model| {
                     if let Some(other) = &model.$field_other {
                         model.$field_self = Some(val.clone());
-                        ModificationResult::new_send_next($combine(val, other.clone()))
+                        ModelUpdate::new_send_next($combine(val, other.clone()))
                     } else {
                         model.$field_self = Some(val);
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                     }
                 });
             }
 
             fn on_termination(self, termination: Termination<E>) {
-                let _ = self.0.modify_model(|model| match termination {
+                let _ = self.0.try_update_model(|model| match termination {
                     Termination::Completed => {
                         if model.should_completed || model.$field_self.is_none() {
-                            ModificationResult::new_send_termination(termination)
+                            ModelUpdate::new_send_termination(termination)
                         } else {
                             model.should_completed = true;
-                            ModificationResult::new_without_result()
+                            ModelUpdate::new_without_result()
                         }
                     }
-                    Termination::Error(_) => ModificationResult::new_send_termination(termination),
+                    Termination::Error(_) => ModelUpdate::new_send_termination(termination),
                 });
             }
         }

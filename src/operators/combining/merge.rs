@@ -1,5 +1,6 @@
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -64,13 +65,13 @@ where
     OE2: Observable<'or, T, E>,
     OE2::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model {
             one_is_completed: false,
         };
-        subscribe_with_context_bound_disposal(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             let subscription_1 = self.source_1.subscribe(MergeObserver(context.clone()));
             let subscription_2 = self.source_2.subscribe(MergeObserver(context));
             subscription_1.preceded_by_bound(subscription_2)
@@ -82,7 +83,7 @@ struct Model {
     one_is_completed: bool,
 }
 
-struct MergeObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model, D>);
+struct MergeObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, Model, D>);
 
 impl<T, E, OR, D> Observer<T, E> for MergeObserver<T, E, OR, D>
 where
@@ -96,12 +97,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _ = self.0.modify_model(|model| {
+                let _ = self.0.try_update_model(|model| {
                     if model.one_is_completed {
-                        ModificationResult::new_send_termination(termination)
+                        ModelUpdate::new_send_termination(termination)
                     } else {
                         model.one_is_completed = true;
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                     }
                 });
             }

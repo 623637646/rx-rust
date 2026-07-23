@@ -1,6 +1,6 @@
 use crate::disposable::{bound_drop_disposal::BoundDropDisposal, chain_disposal::ChainDisposal};
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    self, ModelUpdate, SubscriptionContext, subscribe_with_context,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
@@ -111,29 +111,29 @@ where
     }
 }
 
-struct BufferWithTimeObserver<T, E, OR>(Context<Vec<T>, E, OR, Vec<T>>);
+struct BufferWithTimeObserver<T, E, OR>(SubscriptionContext<Vec<T>, E, OR, Vec<T>>);
 
 impl<T, E, OR> Observer<T, E> for BufferWithTimeObserver<T, E, OR>
 where
     OR: Observer<Vec<T>, E>,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.modify_model(|values| {
+        let _ = self.0.try_update_model(|values| {
             values.push(value);
-            ModificationResult::new_empty()
+            ModelUpdate::new_empty()
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _ = self.0.modify_model(|values| {
+                let _ = self.0.try_update_model(|values| {
                     if !values.is_empty() {
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                             .send_next_and_termination(std::mem::take(values), termination)
                             .ignore_drop_outside()
                     } else {
-                        ModificationResult::new_without_result().send_termination(termination)
+                        ModelUpdate::new_without_result().send_termination(termination)
                     }
                 });
             }
@@ -143,7 +143,7 @@ where
 }
 
 fn setup_emit_timer<T, E, OR, S>(
-    context: Context<Vec<T>, E, OR, Vec<T>>,
+    context: SubscriptionContext<Vec<T>, E, OR, Vec<T>>,
     scheduler: S,
     time_span: Duration,
     delay: Option<Duration>,
@@ -161,8 +161,8 @@ where
                 return false;
             };
             context
-                .modify_model(|values| {
-                    ModificationResult::new(true)
+                .try_update_model(|values| {
+                    ModelUpdate::new(true)
                         .send_next(std::mem::replace(values, Vec::with_capacity(values.len())))
                         .ignore_drop_outside()
                 })

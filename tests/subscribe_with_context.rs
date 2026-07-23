@@ -1,12 +1,13 @@
 mod tests_utils;
 
+use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt, Subscription},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
     safe_lock, safe_lock_option,
     utils::{
-        subscribe_with_context::{EventGroup, subscribe_with_context},
+        subscribe_with_context::{ContextStopped, EventBatch, ModelUpdate, subscribe_with_context},
         types::{Mutable, Shared},
     },
 };
@@ -26,7 +27,7 @@ fn delivers_batch_in_order_with_termination() {
     });
     let context = context_out.unwrap();
 
-    context.send_events(EventGroup::NextsAndTermination(
+    context.send_events(EventBatch::NextBatchAndTermination(
         vec![1, 2, 3],
         Termination::Completed,
     ));
@@ -60,7 +61,7 @@ fn dispose_during_batch_stops_remaining_events() {
     safe_lock_option!(replace: subscription_slot, subscription);
     let context = context_out.unwrap();
 
-    context.send_events(EventGroup::Nexts(vec![1, 2, 3]));
+    context.send_events(EventBatch::NextBatch(vec![1, 2, 3]));
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Dropped);
 
@@ -92,7 +93,7 @@ fn dispose_during_batch_suppresses_pending_termination() {
     safe_lock_option!(replace: subscription_slot, subscription);
     let context = context_out.unwrap();
 
-    context.send_events(EventGroup::NextsAndTermination(
+    context.send_events(EventBatch::NextBatchAndTermination(
         vec![1, 2],
         Termination::Completed,
     ));
@@ -123,7 +124,7 @@ fn reentrant_send_is_queued_after_pending_events() {
     .subscribe(observer);
     let context = context_out.unwrap();
 
-    context.send_events(EventGroup::Nexts(vec![1, 2, 3]));
+    context.send_events(EventBatch::NextBatch(vec![1, 2, 3]));
     assert_eq!(checker.values(), [1, 2, 3, 10]);
     assert_eq!(checker.state(), State::Active);
 
@@ -143,7 +144,7 @@ fn empty_batch_is_a_no_op() {
     });
     let context = context_out.unwrap();
 
-    context.send_events(EventGroup::Nexts(vec![]));
+    context.send_events(EventBatch::NextBatch(vec![]));
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
 
@@ -152,8 +153,47 @@ fn empty_batch_is_a_no_op() {
     assert_eq!(checker.state(), State::Active);
 }
 
+#[test]
+fn stopped_try_update_model_drops_callback_outside_lock() {
+    struct RunOnDrop<F: FnOnce()>(Option<F>);
+
+    impl<F: FnOnce()> Drop for RunOnDrop<F> {
+        fn drop(&mut self) {
+            self.0.take().unwrap()();
+        }
+    }
+
+    let (checker, observer) = Checker::<i32, Infallible>::new();
+    let mut context_out = None;
+    let subscription = subscribe_with_context(observer, (), |context| {
+        context_out = Some(context);
+        Subscription::default()
+    });
+    let context = context_out.unwrap();
+    drop(subscription);
+    assert_eq!(checker.state(), State::Dropped);
+
+    let callback_dropped = Shared::new(MutableBool::new(false));
+    let callback_dropped_on_drop = callback_dropped.clone();
+    let reentrant_context = context.clone();
+    let run_on_drop = RunOnDrop(Some(move || {
+        callback_dropped_on_drop.write(true);
+        // This would deadlock if the callback were dropped while the context was locked.
+        reentrant_context.send_next(1);
+    }));
+
+    let result = context.try_update_model(move |_| {
+        drop(run_on_drop);
+        ModelUpdate::new_empty()
+    });
+
+    assert_eq!(result, Err(ContextStopped));
+    assert!(callback_dropped.read());
+    assert_eq!(checker.values(), []);
+}
+
 // End-to-end wiring through a real upstream: the channel feeds the context the
-// way real operators do (forwarding via a `WeakContext` to avoid a strong
+// way real operators do (forwarding via a `WeakSubscriptionContext` to avoid a strong
 // reference cycle). Disposing mid-batch must also unsubscribe the upstream.
 #[test]
 fn dispose_during_batch_unsubscribes_upstream() {
@@ -189,7 +229,7 @@ fn dispose_during_batch_unsubscribes_upstream() {
             if value == 1 {
                 // Queue a batch while value 1 is still being processed.
                 let context = safe_lock!(clone: send_slot).unwrap();
-                context.send_events(EventGroup::Nexts(vec![2, 3]));
+                context.send_events(EventBatch::NextBatch(vec![2, 3]));
             }
             if value == 2 {
                 drop(safe_lock_option!(take: dispose_slot));

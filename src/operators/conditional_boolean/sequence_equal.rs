@@ -1,5 +1,6 @@
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
@@ -71,7 +72,7 @@ where
     OE2: Observable<'or, T, E>,
     OE2::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(
         self,
@@ -87,7 +88,7 @@ where
                 completed: false,
             },
         };
-        subscribe_with_context_bound_disposal(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             let observer_1 = SequenceEqualObserver {
                 context: context.clone(),
                 is_first: true,
@@ -114,7 +115,7 @@ struct Model<T> {
 }
 
 struct SequenceEqualObserver<T, E, OR, D: Disposable> {
-    context: Context<bool, E, OR, Model<T>, D>,
+    context: SubscriptionContext<bool, E, OR, Model<T>, D>,
     is_first: bool,
 }
 
@@ -125,7 +126,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.context.modify_model(|model| {
+        let _ = self.context.try_update_model(|model| {
             let (mine, other) = if self.is_first {
                 (&mut model.first, &mut model.second)
             } else {
@@ -134,20 +135,17 @@ where
 
             match (other.queue.pop_front(), other.completed) {
                 (None, true) => {
-                    ModificationResult::new_send_next_and_termination(false, Termination::Completed)
+                    ModelUpdate::new_send_next_and_termination(false, Termination::Completed)
                 }
                 (None, false) => {
                     mine.queue.push_back(value);
-                    ModificationResult::new_without_result()
+                    ModelUpdate::new_without_result()
                 }
                 (Some(next), _) => {
                     if value == next {
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                     } else {
-                        ModificationResult::new_send_next_and_termination(
-                            false,
-                            Termination::Completed,
-                        )
+                        ModelUpdate::new_send_next_and_termination(false, Termination::Completed)
                     }
                 }
             }
@@ -157,7 +155,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _ = self.context.modify_model(|model| {
+                let _ = self.context.try_update_model(|model| {
                     let (mine, other) = if self.is_first {
                         (&mut model.first, &mut model.second)
                     } else {
@@ -170,10 +168,10 @@ where
                     let other_empty = other.queue.is_empty();
 
                     if !other_completed && other_empty {
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                     } else {
                         let is_equal = mine_empty && other_completed && other_empty;
-                        ModificationResult::new_send_next_and_termination(is_equal, termination)
+                        ModelUpdate::new_send_next_and_termination(is_equal, termination)
                     }
                 });
             }

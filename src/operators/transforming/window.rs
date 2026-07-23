@@ -6,8 +6,8 @@ use crate::{
     observer::{BoxedObserverExt, Observer, Termination, boxed_observer::BoxedObserver},
     utils::{
         subscribe_with_context::{
-            self, Context, EventGroup, ModificationResult,
-            subscribe_with_context_bound_disposal_map_model,
+            self, EventBatch, ModelState, ModelUpdate, SubscriptionContext,
+            subscribe_with_context_bound_subscription_retain_state_on_stop,
         },
         types::{MaybeSend, MutableBool, MutableBoolHelper, Shared},
     },
@@ -109,7 +109,7 @@ where
     OE1: Observable<'or, (), Infallible>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = subscribe_with_context::BoundDisposal<'or>;
+    type D = subscribe_with_context::BoundSubscriptionDisposal<'or>;
 
     fn subscribe(
         self,
@@ -120,7 +120,7 @@ where
             inner_observer: None,
         };
         let model = Model::new();
-        subscribe_with_context_bound_disposal_map_model(
+        subscribe_with_context_bound_subscription_retain_state_on_stop(
             observer,
             model,
             |context| {
@@ -187,7 +187,7 @@ impl<T, E> Model<T, E> {
     }
 }
 
-type WindowContext<'or, T, E, D1, D2> = Context<
+type WindowContext<'or, T, E, D1, D2> = SubscriptionContext<
     DelegateAction<'or, T, E, D1, D2>,
     E,
     DelegateObserver<'or, T, E, D1, D2>,
@@ -208,29 +208,30 @@ where
     D2: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.modify_model(|model| match model.window_state {
-            WindowState::Subscribed(_) => ModificationResult::new_without_result()
-                .send_next(DelegateAction::ForwardValue(value)),
+        let _ = self.0.try_update_model(|model| match model.window_state {
+            WindowState::Subscribed(_) => {
+                ModelUpdate::new_without_result().send_next(DelegateAction::ForwardValue(value))
+            }
             WindowState::Pending(key) => {
                 model.buffered_window_mut(key).values.push(value);
-                ModificationResult::new_without_result()
+                ModelUpdate::new_without_result()
             }
-            WindowState::Vacant => ModificationResult::new_without_result().drop_outside(value),
+            WindowState::Vacant => ModelUpdate::new_without_result().drop_outside(value),
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.modify_model(|model| {
+        let _ = self.0.try_update_model(|model| {
             match std::mem::replace(&mut model.window_state, WindowState::Vacant) {
                 WindowState::Pending(key) => {
                     model.buffered_window_mut(key).termination = Some(termination.clone());
-                    ModificationResult::new_send_termination(termination)
+                    ModelUpdate::new_send_termination(termination)
                 }
-                WindowState::Subscribed(_) => ModificationResult::new_send_next_and_termination(
+                WindowState::Subscribed(_) => ModelUpdate::new_send_next_and_termination(
                     DelegateAction::TerminateInner(termination.clone()),
                     termination,
                 ),
-                WindowState::Vacant => ModificationResult::new_send_termination(termination),
+                WindowState::Vacant => ModelUpdate::new_send_termination(termination),
             }
         });
     }
@@ -247,7 +248,7 @@ where
     D2: Disposable,
 {
     fn on_next(&mut self, _: ()) {
-        let _ = self.0.modify_model(|model| {
+        let _ = self.0.try_update_model(|model| {
             let (key, previous_state) = model.open_window();
 
             let emit_window = DelegateAction::EmitWindow(InnerObservable {
@@ -257,16 +258,16 @@ where
             let events = match previous_state {
                 WindowState::Pending(key) => {
                     model.buffered_window_mut(key).termination = Some(Termination::Completed);
-                    EventGroup::Next(emit_window)
+                    EventBatch::Next(emit_window)
                 }
-                WindowState::Subscribed(_) => EventGroup::Nexts(vec![
+                WindowState::Subscribed(_) => EventBatch::NextBatch(vec![
                     DelegateAction::TerminateInner(Termination::Completed),
                     emit_window,
                 ]),
-                WindowState::Vacant => EventGroup::Next(emit_window),
+                WindowState::Vacant => EventBatch::Next(emit_window),
             };
 
-            ModificationResult::new_without_result()
+            ModelUpdate::new_without_result()
                 .send_events(events)
                 .ignore_drop_outside()
         });
@@ -294,18 +295,18 @@ where
             return;
         };
         let key = self.key;
-        context.modify_model_or_model_in_stop(|model| {
+        context.update_model_or_retained_state(|model| {
             let buffered_window = match model {
-                Ok(model) => {
+                ModelState::Active(model) => {
                     let buffered_window = model.buffered_windows.remove(key);
                     if model.window_state == WindowState::Pending(key) {
                         model.window_state = WindowState::Vacant;
                     }
                     buffered_window
                 }
-                Err(buffered_windows) => buffered_windows.remove(key),
+                ModelState::Stopped(buffered_windows) => buffered_windows.remove(key),
             };
-            ModificationResult::new_without_result().drop_outside(buffered_window)
+            ModelUpdate::new_without_result().drop_outside(buffered_window)
         });
     }
 }
@@ -327,8 +328,8 @@ where
             .expect("inner observable context must exist");
         let key = self.key;
         let is_disposed = Shared::new(MutableBool::new(false));
-        let result = context.modify_model_or_model_in_stop(|model| match model {
-            Ok(model) => {
+        let result = context.update_model_or_retained_state(|model| match model {
+            ModelState::Active(model) => {
                 if model.window_state == WindowState::Pending(key) {
                     let buffered_window = model
                         .buffered_windows
@@ -349,11 +350,11 @@ where
                             .map(DelegateAction::ForwardValue),
                     );
 
-                    ModificationResult::new(None)
-                        .send_events(EventGroup::Nexts(actions))
+                    ModelUpdate::new(None)
+                        .send_events(EventBatch::NextBatch(actions))
                         .ignore_drop_outside()
                 } else {
-                    ModificationResult::new(Some((
+                    ModelUpdate::new(Some((
                         observer,
                         model
                             .buffered_windows
@@ -362,7 +363,7 @@ where
                     )))
                 }
             }
-            Err(buffered_windows) => ModificationResult::new(Some((
+            ModelState::Stopped(buffered_windows) => ModelUpdate::new(Some((
                 observer,
                 buffered_windows
                     .remove(key)
@@ -406,13 +407,12 @@ where
 {
     fn dispose(self) {
         self.is_disposed.write(true);
-        let _ = self.context.modify_model(|model| {
+        let _ = self.context.try_update_model(|model| {
             if model.window_state == WindowState::Subscribed(self.key) {
                 model.window_state = WindowState::Vacant;
-                ModificationResult::new_without_result()
-                    .send_next(DelegateAction::DetachInnerObserver)
+                ModelUpdate::new_without_result().send_next(DelegateAction::DetachInnerObserver)
             } else {
-                ModificationResult::new_empty()
+                ModelUpdate::new_empty()
             }
         });
     }

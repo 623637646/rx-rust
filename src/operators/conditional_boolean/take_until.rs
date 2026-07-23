@@ -1,5 +1,5 @@
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -76,10 +76,10 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        subscribe_with_context_bound_disposal(observer, (), |context| {
+        subscribe_with_context_bound_subscription(observer, (), |context| {
             let subscription_1 = self.stop.subscribe(StopObserver(context.clone()));
             let subscription_2 = self.source.subscribe(TakeUntilObserver(context));
             subscription_1.preceded_by_bound(subscription_2)
@@ -87,7 +87,7 @@ where
     }
 }
 
-struct TakeUntilObserver<T, E, OR, D: Disposable>(Context<T, E, OR, (), D>);
+struct TakeUntilObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, (), D>);
 
 impl<T, E, OR, D> Observer<T, E> for TakeUntilObserver<T, E, OR, D>
 where
@@ -103,7 +103,7 @@ where
     }
 }
 
-struct StopObserver<T, E, OR, D: Disposable>(Context<T, E, OR, (), D>);
+struct StopObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, (), D>);
 
 impl<T, E, OR, D> Observer<(), E> for StopObserver<T, E, OR, D>
 where

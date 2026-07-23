@@ -1,7 +1,8 @@
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -85,14 +86,14 @@ where
     OE1: Observable<'or, T, E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model {
             subscriptions: SlotMap::new(),
             is_source_terminated: false,
         };
-        subscribe_with_context_bound_disposal(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             self.source.subscribe(MergeAllObserver(context))
         })
     }
@@ -103,7 +104,9 @@ struct Model<D: Disposable> {
     is_source_terminated: bool,
 }
 
-struct MergeAllObserver<T, E, OR, ID: Disposable, SD: Disposable>(Context<T, E, OR, Model<ID>, SD>);
+struct MergeAllObserver<T, E, OR, ID: Disposable, SD: Disposable>(
+    SubscriptionContext<T, E, OR, Model<ID>, SD>,
+);
 
 impl<'or, T, E, OR, OE1, SD> Observer<OE1, E> for MergeAllObserver<T, E, OR, OE1::D, SD>
 where
@@ -116,8 +119,8 @@ where
 {
     fn on_next(&mut self, value: OE1) {
         // Insert a placeholder subscription.
-        let result = self.0.modify_model(|model| {
-            ModificationResult::new(model.subscriptions.insert(None)).ignore_drop_outside()
+        let result = self.0.try_update_model(|model| {
+            ModelUpdate::new(model.subscriptions.insert(None)).ignore_drop_outside()
         });
         let key = match result {
             Ok(key) => key,
@@ -129,13 +132,13 @@ where
         };
         let sub = value.subscribe(observer);
 
-        let _ = self.0.modify_model(|model| {
+        let _ = self.0.try_update_model(|model| {
             if model.subscriptions.contains_key(key) {
                 model.subscriptions[key] = Some(sub);
-                ModificationResult::new_without_result()
+                ModelUpdate::new_without_result()
             } else {
                 // already terminated
-                ModificationResult::new_without_result().drop_outside(sub)
+                ModelUpdate::new_without_result().drop_outside(sub)
             }
         });
     }
@@ -143,12 +146,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _ = self.0.modify_model(|model| {
+                let _ = self.0.try_update_model(|model| {
                     if model.subscriptions.is_empty() {
-                        ModificationResult::new_send_termination(termination)
+                        ModelUpdate::new_send_termination(termination)
                     } else {
                         model.is_source_terminated = true;
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                     }
                 });
             }
@@ -160,7 +163,7 @@ where
 }
 
 struct MergeAllInnerObserver<T, E, OR, ID: Disposable, SD: Disposable> {
-    context: Context<T, E, OR, Model<ID>, SD>,
+    context: SubscriptionContext<T, E, OR, Model<ID>, SD>,
     key: DefaultKey,
 }
 
@@ -177,14 +180,14 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _ = self.context.modify_model(|model| {
+                let _ = self.context.try_update_model(|model| {
                     let subscription = model.subscriptions.remove(self.key);
                     if model.is_source_terminated && model.subscriptions.is_empty() {
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                             .drop_outside(subscription)
                             .send_termination(termination)
                     } else {
-                        ModificationResult::new_without_result().drop_outside(subscription)
+                        ModelUpdate::new_without_result().drop_outside(subscription)
                     }
                 });
             }

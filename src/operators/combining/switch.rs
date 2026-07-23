@@ -2,7 +2,8 @@ use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -84,7 +85,7 @@ where
     OE1: Observable<'or, T, E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model {
@@ -92,7 +93,7 @@ where
             is_source_completed: false,
             current_sub_id: IncrementId::default(),
         };
-        subscribe_with_context_bound_disposal(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             self.source.subscribe(SwitchObserver(context))
         })
     }
@@ -110,7 +111,9 @@ struct Model<D: Disposable> {
     current_sub_id: IncrementId,
 }
 
-struct SwitchObserver<T, E, OR, ID: Disposable, SD: Disposable>(Context<T, E, OR, Model<ID>, SD>);
+struct SwitchObserver<T, E, OR, ID: Disposable, SD: Disposable>(
+    SubscriptionContext<T, E, OR, Model<ID>, SD>,
+);
 
 impl<'or, T, E, OR, OE1, SD> Observer<OE1, E> for SwitchObserver<T, E, OR, OE1::D, SD>
 where
@@ -122,12 +125,12 @@ where
     SD: Disposable + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let result = self.0.modify_model(|model| {
+        let result = self.0.try_update_model(|model| {
             model.current_sub_id.increment();
             match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription) {
-                SubState::Idle => ModificationResult::new(model.current_sub_id),
+                SubState::Idle => ModelUpdate::new(model.current_sub_id),
                 SubState::Processing(subscription) => {
-                    ModificationResult::new(model.current_sub_id).drop_outside(subscription)
+                    ModelUpdate::new(model.current_sub_id).drop_outside(subscription)
                 }
                 SubState::PendingSubscription => unreachable!(),
             }
@@ -138,12 +141,12 @@ where
         };
         let observer = SwitchInnerObserver(self.0.clone(), sub_id);
         let sub = value.subscribe(observer);
-        let _ = self.0.modify_model(|model| {
+        let _ = self.0.try_update_model(|model| {
             match &mut model.sub_state {
-                SubState::Idle => ModificationResult::new_without_result().drop_outside(sub), // already terminated
+                SubState::Idle => ModelUpdate::new_without_result().drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     model.sub_state = SubState::Processing(sub);
-                    ModificationResult::new_without_result()
+                    ModelUpdate::new_without_result()
                 }
                 SubState::Processing(_) => unreachable!(),
             }
@@ -153,12 +156,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _ = self.0.modify_model(|model| {
+                let _ = self.0.try_update_model(|model| {
                     model.is_source_completed = true;
                     match model.sub_state {
-                        SubState::Idle => ModificationResult::new_send_termination(termination),
+                        SubState::Idle => ModelUpdate::new_send_termination(termination),
                         SubState::Processing(_) | SubState::PendingSubscription => {
-                            ModificationResult::new_without_result()
+                            ModelUpdate::new_without_result()
                         }
                     }
                 });
@@ -173,7 +176,7 @@ where
 // TODO: Improve performance, if is_source_completed is true, stop the context and no more need to lock when sending next.
 // TODO: check all cases using subscribe_with_context whether it can be improved.
 struct SwitchInnerObserver<T, E, OR, ID: Disposable, SD: Disposable>(
-    Context<T, E, OR, Model<ID>, SD>,
+    SubscriptionContext<T, E, OR, Model<ID>, SD>,
     IncrementId,
 );
 
@@ -184,37 +187,35 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.modify_model(|model| {
+        let _ = self.0.try_update_model(|model| {
             if model.current_sub_id != self.1 {
-                return ModificationResult::new_without_result();
+                return ModelUpdate::new_without_result();
             }
-            ModificationResult::new_send_next(value)
+            ModelUpdate::new_send_next(value)
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.modify_model(|model| {
+        let _ = self.0.try_update_model(|model| {
             if model.current_sub_id != self.1 {
-                return ModificationResult::new_without_result();
+                return ModelUpdate::new_without_result();
             }
             match termination {
                 Termination::Completed => {
                     if model.is_source_completed {
-                        ModificationResult::new_without_result().send_termination(termination)
+                        ModelUpdate::new_without_result().send_termination(termination)
                     } else {
                         match std::mem::replace(&mut model.sub_state, SubState::Idle) {
                             SubState::Idle => unreachable!(),
-                            SubState::PendingSubscription => {
-                                ModificationResult::new_without_result()
-                            }
+                            SubState::PendingSubscription => ModelUpdate::new_without_result(),
                             SubState::Processing(subscription) => {
-                                ModificationResult::new_without_result().drop_outside(subscription)
+                                ModelUpdate::new_without_result().drop_outside(subscription)
                             }
                         }
                     }
                 }
                 Termination::Error(_) => {
-                    ModificationResult::new_without_result().send_termination(termination)
+                    ModelUpdate::new_without_result().send_termination(termination)
                 }
             }
         });

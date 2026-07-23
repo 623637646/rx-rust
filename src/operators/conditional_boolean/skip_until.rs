@@ -1,6 +1,7 @@
 use crate::disposable::Disposable;
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -77,11 +78,11 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model { started: false };
-        subscribe_with_context_bound_disposal(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             let subscription_1 = self.start.subscribe(StartObserver {
                 context: context.clone(),
                 started: false,
@@ -96,7 +97,7 @@ struct Model {
     started: bool,
 }
 
-struct SkipUntilObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model, D>);
+struct SkipUntilObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, Model, D>);
 
 impl<T, E, OR, D> Observer<T, E> for SkipUntilObserver<T, E, OR, D>
 where
@@ -104,11 +105,11 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.modify_model(|model| {
+        let _ = self.0.try_update_model(|model| {
             if model.started {
-                ModificationResult::new_send_next(value)
+                ModelUpdate::new_send_next(value)
             } else {
-                ModificationResult::new_without_result()
+                ModelUpdate::new_without_result()
             }
         });
     }
@@ -119,7 +120,7 @@ where
 }
 
 struct StartObserver<T, E, OR, D: Disposable> {
-    context: Context<T, E, OR, Model, D>,
+    context: SubscriptionContext<T, E, OR, Model, D>,
     started: bool,
 }
 
@@ -131,9 +132,9 @@ where
     fn on_next(&mut self, _: ()) {
         if !self.started {
             self.started = true;
-            let _ = self.context.modify_model(|model| {
+            let _ = self.context.try_update_model(|model| {
                 model.started = true;
-                ModificationResult::new_without_result().ignore_drop_outside()
+                ModelUpdate::new_without_result().ignore_drop_outside()
             });
         }
     }

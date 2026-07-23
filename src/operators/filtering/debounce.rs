@@ -1,7 +1,7 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, subscribe_with_context,
+    self, ModelUpdate, SubscriptionContext, subscribe_with_context,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
@@ -117,7 +117,7 @@ struct Model<T, D: Disposable> {
 }
 
 struct DebounceObserver<T, E, OR, S: Scheduler> {
-    context: Context<T, E, OR, Model<T, S::D>>,
+    context: SubscriptionContext<T, E, OR, Model<T, S::D>>,
     time_span: Duration,
     scheduler: S,
 }
@@ -130,11 +130,11 @@ where
     S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        let timer_id = self.context.modify_model(|model| {
+        let timer_id = self.context.try_update_model(|model| {
             model.current_value = Some(value);
             let timer = model.timer.take();
             let timer_id = model.timer_id.increment();
-            ModificationResult::new(timer_id).drop_outside(timer)
+            ModelUpdate::new(timer_id).drop_outside(timer)
         });
         let Ok(timer_id) = timer_id else { return };
 
@@ -144,48 +144,48 @@ where
                 let Some(context) = weak_context.upgrade() else {
                     return;
                 };
-                let _ = context.modify_model(|model| {
+                let _ = context.try_update_model(|model| {
                     if timer_id != model.timer_id {
-                        return ModificationResult::new_without_result();
+                        return ModelUpdate::new_without_result();
                     }
                     let timer = model.timer.take();
                     if let Some(value) = model.current_value.take() {
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                             .send_next(value)
                             .drop_outside(timer)
                     } else {
-                        ModificationResult::new_without_result().drop_outside(timer)
+                        ModelUpdate::new_without_result().drop_outside(timer)
                     }
                 });
             },
             Some(self.time_span),
         );
 
-        let _ = self.context.modify_model(|model| {
+        let _ = self.context.try_update_model(|model| {
             debug_assert_eq!(
                 timer_id, model.timer_id,
                 "timer id must be the same because on_next &mut self is exclusive"
             );
             let previous_timer = model.timer.replace(disposal);
             debug_assert!(previous_timer.is_none());
-            ModificationResult::new_without_result().ignore_drop_outside()
+            ModelUpdate::new_without_result().ignore_drop_outside()
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let _ = self.context.modify_model(|model| {
+                let _ = self.context.try_update_model(|model| {
                     match (model.current_value.take(), model.timer.take()) {
                         (None, None) => {
-                            ModificationResult::new_without_result().send_termination(termination)
+                            ModelUpdate::new_without_result().send_termination(termination)
                         }
-                        (None, Some(timer)) => ModificationResult::new_without_result()
+                        (None, Some(timer)) => ModelUpdate::new_without_result()
                             .send_termination(termination)
                             .drop_outside(timer),
-                        (Some(value), None) => ModificationResult::new_without_result()
+                        (Some(value), None) => ModelUpdate::new_without_result()
                             .send_next_and_termination(value, termination),
-                        (Some(value), Some(timer)) => ModificationResult::new_without_result()
+                        (Some(value), Some(timer)) => ModelUpdate::new_without_result()
                             .send_next_and_termination(value, termination)
                             .drop_outside(timer),
                     }

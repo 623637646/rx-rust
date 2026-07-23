@@ -7,16 +7,14 @@ use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
 use rx_rust::utils::types::Shared;
+use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::create::Create, utility::do_after_subscription::DoAfterSubscription},
     subject::publish_subject::PublishSubject,
 };
-use std::{
-    convert::Infallible,
-    sync::atomic::{AtomicBool, Ordering},
-};
+use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 use crate::tests_utils::test_channel::test_channel;
@@ -177,13 +175,13 @@ fn test_async() {
     block_on(|runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
-        let called = Shared::new(AtomicBool::new(false));
+        let called = Shared::new(MutableBool::new(false));
 
         // Custom operations
         let called_cloned = called.clone();
         let channel_checker_cloned = channel_checker.clone();
         let observable = observable.do_after_subscription(move || {
-            called_cloned.store(true, Ordering::SeqCst);
+            called_cloned.write(true);
             assert_eq!(channel_checker_cloned.state(), ChannelState::Subscribed);
         });
 
@@ -191,7 +189,7 @@ fn test_async() {
             .spawn(async move { observable.subscribe(observer) })
             .await
             .unwrap();
-        assert!(called.load(Ordering::SeqCst));
+        assert!(called.read());
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);

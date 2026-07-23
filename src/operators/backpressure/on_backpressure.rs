@@ -1,6 +1,6 @@
 use crate::observable::Subscription;
 use crate::utils::subscribe_with_context::{
-    self, Context, ModificationResult, WeakContext, subscribe_with_context,
+    self, ModelUpdate, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context,
 };
 use crate::utils::types::{MaybeSend, MaybeSync, Shared};
 use crate::{
@@ -102,11 +102,15 @@ struct Model<E, C> {
     downstream_ready: bool,
 }
 
-type BackpressureContext<'or, E, OR, C> =
-    Context<(<C as BackpressureCollection>::Output, RequestToken<'or>), E, OR, Model<E, C>>;
+type BackpressureContext<'or, E, OR, C> = SubscriptionContext<
+    (<C as BackpressureCollection>::Output, RequestToken<'or>),
+    E,
+    OR,
+    Model<E, C>,
+>;
 
 impl<'or, E, OR, C> RequestHandler<'or>
-    for WeakContext<(C::Output, RequestToken<'or>), E, OR, Model<E, C>>
+    for WeakSubscriptionContext<(C::Output, RequestToken<'or>), E, OR, Model<E, C>>
 where
     E: MaybeSend + 'or,
     OR: Observer<(C::Output, RequestToken<'or>), E> + MaybeSend + 'or,
@@ -117,14 +121,14 @@ where
         let Some(context) = self.upgrade() else {
             return;
         };
-        let _ = context.modify_model(|model| {
+        let _ = context.try_update_model(|model| {
             if let Some(next) = model.collection.take_next_value() {
-                ModificationResult::new_send_next((next, RequestToken(self)))
+                ModelUpdate::new_send_next((next, RequestToken(self)))
             } else if let Some(termination) = model.termination.take() {
-                ModificationResult::new_send_termination(termination)
+                ModelUpdate::new_send_termination(termination)
             } else {
                 model.downstream_ready = true;
-                ModificationResult::new_without_result()
+                ModelUpdate::new_without_result()
             }
         });
     }
@@ -146,32 +150,32 @@ where
     C::Output: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: C::Input) {
-        let _ = self.context.modify_model(|model| {
+        let _ = self.context.try_update_model(|model| {
             if model.termination.is_some() {
-                return ModificationResult::new_without_result();
+                return ModelUpdate::new_without_result();
             }
             model.collection.extend_one(value);
             if model.downstream_ready {
                 if let Some(next) = model.collection.take_next_value() {
                     model.downstream_ready = false;
                     let request = RequestToken(self.request_handler.clone());
-                    ModificationResult::new_send_next((next, request))
+                    ModelUpdate::new_send_next((next, request))
                 } else {
-                    ModificationResult::new_without_result()
+                    ModelUpdate::new_without_result()
                 }
             } else {
-                ModificationResult::new_without_result()
+                ModelUpdate::new_without_result()
             }
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.context.modify_model(|model| {
+        let _ = self.context.try_update_model(|model| {
             if model.downstream_ready {
-                ModificationResult::new_send_termination(termination)
+                ModelUpdate::new_send_termination(termination)
             } else {
                 model.termination = Some(termination);
-                ModificationResult::new_without_result()
+                ModelUpdate::new_without_result()
             }
         });
     }

@@ -1,5 +1,6 @@
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -66,7 +67,7 @@ where
     OE2: Observable<'or, T2, E>,
     OE2::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(
         self,
@@ -76,7 +77,7 @@ where
             first: (VecDeque::new(), false),
             second: (VecDeque::new(), false),
         };
-        subscribe_with_context_bound_disposal(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             let subscription_1 = self.source_1.subscribe(ZipObserver1(context.clone()));
             let subscription_2 = self.source_2.subscribe(ZipObserver2(context));
             subscription_1.preceded_by_bound(subscription_2)
@@ -91,7 +92,9 @@ struct Model<T1, T2> {
 
 macro_rules! impl_zip_observer {
     ($name:ident, $input_t:ty, $this_field:ident, $other_field:ident, $make_pair:expr) => {
-        struct $name<T1, T2, E, OR, D: Disposable>(Context<(T1, T2), E, OR, Model<T1, T2>, D>);
+        struct $name<T1, T2, E, OR, D: Disposable>(
+            SubscriptionContext<(T1, T2), E, OR, Model<T1, T2>, D>,
+        );
 
         impl<T1, T2, E, OR, D> Observer<$input_t, E> for $name<T1, T2, E, OR, D>
         where
@@ -99,19 +102,19 @@ macro_rules! impl_zip_observer {
             D: Disposable,
         {
             fn on_next(&mut self, value: $input_t) {
-                let _ = self.0.modify_model(|model| {
+                let _ = self.0.try_update_model(|model| {
                     if let Some(other) = model.$other_field.0.pop_front() {
                         if model.$other_field.1 && model.$other_field.0.is_empty() {
-                            ModificationResult::new_send_next_and_termination(
+                            ModelUpdate::new_send_next_and_termination(
                                 $make_pair(value, other),
                                 Termination::Completed,
                             )
                         } else {
-                            ModificationResult::new_send_next($make_pair(value, other))
+                            ModelUpdate::new_send_next($make_pair(value, other))
                         }
                     } else {
                         model.$this_field.0.push_back(value);
-                        ModificationResult::new_without_result()
+                        ModelUpdate::new_without_result()
                     }
                 });
             }
@@ -119,12 +122,12 @@ macro_rules! impl_zip_observer {
             fn on_termination(self, termination: Termination<E>) {
                 match termination {
                     Termination::Completed => {
-                        let _ = self.0.modify_model(|model| {
+                        let _ = self.0.try_update_model(|model| {
                             model.$this_field.1 = true;
                             if model.$this_field.0.is_empty() {
-                                ModificationResult::new_send_termination(termination)
+                                ModelUpdate::new_send_termination(termination)
                             } else {
-                                ModificationResult::new_without_result()
+                                ModelUpdate::new_without_result()
                             }
                         });
                     }

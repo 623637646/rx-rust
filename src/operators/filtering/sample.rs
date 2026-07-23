@@ -1,5 +1,6 @@
 use crate::utils::subscribe_with_context::{
-    BoundDisposal, Context, ModificationResult, subscribe_with_context_bound_disposal,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -79,11 +80,11 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = BoundDisposal<'or>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model { last_value: None };
-        subscribe_with_context_bound_disposal(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             let sample_observer = SampleObserver(context.clone());
             let sampler_observer = SamplerObserver(context);
             let subscription_1 = self.sampler.subscribe(sampler_observer);
@@ -97,7 +98,7 @@ struct Model<T> {
     last_value: Option<T>,
 }
 
-struct SampleObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<T>, D>);
+struct SampleObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, Model<T>, D>);
 
 impl<T, E, OR, D> Observer<T, E> for SampleObserver<T, E, OR, D>
 where
@@ -105,8 +106,8 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.modify_model(|model| {
-            ModificationResult::new_without_result().drop_outside(model.last_value.replace(value))
+        let _ = self.0.try_update_model(|model| {
+            ModelUpdate::new_without_result().drop_outside(model.last_value.replace(value))
         });
     }
 
@@ -115,7 +116,7 @@ where
     }
 }
 
-struct SamplerObserver<T, E, OR, D: Disposable>(Context<T, E, OR, Model<T>, D>);
+struct SamplerObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, Model<T>, D>);
 
 impl<T, E, OR, D> Observer<(), E> for SamplerObserver<T, E, OR, D>
 where
@@ -123,13 +124,13 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
-        let _ = self.0.modify_model(|model| {
+        let _ = self.0.try_update_model(|model| {
             if let Some(value) = model.last_value.take() {
-                ModificationResult::new_without_result()
+                ModelUpdate::new_without_result()
                     .send_next(value)
                     .ignore_drop_outside()
             } else {
-                ModificationResult::new_without_result()
+                ModelUpdate::new_without_result()
             }
         });
     }
