@@ -689,8 +689,11 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Throttles emissions to at most one item per specified timespan.
-    fn throttle<S>(self, time_span: Duration, scheduler: S) -> Throttle<'or, Self, S> {
-        Throttle::new(self, time_span, scheduler)
+    ///
+    /// Leading-edge and scheduler-free: the cooldown is decided by comparing
+    /// item arrival times, so no timer is spawned.
+    fn throttle(self, time_span: Duration) -> Throttle<Self> {
+        Throttle::new(self, time_span)
     }
 
     /// Emits elapsed time between consecutive items as they flow through the stream.
