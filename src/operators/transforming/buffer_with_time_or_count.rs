@@ -1,4 +1,4 @@
-use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
+use crate::disposable::{bound_drop_disposal::BoundDropDisposal, chain_disposal::ChainDisposal};
 use crate::observable::Subscription;
 use crate::utils::subscribe_with_context::{
     self, ModelUpdate, SubscriptionContext, subscribe_with_context,
@@ -7,7 +7,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
-    scheduler::Scheduler,
+    scheduler::{RecursionAction, Scheduler},
 };
 use educe::Educe;
 use std::time::Instant;
@@ -106,15 +106,14 @@ where
     OE: Observable<'static, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = subscribe_with_context::Disposal<'static, OE::D>;
+    type D = subscribe_with_context::Disposal<'static, ChainDisposal<S::D, OE::D>>;
 
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        let model = Model::<T, S::D> {
+        let model = Model::<T> {
             values: Vec::with_capacity(self.count.get()),
-            timer: None,
             last_sending_time_from_counting: None,
         };
         subscribe_with_context(observer, model, |context| {
@@ -124,33 +123,28 @@ where
             };
             let sub = self.source.subscribe(buffer_observer);
             let disposal = setup_emit_timer(
-                context.clone(),
+                context,
                 self.scheduler,
                 self.delay,
                 self.time_span,
                 self.count,
             );
-            let _ = context.try_update_model(|model| {
-                model.timer = Some(disposal);
-                ModelUpdate::new_empty()
-            });
-            sub
+            sub.preceded_by_bound(disposal)
         })
     }
 }
 
-struct Model<T, D: Disposable> {
+struct Model<T> {
     values: Vec<T>,
-    timer: Option<BoundDropDisposal<D>>,
     last_sending_time_from_counting: Option<Instant>,
 }
 
-struct BufferWithTimeOrCountObserver<T, E, OR, D: Disposable> {
-    context: SubscriptionContext<Vec<T>, E, OR, Model<T, D>>,
+struct BufferWithTimeOrCountObserver<T, E, OR> {
+    context: SubscriptionContext<Vec<T>, E, OR, Model<T>>,
     count: NonZeroUsize,
 }
 
-impl<T, E, OR, D: Disposable> Observer<T, E> for BufferWithTimeOrCountObserver<T, E, OR, D>
+impl<T, E, OR> Observer<T, E> for BufferWithTimeOrCountObserver<T, E, OR>
 where
     T: MaybeSend + 'static,
     OR: Observer<Vec<T>, E> + MaybeSend + 'static,
@@ -188,8 +182,16 @@ where
     }
 }
 
+/// Drives the periodic flush with a single, long-lived recursive scheduling loop.
+///
+/// A count-triggered flush (see `BufferWithTimeOrCountObserver::on_next`) doesn't spawn or
+/// tear down a task: it just records `last_sending_time_from_counting`, and the next tick of
+/// this same loop resyncs its own deadline to `time_span` after that flush instead of emitting.
+/// This avoids spawning a fresh scheduler task (and aborting the previous one) on every count
+/// flush, and it sidesteps `Duration` subtraction entirely, so a tick that fires late can never
+/// panic on underflow.
 fn setup_emit_timer<T, E, OR, S>(
-    context: SubscriptionContext<Vec<T>, E, OR, Model<T, S::D>>,
+    context: SubscriptionContext<Vec<T>, E, OR, Model<T>>,
     scheduler: S,
     delay: Option<Duration>,
     time_span: Duration,
@@ -201,35 +203,36 @@ where
     OR: Observer<Vec<T>, E> + MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
+    assert!(!time_span.is_zero(), "time_span must be non-zero");
     let weak_context = context.downgrade();
-    scheduler.clone().schedule_periodically(
+    let mut next_time = Instant::now() + delay.unwrap_or_default();
+    scheduler.schedule_recursively(
         move |_| {
             let Some(context) = weak_context.upgrade() else {
-                return false;
+                return RecursionAction::Stop;
             };
             context
                 .try_update_model(|model| {
                     if let Some(last_sending_time_from_counting) =
                         model.last_sending_time_from_counting.take()
                     {
-                        let disposal = setup_emit_timer(
-                            context.clone(),
-                            scheduler.clone(),
-                            Some(time_span - last_sending_time_from_counting.elapsed()), // TODO: May be panic.
-                            time_span,
-                            count,
-                        );
-                        let old_timer = model.timer.replace(disposal);
-                        ModelUpdate::new(false).drop_outside(old_timer)
+                        // Already flushed by count since the last tick; resync to
+                        // `time_span` after that flush instead of emitting an empty batch.
+                        next_time = last_sending_time_from_counting + time_span;
+                        ModelUpdate::new(RecursionAction::ContinueAt(next_time))
+                            .ignore_drop_outside()
                     } else {
                         let values =
                             std::mem::replace(&mut model.values, Vec::with_capacity(count.get()));
-                        ModelUpdate::new(true).send_next(values)
+                        // Fixed-rate: anchor the next tick to the schedule, not to `now`.
+                        next_time += time_span;
+                        ModelUpdate::new(RecursionAction::ContinueAt(next_time))
+                            .send_next(values)
+                            .ignore_drop_outside()
                     }
                 })
-                .unwrap_or(false)
+                .unwrap_or(RecursionAction::Stop)
         },
-        time_span,
         delay,
     )
 }
