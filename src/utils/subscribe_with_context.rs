@@ -220,130 +220,101 @@ pub enum EventBatch<T, E> {
     NextBatchAndTermination(Vec<T>, Termination<E>),
 }
 
+pub struct DropUndecided;
+pub struct DropDecided<T>(Option<T>);
+
 /// Effects produced by a model update while the subscription context is locked.
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ModelUpdate<T, E, A, R> {
+pub struct ModelUpdate<T, E, R = (), DO = DropUndecided, const EVENTS_DECIDED: bool = false> {
     events: Option<EventBatch<T, E>>,
-    drop_outside: Option<A>,
+    drop_outside: DO,
     result: R,
 }
 
-impl<T, E, A, R> ModelUpdate<T, E, A, R> {
+impl<T, E, R> ModelUpdate<T, E, R> {
     pub fn new(result: R) -> Self {
         Self {
             events: None,
-            drop_outside: None,
+            drop_outside: DropUndecided,
             result,
         }
     }
+}
 
-    pub fn send_next(self, next: T) -> Self {
-        self.assert_no_events_set();
-        Self {
+impl<T, E> ModelUpdate<T, E> {
+    pub fn empty() -> Self {
+        Self::new(())
+    }
+}
+
+impl<T, E, R, const EVENTS_DECIDED: bool> ModelUpdate<T, E, R, DropUndecided, EVENTS_DECIDED> {
+    pub fn with_drop_outside<DO>(
+        self,
+        drop_outside: DO,
+    ) -> ModelUpdate<T, E, R, DropDecided<DO>, EVENTS_DECIDED> {
+        ModelUpdate {
+            events: self.events,
+            drop_outside: DropDecided(Some(drop_outside)),
+            result: self.result,
+        }
+    }
+
+    pub fn without_drop_outside<DO>(self) -> ModelUpdate<T, E, R, DropDecided<DO>, EVENTS_DECIDED> {
+        ModelUpdate {
+            events: self.events,
+            drop_outside: DropDecided(None),
+            result: self.result,
+        }
+    }
+}
+
+impl<T, E, R, DO> ModelUpdate<T, E, R, DO, false> {
+    pub fn with_next_event(self, next: T) -> ModelUpdate<T, E, R, DO, true> {
+        ModelUpdate {
             events: Some(EventBatch::Next(next)),
-            ..self
+            drop_outside: self.drop_outside,
+            result: self.result,
         }
     }
 
-    pub fn send_termination(self, termination: Termination<E>) -> Self {
-        self.assert_no_events_set();
-        Self {
+    pub fn with_termination_event(
+        self,
+        termination: Termination<E>,
+    ) -> ModelUpdate<T, E, R, DO, true> {
+        ModelUpdate {
             events: Some(EventBatch::Termination(termination)),
-            ..self
+            drop_outside: self.drop_outside,
+            result: self.result,
         }
     }
 
-    pub fn send_next_and_termination(self, next: T, termination: Termination<E>) -> Self {
-        self.assert_no_events_set();
-        Self {
+    pub fn with_next_and_termination_events(
+        self,
+        next: T,
+        termination: Termination<E>,
+    ) -> ModelUpdate<T, E, R, DO, true> {
+        ModelUpdate {
             events: Some(EventBatch::NextAndTermination(next, termination)),
-            ..self
+            drop_outside: self.drop_outside,
+            result: self.result,
         }
     }
 
-    pub fn send_events(self, events: EventBatch<T, E>) -> Self {
-        self.assert_no_events_set();
-        Self {
+    pub fn with_events(self, events: EventBatch<T, E>) -> ModelUpdate<T, E, R, DO, true> {
+        ModelUpdate {
             events: Some(events),
-            ..self
+            drop_outside: self.drop_outside,
+            result: self.result,
         }
     }
 
-    pub fn drop_outside(self, object: A) -> Self {
-        debug_assert!(
-            self.drop_outside.is_none(),
-            "drop_outside is already set; calling it again would silently overwrite (and drop) the previous object"
-        );
-        Self {
-            drop_outside: Some(object),
-            ..self
-        }
-    }
-
-    fn assert_no_events_set(&self) {
-        debug_assert!(
-            self.events.is_none(),
-            "send_events is already set; calling a send_* method again would silently overwrite the previous events"
-        );
-    }
-}
-
-impl<T, E> ModelUpdate<T, E, (), ()> {
-    pub fn new_empty() -> Self {
-        Self {
+    pub fn without_events(self) -> ModelUpdate<T, E, R, DO, true> {
+        ModelUpdate {
             events: None,
-            drop_outside: None,
-            result: (),
+            drop_outside: self.drop_outside,
+            result: self.result,
         }
-    }
-
-    pub fn new_send_next(next: T) -> Self {
-        Self {
-            events: Some(EventBatch::Next(next)),
-            drop_outside: None,
-            result: (),
-        }
-    }
-
-    pub fn new_send_termination(termination: Termination<E>) -> Self {
-        Self {
-            events: Some(EventBatch::Termination(termination)),
-            drop_outside: None,
-            result: (),
-        }
-    }
-
-    pub fn new_send_next_and_termination(next: T, termination: Termination<E>) -> Self {
-        Self {
-            events: Some(EventBatch::NextAndTermination(next, termination)),
-            drop_outside: None,
-            result: (),
-        }
-    }
-
-    pub fn new_send_events(events: EventBatch<T, E>) -> Self {
-        Self {
-            events: Some(events),
-            drop_outside: None,
-            result: (),
-        }
-    }
-}
-
-impl<T, E, A> ModelUpdate<T, E, A, ()> {
-    pub fn new_without_result() -> Self {
-        Self {
-            events: None,
-            drop_outside: None,
-            result: (),
-        }
-    }
-}
-
-impl<T, E, R> ModelUpdate<T, E, (), R> {
-    pub fn ignore_drop_outside(self) -> Self {
-        self
     }
 }
 
@@ -366,32 +337,38 @@ where
     /// Tries to update the active model while the context is locked.
     ///
     /// The callback must not call external APIs or drop values that can re-enter this context.
-    /// Return such values through [`ModelUpdate::drop_outside`] instead.
+    /// Return such values through [`ModelUpdate::with_drop_outside`] instead.
     /// If the context has stopped, the callback is not invoked and [`ContextStopped`] is returned.
-    pub fn try_update_model<A, R>(
+    pub fn try_update_model<R, DO, const EVENTS_DECIDED: bool>(
         &self,
-        callback: impl FnOnce(&mut M) -> ModelUpdate<T, E, A, R>,
+        callback: impl FnOnce(&mut M) -> ModelUpdate<T, E, R, DO, EVENTS_DECIDED>,
     ) -> Result<R, ContextStopped> {
         // Keep the callback outside the closure so that, if the context is already stopped, its
-        // captures are dropped only after `update_model_or_retained_state` has released the lock.
+        // captures are dropped only after the lock is released.
         let mut callback = Some(callback);
-        self.update_model_or_retained_state(|model| match model {
-            ModelState::Active(model) => {
-                let callback = callback
-                    .take()
-                    .expect("active model callback must only be called once");
-                let ModelUpdate {
-                    events,
-                    drop_outside,
-                    result,
-                } = callback(model);
-                ModelUpdate {
-                    events,
-                    drop_outside,
-                    result: Ok(result),
-                }
+        self.state.lock_mut(|mut lock| {
+            let model = match &mut *lock {
+                State::Subscribing { model, .. } => model,
+                State::Idle { model, .. } => model,
+                State::Delivering { model, .. } => model,
+                State::Stopped { .. } => return Err(ContextStopped),
+                State::Placeholder => unreachable!(),
+            };
+            let callback = callback
+                .take()
+                .expect("active model callback must only be called once");
+            let ModelUpdate {
+                events,
+                drop_outside,
+                result,
+            } = callback(model);
+            if let Some(events) = events {
+                self.dispatch_events(events, lock);
+            } else {
+                drop(lock);
             }
-            ModelState::Stopped(_) => ModelUpdate::new(Err(ContextStopped)),
+            drop(drop_outside); // Drop outside the lock to avoid potential deadlock
+            Ok(result)
         })
     }
 
@@ -399,9 +376,9 @@ where
     ///
     /// The callback runs while the context is locked and follows the same restrictions as
     /// [`SubscriptionContext::try_update_model`].
-    pub fn update_model_or_retained_state<A, R>(
+    pub fn update_model_or_retained_state<R, DO, const EVENTS_DECIDED: bool>(
         &self,
-        callback: impl FnOnce(ModelState<'_, M, S>) -> ModelUpdate<T, E, A, R>,
+        callback: impl FnOnce(ModelState<'_, M, S>) -> ModelUpdate<T, E, R, DO, EVENTS_DECIDED>,
     ) -> R {
         self.state.lock_mut(|mut lock| {
             let model = match &mut *lock {

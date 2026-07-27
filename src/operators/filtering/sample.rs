@@ -107,7 +107,7 @@ where
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.try_update_model(|model| {
-            ModelUpdate::new_without_result().drop_outside(model.last_value.replace(value))
+            ModelUpdate::empty().with_drop_outside(model.last_value.replace(value))
         });
     }
 
@@ -126,11 +126,9 @@ where
     fn on_next(&mut self, _: ()) {
         let _ = self.0.try_update_model(|model| {
             if let Some(value) = model.last_value.take() {
-                ModelUpdate::new_without_result()
-                    .send_next(value)
-                    .ignore_drop_outside()
+                ModelUpdate::empty().with_next_event(value)
             } else {
-                ModelUpdate::new_without_result()
+                ModelUpdate::empty().without_events()
             }
         });
     }

@@ -103,7 +103,7 @@ where
     fn on_next(&mut self, value: T) {
         let _ = self.0.try_update_model(|values| {
             values.push(value);
-            ModelUpdate::new_empty()
+            ModelUpdate::empty()
         });
     }
 
@@ -121,7 +121,8 @@ where
 {
     fn on_next(&mut self, _: ()) {
         let _ = self.0.try_update_model(|values| {
-            ModelUpdate::new_send_next(std::mem::replace(values, Vec::with_capacity(values.len())))
+            ModelUpdate::empty()
+                .with_next_event(std::mem::replace(values, Vec::with_capacity(values.len())))
         });
     }
 
@@ -141,9 +142,10 @@ fn terminate<T, E, OR, D>(
         Termination::Completed => {
             let _ = context.try_update_model(|values| {
                 if values.is_empty() {
-                    ModelUpdate::new_send_termination(termination)
+                    ModelUpdate::empty().with_termination_event(termination)
                 } else {
-                    ModelUpdate::new_send_next_and_termination(std::mem::take(values), termination)
+                    ModelUpdate::empty()
+                        .with_next_and_termination_events(std::mem::take(values), termination)
                 }
             });
         }

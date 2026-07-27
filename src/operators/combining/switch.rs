@@ -128,9 +128,9 @@ where
         let result = self.0.try_update_model(|model| {
             model.current_sub_id.increment();
             match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription) {
-                SubState::Idle => ModelUpdate::new(model.current_sub_id),
+                SubState::Idle => ModelUpdate::new(model.current_sub_id).without_drop_outside(),
                 SubState::Processing(subscription) => {
-                    ModelUpdate::new(model.current_sub_id).drop_outside(subscription)
+                    ModelUpdate::new(model.current_sub_id).with_drop_outside(subscription)
                 }
                 SubState::PendingSubscription => unreachable!(),
             }
@@ -143,10 +143,10 @@ where
         let sub = value.subscribe(observer);
         let _ = self.0.try_update_model(|model| {
             match &mut model.sub_state {
-                SubState::Idle => ModelUpdate::new_without_result().drop_outside(sub), // already terminated
+                SubState::Idle => ModelUpdate::empty().with_drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     model.sub_state = SubState::Processing(sub);
-                    ModelUpdate::new_without_result()
+                    ModelUpdate::empty().without_drop_outside()
                 }
                 SubState::Processing(_) => unreachable!(),
             }
@@ -159,9 +159,9 @@ where
                 let _ = self.0.try_update_model(|model| {
                     model.is_source_completed = true;
                     match model.sub_state {
-                        SubState::Idle => ModelUpdate::new_send_termination(termination),
+                        SubState::Idle => ModelUpdate::empty().with_termination_event(termination),
                         SubState::Processing(_) | SubState::PendingSubscription => {
-                            ModelUpdate::new_without_result()
+                            ModelUpdate::empty().without_events()
                         }
                     }
                 });
@@ -189,34 +189,38 @@ where
     fn on_next(&mut self, value: T) {
         let _ = self.0.try_update_model(|model| {
             if model.current_sub_id != self.1 {
-                return ModelUpdate::new_without_result();
+                return ModelUpdate::empty().without_events();
             }
-            ModelUpdate::new_send_next(value)
+            ModelUpdate::empty().with_next_event(value)
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         let _ = self.0.try_update_model(|model| {
             if model.current_sub_id != self.1 {
-                return ModelUpdate::new_without_result();
+                return ModelUpdate::empty().without_events().without_drop_outside();
             }
             match termination {
                 Termination::Completed => {
                     if model.is_source_completed {
-                        ModelUpdate::new_without_result().send_termination(termination)
+                        ModelUpdate::empty()
+                            .with_termination_event(termination)
+                            .without_drop_outside()
                     } else {
                         match std::mem::replace(&mut model.sub_state, SubState::Idle) {
                             SubState::Idle => unreachable!(),
-                            SubState::PendingSubscription => ModelUpdate::new_without_result(),
-                            SubState::Processing(subscription) => {
-                                ModelUpdate::new_without_result().drop_outside(subscription)
+                            SubState::PendingSubscription => {
+                                ModelUpdate::empty().without_events().without_drop_outside()
                             }
+                            SubState::Processing(subscription) => ModelUpdate::empty()
+                                .without_events()
+                                .with_drop_outside(subscription),
                         }
                     }
                 }
-                Termination::Error(_) => {
-                    ModelUpdate::new_without_result().send_termination(termination)
-                }
+                Termination::Error(_) => ModelUpdate::empty()
+                    .with_termination_event(termination)
+                    .without_drop_outside(),
             }
         });
     }

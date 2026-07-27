@@ -99,10 +99,10 @@ where
             Termination::Completed => {
                 let _ = self.0.try_update_model(|model| {
                     if model.one_is_completed {
-                        ModelUpdate::new_send_termination(termination)
+                        ModelUpdate::empty().with_termination_event(termination)
                     } else {
                         model.one_is_completed = true;
-                        ModelUpdate::new_without_result()
+                        ModelUpdate::empty().without_events()
                     }
                 });
             }

@@ -119,9 +119,9 @@ where
 {
     fn on_next(&mut self, value: OE1) {
         // Insert a placeholder subscription.
-        let result = self.0.try_update_model(|model| {
-            ModelUpdate::new(model.subscriptions.insert(None)).ignore_drop_outside()
-        });
+        let result = self
+            .0
+            .try_update_model(|model| ModelUpdate::new(model.subscriptions.insert(None)));
         let key = match result {
             Ok(key) => key,
             Err(_) => return,
@@ -135,10 +135,10 @@ where
         let _ = self.0.try_update_model(|model| {
             if model.subscriptions.contains_key(key) {
                 model.subscriptions[key] = Some(sub);
-                ModelUpdate::new_without_result()
+                ModelUpdate::empty().without_drop_outside()
             } else {
                 // already terminated
-                ModelUpdate::new_without_result().drop_outside(sub)
+                ModelUpdate::empty().with_drop_outside(sub)
             }
         });
     }
@@ -148,10 +148,10 @@ where
             Termination::Completed => {
                 let _ = self.0.try_update_model(|model| {
                     if model.subscriptions.is_empty() {
-                        ModelUpdate::new_send_termination(termination)
+                        ModelUpdate::empty().with_termination_event(termination)
                     } else {
                         model.is_source_terminated = true;
-                        ModelUpdate::new_without_result()
+                        ModelUpdate::empty().without_events()
                     }
                 });
             }
@@ -183,11 +183,13 @@ where
                 let _ = self.context.try_update_model(|model| {
                     let subscription = model.subscriptions.remove(self.key);
                     if model.is_source_terminated && model.subscriptions.is_empty() {
-                        ModelUpdate::new_without_result()
-                            .drop_outside(subscription)
-                            .send_termination(termination)
+                        ModelUpdate::empty()
+                            .with_termination_event(termination)
+                            .with_drop_outside(subscription)
                     } else {
-                        ModelUpdate::new_without_result().drop_outside(subscription)
+                        ModelUpdate::empty()
+                            .without_events()
+                            .with_drop_outside(subscription)
                     }
                 });
             }

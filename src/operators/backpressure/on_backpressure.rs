@@ -123,12 +123,12 @@ where
         };
         let _ = context.try_update_model(|model| {
             if let Some(next) = model.collection.take_next_value() {
-                ModelUpdate::new_send_next((next, RequestToken(self)))
+                ModelUpdate::empty().with_next_event((next, RequestToken(self)))
             } else if let Some(termination) = model.termination.take() {
-                ModelUpdate::new_send_termination(termination)
+                ModelUpdate::empty().with_termination_event(termination)
             } else {
                 model.downstream_ready = true;
-                ModelUpdate::new_without_result()
+                ModelUpdate::empty().without_events()
             }
         });
     }
@@ -152,19 +152,19 @@ where
     fn on_next(&mut self, value: C::Input) {
         let _ = self.context.try_update_model(|model| {
             if model.termination.is_some() {
-                return ModelUpdate::new_without_result();
+                return ModelUpdate::empty().without_events();
             }
             model.collection.extend_one(value);
             if model.downstream_ready {
                 if let Some(next) = model.collection.take_next_value() {
                     model.downstream_ready = false;
                     let request = RequestToken(self.request_handler.clone());
-                    ModelUpdate::new_send_next((next, request))
+                    ModelUpdate::empty().with_next_event((next, request))
                 } else {
-                    ModelUpdate::new_without_result()
+                    ModelUpdate::empty().without_events()
                 }
             } else {
-                ModelUpdate::new_without_result()
+                ModelUpdate::empty().without_events()
             }
         });
     }
@@ -172,10 +172,10 @@ where
     fn on_termination(self, termination: Termination<E>) {
         let _ = self.context.try_update_model(|model| {
             if model.downstream_ready {
-                ModelUpdate::new_send_termination(termination)
+                ModelUpdate::empty().with_termination_event(termination)
             } else {
                 model.termination = Some(termination);
-                ModelUpdate::new_without_result()
+                ModelUpdate::empty().without_events()
             }
         });
     }

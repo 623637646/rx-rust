@@ -209,14 +209,16 @@ where
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.try_update_model(|model| match model.window_state {
-            WindowState::Subscribed(_) => {
-                ModelUpdate::new_without_result().send_next(DelegateAction::ForwardValue(value))
-            }
+            WindowState::Subscribed(_) => ModelUpdate::empty()
+                .with_next_event(DelegateAction::ForwardValue(value))
+                .without_drop_outside(),
             WindowState::Pending(key) => {
                 model.buffered_window_mut(key).values.push(value);
-                ModelUpdate::new_without_result()
+                ModelUpdate::empty().without_events().without_drop_outside()
             }
-            WindowState::Vacant => ModelUpdate::new_without_result().drop_outside(value),
+            WindowState::Vacant => ModelUpdate::empty()
+                .without_events()
+                .with_drop_outside(value),
         });
     }
 
@@ -225,13 +227,14 @@ where
             match std::mem::replace(&mut model.window_state, WindowState::Vacant) {
                 WindowState::Pending(key) => {
                     model.buffered_window_mut(key).termination = Some(termination.clone());
-                    ModelUpdate::new_send_termination(termination)
+                    ModelUpdate::empty().with_termination_event(termination)
                 }
-                WindowState::Subscribed(_) => ModelUpdate::new_send_next_and_termination(
-                    DelegateAction::TerminateInner(termination.clone()),
-                    termination,
-                ),
-                WindowState::Vacant => ModelUpdate::new_send_termination(termination),
+                WindowState::Subscribed(_) => ModelUpdate::empty()
+                    .with_next_and_termination_events(
+                        DelegateAction::TerminateInner(termination.clone()),
+                        termination,
+                    ),
+                WindowState::Vacant => ModelUpdate::empty().with_termination_event(termination),
             }
         });
     }
@@ -267,9 +270,7 @@ where
                 WindowState::Vacant => EventBatch::Next(emit_window),
             };
 
-            ModelUpdate::new_without_result()
-                .send_events(events)
-                .ignore_drop_outside()
+            ModelUpdate::empty().with_events(events)
         });
     }
 
@@ -306,7 +307,7 @@ where
                 }
                 ModelState::Stopped(buffered_windows) => buffered_windows.remove(key),
             };
-            ModelUpdate::new_without_result().drop_outside(buffered_window)
+            ModelUpdate::empty().with_drop_outside(buffered_window)
         });
     }
 }
@@ -350,9 +351,7 @@ where
                             .map(DelegateAction::ForwardValue),
                     );
 
-                    ModelUpdate::new(None)
-                        .send_events(EventBatch::NextBatch(actions))
-                        .ignore_drop_outside()
+                    ModelUpdate::new(None).with_events(EventBatch::NextBatch(actions))
                 } else {
                     ModelUpdate::new(Some((
                         observer,
@@ -361,6 +360,7 @@ where
                             .remove(key)
                             .expect("buffered window must exist"),
                     )))
+                    .without_events()
                 }
             }
             ModelState::Stopped(buffered_windows) => ModelUpdate::new(Some((
@@ -368,7 +368,8 @@ where
                 buffered_windows
                     .remove(key)
                     .expect("buffered window must exist"),
-            ))),
+            )))
+            .without_events(),
         });
         if let Some((mut observer, buffered_window)) = result {
             for item in buffered_window.values {
@@ -410,9 +411,9 @@ where
         let _ = self.context.try_update_model(|model| {
             if model.window_state == WindowState::Subscribed(self.key) {
                 model.window_state = WindowState::Vacant;
-                ModelUpdate::new_without_result().send_next(DelegateAction::DetachInnerObserver)
+                ModelUpdate::empty().with_next_event(DelegateAction::DetachInnerObserver)
             } else {
-                ModelUpdate::new_empty()
+                ModelUpdate::empty().without_events()
             }
         });
     }

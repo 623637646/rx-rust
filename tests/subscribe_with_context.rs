@@ -184,7 +184,7 @@ fn stopped_try_update_model_drops_callback_outside_lock() {
 
     let result = context.try_update_model(move |_| {
         drop(run_on_drop);
-        ModelUpdate::new_empty()
+        ModelUpdate::empty()
     });
 
     assert_eq!(result, Err(ContextStopped));

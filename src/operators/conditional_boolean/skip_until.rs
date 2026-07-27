@@ -107,9 +107,9 @@ where
     fn on_next(&mut self, value: T) {
         let _ = self.0.try_update_model(|model| {
             if model.started {
-                ModelUpdate::new_send_next(value)
+                ModelUpdate::empty().with_next_event(value)
             } else {
-                ModelUpdate::new_without_result()
+                ModelUpdate::empty().without_events()
             }
         });
     }
@@ -134,7 +134,7 @@ where
             self.started = true;
             let _ = self.context.try_update_model(|model| {
                 model.started = true;
-                ModelUpdate::new_without_result().ignore_drop_outside()
+                ModelUpdate::empty()
             });
         }
     }

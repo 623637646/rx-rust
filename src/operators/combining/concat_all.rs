@@ -134,7 +134,7 @@ where
         let result = self.0.try_update_model(|model| match model.sub_state {
             SubState::Idle => {
                 model.sub_state = SubState::PendingSubscription;
-                ModelUpdate::new(Some(value)).ignore_drop_outside()
+                ModelUpdate::new(Some(value))
             }
             SubState::PendingSubscription | SubState::Processing(_) => {
                 model.pending_observables.push_back(value);
@@ -150,10 +150,10 @@ where
         let sub = observable.subscribe(observer);
         let _ = self.0.try_update_model(|model| {
             match &model.sub_state {
-                SubState::Idle => ModelUpdate::new_without_result().drop_outside(sub), // already terminated
+                SubState::Idle => ModelUpdate::empty().with_drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     model.sub_state = SubState::Processing(sub);
-                    ModelUpdate::new_without_result()
+                    ModelUpdate::empty().without_drop_outside()
                 }
                 SubState::Processing(_) => unreachable!(),
             }
@@ -169,10 +169,10 @@ where
                         SubState::Idle => {
                             // The state is only possible to be PendingSubscription or Processing when the pending_observables is not empty.
                             debug_assert!(model.pending_observables.is_empty());
-                            ModelUpdate::new_send_termination(termination)
+                            ModelUpdate::empty().with_termination_event(termination)
                         }
                         SubState::PendingSubscription | SubState::Processing(_) => {
-                            ModelUpdate::new_without_result()
+                            ModelUpdate::empty().without_events()
                         }
                     }
                 });
@@ -231,30 +231,40 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
                     // already terminated
                     model.sub_state = SubState::Idle;
                     ModelUpdate::new(None)
+                        .without_events()
+                        .without_drop_outside()
                 }
                 SubState::Idle | SubState::Processing(_) => {
                     if let Some(observable) = model.pending_observables.pop_front() {
                         match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription)
                         {
-                            SubState::Idle => ModelUpdate::new(Some(observable)),
+                            SubState::Idle => ModelUpdate::new(Some(observable))
+                                .without_events()
+                                .without_drop_outside(),
                             SubState::PendingSubscription => {
                                 unreachable!()
                             }
                             SubState::Processing(subscription) => {
-                                ModelUpdate::new(Some(observable)).drop_outside(subscription)
+                                ModelUpdate::new(Some(observable))
+                                    .without_events()
+                                    .with_drop_outside(subscription)
                             }
                         }
                     } else if model.is_source_completed {
-                        ModelUpdate::new(None).send_termination(Termination::Completed)
+                        ModelUpdate::new(None)
+                            .with_termination_event(Termination::Completed)
+                            .without_drop_outside()
                     } else {
                         match std::mem::replace(&mut model.sub_state, SubState::Idle) {
-                            SubState::Idle => ModelUpdate::new(None),
+                            SubState::Idle => ModelUpdate::new(None)
+                                .without_events()
+                                .without_drop_outside(),
                             SubState::PendingSubscription => {
                                 unreachable!()
                             }
-                            SubState::Processing(subscription) => {
-                                ModelUpdate::new(None).drop_outside(subscription)
-                            }
+                            SubState::Processing(subscription) => ModelUpdate::new(None)
+                                .without_events()
+                                .with_drop_outside(subscription),
                         }
                     }
                 }
@@ -271,10 +281,10 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
         let sub = observable.subscribe(observer);
         let result = context.try_update_model(|model| {
             match &model.sub_state {
-                SubState::Idle => ModelUpdate::new(false).drop_outside(sub), // already terminated
+                SubState::Idle => ModelUpdate::new(false).with_drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     model.sub_state = SubState::Processing(sub);
-                    ModelUpdate::new(true)
+                    ModelUpdate::new(true).without_drop_outside()
                 }
                 SubState::Processing(_) => unreachable!(),
             }

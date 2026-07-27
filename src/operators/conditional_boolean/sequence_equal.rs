@@ -134,18 +134,18 @@ where
             };
 
             match (other.queue.pop_front(), other.completed) {
-                (None, true) => {
-                    ModelUpdate::new_send_next_and_termination(false, Termination::Completed)
-                }
+                (None, true) => ModelUpdate::empty()
+                    .with_next_and_termination_events(false, Termination::Completed),
                 (None, false) => {
                     mine.queue.push_back(value);
-                    ModelUpdate::new_without_result()
+                    ModelUpdate::empty().without_events()
                 }
                 (Some(next), _) => {
                     if value == next {
-                        ModelUpdate::new_without_result()
+                        ModelUpdate::empty().without_events()
                     } else {
-                        ModelUpdate::new_send_next_and_termination(false, Termination::Completed)
+                        ModelUpdate::empty()
+                            .with_next_and_termination_events(false, Termination::Completed)
                     }
                 }
             }
@@ -168,10 +168,10 @@ where
                     let other_empty = other.queue.is_empty();
 
                     if !other_completed && other_empty {
-                        ModelUpdate::new_without_result()
+                        ModelUpdate::empty().without_events()
                     } else {
                         let is_equal = mine_empty && other_completed && other_empty;
-                        ModelUpdate::new_send_next_and_termination(is_equal, termination)
+                        ModelUpdate::empty().with_next_and_termination_events(is_equal, termination)
                     }
                 });
             }

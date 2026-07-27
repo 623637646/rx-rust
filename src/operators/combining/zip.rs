@@ -105,16 +105,16 @@ macro_rules! impl_zip_observer {
                 let _ = self.0.try_update_model(|model| {
                     if let Some(other) = model.$other_field.0.pop_front() {
                         if model.$other_field.1 && model.$other_field.0.is_empty() {
-                            ModelUpdate::new_send_next_and_termination(
+                            ModelUpdate::empty().with_next_and_termination_events(
                                 $make_pair(value, other),
                                 Termination::Completed,
                             )
                         } else {
-                            ModelUpdate::new_send_next($make_pair(value, other))
+                            ModelUpdate::empty().with_next_event($make_pair(value, other))
                         }
                     } else {
                         model.$this_field.0.push_back(value);
-                        ModelUpdate::new_without_result()
+                        ModelUpdate::empty().without_events()
                     }
                 });
             }
@@ -125,9 +125,9 @@ macro_rules! impl_zip_observer {
                         let _ = self.0.try_update_model(|model| {
                             model.$this_field.1 = true;
                             if model.$this_field.0.is_empty() {
-                                ModelUpdate::new_send_termination(termination)
+                                ModelUpdate::empty().with_termination_event(termination)
                             } else {
-                                ModelUpdate::new_without_result()
+                                ModelUpdate::empty().without_events()
                             }
                         });
                     }

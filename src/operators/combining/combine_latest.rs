@@ -113,10 +113,10 @@ macro_rules! impl_observer {
                 let _ = self.0.try_update_model(|model| {
                     if let Some(other) = &model.$field_other {
                         model.$field_self = Some(val.clone());
-                        ModelUpdate::new_send_next($combine(val, other.clone()))
+                        ModelUpdate::empty().with_next_event($combine(val, other.clone()))
                     } else {
                         model.$field_self = Some(val);
-                        ModelUpdate::new_without_result()
+                        ModelUpdate::empty().without_events()
                     }
                 });
             }
@@ -125,13 +125,15 @@ macro_rules! impl_observer {
                 let _ = self.0.try_update_model(|model| match termination {
                     Termination::Completed => {
                         if model.should_completed || model.$field_self.is_none() {
-                            ModelUpdate::new_send_termination(termination)
+                            ModelUpdate::empty().with_termination_event(termination)
                         } else {
                             model.should_completed = true;
-                            ModelUpdate::new_without_result()
+                            ModelUpdate::empty().without_events()
                         }
                     }
-                    Termination::Error(_) => ModelUpdate::new_send_termination(termination),
+                    Termination::Error(_) => {
+                        ModelUpdate::empty().with_termination_event(termination)
+                    }
                 });
             }
         }

@@ -134,7 +134,7 @@ where
             model.current_value = Some(value);
             let timer = model.timer.take();
             let timer_id = model.timer_id.increment();
-            ModelUpdate::new(timer_id).drop_outside(timer)
+            ModelUpdate::new(timer_id).with_drop_outside(timer)
         });
         let Ok(timer_id) = timer_id else { return };
 
@@ -146,15 +146,17 @@ where
                 };
                 let _ = context.try_update_model(|model| {
                     if timer_id != model.timer_id {
-                        return ModelUpdate::new_without_result();
+                        return ModelUpdate::empty().without_events().without_drop_outside();
                     }
                     let timer = model.timer.take();
                     if let Some(value) = model.current_value.take() {
-                        ModelUpdate::new_without_result()
-                            .send_next(value)
-                            .drop_outside(timer)
+                        ModelUpdate::empty()
+                            .with_next_event(value)
+                            .with_drop_outside(timer)
                     } else {
-                        ModelUpdate::new_without_result().drop_outside(timer)
+                        ModelUpdate::empty()
+                            .without_events()
+                            .with_drop_outside(timer)
                     }
                 });
             },
@@ -168,7 +170,7 @@ where
             );
             let previous_timer = model.timer.replace(disposal);
             debug_assert!(previous_timer.is_none());
-            ModelUpdate::new_without_result().ignore_drop_outside()
+            ModelUpdate::empty()
         });
     }
 
@@ -177,17 +179,18 @@ where
             Termination::Completed => {
                 let _ = self.context.try_update_model(|model| {
                     match (model.current_value.take(), model.timer.take()) {
-                        (None, None) => {
-                            ModelUpdate::new_without_result().send_termination(termination)
-                        }
-                        (None, Some(timer)) => ModelUpdate::new_without_result()
-                            .send_termination(termination)
-                            .drop_outside(timer),
-                        (Some(value), None) => ModelUpdate::new_without_result()
-                            .send_next_and_termination(value, termination),
-                        (Some(value), Some(timer)) => ModelUpdate::new_without_result()
-                            .send_next_and_termination(value, termination)
-                            .drop_outside(timer),
+                        (None, None) => ModelUpdate::empty()
+                            .with_termination_event(termination)
+                            .without_drop_outside(),
+                        (None, Some(timer)) => ModelUpdate::empty()
+                            .with_termination_event(termination)
+                            .with_drop_outside(timer),
+                        (Some(value), None) => ModelUpdate::empty()
+                            .with_next_and_termination_events(value, termination)
+                            .without_drop_outside(),
+                        (Some(value), Some(timer)) => ModelUpdate::empty()
+                            .with_next_and_termination_events(value, termination)
+                            .with_drop_outside(timer),
                     }
                 });
             }

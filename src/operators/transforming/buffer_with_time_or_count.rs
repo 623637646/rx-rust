@@ -156,9 +156,9 @@ where
                 model.last_sending_time_from_counting = Some(Instant::now());
                 let values =
                     std::mem::replace(&mut model.values, Vec::with_capacity(self.count.get()));
-                ModelUpdate::new_send_next(values)
+                ModelUpdate::empty().with_next_event(values)
             } else {
-                ModelUpdate::new_empty()
+                ModelUpdate::empty().without_events()
             }
         });
     }
@@ -169,9 +169,9 @@ where
                 let _ = self.context.try_update_model(|model| {
                     if !model.values.is_empty() {
                         let values = std::mem::take(&mut model.values);
-                        ModelUpdate::new_send_next_and_termination(values, termination)
+                        ModelUpdate::empty().with_next_and_termination_events(values, termination)
                     } else {
-                        ModelUpdate::new_send_termination(termination)
+                        ModelUpdate::empty().with_termination_event(termination)
                     }
                 });
             }
@@ -219,16 +219,14 @@ where
                         // Already flushed by count since the last tick; resync to
                         // `time_span` after that flush instead of emitting an empty batch.
                         next_time = last_sending_time_from_counting + time_span;
-                        ModelUpdate::new(RecursionAction::ContinueAt(next_time))
-                            .ignore_drop_outside()
+                        ModelUpdate::new(RecursionAction::ContinueAt(next_time)).without_events()
                     } else {
                         let values =
                             std::mem::replace(&mut model.values, Vec::with_capacity(count.get()));
                         // Fixed-rate: anchor the next tick to the schedule, not to `now`.
                         next_time += time_span;
                         ModelUpdate::new(RecursionAction::ContinueAt(next_time))
-                            .send_next(values)
-                            .ignore_drop_outside()
+                            .with_next_event(values)
                     }
                 })
                 .unwrap_or(RecursionAction::Stop)
