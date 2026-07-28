@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 pub(crate) mod checker;
-pub(crate) mod panic_on_drop;
+#[cfg(panic = "unwind")]
+pub(crate) mod panic;
 pub(crate) mod test_channel;
 pub(crate) mod test_runtime;
 pub(crate) mod test_struct;

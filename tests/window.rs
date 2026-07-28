@@ -3572,9 +3572,10 @@ fn test_disposing_old_inner_during_multiple_queued_boundary_rollovers_keeps_late
 }
 
 #[cfg(not(feature = "single-threaded"))]
+#[cfg(panic = "unwind")]
 #[test]
 fn test_dropping_ignored_value_does_not_poison_window_context() {
-    use crate::tests_utils::panic_on_drop::{PanicOnDrop, expect_panic_on_drop};
+    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
     use rx_rust::utils::types::MutableHelper;
 
     let (mut sender, observable, _channel_checker) = test_channel::<'_, PanicOnDrop, Infallible>();

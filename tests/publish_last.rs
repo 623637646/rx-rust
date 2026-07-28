@@ -7,7 +7,7 @@ use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
-use rx_rust::operators::connectable::connectable_observable::ConnectableObservable;
+use rx_rust::operators::connectable::connectable_controller::ConnectableController;
 use rx_rust::operators::creating::defer::Defer;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
@@ -38,9 +38,10 @@ fn test_completed() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = observable
+    let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish_last();
+    let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -57,7 +58,7 @@ fn test_completed() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(channel_checker.test_lock_ref().is_none());
 
-    let _subscription_2 = observable.connect();
+    let _controller = controller.connect();
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -125,9 +126,10 @@ fn test_error() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = observable
+    let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish_last();
+    let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -144,7 +146,7 @@ fn test_error() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(channel_checker.test_lock_ref().is_none());
 
-    let _subscription = observable.connect();
+    let _controller = controller.connect();
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -212,9 +214,10 @@ fn test_unsubscribe() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = observable
+    let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish_last();
+    let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -231,7 +234,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(channel_checker.test_lock_ref().is_none());
 
-    let subscription = observable.connect().unwrap();
+    let controller = controller.connect();
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -291,7 +294,7 @@ fn test_unsubscribe() {
         ChannelState::Subscribed
     );
 
-    subscription.dispose();
+    drop(controller);
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -332,7 +335,7 @@ fn test_ref() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = observable
+    let controller = observable
         .map(|_| {
             let counter = counter.fetch_add(1, Ordering::SeqCst) + 1;
             match counter {
@@ -342,6 +345,7 @@ fn test_ref() {
             }
         })
         .publish_last();
+    let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -358,7 +362,7 @@ fn test_ref() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(channel_checker.test_lock_ref().is_none());
 
-    let _subscription = observable.connect();
+    let _controller = controller.connect();
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -427,9 +431,10 @@ fn test_async() {
         let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
-        let observable = observable
+        let controller = observable
             .map(move |_| counter.fetch_add(1, Ordering::SeqCst) + 1)
             .publish_last();
+        let observable = controller.observable();
         let observable_1 = observable.clone();
         let observable_2 = observable.clone();
 
@@ -449,8 +454,8 @@ fn test_async() {
         assert_eq!(checker_2.state(), State::Active);
         assert!(channel_checker.test_lock_ref().is_none());
 
-        let _subscription = runtime
-            .spawn(async move { observable.connect() })
+        let _controller = runtime
+            .spawn(async move { controller.connect() })
             .await
             .unwrap();
         assert!(checker_1.values().is_empty());
@@ -538,9 +543,10 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = observable
+    let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish_last();
+    let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -557,7 +563,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(channel_checker.test_lock_ref().is_none());
 
-    let _subscription = observable.connect();
+    let _controller = controller.connect();
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -626,9 +632,10 @@ fn test_unsub_on_next_by_take() {
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = observable
+    let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish_last();
+    let observable = controller.observable();
     let observable_1 = observable.clone().take(1);
     let observable_2 = observable.clone().take(2);
 
@@ -645,7 +652,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(channel_checker.test_lock_ref().is_none());
 
-    let _subscription_2 = observable.connect();
+    let _controller = controller.connect();
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -714,10 +721,11 @@ fn test_multiple_operation() {
 
     // Custom operations
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
-    let co_1 = observable.publish_last();
-    let co_2 = co_1.clone().publish_last();
-    let observable_1 = co_2.clone();
-    let observable_2 = co_2.clone();
+    let controller_1 = observable.publish_last();
+    let controller_2 = controller_1.observable().publish_last();
+    let observable = controller_2.observable();
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -732,8 +740,8 @@ fn test_multiple_operation() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(channel_checker.test_lock_ref().is_none());
 
-    let _subscription = co_1.connect();
-    let _subscription = co_2.connect();
+    let _controller_1 = controller_1.connect();
+    let _controller_2 = controller_2.connect();
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -802,10 +810,11 @@ fn test_without_convenient_api() {
 
     // Custom operations
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
-    let observable = ConnectableObservable::<_, AsyncSubject<'_, _, _>>::new(
+    let controller = ConnectableController::<_, AsyncSubject<'_, _, _>>::new(
         observable,
         AsyncSubject::default(),
     );
+    let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
 
@@ -822,7 +831,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(channel_checker.test_lock_ref().is_none());
 
-    let _subscription_2 = observable.connect();
+    let _controller = controller.connect();
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -980,8 +989,9 @@ fn test_lifetime_sub() {
                 life_marker.consume_ref();
             }))
         });
-        let observable = observable.publish_last();
-        _subscription_1 = observable.clone().connect();
+        let controller = observable.publish_last();
+        let observable = controller.observable();
+        _subscription_1 = controller.connect();
 
         let (_, observer) = Checker::<_, ()>::new();
         let _subscription_2 = observable.subscribe(observer);
@@ -1003,7 +1013,8 @@ fn test_lifetime_or() {
             life_marker = Some(observer);
             Subscription::default()
         });
-        let observable = observable.publish_last();
+        let controller = observable.publish_last();
+        let observable = controller.observable();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         observer.on_next(vec![&life_marker_2]);
@@ -1027,20 +1038,10 @@ fn test_lifetime_or_sub() {
 
         let observable =
             Create::new(|_: BoxedObserver<'_, &TestStruct, Infallible>| Subscription::default());
-        let observable = observable.publish_last();
+        let controller = observable.publish_last();
+        let observable = controller.observable();
         _subscription = observable.subscribe(observer);
     }
-}
-
-#[test]
-fn test_clone() {
-    let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
-        observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
-    });
-    let observable = observable.publish_last();
-    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
@@ -1056,7 +1057,8 @@ fn test_type_inference_with_subscribe() {
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
-    let observable = observable.publish_last();
+    let controller = observable.publish_last();
+    let observable = controller.observable();
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -1076,7 +1078,8 @@ fn test_type_inference_without_subscribe() {
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
-    let observable = observable.publish_last();
+    let controller = observable.publish_last();
+    let observable = controller.observable();
 
     observable.filter(|_| true);
 }

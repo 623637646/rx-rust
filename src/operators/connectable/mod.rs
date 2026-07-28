@@ -1,2 +1,2 @@
-pub mod connectable_observable;
+pub mod connectable_controller;
 pub mod ref_count;

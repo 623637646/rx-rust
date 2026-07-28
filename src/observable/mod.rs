@@ -6,11 +6,13 @@ pub mod either_observable;
 use crate::operators::others::observable_stream::ObservableStream;
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
-    observable::boxed_observable::BoxedObservable,
-    observable::cloneable_boxed_observable::CloneableBoxedObservable,
-    observable::either_observable::EitherObservable,
-    observer::Observer,
-    observer::{Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver},
+    observable::{
+        boxed_observable::BoxedObservable, cloneable_boxed_observable::CloneableBoxedObservable,
+        either_observable::EitherObservable,
+    },
+    observer::{
+        Observer, Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver,
+    },
     operators::{
         backpressure::{
             on_backpressure::{BackpressureCollection, OnBackpressure},
@@ -26,7 +28,7 @@ use crate::{
             sequence_equal::SequenceEqual, skip_until::SkipUntil, skip_while::SkipWhile,
             take_until::TakeUntil, take_while::TakeWhile,
         },
-        connectable::{connectable_observable::ConnectableObservable, ref_count::RefCount},
+        connectable::{connectable_controller::ConnectableController, ref_count::RefCount},
         error_handling::{
             catch::Catch,
             map_err::MapErr,
@@ -68,8 +70,7 @@ use crate::{
     subject::{
         async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
     },
-    utils::types::MaybeSend,
-    utils::types::MaybeSync,
+    utils::types::{MaybeSend, MaybeSync},
 };
 use std::convert::Infallible;
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
@@ -484,11 +485,11 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Converts the source into a connectable observable using a subject factory.
-    fn multicast<S, F>(self, subject_maker: F) -> ConnectableObservable<Self, S>
+    fn multicast<S, F>(self, subject_maker: F) -> ConnectableController<Self, S>
     where
         F: FnOnce() -> S,
     {
-        ConnectableObservable::new(self, subject_maker())
+        ConnectableController::new(self, subject_maker())
     }
 
     /// Schedules downstream observation on the provided scheduler.
@@ -512,12 +513,12 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Multicasts the source using a `PublishSubject`.
-    fn publish(self) -> ConnectableObservable<Self, PublishSubject<'or, T, E>> {
+    fn publish(self) -> ConnectableController<Self, PublishSubject<'or, T, E>> {
         self.multicast(PublishSubject::default)
     }
 
     /// Multicasts the source using an `AsyncSubject`, emitting only the last value.
-    fn publish_last(self) -> ConnectableObservable<Self, AsyncSubject<'or, T, E>> {
+    fn publish_last(self) -> ConnectableController<Self, AsyncSubject<'or, T, E>> {
         self.multicast(AsyncSubject::default)
     }
 
@@ -533,7 +534,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     fn replay(
         self,
         buffer_size: Option<usize>,
-    ) -> ConnectableObservable<Self, ReplaySubject<'or, T, E>> {
+    ) -> ConnectableController<Self, ReplaySubject<'or, T, E>> {
         self.multicast(|| ReplaySubject::new(buffer_size))
     }
 

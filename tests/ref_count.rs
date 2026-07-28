@@ -28,8 +28,10 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
-use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::Ordering;
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -313,6 +315,53 @@ fn test_unsubscribe() {
         channel_checker.test_lock_ref().as_ref().unwrap().state(),
         ChannelState::Unsubscribed
     );
+}
+
+#[test]
+fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() {
+    struct RecordSourceStateOnDrop {
+        source_disconnected: Arc<AtomicBool>,
+        disconnected_when_dropped: Arc<AtomicBool>,
+    }
+
+    impl Observer<(), Infallible> for RecordSourceStateOnDrop {
+        fn on_next(&mut self, _: ()) {}
+
+        fn on_termination(self, _: Termination<Infallible>) {}
+    }
+
+    impl Drop for RecordSourceStateOnDrop {
+        fn drop(&mut self) {
+            self.disconnected_when_dropped.store(
+                self.source_disconnected.load(Ordering::SeqCst),
+                Ordering::SeqCst,
+            );
+        }
+    }
+
+    let source_disconnected = Arc::new(AtomicBool::new(false));
+    let disconnected_when_observer_dropped = Arc::new(AtomicBool::new(false));
+    let source_disconnected_cloned = source_disconnected.clone();
+    let source = Create::new(move |_: BoxedObserver<'_, (), Infallible>| {
+        let source_disconnected = source_disconnected_cloned.clone();
+        Subscription::new(CallbackDisposal::new(move || {
+            source_disconnected.store(true, Ordering::SeqCst);
+        }))
+    });
+    let observable = source.publish().ref_count();
+    let observer = RecordSourceStateOnDrop {
+        source_disconnected: source_disconnected.clone(),
+        disconnected_when_dropped: disconnected_when_observer_dropped.clone(),
+    };
+
+    let subscription = observable.subscribe(observer);
+    assert!(!source_disconnected.load(Ordering::SeqCst));
+    assert!(!disconnected_when_observer_dropped.load(Ordering::SeqCst));
+
+    subscription.dispose();
+
+    assert!(source_disconnected.load(Ordering::SeqCst));
+    assert!(!disconnected_when_observer_dropped.load(Ordering::SeqCst));
 }
 
 #[test]
