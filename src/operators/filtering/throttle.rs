@@ -1,17 +1,19 @@
-use crate::disposable::Disposable;
-use crate::disposable::bound_drop_disposal::BoundDropDisposal;
 use crate::observable::Subscription;
-use crate::utils::types::{MarkerType, MaybeSend, MutableBool, MutableBoolHelper, Shared};
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
-    scheduler::Scheduler,
 };
 use educe::Educe;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Emits an item from the source Observable then ignores subsequent items for a particular time span.
 /// See <https://reactivex.io/documentation/operators/debounce.html>
+///
+/// This is a purely synchronous, leading-edge throttle: it compares the arrival
+/// time of each item against the last emission and needs no scheduler. Dropping
+/// items during the cooldown window is decided by an [`Instant`] comparison, so
+/// there is no timer to spawn, cancel, or drift.
 ///
 /// # Examples
 /// ```rust
@@ -32,9 +34,7 @@ use std::time::Duration;
 ///     };
 ///     use std::sync::{Arc, Mutex};
 ///     use std::time::Duration;
-///     use tokio::time::sleep;
 ///
-///     let handle = tokio::runtime::Handle::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
@@ -43,7 +43,6 @@ use std::time::Duration;
 ///     let subscription = Throttle::new(
 ///         FromIter::new(vec![1, 2, 3]),
 ///         Duration::from_millis(5),
-///         handle.clone(),
 ///     )
 ///     .subscribe_with_callback(
 ///         move |value| values_observer.lock().unwrap().push(value),
@@ -53,9 +52,9 @@ use std::time::Duration;
 ///             .push(termination),
 ///     );
 ///
-///     sleep(Duration::from_millis(10)).await;
 ///     drop(subscription);
 ///
+///     // 1, 2 and 3 arrive back-to-back, so only the leading `1` passes.
 ///     assert_eq!(&*values.lock().unwrap(), &[1]);
 ///     assert_eq!(
 ///         &*terminations.lock().unwrap(),
@@ -65,79 +64,57 @@ use std::time::Duration;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Throttle<'or, OE, S> {
+pub struct Throttle<OE> {
     source: OE,
     time_span: Duration,
-    scheduler: S,
-    _marker: MarkerType<&'or ()>,
 }
 
-impl<'or, OE, S> Throttle<'or, OE, S> {
-    pub fn new(source: OE, time_span: Duration, scheduler: S) -> Self {
-        Self {
-            source,
-            time_span,
-            scheduler,
-            _marker: Default::default(),
-        }
+impl<OE> Throttle<OE> {
+    pub fn new(source: OE, time_span: Duration) -> Self {
+        Self { source, time_span }
     }
 }
 
-impl<'or, T, E, OE, S> Observable<'static, T, E> for Throttle<'or, OE, S>
+impl<'or, T, E, OE> Observable<'or, T, E> for Throttle<OE>
 where
     OE: Observable<'or, T, E>,
-    S: Scheduler + MaybeSend + 'or,
 {
     type D = OE::D;
 
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         self.source.subscribe(ThrottleObserver {
             observer,
             time_span: self.time_span,
-            scheduler: self.scheduler,
-            is_cooling: Shared::new(MutableBool::new(false)),
-            disposal: None,
+            last_emit: None,
         })
     }
 }
 
-struct ThrottleObserver<OR, S>
-where
-    S: Scheduler,
-{
+struct ThrottleObserver<OR> {
     observer: OR,
     time_span: Duration,
-    scheduler: S,
-    is_cooling: Shared<MutableBool>,
-    disposal: Option<BoundDropDisposal<S::D>>,
+    last_emit: Option<Instant>,
 }
 
-impl<T, E, OR, S> Observer<T, E> for ThrottleObserver<OR, S>
+impl<T, E, OR> Observer<T, E> for ThrottleObserver<OR>
 where
     OR: Observer<T, E>,
-    S: Scheduler,
 {
     fn on_next(&mut self, value: T) {
-        if !self.is_cooling.change_if_not_equal(true) {
-            return;
+        let now = Instant::now();
+        // `on_next` takes `&mut self`, so it is called exclusively — a plain
+        // field suffices, no shared/atomic state is needed.
+        let should_emit = match self.last_emit {
+            None => true,
+            Some(last) => now.duration_since(last) >= self.time_span,
+        };
+        if should_emit {
+            self.last_emit = Some(now);
+            self.observer.on_next(value);
         }
-        self.observer.on_next(value);
-        let is_cooling_down = self.is_cooling.clone();
-        self.disposal = Some(self.scheduler.schedule(
-            move || {
-                is_cooling_down.write(false);
-            },
-            Some(self.time_span),
-        ))
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(disposal) = self.disposal {
-            disposal.dispose();
-        }
         self.observer.on_termination(termination);
     }
 }

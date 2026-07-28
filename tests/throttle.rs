@@ -32,7 +32,7 @@ fn test_completed() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -89,7 +89,7 @@ fn test_error() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -149,7 +149,7 @@ fn test_unsubscribe() {
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
         let observable_3 = observable_2.clone();
@@ -255,7 +255,7 @@ fn test_async() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = runtime
             .spawn(async move { observable.subscribe(observer) })
@@ -289,14 +289,14 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let mut subject = PublishSubject::default();
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
@@ -325,13 +325,13 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = observable
-            .throttle(DURATION_100_MS, runtime.clone())
+            .throttle(DURATION_100_MS)
             .take(1);
 
         let _subscription = observable.subscribe(observer);
@@ -354,8 +354,8 @@ fn test_multiple_operation() {
 
         // Custom operations
         let observable = observable
-            .throttle(DURATION_100_MS, runtime.clone())
-            .throttle(DURATION_100_MS + DURATION_30_MS * 2, runtime.clone());
+            .throttle(DURATION_100_MS)
+            .throttle(DURATION_100_MS + DURATION_30_MS * 2);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -393,7 +393,7 @@ fn test_without_convenient_api() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = Throttle::new(observable, DURATION_100_MS, runtime.clone());
+        let observable = Throttle::new(observable, DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -445,12 +445,12 @@ fn test_without_convenient_api() {
 
 #[test]
 fn test_complete_after_next() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -467,12 +467,12 @@ fn test_complete_after_next() {
 
 #[test]
 fn test_error_after_next() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -489,12 +489,12 @@ fn test_error_after_next() {
 
 #[test]
 fn test_unsub_after_next() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -511,12 +511,12 @@ fn test_unsub_after_next() {
 
 #[test]
 fn test_unsub_after_completed() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -533,12 +533,12 @@ fn test_unsub_after_completed() {
 
 #[test]
 fn test_unsub_after_error() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -555,12 +555,12 @@ fn test_unsub_after_error() {
 
 #[test]
 fn test_next_on_sub() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let subject = BehaviorSubject::<'_, _, Infallible>::new(111);
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = subject.clone().throttle(DURATION_100_MS, runtime.clone());
+        let observable = subject.clone().throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
         assert_eq!(checker.values(), [111]);
@@ -574,11 +574,11 @@ fn test_next_on_sub() {
 
 #[test]
 fn test_complete_on_sub() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = Empty.throttle(DURATION_100_MS, runtime.clone());
+        let observable = Empty.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
         assert_eq!(checker.values(), vec![]);
@@ -588,11 +588,11 @@ fn test_complete_on_sub() {
 
 #[test]
 fn test_error_on_sub() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = Throw::new("error").throttle(DURATION_100_MS, runtime.clone());
+        let observable = Throw::new("error").throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
         assert_eq!(checker.values(), vec![]);
@@ -620,7 +620,7 @@ fn test_lifetime_sub() {
                 }))
             });
 
-            let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+            let observable = observable.throttle(DURATION_100_MS);
 
             let (_, observer) = Checker::new();
             _subscription = observable.subscribe(observer);
@@ -632,22 +632,22 @@ fn test_lifetime_sub() {
 
 #[test]
 fn test_clone() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         let observable = Create::new(|mut observer| {
             observer.on_next(TestStruct);
             observer.on_termination(Termination::Error(TestStruct));
             Subscription::default()
         });
-        let observable = observable.throttle(DURATION_100_MS, runtime.clone());
+        let observable = observable.throttle(DURATION_100_MS);
         _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
     });
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         // Custom operations
-        let observable = Never.throttle(DURATION_100_MS, runtime.clone());
+        let observable = Never.throttle(DURATION_100_MS);
 
         let observable = observable.filter(|_| true);
         let (_, observer) = Checker::new();
@@ -657,9 +657,9 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    block_on(|runtime| async move {
+    block_on(|_runtime| async move {
         // Custom operations
-        let observable = Never.throttle(DURATION_100_MS, runtime.clone());
+        let observable = Never.throttle(DURATION_100_MS);
 
         observable.filter(|_| true);
     });
