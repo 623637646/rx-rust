@@ -330,9 +330,7 @@ fn test_unsub_on_next_by_take() {
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = observable
-            .throttle(DURATION_100_MS)
-            .take(1);
+        let observable = observable.throttle(DURATION_100_MS).take(1);
 
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());

@@ -339,19 +339,23 @@ where
                     debug_assert!(buffered_window.termination.is_none());
                     model.window_state = WindowState::Subscribed(key);
 
-                    let mut actions = Vec::with_capacity(buffered_window.values.len() + 1);
-                    actions.push(DelegateAction::AttachInnerObserver(
+                    let attach_inner_observer = DelegateAction::AttachInnerObserver(
                         observer.into_boxed(),
                         is_disposed.clone(),
-                    ));
-                    actions.extend(
-                        buffered_window
-                            .values
-                            .into_iter()
-                            .map(DelegateAction::ForwardValue),
                     );
-
-                    ModelUpdate::new(None).with_events(EventBatch::NextBatch(actions))
+                    if buffered_window.values.is_empty() {
+                        ModelUpdate::new(None).with_next_event(attach_inner_observer)
+                    } else {
+                        let mut actions = Vec::with_capacity(buffered_window.values.len() + 1);
+                        actions.push(attach_inner_observer);
+                        actions.extend(
+                            buffered_window
+                                .values
+                                .into_iter()
+                                .map(DelegateAction::ForwardValue),
+                        );
+                        ModelUpdate::new(None).with_events(EventBatch::NextBatch(actions))
+                    }
                 } else {
                     ModelUpdate::new(Some((
                         observer,
