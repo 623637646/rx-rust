@@ -123,16 +123,16 @@ macro_rules! impl_observer {
 
             fn on_termination(self, termination: Termination<E>) {
                 let _ = self.0.try_update_model(|model| match termination {
-                    Termination::Completed => {
+                    completion @ Termination::Completed => {
                         if model.should_completed || model.$field_self.is_none() {
-                            ModelUpdate::empty().with_termination_event(termination)
+                            ModelUpdate::empty().with_termination_event(completion)
                         } else {
                             model.should_completed = true;
                             ModelUpdate::empty().without_events()
                         }
                     }
-                    Termination::Error(_) => {
-                        ModelUpdate::empty().with_termination_event(termination)
+                    error @ Termination::Error(_) => {
+                        ModelUpdate::empty().with_termination_event(error)
                     }
                 });
             }

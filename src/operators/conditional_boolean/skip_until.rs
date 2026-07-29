@@ -141,13 +141,13 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 if !self.started {
-                    self.context.send_termination(termination);
+                    self.context.send_termination(completion);
                 }
             }
-            Termination::Error(_) => {
-                self.context.send_termination(termination);
+            error @ Termination::Error(_) => {
+                self.context.send_termination(error);
             }
         }
     }

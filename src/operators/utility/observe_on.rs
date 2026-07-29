@@ -172,11 +172,11 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
                             (Some(termination), false) => {
                                 drop(lock);
                                 match termination {
-                                    Termination::Completed => {
-                                        safe_lock_option_observer!(on_next_and_termination: observer, values: values, Termination::Completed);
+                                    completion @ Termination::Completed => {
+                                        safe_lock_option_observer!(on_next_and_termination: observer, values: values, completion);
                                     }
-                                    Termination::Error(_) => {
-                                        safe_lock_option_observer!(on_termination: observer, termination);
+                                    error @ Termination::Error(_) => {
+                                        safe_lock_option_observer!(on_termination: observer, error);
                                     }
                                 }
                                 RecursionAction::Stop

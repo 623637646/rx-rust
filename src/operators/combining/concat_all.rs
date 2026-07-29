@@ -162,14 +162,14 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 let _ = self.0.try_update_model(|model| {
                     model.is_source_completed = true;
                     match model.sub_state {
                         SubState::Idle => {
                             // The state is only possible to be PendingSubscription or Processing when the pending_observables is not empty.
                             debug_assert!(model.pending_observables.is_empty());
-                            ModelUpdate::empty().with_termination_event(termination)
+                            ModelUpdate::empty().with_termination_event(completion)
                         }
                         SubState::PendingSubscription | SubState::Processing(_) => {
                             ModelUpdate::empty().without_events()
@@ -177,8 +177,8 @@ where
                     }
                 });
             }
-            Termination::Error(_) => {
-                self.0.send_termination(termination);
+            error @ Termination::Error(_) => {
+                self.0.send_termination(error);
             }
         }
     }
@@ -207,8 +207,8 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => subscribe_next_observable_until_finished(self.0.clone()),
-            Termination::Error(error) => {
-                self.0.send_termination(Termination::Error(error));
+            error @ Termination::Error(_) => {
+                self.0.send_termination(error);
             }
         }
     }

@@ -430,7 +430,7 @@ where
         mut lock: MutGuard<'_, State<T, E, OR, M, D, S>>,
     ) {
         match &mut *lock {
-            State::Idle { .. } | State::Subscribing { .. } => {
+            state @ (State::Idle { .. } | State::Subscribing { .. }) => {
                 let (first_next, next_values, termination) = match events {
                     EventBatch::Next(next) => (Some(next), VecDeque::new(), None),
                     EventBatch::Termination(termination) => {
@@ -455,7 +455,7 @@ where
                     drop(lock);
                     return;
                 }
-                let idle_or_subscribing = std::mem::replace(&mut *lock, State::Placeholder);
+                let idle_or_subscribing = std::mem::replace(state, State::Placeholder);
                 let (mut observer, model, subscription) = match idle_or_subscribing {
                     State::Subscribing { observer, model } => (observer, model, None),
                     State::Idle {

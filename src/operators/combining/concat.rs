@@ -101,8 +101,8 @@ where
                 let sub = self.source_2.subscribe(self.observer);
                 safe_lock_option!(replace: self.sub_2, sub);
             }
-            Termination::Error(_) => {
-                self.observer.on_termination(termination);
+            error @ Termination::Error(_) => {
+                self.observer.on_termination(error);
             }
         }
     }

@@ -96,18 +96,18 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 let _ = self.0.try_update_model(|model| {
                     if model.one_is_completed {
-                        ModelUpdate::empty().with_termination_event(termination)
+                        ModelUpdate::empty().with_termination_event(completion)
                     } else {
                         model.one_is_completed = true;
                         ModelUpdate::empty().without_events()
                     }
                 });
             }
-            Termination::Error(_) => {
-                self.0.send_termination(termination);
+            error @ Termination::Error(_) => {
+                self.0.send_termination(error);
             }
         }
     }

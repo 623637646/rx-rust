@@ -176,26 +176,26 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 let _ = self.context.try_update_model(|model| {
                     match (model.current_value.take(), model.timer.take()) {
                         (None, None) => ModelUpdate::empty()
-                            .with_termination_event(termination)
+                            .with_termination_event(completion)
                             .without_drop_outside(),
                         (None, Some(timer)) => ModelUpdate::empty()
-                            .with_termination_event(termination)
+                            .with_termination_event(completion)
                             .with_drop_outside(timer),
                         (Some(value), None) => ModelUpdate::empty()
-                            .with_next_and_termination_events(value, termination)
+                            .with_next_and_termination_events(value, completion)
                             .without_drop_outside(),
                         (Some(value), Some(timer)) => ModelUpdate::empty()
-                            .with_next_and_termination_events(value, termination)
+                            .with_next_and_termination_events(value, completion)
                             .with_drop_outside(timer),
                     }
                 });
             }
-            Termination::Error(_) => {
-                self.context.send_termination(termination);
+            error @ Termination::Error(_) => {
+                self.context.send_termination(error);
             }
         }
     }

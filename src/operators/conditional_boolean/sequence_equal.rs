@@ -154,7 +154,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 let _ = self.context.try_update_model(|model| {
                     let (mine, other) = if self.is_first {
                         (&mut model.first, &mut model.second)
@@ -171,11 +171,11 @@ where
                         ModelUpdate::empty().without_events()
                     } else {
                         let is_equal = mine_empty && other_completed && other_empty;
-                        ModelUpdate::empty().with_next_and_termination_events(is_equal, termination)
+                        ModelUpdate::empty().with_next_and_termination_events(is_equal, completion)
                     }
                 });
             }
-            Termination::Error(_) => self.context.send_termination(termination),
+            error @ Termination::Error(_) => self.context.send_termination(error),
         };
     }
 }

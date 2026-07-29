@@ -32,7 +32,7 @@ impl<D> SharedDisposal<D> {
                 Some(lock.1.increment())
             }
             State::Building => Some(lock.1.increment()),
-            State::Active(_) => match std::mem::replace(&mut lock.0, State::Building) {
+            state @ State::Active(_) => match std::mem::replace(state, State::Building) {
                 State::Idle | State::Disposed | State::Building => {
                     unreachable!()
                 }

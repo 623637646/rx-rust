@@ -109,7 +109,7 @@ where
 
     fn on_termination(mut self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => self.observer.on_termination(Termination::Completed),
+            completion @ Termination::Completed => self.observer.on_termination(completion),
             Termination::Error(error) => {
                 let action = (self.callback)(error);
                 match action {

@@ -155,19 +155,19 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 let _ = self.0.try_update_model(|model| {
                     model.is_source_completed = true;
                     match model.sub_state {
-                        SubState::Idle => ModelUpdate::empty().with_termination_event(termination),
+                        SubState::Idle => ModelUpdate::empty().with_termination_event(completion),
                         SubState::Processing(_) | SubState::PendingSubscription => {
                             ModelUpdate::empty().without_events()
                         }
                     }
                 });
             }
-            Termination::Error(_) => {
-                self.0.send_termination(termination);
+            error @ Termination::Error(_) => {
+                self.0.send_termination(error);
             }
         }
     }
@@ -201,10 +201,10 @@ where
                 return ModelUpdate::empty().without_events().without_drop_outside();
             }
             match termination {
-                Termination::Completed => {
+                completion @ Termination::Completed => {
                     if model.is_source_completed {
                         ModelUpdate::empty()
-                            .with_termination_event(termination)
+                            .with_termination_event(completion)
                             .without_drop_outside()
                     } else {
                         match std::mem::replace(&mut model.sub_state, SubState::Idle) {
@@ -218,8 +218,8 @@ where
                         }
                     }
                 }
-                Termination::Error(_) => ModelUpdate::empty()
-                    .with_termination_event(termination)
+                error @ Termination::Error(_) => ModelUpdate::empty()
+                    .with_termination_event(error)
                     .without_drop_outside(),
             }
         });

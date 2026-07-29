@@ -145,18 +145,18 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 let _ = self.0.try_update_model(|model| {
                     if model.subscriptions.is_empty() {
-                        ModelUpdate::empty().with_termination_event(termination)
+                        ModelUpdate::empty().with_termination_event(completion)
                     } else {
                         model.is_source_terminated = true;
                         ModelUpdate::empty().without_events()
                     }
                 });
             }
-            Termination::Error(_) => {
-                self.0.send_termination(termination);
+            error @ Termination::Error(_) => {
+                self.0.send_termination(error);
             }
         }
     }
@@ -179,12 +179,12 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 let _ = self.context.try_update_model(|model| {
                     let subscription = model.subscriptions.remove(self.key);
                     if model.is_source_terminated && model.subscriptions.is_empty() {
                         ModelUpdate::empty()
-                            .with_termination_event(termination)
+                            .with_termination_event(completion)
                             .with_drop_outside(subscription)
                     } else {
                         ModelUpdate::empty()
@@ -193,8 +193,8 @@ where
                     }
                 });
             }
-            Termination::Error(_) => {
-                self.context.send_termination(termination);
+            error @ Termination::Error(_) => {
+                self.context.send_termination(error);
             }
         }
     }

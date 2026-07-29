@@ -81,10 +81,10 @@ where
 {
     fn on_next(&mut self, value: T) {
         self.0.clone().lock_mut(|mut lock| match &mut *lock {
-            State::Idle(_) => {
+            state @ State::Idle(_) => {
                 // Get SloptMap
                 let mut dense_slot_map = match std::mem::replace(
-                    &mut *lock,
+                    state,
                     State::Processing {
                         slot_map: DenseSlotMap::new(), // Placeholder
                         events: Vec::new(),
@@ -172,11 +172,10 @@ where
     fn on_termination(self, termination: Termination<E>) {
         self.0.lock_mut(|mut lock| {
             match &mut *lock {
-                State::Idle(_) => {
+                state @ State::Idle(_) => {
                     // Get SloptMap
                     let dense_slot_map =
-                        match std::mem::replace(&mut *lock, State::Terminated(termination.clone()))
-                        {
+                        match std::mem::replace(state, State::Terminated(termination.clone())) {
                             State::Idle(dense_slot_map) => dense_slot_map,
                             State::Processing { .. } => unreachable!(),
                             State::Terminated(..) => unreachable!(),

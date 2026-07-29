@@ -165,18 +165,18 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
+            completion @ Termination::Completed => {
                 let _ = self.context.try_update_model(|model| {
                     if !model.values.is_empty() {
                         let values = std::mem::take(&mut model.values);
-                        ModelUpdate::empty().with_next_and_termination_events(values, termination)
+                        ModelUpdate::empty().with_next_and_termination_events(values, completion)
                     } else {
-                        ModelUpdate::empty().with_termination_event(termination)
+                        ModelUpdate::empty().with_termination_event(completion)
                     }
                 });
             }
-            Termination::Error(_) => {
-                self.context.send_termination(termination);
+            error @ Termination::Error(_) => {
+                self.context.send_termination(error);
             }
         }
     }
