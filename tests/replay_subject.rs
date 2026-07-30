@@ -303,10 +303,10 @@ fn test_error() {
         Some(Termination::Error("error"))
     ));
 
-    // subscribe after termination
+    // subscribe after termination. The buffer is replayed before the error.
     let (checker, observer) = Checker::new();
     let _subscription = subject.clone().subscribe(observer);
-    assert_eq!(checker.values(), []);
+    assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error"));
     assert!(matches!(
         subject.terminated(),
@@ -473,10 +473,10 @@ fn test_error_with_buffer_1() {
         Some(Termination::Error("error"))
     ));
 
-    // subscribe after termination
+    // subscribe after termination. The buffer is replayed before the error.
     let (checker, observer) = Checker::new();
     let _subscription = subject.clone().subscribe(observer);
-    assert_eq!(checker.values(), []);
+    assert_eq!(checker.values(), [333]);
     assert_eq!(checker.state(), State::Error("error"));
     assert!(matches!(
         subject.terminated(),
@@ -1285,9 +1285,10 @@ fn test_sub_on_error() {
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Error("error"));
-    assert_eq!(checker_2.values(), []);
+    // Both subscribed once the subject was terminated, so both get the buffer and then the error.
+    assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Error("error"));
-    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.values(), [111, 222]);
     assert_eq!(checker_3.state(), State::Error("error"));
     assert!(matches!(
         subject.terminated(),
