@@ -19,8 +19,7 @@ use rx_rust::safe_lock_vec;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::Subject;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::types::MutableHelper;
-use rx_rust::utils::types::{Mutable, Shared};
+use rx_rust::utils::types::{Mutable, MutableBool, MutableBoolHelper, MutableHelper, Shared};
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -28,10 +27,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -320,8 +316,8 @@ fn test_unsubscribe() {
 #[test]
 fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() {
     struct RecordSourceStateOnDrop {
-        source_disconnected: Arc<AtomicBool>,
-        disconnected_when_dropped: Arc<AtomicBool>,
+        source_disconnected: Shared<MutableBool>,
+        disconnected_when_dropped: Shared<MutableBool>,
     }
 
     impl Observer<(), Infallible> for RecordSourceStateOnDrop {
@@ -332,20 +328,18 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
 
     impl Drop for RecordSourceStateOnDrop {
         fn drop(&mut self) {
-            self.disconnected_when_dropped.store(
-                self.source_disconnected.load(Ordering::SeqCst),
-                Ordering::SeqCst,
-            );
+            self.disconnected_when_dropped
+                .write(self.source_disconnected.read());
         }
     }
 
-    let source_disconnected = Arc::new(AtomicBool::new(false));
-    let disconnected_when_observer_dropped = Arc::new(AtomicBool::new(false));
+    let source_disconnected = Shared::new(MutableBool::new(false));
+    let disconnected_when_observer_dropped = Shared::new(MutableBool::new(false));
     let source_disconnected_cloned = source_disconnected.clone();
     let source = Create::new(move |_: BoxedObserver<'_, (), Infallible>| {
         let source_disconnected = source_disconnected_cloned.clone();
         Subscription::new(CallbackDisposal::new(move || {
-            source_disconnected.store(true, Ordering::SeqCst);
+            source_disconnected.write(true);
         }))
     });
     let observable = source.publish().ref_count();
@@ -355,13 +349,13 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
     };
 
     let subscription = observable.subscribe(observer);
-    assert!(!source_disconnected.load(Ordering::SeqCst));
-    assert!(!disconnected_when_observer_dropped.load(Ordering::SeqCst));
+    assert!(!source_disconnected.read());
+    assert!(!disconnected_when_observer_dropped.read());
 
     subscription.dispose();
 
-    assert!(source_disconnected.load(Ordering::SeqCst));
-    assert!(!disconnected_when_observer_dropped.load(Ordering::SeqCst));
+    assert!(source_disconnected.read());
+    assert!(!disconnected_when_observer_dropped.read());
 }
 
 #[test]
