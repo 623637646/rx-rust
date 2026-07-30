@@ -12,7 +12,7 @@ use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::create::Create, transforming::window_with_count::WindowWithCount},
-    subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
+    subject::{publish_subject::PublishSubject, unicast_subject::unicast_subject},
 };
 use rx_rust::{safe_lock, safe_lock_vec};
 use std::{convert::Infallible, num::NonZeroUsize};
@@ -1344,6 +1344,78 @@ fn test_revert_error() {
 }
 
 #[test]
+fn test_subscribe_window_after_values() {
+    let mut subject = PublishSubject::<'_, i32, Infallible>::default();
+    let windows = Shared::new(Mutable::new(Vec::new()));
+    let windows_cloned = windows.clone();
+    let _subscription = subject
+        .clone()
+        .window_with_count(NonZeroUsize::new(2).unwrap())
+        .subscribe_with_callback(
+            move |window| safe_lock_vec!(push: windows_cloned, window),
+            |_| {},
+        );
+
+    subject.on_next(111);
+    subject.on_next(222);
+    subject.on_next(333);
+
+    // The windows were collected without being subscribed to, so their items are buffered instead
+    // of being dropped.
+    let mut windows = safe_lock!(mem_take: windows).into_iter();
+    let (checker_1, observer_1) = Checker::new();
+    let _subscription_1 = windows.next().unwrap().subscribe(observer_1);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert_eq!(checker_1.state(), State::Completed);
+
+    let (checker_2, observer_2) = Checker::new();
+    let _subscription_2 = windows.next().unwrap().subscribe(observer_2);
+    assert_eq!(checker_2.values(), [333]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert!(windows.next().is_none());
+
+    subject.on_termination(Termination::Completed);
+    assert_eq!(checker_2.values(), [333]);
+    assert_eq!(checker_2.state(), State::Completed);
+}
+
+#[test]
+fn test_non_clone_item() {
+    // The windows move their items, so the item type doesn't have to be `Clone`.
+    let received = Shared::new(Mutable::new(Vec::new()));
+    let received_cloned = received.clone();
+    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions_cloned = inner_subscriptions.clone();
+    let source = Create::new(|mut observer| {
+        observer.on_next(TestStruct);
+        observer.on_next(TestStruct);
+        observer.on_next(TestStruct);
+        observer.on_termination(Termination::<Infallible>::Completed);
+        Subscription::default()
+    });
+    let _subscription = source
+        .window_with_count(NonZeroUsize::new(2).unwrap())
+        .subscribe_with_callback(
+            move |window| {
+                let received = received_cloned.clone();
+                let subscription = window.subscribe_with_callback(
+                    move |value: TestStruct| {
+                        value.consume();
+                        safe_lock_vec!(push: received, ());
+                    },
+                    |_| {},
+                );
+                safe_lock_vec!(push: inner_subscriptions_cloned, subscription);
+            },
+            |_| {},
+        );
+    assert_eq!(safe_lock_vec!(len: received), 3);
+    safe_lock!(mem_take: inner_subscriptions)
+        .drain(..)
+        .for_each(drop);
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
@@ -1385,10 +1457,9 @@ fn test_lifetime_or() {
         let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        let mut subject = PublishSubject::default();
-        subject.on_next(&life_marker_2);
-        let subject_observable = SubjectObservable::new(subject);
-        observer.on_next(subject_observable);
+        let (mut sender, window) = unicast_subject();
+        sender.on_next(&life_marker_2);
+        observer.on_next(window);
         let _subscription = observable.subscribe(observer);
     }
 }

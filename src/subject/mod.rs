@@ -3,6 +3,7 @@ pub mod behavior_subject;
 pub mod publish_subject;
 pub mod replay_subject;
 pub mod subject_observable;
+pub mod unicast_subject;
 
 use crate::{
     observable::Observable,

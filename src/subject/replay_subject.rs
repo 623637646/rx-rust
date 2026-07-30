@@ -14,6 +14,9 @@ use educe::Educe;
 use std::collections::VecDeque;
 
 /// Buffers emissions and replays them to late subscribers.
+///
+/// A subscriber that arrives after the subject terminated observes the buffered values followed by
+/// the termination, whether the subject completed or errored.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ReplaySubject<'or, T, E> {
@@ -53,14 +56,11 @@ where
         mut observer: impl Observer<T, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
         if let Some(terminated) = self.terminated() {
-            match &terminated {
-                Termination::Completed => {
-                    let values = safe_lock!(clone: self.values);
-                    for value in values {
-                        observer.on_next(value);
-                    }
-                }
-                Termination::Error(_) => {}
+            // The buffer is the history of the subject, so it is replayed whichever way the
+            // subject terminated: an error does not erase what was emitted before it.
+            let values = safe_lock!(clone: self.values);
+            for value in values {
+                observer.on_next(value);
             }
             observer.on_termination(terminated);
             OptionDisposal::none().into_subscription()

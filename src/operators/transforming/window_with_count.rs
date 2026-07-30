@@ -3,12 +3,16 @@ use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    subject::{publish_subject::PublishSubject, subject_observable::SubjectObservable},
+    subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
 };
 use educe::Educe;
 use std::{cmp::Ordering, num::NonZeroUsize};
 
 /// Periodically subdivides items from an Observable into Observable windows, each containing a specified number of items.
+///
+/// A window is emitted before its first item is delivered, and each window can be subscribed to
+/// once. Items emitted while a window has no subscriber are buffered and replayed to a later
+/// subscriber; dropping a window without subscribing to it discards its items.
 /// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// # Examples
@@ -81,10 +85,9 @@ impl<OE> WindowWithCount<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, SubjectObservable<PublishSubject<'or, T, E>>, E>
-    for WindowWithCount<OE>
+impl<'or, T, E, OE> Observable<'or, UnicastObservable<'or, T, E>, E> for WindowWithCount<OE>
 where
-    T: Clone + MaybeSend + 'or,
+    T: MaybeSend + 'or,
     E: Clone + MaybeSend + 'or,
     OE: Observable<'or, T, E>,
 {
@@ -92,14 +95,14 @@ where
 
     fn subscribe(
         self,
-        mut observer: impl Observer<SubjectObservable<PublishSubject<'or, T, E>>, E> + MaybeSend + 'or,
+        mut observer: impl Observer<UnicastObservable<'or, T, E>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        let subject = PublishSubject::default();
-        observer.on_next(SubjectObservable::new(subject.clone()));
+        let (sender, window) = unicast_subject();
+        observer.on_next(window);
 
         let observer = WindowWithCountObserver {
             observer,
-            subject,
+            sender,
             count: self.count,
             sent_count: 0,
         };
@@ -109,29 +112,28 @@ where
 
 struct WindowWithCountObserver<'or, T, E, OR> {
     observer: OR,
-    subject: PublishSubject<'or, T, E>,
+    sender: UnicastSender<'or, T, E>,
     count: NonZeroUsize,
     sent_count: usize,
 }
 
 impl<'or, T, E, OR> Observer<T, E> for WindowWithCountObserver<'or, T, E, OR>
 where
-    T: Clone,
     E: Clone,
-    OR: Observer<SubjectObservable<PublishSubject<'or, T, E>>, E>,
+    OR: Observer<UnicastObservable<'or, T, E>, E>,
 {
     fn on_next(&mut self, value: T) {
         match (self.sent_count + 1).cmp(&self.count.get()) {
             Ordering::Less => {
-                self.subject.on_next(value);
+                self.sender.on_next(value);
                 self.sent_count += 1;
             }
             Ordering::Equal => {
-                let new_subject = PublishSubject::default();
-                let mut old_subject = std::mem::replace(&mut self.subject, new_subject.clone());
-                old_subject.on_next(value);
-                old_subject.on_termination(Termination::Completed);
-                self.observer.on_next(SubjectObservable::new(new_subject));
+                let (new_sender, new_window) = unicast_subject();
+                let mut old_sender = std::mem::replace(&mut self.sender, new_sender);
+                old_sender.on_next(value);
+                old_sender.on_termination(Termination::Completed);
+                self.observer.on_next(new_window);
                 self.sent_count = 0;
             }
             Ordering::Greater => unreachable!(),
@@ -139,7 +141,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.subject.on_termination(termination.clone());
+        self.sender.on_termination(termination.clone());
         self.observer.on_termination(termination);
     }
 }

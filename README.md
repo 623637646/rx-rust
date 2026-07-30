@@ -99,6 +99,6 @@ Time-based operators require a scheduler. The example below uses Tokio; similar 
 ## Project Layout
 - `src/observable` – Core observable traits and the `ObservableExt` extension trait that wires in every operator.
 - `src/operators` – Operator implementations grouped by category (`creating`, `transforming`, `combining`, `utility`, and more) to mirror ReactiveX terminology.
-- `src/subject` – Subjects bridging observers and observables for multicast workflows.
+- `src/subject` – Subjects bridging observers and observables, for multicast workflows and for single-consumer pipes.
 - `src/scheduler` – Scheduler abstractions and adapters for popular async executors.
 - `tests/` – Exhaustive conformance tests covering each operator; great as executable documentation.
