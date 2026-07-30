@@ -12,6 +12,13 @@ use crate::{
 use educe::Educe;
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, when a `boundary` Observable emits an item.
+///
+/// Terminating the `boundary` terminates the outer Observable: completing it emits the pending
+/// bundle when non-empty and then completes, while an error from it discards the pending bundle
+/// and errors. Note that this differs from
+/// [`Window`](crate::operators::transforming::window::Window), where completing the `boundary`
+/// only stops rotation; a buffer has no consumer to release items to, so leaving it open after
+/// the `boundary` completed would accumulate items without bound.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples

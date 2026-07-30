@@ -617,6 +617,124 @@ fn test_error_from_source() {
 }
 
 #[test]
+fn test_error_from_boundary() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
+    let (boundary_sender, boundary_observable, boundary_channel_checker) =
+        test_channel::<'_, (), &str>();
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = observable.window(boundary_observable);
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+        },
+        |termination| termination_observer.on_termination(termination),
+    );
+
+    sender.on_next(111);
+    boundary_sender.on_termination(Termination::Error("boundary error"));
+
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
+    let (checker, _) = &checker_sub_vec.test_lock_ref()[0];
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Error("boundary error"));
+    assert_eq!(termination_checker.state(), State::Error("boundary error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(
+        boundary_channel_checker.state(),
+        ChannelState::Error("boundary error")
+    );
+}
+
+#[test]
+fn test_error_from_boundary_while_window_pending() {
+    use rx_rust::utils::types::MutableHelper;
+
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
+    let (boundary_sender, boundary_observable, boundary_channel_checker) =
+        test_channel::<'_, (), &str>();
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+
+    // Custom operations
+    let observable = observable.window(boundary_observable);
+
+    // Hold the window observable without subscribing to it.
+    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec_cloned = window_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |window| safe_lock_vec!(push: window_vec_cloned, window),
+        |termination| termination_observer.on_termination(termination),
+    );
+    assert_eq!(safe_lock_vec!(len: window_vec), 1);
+
+    // The value is buffered because window 1 has no inner observer yet.
+    sender.on_next(111);
+
+    // The boundary errors while window 1 is still unsubscribed.
+    boundary_sender.on_termination(Termination::Error("boundary error"));
+    assert_eq!(termination_checker.state(), State::Error("boundary error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(
+        boundary_channel_checker.state(),
+        ChannelState::Error("boundary error")
+    );
+
+    // A late subscriber observes the buffered value and then the error.
+    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let (checker_1, observer_1) = Checker::new();
+    let _sub_1 = window_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Error("boundary error"));
+}
+
+#[test]
+fn test_error_from_boundary_while_no_window_subscribed() {
+    use rx_rust::utils::types::MutableHelper;
+
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
+    let (boundary_sender, boundary_observable, boundary_channel_checker) =
+        test_channel::<'_, (), &str>();
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+
+    // Custom operations
+    let observable = observable.window(boundary_observable);
+
+    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec_cloned = window_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |window| safe_lock_vec!(push: window_vec_cloned, window),
+        |termination| termination_observer.on_termination(termination),
+    );
+
+    // Subscribe to window 1 and then unsubscribe, leaving no window to accept values.
+    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let (checker_1, observer_1) = Checker::new();
+    let sub_1 = window_1.subscribe(observer_1);
+    sender.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    drop(sub_1);
+    assert_eq!(checker_1.state(), State::Dropped);
+
+    // The boundary error terminates the outer observable only: the unsubscribed
+    // window has no observer left to receive it.
+    boundary_sender.on_termination(Termination::Error("boundary error"));
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(termination_checker.state(), State::Error("boundary error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(
+        boundary_channel_checker.state(),
+        ChannelState::Error("boundary error")
+    );
+}
+
+#[test]
 fn test_completed_boundary_does_not_mask_later_source_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
@@ -2556,7 +2674,7 @@ fn test_error_on_sub() {
     let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
 
     // Custom operations
-    let observable = Throw::new("error").window(Empty.with_item_type());
+    let observable = Throw::new("error").window(Empty.with_item_type().with_error_type());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(
@@ -2580,6 +2698,43 @@ fn test_error_on_sub() {
         }
     }
     assert_eq!(termination_checker.state(), State::Error("error"));
+}
+
+#[test]
+fn test_error_on_sub_from_boundary() {
+    let (_sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = observable.window(Throw::new("boundary error").with_item_type());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+
+    // The boundary errors during its own subscription, before the source is subscribed.
+    // The window opened up front is still emitted, and it observes the error.
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Error("boundary error"));
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Error("boundary error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
@@ -2670,7 +2825,7 @@ fn test_subscribe_stale_window_observable_after_error() {
 
     let (sender, observable, _channel_checker) = test_channel::<'_, i32, &str>();
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
-        test_channel::<'_, (), Infallible>();
+        test_channel::<'_, (), &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
     // Custom operations
@@ -2704,7 +2859,7 @@ fn test_subscribe_boundary_closed_window_after_later_error() {
 
     let (sender, observable, _channel_checker) = test_channel::<'_, i32, &str>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) =
-        test_channel::<'_, (), Infallible>();
+        test_channel::<'_, (), &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
     // Custom operations
@@ -3115,7 +3270,7 @@ fn test_boundary_completes_current_window_before_emitting_next_window() {
 #[test]
 fn test_subscribing_inner_after_outer_termination_is_queued_observes_termination() {
     let source: PublishSubject<'_, i32, &'static str> = PublishSubject::default();
-    let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let mut boundary: PublishSubject<'_, (), &'static str> = PublishSubject::default();
 
     // Custom operations
     let observable = source.clone().window(boundary.clone());
@@ -3821,7 +3976,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let boundary_subject: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let boundary_subject: PublishSubject<'_, (), String> = PublishSubject::default();
     let observable = subject.window(boundary_subject);
 
     observable.filter(|_| true);

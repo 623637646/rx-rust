@@ -14,13 +14,13 @@ use crate::{
 };
 use educe::Educe;
 use slotmap::{DefaultKey, SlotMap};
-use std::convert::Infallible;
 
 /// Periodically subdivides items from an Observable into Observable windows.
 ///
 /// A new window is emitted whenever the `boundary` Observable emits an item.
 /// Completing the `boundary` stops future window rotation without terminating the current window
 /// or the outer Observable.
+/// An error from the `boundary` terminates the current window and the outer Observable.
 /// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// # Examples
@@ -93,7 +93,7 @@ impl<OE, OE1> Window<OE, OE1> {
     pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
     where
         OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), Infallible>,
+        OE1: Observable<'or, (), E>,
     {
         Self { source, boundary }
     }
@@ -106,7 +106,7 @@ where
     E: Clone + MaybeSend + 'or,
     OE: Observable<'or, T, E>,
     OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), Infallible>,
+    OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
     type D = subscribe_with_context::BoundSubscriptionDisposal<'or>;
@@ -223,21 +223,31 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.try_update_model(|model| {
-            match std::mem::replace(&mut model.window_state, WindowState::Vacant) {
-                WindowState::Pending(key) => {
-                    model.buffered_window_mut(key).termination = Some(termination.clone());
-                    ModelUpdate::empty().with_termination_event(termination)
-                }
-                WindowState::Subscribed(_) => ModelUpdate::empty()
-                    .with_next_and_termination_events(
-                        DelegateAction::TerminateInner(termination.clone()),
-                        termination,
-                    ),
-                WindowState::Vacant => ModelUpdate::empty().with_termination_event(termination),
-            }
-        });
+        terminate(self.0, termination);
     }
+}
+
+fn terminate<'or, T, E, D1, D2>(
+    context: WindowContext<'or, T, E, D1, D2>,
+    termination: Termination<E>,
+) where
+    E: Clone,
+    D1: Disposable,
+    D2: Disposable,
+{
+    let _ = context.try_update_model(|model| {
+        match std::mem::replace(&mut model.window_state, WindowState::Vacant) {
+            WindowState::Pending(key) => {
+                model.buffered_window_mut(key).termination = Some(termination.clone());
+                ModelUpdate::empty().with_termination_event(termination)
+            }
+            WindowState::Subscribed(_) => ModelUpdate::empty().with_next_and_termination_events(
+                DelegateAction::TerminateInner(termination.clone()),
+                termination,
+            ),
+            WindowState::Vacant => ModelUpdate::empty().with_termination_event(termination),
+        }
+    });
 }
 
 struct BoundaryObserver<'or, T, E, D1, D2>(WindowContext<'or, T, E, D1, D2>)
@@ -245,8 +255,9 @@ where
     D1: Disposable,
     D2: Disposable;
 
-impl<'or, T, E, D1, D2> Observer<(), Infallible> for BoundaryObserver<'or, T, E, D1, D2>
+impl<'or, T, E, D1, D2> Observer<(), E> for BoundaryObserver<'or, T, E, D1, D2>
 where
+    E: Clone,
     D1: Disposable,
     D2: Disposable,
 {
@@ -274,7 +285,11 @@ where
         });
     }
 
-    fn on_termination(self, _: Termination<Infallible>) {}
+    fn on_termination(self, termination: Termination<E>) {
+        if let error @ Termination::Error(_) = termination {
+            terminate(self.0, error);
+        }
+    }
 }
 
 pub struct InnerObservable<'or, T, E, D1, D2>

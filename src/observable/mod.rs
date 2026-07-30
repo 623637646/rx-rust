@@ -72,7 +72,6 @@ use crate::{
     },
     utils::types::{MaybeSend, MaybeSync},
 };
-use std::convert::Infallible;
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 
 pub type Subscription<D> = BoundDropDisposal<D>;
@@ -114,6 +113,10 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Collects the items emitted by the source into buffers delimited by another observable.
+    /// Terminating the boundary terminates the outer observable: completing it emits the pending
+    /// buffer when non-empty and then completes, while an error from it discards the pending
+    /// buffer and errors. Unlike [`window`](ObservableExt::window), a completed boundary does not
+    /// leave the current buffer open.
     fn buffer<OE1>(self, boundary: OE1) -> Buffer<Self, OE1>
     where
         OE1: Observable<'or, (), E>,
@@ -427,7 +430,7 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     #[cfg(feature = "futures")]
     fn into_stream(self) -> ObservableStream<'or, T, Self>
     where
-        Self: Observable<'or, T, Infallible>,
+        Self: Observable<'or, T, std::convert::Infallible>,
     {
         ObservableStream::new(self)
     }
@@ -714,9 +717,10 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
 
     /// Collects items into windows that are opened and closed by another observable.
     /// Completing the boundary stops future window rotation without terminating the source.
+    /// An error from the boundary terminates the current window and the outer observable.
     fn window<OE1>(self, boundary: OE1) -> Window<Self, OE1>
     where
-        OE1: Observable<'or, (), Infallible>,
+        OE1: Observable<'or, (), E>,
     {
         Window::new(self, boundary)
     }
