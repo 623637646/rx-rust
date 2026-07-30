@@ -1,6 +1,7 @@
-use crate::disposable::{bound_drop_disposal::BoundDropDisposal, chain_disposal::ChainDisposal};
+use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::subscribe_with_context::{
-    self, ModelUpdate, SubscriptionContext, subscribe_with_context,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
@@ -93,15 +94,16 @@ where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
     OE: Observable<'or, T, E>,
+    OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = subscribe_with_context::Disposal<'or, ChainDisposal<S::D, OE::D>>;
+    type D = BoundSubscriptionDisposal<'or>;
 
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        subscribe_with_context(observer, Vec::new(), |context| {
+        subscribe_with_context_bound_subscription(observer, Vec::new(), |context| {
             let sub = self
                 .source
                 .subscribe(BufferWithTimeObserver(context.clone()));
@@ -111,11 +113,14 @@ where
     }
 }
 
-struct BufferWithTimeObserver<T, E, OR>(SubscriptionContext<Vec<T>, E, OR, Vec<T>>);
+struct BufferWithTimeObserver<T, E, OR, D: Disposable>(
+    SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>,
+);
 
-impl<T, E, OR> Observer<T, E> for BufferWithTimeObserver<T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for BufferWithTimeObserver<T, E, OR, D>
 where
     OR: Observer<Vec<T>, E>,
+    D: Disposable + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.try_update_model(|values| {
@@ -141,8 +146,8 @@ where
     }
 }
 
-fn setup_emit_timer<T, E, OR, S>(
-    context: SubscriptionContext<Vec<T>, E, OR, Vec<T>>,
+fn setup_emit_timer<T, E, OR, D, S>(
+    context: SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>,
     scheduler: S,
     time_span: Duration,
     delay: Option<Duration>,
@@ -151,6 +156,7 @@ where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
     OR: Observer<Vec<T>, E> + MaybeSend + 'static,
+    D: Disposable + MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
     let weak_context = context.downgrade();

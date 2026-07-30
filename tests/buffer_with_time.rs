@@ -15,6 +15,9 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
+use rx_rust::utils::types::MutableBool;
+use rx_rust::utils::types::MutableBoolHelper;
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -855,6 +858,58 @@ fn test_complete_on_sub() {
 }
 
 #[test]
+fn test_sync_completion_disposes_chain_while_subscription_is_retained() {
+    block_on(|runtime| async move {
+        let source_disposed = Shared::new(MutableBool::new(false));
+        let source_disposed_from_callback = source_disposed.clone();
+        let source = Create::new(move |mut observer| {
+            observer.on_next(111);
+            observer.on_termination(Termination::<Infallible>::Completed);
+            Subscription::new(CallbackDisposal::new(move || {
+                source_disposed_from_callback.write(true);
+            }))
+        });
+        let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
+
+        let retained_subscription = source
+            .buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_100_MS))
+            .subscribe(observer);
+
+        assert_eq!(checker.values(), [vec![111]]);
+        assert_eq!(checker.state(), State::Completed);
+        assert!(source_disposed.read());
+        drop(retained_subscription);
+    });
+}
+
+#[test]
+fn test_async_completion_disposes_chain_while_subscription_is_retained() {
+    block_on(|runtime| async move {
+        let mut subject = PublishSubject::<i32, Infallible>::default();
+        let source_disposed = Shared::new(MutableBool::new(false));
+        let source_disposed_from_callback = source_disposed.clone();
+        let source = subject.clone().do_after_disposal(move || {
+            source_disposed_from_callback.write(true);
+        });
+        let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
+
+        let retained_subscription = source
+            .buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_100_MS))
+            .subscribe(observer);
+
+        assert!(!source_disposed.read());
+
+        subject.on_next(111);
+        subject.on_termination(Termination::Completed);
+
+        assert_eq!(checker.values(), [vec![111]]);
+        assert_eq!(checker.state(), State::Completed);
+        assert!(source_disposed.read());
+        drop(retained_subscription);
+    });
+}
+
+#[test]
 fn test_error_on_sub() {
     block_on(|runtime| async move {
         let (checker, observer) = Checker::new();
@@ -869,37 +924,6 @@ fn test_error_on_sub() {
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
-    });
-}
-
-#[test]
-fn test_lifetime_sub() {
-    block_on(|runtime| async move {
-        // OK
-        let life_marker = TestStruct;
-        let _subscription;
-
-        // Error
-        // let _subscription;
-        // let life_marker = TestStruct;
-
-        {
-            let observable = Create::new(|mut observer| {
-                observer.on_next(111);
-                Subscription::new(CallbackDisposal::new(|| {
-                    life_marker.consume_ref();
-                }))
-            });
-
-            let observable = observable.buffer_with_time(
-                DURATION_100_MS,
-                runtime.clone(),
-                Some(DURATION_100_MS),
-            );
-
-            let (_, observer) = Checker::<_, ()>::new();
-            _subscription = observable.subscribe(observer);
-        }
     });
 }
 
