@@ -1,112 +1,119 @@
-use crate::tests_utils::types::TestMutableHelper;
 use educe::Educe;
 use rx_rust::{
-    disposable::{Disposable, DisposableExt},
+    disposable::{Disposable, chain_disposal::ChainDisposal},
     observable::{Observable, Subscription},
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Observer, Termination},
     safe_lock,
+    subject::unicast_subject::{self, UnicastObservable, UnicastSender, unicast_subject},
     utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
 };
 
-enum State<'or, T, E> {
-    Initialized,
-    Subscribed(Option<BoxedObserver<'or, T, E>>),
-    Terminated(Termination<E>),
-    Unsubscribed,
-}
-
+/// A strict single-consumer channel for the tests.
+///
+/// The event delivery is done by a unicast subject, so that the tests do not depend on a second
+/// implementation of it. On top of that, this channel panics whenever it is used out of order, for
+/// example when a value is sent before the subscription or after the end of the channel, which the
+/// unicast subject itself allows.
 pub(crate) fn test_channel<'or, T, E>() -> (
     SenderObserver<'or, T, E>,
     ReceiverObservable<'or, T, E>,
-    ChannelChecker<'or, T, E>,
+    ChannelChecker<E>,
 ) {
-    let state = Shared::new(Mutable::new(State::Initialized));
+    let state = Shared::new(Mutable::new(ChannelState::Initialized));
+    let (sender, observable) = unicast_subject();
     (
-        SenderObserver(state.clone()),
-        ReceiverObservable(state.clone()),
+        SenderObserver {
+            sender,
+            state: state.clone(),
+        },
+        ReceiverObservable {
+            observable,
+            state: state.clone(),
+        },
         ChannelChecker(state),
     )
 }
 
-pub(crate) struct SenderObserver<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
+pub(crate) struct SenderObserver<'or, T, E> {
+    sender: UnicastSender<'or, T, E>,
+    state: Shared<Mutable<ChannelState<E>>>,
+}
 
 impl<T, E> Observer<T, E> for SenderObserver<'_, T, E>
 where
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        let mut observer = match safe_lock!(mem_replace: self.0, State::Subscribed(None)) {
-            State::Initialized => panic!(),
-            State::Subscribed(boxed_observer) => boxed_observer.unwrap(),
-            State::Terminated(_) => panic!(),
-            State::Unsubscribed => panic!(),
-        };
-
-        observer.on_next(value);
-        self.0.lock_mut(|mut lock| match &mut *lock {
-            State::Initialized => panic!(),
-            State::Subscribed(boxed_observer) => *boxed_observer = Some(observer),
-            State::Terminated(_) => panic!(),
-            State::Unsubscribed => {}
-        });
-    }
-
-    fn on_termination(self, termination: Termination<E>) {
-        let observer = match safe_lock!(mem_replace: self.0, State::Terminated(termination.clone()))
-        {
-            State::Initialized => panic!(),
-            State::Subscribed(boxed_observer) => boxed_observer.unwrap(),
-            State::Terminated(_) => panic!(),
-            State::Unsubscribed => panic!(),
-        };
-        observer.on_termination(termination);
-    }
-}
-
-pub(crate) struct ReceiverObservable<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
-
-impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
-    type D = ReceiverObservableDisposal<'or, T, E>;
-
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        match safe_lock!(mem_replace:
-            self.0,
-            State::Subscribed(Some(BoxedObserver::new(observer)))
-        ) {
-            State::Initialized => {}
-            State::Subscribed(_) => panic!(),
-            State::Terminated(_) => panic!(),
-            State::Unsubscribed => panic!(),
-        }
-        ReceiverObservableDisposal(self.0).into_subscription()
-    }
-}
-
-pub(crate) struct ReceiverObservableDisposal<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
-
-impl<'or, T, E> Disposable for ReceiverObservableDisposal<'or, T, E> {
-    fn dispose(self) {
-        self.0.lock_mut(|mut lock| match &mut *lock {
-            State::Initialized | State::Unsubscribed => {
+        self.state.lock_ref(|lock| match &*lock {
+            ChannelState::Subscribed => {}
+            ChannelState::Initialized
+            | ChannelState::Completed
+            | ChannelState::Error(_)
+            | ChannelState::Unsubscribed => {
                 drop(lock);
                 panic!()
             }
-            State::Subscribed(boxed_observer) => {
-                let boxed_observer = boxed_observer.take();
-                *lock = State::Unsubscribed;
+        });
+        self.sender.on_next(value);
+    }
+
+    fn on_termination(self, termination: Termination<E>) {
+        // Terminate the channel itself first. Then terminate the observer of the channel.
+        let terminated = match &termination {
+            Termination::Completed => ChannelState::Completed,
+            Termination::Error(error) => ChannelState::Error(error.clone()),
+        };
+        match safe_lock!(mem_replace: self.state, terminated) {
+            ChannelState::Subscribed => {}
+            ChannelState::Initialized
+            | ChannelState::Completed
+            | ChannelState::Error(_)
+            | ChannelState::Unsubscribed => panic!(),
+        }
+        self.sender.on_termination(termination);
+    }
+}
+
+pub(crate) struct ReceiverObservable<'or, T, E> {
+    observable: UnicastObservable<'or, T, E>,
+    state: Shared<Mutable<ChannelState<E>>>,
+}
+
+impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
+    type D = ChainDisposal<ReceiverObservableDisposal<E>, unicast_subject::Disposal<'or, T, E>>;
+
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        match safe_lock!(mem_replace: self.state, ChannelState::Subscribed) {
+            ChannelState::Initialized => {}
+            ChannelState::Subscribed
+            | ChannelState::Completed
+            | ChannelState::Error(_)
+            | ChannelState::Unsubscribed => panic!(),
+        }
+        self.observable
+            .subscribe(observer)
+            .preceded_by(ReceiverObservableDisposal(self.state))
+    }
+}
+
+pub(crate) struct ReceiverObservableDisposal<E>(Shared<Mutable<ChannelState<E>>>);
+
+impl<E> Disposable for ReceiverObservableDisposal<E> {
+    fn dispose(self) {
+        self.0.lock_mut(|mut lock| match &*lock {
+            ChannelState::Initialized | ChannelState::Unsubscribed => {
                 drop(lock);
-                drop(boxed_observer) // Drop outside the lock to avoid potential deadlock
+                panic!()
             }
-            State::Terminated(_) => {
-                drop(lock);
-            }
+            ChannelState::Subscribed => *lock = ChannelState::Unsubscribed,
+            ChannelState::Completed | ChannelState::Error(_) => {}
         });
     }
 }
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub(crate) struct ChannelChecker<'or, T, E>(Shared<Mutable<State<'or, T, E>>>);
+pub(crate) struct ChannelChecker<E>(Shared<Mutable<ChannelState<E>>>);
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
@@ -118,19 +125,11 @@ pub(crate) enum ChannelState<E> {
     Unsubscribed,
 }
 
-impl<T, E> ChannelChecker<'_, T, E> {
+impl<E> ChannelChecker<E> {
     pub(crate) fn state(&self) -> ChannelState<E>
     where
         E: Clone,
     {
-        match &*self.0.test_lock_ref() {
-            State::Initialized => ChannelState::Initialized,
-            State::Subscribed(_) => ChannelState::Subscribed,
-            State::Terminated(termination) => match termination {
-                Termination::Completed => ChannelState::Completed,
-                Termination::Error(error) => ChannelState::Error(error.clone()),
-            },
-            State::Unsubscribed => ChannelState::Unsubscribed,
-        }
+        safe_lock!(clone: self.0)
     }
 }

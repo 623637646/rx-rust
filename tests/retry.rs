@@ -27,7 +27,7 @@ use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::Tes
 
 fn new_channel<'or, T, E>(
     sender: Shared<Mutable<Option<SenderObserver<'or, T, E>>>>,
-    channel_checker: Shared<Mutable<Option<ChannelChecker<'or, T, E>>>>,
+    channel_checker: Shared<Mutable<Option<ChannelChecker<E>>>>,
 ) -> ReceiverObservable<'or, T, E> {
     let (sender_1, observable, channel_checker_1) = test_channel();
     safe_lock_option!(replace: sender, sender_1);
