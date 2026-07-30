@@ -364,11 +364,11 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Groups items by key into multiple observable sequences.
-    fn group_by<F, K>(self, callback: F) -> GroupBy<Self, F, K>
+    fn group_by<F, K>(self, key_selector: F) -> GroupBy<Self, F, K>
     where
-        F: FnMut(T) -> K,
+        F: FnMut(&T) -> K,
     {
-        GroupBy::new(self, callback)
+        GroupBy::new(self, key_selector)
     }
 
     /// Hooks into the emission of items, allowing mutation of the downstream observer.
