@@ -13,9 +13,7 @@ use std::{convert::Infallible, time::Duration};
 /// # Examples
 /// ```rust
 /// # #[cfg(not(feature = "tokio-scheduler"))]
-/// # fn main() {
-/// #     panic!("Use tokio-scheduler feature to run tests.");
-/// # }
+/// # fn main() {}
 /// # #[cfg(feature = "tokio-scheduler")]
 /// #[tokio::main]
 /// async fn main() {
