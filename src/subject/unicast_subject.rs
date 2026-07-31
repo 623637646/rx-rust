@@ -144,8 +144,10 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
         let delivery = self.0.lock_mut(|mut lock| match &mut *lock {
             State::Buffering(pending) | State::Delivering(pending) => {
                 // Terminating consumes the sender, so no value can arrive after the termination.
-                debug_assert!(!pending.is_terminated());
-                pending.push_next(value);
+                let rejected = pending.push(Event::Next(value));
+                debug_assert!(rejected.is_none());
+                drop(lock);
+                drop(rejected); // Drop outside the lock to avoid potential deadlock
                 None
             }
             state @ State::Attached(_) => {
@@ -171,8 +173,10 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
         let delivery = self.0.lock_mut(|mut lock| match &mut *lock {
             State::Buffering(pending) | State::Delivering(pending) => {
                 // Terminating consumes the sender, so it cannot be terminated twice.
-                debug_assert!(!pending.is_terminated());
-                pending.set_termination(termination);
+                let rejected = pending.push(Event::Termination(termination));
+                debug_assert!(rejected.is_none());
+                drop(lock);
+                drop(rejected); // Drop outside the lock to avoid potential deadlock
                 None
             }
             state @ State::Attached(_) => {

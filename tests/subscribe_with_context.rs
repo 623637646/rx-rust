@@ -7,7 +7,8 @@ use rx_rust::{
     operators::creating::create::Create,
     safe_lock, safe_lock_option,
     utils::{
-        subscribe_with_context::{ContextStopped, EventBatch, ModelUpdate, subscribe_with_context},
+        pending_events::EventBatch,
+        subscribe_with_context::{ContextStopped, ModelUpdate, subscribe_with_context},
         types::{Mutable, Shared},
     },
 };
