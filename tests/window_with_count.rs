@@ -7,6 +7,9 @@ use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
+use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::throw::Throw;
+use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, ObservableExt},
@@ -1377,6 +1380,415 @@ fn test_subscribe_window_after_values() {
     subject.on_termination(Termination::Completed);
     assert_eq!(checker_2.values(), [333]);
     assert_eq!(checker_2.state(), State::Completed);
+}
+
+#[test]
+fn test_next_on_sub() {
+    let mut subject = BehaviorSubject::new(111);
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = subject
+        .clone()
+        .window_with_count(NonZeroUsize::new(2).unwrap());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    // The window is emitted before the source is subscribed, so the value the
+    // subject replays on subscription lands in the first window.
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), [111]);
+                assert_eq!(checker.state(), State::Active);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subject.on_next(222);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), [111, 222]);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            1 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Active);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), [111, 222]);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            1 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Completed);
+}
+
+#[test]
+fn test_complete_on_sub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = Empty.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Completed);
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Completed);
+}
+
+#[test]
+fn test_error_on_sub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = Throw::new("error").window_with_count(NonZeroUsize::new(2).unwrap());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
+    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
+        match index {
+            0 => {
+                assert_eq!(checker.values(), []);
+                assert_eq!(checker.state(), State::Error("error"));
+            }
+            _ => panic!(),
+        }
+    }
+    assert_eq!(termination_checker.state(), State::Error("error"));
+}
+
+#[test]
+fn test_subscribe_stale_window_observable() {
+    use rx_rust::utils::types::MutableHelper;
+
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    // Collect the window observables without subscribing to them immediately.
+    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec_cloned = window_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |window| safe_lock_vec!(push: window_vec_cloned, window),
+        |_termination| {},
+    );
+    assert_eq!(safe_lock_vec!(len: window_vec), 1);
+
+    // Window 1 is still unsubscribed: its values are buffered. The second value
+    // closes it and opens window 2.
+    sender.on_next(111);
+    sender.on_next(222);
+    assert_eq!(safe_lock_vec!(len: window_vec), 2);
+
+    let mut windows = window_vec.lock_mut(|mut lock| std::mem::take(&mut *lock));
+    let window_2 = windows.pop().unwrap();
+    let window_1 = windows.pop().unwrap();
+
+    // The current window (window 2) receives source values.
+    let (checker_2, observer_2) = Checker::new();
+    let _sub_2 = window_2.subscribe(observer_2);
+    sender.on_next(333);
+    assert_eq!(checker_2.values(), [333]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    // Window 1 already completed when it reached the count, so its late
+    // subscriber observes the buffered values followed by the completion.
+    let (checker_1, observer_1) = Checker::new();
+    let _sub_1 = window_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert_eq!(checker_1.state(), State::Completed);
+
+    // Source values keep flowing to the current window's subscriber only.
+    sender.on_next(444);
+    assert_eq!(checker_2.values(), [333, 444]);
+    assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert_eq!(safe_lock_vec!(len: window_vec), 1);
+}
+
+#[test]
+fn test_subscribe_current_window_late_with_earlier_values() {
+    use rx_rust::utils::types::MutableHelper;
+
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(3).unwrap());
+
+    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec_cloned = window_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |window| safe_lock_vec!(push: window_vec_cloned, window),
+        |_termination| {},
+    );
+
+    // The value arrives while the current window has no subscriber yet.
+    sender.on_next(111);
+
+    // Subscribing replays the buffered value.
+    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let (checker_1, observer_1) = Checker::new();
+    let _sub_1 = window_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Active);
+
+    // Later values are delivered directly.
+    sender.on_next(222);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert_eq!(checker_1.state(), State::Active);
+
+    // The count includes the buffered value, so the third value closes the window.
+    sender.on_next(333);
+    assert_eq!(checker_1.values(), [111, 222, 333]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(safe_lock_vec!(len: window_vec), 1);
+}
+
+#[test]
+fn test_subscribe_window_observable_after_termination() {
+    use rx_rust::utils::types::MutableHelper;
+
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    // Hold the window observable without subscribing to it.
+    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec_cloned = window_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |window| safe_lock_vec!(push: window_vec_cloned, window),
+        |termination| termination_observer.on_termination(termination),
+    );
+    assert_eq!(safe_lock_vec!(len: window_vec), 1);
+
+    sender.on_next(111);
+
+    // The source terminates while window 1 is still unsubscribed. The window
+    // itself was completed by the source termination.
+    sender.on_termination(Termination::Completed);
+    assert_eq!(termination_checker.state(), State::Completed);
+
+    // A late subscriber observes the buffered value and the completion.
+    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let (checker_1, observer_1) = Checker::new();
+    let _sub_1 = window_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Completed);
+}
+
+#[test]
+fn test_subscribe_window_observable_after_unsubscribe() {
+    use rx_rust::utils::types::MutableHelper;
+
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    // Hold the window observable without subscribing to it.
+    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec_cloned = window_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |window| safe_lock_vec!(push: window_vec_cloned, window),
+        |_termination| {},
+    );
+    assert_eq!(safe_lock_vec!(len: window_vec), 1);
+
+    sender.on_next(111);
+
+    // Unsubscribing is not a termination: the window never completed nor errored.
+    drop(subscription);
+
+    // A late subscriber still observes the buffered value and remains active,
+    // because unsubscribing from the outer observable is not a termination.
+    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let (checker_1, observer_1) = Checker::new();
+    let sub_1 = window_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Active);
+
+    // Disposing the inner subscription releases its observer without sending a
+    // completion or error.
+    drop(sub_1);
+    assert_eq!(checker_1.state(), State::Dropped);
+}
+
+#[test]
+fn test_unsubscribe_window_subscription_keeps_stream_working() {
+    use rx_rust::utils::types::MutableHelper;
+
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(3).unwrap());
+
+    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec_cloned = window_vec.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |window| safe_lock_vec!(push: window_vec_cloned, window),
+        |termination| termination_observer.on_termination(termination),
+    );
+
+    // Subscribe to window 1 and then unsubscribe in the middle of the window.
+    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let (checker_1, observer_1) = Checker::new();
+    let sub_1 = window_1.subscribe(observer_1);
+    sender.on_next(111);
+    assert_eq!(checker_1.values(), [111]);
+    drop(sub_1);
+
+    // The observer is released on unsubscribe.
+    assert_eq!(checker_1.state(), State::Dropped);
+
+    // Later values of this window have nowhere to go, but they still count
+    // towards the window size and the pipeline stays healthy.
+    sender.on_next(222);
+    sender.on_next(333);
+    assert_eq!(checker_1.values(), [111]);
+
+    // The next window works as usual.
+    let window_2 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let (checker_2, observer_2) = Checker::new();
+    let _sub_2 = window_2.subscribe(observer_2);
+    sender.on_next(444);
+    assert_eq!(checker_2.values(), [444]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(termination_checker.state(), State::Active);
+}
+
+#[test]
+fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
+    use rx_rust::utils::types::MutableHelper;
+
+    struct DropTracker(Shared<Mutable<usize>>);
+
+    impl Drop for DropTracker {
+        fn drop(&mut self) {
+            self.0.lock_mut(|mut lock| *lock += 1);
+        }
+    }
+
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, DropTracker, Infallible>();
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec_cloned = window_vec.clone();
+    let _outer_subscription = observable.subscribe_with_callback(
+        move |window| safe_lock_vec!(push: window_vec_cloned, window),
+        |_termination| {},
+    );
+    assert_eq!(safe_lock_vec!(len: window_vec), 1);
+
+    let drop_count = Shared::new(Mutable::new(0usize));
+    sender.on_next(DropTracker(drop_count.clone()));
+    assert_eq!(safe_lock!(clone: drop_count), 0);
+
+    // Dropping the only handle to an unsubscribed window must release its
+    // buffered values even while the outer window subscription remains active.
+    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    drop(window_1);
+    assert_eq!(safe_lock!(clone: drop_count), 1);
+}
+
+#[test]
+fn test_dropping_ignored_value_does_not_poison_window_context() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+    use rx_rust::utils::types::MutableHelper;
+
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions_cloned = inner_subscriptions.clone();
+    let outer_subscription = observable.subscribe_with_callback(
+        move |window| {
+            let sub = window.subscribe_with_callback(|_value| {}, |_termination| {});
+            safe_lock_vec!(push: inner_subscriptions_cloned, sub);
+        },
+        |_termination| {},
+    );
+    assert_eq!(safe_lock_vec!(len: inner_subscriptions), 1);
+
+    // Stop the current inner subscription while keeping the outer window
+    // pipeline active, so subsequent source values take the ignored-value path.
+    let inner_subscription = inner_subscriptions.lock_mut(|mut lock| lock.pop()).unwrap();
+    drop(inner_subscription);
+
+    expect_panic_on_drop(|value| sender.on_next(value));
+
+    // The ignored value is dropped after releasing the context lock, so the
+    // context is still usable after the intentional drop panic: disposing the
+    // outer subscription locks the context again and unsubscribes the source.
+    drop(outer_subscription);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
