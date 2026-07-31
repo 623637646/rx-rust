@@ -1,7 +1,7 @@
 use crate::{
-    disposable::{Disposable, chain_disposal::ChainDisposal},
+    disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{BoxedObserverExt, Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Observer, Termination},
     subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
     utils::{
         pending_events::EventBatch,
@@ -120,39 +120,32 @@ where
         observer: impl Observer<UnicastObservable<'or, T, E>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
         let observer = DelegateObserver {
-            outer_observer: observer.into_boxed(),
+            outer_observer: observer,
             sender: None,
         };
         // The windows own their buffered items, so the context needs no model of its own: it only
         // serializes the actions below and owns the source and boundary subscriptions.
         subscribe_with_context_bound_subscription(observer, (), |context| {
-            let mut boundary_observer = BoundaryObserver(context.clone());
-            boundary_observer.on_next(());
-            let boundary_subscription = self.boundary.subscribe(boundary_observer);
+            // The first window is opened before subscribing, so that a synchronous source has a
+            // window to deliver its values to.
+            context.send_next(DelegateAction::EmitWindow);
+            let boundary_subscription = self.boundary.subscribe(BoundaryObserver(context.clone()));
             let source_subscription = self.source.subscribe(SourceObserver(context));
             boundary_subscription.preceded_by_bound(source_subscription)
         })
     }
 }
 
-type WindowContext<'or, T, E, D1, D2> = SubscriptionContext<
-    DelegateAction<'or, T, E>,
-    E,
-    DelegateObserver<'or, T, E>,
-    (),
-    ChainDisposal<D1, D2>,
->;
+type WindowContext<'or, T, E, OR, D> =
+    SubscriptionContext<DelegateAction<T, E>, E, DelegateObserver<'or, T, E, OR>, (), D>;
 
-struct SourceObserver<'or, T, E, D1, D2>(WindowContext<'or, T, E, D1, D2>)
-where
-    D1: Disposable,
-    D2: Disposable;
+struct SourceObserver<'or, T, E, OR, D: Disposable>(WindowContext<'or, T, E, OR, D>);
 
-impl<T, E, D1, D2> Observer<T, E> for SourceObserver<'_, T, E, D1, D2>
+impl<'or, T, E, OR, D> Observer<T, E> for SourceObserver<'or, T, E, OR, D>
 where
     E: Clone,
-    D1: Disposable,
-    D2: Disposable,
+    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         // The value is queued as an action, so that it reaches the window outside the lock.
@@ -165,11 +158,13 @@ where
 }
 
 /// Terminates the current window, then the outer Observable.
-fn terminate<T, E, D1, D2>(context: WindowContext<'_, T, E, D1, D2>, termination: Termination<E>)
-where
+fn terminate<'or, T, E, OR, D>(
+    context: WindowContext<'or, T, E, OR, D>,
+    termination: Termination<E>,
+) where
     E: Clone,
-    D1: Disposable,
-    D2: Disposable,
+    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    D: Disposable,
 {
     context.send_next_and_termination(
         DelegateAction::TerminateWindow(termination.clone()),
@@ -177,24 +172,20 @@ where
     );
 }
 
-struct BoundaryObserver<'or, T, E, D1, D2>(WindowContext<'or, T, E, D1, D2>)
-where
-    D1: Disposable,
-    D2: Disposable;
+struct BoundaryObserver<'or, T, E, OR, D: Disposable>(WindowContext<'or, T, E, OR, D>);
 
-impl<T, E, D1, D2> Observer<(), E> for BoundaryObserver<'_, T, E, D1, D2>
+impl<'or, T, E, OR, D> Observer<(), E> for BoundaryObserver<'or, T, E, OR, D>
 where
     E: Clone,
-    D1: Disposable,
-    D2: Disposable,
+    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
-        let (sender, window) = unicast_subject();
         // Two events rather than one, so that disposing the outer subscription while the current
         // window is completing suppresses the new window.
         self.0.send_events(EventBatch::NextBatch(vec![
             DelegateAction::TerminateWindow(Termination::Completed),
-            DelegateAction::EmitWindow(sender, window),
+            DelegateAction::EmitWindow,
         ]));
     }
 
@@ -207,25 +198,30 @@ where
     }
 }
 
-enum DelegateAction<'or, T, E> {
+enum DelegateAction<T, E> {
     /// Sends a source value to the current window, if there is one.
     ForwardValue(T),
     /// Terminates the current window, if there is one.
     TerminateWindow(Termination<E>),
-    /// Makes the new window the current one and emits it downstream.
-    EmitWindow(UnicastSender<'or, T, E>, UnicastObservable<'or, T, E>),
+    /// Opens a new window, makes it the current one and emits it downstream.
+    EmitWindow,
 }
 
-struct DelegateObserver<'or, T, E> {
-    outer_observer: BoxedObserver<'or, UnicastObservable<'or, T, E>, E>,
+/// Owns the state that the actions act on, so that a window is fed and emitted outside the lock of
+/// the context that serializes the source against the boundary.
+struct DelegateObserver<'or, T, E, OR> {
+    outer_observer: OR,
     /// The sending end of the window that is currently open, which is the only place where the
-    /// windows are fed from. It is `None` before the first rotation and after the last window
+    /// windows are fed from. It is `None` until the first window opens and after the last window
     /// ended.
     sender: Option<UnicastSender<'or, T, E>>,
 }
 
-impl<'or, T, E> Observer<DelegateAction<'or, T, E>, E> for DelegateObserver<'or, T, E> {
-    fn on_next(&mut self, action: DelegateAction<'or, T, E>) {
+impl<'or, T, E, OR> Observer<DelegateAction<T, E>, E> for DelegateObserver<'or, T, E, OR>
+where
+    OR: Observer<UnicastObservable<'or, T, E>, E>,
+{
+    fn on_next(&mut self, action: DelegateAction<T, E>) {
         match action {
             DelegateAction::ForwardValue(value) => match &mut self.sender {
                 Some(sender) => sender.on_next(value),
@@ -237,8 +233,9 @@ impl<'or, T, E> Observer<DelegateAction<'or, T, E>, E> for DelegateObserver<'or,
                     sender.on_termination(termination);
                 }
             }
-            DelegateAction::EmitWindow(sender, window) => {
+            DelegateAction::EmitWindow => {
                 debug_assert!(self.sender.is_none());
+                let (sender, window) = unicast_subject();
                 self.sender = Some(sender);
                 self.outer_observer.on_next(window);
             }

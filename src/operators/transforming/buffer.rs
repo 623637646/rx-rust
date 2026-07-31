@@ -21,6 +21,26 @@ use educe::Educe;
 /// the `boundary` completed would accumulate items without bound.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
+/// # Relation to `Window`
+///
+/// Conceptually a buffer is a window whose items are collected into a `Vec`, that is
+/// `source.window(boundary).concat_map(|window| window.to_vec())`. It is implemented on its own
+/// rather than as that composition, because the two are not equivalent:
+///
+/// - Completing the `boundary` terminates a buffer, as described above, but only stops the
+///   rotation of a window.
+/// - Completing the `source` with an empty pending bundle emits nothing for a buffer, whereas the
+///   composition emits a trailing empty `Vec`, because collecting the empty open window yields
+///   the initial value.
+/// - [`Window`](crate::operators::transforming::window::Window) requires `E: Clone`, since an
+///   error is delivered to both the current window and the outer Observable. A buffer has no
+///   window to deliver to and so places no such bound on `E`.
+///
+/// The composition also pays for machinery a buffer does not need: a subject per window, and one
+/// queued action per item. Where the three points above do not matter, the equivalence holds; the
+/// `test_equivalent_to_window_and_collect` test in `tests/buffer.rs` pins it down, alongside two
+/// tests that pin down the divergences.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
