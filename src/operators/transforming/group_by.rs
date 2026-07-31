@@ -27,6 +27,11 @@ use std::{
 /// among themselves, but they are not ordered against the emission of another group. Disposing the
 /// outer subscription closes the open groups, which drops their observers without notifying them
 /// and discards what they had buffered.
+///
+/// Disposing the subscription of a single group does not necessarily release its observer where it
+/// happens: the group releases it on its next item, when it ends, or when the outer subscription
+/// is disposed, whichever comes first. See [the unicast subject](crate::subject::unicast_subject)
+/// each group is built on.
 /// See <https://reactivex.io/documentation/operators/groupby.html>
 ///
 /// # Examples

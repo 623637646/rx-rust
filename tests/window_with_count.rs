@@ -1701,12 +1701,15 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     assert_eq!(checker_1.values(), [111]);
     drop(sub_1);
 
-    // The observer is released on unsubscribe.
-    assert_eq!(checker_1.state(), State::Dropped);
+    // The window holds the observer between two events, so unsubscribing does not release it: the
+    // window does, on its next event.
+    assert_eq!(checker_1.state(), State::Active);
 
     // Later values of this window have nowhere to go, but they still count
-    // towards the window size and the pipeline stays healthy.
+    // towards the window size and the pipeline stays healthy. The first of them is what makes the
+    // window notice the disposal and release the observer.
     sender.on_next(222);
+    assert_eq!(checker_1.state(), State::Dropped);
     sender.on_next(333);
     assert_eq!(checker_1.values(), [111]);
 
