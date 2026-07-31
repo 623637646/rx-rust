@@ -1663,20 +1663,16 @@ fn test_subscribe_window_observable_after_unsubscribe() {
 
     sender.on_next(111);
 
-    // Unsubscribing is not a termination: the window never completed nor errored.
+    // Disposing the outer subscription drops the sender of the open window. Its buffered values
+    // are released without completing or erroring the window.
     drop(subscription);
 
-    // A late subscriber still observes the buffered value and remains active,
-    // because unsubscribing from the outer observable is not a termination.
+    // A late subscriber receives no buffered values or termination because the window pipe has
+    // already been closed.
     let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
     let (checker_1, observer_1) = Checker::new();
-    let sub_1 = window_1.subscribe(observer_1);
-    assert_eq!(checker_1.values(), [111]);
-    assert_eq!(checker_1.state(), State::Active);
-
-    // Disposing the inner subscription releases its observer without sending a
-    // completion or error.
-    drop(sub_1);
+    let _sub_1 = window_1.subscribe(observer_1);
+    assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Dropped);
 }
 
