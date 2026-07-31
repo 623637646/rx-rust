@@ -24,8 +24,8 @@ use educe::Educe;
 /// # Relation to `Window`
 ///
 /// Conceptually a buffer is a window whose items are collected into a `Vec`, that is
-/// `source.window(boundary).concat_map(|window| window.reduce(Vec::new(), push))`. It is
-/// implemented on its own rather than as that composition, because the two are not equivalent:
+/// `source.window(boundary).concat_map(|window| window.to_vec())`. It is implemented on its own
+/// rather than as that composition, because the two are not equivalent:
 ///
 /// - Completing the `boundary` terminates a buffer, as described above, but only stops the
 ///   rotation of a window.

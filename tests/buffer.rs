@@ -11,7 +11,6 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::operators::mathematical_aggregate::reduce::Reduce;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -1048,7 +1047,7 @@ fn test_equivalent_to_window_and_collect() {
     let _window_subscription = subject
         .clone()
         .window(boundary_subject.clone())
-        .concat_map(collect_into_vec)
+        .concat_map(|window| window.to_vec())
         .subscribe(window_observer);
 
     boundary_subject.on_next(());
@@ -1083,7 +1082,7 @@ fn test_diverges_from_window_and_collect_on_completed_boundary() {
     let _window_subscription = subject
         .clone()
         .window(boundary_subject.clone())
-        .concat_map(collect_into_vec)
+        .concat_map(|window| window.to_vec())
         .subscribe(window_observer);
 
     subject.on_next(111);
@@ -1121,7 +1120,7 @@ fn test_diverges_from_window_and_collect_on_empty_pending_bundle() {
     let _window_subscription = subject
         .clone()
         .window(boundary_subject.clone())
-        .concat_map(collect_into_vec)
+        .concat_map(|window| window.to_vec())
         .subscribe(window_observer);
 
     subject.on_next(111);
@@ -1134,20 +1133,6 @@ fn test_diverges_from_window_and_collect_on_empty_pending_bundle() {
     assert_eq!(window_checker.values(), [vec![111], vec![]]);
     assert_eq!(buffer_checker.state(), State::Completed);
     assert_eq!(window_checker.state(), State::Completed);
-}
-
-type CollectIntoVec<T, OE> = Reduce<Vec<T>, T, OE, fn(Vec<T>, T) -> Vec<T>>;
-
-/// Collects a window into a `Vec`, which is the `Collection` half of `Window` + collect.
-fn collect_into_vec<'or, T, E, OE>(window: OE) -> CollectIntoVec<T, OE>
-where
-    OE: Observable<'or, T, E>,
-{
-    fn push<T>(mut values: Vec<T>, value: T) -> Vec<T> {
-        values.push(value);
-        values
-    }
-    window.reduce(Vec::new(), push)
 }
 
 #[test]

@@ -41,7 +41,8 @@ use crate::{
             take_last::TakeLast, throttle::Throttle,
         },
         mathematical_aggregate::{
-            average::Average, count::Count, max::Max, min::Min, reduce::Reduce, sum::Sum,
+            average::Average, collect::Collect, count::Count, max::Max, min::Min, reduce::Reduce,
+            sum::Sum,
         },
         others::{
             debug::{Debug, DebugEvent, DefaultPrintType},
@@ -157,6 +158,15 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         F: FnOnce(E) -> OE1,
     {
         Catch::new(self, callback)
+    }
+
+    /// Gathers all the items into a collection built with `Default` and `Extend`, and emits it
+    /// when the source completes. See [`to_vec`](ObservableExt::to_vec) for the `Vec<T>` case.
+    fn collect<C>(self) -> Collect<C, T, Self>
+    where
+        C: Default + Extend<T>,
+    {
+        Collect::new(self)
     }
 
     /// Combines the latest values from both observables whenever either produces a new item.
@@ -713,6 +723,14 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Annotates each item with the current timestamp when it is emitted.
     fn timestamp(self) -> Timestamp<Self> {
         Timestamp::new(self)
+    }
+
+    /// Gathers all the items into a `Vec` and emits it when the source completes. This is
+    /// [`collect`](ObservableExt::collect) specialized to `Vec<T>`, which is the shape that
+    /// [`window`](ObservableExt::window) composes with:
+    /// `source.window(boundary).concat_map(|window| window.to_vec())`.
+    fn to_vec(self) -> Collect<Vec<T>, T, Self> {
+        Collect::new(self)
     }
 
     /// Collects items into windows that are opened and closed by another observable.
