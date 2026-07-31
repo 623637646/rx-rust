@@ -11,6 +11,7 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
+use rx_rust::operators::mathematical_aggregate::reduce::Reduce;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -1027,6 +1028,126 @@ fn test_clone() {
     let boundary_subject = Create::new(|_| Subscription::default());
     let observable = observable.buffer(boundary_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+}
+
+/// A buffer is conceptually a window whose items are collected into a `Vec`. This pins down that
+/// equivalence on a run that avoids the divergences documented on `Buffer`: the boundary outlives
+/// the source, and the pending bundle is not empty when the source completes.
+#[test]
+fn test_equivalent_to_window_and_collect() {
+    let mut subject = PublishSubject::default();
+    let mut boundary_subject = PublishSubject::default();
+    let (buffer_checker, buffer_observer) = Checker::new();
+    let (window_checker, window_observer) = Checker::new();
+
+    // Custom operations
+    let _buffer_subscription = subject
+        .clone()
+        .buffer(boundary_subject.clone())
+        .subscribe(buffer_observer);
+    let _window_subscription = subject
+        .clone()
+        .window(boundary_subject.clone())
+        .concat_map(collect_into_vec)
+        .subscribe(window_observer);
+
+    boundary_subject.on_next(());
+    subject.on_next(111);
+    boundary_subject.on_next(());
+    subject.on_next(222);
+    subject.on_next(333);
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+
+    assert_eq!(buffer_checker.values(), [vec![], vec![111], vec![222, 333]]);
+    assert_eq!(window_checker.values(), buffer_checker.values());
+    assert_eq!(buffer_checker.state(), State::Completed);
+    assert_eq!(window_checker.state(), State::Completed);
+}
+
+/// A completed boundary terminates a buffer, but only stops the rotation of a window, which leaves
+/// the composition running until the source terminates.
+#[test]
+fn test_diverges_from_window_and_collect_on_completed_boundary() {
+    let mut subject = PublishSubject::default();
+    let boundary_subject = PublishSubject::default();
+    let (buffer_checker, buffer_observer) = Checker::new();
+    let (window_checker, window_observer) = Checker::new();
+
+    // Custom operations
+    let _buffer_subscription = subject
+        .clone()
+        .buffer(boundary_subject.clone())
+        .subscribe(buffer_observer);
+    let _window_subscription = subject
+        .clone()
+        .window(boundary_subject.clone())
+        .concat_map(collect_into_vec)
+        .subscribe(window_observer);
+
+    subject.on_next(111);
+    boundary_subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(buffer_checker.values(), [vec![111]]);
+    assert_eq!(buffer_checker.state(), State::Completed);
+    assert!(window_checker.values().is_empty());
+    assert_eq!(window_checker.state(), State::Active);
+
+    subject.on_next(222);
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(buffer_checker.values(), [vec![111]]);
+    assert_eq!(window_checker.values(), [vec![111, 222]]);
+    assert_eq!(window_checker.state(), State::Completed);
+}
+
+/// Completing the source with an empty pending bundle emits nothing for a buffer, whereas
+/// collecting the empty open window yields a trailing empty `Vec`.
+#[test]
+fn test_diverges_from_window_and_collect_on_empty_pending_bundle() {
+    let mut subject = PublishSubject::default();
+    let mut boundary_subject = PublishSubject::default();
+    let (buffer_checker, buffer_observer) = Checker::new();
+    let (window_checker, window_observer) = Checker::new();
+
+    // Custom operations
+    let _buffer_subscription = subject
+        .clone()
+        .buffer(boundary_subject.clone())
+        .subscribe(buffer_observer);
+    let _window_subscription = subject
+        .clone()
+        .window(boundary_subject.clone())
+        .concat_map(collect_into_vec)
+        .subscribe(window_observer);
+
+    subject.on_next(111);
+    boundary_subject.on_next(());
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+
+    assert_eq!(buffer_checker.values(), [vec![111]]);
+    assert_eq!(window_checker.values(), [vec![111], vec![]]);
+    assert_eq!(buffer_checker.state(), State::Completed);
+    assert_eq!(window_checker.state(), State::Completed);
+}
+
+type CollectIntoVec<T, OE> = Reduce<Vec<T>, T, OE, fn(Vec<T>, T) -> Vec<T>>;
+
+/// Collects a window into a `Vec`, which is the `Collection` half of `Window` + collect.
+fn collect_into_vec<'or, T, E, OE>(window: OE) -> CollectIntoVec<T, OE>
+where
+    OE: Observable<'or, T, E>,
+{
+    fn push<T>(mut values: Vec<T>, value: T) -> Vec<T> {
+        values.push(value);
+        values
+    }
+    window.reduce(Vec::new(), push)
 }
 
 #[test]
