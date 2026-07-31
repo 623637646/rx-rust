@@ -94,7 +94,7 @@ where
     };
     let subscription = builder(context);
     let subscription_to_drop = state.lock_mut(|mut lock| {
-        let state = std::mem::replace(&mut *lock, State::Placeholder);
+        let state = std::mem::replace(&mut *lock, State::Stopped);
         match state {
             State::Subscribing { observer, model } => {
                 *lock = State::Idle {
@@ -121,11 +121,7 @@ where
                 subscription: Some(_),
                 ..
             } => unreachable!(),
-            State::Stopped => {
-                *lock = State::Stopped;
-                Some(subscription)
-            }
-            State::Placeholder => unreachable!(),
+            State::Stopped => Some(subscription),
         }
     });
     drop(subscription_to_drop); // Drop outside the lock to avoid potential deadlock
@@ -150,7 +146,6 @@ enum State<T, E, OR, M, D: Disposable> {
         subscription: Option<Subscription<D>>, // Back to Subscribing if None, otherwise to Idle.
     },
     Stopped,
-    Placeholder,
 }
 
 type SharedState<T, E, OR, M, D> = Shared<Mutable<State<T, E, OR, M, D>>>;
@@ -300,7 +295,6 @@ where
                 State::Idle { model, .. } => model,
                 State::Delivering { model, .. } => model,
                 State::Stopped => return Err(ContextStopped),
-                State::Placeholder => unreachable!(),
             };
             let callback = callback
                 .take()
@@ -357,7 +351,7 @@ where
                     drop(lock);
                     return;
                 }
-                let idle_or_subscribing = std::mem::replace(state, State::Placeholder);
+                let idle_or_subscribing = std::mem::replace(state, State::Stopped);
                 let (mut observer, model, subscription) = match idle_or_subscribing {
                     State::Subscribing { observer, model } => (observer, model, None),
                     State::Idle {
@@ -396,7 +390,6 @@ where
             State::Stopped => {
                 drop(lock);
             }
-            State::Placeholder => unreachable!(),
         };
     }
 
@@ -413,7 +406,7 @@ where
     fn deliver_pending_events(&self, mut observer: OR) {
         loop {
             let step = self.state.lock_mut(|mut lock| match &mut *lock {
-                State::Idle { .. } | State::Subscribing { .. } | State::Placeholder => {
+                State::Idle { .. } | State::Subscribing { .. } => {
                     drop(lock);
                     unreachable!()
                 }
@@ -423,7 +416,7 @@ where
                         return DeliveryStep::Next(observer, value);
                     }
                     let termination = pending.take_termination();
-                    let old_state = std::mem::replace(&mut *lock, State::Placeholder);
+                    let old_state = std::mem::replace(&mut *lock, State::Stopped);
                     let State::Delivering {
                         model,
                         subscription,
@@ -537,7 +530,7 @@ fn stop_state<T, E, OR, M, D: Disposable>(state: &SharedState<T, E, OR, M, D>) {
             return None;
         }
 
-        let state = std::mem::replace(&mut *lock, State::Placeholder);
+        let state = std::mem::replace(&mut *lock, State::Stopped);
         let (model, deferred_drop) = match state {
             State::Subscribing { observer, model } => {
                 let deferred_drop = DeferredDrop {
@@ -571,10 +564,8 @@ fn stop_state<T, E, OR, M, D: Disposable>(state: &SharedState<T, E, OR, M, D>) {
                 };
                 (model, deferred_drop)
             }
-            State::Stopped | State::Placeholder => unreachable!(),
+            State::Stopped => unreachable!(),
         };
-
-        *lock = State::Stopped;
 
         Some((deferred_drop, model))
     });
