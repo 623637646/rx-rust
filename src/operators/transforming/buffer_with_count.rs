@@ -88,7 +88,7 @@ where
         match termination {
             Termination::Completed => {
                 if !self.values.is_empty() {
-                    self.observer.on_next(std::mem::take(&mut self.values));
+                    self.observer.on_next(self.values);
                 }
             }
             Termination::Error(_) => {}
