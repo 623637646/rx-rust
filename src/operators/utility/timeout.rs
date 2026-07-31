@@ -1,21 +1,16 @@
-use crate::{
-    delegate_disposal,
-    disposable::{
-        Disposable, bound_drop_disposal::BoundDropDisposal, chain_disposal::ChainDisposal,
-    },
-    observable::{Observable, Subscription},
-    observer::{Observer, Termination},
-    safe_lock, safe_lock_option_observer,
-    scheduler::Scheduler,
-    utils::{
-        subscribe_with_auto_dispose_on_termination::{
-            self, subscribe_with_auto_dispose_on_termination,
-        },
-        types::{MarkerType, MaybeSend, Mutable, MutableHelper, Shared},
-    },
+use crate::disposable::{
+    Disposable, bound_drop_disposal::BoundDropDisposal, option_disposal::OptionDisposal,
 };
+use crate::observable::{Observable, Subscription};
+use crate::observer::{Observer, Termination};
+use crate::scheduler::{RecursionAction, Scheduler};
+use crate::utils::subscribe_with_context::{
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
+};
+use crate::utils::types::{MarkerType, MaybeSend};
 use educe::Educe;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
@@ -92,182 +87,105 @@ impl<'or, OE, S> Timeout<'or, OE, S> {
     }
 }
 
-delegate_disposal!(
-    Disposal<D, S>,
-    subscribe_with_auto_dispose_on_termination::Disposal<ChainDisposal<Shared<Mutable<TimeoutContext<BoundDropDisposal<S::D>>>>, D>>,
-    where D: Disposable, S: Scheduler
-);
-
 impl<'or, T, E, OE, S> Observable<'static, T, Error<E>> for Timeout<'or, OE, S>
 where
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OE: Observable<'or, T, E>,
     OE::D: MaybeSend + 'static,
-    S: Scheduler + Clone + MaybeSend + 'or,
+    S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = Disposal<OE::D, S>;
+    type D = BoundSubscriptionDisposal<'static>;
 
     fn subscribe(
         self,
         observer: impl Observer<T, Error<E>> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        subscribe_with_auto_dispose_on_termination(observer, |observer| {
-            let context = Shared::new(Mutable::new(TimeoutContext {
-                timer_state: TimerState::Initialized,
-                version: 0,
-            }));
-
-            let observer = Shared::new(Mutable::new(Some(observer)));
-            let timeout_observer = TimeoutObserver {
-                observer: observer.clone(),
-                duration: self.duration,
-                scheduler: self.scheduler.clone(),
+        let model = Model {
+            deadline: Instant::now() + self.duration,
+        };
+        subscribe_with_context_bound_subscription(observer, model, |context| {
+            let source_subscription = self.source.subscribe(TimeoutObserver {
                 context: context.clone(),
-            };
-
-            let sub = self.source.subscribe(timeout_observer);
-            let timer = create_timer(
-                0,
-                observer.clone(),
-                self.duration,
-                &self.scheduler,
-                context.clone(),
-            );
-            let timer_state =
-                safe_lock!(mem_replace: context, timer_state, TimerState::Scheduled(timer));
-            match timer_state {
-                TimerState::Initialized => {} // Normal case.
-                TimerState::Scheduled(_) => unreachable!(),
-                TimerState::DidTimeout => {} // Scheduled task is too fast.
-                TimerState::Disposed => unreachable!(),
-            }
-            sub.preceded_by(context)
+                duration: self.duration,
+            });
+            let timer = setup_timer(context, &self.scheduler);
+            source_subscription.preceded_by(timer)
         })
-        .map_into()
     }
 }
 
-enum TimerState<D> {
-    Initialized,
-    Scheduled(D),
-    DidTimeout,
-    Disposed,
+struct Model {
+    deadline: Instant,
 }
 
-struct TimeoutContext<D> {
-    timer_state: TimerState<D>,
-    version: usize,
-}
-
-// TODO: Disposable should not be Cloneable
-impl<D> Disposable for Shared<Mutable<TimeoutContext<D>>>
-where
-    D: Disposable,
-{
-    fn dispose(self) {
-        let timer_state = safe_lock!(mem_replace: self, timer_state, TimerState::Disposed);
-        match timer_state {
-            TimerState::Initialized => unreachable!(),
-            TimerState::Scheduled(disposal) => disposal.dispose(), // Not timeout yet.
-            TimerState::DidTimeout => {}                           // Timeout
-            TimerState::Disposed => unreachable!(),
-        }
-    }
-}
-
-struct TimeoutObserver<OR, S>
-where
-    S: Scheduler,
-{
-    observer: Shared<Mutable<Option<OR>>>,
+struct TimeoutObserver<T, E, OR, D: Disposable> {
+    context: SubscriptionContext<T, Error<E>, OR, Model, D>,
     duration: Duration,
-    scheduler: S,
-    context: Shared<Mutable<TimeoutContext<BoundDropDisposal<S::D>>>>,
 }
 
-impl<T, E, OR, S> Observer<T, E> for TimeoutObserver<OR, S>
+impl<T, E, OR, D> Observer<T, E> for TimeoutObserver<T, E, OR, D>
 where
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OR: Observer<T, Error<E>> + MaybeSend + 'static,
-    S: Scheduler,
+    D: Disposable + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        self.context
-            .lock_mut(|mut lock| match &mut lock.timer_state {
-                TimerState::Initialized => {
-                    drop(lock);
-                    safe_lock_option_observer!(on_next: self.observer, value);
-                }
-                TimerState::Scheduled(_) => {
-                    // schedule new timer
-                    lock.version += 1;
-                    let timer = create_timer(
-                        lock.version,
-                        self.observer.clone(),
-                        self.duration,
-                        &self.scheduler,
-                        self.context.clone(),
-                    );
-                    let old_disposal = match std::mem::replace(
-                        &mut lock.timer_state,
-                        TimerState::Scheduled(timer),
-                    ) {
-                        TimerState::Initialized | TimerState::DidTimeout | TimerState::Disposed => {
-                            unreachable!()
-                        }
-                        TimerState::Scheduled(disposal) => disposal,
-                    };
-
-                    // emit
-                    drop(lock);
-                    old_disposal.dispose();
-                    safe_lock_option_observer!(on_next: self.observer, value);
-                }
-                TimerState::DidTimeout => {}
-                TimerState::Disposed => {}
-            });
+        let _ = self.context.try_update_model(|model| {
+            model.deadline = Instant::now() + self.duration;
+            ModelUpdate::empty().with_next_event(value)
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                safe_lock_option_observer!(on_termination: self.observer, Termination::Completed);
-            }
-            Termination::Error(error) => {
-                safe_lock_option_observer!(on_termination: self.observer, Termination::Error(Error::SourceError(error)));
-            }
-        }
+        self.context.send_termination(match termination {
+            Termination::Completed => Termination::Completed,
+            Termination::Error(error) => Termination::Error(Error::SourceError(error)),
+        });
     }
 }
 
-fn create_timer<T, E, OR, S>(
-    version: usize,
-    observer: Shared<Mutable<Option<OR>>>,
-    duration: Duration,
+/// Drives the timeout with one long-lived recursive scheduler task.
+///
+/// Source values only move `deadline` forward. If the task wakes at an obsolete deadline, it
+/// continues at the latest one; no scheduler task needs to be cancelled or spawned per value.
+fn setup_timer<T, E, OR, S, D>(
+    context: SubscriptionContext<T, Error<E>, OR, Model, D>,
     scheduler: &S,
-    context: Shared<Mutable<TimeoutContext<BoundDropDisposal<S::D>>>>,
-) -> BoundDropDisposal<S::D>
+) -> OptionDisposal<BoundDropDisposal<S::D>>
 where
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OR: Observer<T, Error<E>> + MaybeSend + 'static,
-    S: Scheduler,
+    S: Scheduler + Clone + MaybeSend + 'static,
+    D: Disposable + MaybeSend + 'static,
 {
-    scheduler.schedule(
-        move || {
-            context.lock_mut(|mut lock| {
-                if lock.version != version {
-                    // New version, should ignore.
-                    return;
-                }
-                // Same version, should do timeout.
-                let timer_state = std::mem::replace(&mut lock.timer_state, TimerState::DidTimeout);
-                drop(lock);
-                safe_lock_option_observer!(on_termination: observer, Termination::Error(Error::Timeout));
-                match timer_state {
-                    TimerState::Initialized => {} //  Scheduled task is too fast.
-                    TimerState::Scheduled(disposal) => disposal.dispose(),
-                    TimerState::DidTimeout => unreachable!(),
-                    TimerState::Disposed => {},
-                }
-            });
+    let deadline =
+        context.try_update_model(|model| ModelUpdate::new(model.deadline).without_events());
+    let Ok(deadline) = deadline else {
+        // The source terminated synchronously while it was being subscribed.
+        return OptionDisposal::none();
+    };
+
+    let weak_context = context.downgrade();
+    let timer = scheduler.schedule_recursively(
+        move |_| {
+            let Some(context) = weak_context.upgrade() else {
+                return RecursionAction::Stop;
+            };
+            context
+                .try_update_model(|model| {
+                    if Instant::now() < model.deadline {
+                        return ModelUpdate::new(RecursionAction::ContinueAt(model.deadline))
+                            .without_events();
+                    }
+                    ModelUpdate::new(RecursionAction::Stop)
+                        .with_termination_event(Termination::Error(Error::Timeout))
+                })
+                .unwrap_or(RecursionAction::Stop)
         },
-        Some(duration),
-    )
+        Some(deadline.saturating_duration_since(Instant::now())),
+    );
+    OptionDisposal::some(timer)
 }
