@@ -4,8 +4,9 @@ use crate::{
     observer::{BoxedObserverExt, Observer, Termination, boxed_observer::BoxedObserver},
     subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
     utils::{
+        pending_events::EventBatch,
         subscribe_with_context::{
-            self, EventBatch, SubscriptionContext, subscribe_with_context_bound_subscription,
+            self, SubscriptionContext, subscribe_with_context_bound_subscription,
         },
         types::MaybeSend,
     },

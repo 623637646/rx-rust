@@ -6,7 +6,7 @@ use crate::{
     observable::Subscription,
     observer::{Observer, Termination},
     utils::{
-        pending_events::PendingEvents,
+        pending_events::{EventBatch, PendingEvents},
         types::{MaybeSend, MutGuard, Mutable, MutableHelper, Shared, WeakShared},
     },
 };
@@ -17,23 +17,6 @@ delegate_disposal!(
     ChainDisposal<BoxedDisposal<'or>, D>,
     where D: Disposable
 );
-
-/// Queues a batch of events. The caller must have checked that the last event is not queued yet.
-fn queue_events<T, E>(pending: &mut PendingEvents<T, E>, events: EventBatch<T, E>) {
-    match events {
-        EventBatch::Next(value) => pending.push_next(value),
-        EventBatch::Termination(termination) => pending.set_termination(termination),
-        EventBatch::NextAndTermination(value, termination) => {
-            pending.push_next(value);
-            pending.set_termination(termination);
-        }
-        EventBatch::NextBatch(values) => pending.extend_next(values),
-        EventBatch::NextBatchAndTermination(values, termination) => {
-            pending.extend_next(values);
-            pending.set_termination(termination);
-        }
-    }
-}
 
 /// Creates a subscription backed by a shared, serialized context containing the downstream
 /// observer and a mutable model.
@@ -161,17 +144,6 @@ type WeakSharedState<T, E, OR, M, D> = WeakShared<Mutable<State<T, E, OR, M, D>>
 #[educe(Debug, Clone)]
 pub struct SubscriptionContext<T, E, OR, M, D: Disposable = ()> {
     state: SharedState<T, E, OR, M, D>,
-}
-
-/// One atomic batch of downstream observer events.
-#[derive(Educe)]
-#[educe(Debug, Clone, PartialEq, Eq)]
-pub enum EventBatch<T, E> {
-    Next(T),
-    Termination(Termination<E>),
-    NextAndTermination(T, Termination<E>),
-    NextBatch(Vec<T>),
-    NextBatchAndTermination(Vec<T>, Termination<E>),
 }
 
 pub struct DropUndecided;
@@ -349,7 +321,8 @@ where
         match &mut *lock {
             state @ (State::Idle { .. } | State::Subscribing { .. }) => {
                 let mut pending = PendingEvents::new();
-                queue_events(&mut pending, events);
+                let rejected = pending.push_batch(events);
+                debug_assert!(rejected.is_none(), "a new queue accepts every batch");
                 // The first value is delivered directly, so it never enters the queue.
                 let first_next = pending.pop_next();
                 if first_next.is_none() && pending.is_empty() {
@@ -384,14 +357,11 @@ where
                 self.deliver_pending_events(observer);
             }
             State::Delivering { pending, .. } => {
-                if pending.is_terminated() {
-                    // The termination is the last event, so these events have nowhere to go.
-                    drop(lock);
-                    drop(events); // Drop outside the lock to avoid potential deadlock
-                } else {
-                    queue_events(pending, events);
-                    drop(lock);
-                }
+                // The events are rejected once the termination is queued, since it is the last
+                // event of the stream.
+                let rejected = pending.push_batch(events);
+                drop(lock);
+                drop(rejected); // Drop outside the lock to avoid potential deadlock
             }
             State::Stopped => {
                 drop(lock);

@@ -2,12 +2,23 @@ use crate::observer::{Event, Termination};
 use educe::Educe;
 use std::collections::VecDeque;
 
+/// One atomic batch of events to queue.
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq)]
+pub enum EventBatch<T, E> {
+    Next(T),
+    Termination(Termination<E>),
+    NextAndTermination(T, Termination<E>),
+    NextBatch(Vec<T>),
+    NextBatchAndTermination(Vec<T>, Termination<E>),
+}
+
 /// The events waiting to be delivered to an observer.
 ///
 /// A termination is the last event of a stream, so it is queued last and nothing is queued after
-/// it. Callers must not queue an event once [`PendingEvents::is_terminated`] holds; they must drop
-/// it instead, outside of the lock that guards these events, because dropping a value can run
-/// arbitrary code that re-enters that lock.
+/// it. Queuing anything after it gives the event back instead of accepting it: the caller drops it
+/// outside of the lock that guards this queue, because dropping a value can run arbitrary code
+/// that re-enters that lock.
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct PendingEvents<T, E> {
@@ -40,22 +51,42 @@ impl<T, E> PendingEvents<T, E> {
         self.values.is_empty() && self.termination.is_none()
     }
 
-    /// Queues a value. Must not be called once [`PendingEvents::is_terminated`] holds.
-    pub fn push_next(&mut self, value: T) {
-        debug_assert!(!self.is_terminated());
-        self.values.push_back(value);
+    /// Queues `event`, or gives it back when the last event has already been queued.
+    #[must_use = "a rejected event must be dropped outside the lock that guards these events"]
+    pub fn push(&mut self, event: Event<T, E>) -> Option<Event<T, E>> {
+        if self.is_terminated() {
+            return Some(event);
+        }
+        match event {
+            Event::Next(value) => self.values.push_back(value),
+            Event::Termination(termination) => self.termination = Some(termination),
+        }
+        None
     }
 
-    /// Queues several values. Must not be called once [`PendingEvents::is_terminated`] holds.
-    pub fn extend_next(&mut self, values: impl IntoIterator<Item = T>) {
-        debug_assert!(!self.is_terminated());
-        self.values.extend(values);
-    }
-
-    /// Queues the last event. Must not be called once [`PendingEvents::is_terminated`] holds.
-    pub fn set_termination(&mut self, termination: Termination<E>) {
-        debug_assert!(!self.is_terminated());
-        self.termination = Some(termination);
+    /// Queues `events`, or gives them back when the last event has already been queued.
+    ///
+    /// A batch is queued as a whole: it holds at most one termination and queues it last, so no
+    /// event of a batch can be rejected on its own.
+    #[must_use = "rejected events must be dropped outside the lock that guards these events"]
+    pub fn push_batch(&mut self, events: EventBatch<T, E>) -> Option<EventBatch<T, E>> {
+        if self.is_terminated() {
+            return Some(events);
+        }
+        match events {
+            EventBatch::Next(value) => self.values.push_back(value),
+            EventBatch::Termination(termination) => self.termination = Some(termination),
+            EventBatch::NextAndTermination(value, termination) => {
+                self.values.push_back(value);
+                self.termination = Some(termination);
+            }
+            EventBatch::NextBatch(values) => self.values.extend(values),
+            EventBatch::NextBatchAndTermination(values, termination) => {
+                self.values.extend(values);
+                self.termination = Some(termination);
+            }
+        }
+        None
     }
 
     /// Takes the next event to deliver, which is the termination once no value is left.
