@@ -3130,7 +3130,7 @@ fn test_disposing_outer_subscription_during_buffer_replay_suppresses_remaining_v
 }
 
 #[test]
-fn test_reentrant_boundary_during_buffer_replay_completes_old_window_before_emitting_new_window() {
+fn test_reentrant_boundary_during_buffer_replay_keeps_the_order_of_the_old_window() {
     use rx_rust::utils::types::MutableHelper;
 
     let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
@@ -3198,13 +3198,16 @@ fn test_reentrant_boundary_during_buffer_replay_completes_old_window_before_emit
 
     assert_eq!(safe_lock!(clone: values_1), [111, 222]);
     assert_eq!(safe_lock!(clone: terminations_1), [Termination::Completed]);
+    // Each window is serialized on its own, independently of the outer Observable, so the
+    // re-entrant boundary emits the new window while window 1 is still replaying its buffer. The
+    // events of window 1 keep their order among themselves, and its completion stays last.
     assert_eq!(
         safe_lock!(clone: events),
         [
             "window_1_value_111",
+            "window_2_emitted",
             "window_1_value_222",
             "window_1_completed",
-            "window_2_emitted",
         ]
     );
     assert_eq!(safe_lock_vec!(len: window_vec), 1);
@@ -3729,12 +3732,12 @@ fn test_disposing_old_inner_during_multiple_queued_boundary_rollovers_keeps_late
 #[cfg(not(feature = "single-threaded"))]
 #[cfg(panic = "unwind")]
 #[test]
-fn test_dropping_ignored_value_does_not_poison_window_context() {
+fn test_dropping_ignored_value_stops_the_subscription() {
     use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
     use rx_rust::utils::types::MutableHelper;
 
-    let (mut sender, observable, _channel_checker) = test_channel::<'_, PanicOnDrop, Infallible>();
-    let (mut boundary_sender, boundary_observable, _boundary_channel_checker) =
+    let (mut sender, observable, channel_checker) = test_channel::<'_, PanicOnDrop, Infallible>();
+    let (_boundary_sender, boundary_observable, boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
 
     // Custom operations
@@ -3756,12 +3759,14 @@ fn test_dropping_ignored_value_does_not_poison_window_context() {
     let inner_subscription = inner_subscriptions.lock_mut(|mut lock| lock.pop()).unwrap();
     drop(inner_subscription);
 
+    // The window that the value belongs to is closed, so the value is dropped while the pipeline
+    // is delivering it. A panic from that drop stops the subscription, like a panic from any other
+    // call made while delivering, which disposes the source and the boundary.
     expect_panic_on_drop(|value| sender.on_next(value));
-
-    // The ignored value is dropped after releasing the context lock, so the
-    // window pipeline remains usable after the intentional drop panic.
-    boundary_sender.on_next(());
-    assert_eq!(safe_lock_vec!(len: inner_subscriptions), 1);
+    // The subscription is over, so no window is emitted anymore.
+    assert_eq!(safe_lock_vec!(len: inner_subscriptions), 0);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]

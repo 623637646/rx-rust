@@ -317,9 +317,11 @@ fn test_async() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime
+        // The sender is kept alive: dropping it would close the channel and drop the observer.
+        let _sender = runtime
             .spawn(async move {
                 sender.on_next(222);
+                sender
             })
             .await
             .unwrap();

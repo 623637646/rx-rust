@@ -172,10 +172,40 @@ fn test_drop_sender_without_termination() {
     let _subscription = observable.subscribe(observer);
 
     sender.on_next(111);
-    // A dropped sender is not reported as a completion.
+    // Nothing can reach the observer once the only sender is gone, so the pipe is closed and the
+    // observer is dropped. It is not reported as a completion.
     drop(sender);
     assert_eq!(checker.values(), [111]);
-    assert_eq!(checker.state(), State::Active);
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[test]
+fn test_drop_sender_after_termination_keeps_the_buffered_termination() {
+    let (mut sender, observable) = unicast_subject::<i32, Infallible>();
+
+    sender.on_next(111);
+    // Terminating consumes the sender, so this also drops it. The last event still has to reach a
+    // late subscriber.
+    sender.on_termination(Termination::Completed);
+
+    let (checker, observer) = Checker::new();
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_subscribe_after_drop_sender() {
+    let (mut sender, observable) = unicast_subject::<i32, Infallible>();
+    sender.on_next(111);
+    drop(sender);
+
+    // The pipe is closed, so a late subscriber observes neither the buffered values nor a
+    // termination.
+    let (checker, observer) = Checker::new();
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]

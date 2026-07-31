@@ -719,12 +719,12 @@ fn test_subscribe_group_after_unsubscribe() {
     // Unsubscribing is not a termination: the group never completed nor errored.
     drop(subscription);
 
-    // A late subscriber still observes the buffered value, then is dropped
-    // without receiving a termination.
+    // Unsubscribing closed the group, so a late subscriber observes neither the buffered value nor
+    // a termination.
     let group = group_vec.lock_mut(|mut lock| lock.pop()).unwrap();
     let (checker, observer) = Checker::new();
     let _sub = group.subscribe(observer);
-    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Dropped);
 }
 
@@ -822,9 +822,10 @@ fn test_unsub_on_inner_termination_still_terminates_other_groups() {
     assert_eq!(checker_odd.state(), State::Completed);
     assert_eq!(checker_even.values(), [2]);
     assert_eq!(checker_even.state(), State::Completed);
-    // The outer termination itself is suppressed: it is queued after the inner
-    // terminations, so the disposal does take effect for it.
-    assert_eq!(outer_termination_checker.state(), State::Dropped);
+    // The outer termination is delivered anyway: the source handed it over before the disposal
+    // happened, and suppressing an event that is already in flight is the upstream's job, not the
+    // job of an operator that only forwards it.
+    assert_eq!(outer_termination_checker.state(), State::Completed);
 }
 
 #[test]

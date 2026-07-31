@@ -398,8 +398,10 @@ fn test_unsubscribe() {
                 assert_eq!(checker.state(), State::Completed);
             }
             2 => {
+                // Disposing the outer subscription drops the sending end of the open window, so
+                // its observer is dropped too: nothing can reach it anymore.
                 assert_eq!(checker.values(), []);
-                assert_eq!(checker.state(), State::Active);
+                assert_eq!(checker.state(), State::Dropped);
                 sub.dispose();
                 assert_eq!(checker.state(), State::Dropped);
             }
@@ -901,8 +903,10 @@ fn test_unsub_on_next_by_take() {
     for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
         match index {
             0 => {
+                // Taking one window disposes the outer subscription, which drops the sending end
+                // of the open window, so its observer is dropped too.
                 assert_eq!(checker.values(), []);
-                assert_eq!(checker.state(), State::Active);
+                assert_eq!(checker.state(), State::Dropped);
             }
             _ => panic!(),
         }

@@ -17,12 +17,14 @@
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Event, Observer, Termination, boxed_observer::BoxedObserver},
     safe_lock,
-    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
+    utils::{
+        pending_events::PendingEvents,
+        types::{MaybeSend, Mutable, MutableHelper, Shared},
+    },
 };
 use educe::Educe;
-use std::collections::VecDeque;
 
 /// Creates a unicast subject, giving back its sending and its observable end.
 ///
@@ -64,7 +66,7 @@ use std::collections::VecDeque;
 /// drop(subscription);
 /// ```
 pub fn unicast_subject<'or, T, E>() -> (UnicastSender<'or, T, E>, UnicastObservable<'or, T, E>) {
-    new_pair(Buffer::new())
+    new_pair(PendingEvents::new())
 }
 
 /// Creates a unicast subject whose buffer is pre-allocated for `capacity` values.
@@ -74,58 +76,26 @@ pub fn unicast_subject<'or, T, E>() -> (UnicastSender<'or, T, E>, UnicastObserva
 pub fn unicast_subject_with_capacity<'or, T, E>(
     capacity: usize,
 ) -> (UnicastSender<'or, T, E>, UnicastObservable<'or, T, E>) {
-    new_pair(Buffer::with_capacity(capacity))
+    new_pair(PendingEvents::with_capacity(capacity))
 }
 
 fn new_pair<'or, T, E>(
-    buffer: Buffer<T, E>,
+    pending: PendingEvents<T, E>,
 ) -> (UnicastSender<'or, T, E>, UnicastObservable<'or, T, E>) {
-    let state = Shared::new(Mutable::new(State::Buffering(buffer)));
+    let state = Shared::new(Mutable::new(State::Buffering(pending)));
     (UnicastSender(state.clone()), UnicastObservable(Some(state)))
-}
-
-/// The events waiting for the observer.
-#[derive(Educe)]
-#[educe(Debug)]
-struct Buffer<T, E> {
-    values: VecDeque<T>,
-    /// Always the last event of the pipe: [`Observer::on_termination`] consumes the sender, so no
-    /// value can arrive after it.
-    termination: Option<Termination<E>>,
-}
-
-impl<T, E> Buffer<T, E> {
-    fn new() -> Self {
-        Self {
-            values: VecDeque::new(),
-            termination: None,
-        }
-    }
-
-    fn with_capacity(capacity: usize) -> Self {
-        Self {
-            values: VecDeque::with_capacity(capacity),
-            termination: None,
-        }
-    }
-}
-
-impl<T, E> Default for Buffer<T, E> {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[derive(Educe)]
 #[educe(Debug)]
 enum State<'or, T, E> {
-    /// No observer has subscribed yet: the events wait in the buffer.
-    Buffering(Buffer<T, E>),
+    /// No observer has subscribed yet: the events wait in the queue.
+    Buffering(PendingEvents<T, E>),
     /// The observer has subscribed and is idle.
     Attached(BoxedObserver<'or, T, E>),
     /// The observer is being delivered to outside the lock, so it is not held here. The events
-    /// that arrive while delivering wait in the buffer.
-    Delivering(Buffer<T, E>),
+    /// that arrive while delivering wait in the queue.
+    Delivering(PendingEvents<T, E>),
     /// The observer is gone, either because it was terminated or because the subscription was
     /// disposed. Every later event is dropped.
     Closed,
@@ -135,11 +105,27 @@ type SharedState<'or, T, E> = Shared<Mutable<State<'or, T, E>>>;
 
 /// The sending end of a unicast subject. See [`unicast_subject`].
 ///
-/// Dropping the sender without terminating it leaves the observer waiting: a dropped sender is not
-/// reported as a completion, because a producer that gives up halfway has not completed anything.
+/// Dropping the sender without terminating it closes the pipe, which drops the observer without
+/// notifying it: no event can reach it anymore, because the sender was the only way in, but a
+/// producer that gave up halfway has not completed anything either.
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct UnicastSender<'or, T, E>(SharedState<'or, T, E>);
+
+impl<T, E> Drop for UnicastSender<'_, T, E> {
+    fn drop(&mut self) {
+        // Terminating the pipe consumes the sender, so this also runs right after the last event
+        // was queued. That event still has to reach the observer, whether it is waiting in the
+        // queue for a late subscriber or for the delivery that is running.
+        let previous_state = self.0.lock_mut(|mut lock| match &mut *lock {
+            State::Buffering(pending) | State::Delivering(pending) if pending.is_terminated() => {
+                None
+            }
+            state => Some(std::mem::replace(state, State::Closed)),
+        });
+        drop(previous_state); // Drop outside the lock to avoid potential deadlock
+    }
+}
 
 impl<T, E> UnicastSender<'_, T, E> {
     /// Returns whether the observer is gone, which happens when its subscription is disposed or
@@ -156,14 +142,15 @@ impl<T, E> UnicastSender<'_, T, E> {
 impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
     fn on_next(&mut self, value: T) {
         let delivery = self.0.lock_mut(|mut lock| match &mut *lock {
-            State::Buffering(buffer) | State::Delivering(buffer) => {
-                debug_assert!(buffer.termination.is_none());
-                buffer.values.push_back(value);
+            State::Buffering(pending) | State::Delivering(pending) => {
+                // Terminating consumes the sender, so no value can arrive after the termination.
+                debug_assert!(!pending.is_terminated());
+                pending.push_next(value);
                 None
             }
             state @ State::Attached(_) => {
                 let State::Attached(observer) =
-                    std::mem::replace(state, State::Delivering(Buffer::new()))
+                    std::mem::replace(state, State::Delivering(PendingEvents::new()))
                 else {
                     unreachable!()
                 };
@@ -182,9 +169,10 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
 
     fn on_termination(self, termination: Termination<E>) {
         let delivery = self.0.lock_mut(|mut lock| match &mut *lock {
-            State::Buffering(buffer) | State::Delivering(buffer) => {
-                debug_assert!(buffer.termination.is_none());
-                buffer.termination = Some(termination);
+            State::Buffering(pending) | State::Delivering(pending) => {
+                // Terminating consumes the sender, so it cannot be terminated twice.
+                debug_assert!(!pending.is_terminated());
+                pending.set_termination(termination);
                 None
             }
             state @ State::Attached(_) => {
@@ -232,18 +220,25 @@ impl<'or, T, E> Observable<'or, T, E> for UnicastObservable<'or, T, E> {
             .0
             .take()
             .expect("the shared state is taken by either subscribing or dropping");
-        state.lock_mut(|mut lock| match &mut *lock {
-            State::Buffering(buffer) => {
+        let is_open = state.lock_mut(|mut lock| match &mut *lock {
+            State::Buffering(pending) => {
                 // The buffered events keep waiting in the state, where the delivery below picks
                 // them up one at a time.
-                let buffer = std::mem::take(buffer);
-                *lock = State::Delivering(buffer);
+                let pending = std::mem::take(pending);
+                *lock = State::Delivering(pending);
+                true
             }
-            // Subscribing consumes the only `UnicastObservable` of the pipe, and every other state
-            // is reachable only through a previous subscription.
-            State::Attached(_) | State::Delivering(_) | State::Closed => unreachable!(),
+            // The sender was dropped before this subscription, so nothing can ever arrive.
+            State::Closed => false,
+            // Subscribing consumes the only `UnicastObservable` of the pipe, so an observer can
+            // only be attached once.
+            State::Attached(_) | State::Delivering(_) => unreachable!(),
         });
-        deliver(&state, BoxedObserver::new(observer), None);
+        if is_open {
+            deliver(&state, BoxedObserver::new(observer), None);
+        } else {
+            drop(observer); // Drop outside the lock to avoid potential deadlock
+        }
         Subscription::new(Disposal(state))
     }
 }
@@ -301,11 +296,9 @@ fn deliver<'or, T, E>(
                 // being delivered to has been subscribed to.
                 State::Buffering(_) | State::Attached(_) => unreachable!(),
             };
-            if let Some(value) = pending.values.pop_front() {
-                return Step::Next(observer, value);
-            }
-            match pending.termination.take() {
-                Some(termination) => {
+            match pending.pop() {
+                Some(Event::Next(value)) => Step::Next(observer, value),
+                Some(Event::Termination(termination)) => {
                     *lock = State::Closed;
                     Step::Terminate(observer, termination)
                 }
