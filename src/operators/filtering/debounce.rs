@@ -1,5 +1,4 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
-use crate::utils::increment_id::IncrementId;
 use crate::utils::subscribe_with_context::{
     self, ModelUpdate, SubscriptionContext, subscribe_with_context,
 };
@@ -8,10 +7,10 @@ use crate::{
     observable::Observable,
     observable::Subscription,
     observer::{Observer, Termination},
-    scheduler::Scheduler,
+    scheduler::{RecursionAction, Scheduler},
 };
 use educe::Educe;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Emits a notification from the source Observable only after a particular time span has passed without another source emission.
 /// See <https://reactivex.io/documentation/operators/debounce.html>
@@ -85,7 +84,7 @@ where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
     OE: Observable<'or, T, E>,
-    S: Scheduler + MaybeSend + 'or,
+    S: Scheduler + Clone + MaybeSend + 'static,
 {
     type D = subscribe_with_context::Disposal<'or, OE::D>;
 
@@ -93,11 +92,7 @@ where
         self,
         observer: impl Observer<T, E> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        let model = Model::<T, S::D> {
-            current_value: None,
-            timer: None,
-            timer_id: IncrementId::default(),
-        };
+        let model = Model::<T, S::D>::Idle;
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(DebounceObserver {
                 context,
@@ -108,10 +103,17 @@ where
     }
 }
 
-struct Model<T, D: Disposable> {
-    current_value: Option<T>,
-    timer: Option<BoundDropDisposal<D>>,
-    timer_id: IncrementId,
+/// Keeps at most one recursive scheduler task alive for each debounce burst.
+///
+/// An active model with `timer: None` covers schedulers that can execute a zero-delay task before
+/// returning its disposal.
+enum Model<T, D: Disposable> {
+    Idle,
+    Active {
+        value: T,
+        deadline: Instant,
+        timer: Option<BoundDropDisposal<D>>,
+    },
 }
 
 struct DebounceObserver<T, E, OR, S: Scheduler> {
@@ -125,50 +127,84 @@ where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
     OR: Observer<T, E> + MaybeSend + 'static,
-    S: Scheduler,
+    S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let timer_id = self.context.try_update_model(|model| {
-            model.current_value = Some(value);
-            let timer = model.timer.take();
-            let timer_id = model.timer_id.increment();
-            ModelUpdate::new(timer_id).with_drop_outside(timer)
+        let timer_setup = self.context.try_update_model(|model| {
+            let deadline = Instant::now() + self.time_span;
+            let (timer_setup, previous_value) = match model {
+                Model::Idle => {
+                    *model = Model::Active {
+                        value,
+                        deadline,
+                        timer: None,
+                    };
+                    (Some(deadline), None)
+                }
+                Model::Active {
+                    value: current_value,
+                    deadline: current_deadline,
+                    ..
+                } => {
+                    let previous_value = std::mem::replace(current_value, value);
+                    *current_deadline = deadline;
+                    (None, Some(previous_value))
+                }
+            };
+            ModelUpdate::new(timer_setup).with_drop_outside(previous_value)
         });
-        let Ok(timer_id) = timer_id else { return };
+        let Ok(Some(deadline)) = timer_setup else {
+            return;
+        };
 
         let weak_context = self.context.downgrade();
-        let disposal = self.scheduler.schedule(
-            move || {
+        let disposal = self.scheduler.schedule_recursively(
+            move |_| {
                 let Some(context) = weak_context.upgrade() else {
-                    return;
+                    return RecursionAction::Stop;
                 };
-                let _ = context.try_update_model(|model| {
-                    if timer_id != model.timer_id {
-                        return ModelUpdate::empty().without_events().without_drop_outside();
-                    }
-                    let timer = model.timer.take();
-                    if let Some(value) = model.current_value.take() {
-                        ModelUpdate::empty()
-                            .with_next_event(value)
-                            .with_drop_outside(timer)
-                    } else {
-                        ModelUpdate::empty()
-                            .without_events()
-                            .with_drop_outside(timer)
-                    }
-                });
+                context
+                    .try_update_model(|model| {
+                        let deadline = match model {
+                            Model::Idle => {
+                                return ModelUpdate::new(RecursionAction::Stop)
+                                    .without_events()
+                                    .without_drop_outside();
+                            }
+                            Model::Active { deadline, .. } => *deadline,
+                        };
+                        if Instant::now() < deadline {
+                            return ModelUpdate::new(RecursionAction::ContinueAt(deadline))
+                                .without_events()
+                                .without_drop_outside();
+                        }
+
+                        match std::mem::replace(model, Model::Idle) {
+                            Model::Idle => unreachable!(),
+                            Model::Active {
+                                value,
+                                deadline: _,
+                                timer,
+                            } => ModelUpdate::new(RecursionAction::Stop)
+                                .with_next_event(value)
+                                .with_drop_outside(timer),
+                        }
+                    })
+                    .unwrap_or(RecursionAction::Stop)
             },
-            Some(self.time_span),
+            Some(deadline.saturating_duration_since(Instant::now())),
         );
 
-        let _ = self.context.try_update_model(|model| {
-            debug_assert_eq!(
-                timer_id, model.timer_id,
-                "timer id must be the same because on_next &mut self is exclusive"
-            );
-            let previous_timer = model.timer.replace(disposal);
-            debug_assert!(previous_timer.is_none());
-            ModelUpdate::empty()
+        let mut disposal = Some(disposal);
+        let _ = self.context.try_update_model(move |model| {
+            if let Model::Active { timer, .. } = model {
+                if timer.is_none() {
+                    *timer = disposal.take();
+                }
+            }
+            // If the timer already fired (possible for a zero time span), dispose the returned
+            // handle outside the lock.
+            ModelUpdate::empty().with_drop_outside(disposal)
         });
     }
 
@@ -176,17 +212,15 @@ where
         match termination {
             completion @ Termination::Completed => {
                 let _ = self.context.try_update_model(|model| {
-                    match (model.current_value.take(), model.timer.take()) {
-                        (None, None) => ModelUpdate::empty()
+                    match std::mem::replace(model, Model::Idle) {
+                        Model::Idle => ModelUpdate::empty()
                             .with_termination_event(completion)
                             .without_drop_outside(),
-                        (None, Some(timer)) => ModelUpdate::empty()
-                            .with_termination_event(completion)
-                            .with_drop_outside(timer),
-                        (Some(value), None) => ModelUpdate::empty()
-                            .with_next_and_termination_events(value, completion)
-                            .without_drop_outside(),
-                        (Some(value), Some(timer)) => ModelUpdate::empty()
+                        Model::Active {
+                            value,
+                            deadline: _,
+                            timer,
+                        } => ModelUpdate::empty()
                             .with_next_and_termination_events(value, completion)
                             .with_drop_outside(timer),
                     }
