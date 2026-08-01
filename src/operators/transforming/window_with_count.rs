@@ -13,6 +13,11 @@ use std::{cmp::Ordering, num::NonZeroUsize};
 /// A window is emitted before its first item is delivered, and each window can be subscribed to
 /// once. Items emitted while a window has no subscriber are buffered and replayed to a later
 /// subscriber; dropping a window without subscribing to it discards its items.
+///
+/// Disposing the subscription of a single window does not necessarily release its observer where
+/// it happens: the window releases it on its next item, when it ends, or when the outer
+/// subscription is disposed, whichever comes first. See
+/// [the unicast subject](crate::subject::unicast_subject) each window is built on.
 /// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// # Examples

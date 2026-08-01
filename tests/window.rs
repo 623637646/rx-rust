@@ -719,7 +719,9 @@ fn test_error_from_boundary_while_no_window_subscribed() {
     sender.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     drop(sub_1);
-    assert_eq!(checker_1.state(), State::Dropped);
+    // The window holds the observer between two events, so it is released by the next thing that
+    // happens to the window, which is its end below.
+    assert_eq!(checker_1.state(), State::Active);
 
     // The boundary error terminates the outer observable only: the unsubscribed
     // window has no observer left to receive it.
@@ -3795,12 +3797,15 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     assert_eq!(checker_1.values(), [111]);
     drop(sub_1);
 
-    // The observer is released on unsubscribe.
-    assert_eq!(checker_1.state(), State::Dropped);
+    // The window holds the observer between two events, so unsubscribing does not release it: the
+    // window does, on its next event.
+    assert_eq!(checker_1.state(), State::Active);
 
-    // Later values of this window have nowhere to go, but the pipeline stays healthy.
+    // Later values of this window have nowhere to go, but the pipeline stays healthy. The value
+    // below is what makes the window notice the disposal and release the observer.
     sender.on_next(222);
     assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Dropped);
 
     // The next window works as usual.
     boundary_sender.on_next(());

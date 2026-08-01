@@ -69,14 +69,52 @@ fn test_unsubscribe() {
 
     drop(subscription);
     assert_eq!(checker.values(), [111]);
-    assert_eq!(checker.state(), State::Dropped);
+    // The sender holds the observer between two events, so disposing cannot drop it: it is the
+    // sender that drops it, as soon as it notices, which is the case below.
+    assert_eq!(checker.state(), State::Active);
     assert!(sender.is_disposed());
 
-    // The events after the disposal are dropped.
+    // The events after the disposal are dropped, and so is the observer.
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
 
+    sender.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[test]
+fn test_unsubscribe_releases_the_observer_when_the_sender_is_dropped() {
+    let (mut sender, observable) = unicast_subject::<i32, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let subscription = observable.subscribe(observer);
+    sender.on_next(111);
+    assert_eq!(checker.state(), State::Active);
+
+    // Nothing is sent after the disposal, so the observer the sender holds is released by the drop
+    // of the sender itself, which is the last chance to do so.
+    drop(subscription);
+    assert_eq!(checker.state(), State::Active);
+
+    drop(sender);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[test]
+fn test_unsubscribe_releases_the_observer_when_the_pipe_terminates() {
+    let (mut sender, observable) = unicast_subject::<i32, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let subscription = observable.subscribe(observer);
+    sender.on_next(111);
+    drop(subscription);
+    assert_eq!(checker.state(), State::Active);
+
+    // The termination reaches no observer, because the observer is gone: it is dropped instead of
+    // being notified.
     sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
@@ -520,6 +558,56 @@ fn test_drop_replayed_value_outside_lock() {
     // running. The re-entrant values are then replayed and dropped in the same way.
     let _subscription = observable.subscribe_with_callback(drop, |_| {});
     assert_eq!(drop_count.load(Ordering::SeqCst), 4);
+}
+
+#[test]
+fn test_drop_delivered_value_outside_lock() {
+    let drop_count = Shared::new(AtomicUsize::new(0));
+    let sender_holder: SenderHolder = Shared::new(Mutable::new(None));
+    let (mut sender, observable) = unicast_subject::<ReentrantValue, Infallible>();
+    let _subscription = observable.subscribe_with_callback(drop, |_| {});
+
+    // The observer drops the value while it is being delivered to it, which re-enters the pipe
+    // from inside that delivery. Sending consumes the sender exclusively, so the re-entrant value
+    // finds no sender to send with: the pipe cannot be fed from inside a delivery of its own, and
+    // the observer is reached once per value.
+    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
+    assert_eq!(drop_count.load(Ordering::SeqCst), 1);
+
+    // The observer was parked back, so the pipe keeps working.
+    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
+    assert_eq!(drop_count.load(Ordering::SeqCst), 2);
+    assert!(!sender.is_disposed());
+}
+
+#[test]
+fn test_drop_delivered_value_after_unsubscribe_outside_lock() {
+    let drop_count = Shared::new(AtomicUsize::new(0));
+    let sender_holder: SenderHolder = Shared::new(Mutable::new(None));
+    let (mut sender, observable) = unicast_subject::<ReentrantValue, Infallible>();
+
+    // The value is dropped by the observer, which disposes the subscription while that value is
+    // still being delivered: the pipe closes while the observer is out of the state, so the send
+    // that is running is what drops the observer, outside the lock.
+    let subscription = Shared::new(Mutable::new(None));
+    let subscription_cloned = subscription.clone();
+    safe_lock_option!(replace: subscription,
+        observable
+            .hook_on_next(move |downstream: &mut _, value| {
+                Observer::on_next(downstream, value);
+                safe_lock_option_disposable!(dispose: subscription_cloned);
+            })
+            .subscribe_with_callback(drop, |_| {})
+    );
+
+    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
+    assert_eq!(drop_count.load(Ordering::SeqCst), 1);
+    assert!(sender.is_disposed());
+
+    // The pipe is closed, so the value is dropped instead of being delivered, still outside the
+    // lock.
+    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
+    assert_eq!(drop_count.load(Ordering::SeqCst), 2);
 }
 
 #[test]
