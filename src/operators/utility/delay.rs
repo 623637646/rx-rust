@@ -1,13 +1,15 @@
-use crate::observable::Subscription;
-use crate::scheduler::RecursionAction;
-use crate::utils::types::{MarkerType, MaybeSend, Mutable, MutableHelper, Shared};
-use crate::{delegate_disposal, disposable::Disposable};
+use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
+use crate::utils::pending_events::EventBatch;
+use crate::utils::subscribe_with_context::{
+    self, ModelUpdate, SubscriptionContext, subscribe_with_context,
+};
+use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
+    observable::Subscription,
     observer::{Observer, Termination},
-    scheduler::Scheduler,
+    scheduler::{RecursionAction, Scheduler},
 };
-use crate::{safe_lock_option_disposable, safe_lock_option_observer};
 use educe::Educe;
 use std::{
     collections::VecDeque,
@@ -87,141 +89,178 @@ impl<'or, OE, S> Delay<'or, OE, S> {
     }
 }
 
-delegate_disposal!(
-    Disposal<T, SD, D>,
-    crate::disposable::chain_disposal::ChainDisposal<Shared<Mutable<DelayContext<T, SD>>>, D>,
-    where SD: Disposable, D: Disposable
-);
-
 impl<'or, T, E, OE, S> Observable<'static, T, E> for Delay<'or, OE, S>
 where
     T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OE: Observable<'or, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = Disposal<T, S::D, OE::D>;
+    type D = subscribe_with_context::Disposal<'or, OE::D>;
 
     fn subscribe(
         self,
         observer: impl Observer<T, E> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        let context = Shared::new(Mutable::new(DelayContext {
+        let model = Model::<T, S::D> {
             values: VecDeque::new(),
-            timer: None,
-        }));
-        let delay_observer = DelayObserver {
-            delay: self.delay,
-            scheduler: self.scheduler,
-            context: context.clone(),
-            observer: Shared::new(Mutable::new(Some(observer))),
+            completion: None,
+            timer: Timer::Stopped,
         };
-        self.source
-            .subscribe(delay_observer)
-            .preceded_by(context)
-            .map_into()
+        subscribe_with_context(observer, model, |context| {
+            self.source.subscribe(DelayObserver {
+                context,
+                delay: self.delay,
+                scheduler: self.scheduler,
+            })
+        })
     }
 }
 
-struct DelayContext<T, D: Disposable> {
-    values: VecDeque<(Instant, Option<T>)>, // None means completed
-    timer: Option<Subscription<D>>,
+/// The events waiting for their deadline, and the recursive scheduler task that delivers them.
+struct Model<T, D: Disposable> {
+    /// The values with the instant at which each of them is due, in ascending order.
+    values: VecDeque<(Instant, T)>,
+    /// The instant at which the completion is due, once the source has completed.
+    completion: Option<Instant>,
+    timer: Timer<D>,
 }
 
-// TODO: Disposable should not be Cloneable
-impl<T, D: Disposable> Disposable for Shared<Mutable<DelayContext<T, D>>> {
-    fn dispose(self) {
-        safe_lock_option_disposable!(dispose: self, timer);
+impl<T, D: Disposable> Model<T, D> {
+    /// Returns the instant at which the next event is due.
+    fn next_deadline(&self) -> Option<Instant> {
+        self.values
+            .front()
+            .map(|(deadline, _)| *deadline)
+            .or(self.completion)
     }
 }
 
-struct DelayObserver<T, OR, S: Scheduler> {
+/// Keeps at most one recursive scheduler task alive while events are waiting.
+enum Timer<D: Disposable> {
+    Stopped,
+    /// A task is alive. Its disposal is `None` only between scheduling the task and storing the
+    /// returned handle, which covers schedulers that can execute a zero-delay task before
+    /// returning its disposal.
+    Running(Option<BoundDropDisposal<D>>),
+}
+
+struct DelayObserver<T, E, OR, S: Scheduler> {
+    context: SubscriptionContext<T, E, OR, Model<T, S::D>>,
     delay: Duration,
     scheduler: S,
-    context: Shared<Mutable<DelayContext<T, S::D>>>,
-    observer: Shared<Mutable<Option<OR>>>, // None means terminated or disposed
 }
 
-impl<T, OR, S: Scheduler> DelayObserver<T, OR, S> {
-    fn emit_value_and_setup_timer_if_needed<E>(&self, value: Option<T>)
-    where
-        T: MaybeSend + 'static,
-        OR: Observer<T, E> + MaybeSend + 'static,
-        S: Scheduler + Clone + MaybeSend + 'static,
-    {
-        self.context.lock_mut(|mut lock| {
-            lock.values.push_back((Instant::now() + self.delay, value));
-            if lock.timer.is_some() {
-                return;
+impl<T, E, OR, S> DelayObserver<T, E, OR, S>
+where
+    T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
+    OR: Observer<T, E> + MaybeSend + 'static,
+    S: Scheduler + Clone + MaybeSend + 'static,
+{
+    /// Queues `value`, or the completion when it is `None`, and starts the timer if needed.
+    fn queue_event(&self, value: Option<T>) {
+        let timer_setup = self.context.try_update_model(|model| {
+            let deadline = Instant::now() + self.delay;
+            match value {
+                Some(value) => model.values.push_back((deadline, value)),
+                None => model.completion = Some(deadline),
             }
-            let context = self.context.clone();
-            let observer = self.observer.clone();
-            lock.timer = Some(self.scheduler.schedule_recursively(
-                move |_| {
-                    // Get values that should be sent
-                    let (values, completed) = context.lock_mut(|mut lock| {
-                        let mut values = Vec::new();
-                        let mut completed = false;
-                        let now = Instant::now();
-                        while let Some((instant, _)) = lock.values.front() {
-                            if now < *instant {
-                                break;
-                            }
-                            let value = lock.values.pop_front().unwrap().1;
-                            if let Some(value) = value {
-                                values.push(value);
-                            } else {
-                                completed = true;
-                                break;
-                            }
-                        }
-                        (values, completed)
-                    });
+            let start_timer = matches!(model.timer, Timer::Stopped);
+            if start_timer {
+                model.timer = Timer::Running(None);
+            }
+            ModelUpdate::new(start_timer.then_some(deadline))
+        });
+        let Ok(Some(deadline)) = timer_setup else {
+            return;
+        };
 
-                    if completed {
-                        safe_lock_option_observer!(on_next_and_termination: observer, values: values, Termination::Completed);
-                        RecursionAction::Stop
-                    } else {
-                        safe_lock_option_observer!(on_next: observer, values: values);
-                        context.lock_mut(|mut lock| {
-                            if let Some((next_instant, _)) = lock.values.front() {
-                                // Continue
-                                RecursionAction::ContinueAt(*next_instant)
-                            } else {
-                                // No more values. Stop timer. Set timer to None.
-                                if let Some(timer) = lock.timer.take() {
-                                    drop(lock);
-                                    timer.dispose();
-                                }
-                                RecursionAction::Stop
+        let weak_context = self.context.downgrade();
+        let disposal = self.scheduler.schedule_recursively(
+            move |_| {
+                let Some(context) = weak_context.upgrade() else {
+                    return RecursionAction::Stop;
+                };
+                context
+                    .try_update_model(|model| {
+                        let now = Instant::now();
+                        // The deadlines are ascending, so one binary search splits the queue into
+                        // the due values and the ones that keep waiting.
+                        let due = model
+                            .values
+                            .partition_point(|(deadline, _)| *deadline <= now);
+                        let values: Vec<T> =
+                            model.values.drain(..due).map(|(_, value)| value).collect();
+
+                        // The completion is queued last, so it is due only once no value is left
+                        // to deliver before it and its own deadline has passed. A value that
+                        // still waits holds the completion back, which keeps the order right.
+                        if model.values.is_empty()
+                            && model.completion.is_some_and(|deadline| deadline <= now)
+                        {
+                            return ModelUpdate::new(RecursionAction::Stop)
+                                .with_events(EventBatch::NextBatchAndTermination(
+                                    values,
+                                    Termination::Completed,
+                                ))
+                                .with_drop_outside(std::mem::replace(
+                                    &mut model.timer,
+                                    Timer::Stopped,
+                                ));
+                        }
+
+                        match model.next_deadline() {
+                            Some(deadline) => {
+                                ModelUpdate::new(RecursionAction::ContinueAt(deadline))
+                                    .with_events(EventBatch::NextBatch(values))
+                                    .without_drop_outside()
                             }
-                        })
-                    }
-                },
-                Some(self.delay),
-            ));
+                            // Nothing is waiting anymore: stop the timer until the next event.
+                            None => ModelUpdate::new(RecursionAction::Stop)
+                                .with_events(EventBatch::NextBatch(values))
+                                .with_drop_outside(std::mem::replace(
+                                    &mut model.timer,
+                                    Timer::Stopped,
+                                )),
+                        }
+                    })
+                    .unwrap_or(RecursionAction::Stop)
+            },
+            Some(deadline.saturating_duration_since(Instant::now())),
+        );
+
+        let mut disposal = Some(disposal);
+        let _ = self.context.try_update_model(move |model| {
+            if let Timer::Running(slot) = &mut model.timer
+                && slot.is_none()
+            {
+                *slot = disposal.take();
+            }
+            // If the timer already stopped (possible for a zero delay), dispose the returned
+            // handle outside the lock.
+            ModelUpdate::empty().with_drop_outside(disposal)
         });
     }
 }
 
-impl<T, E, OR, S> Observer<T, E> for DelayObserver<T, OR, S>
+impl<T, E, OR, S> Observer<T, E> for DelayObserver<T, E, OR, S>
 where
     T: MaybeSend + 'static,
+    E: MaybeSend + 'static,
     OR: Observer<T, E> + MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        self.emit_value_and_setup_timer_if_needed(Some(value));
+        self.queue_event(Some(value));
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => {
-                self.emit_value_and_setup_timer_if_needed(None);
-            }
-            error @ Termination::Error(_) => {
-                self.context.dispose();
-                safe_lock_option_observer!(on_termination: self.observer, error);
-            }
+            Termination::Completed => self.queue_event(None),
+            // An error is not delayed: it terminates the subscription right away, which drops the
+            // values that are still waiting along with the timer.
+            error @ Termination::Error(_) => self.context.send_termination(error),
         }
     }
 }
