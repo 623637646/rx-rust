@@ -654,3 +654,25 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+#[test]
+fn test_panicking_replay_closes_the_pipe() {
+    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
+
+    let (mut sender, observable) = unicast_subject::<Option<PanicOnDrop>, Infallible>();
+
+    expect_panic_on_drop(|value| {
+        // Both values are buffered, so subscribing replays them while the pipe still holds the
+        // observer on the replay stack. The first one panics when the callback drops it, and the
+        // second one carries no payload, so closing the pipe can drop what is left of the queue.
+        sender.on_next(Some(value));
+        sender.on_next(None);
+        let _subscription = observable.subscribe_with_callback(|_value| {}, |_termination| {});
+    });
+
+    // The panic took the observer away with it, so the pipe is over instead of queuing the events
+    // that follow for a replay that will never resume.
+    assert!(sender.is_disposed());
+    sender.on_next(None);
+    assert!(sender.is_disposed());
+}

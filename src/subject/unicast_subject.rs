@@ -384,6 +384,25 @@ fn close<T, E>(pipe: &SharedPipe<'_, T, E>) {
     drop(previous_state); // Drop outside the lock to avoid potential deadlock
 }
 
+/// Closes the pipe when dropped while panicking.
+///
+/// A replay delivers to an observer it holds on the stack, so a panicking notification unwinds the
+/// observer away while the state is still [`State::Pending`]: without this, the events the sender
+/// keeps sending would pile up in a queue that nobody drains anymore. The panic must have happened
+/// outside the lock (the observer is notified outside it), so locking here is safe on the panicking
+/// thread.
+struct CloseOnPanic<'a, 'or, T, E> {
+    pipe: &'a SharedPipe<'or, T, E>,
+}
+
+impl<T, E> Drop for CloseOnPanic<'_, '_, T, E> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            close(self.pipe);
+        }
+    }
+}
+
 enum Step<'or, T, E> {
     /// One more value to deliver.
     Next(BoxedObserver<'or, T, E>, T),
@@ -436,9 +455,13 @@ fn deliver<'or, T, E>(
         match step {
             Step::Next(next_observer, value) => {
                 observer = next_observer;
+                let close_on_panic = CloseOnPanic { pipe };
                 observer.on_next(value); // Notify outside the lock
+                drop(close_on_panic);
             }
             Step::Terminate(next_observer, termination) => {
+                // The state was closed under the lock before this step, so a panicking termination
+                // leaves the pipe over already and needs no guard.
                 next_observer.on_termination(termination); // Notify outside the lock
                 return false;
             }
