@@ -1,7 +1,8 @@
-use crate::disposable::{bound_drop_disposal::BoundDropDisposal, chain_disposal::ChainDisposal};
+use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::observable::Subscription;
 use crate::utils::subscribe_with_context::{
-    self, ModelUpdate, SubscriptionContext, subscribe_with_context,
+    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
+    subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -102,9 +103,10 @@ where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
     OE: Observable<'static, T, E>,
+    OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = subscribe_with_context::Disposal<'static, ChainDisposal<S::D, OE::D>>;
+    type D = BoundSubscriptionDisposal<'static>;
 
     fn subscribe(
         self,
@@ -114,7 +116,7 @@ where
             values: Vec::with_capacity(self.count.get()),
             last_sending_time_from_counting: None,
         };
-        subscribe_with_context(observer, model, |context| {
+        subscribe_with_context_bound_subscription(observer, model, |context| {
             let buffer_observer = BufferWithTimeOrCountObserver {
                 context: context.clone(),
                 count: self.count,
@@ -137,15 +139,16 @@ struct Model<T> {
     last_sending_time_from_counting: Option<Instant>,
 }
 
-struct BufferWithTimeOrCountObserver<T, E, OR> {
-    context: SubscriptionContext<Vec<T>, E, OR, Model<T>>,
+struct BufferWithTimeOrCountObserver<T, E, OR, D: Disposable> {
+    context: SubscriptionContext<Vec<T>, E, OR, Model<T>, D>,
     count: NonZeroUsize,
 }
 
-impl<T, E, OR> Observer<T, E> for BufferWithTimeOrCountObserver<T, E, OR>
+impl<T, E, OR, D> Observer<T, E> for BufferWithTimeOrCountObserver<T, E, OR, D>
 where
     T: MaybeSend + 'static,
     OR: Observer<Vec<T>, E> + MaybeSend + 'static,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) {
         let _ = self.context.try_update_model(|model| {
@@ -188,8 +191,8 @@ where
 /// This avoids spawning a fresh scheduler task (and aborting the previous one) on every count
 /// flush, and it sidesteps `Duration` subtraction entirely, so a tick that fires late can never
 /// panic on underflow.
-fn setup_emit_timer<T, E, OR, S>(
-    context: SubscriptionContext<Vec<T>, E, OR, Model<T>>,
+fn setup_emit_timer<T, E, OR, D, S>(
+    context: SubscriptionContext<Vec<T>, E, OR, Model<T>, D>,
     scheduler: S,
     delay: Option<Duration>,
     time_span: Duration,
@@ -199,6 +202,7 @@ where
     T: MaybeSend + 'static,
     E: MaybeSend + 'static,
     OR: Observer<Vec<T>, E> + MaybeSend + 'static,
+    D: Disposable + MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
     assert!(!time_span.is_zero(), "time_span must be non-zero");
