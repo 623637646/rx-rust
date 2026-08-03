@@ -453,6 +453,82 @@ fn test_without_convenient_api() {
 }
 
 #[test]
+fn test_empty_sources() {
+    let (checker, observer) = Checker::<Infallible, Infallible>::new();
+
+    // Custom operations
+    let observable = Amb::new(Vec::<Empty>::new());
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_three_sources() {
+    let (_, observable_1, channel_checker_1) = test_channel();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel();
+    let (_, observable_3, channel_checker_3) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Amb::new([observable_1, observable_2, observable_3]);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
+
+    sender_2.on_next(111);
+    assert_eq!(checker.values(), vec![111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
+
+    sender_2.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), vec![111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Completed);
+    assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_three_sources_next_on_sub() {
+    let mut subject = BehaviorSubject::new(111);
+    let (_, observable_2, channel_checker_2) = test_channel();
+    let (_, observable_3, channel_checker_3) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = Amb::new([
+        subject.clone().into_boxed(),
+        observable_2.into_boxed(),
+        observable_3.into_boxed(),
+    ]);
+
+    // The first source wins while it is being subscribed to, so the others are never subscribed.
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+    assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
+
+    subject.on_next(222);
+    assert_eq!(checker.values(), vec![111, 222]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), vec![111, 222]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker_2.state(), ChannelState::Initialized);
+    assert_eq!(channel_checker_3.state(), ChannelState::Initialized);
+}
+
+#[test]
 fn test_next_on_sub() {
     let mut subject = BehaviorSubject::new(111);
     let (_, observable, channel_checker) = test_channel();
@@ -478,6 +554,29 @@ fn test_next_on_sub() {
 }
 
 #[test]
+fn test_next_on_later_sub() {
+    let (_, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let mut subject = BehaviorSubject::new(111);
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.amb_with(subject.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+
+    subject.on_next(222);
+    assert_eq!(checker.values(), vec![111, 222]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), vec![111, 222]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
 fn test_complete_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
@@ -492,6 +591,20 @@ fn test_complete_on_sub() {
 }
 
 #[test]
+fn test_complete_on_later_sub() {
+    let (_, observable, channel_checker) = test_channel::<'_, Infallible, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.amb_with(Empty);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
 fn test_error_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
@@ -503,6 +616,20 @@ fn test_error_on_sub() {
     assert_eq!(checker.values(), vec![]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Initialized);
+}
+
+#[test]
+fn test_error_on_later_sub() {
+    let (_, observable, channel_checker) = test_channel::<'_, Infallible, &str>();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = observable.amb_with(Throw::new("error"));
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]

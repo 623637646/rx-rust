@@ -1,13 +1,11 @@
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, DisposableExt};
-use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
+use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared, WeakShared};
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
-use crate::{safe_lock, safe_lock_option, safe_lock_slot_map};
 use educe::Educe;
-use slotmap::{DefaultKey, SlotMap};
 
 /// Given two or more source Observables, emit all of the items from only the first of these Observables to emit an item or notification.
 /// See <https://reactivex.io/documentation/operators/amb.html>
@@ -65,34 +63,37 @@ where
     type D = Disposal<OE::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        let sources = self.sources.into_iter();
+        let minimum_source_count = sources.size_hint().0;
         let observer = Shared::new(Mutable::new(Some(observer)));
-
-        let mut slop_map = SlotMap::new();
-        let sources_and_key: Vec<_> = self
-            .sources
-            .into_iter()
-            .map(|e| {
-                let key = slop_map.insert(None);
-                (e, key)
-            })
-            .collect();
         let context = Shared::new(Mutable::new(AmbContext {
-            subscriptions: slop_map,
+            state: AmbState::Racing(Vec::with_capacity(minimum_source_count)),
         }));
 
-        for (source, key) in sources_and_key {
-            if safe_lock_option!(is_none: observer) {
-                // determined
+        let mut has_sources = false;
+        for source in sources {
+            has_sources = true;
+            let Some(key) = reserve_subscription_slot(&context) else {
+                break;
+            };
+            let amb_observer = AmbObserver(AmbObserverState::Racing {
+                observer: observer.clone(),
+                context: Shared::downgrade(&context),
+                key,
+            });
+            let subscription = source.subscribe(amb_observer);
+            if !store_subscription(&context, key, subscription) {
                 break;
             }
-            let amb_observer = AmbObserver {
-                observer: observer.clone(),
-                context: context.clone(),
-                key,
-                determined_observer: None,
-            };
-            let sub = source.subscribe(amb_observer);
-            safe_lock_slot_map!(replace: context, subscriptions, key, Some(sub));
+        }
+
+        if !has_sources {
+            // Without a source, no one can ever win the race, so it completes right away.
+            // The observer is taken out of its slot so that it is notified outside the lock.
+            let observer = observer
+                .lock_mut(|mut observer| observer.take())
+                .expect("a new amb must retain its downstream observer");
+            observer.on_termination(Termination::Completed);
         }
 
         context.into_subscription()
@@ -100,7 +101,16 @@ where
 }
 
 struct AmbContext<D: Disposable> {
-    subscriptions: SlotMap<DefaultKey, Option<Subscription<D>>>,
+    state: AmbState<D>,
+}
+
+enum AmbState<D: Disposable> {
+    Racing(Vec<Option<Subscription<D>>>),
+    Won {
+        key: usize,
+        subscription: Option<Subscription<D>>,
+    },
+    Stopped,
 }
 
 // TODO: Disposable should not be Cloneable
@@ -109,17 +119,115 @@ where
     D: Disposable,
 {
     fn dispose(self) {
-        safe_lock!(mem_take: self, subscriptions);
+        let old_state =
+            self.lock_mut(|mut lock| std::mem::replace(&mut lock.state, AmbState::Stopped));
+        drop(old_state); // Dispose the remaining subscriptions outside the lock.
     }
 }
 
-// TODO: should use state for observer and determined_observer for better performance.
-struct AmbObserver<D: Disposable, OR> {
-    observer: Shared<Mutable<Option<OR>>>,
-    context: Shared<Mutable<AmbContext<D>>>,
-    key: DefaultKey,
-    determined_observer: Option<OR>, // Some means this AmbObserver is the first. None means this AmbObserver is not the first or not determined yet.
+fn reserve_subscription_slot<D>(context: &Mutable<AmbContext<D>>) -> Option<usize>
+where
+    D: Disposable,
+{
+    context.lock_mut(|mut lock| match &mut lock.state {
+        AmbState::Racing(subscriptions) => {
+            let key = subscriptions.len();
+            subscriptions.push(None);
+            Some(key)
+        }
+        AmbState::Won { .. } | AmbState::Stopped => None,
+    })
 }
+
+fn store_subscription<D>(
+    context: &Mutable<AmbContext<D>>,
+    key: usize,
+    subscription: Subscription<D>,
+) -> bool
+where
+    D: Disposable,
+{
+    // Wrapped in an `Option` so that the branches which do not store the subscription leave it to
+    // be dropped outside the lock.
+    let mut subscription = Some(subscription);
+    let (keep_subscribing, replaced) = context.lock_mut(|mut lock| match &mut lock.state {
+        // The race is still open: the subscription belongs in the reserved slot.
+        AmbState::Racing(subscriptions) => {
+            let slot = subscriptions
+                .get_mut(key)
+                .expect("a racing source must retain its subscription slot");
+            let replaced = std::mem::replace(slot, subscription.take());
+            (true, replaced)
+        }
+        // This source won while it was still being subscribed to: it owns the winning slot.
+        AmbState::Won {
+            key: winner_key,
+            subscription: winner_subscription,
+        } if *winner_key == key => {
+            let replaced = std::mem::replace(winner_subscription, subscription.take());
+            (false, replaced)
+        }
+        // Another source won, or the race is over: this subscription is not needed anymore.
+        AmbState::Won { .. } | AmbState::Stopped => (false, None),
+    });
+    // Both slots are empty until they are written above, so nothing is ever replaced. This is
+    // asserted outside the lock so that a failing assertion cannot poison it.
+    debug_assert!(
+        replaced.is_none(),
+        "a subscription slot is written only once"
+    );
+    drop((replaced, subscription)); // Drop a late losing subscription outside the lock.
+    keep_subscribing
+}
+
+fn try_win<D, OR>(
+    context: &Mutable<AmbContext<D>>,
+    shared_observer: &Mutable<Option<OR>>,
+    key: usize,
+) -> Option<OR>
+where
+    D: Disposable,
+{
+    let losing_subscriptions = context.lock_mut(|mut lock| {
+        if !matches!(&lock.state, AmbState::Racing(_)) {
+            return None;
+        }
+
+        let AmbState::Racing(mut subscriptions) =
+            std::mem::replace(&mut lock.state, AmbState::Stopped)
+        else {
+            unreachable!()
+        };
+        let winner_subscription = subscriptions
+            .get_mut(key)
+            .expect("a racing source must retain its subscription slot")
+            .take();
+        lock.state = AmbState::Won {
+            key,
+            subscription: winner_subscription,
+        };
+        Some(subscriptions)
+    })?;
+    // The `Racing` -> `Won` transition above elects a single winner, so the downstream observer is
+    // taken after the context lock is released: no other source can reach this point.
+    let observer = shared_observer
+        .lock_mut(|mut observer| observer.take())
+        .expect("a racing amb must retain its downstream observer");
+    drop(losing_subscriptions); // Dispose losing subscriptions outside the lock.
+    Some(observer)
+}
+
+enum AmbObserverState<D: Disposable, OR> {
+    Racing {
+        observer: Shared<Mutable<Option<OR>>>,
+        context: WeakShared<Mutable<AmbContext<D>>>,
+        key: usize,
+    },
+    Won(OR),
+    Lost,
+}
+
+struct AmbObserver<D: Disposable, OR>(AmbObserverState<D, OR>);
 
 impl<T, E, D, OR> Observer<T, E> for AmbObserver<D, OR>
 where
@@ -127,38 +235,55 @@ where
     OR: Observer<T, E>,
 {
     fn on_next(&mut self, value: T) {
-        if let Some(observer) = self.determined_observer.as_mut() {
-            observer.on_next(value);
+        match &mut self.0 {
+            AmbObserverState::Won(observer) => {
+                observer.on_next(value);
+                return;
+            }
+            AmbObserverState::Lost => return,
+            AmbObserverState::Racing { .. } => {}
+        }
+
+        let AmbObserverState::Racing {
+            observer: shared_observer,
+            context,
+            key,
+        } = std::mem::replace(&mut self.0, AmbObserverState::Lost)
+        else {
+            unreachable!()
+        };
+        let Some(shared_context) = context.upgrade() else {
             return;
-        }
-        if let Some(observer) = safe_lock_option!(take: self.observer) {
-            self.determined_observer = Some(observer);
-            drop_none_matched_subscriptions(&self.context, self.key);
-            self.on_next(value);
-        }
+        };
+        let Some(mut observer) = try_win(&shared_context, &shared_observer, key) else {
+            return;
+        };
+        drop(shared_context);
+        drop(shared_observer);
+
+        observer.on_next(value);
+        self.0 = AmbObserverState::Won(observer);
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        if let Some(observer) = self.determined_observer {
-            observer.on_termination(termination);
-            return;
-        }
-        if let Some(observer) = safe_lock_option!(take: self.observer) {
-            drop_none_matched_subscriptions(&self.context, self.key);
-            observer.on_termination(termination);
+        match self.0 {
+            AmbObserverState::Won(observer) => observer.on_termination(termination),
+            AmbObserverState::Lost => {}
+            AmbObserverState::Racing {
+                observer: shared_observer,
+                context,
+                key,
+            } => {
+                let Some(shared_context) = context.upgrade() else {
+                    return;
+                };
+                let Some(observer) = try_win(&shared_context, &shared_observer, key) else {
+                    return;
+                };
+                drop(shared_context);
+                drop(shared_observer);
+                observer.on_termination(termination);
+            }
         }
     }
-}
-
-fn drop_none_matched_subscriptions<D>(context: &Mutable<AmbContext<D>>, key: DefaultKey)
-where
-    D: Disposable,
-{
-    let drop_subscriptions = context.lock_mut(|mut lock| {
-        let keep = lock.subscriptions.remove(key).unwrap();
-        let mut keep_slot_map = SlotMap::new();
-        keep_slot_map.insert(keep);
-        std::mem::replace(&mut lock.subscriptions, keep_slot_map)
-    });
-    drop(drop_subscriptions);
 }
