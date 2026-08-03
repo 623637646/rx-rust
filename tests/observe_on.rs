@@ -540,6 +540,46 @@ fn test_unsub_on_next_by_take() {
     });
 }
 
+/// Values queued before the scheduler task runs are delivered as one batch. Disposing partway
+/// through that batch must stop it: the values behind the disposal are never observed.
+#[test]
+fn test_unsub_in_the_middle_of_a_batch() {
+    block_on(|runtime| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+        let delivered = Shared::new(AtomicUsize::new(0));
+        let delivered_1 = delivered.clone();
+
+        // Custom operations
+        let observable = observable
+            .observe_on(ThreadCheckerScheduler::new("thread_1"))
+            .do_after_next(move |_| {
+                delivered_1.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(get_thread_name(), Some("thread_1"));
+            })
+            .take(1);
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+        // All three values are queued before the scheduler task runs, so `observe_on` has them
+        // buffered as a single batch by the time it starts delivering.
+        sender.on_next(111);
+        sender.on_next(222);
+        sender.on_next(333);
+        runtime.sleep(DURATION_10_MS).await;
+
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        // `take(1)` disposes while `observe_on` is delivering the batch, so 222 and 333 stay
+        // buffered instead of being pushed downstream.
+        assert_eq!(delivered.load(Ordering::SeqCst), 1);
+    });
+}
+
 #[test]
 fn test_multiple_operation() {
     block_on(|runtime| async move {

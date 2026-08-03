@@ -1,11 +1,13 @@
 use crate::{
-    delegate_disposal,
-    disposable::Disposable,
+    disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
-    safe_lock_option_disposable, safe_lock_option_observer,
+    observer::{Event, Observer, Termination},
     scheduler::{RecursionAction, Scheduler},
-    utils::types::{MarkerType, MaybeSend, MutGuard, Mutable, MutableHelper, Shared},
+    utils::{
+        pending_events::EventBatch,
+        subscribe_with_context::{self, ModelUpdate, SubscriptionContext, subscribe_with_context},
+        types::{MarkerType, MaybeSend},
+    },
 };
 use educe::Educe;
 
@@ -73,12 +75,6 @@ impl<'or, OE, S> ObserveOn<'or, OE, S> {
     }
 }
 
-delegate_disposal!(
-    Disposal<T, E, SD, D>,
-    crate::disposable::chain_disposal::ChainDisposal<Shared<Mutable<ObserveOnContext<T, E, SD>>>, D>,
-    where SD: Disposable, D: Disposable
-);
-
 impl<'or, T, E, OE, S> Observable<'static, T, E> for ObserveOn<'or, OE, S>
 where
     T: MaybeSend + 'static,
@@ -86,104 +82,136 @@ where
     OE: Observable<'or, T, E>,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = Disposal<T, E, S::D, OE::D>;
+    type D = subscribe_with_context::Disposal<'or, OE::D>;
 
     fn subscribe(
         self,
         observer: impl Observer<T, E> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        let context = Shared::new(Mutable::new(ObserveOnContext {
+        let model = Model::<T, E, S::D> {
             values: Vec::new(),
             termination: None,
-            disposal: None,
-        }));
-        let observer = ObserveOnObserver {
-            context: context.clone(),
-            observer: Shared::new(Mutable::new(Some(observer))),
-            scheduler: self.scheduler,
+            task: Task::Stopped,
         };
-        self.source
-            .subscribe(observer)
-            .preceded_by(context)
-            .map_into()
+        subscribe_with_context(observer, model, |context| {
+            self.source.subscribe(ObserveOnObserver {
+                context,
+                scheduler: self.scheduler,
+            })
+        })
     }
 }
 
-struct ObserveOnContext<T, E, D: Disposable> {
+/// Events waiting to be observed and the scheduler task that delivers them.
+struct Model<T, E, D: Disposable> {
     values: Vec<T>,
     termination: Option<Termination<E>>,
-    disposal: Option<Subscription<D>>,
+    task: Task<D>,
 }
 
-// TODO: Disposable should not be Cloneable
-impl<T, E, D: Disposable> Disposable for Shared<Mutable<ObserveOnContext<T, E, D>>> {
-    fn dispose(self) {
-        safe_lock_option_disposable!(dispose: self, disposal);
-    }
+/// Keeps at most one recursive scheduler task alive while events are waiting.
+///
+/// `Running(None)` covers schedulers that can execute the task before returning its disposal.
+enum Task<D: Disposable> {
+    Stopped,
+    Running(Option<BoundDropDisposal<D>>),
 }
 
 struct ObserveOnObserver<T, E, OR, S: Scheduler> {
-    context: Shared<Mutable<ObserveOnContext<T, E, S::D>>>,
-    observer: Shared<Mutable<Option<OR>>>,
+    context: SubscriptionContext<T, E, OR, Model<T, E, S::D>>,
     scheduler: S,
 }
 
 impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
-    fn setup_scheduler_if_needed(&self, mut lock: MutGuard<'_, ObserveOnContext<T, E, S::D>>)
+    /// Queues `event` for the observing scheduler, starting the delivering task if it is stopped.
+    ///
+    /// Only one task exists at a time. `Observer` serializes its callers — `on_next` takes
+    /// `&mut self` and `on_termination` takes `self` — so a task cannot be started here while
+    /// another call is between starting a task and storing its disposal below.
+    fn queue_event(&self, event: Event<T, E>)
     where
         T: MaybeSend + 'static,
         E: MaybeSend + 'static,
         OR: Observer<T, E> + MaybeSend + 'static,
         S: Scheduler + Clone + MaybeSend + 'static,
     {
-        if lock.disposal.is_some() {
+        let task_setup = self.context.try_update_model(|model| {
+            match event {
+                Event::Next(value) => model.values.push(value),
+                Event::Termination(termination) => model.termination = Some(termination),
+            }
+            let start_task = matches!(model.task, Task::Stopped);
+            if start_task {
+                model.task = Task::Running(None);
+            }
+            ModelUpdate::new(start_task)
+        });
+        let Ok(true) = task_setup else {
             return;
-        }
-        let context = self.context.clone();
-        let observer = self.observer.clone();
-        // TODO: can remove this recursion? because the values will be sent in a single batch.
-        lock.disposal
-            .replace(self.scheduler.schedule_recursively(
-                move |_| {
-                    context.lock_mut(|mut lock| {
-                        let termination = lock.termination.take();
-                        let values = std::mem::take(&mut lock.values);
+        };
 
-                        match (termination, values.is_empty()) {
-                            (None, true) => {
-                                // No more values. Stop scheduler. Set disposal to None.
-                                if let Some(disposal) = lock.disposal.take() {
-                                    disposal.dispose();
-                                }
-                                RecursionAction::Stop
-                            }
-                            (None, false) => {
-                                drop(lock);
-                                safe_lock_option_observer!(on_next: observer, values: values);
-                                RecursionAction::ContinueImmediately
-                            }
-                            (Some(termination), true) => {
-                                drop(lock);
-                                safe_lock_option_observer!(on_termination: observer, termination);
-                                RecursionAction::Stop
-                            }
-                            (Some(termination), false) => {
-                                drop(lock);
-                                match termination {
-                                    completion @ Termination::Completed => {
-                                        safe_lock_option_observer!(on_next_and_termination: observer, values: values, completion);
-                                    }
-                                    error @ Termination::Error(_) => {
-                                        safe_lock_option_observer!(on_termination: observer, error);
-                                    }
-                                }
-                                RecursionAction::Stop
-                            }
-                        }
+        // The context owns this task through the model, so the task only holds a weak reference
+        // back: a strong one would form a cycle and leak the subscription.
+        let weak_context = self.context.downgrade();
+        let task = self.scheduler.schedule_recursively(
+            move |_| {
+                let Some(context) = weak_context.upgrade() else {
+                    return RecursionAction::Stop;
+                };
+                context
+                    .try_update_model(|model| {
+                        let termination = model.termination.take();
+                        let values = std::mem::take(&mut model.values);
+                        let (action, events, discarded_values) = match termination {
+                            // Nothing left to deliver. An empty batch is a no-op for the context,
+                            // and every branch must produce one so their types agree.
+                            None if values.is_empty() => (
+                                RecursionAction::Stop,
+                                EventBatch::NextBatch(Vec::new()),
+                                None,
+                            ),
+                            // Recur instead of stopping: values arriving while this batch is
+                            // delivered are pushed onto the model, and only another pass takes
+                            // them. They cannot start a task of their own, because this one is
+                            // still `Running` until a pass finds the model empty.
+                            None => (
+                                RecursionAction::ContinueImmediately,
+                                EventBatch::NextBatch(values),
+                                None,
+                            ),
+                            Some(completion @ Termination::Completed) => (
+                                RecursionAction::Stop,
+                                EventBatch::NextBatchAndTermination(values, completion),
+                                None,
+                            ),
+                            // An error preempts the values buffered before it, unlike a completion.
+                            Some(error @ Termination::Error(_)) => (
+                                RecursionAction::Stop,
+                                EventBatch::Termination(error),
+                                Some(values),
+                            ),
+                        };
+                        let finished_task = matches!(action, RecursionAction::Stop)
+                            .then(|| std::mem::replace(&mut model.task, Task::Stopped));
+                        ModelUpdate::new(action)
+                            .with_events(events)
+                            .with_drop_outside((finished_task, discarded_values))
                     })
-                },
-                None,
-            ));
+                    .unwrap_or(RecursionAction::Stop)
+            },
+            None,
+        );
+
+        let mut task = Some(task);
+        let _ = self.context.try_update_model(move |model| {
+            if let Task::Running(slot) = &mut model.task
+                && slot.is_none()
+            {
+                *slot = task.take();
+            }
+            // If the task already stopped, dispose the returned handle outside the lock.
+            ModelUpdate::empty().with_drop_outside(task)
+        });
     }
 }
 
@@ -195,16 +223,10 @@ where
     S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        self.context.lock_mut(|mut lock| {
-            lock.values.push(value);
-            self.setup_scheduler_if_needed(lock);
-        });
+        self.queue_event(Event::Next(value));
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.context.lock_mut(|mut lock| {
-            lock.termination.replace(termination);
-            self.setup_scheduler_if_needed(lock);
-        });
+        self.queue_event(Event::Termination(termination));
     }
 }
