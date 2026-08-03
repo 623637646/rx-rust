@@ -171,10 +171,10 @@ fn terminate<'or, T, E, OR, D>(
     OR: Observer<UnicastObservable<'or, T, E>, E>,
     D: Disposable,
 {
-    context.send_next_and_termination(
+    context.send(EventBatch::NextAndTermination(
         DelegateAction::TerminateWindow(termination.clone()),
         termination,
-    );
+    ));
 }
 
 struct BoundaryObserver<'or, T, E, OR, D: Disposable>(WindowContext<'or, T, E, OR, D>);
@@ -188,7 +188,7 @@ where
     fn on_next(&mut self, _: ()) {
         // Two events rather than one, so that disposing the outer subscription while the current
         // window is completing suppresses the new window.
-        self.0.send_events(EventBatch::NextBatch(vec![
+        self.0.send(EventBatch::NextBatch(vec![
             DelegateAction::TerminateWindow(Termination::Completed),
             DelegateAction::EmitWindow,
         ]));

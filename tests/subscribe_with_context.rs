@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use rx_rust::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt, Subscription},
@@ -8,7 +9,7 @@ use rx_rust::{
     safe_lock, safe_lock_option,
     utils::{
         pending_events::EventBatch,
-        subscribe_with_context::{ContextStopped, ModelUpdate, subscribe_with_context},
+        subscribe_with_context::subscribe_with_context,
         types::{Mutable, Shared},
     },
 };
@@ -28,7 +29,7 @@ fn delivers_batch_in_order_with_termination() {
     });
     let context = context_out.unwrap();
 
-    context.send_events(EventBatch::NextBatchAndTermination(
+    context.send(EventBatch::NextBatchAndTermination(
         vec![1, 2, 3],
         Termination::Completed,
     ));
@@ -62,7 +63,7 @@ fn dispose_during_batch_stops_remaining_events() {
     safe_lock_option!(replace: subscription_slot, subscription);
     let context = context_out.unwrap();
 
-    context.send_events(EventBatch::NextBatch(vec![1, 2, 3]));
+    context.send(EventBatch::NextBatch(vec![1, 2, 3]));
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Dropped);
 
@@ -94,7 +95,7 @@ fn dispose_during_batch_suppresses_pending_termination() {
     safe_lock_option!(replace: subscription_slot, subscription);
     let context = context_out.unwrap();
 
-    context.send_events(EventBatch::NextBatchAndTermination(
+    context.send(EventBatch::NextBatchAndTermination(
         vec![1, 2],
         Termination::Completed,
     ));
@@ -125,7 +126,7 @@ fn reentrant_send_is_queued_after_pending_events() {
     .subscribe(observer);
     let context = context_out.unwrap();
 
-    context.send_events(EventBatch::NextBatch(vec![1, 2, 3]));
+    context.send(EventBatch::NextBatch(vec![1, 2, 3]));
     assert_eq!(checker.values(), [1, 2, 3, 10]);
     assert_eq!(checker.state(), State::Active);
 
@@ -145,7 +146,7 @@ fn empty_batch_is_a_no_op() {
     });
     let context = context_out.unwrap();
 
-    context.send_events(EventBatch::NextBatch(vec![]));
+    context.send(EventBatch::NextBatch(vec![]));
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
 
@@ -155,7 +156,7 @@ fn empty_batch_is_a_no_op() {
 }
 
 #[test]
-fn stopped_try_update_model_drops_callback_outside_lock() {
+fn stopped_update_model_and_send_drops_callback_outside_lock() {
     struct RunOnDrop<F: FnOnce()>(Option<F>);
 
     impl<F: FnOnce()> Drop for RunOnDrop<F> {
@@ -183,12 +184,12 @@ fn stopped_try_update_model_drops_callback_outside_lock() {
         reentrant_context.send_next(1);
     }));
 
-    let result = context.try_update_model(move |_| {
+    let result = context.update_model_and_send(move |_| {
         drop(run_on_drop);
-        ModelUpdate::empty()
+        UpdateOutcome::empty()
     });
 
-    assert_eq!(result, Err(ContextStopped));
+    assert_eq!(result, Err(DeliveryStopped));
     assert!(callback_dropped.read());
     assert_eq!(checker.values(), []);
 }
@@ -230,7 +231,7 @@ fn dispose_during_batch_unsubscribes_upstream() {
             if value == 1 {
                 // Queue a batch while value 1 is still being processed.
                 let context = safe_lock!(clone: send_slot).unwrap();
-                context.send_events(EventBatch::NextBatch(vec![2, 3]));
+                context.send(EventBatch::NextBatch(vec![2, 3]));
             }
             if value == 2 {
                 drop(safe_lock_option!(take: dispose_slot));

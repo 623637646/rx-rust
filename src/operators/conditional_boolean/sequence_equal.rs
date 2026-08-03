@@ -1,6 +1,6 @@
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
@@ -126,7 +126,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.context.try_update_model(|model| {
+        let _ = self.context.update_model_and_send(|model| {
             let (mine, other) = if self.is_first {
                 (&mut model.first, &mut model.second)
             } else {
@@ -134,17 +134,17 @@ where
             };
 
             match (other.queue.pop_front(), other.completed) {
-                (None, true) => ModelUpdate::empty()
+                (None, true) => UpdateOutcome::empty()
                     .with_next_and_termination_events(false, Termination::Completed),
                 (None, false) => {
                     mine.queue.push_back(value);
-                    ModelUpdate::empty().without_events()
+                    UpdateOutcome::empty().without_events()
                 }
                 (Some(next), _) => {
                     if value == next {
-                        ModelUpdate::empty().without_events()
+                        UpdateOutcome::empty().without_events()
                     } else {
-                        ModelUpdate::empty()
+                        UpdateOutcome::empty()
                             .with_next_and_termination_events(false, Termination::Completed)
                     }
                 }
@@ -155,7 +155,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.context.try_update_model(|model| {
+                let _ = self.context.update_model_and_send(|model| {
                     let (mine, other) = if self.is_first {
                         (&mut model.first, &mut model.second)
                     } else {
@@ -168,10 +168,11 @@ where
                     let other_empty = other.queue.is_empty();
 
                     if !other_completed && other_empty {
-                        ModelUpdate::empty().without_events()
+                        UpdateOutcome::empty().without_events()
                     } else {
                         let is_equal = mine_empty && other_completed && other_empty;
-                        ModelUpdate::empty().with_next_and_termination_events(is_equal, completion)
+                        UpdateOutcome::empty()
+                            .with_next_and_termination_events(is_equal, completion)
                     }
                 });
             }

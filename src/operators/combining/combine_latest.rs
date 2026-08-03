@@ -1,6 +1,6 @@
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -110,29 +110,29 @@ macro_rules! impl_observer {
             D: Disposable,
         {
             fn on_next(&mut self, val: $t_self) {
-                let _ = self.0.try_update_model(|model| {
+                let _ = self.0.update_model_and_send(|model| {
                     if let Some(other) = &model.$field_other {
                         model.$field_self = Some(val.clone());
-                        ModelUpdate::empty().with_next_event($combine(val, other.clone()))
+                        UpdateOutcome::empty().with_next_event($combine(val, other.clone()))
                     } else {
                         model.$field_self = Some(val);
-                        ModelUpdate::empty().without_events()
+                        UpdateOutcome::empty().without_events()
                     }
                 });
             }
 
             fn on_termination(self, termination: Termination<E>) {
-                let _ = self.0.try_update_model(|model| match termination {
+                let _ = self.0.update_model_and_send(|model| match termination {
                     completion @ Termination::Completed => {
                         if model.should_completed || model.$field_self.is_none() {
-                            ModelUpdate::empty().with_termination_event(completion)
+                            UpdateOutcome::empty().with_termination_event(completion)
                         } else {
                             model.should_completed = true;
-                            ModelUpdate::empty().without_events()
+                            UpdateOutcome::empty().without_events()
                         }
                     }
                     error @ Termination::Error(_) => {
-                        ModelUpdate::empty().with_termination_event(error)
+                        UpdateOutcome::empty().with_termination_event(error)
                     }
                 });
             }

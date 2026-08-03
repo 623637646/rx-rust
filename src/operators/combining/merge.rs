@@ -1,6 +1,6 @@
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -97,12 +97,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.try_update_model(|model| {
+                let _ = self.0.update_model_and_send(|model| {
                     if model.one_is_completed {
-                        ModelUpdate::empty().with_termination_event(completion)
+                        UpdateOutcome::empty().with_termination_event(completion)
                     } else {
                         model.one_is_completed = true;
-                        ModelUpdate::empty().without_events()
+                        UpdateOutcome::empty().without_events()
                     }
                 });
             }

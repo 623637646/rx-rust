@@ -1,7 +1,7 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
@@ -121,21 +121,21 @@ where
     D: Disposable + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.try_update_model(|values| {
+        let _ = self.0.update_model_and_send(|values| {
             values.push(value);
-            ModelUpdate::empty().without_events()
+            UpdateOutcome::empty().without_events()
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.try_update_model(|values| {
+                let _ = self.0.update_model_and_send(|values| {
                     if !values.is_empty() {
-                        ModelUpdate::empty()
+                        UpdateOutcome::empty()
                             .with_next_and_termination_events(std::mem::take(values), completion)
                     } else {
-                        ModelUpdate::empty().with_termination_event(completion)
+                        UpdateOutcome::empty().with_termination_event(completion)
                     }
                 });
             }
@@ -164,8 +164,8 @@ where
                 return false;
             };
             context
-                .try_update_model(|values| {
-                    ModelUpdate::new(true).with_next_event(std::mem::replace(
+                .update_model_and_send(|values| {
+                    UpdateOutcome::new(true).with_next_event(std::mem::replace(
                         values,
                         Vec::with_capacity(values.len()),
                     ))

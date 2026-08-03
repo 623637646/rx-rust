@@ -1,8 +1,8 @@
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -121,7 +121,7 @@ where
         // Insert a placeholder subscription.
         let result = self
             .0
-            .try_update_model(|model| ModelUpdate::new(model.subscriptions.insert(None)));
+            .update_model_and_send(|model| UpdateOutcome::new(model.subscriptions.insert(None)));
         let key = match result {
             Ok(key) => key,
             Err(_) => return,
@@ -132,13 +132,13 @@ where
         };
         let sub = value.subscribe(observer);
 
-        let _ = self.0.try_update_model(|model| {
+        let _ = self.0.update_model_and_send(|model| {
             if model.subscriptions.contains_key(key) {
                 model.subscriptions[key] = Some(sub);
-                ModelUpdate::empty().without_drop_outside()
+                UpdateOutcome::empty().without_drop_outside()
             } else {
                 // already terminated
-                ModelUpdate::empty().with_drop_outside(sub)
+                UpdateOutcome::empty().with_drop_outside(sub)
             }
         });
     }
@@ -146,12 +146,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.try_update_model(|model| {
+                let _ = self.0.update_model_and_send(|model| {
                     if model.subscriptions.is_empty() {
-                        ModelUpdate::empty().with_termination_event(completion)
+                        UpdateOutcome::empty().with_termination_event(completion)
                     } else {
                         model.is_source_terminated = true;
-                        ModelUpdate::empty().without_events()
+                        UpdateOutcome::empty().without_events()
                     }
                 });
             }
@@ -180,14 +180,14 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.context.try_update_model(|model| {
+                let _ = self.context.update_model_and_send(|model| {
                     let subscription = model.subscriptions.remove(self.key);
                     if model.is_source_terminated && model.subscriptions.is_empty() {
-                        ModelUpdate::empty()
+                        UpdateOutcome::empty()
                             .with_termination_event(completion)
                             .with_drop_outside(subscription)
                     } else {
-                        ModelUpdate::empty()
+                        UpdateOutcome::empty()
                             .without_events()
                             .with_drop_outside(subscription)
                     }

@@ -1,3 +1,4 @@
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
     observable::{Observable, Subscription},
@@ -5,7 +6,7 @@ use crate::{
     scheduler::{RecursionAction, Scheduler},
     utils::{
         pending_events::EventBatch,
-        subscribe_with_context::{self, ModelUpdate, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
         types::{MarkerType, MaybeSend},
     },
 };
@@ -135,7 +136,7 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
         OR: Observer<T, E> + MaybeSend + 'static,
         S: Scheduler + Clone + MaybeSend + 'static,
     {
-        let task_setup = self.context.try_update_model(|model| {
+        let task_setup = self.context.update_model_and_send(|model| {
             match event {
                 Event::Next(value) => model.values.push(value),
                 Event::Termination(termination) => model.termination = Some(termination),
@@ -144,7 +145,7 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
             if start_task {
                 model.task = Task::Running(None);
             }
-            ModelUpdate::new(start_task)
+            UpdateOutcome::new(start_task)
         });
         let Ok(true) = task_setup else {
             return;
@@ -159,7 +160,7 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
                     return RecursionAction::Stop;
                 };
                 context
-                    .try_update_model(|model| {
+                    .update_model_and_send(|model| {
                         let termination = model.termination.take();
                         let values = std::mem::take(&mut model.values);
                         let (action, events, discarded_values) = match termination {
@@ -193,7 +194,7 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
                         };
                         let finished_task = matches!(action, RecursionAction::Stop)
                             .then(|| std::mem::replace(&mut model.task, Task::Stopped));
-                        ModelUpdate::new(action)
+                        UpdateOutcome::new(action)
                             .with_events(events)
                             .with_drop_outside((finished_task, discarded_values))
                     })
@@ -203,14 +204,14 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
         );
 
         let mut task = Some(task);
-        let _ = self.context.try_update_model(move |model| {
+        let _ = self.context.update_model_and_send(move |model| {
             if let Task::Running(slot) = &mut model.task
                 && slot.is_none()
             {
                 *slot = task.take();
             }
             // If the task already stopped, dispose the returned handle outside the lock.
-            ModelUpdate::empty().with_drop_outside(task)
+            UpdateOutcome::empty().with_drop_outside(task)
         });
     }
 }

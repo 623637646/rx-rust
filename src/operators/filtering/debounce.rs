@@ -1,7 +1,6 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
-use crate::utils::subscribe_with_context::{
-    self, ModelUpdate, SubscriptionContext, subscribe_with_context,
-};
+use crate::utils::serialized_delivery::UpdateOutcome;
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
@@ -130,7 +129,7 @@ where
     S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let timer_setup = self.context.try_update_model(|model| {
+        let timer_setup = self.context.update_model_and_send(|model| {
             let deadline = Instant::now() + self.time_span;
             let (timer_setup, previous_value) = match model {
                 Model::Idle => {
@@ -151,7 +150,7 @@ where
                     (None, Some(previous_value))
                 }
             };
-            ModelUpdate::new(timer_setup).with_drop_outside(previous_value)
+            UpdateOutcome::new(timer_setup).with_drop_outside(previous_value)
         });
         let Ok(Some(deadline)) = timer_setup else {
             return;
@@ -164,17 +163,17 @@ where
                     return RecursionAction::Stop;
                 };
                 context
-                    .try_update_model(|model| {
+                    .update_model_and_send(|model| {
                         let deadline = match model {
                             Model::Idle => {
-                                return ModelUpdate::new(RecursionAction::Stop)
+                                return UpdateOutcome::new(RecursionAction::Stop)
                                     .without_events()
                                     .without_drop_outside();
                             }
                             Model::Active { deadline, .. } => *deadline,
                         };
                         if Instant::now() < deadline {
-                            return ModelUpdate::new(RecursionAction::ContinueAt(deadline))
+                            return UpdateOutcome::new(RecursionAction::ContinueAt(deadline))
                                 .without_events()
                                 .without_drop_outside();
                         }
@@ -185,7 +184,7 @@ where
                                 value,
                                 deadline: _,
                                 timer,
-                            } => ModelUpdate::new(RecursionAction::Stop)
+                            } => UpdateOutcome::new(RecursionAction::Stop)
                                 .with_next_event(value)
                                 .with_drop_outside(timer),
                         }
@@ -196,7 +195,7 @@ where
         );
 
         let mut disposal = Some(disposal);
-        let _ = self.context.try_update_model(move |model| {
+        let _ = self.context.update_model_and_send(move |model| {
             if let Model::Active { timer, .. } = model {
                 if timer.is_none() {
                     *timer = disposal.take();
@@ -204,23 +203,23 @@ where
             }
             // If the timer already fired (possible for a zero time span), dispose the returned
             // handle outside the lock.
-            ModelUpdate::empty().with_drop_outside(disposal)
+            UpdateOutcome::empty().with_drop_outside(disposal)
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.context.try_update_model(|model| {
+                let _ = self.context.update_model_and_send(|model| {
                     match std::mem::replace(model, Model::Idle) {
-                        Model::Idle => ModelUpdate::empty()
+                        Model::Idle => UpdateOutcome::empty()
                             .with_termination_event(completion)
                             .without_drop_outside(),
                         Model::Active {
                             value,
                             deadline: _,
                             timer,
-                        } => ModelUpdate::empty()
+                        } => UpdateOutcome::empty()
                             .with_next_and_termination_events(value, completion)
                             .with_drop_outside(timer),
                     }
