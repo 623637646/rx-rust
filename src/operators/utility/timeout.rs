@@ -4,9 +4,9 @@ use crate::disposable::{
 use crate::observable::{Observable, Subscription};
 use crate::observer::{Observer, Termination};
 use crate::scheduler::{RecursionAction, Scheduler};
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use educe::Educe;
@@ -130,9 +130,9 @@ where
     D: Disposable + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.context.try_update_model(|model| {
+        let _ = self.context.update_model_and_send(|model| {
             model.deadline = Instant::now() + self.duration;
-            ModelUpdate::empty().with_next_event(value)
+            UpdateOutcome::empty().with_next_event(value)
         });
     }
 
@@ -160,7 +160,7 @@ where
     D: Disposable + MaybeSend + 'static,
 {
     let deadline =
-        context.try_update_model(|model| ModelUpdate::new(model.deadline).without_events());
+        context.update_model_and_send(|model| UpdateOutcome::new(model.deadline).without_events());
     let Ok(deadline) = deadline else {
         // The source terminated synchronously while it was being subscribed.
         return OptionDisposal::none();
@@ -173,12 +173,12 @@ where
                 return RecursionAction::Stop;
             };
             context
-                .try_update_model(|model| {
+                .update_model_and_send(|model| {
                     if Instant::now() < model.deadline {
-                        return ModelUpdate::new(RecursionAction::ContinueAt(model.deadline))
+                        return UpdateOutcome::new(RecursionAction::ContinueAt(model.deadline))
                             .without_events();
                     }
-                    ModelUpdate::new(RecursionAction::Stop)
+                    UpdateOutcome::new(RecursionAction::Stop)
                         .with_termination_event(Termination::Error(Error::Timeout))
                 })
                 .unwrap_or(RecursionAction::Stop)

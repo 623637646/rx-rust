@@ -1,6 +1,7 @@
 use crate::observable::Subscription;
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    self, ModelUpdate, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context,
+    self, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context,
 };
 use crate::utils::types::{MaybeSend, MaybeSync, Shared};
 use crate::{
@@ -121,14 +122,14 @@ where
         let Some(context) = self.upgrade() else {
             return;
         };
-        let _ = context.try_update_model(|model| {
+        let _ = context.update_model_and_send(|model| {
             if let Some(next) = model.collection.take_next_value() {
-                ModelUpdate::empty().with_next_event((next, RequestToken(self)))
+                UpdateOutcome::empty().with_next_event((next, RequestToken(self)))
             } else if let Some(termination) = model.termination.take() {
-                ModelUpdate::empty().with_termination_event(termination)
+                UpdateOutcome::empty().with_termination_event(termination)
             } else {
                 model.downstream_ready = true;
-                ModelUpdate::empty().without_events()
+                UpdateOutcome::empty().without_events()
             }
         });
     }
@@ -150,32 +151,32 @@ where
     C::Output: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: C::Input) {
-        let _ = self.context.try_update_model(|model| {
+        let _ = self.context.update_model_and_send(|model| {
             if model.termination.is_some() {
-                return ModelUpdate::empty().without_events();
+                return UpdateOutcome::empty().without_events();
             }
             model.collection.extend_one(value);
             if model.downstream_ready {
                 if let Some(next) = model.collection.take_next_value() {
                     model.downstream_ready = false;
                     let request = RequestToken(self.request_handler.clone());
-                    ModelUpdate::empty().with_next_event((next, request))
+                    UpdateOutcome::empty().with_next_event((next, request))
                 } else {
-                    ModelUpdate::empty().without_events()
+                    UpdateOutcome::empty().without_events()
                 }
             } else {
-                ModelUpdate::empty().without_events()
+                UpdateOutcome::empty().without_events()
             }
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.context.try_update_model(|model| {
+        let _ = self.context.update_model_and_send(|model| {
             if model.downstream_ready {
-                ModelUpdate::empty().with_termination_event(termination)
+                UpdateOutcome::empty().with_termination_event(termination)
             } else {
                 model.termination = Some(termination);
-                ModelUpdate::empty().without_events()
+                UpdateOutcome::empty().without_events()
             }
         });
     }

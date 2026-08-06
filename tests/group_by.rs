@@ -830,17 +830,10 @@ fn test_unsub_on_inner_termination_still_terminates_other_groups() {
 
 #[test]
 fn test_dropping_unsubscribed_group_releases_buffered_values() {
+    use crate::tests_utils::drop_probe::{DropCount, DropProbe};
     use rx_rust::utils::types::MutableHelper;
 
-    struct DropTracker(Shared<Mutable<usize>>);
-
-    impl Drop for DropTracker {
-        fn drop(&mut self) {
-            self.0.lock_mut(|mut lock| *lock += 1);
-        }
-    }
-
-    let (mut sender, observable, _channel_checker) = test_channel::<'_, DropTracker, Infallible>();
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, DropProbe, Infallible>();
 
     // Custom operations
     let observable = observable.group_by(|_value| 0);
@@ -852,16 +845,16 @@ fn test_dropping_unsubscribed_group_releases_buffered_values() {
         |_termination| {},
     );
 
-    let drop_count = Shared::new(Mutable::new(0usize));
-    sender.on_next(DropTracker(drop_count.clone()));
+    let drops = DropCount::new();
+    sender.on_next(drops.probe());
     assert_eq!(safe_lock_vec!(len: group_vec), 1);
-    assert_eq!(safe_lock!(clone: drop_count), 0);
+    assert_eq!(drops.get(), 0);
 
     // Dropping the only handle to an unsubscribed group must release its
     // buffered values even while the outer subscription remains active.
     let group = group_vec.lock_mut(|mut lock| lock.pop()).unwrap();
     drop(group);
-    assert_eq!(safe_lock!(clone: drop_count), 1);
+    assert_eq!(drops.get(), 1);
 }
 
 #[test]

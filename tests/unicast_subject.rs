@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::{Observable, ObservableExt};
@@ -11,7 +12,6 @@ use rx_rust::subject::unicast_subject::{
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{safe_lock_option, safe_lock_option_disposable};
 use std::convert::Infallible;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
 
@@ -484,60 +484,41 @@ fn test_unsub_on_completed() {
     assert_eq!(checker.state(), State::Completed);
 }
 
-/// A value that sends another value into the pipe while being dropped, to check that a value is
+type SenderHolder = Shared<Mutable<Option<UnicastSender<'static, DropProbe, Infallible>>>>;
+
+/// A probe that sends another one into the pipe while being dropped, to check that a value is
 /// never dropped while the state of the pipe is locked. Dropping it under the lock would panic in
 /// single-threaded builds and deadlock otherwise.
-struct ReentrantValue {
-    sender: SenderHolder,
-    reenter: bool,
-    drop_count: Shared<AtomicUsize>,
-}
-
-type SenderHolder = Shared<Mutable<Option<UnicastSender<'static, ReentrantValue, Infallible>>>>;
-
-impl ReentrantValue {
-    fn new(sender: &SenderHolder, drop_count: &Shared<AtomicUsize>) -> Self {
-        Self {
-            sender: sender.clone(),
-            reenter: true,
-            drop_count: drop_count.clone(),
-        }
-    }
-}
-
-impl Drop for ReentrantValue {
-    fn drop(&mut self) {
-        self.drop_count.fetch_add(1, Ordering::SeqCst);
-        if !self.reenter {
-            return;
-        }
-        // The holder is emptied while the re-entrant call runs, so the value sent below re-enters
+///
+/// The probe it sends only counts its own drop, so re-entering never recurses any further.
+fn reentrant_probe(holder: &SenderHolder, drops: &DropCount) -> DropProbe {
+    let holder = holder.clone();
+    let drops = drops.clone();
+    DropProbe::new().on_drop(Box::new(move || {
+        drops.increment();
+        // The holder is emptied while the re-entrant call runs, so the probe sent below re-enters
         // the pipe without recursing any further.
-        let Some(mut sender) = safe_lock_option!(take: self.sender) else {
+        let Some(mut sender) = safe_lock_option!(take: holder) else {
             return;
         };
-        sender.on_next(ReentrantValue {
-            sender: self.sender.clone(),
-            reenter: false,
-            drop_count: self.drop_count.clone(),
-        });
-        safe_lock_option!(replace: self.sender, sender);
-    }
+        sender.on_next(drops.probe());
+        safe_lock_option!(replace: holder, sender);
+    }))
 }
 
 #[test]
 fn test_drop_buffered_value_outside_lock() {
-    let drop_count = Shared::new(AtomicUsize::new(0));
+    let drops = DropCount::new();
     let sender_holder: SenderHolder = Shared::new(Mutable::new(None));
-    let (mut sender, observable) = unicast_subject::<ReentrantValue, Infallible>();
-    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
-    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
+    let (mut sender, observable) = unicast_subject::<DropProbe, Infallible>();
+    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    sender.on_next(reentrant_probe(&sender_holder, &drops));
     safe_lock_option!(replace: sender_holder, sender);
 
     // Closing the pipe drops the buffered values, each of which re-enters the pipe while being
     // dropped. The re-entrant values are dropped as well, because the pipe is closed by then.
     drop(observable);
-    assert_eq!(drop_count.load(Ordering::SeqCst), 4);
+    assert_eq!(drops.get(), 4);
     assert!(
         safe_lock_option!(take: sender_holder)
             .unwrap()
@@ -547,44 +528,44 @@ fn test_drop_buffered_value_outside_lock() {
 
 #[test]
 fn test_drop_replayed_value_outside_lock() {
-    let drop_count = Shared::new(AtomicUsize::new(0));
+    let drops = DropCount::new();
     let sender_holder: SenderHolder = Shared::new(Mutable::new(None));
-    let (mut sender, observable) = unicast_subject::<ReentrantValue, Infallible>();
-    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
-    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
+    let (mut sender, observable) = unicast_subject::<DropProbe, Infallible>();
+    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    sender.on_next(reentrant_probe(&sender_holder, &drops));
     safe_lock_option!(replace: sender_holder, sender);
 
     // The observer drops each replayed value, which re-enters the pipe while the replay is still
     // running. The re-entrant values are then replayed and dropped in the same way.
     let _subscription = observable.subscribe_with_callback(drop, |_| {});
-    assert_eq!(drop_count.load(Ordering::SeqCst), 4);
+    assert_eq!(drops.get(), 4);
 }
 
 #[test]
 fn test_drop_delivered_value_outside_lock() {
-    let drop_count = Shared::new(AtomicUsize::new(0));
+    let drops = DropCount::new();
     let sender_holder: SenderHolder = Shared::new(Mutable::new(None));
-    let (mut sender, observable) = unicast_subject::<ReentrantValue, Infallible>();
+    let (mut sender, observable) = unicast_subject::<DropProbe, Infallible>();
     let _subscription = observable.subscribe_with_callback(drop, |_| {});
 
     // The observer drops the value while it is being delivered to it, which re-enters the pipe
     // from inside that delivery. Sending consumes the sender exclusively, so the re-entrant value
     // finds no sender to send with: the pipe cannot be fed from inside a delivery of its own, and
     // the observer is reached once per value.
-    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
-    assert_eq!(drop_count.load(Ordering::SeqCst), 1);
+    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert_eq!(drops.get(), 1);
 
     // The observer was parked back, so the pipe keeps working.
-    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
-    assert_eq!(drop_count.load(Ordering::SeqCst), 2);
+    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert_eq!(drops.get(), 2);
     assert!(!sender.is_disposed());
 }
 
 #[test]
 fn test_drop_delivered_value_after_unsubscribe_outside_lock() {
-    let drop_count = Shared::new(AtomicUsize::new(0));
+    let drops = DropCount::new();
     let sender_holder: SenderHolder = Shared::new(Mutable::new(None));
-    let (mut sender, observable) = unicast_subject::<ReentrantValue, Infallible>();
+    let (mut sender, observable) = unicast_subject::<DropProbe, Infallible>();
 
     // The value is dropped by the observer, which disposes the subscription while that value is
     // still being delivered: the pipe closes while the observer is out of the state, so the send
@@ -600,14 +581,14 @@ fn test_drop_delivered_value_after_unsubscribe_outside_lock() {
             .subscribe_with_callback(drop, |_| {})
     );
 
-    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
-    assert_eq!(drop_count.load(Ordering::SeqCst), 1);
+    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert_eq!(drops.get(), 1);
     assert!(sender.is_disposed());
 
     // The pipe is closed, so the value is dropped instead of being delivered, still outside the
     // lock.
-    sender.on_next(ReentrantValue::new(&sender_holder, &drop_count));
-    assert_eq!(drop_count.load(Ordering::SeqCst), 2);
+    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert_eq!(drops.get(), 2);
 }
 
 #[test]

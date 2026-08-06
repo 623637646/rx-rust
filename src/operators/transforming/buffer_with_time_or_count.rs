@@ -1,8 +1,8 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::observable::Subscription;
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -151,15 +151,15 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.context.try_update_model(|model| {
+        let _ = self.context.update_model_and_send(|model| {
             model.values.push(value);
             if model.values.len() >= self.count.get() {
                 model.last_sending_time_from_counting = Some(Instant::now());
                 let values =
                     std::mem::replace(&mut model.values, Vec::with_capacity(self.count.get()));
-                ModelUpdate::empty().with_next_event(values)
+                UpdateOutcome::empty().with_next_event(values)
             } else {
-                ModelUpdate::empty().without_events()
+                UpdateOutcome::empty().without_events()
             }
         });
     }
@@ -167,12 +167,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.context.try_update_model(|model| {
+                let _ = self.context.update_model_and_send(|model| {
                     if !model.values.is_empty() {
                         let values = std::mem::take(&mut model.values);
-                        ModelUpdate::empty().with_next_and_termination_events(values, completion)
+                        UpdateOutcome::empty().with_next_and_termination_events(values, completion)
                     } else {
-                        ModelUpdate::empty().with_termination_event(completion)
+                        UpdateOutcome::empty().with_termination_event(completion)
                     }
                 });
             }
@@ -214,20 +214,20 @@ where
                 return RecursionAction::Stop;
             };
             context
-                .try_update_model(|model| {
+                .update_model_and_send(|model| {
                     if let Some(last_sending_time_from_counting) =
                         model.last_sending_time_from_counting.take()
                     {
                         // Already flushed by count since the last tick; resync to
                         // `time_span` after that flush instead of emitting an empty batch.
                         next_time = last_sending_time_from_counting + time_span;
-                        ModelUpdate::new(RecursionAction::ContinueAt(next_time)).without_events()
+                        UpdateOutcome::new(RecursionAction::ContinueAt(next_time)).without_events()
                     } else {
                         let values =
                             std::mem::replace(&mut model.values, Vec::with_capacity(count.get()));
                         // Fixed-rate: anchor the next tick to the schedule, not to `now`.
                         next_time += time_span;
-                        ModelUpdate::new(RecursionAction::ContinueAt(next_time))
+                        UpdateOutcome::new(RecursionAction::ContinueAt(next_time))
                             .with_next_event(values)
                     }
                 })

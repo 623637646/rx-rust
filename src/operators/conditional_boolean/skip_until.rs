@@ -1,7 +1,7 @@
 use crate::disposable::Disposable;
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -105,11 +105,11 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.try_update_model(|model| {
+        let _ = self.0.update_model_and_send(|model| {
             if model.started {
-                ModelUpdate::empty().with_next_event(value)
+                UpdateOutcome::empty().with_next_event(value)
             } else {
-                ModelUpdate::empty().without_events()
+                UpdateOutcome::empty().without_events()
             }
         });
     }
@@ -132,9 +132,9 @@ where
     fn on_next(&mut self, _: ()) {
         if !self.started {
             self.started = true;
-            let _ = self.context.try_update_model(|model| {
+            let _ = self.context.update_model_and_send(|model| {
                 model.started = true;
-                ModelUpdate::empty()
+                UpdateOutcome::empty()
             });
         }
     }

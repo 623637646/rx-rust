@@ -1,8 +1,7 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::pending_events::EventBatch;
-use crate::utils::subscribe_with_context::{
-    self, ModelUpdate, SubscriptionContext, subscribe_with_context,
-};
+use crate::utils::serialized_delivery::UpdateOutcome;
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
@@ -160,7 +159,7 @@ where
 {
     /// Queues `value`, or the completion when it is `None`, and starts the timer if needed.
     fn queue_event(&self, value: Option<T>) {
-        let timer_setup = self.context.try_update_model(|model| {
+        let timer_setup = self.context.update_model_and_send(|model| {
             let deadline = Instant::now() + self.delay;
             match value {
                 Some(value) => model.values.push_back((deadline, value)),
@@ -170,7 +169,7 @@ where
             if start_timer {
                 model.timer = Timer::Running(None);
             }
-            ModelUpdate::new(start_timer.then_some(deadline))
+            UpdateOutcome::new(start_timer.then_some(deadline))
         });
         let Ok(Some(deadline)) = timer_setup else {
             return;
@@ -183,7 +182,7 @@ where
                     return RecursionAction::Stop;
                 };
                 context
-                    .try_update_model(|model| {
+                    .update_model_and_send(|model| {
                         let now = Instant::now();
                         // The deadlines are ascending, so one binary search splits the queue into
                         // the due values and the ones that keep waiting.
@@ -199,7 +198,7 @@ where
                         if model.values.is_empty()
                             && model.completion.is_some_and(|deadline| deadline <= now)
                         {
-                            return ModelUpdate::new(RecursionAction::Stop)
+                            return UpdateOutcome::new(RecursionAction::Stop)
                                 .with_events(EventBatch::NextBatchAndTermination(
                                     values,
                                     Termination::Completed,
@@ -212,12 +211,12 @@ where
 
                         match model.next_deadline() {
                             Some(deadline) => {
-                                ModelUpdate::new(RecursionAction::ContinueAt(deadline))
+                                UpdateOutcome::new(RecursionAction::ContinueAt(deadline))
                                     .with_events(EventBatch::NextBatch(values))
                                     .without_drop_outside()
                             }
                             // Nothing is waiting anymore: stop the timer until the next event.
-                            None => ModelUpdate::new(RecursionAction::Stop)
+                            None => UpdateOutcome::new(RecursionAction::Stop)
                                 .with_events(EventBatch::NextBatch(values))
                                 .with_drop_outside(std::mem::replace(
                                     &mut model.timer,
@@ -231,7 +230,7 @@ where
         );
 
         let mut disposal = Some(disposal);
-        let _ = self.context.try_update_model(move |model| {
+        let _ = self.context.update_model_and_send(move |model| {
             if let Timer::Running(slot) = &mut model.timer
                 && slot.is_none()
             {
@@ -239,7 +238,7 @@ where
             }
             // If the timer already stopped (possible for a zero delay), dispose the returned
             // handle outside the lock.
-            ModelUpdate::empty().with_drop_outside(disposal)
+            UpdateOutcome::empty().with_drop_outside(disposal)
         });
     }
 }

@@ -1,6 +1,6 @@
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -128,9 +128,9 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.try_update_model(|values| {
+        let _ = self.0.update_model_and_send(|values| {
             values.push(value);
-            ModelUpdate::empty()
+            UpdateOutcome::empty()
         });
     }
 
@@ -147,8 +147,8 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
-        let _ = self.0.try_update_model(|values| {
-            ModelUpdate::empty()
+        let _ = self.0.update_model_and_send(|values| {
+            UpdateOutcome::empty()
                 .with_next_event(std::mem::replace(values, Vec::with_capacity(values.len())))
         });
     }
@@ -167,11 +167,11 @@ fn terminate<T, E, OR, D>(
 {
     match termination {
         completion @ Termination::Completed => {
-            let _ = context.try_update_model(|values| {
+            let _ = context.update_model_and_send(|values| {
                 if values.is_empty() {
-                    ModelUpdate::empty().with_termination_event(completion)
+                    UpdateOutcome::empty().with_termination_event(completion)
                 } else {
-                    ModelUpdate::empty()
+                    UpdateOutcome::empty()
                         .with_next_and_termination_events(std::mem::take(values), completion)
                 }
             });

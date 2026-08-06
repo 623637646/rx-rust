@@ -1,9 +1,9 @@
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::increment_id::IncrementId;
+use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, ModelUpdate, SubscriptionContext,
-    subscribe_with_context_bound_subscription,
+    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -125,12 +125,12 @@ where
     SD: Disposable + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let result = self.0.try_update_model(|model| {
+        let result = self.0.update_model_and_send(|model| {
             model.current_sub_id.increment();
             match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription) {
-                SubState::Idle => ModelUpdate::new(model.current_sub_id).without_drop_outside(),
+                SubState::Idle => UpdateOutcome::new(model.current_sub_id).without_drop_outside(),
                 SubState::Processing(subscription) => {
-                    ModelUpdate::new(model.current_sub_id).with_drop_outside(subscription)
+                    UpdateOutcome::new(model.current_sub_id).with_drop_outside(subscription)
                 }
                 SubState::PendingSubscription => unreachable!(),
             }
@@ -141,12 +141,12 @@ where
         };
         let observer = SwitchInnerObserver(self.0.clone(), sub_id);
         let sub = value.subscribe(observer);
-        let _ = self.0.try_update_model(|model| {
+        let _ = self.0.update_model_and_send(|model| {
             match &mut model.sub_state {
-                SubState::Idle => ModelUpdate::empty().with_drop_outside(sub), // already terminated
+                SubState::Idle => UpdateOutcome::empty().with_drop_outside(sub), // already terminated
                 SubState::PendingSubscription => {
                     model.sub_state = SubState::Processing(sub);
-                    ModelUpdate::empty().without_drop_outside()
+                    UpdateOutcome::empty().without_drop_outside()
                 }
                 SubState::Processing(_) => unreachable!(),
             }
@@ -156,12 +156,12 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.try_update_model(|model| {
+                let _ = self.0.update_model_and_send(|model| {
                     model.is_source_completed = true;
                     match model.sub_state {
-                        SubState::Idle => ModelUpdate::empty().with_termination_event(completion),
+                        SubState::Idle => UpdateOutcome::empty().with_termination_event(completion),
                         SubState::Processing(_) | SubState::PendingSubscription => {
-                            ModelUpdate::empty().without_events()
+                            UpdateOutcome::empty().without_events()
                         }
                     }
                 });
@@ -187,38 +187,40 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.try_update_model(|model| {
+        let _ = self.0.update_model_and_send(|model| {
             if model.current_sub_id != self.1 {
-                return ModelUpdate::empty().without_events();
+                return UpdateOutcome::empty().without_events();
             }
-            ModelUpdate::empty().with_next_event(value)
+            UpdateOutcome::empty().with_next_event(value)
         });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.try_update_model(|model| {
+        let _ = self.0.update_model_and_send(|model| {
             if model.current_sub_id != self.1 {
-                return ModelUpdate::empty().without_events().without_drop_outside();
+                return UpdateOutcome::empty()
+                    .without_events()
+                    .without_drop_outside();
             }
             match termination {
                 completion @ Termination::Completed => {
                     if model.is_source_completed {
-                        ModelUpdate::empty()
+                        UpdateOutcome::empty()
                             .with_termination_event(completion)
                             .without_drop_outside()
                     } else {
                         match std::mem::replace(&mut model.sub_state, SubState::Idle) {
                             SubState::Idle => unreachable!(),
-                            SubState::PendingSubscription => {
-                                ModelUpdate::empty().without_events().without_drop_outside()
-                            }
-                            SubState::Processing(subscription) => ModelUpdate::empty()
+                            SubState::PendingSubscription => UpdateOutcome::empty()
+                                .without_events()
+                                .without_drop_outside(),
+                            SubState::Processing(subscription) => UpdateOutcome::empty()
                                 .without_events()
                                 .with_drop_outside(subscription),
                         }
                     }
                 }
-                error @ Termination::Error(_) => ModelUpdate::empty()
+                error @ Termination::Error(_) => UpdateOutcome::empty()
                     .with_termination_event(error)
                     .without_drop_outside(),
             }
