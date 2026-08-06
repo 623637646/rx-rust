@@ -1725,17 +1725,10 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
 
 #[test]
 fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
+    use crate::tests_utils::drop_probe::{DropCount, DropProbe};
     use rx_rust::utils::types::MutableHelper;
 
-    struct DropTracker(Shared<Mutable<usize>>);
-
-    impl Drop for DropTracker {
-        fn drop(&mut self) {
-            self.0.lock_mut(|mut lock| *lock += 1);
-        }
-    }
-
-    let (mut sender, observable, _channel_checker) = test_channel::<'_, DropTracker, Infallible>();
+    let (mut sender, observable, _channel_checker) = test_channel::<'_, DropProbe, Infallible>();
 
     // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
@@ -1748,15 +1741,15 @@ fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
     );
     assert_eq!(safe_lock_vec!(len: window_vec), 1);
 
-    let drop_count = Shared::new(Mutable::new(0usize));
-    sender.on_next(DropTracker(drop_count.clone()));
-    assert_eq!(safe_lock!(clone: drop_count), 0);
+    let drops = DropCount::new();
+    sender.on_next(drops.probe());
+    assert_eq!(drops.get(), 0);
 
     // Dropping the only handle to an unsubscribed window must release its
     // buffered values even while the outer window subscription remains active.
     let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
     drop(window_1);
-    assert_eq!(safe_lock!(clone: drop_count), 1);
+    assert_eq!(drops.get(), 1);
 }
 
 #[test]

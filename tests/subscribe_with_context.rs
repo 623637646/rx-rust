@@ -16,6 +16,7 @@ use rx_rust::{
 use std::convert::Infallible;
 use tests_utils::{
     checker::{Checker, State},
+    drop_probe::DropProbe,
     test_channel::{ChannelState, test_channel},
 };
 
@@ -157,14 +158,6 @@ fn empty_batch_is_a_no_op() {
 
 #[test]
 fn stopped_update_model_and_send_drops_callback_outside_lock() {
-    struct RunOnDrop<F: FnOnce()>(Option<F>);
-
-    impl<F: FnOnce()> Drop for RunOnDrop<F> {
-        fn drop(&mut self) {
-            self.0.take().unwrap()();
-        }
-    }
-
     let (checker, observer) = Checker::<i32, Infallible>::new();
     let mut context_out = None;
     let subscription = subscribe_with_context(observer, (), |context| {
@@ -178,14 +171,14 @@ fn stopped_update_model_and_send_drops_callback_outside_lock() {
     let callback_dropped = Shared::new(MutableBool::new(false));
     let callback_dropped_on_drop = callback_dropped.clone();
     let reentrant_context = context.clone();
-    let run_on_drop = RunOnDrop(Some(move || {
+    let probe = DropProbe::new().on_drop(Box::new(move || {
         callback_dropped_on_drop.write(true);
         // This would deadlock if the callback were dropped while the context was locked.
         reentrant_context.send_next(1);
     }));
 
     let result = context.update_model_and_send(move |_| {
-        drop(run_on_drop);
+        drop(probe);
         UpdateOutcome::empty()
     });
 
