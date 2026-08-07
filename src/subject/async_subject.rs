@@ -31,7 +31,8 @@ impl<T, E> AsyncSubject<'_, T, E> {
 
 delegate_disposal!(
     Disposal<'or, T, E>,
-    OptionDisposal<Subscription<publish_subject::Disposal<'or, T, E>>>
+    OptionDisposal<Subscription<publish_subject::Disposal<'or, T, E>>>,
+    where T: Clone, E: Clone
 );
 
 impl<'or, T, E> Observable<'or, T, E> for AsyncSubject<'or, T, E>

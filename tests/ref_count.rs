@@ -1168,7 +1168,10 @@ fn test_next_on_next() {
     let mut subject_cloned = subject.clone();
     let _subscription = observable.subscribe_with_callback(
         move |value| {
-            assert!(subject_cloned.terminated().is_none());
+            // The subject is terminated as soon as `on_termination` is called, which the callback
+            // of the first value did: the callback of the second sees it terminated while the
+            // termination is still queued behind that value.
+            assert_eq!(subject_cloned.terminated().is_some(), value > 1);
             if value < 3 {
                 subject_cloned.on_next(());
             }
@@ -1182,13 +1185,16 @@ fn test_next_on_next() {
     assert_eq!(checker.state(), State::Active);
 
     subject.on_next(());
-    assert_eq!(checker.values(), [1, 2, 3]);
+    // The events are delivered in the order they were sent: the third value is sent from the
+    // callback of the second one, after that callback has already sent the termination, so it
+    // arrives once the subject has terminated and is dropped.
+    assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Completed);
 
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [1, 2, 3]);
+    assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Completed);
 }
 
