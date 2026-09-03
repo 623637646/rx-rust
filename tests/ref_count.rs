@@ -1770,7 +1770,7 @@ fn test_sub_on_sub() {
         ChannelState::Subscribed
     );
 
-    subscription_2.dispose();
+    safe_lock_option_disposable!(dispose: subscription_2);
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [1]);

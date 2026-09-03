@@ -13,8 +13,7 @@ use crate::{
         either_disposal::EitherDisposal, option_disposal::OptionDisposal,
     },
     observable::Subscription,
-    safe_lock_option_disposable,
-    utils::types::{MaybeSend, Mutable, Shared},
+    utils::types::MaybeSend,
 };
 pub mod either_disposal;
 
@@ -22,16 +21,6 @@ pub mod either_disposal;
 pub trait Disposable {
     /// Disposes of the resource.
     fn dispose(self);
-}
-
-// TODO: remove this after using SharedDisposal
-impl<D> Disposable for Shared<Mutable<Option<D>>>
-where
-    D: Disposable,
-{
-    fn dispose(self) {
-        safe_lock_option_disposable!(dispose: self);
-    }
 }
 
 pub trait DisposableExt: Disposable + Sized {
