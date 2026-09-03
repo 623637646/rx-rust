@@ -219,20 +219,3 @@ macro_rules! safe_lock_vec {
         $lock_name.lock_mut(|mut lock| Vec::push(&mut lock.$field_name, value))
     }};
 }
-
-#[macro_export]
-macro_rules! safe_lock_slot_map {
-    (insert: $lock_name:expr, $field_name:ident, $value:expr) => {{
-        use $crate::utils::types::MutableHelper;
-        let value = $value;
-        $lock_name.lock_mut(|mut lock| SlotMap::insert(&mut lock.$field_name, value))
-    }};
-
-    (replace: $lock_name:expr, $field_name:ident, $key:expr, $value:expr) => {{
-        use std::ops::IndexMut;
-        use $crate::utils::types::MutableHelper;
-        let key = $key;
-        let value = $value;
-        $lock_name.lock_mut(|mut lock| *SlotMap::index_mut(&mut lock.$field_name, key) = value)
-    }};
-}

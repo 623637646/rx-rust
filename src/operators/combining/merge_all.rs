@@ -12,7 +12,7 @@ use crate::{
     utils::types::MarkerType,
 };
 use educe::Educe;
-use slotmap::{DefaultKey, SlotMap};
+use std::collections::HashMap;
 use std::marker::PhantomData;
 
 /// Merges an Observable of Observables into a single Observable that emits all of their emissions.
@@ -90,7 +90,8 @@ where
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model {
-            subscriptions: SlotMap::new(),
+            subscriptions: HashMap::new(),
+            next_key: 0,
             is_source_terminated: false,
         };
         subscribe_with_context_bound_subscription(observer, model, |context| {
@@ -100,8 +101,21 @@ where
 }
 
 struct Model<D: Disposable> {
-    subscriptions: SlotMap<DefaultKey, Option<Subscription<D>>>,
+    /// Keys are never reused, so a late inner observer can never remove another
+    /// inner observer's subscription.
+    subscriptions: HashMap<u64, Option<Subscription<D>>>,
+    next_key: u64,
     is_source_terminated: bool,
+}
+
+impl<D: Disposable> Model<D> {
+    /// Inserts a placeholder subscription and returns its key.
+    fn insert_placeholder(&mut self) -> u64 {
+        let key = self.next_key;
+        self.next_key += 1;
+        self.subscriptions.insert(key, None);
+        key
+    }
 }
 
 struct MergeAllObserver<T, E, OR, ID: Disposable, SD: Disposable>(
@@ -121,7 +135,7 @@ where
         // Insert a placeholder subscription.
         let result = self
             .0
-            .update_model_and_send(|model| UpdateOutcome::new(model.subscriptions.insert(None)));
+            .update_model_and_send(|model| UpdateOutcome::new(model.insert_placeholder()));
         let key = match result {
             Ok(key) => key,
             Err(_) => return,
@@ -133,8 +147,8 @@ where
         let sub = value.subscribe(observer);
 
         let _ = self.0.update_model_and_send(|model| {
-            if model.subscriptions.contains_key(key) {
-                model.subscriptions[key] = Some(sub);
+            if let Some(slot) = model.subscriptions.get_mut(&key) {
+                *slot = Some(sub);
                 UpdateOutcome::empty().without_drop_outside()
             } else {
                 // already terminated
@@ -164,7 +178,7 @@ where
 
 struct MergeAllInnerObserver<T, E, OR, ID: Disposable, SD: Disposable> {
     context: SubscriptionContext<T, E, OR, Model<ID>, SD>,
-    key: DefaultKey,
+    key: u64,
 }
 
 impl<T, E, OR, ID, SD> Observer<T, E> for MergeAllInnerObserver<T, E, OR, ID, SD>
@@ -181,7 +195,7 @@ where
         match termination {
             completion @ Termination::Completed => {
                 let _ = self.context.update_model_and_send(|model| {
-                    let subscription = model.subscriptions.remove(self.key);
+                    let subscription = model.subscriptions.remove(&self.key);
                     if model.is_source_terminated && model.subscriptions.is_empty() {
                         UpdateOutcome::empty()
                             .with_termination_event(completion)
