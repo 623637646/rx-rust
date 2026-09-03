@@ -110,7 +110,7 @@ macro_rules! impl_observer {
             D: Disposable,
         {
             fn on_next(&mut self, val: $t_self) {
-                let _ = self.0.update_model_and_send(|model| {
+                let _ = self.0.update(|model| {
                     if let Some(other) = &model.$field_other {
                         model.$field_self = Some(val.clone());
                         UpdateOutcome::empty().with_next_event($combine(val, other.clone()))
@@ -122,7 +122,7 @@ macro_rules! impl_observer {
             }
 
             fn on_termination(self, termination: Termination<E>) {
-                let _ = self.0.update_model_and_send(|model| match termination {
+                let _ = self.0.update(|model| match termination {
                     completion @ Termination::Completed => {
                         if model.should_completed || model.$field_self.is_none() {
                             UpdateOutcome::empty().with_termination_event(completion)

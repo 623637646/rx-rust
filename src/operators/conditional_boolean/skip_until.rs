@@ -105,7 +105,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.update_model_and_send(|model| {
+        let _ = self.0.update(|model| {
             if model.started {
                 UpdateOutcome::empty().with_next_event(value)
             } else {
@@ -132,7 +132,7 @@ where
     fn on_next(&mut self, _: ()) {
         if !self.started {
             self.started = true;
-            let _ = self.context.update_model_and_send(|model| {
+            let _ = self.context.update(|model| {
                 model.started = true;
                 UpdateOutcome::empty()
             });

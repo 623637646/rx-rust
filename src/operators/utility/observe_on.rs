@@ -132,7 +132,7 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
         OR: Observer<T, E> + MaybeSend + 'static,
         S: Scheduler + Clone + MaybeSend + 'static,
     {
-        let task_setup = self.context.update_model_and_send(|model| {
+        let task_setup = self.context.update(|model| {
             match event {
                 Event::Next(value) => model.values.push(value),
                 Event::Termination(termination) => model.termination = Some(termination),
@@ -152,7 +152,7 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
                     return RecursionAction::Stop;
                 };
                 context
-                    .update_model_and_send(|model| {
+                    .update(|model| {
                         let termination = model.termination.take();
                         let values = std::mem::take(&mut model.values);
                         let (action, events, discarded_values) = match termination {
@@ -197,7 +197,7 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
             None,
         );
 
-        let _ = self.context.update_model_and_send(move |model| {
+        let _ = self.context.update(move |model| {
             // If the task already stopped, `fill` gives the handle back to dispose outside the
             // lock.
             UpdateOutcome::empty().with_drop_outside(model.task.fill(task))

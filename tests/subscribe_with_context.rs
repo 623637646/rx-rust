@@ -157,7 +157,7 @@ fn empty_batch_is_a_no_op() {
 }
 
 #[test]
-fn stopped_update_model_and_send_drops_callback_outside_lock() {
+fn stopped_update_drops_callback_outside_lock() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
     let mut context_out = None;
     let subscription = subscribe_with_context(observer, (), |context| {
@@ -177,7 +177,7 @@ fn stopped_update_model_and_send_drops_callback_outside_lock() {
         reentrant_context.send_next(1);
     }));
 
-    let result = context.update_model_and_send(move |_| {
+    let result = context.update(move |_| {
         drop(probe);
         UpdateOutcome::empty()
     });

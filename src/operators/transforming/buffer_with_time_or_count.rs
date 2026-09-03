@@ -151,7 +151,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.context.update_model_and_send(|model| {
+        let _ = self.context.update(|model| {
             model.values.push(value);
             if model.values.len() >= self.count.get() {
                 model.last_sending_time_from_counting = Some(Instant::now());
@@ -167,7 +167,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.context.update_model_and_send(|model| {
+                let _ = self.context.update(|model| {
                     if !model.values.is_empty() {
                         let values = std::mem::take(&mut model.values);
                         UpdateOutcome::empty().with_next_and_termination_events(values, completion)
@@ -214,7 +214,7 @@ where
                 return RecursionAction::Stop;
             };
             context
-                .update_model_and_send(|model| {
+                .update(|model| {
                     if let Some(last_sending_time_from_counting) =
                         model.last_sending_time_from_counting.take()
                     {

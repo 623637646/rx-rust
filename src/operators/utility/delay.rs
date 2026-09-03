@@ -154,7 +154,7 @@ where
 {
     /// Queues `value`, or the completion when it is `None`, and starts the timer if needed.
     fn queue_event(&self, value: Option<T>) {
-        let timer_setup = self.context.update_model_and_send(|model| {
+        let timer_setup = self.context.update(|model| {
             let deadline = Instant::now() + self.delay;
             match value {
                 Some(value) => model.values.push_back((deadline, value)),
@@ -174,7 +174,7 @@ where
                     return RecursionAction::Stop;
                 };
                 context
-                    .update_model_and_send(|model| {
+                    .update(|model| {
                         let now = Instant::now();
                         // The deadlines are ascending, so one binary search splits the queue into
                         // the due values and the ones that keep waiting.
@@ -215,7 +215,7 @@ where
             Some(deadline.saturating_duration_since(Instant::now())),
         );
 
-        let _ = self.context.update_model_and_send(move |model| {
+        let _ = self.context.update(move |model| {
             // If the timer already stopped (possible for a zero delay), `fill` gives the handle
             // back to dispose outside the lock.
             UpdateOutcome::empty().with_drop_outside(model.timer.fill(disposal))

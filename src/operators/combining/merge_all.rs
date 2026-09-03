@@ -135,7 +135,7 @@ where
         // Insert a placeholder subscription.
         let result = self
             .0
-            .update_model_and_send(|model| UpdateOutcome::new(model.insert_placeholder()));
+            .update(|model| UpdateOutcome::new(model.insert_placeholder()));
         let key = match result {
             Ok(key) => key,
             Err(_) => return,
@@ -146,7 +146,7 @@ where
         };
         let sub = value.subscribe(observer);
 
-        let _ = self.0.update_model_and_send(|model| {
+        let _ = self.0.update(|model| {
             if let Some(slot) = model.subscriptions.get_mut(&key) {
                 *slot = Some(sub);
                 UpdateOutcome::empty().without_drop_outside()
@@ -160,7 +160,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.update_model_and_send(|model| {
+                let _ = self.0.update(|model| {
                     if model.subscriptions.is_empty() {
                         UpdateOutcome::empty().with_termination_event(completion)
                     } else {
@@ -194,7 +194,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.context.update_model_and_send(|model| {
+                let _ = self.context.update(|model| {
                     let subscription = model.subscriptions.remove(&self.key);
                     if model.is_source_terminated && model.subscriptions.is_empty() {
                         UpdateOutcome::empty()

@@ -121,7 +121,7 @@ where
     D: Disposable + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.update_model_and_send(|values| {
+        let _ = self.0.update(|values| {
             values.push(value);
             UpdateOutcome::empty().without_events()
         });
@@ -130,7 +130,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.update_model_and_send(|values| {
+                let _ = self.0.update(|values| {
                     if !values.is_empty() {
                         UpdateOutcome::empty()
                             .with_next_and_termination_events(std::mem::take(values), completion)
@@ -164,7 +164,7 @@ where
                 return false;
             };
             context
-                .update_model_and_send(|values| {
+                .update(|values| {
                     UpdateOutcome::new(true).with_next_event(std::mem::replace(
                         values,
                         Vec::with_capacity(values.len()),

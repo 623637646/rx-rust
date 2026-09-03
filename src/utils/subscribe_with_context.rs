@@ -148,11 +148,13 @@ where
 {
     /// Updates the model and sends the events that update produced, while the context is locked.
     ///
+    /// An update that emits nothing simply decides no events, and then nothing is sent here.
+    ///
     /// The callback must not call external APIs or drop values that can re-enter this context.
     /// Return such values through [`UpdateOutcome::with_drop_outside`] instead.
     /// If the context's delivery has stopped, the callback is not invoked and [`DeliveryStopped`]
     /// is returned.
-    pub fn update_model_and_send<R, DO, const EVENTS_DECIDED: bool>(
+    pub fn update<R, DO, const EVENTS_DECIDED: bool>(
         &self,
         callback: impl FnOnce(&mut M) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
     ) -> Result<R, DeliveryStopped> {

@@ -128,7 +128,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.update_model_and_send(|values| {
+        let _ = self.0.update(|values| {
             values.push(value);
             UpdateOutcome::empty()
         });
@@ -147,7 +147,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
-        let _ = self.0.update_model_and_send(|values| {
+        let _ = self.0.update(|values| {
             UpdateOutcome::empty()
                 .with_next_event(std::mem::replace(values, Vec::with_capacity(values.len())))
         });
@@ -167,7 +167,7 @@ fn terminate<T, E, OR, D>(
 {
     match termination {
         completion @ Termination::Completed => {
-            let _ = context.update_model_and_send(|values| {
+            let _ = context.update(|values| {
                 if values.is_empty() {
                     UpdateOutcome::empty().with_termination_event(completion)
                 } else {

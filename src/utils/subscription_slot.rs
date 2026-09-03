@@ -10,7 +10,7 @@
 //!
 //! [`SubscriptionSlot`] is that three-step state machine and nothing else. It carries **no lock of
 //! its own**: it lives inside a model already guarded by the delivery lock — see
-//! [`SubscriptionContext::update_model_and_send`](crate::utils::subscribe_with_context::SubscriptionContext::update_model_and_send)
+//! [`SubscriptionContext::update`](crate::utils::subscribe_with_context::SubscriptionContext::update)
 //! — and every method takes `&mut self`. It also disposes nothing: each method hands the
 //! subscription it evicts back to the caller, which passes it to
 //! [`UpdateOutcome::with_drop_outside`](crate::utils::serialized_delivery::UpdateOutcome::with_drop_outside)

@@ -122,7 +122,7 @@ where
         let Some(context) = self.upgrade() else {
             return;
         };
-        let _ = context.update_model_and_send(|model| {
+        let _ = context.update(|model| {
             if let Some(next) = model.collection.take_next_value() {
                 UpdateOutcome::empty().with_next_event((next, RequestToken(self)))
             } else if let Some(termination) = model.termination.take() {
@@ -151,7 +151,7 @@ where
     C::Output: MaybeSend + 'or,
 {
     fn on_next(&mut self, value: C::Input) {
-        let _ = self.context.update_model_and_send(|model| {
+        let _ = self.context.update(|model| {
             if model.termination.is_some() {
                 return UpdateOutcome::empty().without_events();
             }
@@ -171,7 +171,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.context.update_model_and_send(|model| {
+        let _ = self.context.update(|model| {
             if model.downstream_ready {
                 UpdateOutcome::empty().with_termination_event(termination)
             } else {

@@ -126,7 +126,7 @@ where
     SD: Disposable + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let result = self.0.update_model_and_send(|model| {
+        let result = self.0.update(|model| {
             if model.slot.reserve_if_idle() {
                 UpdateOutcome::new(Some(value))
             } else {
@@ -143,15 +143,15 @@ where
         let sub = observable.subscribe(observer);
         // `fill` gives the subscription back when the slot was released while it was being built,
         // which means the operator already terminated.
-        let _ = self.0.update_model_and_send(|model| {
-            UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub))
-        });
+        let _ = self
+            .0
+            .update(|model| UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub)));
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.update_model_and_send(|model| {
+                let _ = self.0.update(|model| {
                     model.is_source_completed = true;
                     if model.slot.is_idle() {
                         // The slot is only possible to be reserved or active when the pending_observables is not empty.
@@ -210,7 +210,7 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
     SD: Disposable + MaybeSend + 'or,
 {
     loop {
-        let result = context.update_model_and_send(|model| {
+        let result = context.update(|model| {
             if model.slot.is_reserved() {
                 // Already terminated. A reserved slot holds nothing, so nothing is dropped here;
                 // releasing it makes the pending fill give its subscription back.
@@ -243,7 +243,7 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
         };
         let observer = InnerObserver(context.clone());
         let sub = observable.subscribe(observer);
-        let result = context.update_model_and_send(|model| {
+        let result = context.update(|model| {
             // `fill` gives the subscription back when the slot was released while it was being
             // built, which means the inner observable already terminated: the loop then goes on
             // to the next pending observable instead of waiting for this subscription.

@@ -126,7 +126,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.context.update_model_and_send(|model| {
+        let _ = self.context.update(|model| {
             let (mine, other) = if self.is_first {
                 (&mut model.first, &mut model.second)
             } else {
@@ -155,7 +155,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.context.update_model_and_send(|model| {
+                let _ = self.context.update(|model| {
                     let (mine, other) = if self.is_first {
                         (&mut model.first, &mut model.second)
                     } else {

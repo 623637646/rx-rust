@@ -120,7 +120,7 @@ where
     SD: Disposable + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let result = self.0.update_model_and_send(|model| {
+        let result = self.0.update(|model| {
             model.current_sub_id.increment();
             UpdateOutcome::new(model.current_sub_id).with_drop_outside(model.slot.reserve())
         });
@@ -132,15 +132,15 @@ where
         let sub = value.subscribe(observer);
         // `fill` gives the subscription back when the slot was released while it was being built,
         // which means the operator already terminated.
-        let _ = self.0.update_model_and_send(|model| {
-            UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub))
-        });
+        let _ = self
+            .0
+            .update(|model| UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub)));
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.update_model_and_send(|model| {
+                let _ = self.0.update(|model| {
                     model.is_source_completed = true;
                     if model.slot.is_idle() {
                         UpdateOutcome::empty().with_termination_event(completion)
@@ -170,7 +170,7 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.update_model_and_send(|model| {
+        let _ = self.0.update(|model| {
             if model.current_sub_id != self.1 {
                 return UpdateOutcome::empty().without_events();
             }
@@ -179,7 +179,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        let _ = self.0.update_model_and_send(|model| {
+        let _ = self.0.update(|model| {
             if model.current_sub_id != self.1 {
                 return UpdateOutcome::empty()
                     .without_events()

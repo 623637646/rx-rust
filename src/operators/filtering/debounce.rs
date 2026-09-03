@@ -129,7 +129,7 @@ where
     S: Scheduler + Clone + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let timer_setup = self.context.update_model_and_send(|model| {
+        let timer_setup = self.context.update(|model| {
             let deadline = Instant::now() + self.time_span;
             let (timer_setup, previous_value) = match model {
                 Model::Idle => {
@@ -163,7 +163,7 @@ where
                     return RecursionAction::Stop;
                 };
                 context
-                    .update_model_and_send(|model| {
+                    .update(|model| {
                         let deadline = match model {
                             Model::Idle => {
                                 return UpdateOutcome::new(RecursionAction::Stop)
@@ -195,7 +195,7 @@ where
         );
 
         let mut disposal = Some(disposal);
-        let _ = self.context.update_model_and_send(move |model| {
+        let _ = self.context.update(move |model| {
             if let Model::Active { timer, .. } = model {
                 if timer.is_none() {
                     *timer = disposal.take();
@@ -210,8 +210,9 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.context.update_model_and_send(|model| {
-                    match std::mem::replace(model, Model::Idle) {
+                let _ = self
+                    .context
+                    .update(|model| match std::mem::replace(model, Model::Idle) {
                         Model::Idle => UpdateOutcome::empty()
                             .with_termination_event(completion)
                             .without_drop_outside(),
@@ -222,8 +223,7 @@ where
                         } => UpdateOutcome::empty()
                             .with_next_and_termination_events(value, completion)
                             .with_drop_outside(timer),
-                    }
-                });
+                    });
             }
             error @ Termination::Error(_) => {
                 self.context.send_termination(error);

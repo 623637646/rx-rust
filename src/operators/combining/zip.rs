@@ -102,7 +102,7 @@ macro_rules! impl_zip_observer {
             D: Disposable,
         {
             fn on_next(&mut self, value: $input_t) {
-                let _ = self.0.update_model_and_send(|model| {
+                let _ = self.0.update(|model| {
                     if let Some(other) = model.$other_field.0.pop_front() {
                         if model.$other_field.1 && model.$other_field.0.is_empty() {
                             UpdateOutcome::empty().with_next_and_termination_events(
@@ -122,7 +122,7 @@ macro_rules! impl_zip_observer {
             fn on_termination(self, termination: Termination<E>) {
                 match termination {
                     completion @ Termination::Completed => {
-                        let _ = self.0.update_model_and_send(|model| {
+                        let _ = self.0.update(|model| {
                             model.$this_field.1 = true;
                             if model.$this_field.0.is_empty() {
                                 UpdateOutcome::empty().with_termination_event(completion)

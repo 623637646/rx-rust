@@ -106,7 +106,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.0.update_model_and_send(|model| {
+        let _ = self.0.update(|model| {
             UpdateOutcome::empty().with_drop_outside(model.last_value.replace(value))
         });
     }
@@ -124,7 +124,7 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, _: ()) {
-        let _ = self.0.update_model_and_send(|model| {
+        let _ = self.0.update(|model| {
             if let Some(value) = model.last_value.take() {
                 UpdateOutcome::empty().with_next_event(value)
             } else {

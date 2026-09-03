@@ -130,7 +130,7 @@ where
     D: Disposable + MaybeSend + 'static,
 {
     fn on_next(&mut self, value: T) {
-        let _ = self.context.update_model_and_send(|model| {
+        let _ = self.context.update(|model| {
             model.deadline = Instant::now() + self.duration;
             UpdateOutcome::empty().with_next_event(value)
         });
@@ -159,8 +159,7 @@ where
     S: Scheduler + Clone + MaybeSend + 'static,
     D: Disposable + MaybeSend + 'static,
 {
-    let deadline =
-        context.update_model_and_send(|model| UpdateOutcome::new(model.deadline).without_events());
+    let deadline = context.update(|model| UpdateOutcome::new(model.deadline).without_events());
     let Ok(deadline) = deadline else {
         // The source terminated synchronously while it was being subscribed.
         return OptionDisposal::none();
@@ -173,7 +172,7 @@ where
                 return RecursionAction::Stop;
             };
             context
-                .update_model_and_send(|model| {
+                .update(|model| {
                     if Instant::now() < model.deadline {
                         return UpdateOutcome::new(RecursionAction::ContinueAt(model.deadline))
                             .without_events();

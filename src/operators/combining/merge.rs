@@ -97,7 +97,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.update_model_and_send(|model| {
+                let _ = self.0.update(|model| {
                     if model.one_is_completed {
                         UpdateOutcome::empty().with_termination_event(completion)
                     } else {
