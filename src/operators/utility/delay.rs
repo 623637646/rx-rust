@@ -2,6 +2,7 @@ use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
+use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
@@ -104,7 +105,7 @@ where
         let model = Model::<T, S::D> {
             values: VecDeque::new(),
             completion: None,
-            timer: Timer::Stopped,
+            timer: SubscriptionSlot::Idle,
         };
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(DelayObserver {
@@ -122,7 +123,10 @@ struct Model<T, D: Disposable> {
     values: VecDeque<(Instant, T)>,
     /// The instant at which the completion is due, once the source has completed.
     completion: Option<Instant>,
-    timer: Timer<D>,
+    /// Keeps at most one recursive scheduler task alive while events are waiting. The slot is
+    /// reserved while the task is being scheduled, which covers schedulers that can execute a
+    /// zero-delay task before returning its disposal.
+    timer: SubscriptionSlot<BoundDropDisposal<D>>,
 }
 
 impl<T, D: Disposable> Model<T, D> {
@@ -133,15 +137,6 @@ impl<T, D: Disposable> Model<T, D> {
             .map(|(deadline, _)| *deadline)
             .or(self.completion)
     }
-}
-
-/// Keeps at most one recursive scheduler task alive while events are waiting.
-enum Timer<D: Disposable> {
-    Stopped,
-    /// A task is alive. Its disposal is `None` only between scheduling the task and storing the
-    /// returned handle, which covers schedulers that can execute a zero-delay task before
-    /// returning its disposal.
-    Running(Option<BoundDropDisposal<D>>),
 }
 
 struct DelayObserver<T, E, OR, S: Scheduler> {
@@ -165,10 +160,7 @@ where
                 Some(value) => model.values.push_back((deadline, value)),
                 None => model.completion = Some(deadline),
             }
-            let start_timer = matches!(model.timer, Timer::Stopped);
-            if start_timer {
-                model.timer = Timer::Running(None);
-            }
+            let start_timer = model.timer.reserve_if_idle();
             UpdateOutcome::new(start_timer.then_some(deadline))
         });
         let Ok(Some(deadline)) = timer_setup else {
@@ -203,10 +195,7 @@ where
                                     values,
                                     Termination::Completed,
                                 ))
-                                .with_drop_outside(std::mem::replace(
-                                    &mut model.timer,
-                                    Timer::Stopped,
-                                ));
+                                .with_drop_outside(model.timer.release());
                         }
 
                         match model.next_deadline() {
@@ -218,10 +207,7 @@ where
                             // Nothing is waiting anymore: stop the timer until the next event.
                             None => UpdateOutcome::new(RecursionAction::Stop)
                                 .with_events(EventBatch::NextBatch(values))
-                                .with_drop_outside(std::mem::replace(
-                                    &mut model.timer,
-                                    Timer::Stopped,
-                                )),
+                                .with_drop_outside(model.timer.release()),
                         }
                     })
                     .unwrap_or(RecursionAction::Stop)
@@ -229,16 +215,10 @@ where
             Some(deadline.saturating_duration_since(Instant::now())),
         );
 
-        let mut disposal = Some(disposal);
         let _ = self.context.update_model_and_send(move |model| {
-            if let Timer::Running(slot) = &mut model.timer
-                && slot.is_none()
-            {
-                *slot = disposal.take();
-            }
-            // If the timer already stopped (possible for a zero delay), dispose the returned
-            // handle outside the lock.
-            UpdateOutcome::empty().with_drop_outside(disposal)
+            // If the timer already stopped (possible for a zero delay), `fill` gives the handle
+            // back to dispose outside the lock.
+            UpdateOutcome::empty().with_drop_outside(model.timer.fill(disposal))
         });
     }
 }

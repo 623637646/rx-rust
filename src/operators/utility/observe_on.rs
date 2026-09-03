@@ -7,6 +7,7 @@ use crate::{
     utils::{
         pending_events::EventBatch,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscription_slot::SubscriptionSlot,
         types::{MarkerType, MaybeSend},
     },
 };
@@ -92,7 +93,7 @@ where
         let model = Model::<T, E, S::D> {
             values: Vec::new(),
             termination: None,
-            task: Task::Stopped,
+            task: SubscriptionSlot::Idle,
         };
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(ObserveOnObserver {
@@ -107,15 +108,10 @@ where
 struct Model<T, E, D: Disposable> {
     values: Vec<T>,
     termination: Option<Termination<E>>,
-    task: Task<D>,
-}
-
-/// Keeps at most one recursive scheduler task alive while events are waiting.
-///
-/// `Running(None)` covers schedulers that can execute the task before returning its disposal.
-enum Task<D: Disposable> {
-    Stopped,
-    Running(Option<BoundDropDisposal<D>>),
+    /// Keeps at most one recursive scheduler task alive while events are waiting. The slot is
+    /// reserved while the task is being scheduled, which covers schedulers that can execute it
+    /// before returning its disposal.
+    task: SubscriptionSlot<BoundDropDisposal<D>>,
 }
 
 struct ObserveOnObserver<T, E, OR, S: Scheduler> {
@@ -141,11 +137,7 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
                 Event::Next(value) => model.values.push(value),
                 Event::Termination(termination) => model.termination = Some(termination),
             }
-            let start_task = matches!(model.task, Task::Stopped);
-            if start_task {
-                model.task = Task::Running(None);
-            }
-            UpdateOutcome::new(start_task)
+            UpdateOutcome::new(model.task.reserve_if_idle())
         });
         let Ok(true) = task_setup else {
             return;
@@ -192,8 +184,10 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
                                 Some(values),
                             ),
                         };
-                        let finished_task = matches!(action, RecursionAction::Stop)
-                            .then(|| std::mem::replace(&mut model.task, Task::Stopped));
+                        let finished_task = match action {
+                            RecursionAction::Stop => model.task.release(),
+                            _ => None,
+                        };
                         UpdateOutcome::new(action)
                             .with_events(events)
                             .with_drop_outside((finished_task, discarded_values))
@@ -203,15 +197,10 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
             None,
         );
 
-        let mut task = Some(task);
         let _ = self.context.update_model_and_send(move |model| {
-            if let Task::Running(slot) = &mut model.task
-                && slot.is_none()
-            {
-                *slot = task.take();
-            }
-            // If the task already stopped, dispose the returned handle outside the lock.
-            UpdateOutcome::empty().with_drop_outside(task)
+            // If the task already stopped, `fill` gives the handle back to dispose outside the
+            // lock.
+            UpdateOutcome::empty().with_drop_outside(model.task.fill(task))
         });
     }
 }

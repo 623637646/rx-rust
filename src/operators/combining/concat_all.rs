@@ -4,6 +4,7 @@ use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{
     BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
+use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -90,7 +91,7 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model {
             pending_observables: VecDeque::new(),
-            sub_state: SubState::Idle,
+            slot: SubscriptionSlot::Idle,
             is_source_completed: false,
         };
         subscribe_with_context_bound_subscription(observer, model, |context| {
@@ -99,18 +100,12 @@ where
     }
 }
 
-enum SubState<D: Disposable> {
-    Idle,
-    PendingSubscription,
-    Processing(Subscription<D>),
-}
-
 struct Model<'or, T, E, OE1>
 where
     OE1: Observable<'or, T, E>,
 {
     pending_observables: VecDeque<OE1>,
-    sub_state: SubState<OE1::D>,
+    slot: SubscriptionSlot<Subscription<OE1::D>>,
     is_source_completed: bool,
 }
 
@@ -131,12 +126,10 @@ where
     SD: Disposable + MaybeSend + 'or,
 {
     fn on_next(&mut self, value: OE1) {
-        let result = self.0.update_model_and_send(|model| match model.sub_state {
-            SubState::Idle => {
-                model.sub_state = SubState::PendingSubscription;
+        let result = self.0.update_model_and_send(|model| {
+            if model.slot.reserve_if_idle() {
                 UpdateOutcome::new(Some(value))
-            }
-            SubState::PendingSubscription | SubState::Processing(_) => {
+            } else {
                 model.pending_observables.push_back(value);
                 UpdateOutcome::new(None)
             }
@@ -148,15 +141,10 @@ where
         };
         let observer = InnerObserver(self.0.clone());
         let sub = observable.subscribe(observer);
+        // `fill` gives the subscription back when the slot was released while it was being built,
+        // which means the operator already terminated.
         let _ = self.0.update_model_and_send(|model| {
-            match &model.sub_state {
-                SubState::Idle => UpdateOutcome::empty().with_drop_outside(sub), // already terminated
-                SubState::PendingSubscription => {
-                    model.sub_state = SubState::Processing(sub);
-                    UpdateOutcome::empty().without_drop_outside()
-                }
-                SubState::Processing(_) => unreachable!(),
-            }
+            UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub))
         });
     }
 
@@ -165,15 +153,12 @@ where
             completion @ Termination::Completed => {
                 let _ = self.0.update_model_and_send(|model| {
                     model.is_source_completed = true;
-                    match model.sub_state {
-                        SubState::Idle => {
-                            // The state is only possible to be PendingSubscription or Processing when the pending_observables is not empty.
-                            debug_assert!(model.pending_observables.is_empty());
-                            UpdateOutcome::empty().with_termination_event(completion)
-                        }
-                        SubState::PendingSubscription | SubState::Processing(_) => {
-                            UpdateOutcome::empty().without_events()
-                        }
+                    if model.slot.is_idle() {
+                        // The slot is only possible to be reserved or active when the pending_observables is not empty.
+                        debug_assert!(model.pending_observables.is_empty());
+                        UpdateOutcome::empty().with_termination_event(completion)
+                    } else {
+                        UpdateOutcome::empty().without_events()
                     }
                 });
             }
@@ -226,48 +211,27 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
 {
     loop {
         let result = context.update_model_and_send(|model| {
-            match &model.sub_state {
-                SubState::PendingSubscription => {
-                    // already terminated
-                    model.sub_state = SubState::Idle;
-                    UpdateOutcome::new(None)
-                        .without_events()
-                        .without_drop_outside()
-                }
-                SubState::Idle | SubState::Processing(_) => {
-                    if let Some(observable) = model.pending_observables.pop_front() {
-                        match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription)
-                        {
-                            SubState::Idle => UpdateOutcome::new(Some(observable))
-                                .without_events()
-                                .without_drop_outside(),
-                            SubState::PendingSubscription => {
-                                unreachable!()
-                            }
-                            SubState::Processing(subscription) => {
-                                UpdateOutcome::new(Some(observable))
-                                    .without_events()
-                                    .with_drop_outside(subscription)
-                            }
-                        }
-                    } else if model.is_source_completed {
-                        UpdateOutcome::new(None)
-                            .with_termination_event(Termination::Completed)
-                            .without_drop_outside()
-                    } else {
-                        match std::mem::replace(&mut model.sub_state, SubState::Idle) {
-                            SubState::Idle => UpdateOutcome::new(None)
-                                .without_events()
-                                .without_drop_outside(),
-                            SubState::PendingSubscription => {
-                                unreachable!()
-                            }
-                            SubState::Processing(subscription) => UpdateOutcome::new(None)
-                                .without_events()
-                                .with_drop_outside(subscription),
-                        }
-                    }
-                }
+            if model.slot.is_reserved() {
+                // Already terminated. A reserved slot holds nothing, so nothing is dropped here;
+                // releasing it makes the pending fill give its subscription back.
+                let released = model.slot.release();
+                debug_assert!(released.is_none());
+                return UpdateOutcome::new(None)
+                    .without_events()
+                    .without_drop_outside();
+            }
+            if let Some(observable) = model.pending_observables.pop_front() {
+                UpdateOutcome::new(Some(observable))
+                    .without_events()
+                    .with_drop_outside(model.slot.reserve())
+            } else if model.is_source_completed {
+                UpdateOutcome::new(None)
+                    .with_termination_event(Termination::Completed)
+                    .without_drop_outside()
+            } else {
+                UpdateOutcome::new(None)
+                    .without_events()
+                    .with_drop_outside(model.slot.release())
             }
         });
         let observable = match result {
@@ -280,18 +244,15 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
         let observer = InnerObserver(context.clone());
         let sub = observable.subscribe(observer);
         let result = context.update_model_and_send(|model| {
-            match &model.sub_state {
-                SubState::Idle => UpdateOutcome::new(false).with_drop_outside(sub), // already terminated
-                SubState::PendingSubscription => {
-                    model.sub_state = SubState::Processing(sub);
-                    UpdateOutcome::new(true).without_drop_outside()
-                }
-                SubState::Processing(_) => unreachable!(),
-            }
+            // `fill` gives the subscription back when the slot was released while it was being
+            // built, which means the inner observable already terminated: the loop then goes on
+            // to the next pending observable instead of waiting for this subscription.
+            let unused = model.slot.fill(sub);
+            UpdateOutcome::new(unused.is_none()).with_drop_outside(unused)
         });
         match result {
-            Ok(stop) => {
-                if stop {
+            Ok(subscribed) => {
+                if subscribed {
                     break;
                 }
             }

@@ -5,6 +5,7 @@ use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
 };
+use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -89,7 +90,7 @@ where
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model {
-            sub_state: SubState::Idle,
+            slot: SubscriptionSlot::Idle,
             is_source_completed: false,
             current_sub_id: IncrementId::default(),
         };
@@ -99,14 +100,8 @@ where
     }
 }
 
-enum SubState<D: Disposable> {
-    Idle,
-    PendingSubscription,
-    Processing(Subscription<D>),
-}
-
 struct Model<D: Disposable> {
-    sub_state: SubState<D>,
+    slot: SubscriptionSlot<Subscription<D>>,
     is_source_completed: bool,
     current_sub_id: IncrementId,
 }
@@ -127,13 +122,7 @@ where
     fn on_next(&mut self, value: OE1) {
         let result = self.0.update_model_and_send(|model| {
             model.current_sub_id.increment();
-            match std::mem::replace(&mut model.sub_state, SubState::PendingSubscription) {
-                SubState::Idle => UpdateOutcome::new(model.current_sub_id).without_drop_outside(),
-                SubState::Processing(subscription) => {
-                    UpdateOutcome::new(model.current_sub_id).with_drop_outside(subscription)
-                }
-                SubState::PendingSubscription => unreachable!(),
-            }
+            UpdateOutcome::new(model.current_sub_id).with_drop_outside(model.slot.reserve())
         });
         let sub_id = match result {
             Ok(sub_id) => sub_id,
@@ -141,15 +130,10 @@ where
         };
         let observer = SwitchInnerObserver(self.0.clone(), sub_id);
         let sub = value.subscribe(observer);
+        // `fill` gives the subscription back when the slot was released while it was being built,
+        // which means the operator already terminated.
         let _ = self.0.update_model_and_send(|model| {
-            match &mut model.sub_state {
-                SubState::Idle => UpdateOutcome::empty().with_drop_outside(sub), // already terminated
-                SubState::PendingSubscription => {
-                    model.sub_state = SubState::Processing(sub);
-                    UpdateOutcome::empty().without_drop_outside()
-                }
-                SubState::Processing(_) => unreachable!(),
-            }
+            UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub))
         });
     }
 
@@ -158,11 +142,10 @@ where
             completion @ Termination::Completed => {
                 let _ = self.0.update_model_and_send(|model| {
                     model.is_source_completed = true;
-                    match model.sub_state {
-                        SubState::Idle => UpdateOutcome::empty().with_termination_event(completion),
-                        SubState::Processing(_) | SubState::PendingSubscription => {
-                            UpdateOutcome::empty().without_events()
-                        }
+                    if model.slot.is_idle() {
+                        UpdateOutcome::empty().with_termination_event(completion)
+                    } else {
+                        UpdateOutcome::empty().without_events()
                     }
                 });
             }
@@ -209,15 +192,13 @@ where
                             .with_termination_event(completion)
                             .without_drop_outside()
                     } else {
-                        match std::mem::replace(&mut model.sub_state, SubState::Idle) {
-                            SubState::Idle => unreachable!(),
-                            SubState::PendingSubscription => UpdateOutcome::empty()
-                                .without_events()
-                                .without_drop_outside(),
-                            SubState::Processing(subscription) => UpdateOutcome::empty()
-                                .without_events()
-                                .with_drop_outside(subscription),
-                        }
+                        assert!(
+                            !model.slot.is_idle(),
+                            "the terminating inner subscription is still held or reserved"
+                        );
+                        UpdateOutcome::empty()
+                            .without_events()
+                            .with_drop_outside(model.slot.release())
                     }
                 }
                 error @ Termination::Error(_) => UpdateOutcome::empty()
