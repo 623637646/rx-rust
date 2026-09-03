@@ -111,7 +111,7 @@ where
         let mut observer = Some(observer);
         // Reading the termination, handing out the id and queueing the entry are one step under
         // one lock.
-        let admission = self.0.update_and_send(|resources| {
+        let admission = self.0.update(|resources| {
             if let Some(termination) = resources.termination.clone() {
                 return UpdateOutcome::new(Admission::Terminated(termination)).without_events();
             }
@@ -157,7 +157,7 @@ where
     fn on_next(&mut self, value: T) {
         // One step under one lock, so a value can never be queued behind the termination. A value
         // that arrives after it is dropped outside the lock.
-        let _ = self.0.update_and_send(|resources| {
+        let _ = self.0.update(|resources| {
             if resources.termination.is_some() {
                 return UpdateOutcome::empty()
                     .with_drop_outside(value)
@@ -172,7 +172,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         // One step under one lock, so only the first termination is ever queued, and nothing joins
         // the subject after it.
-        let _ = self.0.update_and_send(|resources| {
+        let _ = self.0.update(|resources| {
             if resources.termination.is_some() {
                 // Already terminated: this termination is dropped outside the lock.
                 return UpdateOutcome::empty()
@@ -196,7 +196,7 @@ where
         // The resources are gone once the delivery stopped, which only an observer's panic does:
         // the subject is then dead, and reports no termination.
         self.0
-            .update_resources(|resources| resources.termination.clone())
+            .update(|resources| UpdateOutcome::new(resources.termination.clone()))
             .unwrap_or(None)
     }
 }

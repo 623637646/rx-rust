@@ -5,10 +5,10 @@
 //! hold it across a notification, a drop, or a second lock: every transition, the delivery loop,
 //! and the rule that nothing is dropped or notified under the lock live here.
 //!
-//! A host that must change its own data and emit the resulting events atomically does so through
-//! [`SerializedDelivery::update_and_send`], which runs its callback under the same lock that then
-//! queues the events. The callback describes its outcome with an [`UpdateOutcome`], the one way to
-//! hand this module events to queue and a value to drop once they were delivered.
+//! A host that must change its own data, and emit the resulting events atomically, does so through
+//! [`SerializedDelivery::update`], which runs its callback under the same lock that then queues
+//! the events. The callback describes its outcome with an [`UpdateOutcome`], the one way to hand
+//! this module events to queue and a value to drop once they were delivered.
 
 use crate::{
     observer::{Observer, Termination},
@@ -186,34 +186,6 @@ impl<T, E, OR, R> SerializedDelivery<T, E, OR, R> {
         })))
     }
 
-    /// Updates the resources, without queueing anything, so no delivery can start here.
-    ///
-    /// This is the update a host uses when it only has to change what it owns: it needs no
-    /// observer, so it is available whatever `OR` is. Use [`Self::update_and_send`] to change the
-    /// resources and emit the resulting events atomically.
-    ///
-    /// `update` runs under the lock, so it must not notify anyone or drop a value that can
-    /// re-enter this delivery: give such a value back as the result instead, and the caller drops
-    /// it once the lock is released.
-    ///
-    /// Returns [`DeliveryStopped`], without running `update`, once the delivery has stopped.
-    /// `update` and everything it captured are then dropped outside the lock.
-    pub fn update_resources<Out>(
-        &self,
-        update: impl FnOnce(&mut R) -> Out,
-    ) -> Result<Out, DeliveryStopped> {
-        // Keep `update` out of the closure so that, when the delivery has stopped, its captures
-        // are dropped only after the lock is released.
-        let mut update = Some(update);
-        self.0
-            .lock_mut(|mut lock| {
-                let resources = lock.resources_mut()?;
-                let update = update.take().expect("the update runs at most once");
-                Some(update(resources))
-            })
-            .ok_or(DeliveryStopped)
-    }
-
     /// Stops the delivery, dropping the observer without notifying it. Stopping again is a no-op.
     pub fn stop(&self) {
         // The taken state owns the observer, the queued events, and the resources, so binding it
@@ -241,8 +213,8 @@ where
 
     /// Updates the resources and queues the events that update produced, under one lock.
     ///
-    /// Use [`Self::update_resources`] when the update emits nothing: it needs no observer, so it
-    /// does not ask the host for one.
+    /// This is how a host changes what it owns, whether or not that emits anything: an update that
+    /// emits nothing simply decides no events, and then no delivery can start here.
     ///
     /// `update` describes its outcome with an [`UpdateOutcome`]. It must not notify anyone or drop
     /// a value that can re-enter this delivery: it runs under the lock, so hand such a value to
@@ -250,7 +222,7 @@ where
     ///
     /// Returns [`DeliveryStopped`], without running `update`, once the delivery has stopped.
     /// `update` and everything it captured are then dropped outside the lock.
-    pub fn update_and_send<Out, DO, const EVENTS_DECIDED: bool>(
+    pub fn update<Out, DO, const EVENTS_DECIDED: bool>(
         &self,
         update: impl FnOnce(&mut R) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
     ) -> Result<Out, DeliveryStopped> {

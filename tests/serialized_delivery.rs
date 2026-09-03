@@ -28,6 +28,7 @@ const ERROR: TestError = "boom";
 type TestObserver = BoxedObserver<'static, Value, TestError>;
 type TestDelivery = SerializedDelivery<Value, TestError, TestObserver, Resources>;
 type WeakTestDelivery = WeakSerializedDelivery<Value, TestError, TestObserver, Resources>;
+type TestOutcome<R> = UpdateOutcome<Value, TestError, R>;
 
 // MARK: - The log the tests assert on
 
@@ -503,7 +504,7 @@ fn events_sent_from_on_termination_are_rejected() {
             // The state is stopped before the terminal notification, so nothing can follow it.
             assert!(!delivery.send(next(1)));
             assert_eq!(
-                delivery.update_resources(|_resources| ()),
+                delivery.update(|_resources| UpdateOutcome::empty()),
                 Err(DeliveryStopped)
             );
         })
@@ -543,8 +544,9 @@ fn stop_drops_the_observer_and_the_resources_outside_the_lock() {
         .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
         .build();
     delivery
-        .update_resources(|resources| {
+        .update(|resources| {
             resources.on_drop = Some(note_and_reenter(&handle, &log, "resources dropped"));
+            UpdateOutcome::empty()
         })
         .expect("the delivery is idle");
 
@@ -662,36 +664,36 @@ fn a_termination_sent_from_on_next_is_delivered_after_the_queued_values() {
     );
 }
 
-// MARK: - `update_resources`
+// MARK: - `update`
 
 #[test]
-fn update_resources_updates_the_model_and_returns_its_result() {
+fn update_without_events_updates_the_model_and_returns_its_result() {
     let log = new_log();
     let delivery = builder(&log).model(1).build();
 
     assert_eq!(
-        delivery.update_resources(|resources| {
+        delivery.update(|resources| {
             resources.model += 10;
-            resources.model
+            UpdateOutcome::new(resources.model)
         }),
         Ok(11)
     );
     assert_eq!(
-        delivery.update_resources(|resources| resources.model),
+        delivery.update(|resources| UpdateOutcome::new(resources.model)),
         Ok(11)
     );
     assert_eq!(records(&log), [], "an update alone delivers nothing");
 }
 
 #[test]
-fn update_resources_runs_while_a_delivery_is_running() {
+fn update_runs_while_a_delivery_is_running() {
     let log = new_log();
     let delivery = builder(&log)
         .on_next(|delivery, number| {
             assert_eq!(
-                delivery.update_resources(|resources| {
+                delivery.update(|resources| {
                     resources.model += number;
-                    resources.model
+                    UpdateOutcome::new(resources.model)
                 }),
                 Ok(number * (number + 1) / 2)
             );
@@ -700,19 +702,19 @@ fn update_resources_runs_while_a_delivery_is_running() {
 
     assert!(delivery.send(next_batch([1, 2, 3])));
     assert_eq!(
-        delivery.update_resources(|resources| resources.model),
+        delivery.update(|resources| UpdateOutcome::new(resources.model)),
         Ok(6)
     );
 }
 
 #[test]
-fn update_resources_after_a_termination_returns_delivery_stopped() {
+fn update_after_a_termination_returns_delivery_stopped() {
     let log = new_log();
     let delivery = builder(&log).build();
 
     assert!(delivery.send(completed()));
     assert_eq!(
-        delivery.update_resources(|resources| resources.model),
+        delivery.update(|resources| UpdateOutcome::new(resources.model)),
         Err(DeliveryStopped)
     );
 }
@@ -728,7 +730,7 @@ fn a_stopped_update_does_not_run_and_is_dropped_outside_the_lock() {
         &log,
         "update dropped",
     ));
-    let result: Result<(), _> = delivery.update_resources(move |_resources| {
+    let result: Result<(), _> = delivery.update(move |_resources| -> TestOutcome<()> {
         drop(probe); // Never runs: it is what makes the update own the probe.
         panic!("the update must not run once the delivery has stopped");
     });
@@ -741,36 +743,20 @@ fn a_stopped_update_does_not_run_and_is_dropped_outside_the_lock() {
     );
 }
 
-// MARK: - `update_and_send`
-
 #[test]
-fn update_and_send_without_events_only_updates_the_model() {
-    let log = new_log();
-    let delivery = builder(&log).build();
-
-    let result = delivery.update_and_send(|resources| {
-        resources.model += 1;
-        UpdateOutcome::new(resources.model)
-    });
-
-    assert_eq!(result, Ok(1));
-    assert_eq!(records(&log), []);
-}
-
-#[test]
-fn update_and_send_delivers_the_events_of_its_outcome() {
+fn update_delivers_the_events_of_its_outcome() {
     let log = new_log();
     let delivery = builder(&log).build();
 
     assert_eq!(
-        delivery.update_and_send(|resources| {
+        delivery.update(|resources| {
             resources.model = 1;
             UpdateOutcome::new("first").with_next_event(Value::new(1))
         }),
         Ok("first")
     );
     assert_eq!(
-        delivery.update_and_send(|_resources| {
+        delivery.update(|_resources| {
             UpdateOutcome::empty()
                 .with_events(EventBatch::NextBatch(vec![Value::new(2), Value::new(3)]))
         }),
@@ -780,11 +766,11 @@ fn update_and_send_delivers_the_events_of_its_outcome() {
 }
 
 #[test]
-fn update_and_send_terminates_before_dropping_what_it_asked_to_drop_outside() {
+fn update_terminates_before_dropping_what_it_asked_to_drop_outside() {
     let log = new_log();
     let delivery = builder(&log).build();
 
-    let result = delivery.update_and_send(|resources| {
+    let result = delivery.update(|resources| {
         resources.model = 1;
         UpdateOutcome::empty()
             .with_drop_outside(Value::new(0).on_drop(note(&log, "dropped outside")))
@@ -806,7 +792,7 @@ fn update_and_send_terminates_before_dropping_what_it_asked_to_drop_outside() {
 }
 
 #[test]
-fn what_update_and_send_drops_outside_is_dropped_with_the_lock_released() {
+fn what_an_update_drops_outside_is_dropped_with_the_lock_released() {
     let log = new_log();
     let delivery = builder(&log).build();
     let probe = Value::new(0).on_drop(note_and_reenter(
@@ -815,7 +801,7 @@ fn what_update_and_send_drops_outside_is_dropped_with_the_lock_released() {
         "dropped outside",
     ));
 
-    let result = delivery.update_and_send(move |_resources| {
+    let result = delivery.update(move |_resources| {
         UpdateOutcome::empty()
             .with_drop_outside(probe)
             .with_next_event(Value::new(1))
@@ -834,31 +820,31 @@ fn what_update_and_send_drops_outside_is_dropped_with_the_lock_released() {
 }
 
 #[test]
-fn update_and_send_with_a_termination_event_stops_the_delivery() {
+fn update_with_a_termination_event_stops_the_delivery() {
     let log = new_log();
     let delivery = builder(&log).build();
 
     assert_eq!(
-        delivery.update_and_send(|_resources| {
+        delivery.update(|_resources| {
             UpdateOutcome::empty().with_termination_event(Termination::Completed)
         }),
         Ok(())
     );
     assert_eq!(
-        delivery.update_and_send(|_resources| UpdateOutcome::empty()),
+        delivery.update(|_resources| UpdateOutcome::empty()),
         Err(DeliveryStopped)
     );
     assert!(!delivery.send(next(1)));
 }
 
 #[test]
-fn update_and_send_from_on_next_queues_its_events_after_the_pending_ones() {
+fn update_from_on_next_queues_its_events_after_the_pending_ones() {
     let log = new_log();
     let delivery = builder(&log)
         .on_next(|delivery, number| {
             if number == 1 {
                 assert_eq!(
-                    delivery.update_and_send(|resources| {
+                    delivery.update(|resources| {
                         resources.model += 1;
                         UpdateOutcome::new(resources.model).with_next_event(Value::new(10))
                     }),
@@ -873,7 +859,7 @@ fn update_and_send_from_on_next_queues_its_events_after_the_pending_ones() {
 }
 
 #[test]
-fn update_and_send_runs_and_returns_even_when_its_events_are_rejected() {
+fn update_runs_and_returns_even_when_its_events_are_rejected() {
     let log = new_log();
     let log_of_observer = log.clone();
     let delivery = builder(&log)
@@ -886,7 +872,7 @@ fn update_and_send_runs_and_returns_even_when_its_events_are_rejected() {
             // so its events are dropped instead of being delivered.
             let dropped = Value::new(10).on_drop(note(&log_of_observer, "10 dropped"));
             assert_eq!(
-                delivery.update_and_send(move |resources| {
+                delivery.update(move |resources| {
                     resources.model += 1;
                     UpdateOutcome::new(resources.model).with_next_event(dropped)
                 }),
@@ -907,7 +893,7 @@ fn the_arms_of_one_update_share_the_type_of_their_outcome() {
 
     // Both arms are one expression, so the type state makes the arm that emits nothing say so.
     let update = || {
-        delivery.update_and_send(|resources| {
+        delivery.update(|resources| {
             resources.model += 1;
             if resources.model == 1 {
                 UpdateOutcome::new(resources.model)

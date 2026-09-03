@@ -84,7 +84,7 @@ pub fn subscribe_with_context_bound_subscription<'or, T, E, OR, D, M, F>(
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
-    OR: MaybeSend + 'or,
+    OR: Observer<T, E> + MaybeSend + 'or,
     D: Disposable + MaybeSend + 'or,
     M: MaybeSend + 'or,
     F: FnOnce(SubscriptionContext<T, E, OR, M, D>) -> Subscription<D>,
@@ -106,12 +106,13 @@ where
     let subscription = builder(context);
     // If the context stopped while the builder was running, the update never runs and the
     // subscription is dropped with this closure, outside the lock.
-    let _ = delivery.update_resources(|resources| {
+    let _ = delivery.update(|resources| {
         debug_assert!(
             resources.subscription.is_none(),
             "the bound subscription is installed only once"
         );
         resources.subscription = Some(subscription);
+        UpdateOutcome::empty()
     });
     disposable.into_boxed().into_subscription()
 }
@@ -156,7 +157,7 @@ where
         callback: impl FnOnce(&mut M) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
     ) -> Result<R, DeliveryStopped> {
         self.delivery
-            .update_and_send(|resources| callback(&mut resources.model))
+            .update(|resources| callback(&mut resources.model))
     }
 
     pub fn send_next(&self, value: T) {
