@@ -1,7 +1,8 @@
 use crate::delegate_disposal;
-use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
-use crate::safe_lock_option;
-use crate::utils::types::{MaybeSend, Mutable, Shared};
+use crate::disposable::{
+    Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
+};
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
@@ -54,7 +55,7 @@ impl<OE1, OE2> Concat<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<D1, D2>,
-    ChainDisposal<Shared<Mutable<Option<Subscription<D2>>>>, D1>,
+    ChainDisposal<SharedDisposal<Subscription<D2>>, D1>,
     where D1: Disposable, D2: Disposable
 );
 
@@ -67,7 +68,7 @@ where
     type D = Disposal<OE1::D, OE2::D>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        let sub_2 = Shared::new(Mutable::new(None));
+        let sub_2 = SharedDisposal::default();
         let observer = ConcatObserver {
             observer,
             source_2: self.source_2,
@@ -83,7 +84,7 @@ where
 struct ConcatObserver<OR, OE2, D: Disposable> {
     observer: OR,
     source_2: OE2,
-    sub_2: Shared<Mutable<Option<Subscription<D>>>>,
+    sub_2: SharedDisposal<Subscription<D>>,
 }
 
 impl<'or, T, E, OR, OE2> Observer<T, E> for ConcatObserver<OR, OE2, OE2::D>
@@ -98,8 +99,11 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let sub = self.source_2.subscribe(self.observer);
-                safe_lock_option!(replace: self.sub_2, sub);
+                // `replace` does not run the builder once the subscription was disposed, so the
+                // second source is never subscribed after downstream unsubscribed, and a
+                // subscription built while downstream unsubscribes is disposed right away.
+                self.sub_2
+                    .replace(|| self.source_2.subscribe(self.observer));
             }
             error @ Termination::Error(_) => {
                 self.observer.on_termination(error);
