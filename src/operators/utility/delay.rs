@@ -239,7 +239,9 @@ where
             Termination::Completed => self.queue_event(None),
             // An error is not delayed: it terminates the subscription right away, which drops the
             // values that are still waiting along with the timer.
-            error @ Termination::Error(_) => self.context.send_termination(error),
+            error @ Termination::Error(_) => {
+                self.context.send_termination(error);
+            }
         }
     }
 }

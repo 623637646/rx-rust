@@ -87,7 +87,7 @@ cargo tarpaulin --out Html --features tokio-scheduler
   `on_termination`. One "transaction" should take the lock once, not repeatedly.
 - **Subscription helpers**: prefer the existing helpers over hand-rolled state:
   `subscribe_with_context` when the operator can only terminate from inside the source's own
-  `on_termination`; `subscribe_with_context_bound_subscription` when it can terminate while the
+  `on_termination`; `subscribe_with_context_owning_source` when it can terminate while the
   source is still active (notifier, scheduler task, another source);
   `subscribe_with_auto_dispose_on_termination` for the simple case.
 - Keep `pub` surface minimal; add `Clone`/`Send`/`Sync`/`'static` bounds only where actually needed.

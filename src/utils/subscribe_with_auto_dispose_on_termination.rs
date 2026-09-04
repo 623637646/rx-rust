@@ -31,6 +31,21 @@ where
     shared_disposal.into_subscription()
 }
 
+/// Whether `OR` is an [`AutoDisposeOnTerminationObserver`], whatever its generic arguments are.
+///
+/// Only the outermost type is recognized: an auto-disposing observer wrapped inside another
+/// observer is not detected. This is a best-effort check meant for `debug_assert!`, not a complete
+/// one.
+pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
+    fn type_name_without_generics<T>() -> &'static str {
+        let name = std::any::type_name::<T>();
+        name.split_once('<').map_or(name, |(name, _)| name)
+    }
+
+    type_name_without_generics::<OR>()
+        == type_name_without_generics::<AutoDisposeOnTerminationObserver<(), ()>>()
+}
+
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct AutoDisposeOnTerminationObserver<OR, D: Disposable> {

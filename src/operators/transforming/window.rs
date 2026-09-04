@@ -5,9 +5,7 @@ use crate::{
     subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
     utils::{
         pending_events::EventBatch,
-        subscribe_with_context::{
-            self, SubscriptionContext, subscribe_with_context_bound_subscription,
-        },
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_owning_source},
         types::MaybeSend,
     },
 };
@@ -118,7 +116,7 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = subscribe_with_context::BoundSubscriptionDisposal<'or>;
+    type D = subscribe_with_context::OwningDisposal<'or>;
 
     fn subscribe(
         self,
@@ -130,7 +128,7 @@ where
         };
         // The windows own their buffered items, so the context needs no model of its own: it only
         // serializes the actions below and owns the source and boundary subscriptions.
-        subscribe_with_context_bound_subscription(observer, (), |context| {
+        subscribe_with_context_owning_source(observer, (), |context| {
             // The first window is opened before subscribing, so that a synchronous source has a
             // window to deliver its values to.
             context.send_next(DelegateAction::EmitWindow);

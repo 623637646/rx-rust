@@ -9,16 +9,23 @@ use crate::{
     utils::{
         pending_events::EventBatch,
         serialized_delivery::{SerializedDelivery, WeakSerializedDelivery},
+        subscribe_with_auto_dispose_on_termination::is_auto_dispose_on_termination_observer,
         types::MaybeSend,
     },
 };
 use educe::Educe;
 
+// The disposal of a context that does not own its source subscription: stopping the context,
+// followed by the caller's own subscription. Returned by `subscribe_with_context`.
 delegate_disposal!(
     Disposal<'or, D>,
     ChainDisposal<BoxedDisposal<'or>, D>,
     where D: Disposable
 );
+
+/// The type-erased disposal of a context that owns its source subscription. Returned by
+/// [`subscribe_with_context_owning_source`].
+pub type OwningDisposal<'or> = BoxedDisposal<'or>;
 
 /// Creates a subscription backed by a shared, serialized context containing the downstream
 /// observer and a mutable model.
@@ -32,7 +39,7 @@ delegate_disposal!(
 ///
 /// When the context can instead terminate while the source is still active — from a notifier, from
 /// a scheduler task, or from another source of a multi-source operator — use
-/// [`subscribe_with_context_bound_subscription`] so that the source is disposed on termination.
+/// [`subscribe_with_context_owning_source`] so that the source is disposed on termination.
 pub fn subscribe_with_context<'or, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
@@ -47,24 +54,13 @@ where
     F: FnOnce(SubscriptionContext<T, E, OR, M>) -> Subscription<D>,
 {
     debug_assert_observer_compatibility::<OR>();
-    // This context does not own its source subscription: the caller chains it below instead.
-    let delivery = SerializedDelivery::idle(
-        observer,
-        ContextResources {
-            model,
-            subscription: None,
-        },
-    );
-    let context = SubscriptionContext {
-        delivery: delivery.clone(),
-    };
-    let disposable = SubscriptionContextDisposal { delivery };
+    // This context does not own its source subscription, so its own `D` is `()`: the caller's
+    // subscription, of the unrelated type `D`, is chained below instead.
+    let context = SubscriptionContext::<T, E, OR, M, ()>::new(observer, model);
+    let disposal = context.disposal();
     let subscription = builder(context);
-    subscription.preceded_by(disposable.into_boxed()).map_into()
+    subscription.preceded_by(disposal.into_boxed()).map_into()
 }
-
-/// Type-erased disposal returned when the context owns the source subscription.
-pub type BoundSubscriptionDisposal<'or> = BoxedDisposal<'or>;
 
 /// Creates a context subscription whose source subscription is owned by the context.
 ///
@@ -73,14 +69,14 @@ pub type BoundSubscriptionDisposal<'or> = BoxedDisposal<'or>;
 ///
 /// Use this whenever the context can terminate while the source is still active — from a notifier,
 /// from a scheduler task, or from another source of a multi-source operator. Owning the source
-/// costs `D: MaybeSend + 'or` and erases the disposal into [`BoundSubscriptionDisposal`], so when
+/// costs `D: MaybeSend + 'or` and erases the disposal into [`OwningDisposal`], so when
 /// the context can only terminate from inside the source's own `on_termination` prefer
 /// [`subscribe_with_context`], which keeps `D` concrete.
-pub fn subscribe_with_context_bound_subscription<'or, T, E, OR, D, M, F>(
+pub fn subscribe_with_context_owning_source<'or, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
     builder: F,
-) -> Subscription<BoundSubscriptionDisposal<'or>>
+) -> Subscription<OwningDisposal<'or>>
 where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
@@ -90,31 +86,15 @@ where
     F: FnOnce(SubscriptionContext<T, E, OR, M, D>) -> Subscription<D>,
 {
     debug_assert_observer_compatibility::<OR>();
-    let delivery = SerializedDelivery::idle(
-        observer,
-        ContextResources {
-            model,
-            subscription: None,
-        },
+    let context = SubscriptionContext::<T, E, OR, M, D>::new(observer, model);
+    let disposal = context.disposal();
+    let subscription = builder(context.clone());
+    let previous_subscription = context.install_source_subscription(subscription);
+    debug_assert!(
+        !matches!(previous_subscription, Ok(Some(_))),
+        "the source subscription is installed only once"
     );
-    let context = SubscriptionContext {
-        delivery: delivery.clone(),
-    };
-    let disposable = SubscriptionContextDisposal {
-        delivery: delivery.clone(),
-    };
-    let subscription = builder(context);
-    // If the context stopped while the builder was running, the update never runs and the
-    // subscription is dropped with this closure, outside the lock.
-    let _ = delivery.update(|resources| {
-        debug_assert!(
-            resources.subscription.is_none(),
-            "the bound subscription is installed only once"
-        );
-        resources.subscription = Some(subscription);
-        UpdateOutcome::empty()
-    });
-    disposable.into_boxed().into_subscription()
+    disposal.into_boxed().into_subscription()
 }
 
 /// What a context owns besides its observer and its queued events.
@@ -126,19 +106,50 @@ where
 #[educe(Debug)]
 struct ContextResources<M, D: Disposable> {
     model: M,
-    /// `None` when the context does not own its source subscription, or while a bound
-    /// subscription's builder is still running.
-    subscription: Option<Subscription<D>>,
+    /// `None` when the context does not own its source subscription — `D` is then `()` — or
+    /// while the builder of an owned source subscription is still running.
+    source_subscription: Option<Subscription<D>>,
 }
 
 type ContextDelivery<T, E, OR, M, D> = SerializedDelivery<T, E, OR, ContextResources<M, D>>;
 type WeakContextDelivery<T, E, OR, M, D> = WeakSerializedDelivery<T, E, OR, ContextResources<M, D>>;
 
 /// Context used by operator observers to serialize model updates and downstream events.
+///
+/// `D` is the disposal of the source subscription the context owns, and `()` when it owns none.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SubscriptionContext<T, E, OR, M, D: Disposable = ()> {
     delivery: ContextDelivery<T, E, OR, M, D>,
+}
+
+impl<T, E, OR, M, D: Disposable> SubscriptionContext<T, E, OR, M, D> {
+    /// Creates a context holding `observer` and `model`, owning no source subscription yet.
+    fn new(observer: OR, model: M) -> Self {
+        Self {
+            delivery: SerializedDelivery::idle(
+                observer,
+                ContextResources {
+                    model,
+                    source_subscription: None,
+                },
+            ),
+        }
+    }
+
+    /// Creates the disposal that stops this context.
+    fn disposal(&self) -> SubscriptionContextDisposal<T, E, OR, M, D> {
+        SubscriptionContextDisposal {
+            delivery: self.delivery.clone(),
+        }
+    }
+
+    /// Creates a non-owning reference to this context.
+    pub fn downgrade(&self) -> WeakSubscriptionContext<T, E, OR, M, D> {
+        WeakSubscriptionContext {
+            delivery: self.delivery.downgrade(),
+        }
+    }
 }
 
 impl<T, E, OR, M, D> SubscriptionContext<T, E, OR, M, D>
@@ -162,22 +173,36 @@ where
             .update(|resources| callback(&mut resources.model))
     }
 
-    pub fn send_next(&self, value: T) {
-        self.send(EventBatch::Next(value));
+    /// Gives the context the source subscription it owns, to be disposed once the context stops.
+    ///
+    /// The subscription it replaces — none, unless it is installed twice — is handed back so that
+    /// it is dropped outside the lock. Once the context has stopped, `subscription` is not
+    /// installed but disposed, outside the lock, and [`DeliveryStopped`] is returned.
+    fn install_source_subscription(
+        &self,
+        subscription: Subscription<D>,
+    ) -> Result<Option<Subscription<D>>, DeliveryStopped> {
+        self.delivery.update(|resources| {
+            UpdateOutcome::new(resources.source_subscription.replace(subscription))
+        })
     }
 
-    pub fn send_termination(&self, termination: Termination<E>) {
-        self.send(EventBatch::Termination(termination));
+    /// Sends `value` downstream. Returns whether it was accepted, as [`Self::send`] does.
+    pub fn send_next(&self, value: T) -> bool {
+        self.send(EventBatch::Next(value))
     }
 
-    pub fn send(&self, events: EventBatch<T, E>) {
-        self.delivery.send(events);
+    /// Sends `termination` downstream. Returns whether it was accepted, as [`Self::send`] does.
+    pub fn send_termination(&self, termination: Termination<E>) -> bool {
+        self.send(EventBatch::Termination(termination))
     }
 
-    pub fn downgrade(&self) -> WeakSubscriptionContext<T, E, OR, M, D> {
-        WeakSubscriptionContext {
-            delivery: self.delivery.downgrade(),
-        }
+    /// Sends `events` downstream, delivering them now or queueing them behind a running delivery.
+    ///
+    /// Returns whether the events were accepted. They are rejected, and dropped, once the context
+    /// has stopped or a termination is already queued.
+    pub fn send(&self, events: EventBatch<T, E>) -> bool {
+        self.delivery.send(events)
     }
 }
 
@@ -186,8 +211,9 @@ struct SubscriptionContextDisposal<T, E, OR, M, D: Disposable> {
 }
 
 impl<T, E, OR, M, D: Disposable> Disposable for SubscriptionContextDisposal<T, E, OR, M, D> {
+    /// Stops the context, so that every later event is dropped.
     fn dispose(self) {
-        self.delivery.stop(); // Stops the context, so that every later event is dropped
+        self.delivery.stop();
     }
 }
 
@@ -199,6 +225,7 @@ pub struct WeakSubscriptionContext<T, E, OR, M, D: Disposable = ()> {
 }
 
 impl<T, E, OR, M, D: Disposable> WeakSubscriptionContext<T, E, OR, M, D> {
+    /// Returns the context, or `None` once every strong reference to it is gone.
     pub fn upgrade(&self) -> Option<SubscriptionContext<T, E, OR, M, D>> {
         self.delivery
             .upgrade()
@@ -208,21 +235,8 @@ impl<T, E, OR, M, D: Disposable> WeakSubscriptionContext<T, E, OR, M, D> {
 
 fn debug_assert_observer_compatibility<OR>() {
     debug_assert!(
-        {
-            fn type_name_without_generics<T>() -> &'static str {
-                std::any::type_name::<T>()
-                    .split_once('<')
-                    .map_or_else(|| std::any::type_name::<T>(), |(name, _)| name)
-            }
-
-            type_name_without_generics::<OR>()
-                != type_name_without_generics::<
-                    crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver<
-                        (),
-                        (),
-                    >,
-                >()
-        },
-        "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. Using subscribe_with_context_bound_subscription handles \"auto dispose on termination\"."
+        !is_auto_dispose_on_termination_observer::<OR>(),
+        "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. \
+         Using subscribe_with_context_owning_source handles \"auto dispose on termination\"."
     );
 }

@@ -1,6 +1,6 @@
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
+    self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -71,7 +71,7 @@ where
     OE2: Observable<'or, T2, E>,
     OE2::D: MaybeSend + 'or,
 {
-    type D = BoundSubscriptionDisposal<'or>;
+    type D = subscribe_with_context::OwningDisposal<'or>;
 
     fn subscribe(
         self,
@@ -82,7 +82,7 @@ where
             latest_2: None,
             should_completed: false,
         };
-        subscribe_with_context_bound_subscription(observer, model, |context| {
+        subscribe_with_context_owning_source(observer, model, |context| {
             let sub_1 = self.source_1.subscribe(ObserverImpl1(context.clone()));
             let sub_2 = self.source_2.subscribe(ObserverImpl2(context));
             sub_1.preceded_by_bound(sub_2)

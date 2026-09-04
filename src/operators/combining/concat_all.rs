@@ -2,7 +2,7 @@ use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
+    self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::utils::types::MaybeSend;
@@ -86,7 +86,7 @@ where
     OE1: Observable<'or, T, E> + MaybeSend + 'or,
     OE1::D: MaybeSend + 'or,
 {
-    type D = BoundSubscriptionDisposal<'or>;
+    type D = subscribe_with_context::OwningDisposal<'or>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model {
@@ -94,7 +94,7 @@ where
             slot: SubscriptionSlot::Idle,
             is_source_completed: false,
         };
-        subscribe_with_context_bound_subscription(observer, model, |context| {
+        subscribe_with_context_owning_source(observer, model, |context| {
             self.source.subscribe(SourceObserver(context.clone()))
         })
     }

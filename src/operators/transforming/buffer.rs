@@ -1,6 +1,6 @@
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
+    self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -106,13 +106,13 @@ where
     OE1: Observable<'or, (), E>,
     OE1::D: MaybeSend + 'or,
 {
-    type D = BoundSubscriptionDisposal<'or>;
+    type D = subscribe_with_context::OwningDisposal<'or>;
 
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        subscribe_with_context_bound_subscription(observer, Vec::new(), |context| {
+        subscribe_with_context_owning_source(observer, Vec::new(), |context| {
             let subscription_1 = self.boundary.subscribe(BoundaryObserver(context.clone()));
             let subscription_2 = self.source.subscribe(BufferObserver(context));
             subscription_1.preceded_by_bound(subscription_2)
@@ -176,6 +176,8 @@ fn terminate<T, E, OR, D>(
                 }
             });
         }
-        error @ Termination::Error(_) => context.send_termination(error),
+        error @ Termination::Error(_) => {
+            context.send_termination(error);
+        }
     }
 }

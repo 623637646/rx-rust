@@ -6,7 +6,7 @@ use crate::observer::{Observer, Termination};
 use crate::scheduler::{RecursionAction, Scheduler};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
+    self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use educe::Educe;
@@ -93,7 +93,7 @@ where
     OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = BoundSubscriptionDisposal<'static>;
+    type D = subscribe_with_context::OwningDisposal<'static>;
 
     fn subscribe(
         self,
@@ -102,7 +102,7 @@ where
         let model = Model {
             deadline: Instant::now() + self.duration,
         };
-        subscribe_with_context_bound_subscription(observer, model, |context| {
+        subscribe_with_context_owning_source(observer, model, |context| {
             let source_subscription = self.source.subscribe(TimeoutObserver {
                 context: context.clone(),
                 duration: self.duration,

@@ -1,7 +1,7 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    BoundSubscriptionDisposal, SubscriptionContext, subscribe_with_context_bound_subscription,
+    self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
@@ -95,13 +95,13 @@ where
     OE::D: MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    type D = BoundSubscriptionDisposal<'or>;
+    type D = subscribe_with_context::OwningDisposal<'or>;
 
     fn subscribe(
         self,
         observer: impl Observer<Vec<T>, E> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
-        subscribe_with_context_bound_subscription(observer, Vec::new(), |context| {
+        subscribe_with_context_owning_source(observer, Vec::new(), |context| {
             let sub = self
                 .source
                 .subscribe(BufferWithTimeObserver(context.clone()));
@@ -139,7 +139,9 @@ where
                     }
                 });
             }
-            error @ Termination::Error(_) => self.0.send_termination(error),
+            error @ Termination::Error(_) => {
+                self.0.send_termination(error);
+            }
         }
     }
 }
