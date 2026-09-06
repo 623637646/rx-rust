@@ -28,10 +28,22 @@ impl DropProbe {
         Self(None)
     }
 
-    /// Runs `callback` when this probe is dropped.
+    /// Runs `callback` when this probe is dropped, after any callback it already runs.
     pub(crate) fn on_drop(mut self, callback: DropCallback) -> Self {
-        self.0 = Some(callback);
+        self.also_on_drop(callback);
         self
+    }
+
+    /// Adds `callback` to a probe already owned by a value, which is how a test hooks a drop it
+    /// only learns about after the value was built.
+    pub(crate) fn also_on_drop(&mut self, callback: DropCallback) {
+        self.0 = Some(match self.0.take() {
+            Some(existing) => Box::new(move || {
+                existing();
+                callback();
+            }),
+            None => callback,
+        });
     }
 }
 

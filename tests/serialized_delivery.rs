@@ -68,10 +68,15 @@ fn values(log: &Log) -> Vec<i32> {
         .collect()
 }
 
+/// A callback that records `record_value` when whatever owns it is dropped.
+fn record_on_drop(log: &Log, record_value: Record) -> DropCallback {
+    let log = log.clone();
+    Box::new(move || record(&log, record_value))
+}
+
 /// A callback that only notes that whatever owned it was dropped.
 fn note(log: &Log, text: &'static str) -> DropCallback {
-    let log = log.clone();
-    Box::new(move || record(&log, Record::Note(text)))
+    record_on_drop(log, Record::Note(text))
 }
 
 /// A callback that notes the drop and then re-enters the delivery, which only works when the drop
@@ -115,19 +120,23 @@ impl Value {
     }
 }
 
-/// What the host owns alongside the observer: a model, and a callback to observe its drop.
+/// What the host owns alongside the observer: a model, and a probe reporting its drop.
 struct Resources {
     model: i32,
-    log: Log,
-    on_drop: Option<DropCallback>,
+    probe: DropProbe,
 }
 
-impl Drop for Resources {
-    fn drop(&mut self) {
-        record(&self.log, Record::ResourcesDropped);
-        if let Some(callback) = self.on_drop.take() {
-            callback();
+impl Resources {
+    fn new(model: i32, log: &Log) -> Self {
+        Self {
+            model,
+            probe: DropProbe::new().on_drop(record_on_drop(log, Record::ResourcesDropped)),
         }
+    }
+
+    /// Runs `callback` once the drop of the resources was recorded.
+    fn on_drop(&mut self, callback: DropCallback) {
+        self.probe.also_on_drop(callback);
     }
 }
 
@@ -170,11 +179,14 @@ impl DeliveryHandle {
 /// Each hook receives the delivery it is running in, so it can send, update, or stop from inside a
 /// notification, which is what re-entrancy looks like to this module.
 struct RecordingObserver<FN, FT> {
+    /// Never read: it is here for its drop, and declared first so that the drop of the observer
+    /// is recorded before the hooks it owns are dropped, which is the order a hand-written `Drop`
+    /// gave.
+    _probe: DropProbe,
     log: Log,
     handle: DeliveryHandle,
     on_next: FN,
     on_termination: Option<FT>,
-    on_drop: Option<DropCallback>,
 }
 
 impl<FN, FT> Observer<Value, TestError> for RecordingObserver<FN, FT>
@@ -198,15 +210,6 @@ where
             .expect("an observer is terminated at most once");
         hook(&delivery, &termination);
         // `self` is dropped here, which records the drop of the observer after its termination.
-    }
-}
-
-impl<FN, FT> Drop for RecordingObserver<FN, FT> {
-    fn drop(&mut self) {
-        record(&self.log, Record::ObserverDropped);
-        if let Some(callback) = self.on_drop.take() {
-            callback();
-        }
     }
 }
 
@@ -284,19 +287,20 @@ impl<FN, FT> Builder<FN, FT> {
         FT: FnOnce(&TestDelivery, &Termination<TestError>) + MaybeSend + 'static,
     {
         let handle = self.handle.clone();
+        let mut probe =
+            DropProbe::new().on_drop(record_on_drop(&self.log, Record::ObserverDropped));
+        if let Some(callback) = self.on_observer_drop {
+            probe.also_on_drop(callback);
+        }
         let observer: TestObserver = RecordingObserver {
+            _probe: probe,
             log: self.log.clone(),
             handle: self.handle,
             on_next: self.on_next,
             on_termination: Some(self.on_termination),
-            on_drop: self.on_observer_drop,
         }
         .into_boxed();
-        let resources = Resources {
-            model: self.model,
-            log: self.log,
-            on_drop: None,
-        };
+        let resources = Resources::new(self.model, &self.log);
         let delivery = SerializedDelivery::idle(observer, resources);
         handle.install(&delivery);
         delivery
@@ -545,7 +549,7 @@ fn stop_drops_the_observer_and_the_resources_outside_the_lock() {
         .build();
     delivery
         .update(|resources| {
-            resources.on_drop = Some(note_and_reenter(&handle, &log, "resources dropped"));
+            resources.on_drop(note_and_reenter(&handle, &log, "resources dropped"));
             UpdateOutcome::empty()
         })
         .expect("the delivery is idle");
