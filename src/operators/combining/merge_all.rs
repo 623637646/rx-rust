@@ -1,5 +1,6 @@
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
+use crate::utils::id_generator::{Id, IdGenerator};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
@@ -91,7 +92,7 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let model = Model {
             subscriptions: HashMap::new(),
-            next_key: 0,
+            keys: IdGenerator::default(),
             is_source_terminated: false,
         };
         subscribe_with_context_owning_source(observer, model, |context| {
@@ -103,16 +104,15 @@ where
 struct Model<D: Disposable> {
     /// Keys are never reused, so a late inner observer can never remove another
     /// inner observer's subscription.
-    subscriptions: HashMap<u64, Option<Subscription<D>>>,
-    next_key: u64,
+    subscriptions: HashMap<Id, Option<Subscription<D>>>,
+    keys: IdGenerator,
     is_source_terminated: bool,
 }
 
 impl<D: Disposable> Model<D> {
     /// Inserts a placeholder subscription and returns its key.
-    fn insert_placeholder(&mut self) -> u64 {
-        let key = self.next_key;
-        self.next_key += 1;
+    fn insert_placeholder(&mut self) -> Id {
+        let key = self.keys.next_id();
         self.subscriptions.insert(key, None);
         key
     }
@@ -178,7 +178,7 @@ where
 
 struct MergeAllInnerObserver<T, E, OR, ID: Disposable, SD: Disposable> {
     context: SubscriptionContext<T, E, OR, Model<ID>, SD>,
-    key: u64,
+    key: Id,
 }
 
 impl<T, E, OR, ID, SD> Observer<T, E> for MergeAllInnerObserver<T, E, OR, ID, SD>

@@ -1,6 +1,6 @@
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
-use crate::utils::increment_id::IncrementId;
+use crate::utils::id_generator::{Id, IdGenerator};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
@@ -92,7 +92,7 @@ where
         let model = Model {
             slot: SubscriptionSlot::Idle,
             is_source_completed: false,
-            current_sub_id: IncrementId::default(),
+            sub_ids: IdGenerator::default(),
         };
         subscribe_with_context_owning_source(observer, model, |context| {
             self.source.subscribe(SwitchObserver(context))
@@ -103,7 +103,11 @@ where
 struct Model<D: Disposable> {
     slot: SubscriptionSlot<Subscription<D>>,
     is_source_completed: bool,
-    current_sub_id: IncrementId,
+    /// The current inner subscription is always the one subscribed last, so the id it was handed
+    /// is [`IdGenerator::latest`]. An inner observer whose id is no longer the latest was
+    /// superseded, and its events are dropped: the subscription it replaced is disposed outside
+    /// the lock, so it can still deliver one after being replaced.
+    sub_ids: IdGenerator,
 }
 
 struct SwitchObserver<T, E, OR, ID: Disposable, SD: Disposable>(
@@ -121,8 +125,7 @@ where
 {
     fn on_next(&mut self, value: OE1) {
         let result = self.0.update(|model| {
-            model.current_sub_id.increment();
-            UpdateOutcome::new(model.current_sub_id).with_drop_outside(model.slot.reserve())
+            UpdateOutcome::new(model.sub_ids.next_id()).with_drop_outside(model.slot.reserve())
         });
         let sub_id = match result {
             Ok(sub_id) => sub_id,
@@ -160,7 +163,7 @@ where
 // TODO: check all cases using subscribe_with_context whether it can be improved.
 struct SwitchInnerObserver<T, E, OR, ID: Disposable, SD: Disposable>(
     SubscriptionContext<T, E, OR, Model<ID>, SD>,
-    IncrementId,
+    Id,
 );
 
 impl<T, E, OR, ID, SD> Observer<T, E> for SwitchInnerObserver<T, E, OR, ID, SD>
@@ -171,7 +174,7 @@ where
 {
     fn on_next(&mut self, value: T) {
         let _ = self.0.update(|model| {
-            if model.current_sub_id != self.1 {
+            if model.sub_ids.latest() != Some(self.1) {
                 return UpdateOutcome::empty().without_events();
             }
             UpdateOutcome::empty().with_next_event(value)
@@ -180,7 +183,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         let _ = self.0.update(|model| {
-            if model.current_sub_id != self.1 {
+            if model.sub_ids.latest() != Some(self.1) {
                 return UpdateOutcome::empty()
                     .without_events()
                     .without_drop_outside();

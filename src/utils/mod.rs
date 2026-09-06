@@ -1,4 +1,4 @@
-pub mod increment_id;
+pub mod id_generator;
 pub mod pending_events;
 pub mod safe_lock;
 pub mod serialized_delivery;

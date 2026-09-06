@@ -25,6 +25,7 @@ use crate::delegate_disposal;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::disposable::{Disposable, DisposableExt};
 use crate::observable::Subscription;
+use crate::utils::id_generator::{Id, IdGenerator};
 use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome};
 use crate::utils::types::{MaybeSend, MutableBool, MutableBoolHelper, Shared};
@@ -59,7 +60,7 @@ struct SubjectResources<E> {
     /// subject.
     termination: Option<Termination<E>>,
     /// Handed out in subscription order, so that the delegate's entries stay sorted by it.
-    next_id: u64,
+    ids: IdGenerator,
 }
 
 /// What [`Observable::subscribe`] decided under the lock, for the observer waiting outside it.
@@ -67,7 +68,7 @@ struct SubjectResources<E> {
 #[educe(Debug)]
 enum Admission<E> {
     /// The entry was queued with this id, carrying the observer with it.
-    Added(u64),
+    Added(Id),
     /// The subject had already terminated; the observer stayed behind, to be notified with this.
     Terminated(Termination<E>),
 }
@@ -81,7 +82,7 @@ impl<'or, T, E> PublishSubject<'or, T, E> {
             delegate,
             SubjectResources {
                 termination: None,
-                next_id: 0,
+                ids: IdGenerator::default(),
             },
         ))
     }
@@ -115,8 +116,7 @@ where
             if let Some(termination) = resources.termination.clone() {
                 return UpdateOutcome::new(Admission::Terminated(termination)).without_events();
             }
-            let id = resources.next_id;
-            resources.next_id += 1;
+            let id = resources.ids.next_id();
             let entry = Entry {
                 id,
                 disposed: disposed.clone(),
@@ -207,7 +207,7 @@ where
 struct Entry<'or, T, E> {
     /// Identifies the entry before the delegate has added it, so a subscription can be disposed
     /// while its [`SubjectAction::Add`] is still queued.
-    id: u64,
+    id: Id,
     /// Written by the disposal, read by the delegate before every notification.
     disposed: Shared<MutableBool>,
     observer: BoxedObserver<'or, T, E>,
@@ -222,7 +222,7 @@ enum SubjectAction<'or, T, E> {
     /// Adds an entry.
     Add(Entry<'or, T, E>),
     /// Removes the entry with this id, releasing its observer.
-    Prune(u64),
+    Prune(Id),
     /// Terminates every entry. An observer that subscribes afterwards is terminated by
     /// [`Observable::subscribe`] instead.
     Terminate(Termination<E>),
@@ -284,7 +284,7 @@ where
         self.entries.push(entry);
     }
 
-    fn prune(&mut self, id: u64) {
+    fn prune(&mut self, id: Id) {
         if let Ok(index) = self.entries.binary_search_by_key(&id, |entry| entry.id) {
             self.entries.remove(index); // Releases the observer here, outside the lock
         }
@@ -304,7 +304,7 @@ where
 struct PublishSubjectDisposal<'or, T, E> {
     delivery: SubjectDelivery<'or, T, E>,
     disposed: Shared<MutableBool>,
-    id: u64,
+    id: Id,
 }
 
 impl<T, E> Disposable for PublishSubjectDisposal<'_, T, E>
