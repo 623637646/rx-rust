@@ -50,7 +50,7 @@ impl<I> Amb<I> {
 
 delegate_disposal!(
     Disposal<D>,
-    Shared<Mutable<AmbContext<D>>>,
+    AmbDisposal<D>,
     where D: Disposable
 );
 
@@ -66,9 +66,9 @@ where
         let sources = self.sources.into_iter();
         let minimum_source_count = sources.size_hint().0;
         let observer = Shared::new(Mutable::new(Some(observer)));
-        let context = Shared::new(Mutable::new(AmbContext {
-            state: AmbState::Racing(Vec::with_capacity(minimum_source_count)),
-        }));
+        let context = Shared::new(Mutable::new(AmbState::Racing(Vec::with_capacity(
+            minimum_source_count,
+        ))));
 
         let mut has_sources = false;
         for source in sources {
@@ -96,12 +96,8 @@ where
             observer.on_termination(Termination::Completed);
         }
 
-        context.into_subscription()
+        AmbDisposal(context).into_subscription()
     }
-}
-
-struct AmbContext<D: Disposable> {
-    state: AmbState<D>,
 }
 
 enum AmbState<D: Disposable> {
@@ -113,23 +109,11 @@ enum AmbState<D: Disposable> {
     Stopped,
 }
 
-// TODO: Disposable should not be Cloneable
-impl<D> Disposable for Shared<Mutable<AmbContext<D>>>
+fn reserve_subscription_slot<D>(context: &Mutable<AmbState<D>>) -> Option<usize>
 where
     D: Disposable,
 {
-    fn dispose(self) {
-        let old_state =
-            self.lock_mut(|mut lock| std::mem::replace(&mut lock.state, AmbState::Stopped));
-        drop(old_state); // Dispose the remaining subscriptions outside the lock.
-    }
-}
-
-fn reserve_subscription_slot<D>(context: &Mutable<AmbContext<D>>) -> Option<usize>
-where
-    D: Disposable,
-{
-    context.lock_mut(|mut lock| match &mut lock.state {
+    context.lock_mut(|mut lock| match &mut *lock {
         AmbState::Racing(subscriptions) => {
             let key = subscriptions.len();
             subscriptions.push(None);
@@ -140,7 +124,7 @@ where
 }
 
 fn store_subscription<D>(
-    context: &Mutable<AmbContext<D>>,
+    context: &Mutable<AmbState<D>>,
     key: usize,
     subscription: Subscription<D>,
 ) -> bool
@@ -150,7 +134,7 @@ where
     // Wrapped in an `Option` so that the branches which do not store the subscription leave it to
     // be dropped outside the lock.
     let mut subscription = Some(subscription);
-    let (keep_subscribing, replaced) = context.lock_mut(|mut lock| match &mut lock.state {
+    let (keep_subscribing, replaced) = context.lock_mut(|mut lock| match &mut *lock {
         // The race is still open: the subscription belongs in the reserved slot.
         AmbState::Racing(subscriptions) => {
             let slot = subscriptions
@@ -181,7 +165,7 @@ where
 }
 
 fn try_win<D, OR>(
-    context: &Mutable<AmbContext<D>>,
+    context: &Mutable<AmbState<D>>,
     shared_observer: &Mutable<Option<OR>>,
     key: usize,
 ) -> Option<OR>
@@ -189,12 +173,11 @@ where
     D: Disposable,
 {
     let losing_subscriptions = context.lock_mut(|mut lock| {
-        if !matches!(&lock.state, AmbState::Racing(_)) {
+        if !matches!(*lock, AmbState::Racing(_)) {
             return None;
         }
 
-        let AmbState::Racing(mut subscriptions) =
-            std::mem::replace(&mut lock.state, AmbState::Stopped)
+        let AmbState::Racing(mut subscriptions) = std::mem::replace(&mut *lock, AmbState::Stopped)
         else {
             unreachable!()
         };
@@ -202,7 +185,7 @@ where
             .get_mut(key)
             .expect("a racing source must retain its subscription slot")
             .take();
-        lock.state = AmbState::Won {
+        *lock = AmbState::Won {
             key,
             subscription: winner_subscription,
         };
@@ -220,7 +203,7 @@ where
 enum AmbObserverState<D: Disposable, OR> {
     Racing {
         observer: Shared<Mutable<Option<OR>>>,
-        context: WeakShared<Mutable<AmbContext<D>>>,
+        context: WeakShared<Mutable<AmbState<D>>>,
         key: usize,
     },
     Won(OR),
@@ -285,5 +268,19 @@ where
                 observer.on_termination(termination);
             }
         }
+    }
+}
+
+struct AmbDisposal<D: Disposable>(Shared<Mutable<AmbState<D>>>);
+
+impl<D> Disposable for AmbDisposal<D>
+where
+    D: Disposable,
+{
+    fn dispose(self) {
+        let old_state = self
+            .0
+            .lock_mut(|mut lock| std::mem::replace(&mut *lock, AmbState::Stopped));
+        drop(old_state); // Dispose the remaining subscriptions outside the lock.
     }
 }
