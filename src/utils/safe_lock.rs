@@ -85,7 +85,7 @@ macro_rules! safe_lock_option {
     (replace: $lock_name:expr, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        $lock_name.lock_mut(|mut lock| Option::replace(&mut lock, value))
+        $lock_name.lock_mut(|mut lock| Option::replace(&mut *lock, value))
     }};
 
     (replace: $lock_name:expr, $field_name:ident, $value:expr) => {{
@@ -210,7 +210,7 @@ macro_rules! safe_lock_vec {
     (push: $lock_name:expr, $value:expr) => {{
         use $crate::utils::types::MutableHelper;
         let value = $value;
-        $lock_name.lock_mut(|mut lock| Vec::push(&mut lock, value))
+        $lock_name.lock_mut(|mut lock| Vec::push(&mut *lock, value))
     }};
 
     (push: $lock_name:expr, $field_name:ident, $value:expr) => {{
