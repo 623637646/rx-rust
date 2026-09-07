@@ -6,8 +6,10 @@ use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
+use rx_rust::safe_lock;
 use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_disposable;
+use rx_rust::safe_lock_vec;
 use rx_rust::subject::Subject;
 use rx_rust::subject::replay_subject::ReplaySubject;
 use rx_rust::utils::types::{Mutable, Shared};
@@ -1300,6 +1302,135 @@ fn test_sub_on_error() {
         subject.terminated(),
         Some(Termination::Error("error"))
     ));
+}
+
+// The cases below assert the behaviour `ReplaySubject` is meant to have. It keeps its buffer in a
+// lock of its own, next to the lock of the `PublishSubject`'s delivery, and nothing is atomic
+// across the two, so they fail today: each of them names the window it walks through.
+
+#[test]
+fn test_next_on_sub() {
+    // `subscribe` replays a snapshot of the buffer under one lock and joins the subject under the
+    // other, and the callbacks of the replayed values run in between: the `222` sent from there is
+    // buffered and forwarded before the observer is admitted, so it reaches neither the replay nor
+    // the observer.
+    let mut subject: ReplaySubject<'_, _, Infallible> = ReplaySubject::new(None);
+    subject.on_next(111);
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut subject_cloned = subject.clone();
+    let values = Shared::new(Mutable::new(Vec::new()));
+    let values_cloned = values.clone();
+    let _subscription = observable.clone().subscribe_with_callback(
+        move |value| {
+            safe_lock_vec!(push: values_cloned, value);
+            if value == 111 {
+                subject_cloned.on_next(222);
+            }
+        },
+        move |_| {},
+    );
+
+    // The observer had joined the subject before `222` was sent, so it sees it too, and it sees
+    // what a subscriber arriving afterwards is replayed.
+    assert_eq!(safe_lock!(clone: values), [111, 222]);
+
+    let (checker, observer) = Checker::new();
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Active);
+    assert!(subject.terminated().is_none());
+}
+
+#[cfg(not(feature = "single-threaded"))]
+#[test]
+fn test_race_condition() {
+    // Same window as `test_next_on_sub`, walked into by another thread: a value buffered between
+    // the snapshot and the subscription is replayed to the observer and forwarded to it as well,
+    // and a value forwarded there reaches neither.
+    use std::sync::{Arc, Barrier};
+
+    const SUBSCRIBERS: usize = 3;
+    const ROUNDS: usize = 20;
+
+    for _ in 0..200 {
+        let mut subject: ReplaySubject<'static, i32, Infallible> = ReplaySubject::new(None);
+        let barrier = Arc::new(Barrier::new(SUBSCRIBERS + 1));
+
+        let handles: Vec<_> = (0..SUBSCRIBERS)
+            .map(|_| {
+                let subject = subject.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    // The subscriptions are returned so that the observers stay subscribed until
+                    // every thread has finished.
+                    (0..ROUNDS)
+                        .map(|_| {
+                            let (checker, observer) = Checker::new();
+                            (checker, subject.clone().subscribe(observer))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+
+        barrier.wait();
+        subject.on_next(111);
+
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+        for (checker, _subscription) in results.iter().flatten() {
+            // The observer subscribed either before `111` or after it, so it is either forwarded
+            // the value or replayed it, exactly once in both cases.
+            assert_eq!(checker.values(), [111]);
+            assert_eq!(checker.state(), State::Active);
+        }
+    }
+}
+
+#[cfg(not(feature = "single-threaded"))]
+#[test]
+fn test_race_condition_between_next() {
+    // Buffering a value and forwarding it are two steps under two locks, so two threads can buffer
+    // in one order and forward in the other: what a late subscriber is replayed is then not what
+    // the subject delivered.
+    use std::sync::{Arc, Barrier};
+
+    const SENDERS: usize = 16;
+
+    for _ in 0..500 {
+        let subject: ReplaySubject<'static, i32, Infallible> = ReplaySubject::new(None);
+        let (checker, observer) = Checker::new();
+        let _subscription = subject.clone().subscribe(observer);
+        let barrier = Arc::new(Barrier::new(SENDERS));
+
+        let handles: Vec<_> = (1..=SENDERS)
+            .map(|value| {
+                let mut subject = subject.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    subject.on_next(value as i32);
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        let (late_checker, late_observer) = Checker::new();
+        let _subscription = subject.subscribe(late_observer);
+        assert_eq!(
+            late_checker.values(),
+            checker.values(),
+            "the replayed values are not the values the subject delivered"
+        );
+    }
 }
 
 #[test]

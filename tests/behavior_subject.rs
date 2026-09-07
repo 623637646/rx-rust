@@ -7,8 +7,10 @@ use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
+use rx_rust::safe_lock;
 use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_disposable;
+use rx_rust::safe_lock_vec;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::Subject;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
@@ -553,7 +555,10 @@ fn test_next_on_next() {
     let mut subject_cloned = subject.clone();
     let _subscription = observable.subscribe_with_callback(
         move |value| {
-            assert!(subject_cloned.terminated().is_none());
+            // The callback of the replayed `-1` terminates the subject, and its entry joins the
+            // subject before `0` is forwarded: this observer receives that value too, and sees the
+            // subject terminated by then.
+            assert_eq!(subject_cloned.terminated().is_some(), value > -1);
             if value < 3 {
                 subject_cloned.on_next(value + 1);
             }
@@ -843,6 +848,137 @@ fn test_sub_on_error() {
         subject.terminated(),
         Some(Termination::Error("error"))
     ));
+}
+
+// The cases below assert the behaviour `BehaviorSubject` is meant to have. It keeps its value in a
+// lock of its own, next to the lock of the `PublishSubject`'s delivery, and nothing is atomic
+// across the two, so they fail today: each of them names the window it walks through.
+
+#[test]
+fn test_next_on_sub() {
+    // `subscribe` reads the value under one lock and joins the subject under the other, and the
+    // callback of that first value runs in between: the `222` it sends is forwarded before the
+    // observer is admitted, so the observer keeps a value that is no longer the subject's.
+    let subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(111);
+    let (checker_1, observer_1) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let _subscription = observable.clone().subscribe(observer_1);
+    let mut subject_cloned = subject.clone();
+    let values = Shared::new(Mutable::new(Vec::new()));
+    let values_cloned = values.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |value| {
+            safe_lock_vec!(push: values_cloned, value);
+            if value == 111 {
+                subject_cloned.on_next(222);
+            }
+        },
+        move |_| {},
+    );
+
+    // The second observer had joined the subject before `222` was sent, so it sees it too.
+    assert_eq!(safe_lock!(clone: values), [111, 222]);
+    assert_eq!(checker_1.values(), [111, 222]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(subject.value(), 222);
+    assert!(subject.terminated().is_none());
+}
+
+#[cfg(not(feature = "single-threaded"))]
+#[test]
+fn test_race_condition() {
+    // Same window as `test_next_on_sub`, walked into by another thread: a value that lands between
+    // the read of the value and the subscription is forwarded before the observer is admitted, and
+    // never reaches it. Subscribing after the value was stored but before it was forwarded
+    // delivers it twice instead.
+    use std::sync::{Arc, Barrier};
+
+    const SUBSCRIBERS: usize = 3;
+    const ROUNDS: usize = 20;
+
+    for _ in 0..200 {
+        let mut subject: BehaviorSubject<'static, i32, Infallible> = BehaviorSubject::new(111);
+        let barrier = Arc::new(Barrier::new(SUBSCRIBERS + 1));
+
+        let handles: Vec<_> = (0..SUBSCRIBERS)
+            .map(|_| {
+                let subject = subject.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    // The subscriptions are returned so that the observers stay subscribed until
+                    // every thread has finished.
+                    (0..ROUNDS)
+                        .map(|_| {
+                            let (checker, observer) = Checker::new();
+                            (checker, subject.clone().subscribe(observer))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+
+        barrier.wait();
+        subject.on_next(222);
+
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+        for (checker, _subscription) in results.iter().flatten() {
+            let values = checker.values();
+            // The observer subscribed either before `222` or after it, and it is fed the current
+            // value exactly once in both cases.
+            assert!(
+                values == [111, 222] || values == [222],
+                "the observer did not converge on the subject's value: {values:?}"
+            );
+            assert_eq!(checker.state(), State::Active);
+        }
+        assert_eq!(subject.value(), 222);
+    }
+}
+
+#[cfg(not(feature = "single-threaded"))]
+#[test]
+fn test_race_condition_between_next() {
+    // Storing the value and forwarding it are two steps under two locks, so two threads can store
+    // in one order and forward in the other: the value the subject reports is then not the last
+    // value its observers were given.
+    use std::sync::{Arc, Barrier};
+
+    const SENDERS: usize = 16;
+
+    for _ in 0..500 {
+        let subject: BehaviorSubject<'static, i32, Infallible> = BehaviorSubject::new(0);
+        let (checker, observer) = Checker::new();
+        let _subscription = subject.clone().subscribe(observer);
+        let barrier = Arc::new(Barrier::new(SENDERS));
+
+        let handles: Vec<_> = (1..=SENDERS)
+            .map(|value| {
+                let mut subject = subject.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    subject.on_next(value as i32);
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        let values = checker.values();
+        assert_eq!(
+            values.last(),
+            Some(&subject.value()),
+            "the subject's value is not the last value its observers were given"
+        );
+    }
 }
 
 #[test]

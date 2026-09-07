@@ -1,11 +1,19 @@
-use super::{Subject, publish_subject::PublishSubject};
+//! A subject that buffers what it emits and replays that buffer to every new subscriber.
+//!
+//! The buffer lives in the [`SerializedMulticast`]'s resources, so buffering a value and
+//! forwarding it are one atomic step, and so are snapshotting the buffer and joining the
+//! multicast: a subscriber can neither miss a value emitted while it was subscribing nor observe
+//! one twice.
+
+use super::Subject;
 use crate::delegate_disposal;
 use crate::disposable::DisposableExt;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::observable::Subscription;
-use crate::safe_lock;
-use crate::subject::publish_subject;
-use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
+use crate::utils::pending_events::EventBatch;
+use crate::utils::serialized_delivery::UpdateOutcome;
+use crate::utils::serialized_multicast::{Admission, MulticastDisposal, SerializedMulticast};
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -19,104 +27,116 @@ use std::collections::VecDeque;
 /// the termination, whether the subject completed or errored.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct ReplaySubject<'or, T, E> {
-    values: Shared<Mutable<VecDeque<T>>>,
-    buffer_size: Option<usize>,
-    publish_subject: PublishSubject<'or, T, E>,
+pub struct ReplaySubject<'or, T, E>(SerializedMulticast<'or, T, E, Buffer<T>>);
+
+/// The replayed values, and how many of them are kept.
+#[derive(Educe)]
+#[educe(Debug)]
+struct Buffer<T> {
+    values: VecDeque<T>,
+    /// The number of values kept, or [`None`] to keep every one of them.
+    size: Option<usize>,
 }
 
 impl<T, E> ReplaySubject<'_, T, E> {
     pub fn new(buffer_size: Option<usize>) -> Self {
-        let vec = match buffer_size {
+        let values = match buffer_size {
             Some(size) => VecDeque::with_capacity(size),
             None => VecDeque::new(),
         };
-        Self {
-            values: Shared::new(Mutable::new(vec)),
-            buffer_size,
-            publish_subject: PublishSubject::default(),
-        }
+        Self(SerializedMulticast::idle(Buffer {
+            values,
+            size: buffer_size,
+        }))
     }
 }
 
 delegate_disposal!(
     Disposal<'or, T, E>,
-    OptionDisposal<Subscription<publish_subject::Disposal<'or, T, E>>>,
-    where T: Clone, E: Clone
+    OptionDisposal<MulticastDisposal<'or, T, E, Buffer<T>>>,
 );
 
 impl<'or, T, E> Observable<'or, T, E> for ReplaySubject<'or, T, E>
 where
-    T: Clone + MaybeSend,
-    E: Clone + MaybeSend,
+    T: Clone,
+    E: Clone,
 {
     type D = Disposal<'or, T, E>;
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
-        if let Some(terminated) = self.terminated() {
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        match self.0.subscribe_with(observer, |buffer, terminated| {
             // The buffer is the history of the subject, so it is replayed whichever way the
             // subject terminated: an error does not erase what was emitted before it.
-            let values = safe_lock!(clone: self.values);
-            for value in values {
-                observer.on_next(value);
+            let values = buffer.values.iter().cloned().collect();
+            match terminated {
+                None => Admission::Join(values),
+                Some(termination) => Admission::Terminated(values, termination.clone()),
             }
-            observer.on_termination(terminated);
-            OptionDisposal::none().into_subscription()
-        } else {
-            let values = safe_lock!(clone: self.values);
-            for value in values {
-                observer.on_next(value);
-            }
-            self.publish_subject
-                .subscribe(observer)
-                .into_option()
-                .into_subscription()
+        }) {
+            Some(disposal) => OptionDisposal::some(disposal),
+            None => OptionDisposal::none(),
         }
+        .into_subscription()
     }
 }
 
 impl<T, E> Observer<T, E> for ReplaySubject<'_, T, E>
 where
-    T: Clone + MaybeSend,
-    E: Clone + MaybeSend,
+    T: Clone,
+    E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        if self.terminated().is_none() {
-            self.values.lock_mut(|mut lock| {
-                if let Some(buffer_size) = self.buffer_size {
-                    if lock.len() == buffer_size {
-                        if lock.pop_front().is_some() {
-                            // only push if the buffer is not 0
-                            lock.push_back(value.clone());
-                        }
-                    } else {
-                        lock.push_back(value.clone());
-                    }
-                } else {
-                    lock.push_back(value.clone());
-                }
-            });
-            self.publish_subject.on_next(value);
-        }
+        let _ = self.0.update(|buffer, terminated| {
+            if terminated.is_some() {
+                return UpdateOutcome::empty()
+                    .with_drop_outside(Some(value))
+                    .without_events();
+            }
+            // Buffering the value and forwarding it are one step, so the buffer a subscriber is
+            // replayed always matches the values it then receives. The evicted value is dropped
+            // outside the lock: dropping it can run arbitrary code.
+            let evicted = buffer.push(value.clone());
+            UpdateOutcome::empty()
+                .with_drop_outside(evicted)
+                .with_next_event(value)
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.publish_subject.on_termination(termination);
+        self.0.send(EventBatch::Termination(termination));
+    }
+}
+
+impl<T> Buffer<T> {
+    /// Buffers `value`, returning the value it evicted, if any.
+    ///
+    /// A buffer of size zero keeps nothing: the value is only forwarded.
+    fn push(&mut self, value: T) -> Option<T> {
+        let Some(size) = self.size else {
+            self.values.push_back(value);
+            return None;
+        };
+        if self.values.len() < size {
+            self.values.push_back(value);
+            return None;
+        }
+        let evicted = self.values.pop_front();
+        if evicted.is_some() {
+            self.values.push_back(value);
+        }
+        evicted
     }
 }
 
 impl<'or, T, E> Subject<'or, T, E> for ReplaySubject<'or, T, E>
 where
-    T: Clone + MaybeSend,
-    E: Clone + MaybeSend,
+    T: Clone,
+    E: Clone,
 {
     fn terminated(&self) -> Option<Termination<E>>
     where
         E: Clone,
     {
-        self.publish_subject.terminated()
+        self.0.terminated()
     }
 }

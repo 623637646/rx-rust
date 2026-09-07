@@ -6,8 +6,10 @@ use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
+use rx_rust::safe_lock;
 use rx_rust::safe_lock_option;
 use rx_rust::safe_lock_option_disposable;
+use rx_rust::safe_lock_vec;
 use rx_rust::subject::Subject;
 use rx_rust::subject::async_subject::AsyncSubject;
 use rx_rust::utils::types::{Mutable, Shared};
@@ -309,8 +311,9 @@ fn test_unsub_on_next_by_take() {
     let _subscription = observable.subscribe_with_callback(
         |_| {},
         move |_| {
-            // In this case, Subject is not terminated.
-            assert!(subject_cloned.terminated().is_none());
+            // The completion is queued together with the last value, so the subject is already
+            // terminated when `take` passes that value on and terminates this observer.
+            assert!(subject_cloned.terminated().is_some());
         },
     );
     assert_eq!(checker.values(), []);
@@ -368,10 +371,9 @@ fn test_complete_on_next() {
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
-    // The events are delivered in the order they were sent: `3` is sent from the callback of `2`,
-    // after that callback has already sent the termination, so it arrives once the subject has
-    // terminated and is dropped.
-    assert_eq!(checker.values(), [1, 2]);
+    // The subject is terminated by the very step that queued `1` and the completion, so the `2`
+    // the callback of `1` sends arrives once it has terminated and is dropped.
+    assert_eq!(checker.values(), [1]);
     assert_eq!(checker.state(), State::Completed);
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
@@ -404,12 +406,11 @@ fn test_error_on_next() {
     assert!(subject.terminated().is_none());
 
     subject.clone().on_termination(Termination::Completed);
+    // The completion is queued together with `111` and terminates the subject at once, so the
+    // error the callback of `111` sends is dropped.
     assert_eq!(checker.values(), [111]);
-    assert_eq!(checker.state(), State::Error("error"));
-    assert!(matches!(
-        subject.terminated(),
-        Some(Termination::Error("error"))
-    ));
+    assert_eq!(checker.state(), State::Completed);
+    assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
 
 #[test]
@@ -494,22 +495,20 @@ fn test_sub_on_next() {
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
-    let _subscription = Some(
-        observable
-            .clone()
-            .hook_on_next(move |observer, value| {
-                // subscribe before on_next
-                if let Some(observer) = observer_2.take() {
-                    safe_lock_option!(replace: subscription_2_cloned, observable.clone().subscribe(observer));
-                }
-                observer.on_next(value);
-                // subscribe after on_next
-                if let Some(observer) = observer_3.take() {
-                    safe_lock_option!(replace: subscription_3_cloned, observable.clone().subscribe(observer));
-                }
-            })
-            .subscribe(observer_1),
-    );
+    let _subscription = observable
+        .clone()
+        .hook_on_next(move |observer, value| {
+            // subscribe before on_next
+            if let Some(observer) = observer_2.take() {
+                safe_lock_option!(replace: subscription_2_cloned, observable.clone().subscribe(observer));
+            }
+            observer.on_next(value);
+            // subscribe after on_next
+            if let Some(observer) = observer_3.take() {
+                safe_lock_option!(replace: subscription_3_cloned, observable.clone().subscribe(observer));
+            }
+        })
+        .subscribe(observer_1);
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -537,11 +536,13 @@ fn test_sub_on_next() {
     assert!(subject.terminated().is_none());
 
     subject.clone().on_termination(Termination::Completed);
+    // Both subscribed while `222` and the completion were queued together, so both arrived at an
+    // already terminated subject and were replayed its last value before being completed.
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Completed);
-    assert_eq!(checker_2.values(), []);
+    assert_eq!(checker_2.values(), [222]);
     assert_eq!(checker_2.state(), State::Completed);
-    assert_eq!(checker_3.values(), []);
+    assert_eq!(checker_3.values(), [222]);
     assert_eq!(checker_3.state(), State::Completed);
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
@@ -558,10 +559,9 @@ fn test_next_on_next() {
     let mut subject_cloned = subject.clone();
     let _subscription = observable.subscribe_with_callback(
         move |value| {
-            // The subject is terminated as soon as `on_termination` is called, which the callback
-            // of `1` did: the callback of `2` sees it terminated while the termination is still
-            // queued behind that value.
-            assert_eq!(subject_cloned.terminated().is_some(), value > 1);
+            // The last value and the completion are queued in one step, so the subject is already
+            // terminated when that value is delivered.
+            assert!(subject_cloned.terminated().is_some());
             if value < 3 {
                 subject_cloned.on_next(value + 1);
                 subject_cloned
@@ -583,10 +583,9 @@ fn test_next_on_next() {
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
-    // The events are delivered in the order they were sent: `3` is sent from the callback of `2`,
-    // after that callback has already sent the termination, so it arrives once the subject has
-    // terminated and is dropped.
-    assert_eq!(checker.values(), [1, 2]);
+    // The subject is terminated by the very step that queued `1` and the completion, so the `2`
+    // the callback of `1` sends arrives once it has terminated and is dropped.
+    assert_eq!(checker.values(), [1]);
     assert_eq!(checker.state(), State::Completed);
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 }
@@ -863,6 +862,204 @@ fn test_sub_on_error() {
         subject.terminated(),
         Some(Termination::Error("error"))
     ));
+}
+
+// The cases below assert the behaviour `AsyncSubject` is meant to have. It keeps its last value in
+// a lock of its own, next to the lock of the `PublishSubject`'s delivery, and nothing is atomic
+// across the two, so they fail today: each of them names the window it walks through.
+
+#[test]
+fn test_next_on_replayed_next() {
+    // `on_termination` reads the value and forwards it *before* it records the termination, so a
+    // re-entrant `on_next` still passes the `terminated()` check and overwrites the value that
+    // late subscribers are replayed.
+    let mut subject = AsyncSubject::default();
+    let (checker_1, observer_1) = Checker::new();
+    let terminated_while_replaying = Shared::new(Mutable::new(Vec::new()));
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let _subscription = observable.clone().subscribe(observer_1);
+    let mut subject_cloned = subject.clone();
+    let terminated_cloned = terminated_while_replaying.clone();
+    let _subscription = observable.clone().subscribe_with_callback(
+        move |value| {
+            safe_lock_vec!(push: terminated_cloned, subject_cloned.terminated().is_some());
+            if value == 111 {
+                subject_cloned.on_next(222);
+            }
+        },
+        move |_| {},
+    );
+
+    subject.on_next(111);
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+
+    // The value is replayed by `on_termination`, so the subject is already terminated while the
+    // callback runs and the `222` it sends is dropped.
+    assert_eq!(safe_lock!(clone: terminated_while_replaying), [true]);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Completed);
+
+    // A subscriber arriving after the termination is replayed what the earlier ones saw.
+    let (checker_2, observer_2) = Checker::new();
+    let _subscription = observable.subscribe(observer_2);
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Completed);
+}
+
+#[test]
+fn test_complete_on_replayed_next() {
+    // The re-entrant termination reads the value and forwards it a second time, because forwarding
+    // the value and recording the termination are two steps: an `AsyncSubject` emits its value
+    // once.
+    let mut subject = AsyncSubject::default();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let _subscription = observable.clone().subscribe(observer);
+    let subject_cloned = subject.clone();
+    let _subscription = observable.subscribe_with_callback(
+        move |_| {
+            subject_cloned
+                .clone()
+                .on_termination(Termination::Completed);
+        },
+        move |_| {},
+    );
+
+    subject.on_next(111);
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_sub_on_replayed_next() {
+    // The value is replayed by `on_termination`, so an observer subscribing from that callback
+    // arrives at a terminated subject and must be replayed the value too. `test_sub_on_next`
+    // asserts what happens instead today: the termination alone reaches it, because the
+    // termination is recorded only after the value has been forwarded.
+    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut observer_2 = Some(observer_2);
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_2_cloned = subscription_2.clone();
+    let observable_cloned = observable.clone();
+    let _subscription = observable.clone().subscribe_with_callback(
+        move |_| {
+            if let Some(observer) = observer_2.take() {
+                safe_lock_option!(
+                    replace: subscription_2_cloned,
+                    observable_cloned.clone().subscribe(observer)
+                );
+            }
+        },
+        move |_| {},
+    );
+    let _subscription = observable.subscribe(observer_1);
+
+    subject.on_next(111);
+    subject.clone().on_termination(Termination::Completed);
+
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Completed);
+}
+
+#[test]
+fn test_next_on_sub() {
+    // Replaying the value to a late subscriber runs its callback: the subject has terminated long
+    // ago, so a value sent from there is dropped and the replayed value stays what it was.
+    let mut subject = AsyncSubject::default();
+    subject.on_next(111);
+    subject
+        .clone()
+        .on_termination(Termination::<Infallible>::Completed);
+
+    // Custom operations
+    let observable = subject.clone();
+
+    let mut subject_cloned = subject.clone();
+    let _subscription = observable.clone().subscribe_with_callback(
+        move |value| {
+            if value == 111 {
+                subject_cloned.on_next(222);
+            }
+        },
+        move |_| {},
+    );
+
+    let (checker, observer) = Checker::new();
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[cfg(not(feature = "single-threaded"))]
+#[test]
+fn test_race_condition() {
+    // `subscribe` reads `terminated()` under the delivery's lock and the value under the subject's
+    // own, so a termination can land between the two: the observer is then admitted by the
+    // terminated branch of `PublishSubject`, which knows nothing about the value and only
+    // terminates it. The subscribers race a termination often enough to walk into that window.
+    use std::sync::{Arc, Barrier};
+
+    const SUBSCRIBERS: usize = 3;
+    const ROUNDS: usize = 20;
+
+    for _ in 0..200 {
+        let mut subject: AsyncSubject<'static, i32, Infallible> = AsyncSubject::default();
+        subject.on_next(111);
+        let barrier = Arc::new(Barrier::new(SUBSCRIBERS + 1));
+
+        let handles: Vec<_> = (0..SUBSCRIBERS)
+            .map(|_| {
+                let subject = subject.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    // The subscriptions are returned so that the observers stay subscribed until
+                    // every thread has finished: an observer that joined before the termination is
+                    // notified by it, not by `subscribe`.
+                    (0..ROUNDS)
+                        .map(|_| {
+                            let (checker, observer) = Checker::new();
+                            (checker, subject.clone().subscribe(observer))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+
+        barrier.wait();
+        subject.clone().on_termination(Termination::Completed);
+
+        let results: Vec<_> = handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap())
+            .collect();
+        for (checker, _subscription) in results.iter().flatten() {
+            // Whether the observer joined the subject before the termination or was replayed by
+            // it, it sees the last value followed by the completion.
+            assert_eq!(checker.values(), [111]);
+            assert_eq!(checker.state(), State::Completed);
+        }
+    }
 }
 
 #[test]

@@ -1,11 +1,18 @@
-use super::{Subject, publish_subject::PublishSubject};
+//! A subject that keeps a current value and hands it to every new subscriber.
+//!
+//! The current value lives in the [`SerializedMulticast`]'s resources, so replacing it and
+//! forwarding it are one atomic step, and so are reading it and joining the multicast: a
+//! subscriber can neither miss a value emitted while it was subscribing nor observe one twice.
+
+use super::Subject;
 use crate::delegate_disposal;
 use crate::disposable::DisposableExt;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::observable::Subscription;
-use crate::safe_lock;
-use crate::subject::publish_subject;
-use crate::utils::types::{MaybeSend, Mutable, Shared};
+use crate::utils::pending_events::EventBatch;
+use crate::utils::serialized_delivery::UpdateOutcome;
+use crate::utils::serialized_multicast::{Admission, MulticastDisposal, SerializedMulticast};
+use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observer::{Observer, Termination},
@@ -15,83 +22,96 @@ use educe::Educe;
 /// Keeps the latest value and emits it immediately to new subscribers.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct BehaviorSubject<'or, T, E> {
-    value: Shared<Mutable<T>>,
-    publish_subject: PublishSubject<'or, T, E>,
-}
+pub struct BehaviorSubject<'or, T, E>(SerializedMulticast<'or, T, E, T>);
 
 impl<T, E> BehaviorSubject<'_, T, E> {
     pub fn new(value: T) -> Self {
-        Self {
-            value: Shared::new(Mutable::new(value)),
-            publish_subject: PublishSubject::default(),
-        }
+        Self(SerializedMulticast::idle(value))
     }
+}
 
-    pub fn value(&self) -> T
-    where
-        T: Clone,
-    {
-        safe_lock!(clone: self.value)
+impl<T, E> BehaviorSubject<'_, T, E>
+where
+    T: Clone,
+    E: Clone,
+{
+    /// The current value.
+    ///
+    /// # Panics
+    ///
+    /// Panics once an observer's callback has panicked, which takes the subject's whole state with
+    /// it and leaves nothing to return.
+    pub fn value(&self) -> T {
+        self.0
+            .read(|value, _| value.clone())
+            .expect("the subject is dead because an observer panicked")
     }
 }
 
 delegate_disposal!(
     Disposal<'or, T, E>,
-    OptionDisposal<Subscription<publish_subject::Disposal<'or, T, E>>>,
-    where T: Clone, E: Clone
+    OptionDisposal<MulticastDisposal<'or, T, E, T>>,
 );
 
 impl<'or, T, E> Observable<'or, T, E> for BehaviorSubject<'or, T, E>
 where
-    T: Clone + MaybeSend,
-    E: Clone + MaybeSend,
+    T: Clone,
+    E: Clone,
 {
     type D = Disposal<'or, T, E>;
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
-        if let Some(terminated) = self.terminated() {
-            observer.on_termination(terminated);
-            OptionDisposal::none().into_subscription()
-        } else {
-            observer.on_next(safe_lock!(clone: self.value));
-            self.publish_subject
-                .subscribe(observer)
-                .into_option()
-                .into_subscription()
+    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        match self
+            .0
+            .subscribe_with(observer, |value, terminated| match terminated {
+                // The current value is snapshotted under the very lock that queues the subscription,
+                // so it is followed by exactly the values emitted after it.
+                None => Admission::Join(vec![value.clone()]),
+                Some(termination) => Admission::Terminated(Vec::new(), termination.clone()),
+            }) {
+            Some(disposal) => OptionDisposal::some(disposal),
+            None => OptionDisposal::none(),
         }
+        .into_subscription()
     }
 }
 
 impl<T, E> Observer<T, E> for BehaviorSubject<'_, T, E>
 where
-    T: Clone + MaybeSend,
-    E: Clone + MaybeSend,
+    T: Clone,
+    E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        if self.terminated().is_none() {
-            safe_lock!(set: self.value, value.clone());
-            self.publish_subject.on_next(value);
-        }
+        let _ = self.0.update(|current, terminated| {
+            if terminated.is_some() {
+                return UpdateOutcome::empty()
+                    .with_drop_outside(Some(value))
+                    .without_events();
+            }
+            // Replacing the current value and forwarding it are one step, so the value a
+            // subscriber is given always matches the values it then receives. The replaced value
+            // is dropped outside the lock: dropping it can run arbitrary code.
+            let previous = std::mem::replace(current, value.clone());
+            UpdateOutcome::empty()
+                .with_drop_outside(Some(previous))
+                .with_next_event(value)
+        });
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.publish_subject.on_termination(termination);
+        self.0.send(EventBatch::Termination(termination));
     }
 }
 
 impl<'or, T, E> Subject<'or, T, E> for BehaviorSubject<'or, T, E>
 where
-    T: Clone + MaybeSend,
-    E: Clone + MaybeSend,
+    T: Clone,
+    E: Clone,
 {
     fn terminated(&self) -> Option<Termination<E>>
     where
         E: Clone,
     {
-        self.publish_subject.terminated()
+        self.0.terminated()
     }
 }
