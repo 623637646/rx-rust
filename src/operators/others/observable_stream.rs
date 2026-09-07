@@ -113,22 +113,25 @@ struct ObservableStreamObserver<T> {
 
 impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
-        self.context.lock_mut(|mut lock| {
+        // The waker is taken under the lock and woken after it is released, because waking runs
+        // external code, which must not run under the lock.
+        let waker = self.context.lock_mut(|mut lock| {
             lock.values.push_back(value);
-            if let Some(waker) = lock.waker.take() {
-                drop(lock);
-                waker.wake();
-            }
+            lock.waker.take()
         });
+        if let Some(waker) = waker {
+            waker.wake();
+        }
     }
 
     fn on_termination(self, _: Termination<Infallible>) {
-        self.context.lock_mut(|mut lock| {
+        // The waker is woken outside the lock, like in `on_next`.
+        let waker = self.context.lock_mut(|mut lock| {
             lock.terminated = true;
-            if let Some(waker) = lock.waker.take() {
-                drop(lock);
-                waker.wake();
-            }
+            lock.waker.take()
         });
+        if let Some(waker) = waker {
+            waker.wake();
+        }
     }
 }
