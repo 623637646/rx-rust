@@ -1523,8 +1523,6 @@ fn test_error_on_sub() {
 
 #[test]
 fn test_subscribe_stale_window_observable() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
 
     // Custom operations
@@ -1545,7 +1543,7 @@ fn test_subscribe_stale_window_observable() {
     sender.on_next(222);
     assert_eq!(safe_lock_vec!(len: window_vec), 2);
 
-    let mut windows = window_vec.lock_mut(|mut lock| std::mem::take(&mut *lock));
+    let mut windows = safe_lock!(mem_take: window_vec);
     let window_2 = windows.pop().unwrap();
     let window_1 = windows.pop().unwrap();
 
@@ -1573,8 +1571,6 @@ fn test_subscribe_stale_window_observable() {
 
 #[test]
 fn test_subscribe_current_window_late_with_earlier_values() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
 
     // Custom operations
@@ -1591,7 +1587,7 @@ fn test_subscribe_current_window_late_with_earlier_values() {
     sender.on_next(111);
 
     // Subscribing replays the buffered value.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), [111]);
@@ -1611,8 +1607,6 @@ fn test_subscribe_current_window_late_with_earlier_values() {
 
 #[test]
 fn test_subscribe_window_observable_after_termination() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
@@ -1636,7 +1630,7 @@ fn test_subscribe_window_observable_after_termination() {
     assert_eq!(termination_checker.state(), State::Completed);
 
     // A late subscriber observes the buffered value and the completion.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), [111]);
@@ -1645,8 +1639,6 @@ fn test_subscribe_window_observable_after_termination() {
 
 #[test]
 fn test_subscribe_window_observable_after_unsubscribe() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
 
     // Custom operations
@@ -1669,7 +1661,7 @@ fn test_subscribe_window_observable_after_unsubscribe() {
 
     // A late subscriber receives no buffered values or termination because the window pipe has
     // already been closed.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), []);
@@ -1678,8 +1670,6 @@ fn test_subscribe_window_observable_after_unsubscribe() {
 
 #[test]
 fn test_unsubscribe_window_subscription_keeps_stream_working() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
@@ -1694,7 +1684,7 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     );
 
     // Subscribe to window 1 and then unsubscribe in the middle of the window.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let sub_1 = window_1.subscribe(observer_1);
     sender.on_next(111);
@@ -1714,7 +1704,7 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     assert_eq!(checker_1.values(), [111]);
 
     // The next window works as usual.
-    let window_2 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_2 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_2, observer_2) = Checker::new();
     let _sub_2 = window_2.subscribe(observer_2);
     sender.on_next(444);
@@ -1726,7 +1716,6 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
 #[test]
 fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
     use crate::tests_utils::drop_probe::{DropCount, DropProbe};
-    use rx_rust::utils::types::MutableHelper;
 
     let (mut sender, observable, _channel_checker) = test_channel::<'_, DropProbe, Infallible>();
 
@@ -1747,7 +1736,7 @@ fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
 
     // Dropping the only handle to an unsubscribed window must release its
     // buffered values even while the outer window subscription remains active.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     drop(window_1);
     assert_eq!(drops.get(), 1);
 }
@@ -1755,7 +1744,6 @@ fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
 #[test]
 fn test_dropping_ignored_value_does_not_poison_window_context() {
     use crate::tests_utils::panic::expect_panic_on_drop;
-    use rx_rust::utils::types::MutableHelper;
 
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
 
@@ -1775,7 +1763,7 @@ fn test_dropping_ignored_value_does_not_poison_window_context() {
 
     // Stop the current inner subscription while keeping the outer window
     // pipeline active, so subsequent source values take the ignored-value path.
-    let inner_subscription = inner_subscriptions.lock_mut(|mut lock| lock.pop()).unwrap();
+    let inner_subscription = safe_lock_vec!(pop: inner_subscriptions).unwrap();
     drop(inner_subscription);
 
     expect_panic_on_drop(|value| sender.on_next(value));

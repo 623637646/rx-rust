@@ -12,6 +12,7 @@ use rx_rust::{
         types::{MaybeSend, Mutable, MutableHelper, Shared},
     },
 };
+use rx_rust::{safe_lock, safe_lock_vec};
 use std::convert::Infallible;
 
 #[derive(Clone)]
@@ -90,10 +91,10 @@ where
     let termination = recorder.termination.clone();
     let subscription = observable.subscribe_with_callback(
         move |(value, request)| {
-            values.lock_mut(|mut values| values.push(value));
-            requests.lock_mut(|mut requests| requests.push(request));
+            safe_lock_vec!(push: values, value);
+            safe_lock_vec!(push: requests, request);
         },
-        move |value| termination.lock_mut(|mut termination| *termination = Some(value)),
+        move |value| safe_lock!(set: termination, Some(value)),
     );
     (recorder, subscription)
 }
@@ -356,10 +357,10 @@ fn request_can_be_called_reentrantly_from_on_next() {
     let _subscription = OnBackpressure::new(subject.clone(), ChunksOfThree::default())
         .subscribe_with_callback(
             move |(value, request)| {
-                values_cloned.lock_mut(|mut values| values.push(value));
+                safe_lock_vec!(push: values_cloned, value);
                 request.request();
             },
-            move |value| termination_cloned.lock_mut(|mut state| *state = Some(value)),
+            move |value| safe_lock!(set: termination_cloned, Some(value)),
         );
 
     for value in 1..=9 {
@@ -388,13 +389,13 @@ fn upstream_can_terminate_reentrantly_from_on_next() {
     let _subscription = OnBackpressure::new(subject.clone(), ChunksOfThree::default())
         .subscribe_with_callback(
             move |(value, request)| {
-                values_cloned.lock_mut(|mut values| values.push(value));
+                safe_lock_vec!(push: values_cloned, value);
                 request.request();
                 subject_cloned
                     .clone()
                     .on_termination(Termination::<Infallible>::Completed);
             },
-            move |value| termination_cloned.lock_mut(|mut state| *state = Some(value)),
+            move |value| safe_lock!(set: termination_cloned, Some(value)),
         );
 
     subject.on_next(1);

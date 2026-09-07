@@ -63,7 +63,7 @@ where
     fn on_next(&mut self, value: T) {
         // The observer is taken out of its slot while it is notified, because it is notified
         // outside the lock: a re-entrant send then finds the slot empty instead of aliasing it.
-        let observer = self.state.lock_mut(|lock| match &*lock {
+        let observer = self.state.lock_ref(|lock| match &*lock {
             ChannelState::Subscribed => safe_lock_option!(take: self.observer),
             ChannelState::Initialized
             | ChannelState::Completed
@@ -79,7 +79,7 @@ where
 
         // A disposal that ran while the value was being delivered found the slot empty, so the
         // observer is dropped here instead: this is the earliest the channel can let go of it.
-        let leftover = self.state.lock_mut(|lock| match &*lock {
+        let leftover = self.state.lock_ref(|lock| match &*lock {
             ChannelState::Subscribed => {
                 let previous = safe_lock_option!(replace: self.observer, observer);
                 debug_assert!(previous.is_none());

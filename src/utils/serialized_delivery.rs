@@ -12,6 +12,7 @@
 
 use crate::{
     observer::{Observer, Termination},
+    safe_lock,
     utils::{
         pending_events::{EventBatch, PendingEvents},
         types::{Mutable, MutableHelper, Shared, WeakShared},
@@ -200,9 +201,10 @@ impl<T, E, OR, R> SerializedDelivery<T, E, OR, R> {
 
     /// Stops the delivery, dropping the observer without notifying it. Stopping again is a no-op.
     pub fn stop(&self) {
-        // The taken state owns the observer, the queued events, and the resources, so binding it
-        // here drops all of them outside the lock, avoiding a potential deadlock.
-        let _deferred_drop = self.0.lock_mut(|mut lock| lock.take());
+        // `Stopped` is the only variant that owns nothing, so replacing the state with it takes
+        // the observer, the queued events and the resources out. Binding them here drops all of
+        // them outside the lock, avoiding a potential deadlock.
+        let _deferred_drop = safe_lock!(mem_replace: self.0, State::Stopped);
     }
 
     pub fn downgrade(&self) -> WeakSerializedDelivery<T, E, OR, R> {
@@ -375,11 +377,12 @@ impl<T, E, OR, R> State<T, E, OR, R> {
                 }
 
                 // The batch is known to need a delivery only now, so the observer is taken out of
-                // the state only now.
+                // the state only now. It is put back into `Delivering` right below, so nothing the
+                // state owned is dropped under the lock.
                 let Self::Idle {
                     observer,
                     resources,
-                } = self.take()
+                } = std::mem::replace(self, Self::Stopped)
                 else {
                     unreachable!()
                 };
@@ -406,10 +409,12 @@ impl<T, E, OR, R> State<T, E, OR, R> {
             Self::Idle { .. } => unreachable!("a delivery loop only runs in the delivering state"),
         }
 
+        // Everything the state owns is handed to the caller or put back into `Idle` below, so
+        // nothing is dropped under the lock.
         let Self::Delivering {
             mut pending,
             resources,
-        } = self.take()
+        } = std::mem::replace(self, Self::Stopped)
         else {
             unreachable!()
         };
@@ -432,14 +437,5 @@ impl<T, E, OR, R> State<T, E, OR, R> {
                 Step::Parked
             }
         }
-    }
-
-    /// Takes the state out, leaving the only variant that owns nothing behind.
-    ///
-    /// The taken state still owns the observer, the queued events, and the resources, so the caller
-    /// must either put them back into a new state or drop them outside the lock that guards it.
-    #[must_use = "the taken state must be reused or dropped outside the lock that guards it"]
-    fn take(&mut self) -> Self {
-        std::mem::replace(self, Self::Stopped)
     }
 }

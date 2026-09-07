@@ -218,4 +218,14 @@ macro_rules! safe_lock_vec {
         let value = $value;
         $lock_name.lock_mut(|mut lock| Vec::push(&mut lock.$field_name, value))
     }};
+
+    (pop: $lock_name:expr) => {{
+        use $crate::utils::types::MutableHelper;
+        $lock_name.lock_mut(|mut lock| Vec::pop(&mut *lock))
+    }};
+
+    (pop: $lock_name:expr, $field_name:ident) => {{
+        use $crate::utils::types::MutableHelper;
+        $lock_name.lock_mut(|mut lock| Vec::pop(&mut lock.$field_name))
+    }};
 }

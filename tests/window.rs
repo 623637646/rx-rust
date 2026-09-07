@@ -17,7 +17,7 @@ use rx_rust::{
     operators::{creating::create::Create, transforming::window::Window},
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock, safe_lock_vec};
+use rx_rust::{safe_lock, safe_lock_option, safe_lock_vec};
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
@@ -654,8 +654,6 @@ fn test_error_from_boundary() {
 
 #[test]
 fn test_error_from_boundary_while_window_pending() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
     let (boundary_sender, boundary_observable, boundary_channel_checker) =
         test_channel::<'_, (), &str>();
@@ -686,7 +684,7 @@ fn test_error_from_boundary_while_window_pending() {
     );
 
     // A late subscriber observes the buffered value and then the error.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), [111]);
@@ -695,8 +693,6 @@ fn test_error_from_boundary_while_window_pending() {
 
 #[test]
 fn test_error_from_boundary_while_no_window_subscribed() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
     let (boundary_sender, boundary_observable, boundary_channel_checker) =
         test_channel::<'_, (), &str>();
@@ -713,7 +709,7 @@ fn test_error_from_boundary_while_no_window_subscribed() {
     );
 
     // Subscribe to window 1 and then unsubscribe, leaving no window to accept values.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let sub_1 = window_1.subscribe(observer_1);
     sender.on_next(111);
@@ -2741,8 +2737,6 @@ fn test_error_on_sub_from_boundary() {
 
 #[test]
 fn test_subscribe_stale_window_observable() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) = test_channel();
 
@@ -2762,7 +2756,7 @@ fn test_subscribe_stale_window_observable() {
     boundary_sender.on_next(());
     assert_eq!(safe_lock_vec!(len: window_vec), 2);
 
-    let mut windows = window_vec.lock_mut(|mut lock| std::mem::take(&mut *lock));
+    let mut windows = safe_lock!(mem_take: window_vec);
     let window_2 = windows.pop().unwrap();
     let window_1 = windows.pop().unwrap();
 
@@ -2789,8 +2783,6 @@ fn test_subscribe_stale_window_observable() {
 
 #[test]
 fn test_subscribe_window_observable_after_termination() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
@@ -2814,7 +2806,7 @@ fn test_subscribe_window_observable_after_termination() {
     assert_eq!(termination_checker.state(), State::Completed);
 
     // A late subscriber observes the completion.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), []);
@@ -2823,8 +2815,6 @@ fn test_subscribe_window_observable_after_termination() {
 
 #[test]
 fn test_subscribe_stale_window_observable_after_error() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (sender, observable, _channel_checker) = test_channel::<'_, i32, &str>();
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), &str>();
@@ -2848,7 +2838,7 @@ fn test_subscribe_stale_window_observable_after_error() {
     assert_eq!(termination_checker.state(), State::Error("error"));
 
     // A late subscriber observes the error.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), []);
@@ -2857,8 +2847,6 @@ fn test_subscribe_stale_window_observable_after_error() {
 
 #[test]
 fn test_subscribe_boundary_closed_window_after_later_error() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (sender, observable, _channel_checker) = test_channel::<'_, i32, &str>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), &str>();
@@ -2883,7 +2871,7 @@ fn test_subscribe_boundary_closed_window_after_later_error() {
     sender.on_termination(Termination::Error("error"));
     assert_eq!(termination_checker.state(), State::Error("error"));
 
-    let mut windows = window_vec.lock_mut(|mut lock| std::mem::take(&mut *lock));
+    let mut windows = safe_lock!(mem_take: window_vec);
     let window_2 = windows.pop().unwrap();
     let window_1 = windows.pop().unwrap();
 
@@ -2900,8 +2888,6 @@ fn test_subscribe_boundary_closed_window_after_later_error() {
 
 #[test]
 fn test_subscribe_window_observable_after_unsubscribe() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (_sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
@@ -2922,7 +2908,7 @@ fn test_subscribe_window_observable_after_unsubscribe() {
     drop(subscription);
 
     // A late subscriber is dropped without receiving a termination.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), []);
@@ -2931,8 +2917,6 @@ fn test_subscribe_window_observable_after_unsubscribe() {
 
 #[test]
 fn test_subscribe_multiple_stale_window_observables() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) = test_channel();
 
@@ -2952,7 +2936,7 @@ fn test_subscribe_multiple_stale_window_observables() {
     boundary_sender.on_next(());
     assert_eq!(safe_lock_vec!(len: window_vec), 3);
 
-    let mut windows = window_vec.lock_mut(|mut lock| std::mem::take(&mut *lock));
+    let mut windows = safe_lock!(mem_take: window_vec);
     let window_3 = windows.pop().unwrap();
     let window_2 = windows.pop().unwrap();
     let window_1 = windows.pop().unwrap();
@@ -2984,8 +2968,6 @@ fn test_subscribe_multiple_stale_window_observables() {
 
 #[test]
 fn test_subscribe_current_window_late_with_earlier_values() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
@@ -3004,7 +2986,7 @@ fn test_subscribe_current_window_late_with_earlier_values() {
     // Values emitted before the window is subscribed are sent.
     sender.on_next(111);
 
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), [111]);
@@ -3017,8 +2999,6 @@ fn test_subscribe_current_window_late_with_earlier_values() {
 
 #[test]
 fn test_subscribe_current_window_after_buffered_values_and_completion() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
@@ -3041,7 +3021,7 @@ fn test_subscribe_current_window_after_buffered_values_and_completion() {
     sender.on_next(222);
     sender.on_termination(Termination::Completed);
 
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), [111, 222]);
@@ -3050,8 +3030,6 @@ fn test_subscribe_current_window_after_buffered_values_and_completion() {
 
 #[test]
 fn test_reentrant_source_value_during_buffer_replay() {
-    use rx_rust::utils::types::MutableHelper;
-
     let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
     let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
 
@@ -3071,7 +3049,7 @@ fn test_reentrant_source_value_during_buffer_replay() {
     source.on_next(111);
     source.on_next(222);
 
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let values = Shared::new(Mutable::new(Vec::new()));
     let values_cloned = values.clone();
     let mut source_reentrant = source.clone();
@@ -3093,8 +3071,6 @@ fn test_reentrant_source_value_during_buffer_replay() {
 
 #[test]
 fn test_disposing_outer_subscription_during_buffer_replay_suppresses_remaining_values() {
-    use rx_rust::utils::types::MutableHelper;
-
     let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
     let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
 
@@ -3108,12 +3084,12 @@ fn test_disposing_outer_subscription_during_buffer_replay_suppresses_remaining_v
         move |window| safe_lock_vec!(push: windows_cloned, window),
         |_termination| {},
     );
-    outer_subscription.lock_mut(|mut lock| *lock = Some(subscription));
+    safe_lock!(set: outer_subscription, Some(subscription));
 
     source.on_next(111);
     source.on_next(222);
 
-    let window = windows.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window = safe_lock_vec!(pop: windows).unwrap();
     let values = Shared::new(Mutable::new(Vec::new()));
     let values_cloned = values.clone();
     let outer_subscription_cloned = outer_subscription.clone();
@@ -3121,7 +3097,7 @@ fn test_disposing_outer_subscription_during_buffer_replay_suppresses_remaining_v
         move |value| {
             safe_lock_vec!(push: values_cloned, value);
             if value == 111 {
-                let subscription = outer_subscription_cloned.lock_mut(|mut lock| lock.take());
+                let subscription = safe_lock_option!(take: outer_subscription_cloned);
                 drop(subscription);
             }
         },
@@ -3168,7 +3144,7 @@ fn test_reentrant_boundary_during_buffer_replay_keeps_the_order_of_the_old_windo
     source.on_next(111);
     source.on_next(222);
 
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let values_1 = Shared::new(Mutable::new(Vec::new()));
     let values_1_cloned = values_1.clone();
     let terminations_1 = Shared::new(Mutable::new(Vec::<Termination<Infallible>>::new()));
@@ -3215,7 +3191,7 @@ fn test_reentrant_boundary_during_buffer_replay_keeps_the_order_of_the_old_windo
     assert_eq!(safe_lock_vec!(len: window_vec), 1);
 
     // The new window remains independent and receives subsequent source values.
-    let window_2 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_2 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_2, observer_2) = Checker::new();
     let _sub_2 = window_2.subscribe(observer_2);
     source.on_next(333);
@@ -3349,7 +3325,7 @@ fn test_disposing_outer_subscription_from_old_window_completion_suppresses_new_w
                     |_value| {},
                     move |termination| {
                         assert_eq!(termination, Termination::Completed);
-                        let subscription = outer_subscription.lock_mut(|mut lock| lock.take());
+                        let subscription = safe_lock_option!(take: outer_subscription);
                         drop(subscription);
                     },
                 );
@@ -3358,7 +3334,7 @@ fn test_disposing_outer_subscription_from_old_window_completion_suppresses_new_w
         },
         |_termination| {},
     );
-    outer_subscription.lock_mut(|mut lock| *lock = Some(subscription));
+    safe_lock!(set: outer_subscription, Some(subscription));
 
     boundary.on_next(());
 
@@ -3367,8 +3343,6 @@ fn test_disposing_outer_subscription_from_old_window_completion_suppresses_new_w
 
 #[test]
 fn test_disposing_outer_subscription_from_inner_termination_suppresses_outer_termination() {
-    use rx_rust::utils::types::MutableHelper;
-
     let source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
     let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
 
@@ -3391,7 +3365,7 @@ fn test_disposing_outer_subscription_from_inner_termination_suppresses_outer_ter
                 |_value| {},
                 move |termination| {
                     safe_lock_vec!(push: inner_terminations, termination);
-                    let subscription = outer_subscription.lock_mut(|mut lock| lock.take());
+                    let subscription = safe_lock_option!(take: outer_subscription);
                     drop(subscription);
                 },
             );
@@ -3399,7 +3373,7 @@ fn test_disposing_outer_subscription_from_inner_termination_suppresses_outer_ter
         },
         move |termination| safe_lock_vec!(push: outer_terminations_cloned, termination),
     );
-    outer_subscription.lock_mut(|mut lock| *lock = Some(subscription));
+    safe_lock!(set: outer_subscription, Some(subscription));
 
     source.on_termination(Termination::Completed);
 
@@ -3412,8 +3386,6 @@ fn test_disposing_outer_subscription_from_inner_termination_suppresses_outer_ter
 
 #[test]
 fn test_disposing_inner_subscription_after_termination_is_queued_suppresses_inner_termination() {
-    use rx_rust::utils::types::MutableHelper;
-
     let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
     let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
 
@@ -3442,14 +3414,14 @@ fn test_disposing_inner_subscription_after_termination_is_queued_suppresses_inne
 
                     // Queue the window termination, then dispose the inner
                     // subscription before that termination can be delivered.
-                    let source = source_termination.lock_mut(|mut lock| lock.take()).unwrap();
+                    let source = safe_lock_option!(take: source_termination).unwrap();
                     source.on_termination(Termination::Completed);
-                    let sub = inner_subscription_cloned.lock_mut(|mut lock| lock.take());
+                    let sub = safe_lock_option!(take: inner_subscription_cloned);
                     drop(sub);
                 },
                 move |termination| safe_lock_vec!(push: inner_terminations, termination),
             );
-            inner_subscription_outer.lock_mut(|mut lock| *lock = Some(sub));
+            safe_lock!(set: inner_subscription_outer, Some(sub));
         },
         move |termination| safe_lock_vec!(push: outer_terminations_cloned, termination),
     );
@@ -3502,17 +3474,15 @@ fn test_disposing_inner_subscription_after_boundary_rollover_is_queued_suppresse
                         move |_value| {
                             // Queue completion of the old window and emission of
                             // the new one, then cancel the old inner subscription.
-                            boundary_reentrant
-                                .lock_mut(|mut lock| lock.take())
+                            safe_lock_option!(take: boundary_reentrant)
                                 .unwrap()
                                 .on_next(());
-                            let sub =
-                                first_inner_subscription_cloned.lock_mut(|mut lock| lock.take());
+                            let sub = safe_lock_option!(take: first_inner_subscription_cloned);
                             drop(sub);
                         },
                         move |termination| safe_lock_vec!(push: first_terminations, termination),
                     );
-                    first_inner_subscription.lock_mut(|mut lock| *lock = Some(sub));
+                    safe_lock!(set: first_inner_subscription, Some(sub));
                 }
                 1 => {
                     let second_values = second_values_cloned.clone();
@@ -3685,17 +3655,15 @@ fn test_disposing_old_inner_during_multiple_queued_boundary_rollovers_keeps_late
                             // Both rollovers are queued while the old observer is
                             // still handling a value. The middle window is closed
                             // before it can be delivered to the outer observer.
-                            let mut boundary =
-                                boundary_reentrant.lock_mut(|mut lock| lock.take()).unwrap();
+                            let mut boundary = safe_lock_option!(take: boundary_reentrant).unwrap();
                             boundary.on_next(());
                             boundary.on_next(());
-                            let sub =
-                                first_inner_subscription_cloned.lock_mut(|mut lock| lock.take());
+                            let sub = safe_lock_option!(take: first_inner_subscription_cloned);
                             drop(sub);
                         },
                         move |termination| safe_lock_vec!(push: first_terminations, termination),
                     );
-                    first_inner_subscription.lock_mut(|mut lock| *lock = Some(sub));
+                    safe_lock!(set: first_inner_subscription, Some(sub));
                 }
                 1 => {
                     let second_terminations = second_terminations_cloned.clone();
@@ -3736,7 +3704,6 @@ fn test_disposing_old_inner_during_multiple_queued_boundary_rollovers_keeps_late
 #[test]
 fn test_dropping_ignored_value_stops_the_subscription() {
     use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
-    use rx_rust::utils::types::MutableHelper;
 
     let (mut sender, observable, channel_checker) = test_channel::<'_, PanicOnDrop, Infallible>();
     let (_boundary_sender, boundary_observable, boundary_channel_checker) =
@@ -3758,7 +3725,7 @@ fn test_dropping_ignored_value_stops_the_subscription() {
 
     // Stop the current inner subscription while keeping the outer window
     // pipeline active, so subsequent source values take the ignored-value path.
-    let inner_subscription = inner_subscriptions.lock_mut(|mut lock| lock.pop()).unwrap();
+    let inner_subscription = safe_lock_vec!(pop: inner_subscriptions).unwrap();
     drop(inner_subscription);
 
     // The window that the value belongs to is closed, so the value is dropped while the pipeline
@@ -3773,8 +3740,6 @@ fn test_dropping_ignored_value_stops_the_subscription() {
 
 #[test]
 fn test_unsubscribe_window_subscription_keeps_stream_working() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
@@ -3790,7 +3755,7 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     );
 
     // Subscribe to window 1 and then unsubscribe in the middle of the window.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let sub_1 = window_1.subscribe(observer_1);
     sender.on_next(111);
@@ -3809,7 +3774,7 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
 
     // The next window works as usual.
     boundary_sender.on_next(());
-    let window_2 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_2 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_2, observer_2) = Checker::new();
     let _sub_2 = window_2.subscribe(observer_2);
     sender.on_next(333);
@@ -3821,7 +3786,6 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
 #[test]
 fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
     use crate::tests_utils::drop_probe::{DropCount, DropProbe};
-    use rx_rust::utils::types::MutableHelper;
 
     let (mut sender, observable, _channel_checker) = test_channel::<'_, DropProbe, Infallible>();
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
@@ -3844,15 +3808,13 @@ fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
 
     // Dropping the only handle to an unsubscribed window must release its
     // buffered values even while the outer window subscription remains active.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     drop(window_1);
     assert_eq!(drops.get(), 1);
 }
 
 #[test]
 fn test_unsubscribed_window_values_do_not_leak_into_next_window() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) = test_channel();
 
@@ -3876,7 +3838,7 @@ fn test_unsubscribed_window_values_do_not_leak_into_next_window() {
     boundary_sender.on_next(());
     assert_eq!(safe_lock_vec!(len: window_vec), 2);
 
-    let window_2 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_2 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_2, observer_2) = Checker::new();
     let _sub_2 = window_2.subscribe(observer_2);
     assert_eq!(checker_2.values(), []);
@@ -3887,7 +3849,7 @@ fn test_unsubscribed_window_values_do_not_leak_into_next_window() {
     assert_eq!(checker_2.state(), State::Active);
 
     // The stale window 1 stays consistent: completion without values.
-    let window_1 = window_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let window_1 = safe_lock_vec!(pop: window_vec).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let _sub_1 = window_1.subscribe(observer_1);
     assert_eq!(checker_1.values(), [111, 222]);

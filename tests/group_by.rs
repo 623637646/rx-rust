@@ -610,8 +610,6 @@ fn test_error_on_sub() {
 
 #[test]
 fn test_subscribe_groups_late_with_buffered_values() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
 
     // Custom operations
@@ -633,7 +631,7 @@ fn test_subscribe_groups_late_with_buffered_values() {
     sender.on_next(4);
     assert_eq!(safe_lock_vec!(len: group_vec), 2);
 
-    let mut groups = group_vec.lock_mut(|mut lock| std::mem::take(&mut *lock));
+    let mut groups = safe_lock!(mem_take: group_vec);
     let group_even = groups.pop().unwrap();
     let group_odd = groups.pop().unwrap();
 
@@ -664,8 +662,6 @@ fn test_subscribe_groups_late_with_buffered_values() {
 
 #[test]
 fn test_subscribe_group_after_termination() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
@@ -689,7 +685,7 @@ fn test_subscribe_group_after_termination() {
     assert_eq!(termination_checker.state(), State::Completed);
 
     // A late subscriber observes the buffered value and the completion.
-    let group = group_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let group = safe_lock_vec!(pop: group_vec).unwrap();
     let (checker, observer) = Checker::new();
     let _sub = group.subscribe(observer);
     assert_eq!(checker.values(), [111]);
@@ -698,8 +694,6 @@ fn test_subscribe_group_after_termination() {
 
 #[test]
 fn test_subscribe_group_after_unsubscribe() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
 
     // Custom operations
@@ -721,7 +715,7 @@ fn test_subscribe_group_after_unsubscribe() {
 
     // Unsubscribing closed the group, so a late subscriber observes neither the buffered value nor
     // a termination.
-    let group = group_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let group = safe_lock_vec!(pop: group_vec).unwrap();
     let (checker, observer) = Checker::new();
     let _sub = group.subscribe(observer);
     assert_eq!(checker.values(), []);
@@ -730,8 +724,6 @@ fn test_subscribe_group_after_unsubscribe() {
 
 #[test]
 fn test_values_of_ended_group_are_discarded() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
 
     // Custom operations
@@ -746,7 +738,7 @@ fn test_values_of_ended_group_are_discarded() {
 
     sender.on_next(1);
     sender.on_next(2);
-    let mut groups = group_vec.lock_mut(|mut lock| std::mem::take(&mut *lock));
+    let mut groups = safe_lock!(mem_take: group_vec);
     let group_even = groups.pop().unwrap();
     let group_odd = groups.pop().unwrap();
 
@@ -775,8 +767,6 @@ fn test_values_of_ended_group_are_discarded() {
 
 #[test]
 fn test_unsub_on_inner_termination_still_terminates_other_groups() {
-    use rx_rust::utils::types::MutableHelper;
-
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
     let (outer_termination_checker, outer_termination_observer) = Checker::<Infallible, _>::new();
 
@@ -793,7 +783,7 @@ fn test_unsub_on_inner_termination_still_terminates_other_groups() {
 
     sender.on_next(1);
     sender.on_next(2);
-    let mut groups = group_vec.lock_mut(|mut lock| std::mem::take(&mut *lock));
+    let mut groups = safe_lock!(mem_take: group_vec);
     let group_even = groups.pop().unwrap();
     let group_odd = groups.pop().unwrap();
 
@@ -831,7 +821,6 @@ fn test_unsub_on_inner_termination_still_terminates_other_groups() {
 #[test]
 fn test_dropping_unsubscribed_group_releases_buffered_values() {
     use crate::tests_utils::drop_probe::{DropCount, DropProbe};
-    use rx_rust::utils::types::MutableHelper;
 
     let (mut sender, observable, _channel_checker) = test_channel::<'_, DropProbe, Infallible>();
 
@@ -852,7 +841,7 @@ fn test_dropping_unsubscribed_group_releases_buffered_values() {
 
     // Dropping the only handle to an unsubscribed group must release its
     // buffered values even while the outer subscription remains active.
-    let group = group_vec.lock_mut(|mut lock| lock.pop()).unwrap();
+    let group = safe_lock_vec!(pop: group_vec).unwrap();
     drop(group);
     assert_eq!(drops.get(), 1);
 }
@@ -860,7 +849,6 @@ fn test_dropping_unsubscribed_group_releases_buffered_values() {
 #[test]
 fn test_dropping_ignored_value_does_not_poison_group_context() {
     use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
-    use rx_rust::utils::types::MutableHelper;
 
     let (mut sender, observable, channel_checker) =
         test_channel::<'_, Option<PanicOnDrop>, Infallible>();
@@ -883,7 +871,7 @@ fn test_dropping_ignored_value_does_not_poison_group_context() {
     assert_eq!(safe_lock_vec!(len: inner_subscriptions), 1);
 
     // Ending the group makes the following value take the ignored-value path.
-    let inner_subscription = inner_subscriptions.lock_mut(|mut lock| lock.pop()).unwrap();
+    let inner_subscription = safe_lock_vec!(pop: inner_subscriptions).unwrap();
     drop(inner_subscription);
 
     expect_panic_on_drop(|value| sender.on_next(Some(value)));
