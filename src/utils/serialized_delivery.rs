@@ -117,6 +117,18 @@ impl<T, E> UpdateOutcome<T, E> {
     }
 }
 
+impl<T, E, R, DO, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED> {
+    /// Takes the outcome apart, for a host that queues the events somewhere else.
+    ///
+    /// This is how [`SerializedMulticast`](crate::utils::serialized_multicast::SerializedMulticast)
+    /// translates the outcome of its own host into the events of the delivery underneath it. The
+    /// events must still be queued, and the value still be dropped, under and outside the very
+    /// lock this outcome was produced under.
+    pub(crate) fn into_parts(self) -> (Option<EventBatch<T, E>>, DO, R) {
+        (self.events, self.drop_outside, self.result)
+    }
+}
+
 impl<T, E, R, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DropUndecided, EVENTS_DECIDED> {
     pub fn with_drop_outside<DO>(
         self,
