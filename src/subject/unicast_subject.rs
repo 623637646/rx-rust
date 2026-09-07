@@ -209,8 +209,10 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
             State::Pending(pending) => {
                 // Terminating consumes the sender, so no value can arrive after the termination.
                 let rejected = pending.push(Event::Next(value));
-                debug_assert!(rejected.is_none());
                 drop(lock);
+                // Asserted with the lock released: a failing assertion would otherwise unwind
+                // while holding it, which poisons it for every later event.
+                debug_assert!(rejected.is_none());
                 drop(rejected); // Drop outside the lock to avoid potential deadlock
                 None
             }
@@ -259,8 +261,10 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
             State::Pending(pending) => {
                 // Terminating consumes the sender, so it cannot be terminated twice.
                 let rejected = pending.push(Event::Termination(termination));
-                debug_assert!(rejected.is_none());
                 drop(lock);
+                // Asserted with the lock released: a failing assertion would otherwise unwind
+                // while holding it, which poisons it for every later event.
+                debug_assert!(rejected.is_none());
                 drop(rejected); // Drop outside the lock to avoid potential deadlock
                 None
             }

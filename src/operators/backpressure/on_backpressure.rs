@@ -153,19 +153,28 @@ where
     fn on_next(&mut self, value: C::Input) {
         let _ = self.context.update(|model| {
             if model.termination.is_some() {
-                return UpdateOutcome::empty().without_events();
+                // The value arrived after the termination: it is dropped outside the lock.
+                return UpdateOutcome::empty()
+                    .with_drop_outside(value)
+                    .without_events();
             }
             model.collection.extend_one(value);
             if model.downstream_ready {
                 if let Some(next) = model.collection.take_next_value() {
                     model.downstream_ready = false;
                     let request = RequestToken(self.request_handler.clone());
-                    UpdateOutcome::empty().with_next_event((next, request))
+                    UpdateOutcome::empty()
+                        .without_drop_outside()
+                        .with_next_event((next, request))
                 } else {
-                    UpdateOutcome::empty().without_events()
+                    UpdateOutcome::empty()
+                        .without_drop_outside()
+                        .without_events()
                 }
             } else {
-                UpdateOutcome::empty().without_events()
+                UpdateOutcome::empty()
+                    .without_drop_outside()
+                    .without_events()
             }
         });
     }

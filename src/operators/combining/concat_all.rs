@@ -212,13 +212,13 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
     loop {
         let result = context.update(|model| {
             if model.slot.is_reserved() {
-                // Already terminated. A reserved slot holds nothing, so nothing is dropped here;
-                // releasing it makes the pending fill give its subscription back.
+                // Already terminated. Releasing a reserved slot makes the pending fill give its
+                // subscription back; the slot itself holds nothing, so this hands nothing out,
+                // and it is handed out rather than asserted under the lock.
                 let released = model.slot.release();
-                debug_assert!(released.is_none());
                 return UpdateOutcome::new(None)
                     .without_events()
-                    .without_drop_outside();
+                    .with_drop_outside(released);
             }
             if let Some(observable) = model.pending_observables.pop_front() {
                 UpdateOutcome::new(Some(observable))

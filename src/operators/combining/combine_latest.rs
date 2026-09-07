@@ -111,12 +111,20 @@ macro_rules! impl_observer {
         {
             fn on_next(&mut self, val: $t_self) {
                 let _ = self.0.update(|model| {
+                    // The latest value this one replaces is handed back, so that the `Drop` of
+                    // the user's value runs outside the lock. Building the pair still clones
+                    // under it: whether there is a pair to build at all is only known here.
                     if let Some(other) = &model.$field_other {
-                        model.$field_self = Some(val.clone());
-                        UpdateOutcome::empty().with_next_event($combine(val, other.clone()))
+                        let pair = $combine(val.clone(), other.clone());
+                        let replaced = model.$field_self.replace(val);
+                        UpdateOutcome::empty()
+                            .with_drop_outside(replaced)
+                            .with_next_event(pair)
                     } else {
-                        model.$field_self = Some(val);
-                        UpdateOutcome::empty().without_events()
+                        let replaced = model.$field_self.replace(val);
+                        UpdateOutcome::empty()
+                            .with_drop_outside(replaced)
+                            .without_events()
                     }
                 });
             }

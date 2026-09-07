@@ -89,16 +89,21 @@ where
         }
 
         let waker = cx.waker().clone();
-        self.context.lock_mut(|mut lock| {
-            lock.waker = Some(waker);
-            if let Some(event) = lock.values.pop_front() {
+        // The waker this one replaces is handed back, because dropping a `Waker` runs the
+        // external code of its vtable, which must not run under the lock.
+        let (poll, previous_waker) = self.context.lock_mut(|mut lock| {
+            let previous_waker = lock.waker.replace(waker);
+            let poll = if let Some(event) = lock.values.pop_front() {
                 Poll::Ready(Some(event))
             } else if lock.terminated {
                 Poll::Ready(None)
             } else {
                 Poll::Pending
-            }
-        })
+            };
+            (poll, previous_waker)
+        });
+        drop(previous_waker); // Drop outside the lock to avoid potential deadlock
+        poll
     }
 }
 
