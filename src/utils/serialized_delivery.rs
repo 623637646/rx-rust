@@ -353,13 +353,10 @@ impl<T, E, OR, R> State<T, E, OR, R> {
             },
             Self::Stopped => EnqueueAction::Rejected(events),
             Self::Idle { .. } => {
-                let mut pending = PendingEvents::new();
-                if let Some(rejected) = pending.push_batch(events) {
-                    return EnqueueAction::Rejected(rejected);
-                }
-
-                // The first value is delivered directly, so it never enters the queue.
-                let first_next = pending.pop_next();
+                // The queue is built from the batch instead of being pushed to and popped from:
+                // a fresh queue rejects nothing, and the first value is delivered directly, so it
+                // never enters the queue and a single-value batch allocates no queue at all.
+                let (first_next, pending) = PendingEvents::from_batch(events);
                 if first_next.is_none() && pending.is_empty() {
                     // An empty `NextBatch` is a no-op, consistent with the delivering state.
                     return EnqueueAction::Accepted;

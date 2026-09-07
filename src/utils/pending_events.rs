@@ -41,6 +41,42 @@ impl<T, E> PendingEvents<T, E> {
         }
     }
 
+    /// Splits `events` into the value to deliver first and the queue holding what follows it.
+    ///
+    /// The queue is built here, so it is never already terminated and nothing can be given back.
+    /// The first value is handed to the caller instead of being queued, so a batch carrying a
+    /// single value leaves the queue empty and never allocates it.
+    pub fn from_batch(events: EventBatch<T, E>) -> (Option<T>, Self) {
+        let empty_queue = |termination| Self {
+            values: VecDeque::new(),
+            termination,
+        };
+        // A batch of many values is turned into the queue directly, which reuses its allocation,
+        // and the first value is then taken off the front.
+        let queue_batch = |values: Vec<T>, termination| {
+            let mut values = VecDeque::from(values);
+            let first_next = values.pop_front();
+            (
+                first_next,
+                Self {
+                    values,
+                    termination,
+                },
+            )
+        };
+        match events {
+            EventBatch::Next(value) => (Some(value), empty_queue(None)),
+            EventBatch::Termination(termination) => (None, empty_queue(Some(termination))),
+            EventBatch::NextAndTermination(value, termination) => {
+                (Some(value), empty_queue(Some(termination)))
+            }
+            EventBatch::NextBatch(values) => queue_batch(values, None),
+            EventBatch::NextBatchAndTermination(values, termination) => {
+                queue_batch(values, Some(termination))
+            }
+        }
+    }
+
     /// Returns whether the last event has been queued, after which nothing can be queued anymore.
     pub fn is_terminated(&self) -> bool {
         self.termination.is_some()
