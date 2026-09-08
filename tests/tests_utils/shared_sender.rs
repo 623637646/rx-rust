@@ -69,6 +69,21 @@ where
         }
     }
 
+    /// Drops the parked observer without notifying it, and empties this handle, returning whether
+    /// one was parked.
+    ///
+    /// A delivery that is running stops as soon as it looks for its next event, so this also ends
+    /// a stream from inside the delivery it is re-entering.
+    pub(crate) fn stop(&self) -> bool {
+        match safe_lock_option!(take: self.0) {
+            Some(delivery) => {
+                delivery.stop();
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Terminates the parked observer and empties this handle, returning whether one was parked.
     pub(crate) fn on_termination(&self, termination: Termination<E>) -> bool {
         match safe_lock_option!(take: self.0) {
