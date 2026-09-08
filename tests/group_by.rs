@@ -4,7 +4,6 @@ use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
-use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
@@ -12,14 +11,16 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::types::{Mutable, Shared};
+use rx_rust::utils::mutable::Mutable;
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::MutableHelper;
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::create::Create, transforming::group_by::GroupBy},
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock, safe_lock_vec};
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -512,7 +513,7 @@ fn test_next_on_sub() {
         move |group| {
             let (checker, observer) = Checker::new();
             let sub = group.subscribe(observer);
-            safe_lock_vec!(push: checker_sub_vec_cloned, (checker, sub));
+            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
         },
         |termination| {
             termination_observer.on_termination(termination);
@@ -520,52 +521,60 @@ fn test_next_on_sub() {
     );
     // The value the subject replays on subscription opens the first group, and the
     // group buffers it until the outer observer subscribes.
-    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 1);
-    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
-        match index {
-            0 => {
-                assert_eq!(checker.values(), [111]);
-                assert_eq!(checker.state(), State::Active);
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    checker_sub_vec.with_ref(|checker_sub_vec| {
+        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
+            match index {
+                0 => {
+                    assert_eq!(checker.values(), [111]);
+                    assert_eq!(checker.state(), State::Active);
+                }
+                _ => panic!(),
             }
-            _ => panic!(),
         }
-    }
+    });
     assert_eq!(termination_checker.state(), State::Active);
 
     subject.on_next(222);
-    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
-    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
-        match index {
-            0 => assert_eq!(checker.values(), [111]),
-            1 => assert_eq!(checker.values(), [222]),
-            _ => panic!(),
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
+    checker_sub_vec.with_ref(|checker_sub_vec| {
+        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
+            match index {
+                0 => assert_eq!(checker.values(), [111]),
+                1 => assert_eq!(checker.values(), [222]),
+                _ => panic!(),
+            }
         }
-    }
+    });
 
     subject.on_next(333);
-    assert_eq!(safe_lock_vec!(len: checker_sub_vec), 2);
-    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
-        match index {
-            0 => assert_eq!(checker.values(), [111, 333]),
-            1 => assert_eq!(checker.values(), [222]),
-            _ => panic!(),
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
+    checker_sub_vec.with_ref(|checker_sub_vec| {
+        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
+            match index {
+                0 => assert_eq!(checker.values(), [111, 333]),
+                1 => assert_eq!(checker.values(), [222]),
+                _ => panic!(),
+            }
         }
-    }
+    });
 
     subject.on_termination(Termination::<Infallible>::Completed);
-    for (index, (checker, _)) in checker_sub_vec.test_lock_ref().iter().enumerate() {
-        match index {
-            0 => {
-                assert_eq!(checker.values(), [111, 333]);
-                assert_eq!(checker.state(), State::Completed);
+    checker_sub_vec.with_ref(|checker_sub_vec| {
+        for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
+            match index {
+                0 => {
+                    assert_eq!(checker.values(), [111, 333]);
+                    assert_eq!(checker.state(), State::Completed);
+                }
+                1 => {
+                    assert_eq!(checker.values(), [222]);
+                    assert_eq!(checker.state(), State::Completed);
+                }
+                _ => panic!(),
             }
-            1 => {
-                assert_eq!(checker.values(), [222]);
-                assert_eq!(checker.state(), State::Completed);
-            }
-            _ => panic!(),
         }
-    }
+    });
     assert_eq!(termination_checker.state(), State::Completed);
 }
 
@@ -579,13 +588,13 @@ fn test_complete_on_sub() {
 
     let group_vec_cloned = group_vec.clone();
     let _subscription = observable.subscribe_with_callback(
-        move |group| safe_lock_vec!(push: group_vec_cloned, group),
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
     // No value means no group.
-    assert_eq!(safe_lock_vec!(len: group_vec), 0);
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
     assert_eq!(termination_checker.state(), State::Completed);
 }
 
@@ -599,12 +608,12 @@ fn test_error_on_sub() {
 
     let group_vec_cloned = group_vec.clone();
     let _subscription = observable.subscribe_with_callback(
-        move |group| safe_lock_vec!(push: group_vec_cloned, group),
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
         |termination| {
             termination_observer.on_termination(termination);
         },
     );
-    assert_eq!(safe_lock_vec!(len: group_vec), 0);
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
     assert_eq!(termination_checker.state(), State::Error("error"));
 }
 
@@ -619,7 +628,7 @@ fn test_subscribe_groups_late_with_buffered_values() {
     let group_vec = Shared::new(Mutable::new(Vec::new()));
     let group_vec_cloned = group_vec.clone();
     let _subscription = observable.subscribe_with_callback(
-        move |group| safe_lock_vec!(push: group_vec_cloned, group),
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
         |_termination| {},
     );
 
@@ -629,9 +638,9 @@ fn test_subscribe_groups_late_with_buffered_values() {
     sender.on_next(2);
     sender.on_next(3);
     sender.on_next(4);
-    assert_eq!(safe_lock_vec!(len: group_vec), 2);
+    assert_eq!(group_vec.with_ref(Vec::len), 2);
 
-    let mut groups = safe_lock!(mem_take: group_vec);
+    let mut groups = group_vec.take_value();
     let group_even = groups.pop().unwrap();
     let group_odd = groups.pop().unwrap();
 
@@ -653,7 +662,7 @@ fn test_subscribe_groups_late_with_buffered_values() {
     assert_eq!(checker_even.values(), [2, 4, 6]);
 
     // No extra group is emitted for keys that already have one.
-    assert_eq!(safe_lock_vec!(len: group_vec), 0);
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
 
     sender.on_termination(Termination::Completed);
     assert_eq!(checker_odd.state(), State::Completed);
@@ -672,12 +681,12 @@ fn test_subscribe_group_after_termination() {
     let group_vec = Shared::new(Mutable::new(Vec::new()));
     let group_vec_cloned = group_vec.clone();
     let _subscription = observable.subscribe_with_callback(
-        move |group| safe_lock_vec!(push: group_vec_cloned, group),
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
         |termination| termination_observer.on_termination(termination),
     );
 
     sender.on_next(111);
-    assert_eq!(safe_lock_vec!(len: group_vec), 1);
+    assert_eq!(group_vec.with_ref(Vec::len), 1);
 
     // The source terminates while the group is still unsubscribed. The group
     // itself was completed by the source termination.
@@ -685,7 +694,7 @@ fn test_subscribe_group_after_termination() {
     assert_eq!(termination_checker.state(), State::Completed);
 
     // A late subscriber observes the buffered value and the completion.
-    let group = safe_lock_vec!(pop: group_vec).unwrap();
+    let group = group_vec.with_mut(Vec::pop).unwrap();
     let (checker, observer) = Checker::new();
     let _sub = group.subscribe(observer);
     assert_eq!(checker.values(), [111]);
@@ -703,19 +712,19 @@ fn test_subscribe_group_after_unsubscribe() {
     let group_vec = Shared::new(Mutable::new(Vec::new()));
     let group_vec_cloned = group_vec.clone();
     let subscription = observable.subscribe_with_callback(
-        move |group| safe_lock_vec!(push: group_vec_cloned, group),
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
         |_termination| {},
     );
 
     sender.on_next(111);
-    assert_eq!(safe_lock_vec!(len: group_vec), 1);
+    assert_eq!(group_vec.with_ref(Vec::len), 1);
 
     // Unsubscribing is not a termination: the group never completed nor errored.
     drop(subscription);
 
     // Unsubscribing closed the group, so a late subscriber observes neither the buffered value nor
     // a termination.
-    let group = safe_lock_vec!(pop: group_vec).unwrap();
+    let group = group_vec.with_mut(Vec::pop).unwrap();
     let (checker, observer) = Checker::new();
     let _sub = group.subscribe(observer);
     assert_eq!(checker.values(), []);
@@ -732,13 +741,13 @@ fn test_values_of_ended_group_are_discarded() {
     let group_vec = Shared::new(Mutable::new(Vec::new()));
     let group_vec_cloned = group_vec.clone();
     let _subscription = observable.subscribe_with_callback(
-        move |group| safe_lock_vec!(push: group_vec_cloned, group),
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
         |_termination| {},
     );
 
     sender.on_next(1);
     sender.on_next(2);
-    let mut groups = safe_lock!(mem_take: group_vec);
+    let mut groups = group_vec.take_value();
     let group_even = groups.pop().unwrap();
     let group_odd = groups.pop().unwrap();
 
@@ -759,7 +768,7 @@ fn test_values_of_ended_group_are_discarded() {
     sender.on_next(4);
     assert_eq!(checker_odd.values(), [1]);
     assert_eq!(checker_even.values(), [2, 4]);
-    assert_eq!(safe_lock_vec!(len: group_vec), 0);
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
 
     sender.on_termination(Termination::Completed);
     assert_eq!(checker_even.state(), State::Completed);
@@ -776,14 +785,14 @@ fn test_unsub_on_inner_termination_still_terminates_other_groups() {
     let group_vec = Shared::new(Mutable::new(Vec::new()));
     let group_vec_cloned = group_vec.clone();
     let subscription = observable.subscribe_with_callback(
-        move |group| safe_lock_vec!(push: group_vec_cloned, group),
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
         |termination| outer_termination_observer.on_termination(termination),
     );
     let outer_subscription = Shared::new(Mutable::new(Some(subscription)));
 
     sender.on_next(1);
     sender.on_next(2);
-    let mut groups = safe_lock!(mem_take: group_vec);
+    let mut groups = group_vec.take_value();
     let group_even = groups.pop().unwrap();
     let group_odd = groups.pop().unwrap();
 
@@ -794,14 +803,14 @@ fn test_unsub_on_inner_termination_still_terminates_other_groups() {
     let (on_next_odd, on_termination_odd) = observer_odd.into_callbacks();
     let outer_subscription_cloned = outer_subscription.clone();
     let _sub_odd = group_odd.subscribe_with_callback(on_next_odd, move |termination| {
-        drop(safe_lock!(mem_take: outer_subscription_cloned));
+        drop(outer_subscription_cloned.take_value());
         on_termination_odd(termination);
     });
     let (checker_even, observer_even) = Checker::new();
     let (on_next_even, on_termination_even) = observer_even.into_callbacks();
     let outer_subscription_cloned = outer_subscription.clone();
     let _sub_even = group_even.subscribe_with_callback(on_next_even, move |termination| {
-        drop(safe_lock!(mem_take: outer_subscription_cloned));
+        drop(outer_subscription_cloned.take_value());
         on_termination_even(termination);
     });
     assert_eq!(checker_odd.values(), [1]);
@@ -830,18 +839,18 @@ fn test_dropping_unsubscribed_group_releases_buffered_values() {
     let group_vec = Shared::new(Mutable::new(Vec::new()));
     let group_vec_cloned = group_vec.clone();
     let _outer_subscription = observable.subscribe_with_callback(
-        move |group| safe_lock_vec!(push: group_vec_cloned, group),
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
         |_termination| {},
     );
 
     let drops = DropCount::new();
     sender.on_next(drops.probe());
-    assert_eq!(safe_lock_vec!(len: group_vec), 1);
+    assert_eq!(group_vec.with_ref(Vec::len), 1);
     assert_eq!(drops.get(), 0);
 
     // Dropping the only handle to an unsubscribed group must release its
     // buffered values even while the outer subscription remains active.
-    let group = safe_lock_vec!(pop: group_vec).unwrap();
+    let group = group_vec.with_mut(Vec::pop).unwrap();
     drop(group);
     assert_eq!(drops.get(), 1);
 }
@@ -861,17 +870,17 @@ fn test_dropping_ignored_value_does_not_poison_group_context() {
     let outer_subscription = observable.subscribe_with_callback(
         move |group| {
             let sub = group.subscribe_with_callback(|_value| {}, |_termination| {});
-            safe_lock_vec!(push: inner_subscriptions_cloned, sub);
+            inner_subscriptions_cloned.with_mut(|values| values.push(sub));
         },
         |_termination| {},
     );
 
     // The first value opens the group and carries no panicking payload.
     sender.on_next(None);
-    assert_eq!(safe_lock_vec!(len: inner_subscriptions), 1);
+    assert_eq!(inner_subscriptions.with_ref(Vec::len), 1);
 
     // Ending the group makes the following value take the ignored-value path.
-    let inner_subscription = safe_lock_vec!(pop: inner_subscriptions).unwrap();
+    let inner_subscription = inner_subscriptions.with_mut(Vec::pop).unwrap();
     drop(inner_subscription);
 
     expect_panic_on_drop(|value| sender.on_next(Some(value)));

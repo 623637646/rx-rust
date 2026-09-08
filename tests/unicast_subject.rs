@@ -9,8 +9,10 @@ use rx_rust::observer::{Observer, Termination};
 use rx_rust::subject::unicast_subject::{
     UnicastSender, unicast_subject, unicast_subject_with_capacity,
 };
-use rx_rust::utils::types::{Mutable, Shared};
-use rx_rust::{safe_lock_option, safe_lock_option_disposable};
+use rx_rust::utils::mutable::Mutable;
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::MutableHelper;
+use rx_rust::utils::types::Shared;
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
@@ -329,10 +331,11 @@ fn test_next_on_next() {
         .hook_on_next(move |downstream, value: i32| {
             downstream.on_next(value);
             if value == 1 {
-                let mut sender = safe_lock_option!(take: sender_holder_cloned)
+                let mut sender = sender_holder_cloned
+                    .take_value()
                     .expect("the sender is put back after every re-entrant call");
                 sender.on_next(111);
-                safe_lock_option!(replace: sender_holder_cloned, sender);
+                sender_holder_cloned.replace_value(Some(sender));
             }
         })
         .subscribe(observer);
@@ -341,7 +344,7 @@ fn test_next_on_next() {
     assert_eq!(checker.values(), [1, 2, 111]);
     assert_eq!(checker.state(), State::Active);
 
-    let mut sender = safe_lock_option!(take: sender_holder).unwrap();
+    let mut sender = sender_holder.take_value().unwrap();
     sender.on_next(222);
     assert_eq!(checker.values(), [1, 2, 111, 222]);
     assert_eq!(checker.state(), State::Active);
@@ -360,7 +363,7 @@ fn test_complete_on_next() {
         .hook_on_next(move |downstream, value: i32| {
             downstream.on_next(value);
             if value == 111 {
-                let sender = safe_lock_option!(take: sender_holder_cloned).unwrap();
+                let sender = sender_holder_cloned.take_value().unwrap();
                 sender.on_termination(Termination::Completed);
             }
         })
@@ -369,7 +372,7 @@ fn test_complete_on_next() {
     // The termination is delivered after the remaining buffered values.
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(safe_lock_option!(is_none: sender_holder));
+    assert!(sender_holder.with_ref(Option::is_none));
 }
 
 #[test]
@@ -385,7 +388,7 @@ fn test_error_on_next() {
         .hook_on_next(move |downstream, value: i32| {
             downstream.on_next(value);
             if value == 111 {
-                let sender = safe_lock_option!(take: sender_holder_cloned).unwrap();
+                let sender = sender_holder_cloned.take_value().unwrap();
                 sender.on_termination(Termination::Error("error"));
             }
         })
@@ -393,7 +396,7 @@ fn test_error_on_next() {
 
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error"));
-    assert!(safe_lock_option!(is_none: sender_holder));
+    assert!(sender_holder.with_ref(Option::is_none));
 }
 
 #[test]
@@ -403,14 +406,16 @@ fn test_unsub_on_next() {
 
     let subscription = Shared::new(Mutable::new(None));
     let subscription_cloned = subscription.clone();
-    safe_lock_option!(replace: subscription,
+    subscription.replace_value(Some(
         observable
             .hook_on_next(move |downstream, value| {
                 downstream.on_next(value);
-                safe_lock_option_disposable!(dispose: subscription_cloned);
+                if let Some(subscription) = subscription_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             })
-            .subscribe(observer)
-    );
+            .subscribe(observer),
+    ));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
@@ -466,14 +471,16 @@ fn test_unsub_on_completed() {
 
     let subscription = Shared::new(Mutable::new(None));
     let subscription_cloned = subscription.clone();
-    safe_lock_option!(replace: subscription,
+    subscription.replace_value(Some(
         observable
             .hook_on_termination(move |downstream, termination| {
-                safe_lock_option_disposable!(dispose: subscription_cloned);
+                if let Some(subscription) = subscription_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
                 downstream.on_termination(termination);
             })
-            .subscribe(observer)
-    );
+            .subscribe(observer),
+    ));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
@@ -498,11 +505,11 @@ fn reentrant_probe(holder: &SenderHolder, drops: &DropCount) -> DropProbe {
         drops.increment();
         // The holder is emptied while the re-entrant call runs, so the probe sent below re-enters
         // the pipe without recursing any further.
-        let Some(mut sender) = safe_lock_option!(take: holder) else {
+        let Some(mut sender) = holder.take_value() else {
             return;
         };
         sender.on_next(drops.probe());
-        safe_lock_option!(replace: holder, sender);
+        holder.replace_value(Some(sender));
     }))
 }
 
@@ -513,17 +520,13 @@ fn test_drop_buffered_value_outside_lock() {
     let (mut sender, observable) = unicast_subject::<DropProbe, Infallible>();
     sender.on_next(reentrant_probe(&sender_holder, &drops));
     sender.on_next(reentrant_probe(&sender_holder, &drops));
-    safe_lock_option!(replace: sender_holder, sender);
+    sender_holder.replace_value(Some(sender));
 
     // Closing the pipe drops the buffered values, each of which re-enters the pipe while being
     // dropped. The re-entrant values are dropped as well, because the pipe is closed by then.
     drop(observable);
     assert_eq!(drops.get(), 4);
-    assert!(
-        safe_lock_option!(take: sender_holder)
-            .unwrap()
-            .is_disposed()
-    );
+    assert!(sender_holder.take_value().unwrap().is_disposed());
 }
 
 #[test]
@@ -533,7 +536,7 @@ fn test_drop_replayed_value_outside_lock() {
     let (mut sender, observable) = unicast_subject::<DropProbe, Infallible>();
     sender.on_next(reentrant_probe(&sender_holder, &drops));
     sender.on_next(reentrant_probe(&sender_holder, &drops));
-    safe_lock_option!(replace: sender_holder, sender);
+    sender_holder.replace_value(Some(sender));
 
     // The observer drops each replayed value, which re-enters the pipe while the replay is still
     // running. The re-entrant values are then replayed and dropped in the same way.
@@ -572,14 +575,16 @@ fn test_drop_delivered_value_after_unsubscribe_outside_lock() {
     // that is running is what drops the observer, outside the lock.
     let subscription = Shared::new(Mutable::new(None));
     let subscription_cloned = subscription.clone();
-    safe_lock_option!(replace: subscription,
+    subscription.replace_value(Some(
         observable
             .hook_on_next(move |downstream: &mut _, value| {
                 Observer::on_next(downstream, value);
-                safe_lock_option_disposable!(dispose: subscription_cloned);
+                if let Some(subscription) = subscription_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             })
-            .subscribe_with_callback(drop, |_| {})
-    );
+            .subscribe_with_callback(drop, |_| {}),
+    ));
 
     sender.on_next(reentrant_probe(&sender_holder, &drops));
     assert_eq!(drops.get(), 1);

@@ -12,10 +12,10 @@
 
 use crate::{
     observer::{Observer, Termination},
-    safe_lock,
     utils::{
+        mutable::{Mutable, MutableExt, MutableHelper},
         pending_events::{EventBatch, PendingEvents},
-        types::{Mutable, MutableHelper, Shared, WeakShared},
+        types::{Shared, WeakShared},
     },
 };
 use educe::Educe;
@@ -204,7 +204,7 @@ impl<T, E, OR, R> SerializedDelivery<T, E, OR, R> {
         // `Stopped` is the only variant that owns nothing, so replacing the state with it takes
         // the observer, the queued events and the resources out. Binding them here drops all of
         // them outside the lock, avoiding a potential deadlock.
-        let _deferred_drop = safe_lock!(mem_replace: self.0, State::Stopped);
+        let _deferred_drop = self.0.replace_value(State::Stopped);
     }
 
     pub fn downgrade(&self) -> WeakSerializedDelivery<T, E, OR, R> {
@@ -221,7 +221,7 @@ where
     /// Returns whether the events were queued. They are rejected, and dropped outside the lock,
     /// once the delivery has stopped or the termination is already queued.
     pub fn send(&self, events: EventBatch<T, E>) -> bool {
-        let action = self.0.lock_mut(|mut lock| lock.enqueue_batch(events));
+        let action = self.0.with_mut(|state| state.enqueue_batch(events));
         self.perform(action)
     }
 
@@ -245,15 +245,15 @@ where
         let mut update = Some(update);
         let (action, drop_outside, result) = self
             .0
-            .lock_mut(|mut lock| {
-                let resources = lock.resources_mut()?;
+            .with_mut(|state| {
+                let resources = state.resources_mut()?;
                 let update = update.take().expect("the update runs at most once");
                 let UpdateOutcome {
                     events,
                     drop_outside,
                     result,
                 } = update(resources);
-                let action = events.map(|events| lock.enqueue_batch(events));
+                let action = events.map(|events| state.enqueue_batch(events));
                 Some((action, drop_outside, result))
             })
             .ok_or(DeliveryStopped)?;
@@ -299,7 +299,7 @@ where
         }
 
         loop {
-            match self.0.lock_mut(|mut lock| lock.next_step(observer)) {
+            match self.0.with_mut(|state| state.next_step(observer)) {
                 Step::Next(next_observer, value) => {
                     observer = next_observer;
                     let guard = StopOnPanic(self);

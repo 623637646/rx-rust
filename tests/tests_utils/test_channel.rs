@@ -1,11 +1,12 @@
 use crate::tests_utils::shared_sender::SharedSender;
 use educe::Educe;
+use rx_rust::utils::mutable::MutableExt;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, Subscription},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    safe_lock,
-    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
+    utils::mutable::{Mutable, MutableHelper},
+    utils::types::{MaybeSend, Shared},
 };
 
 /// A strict single-consumer channel for the tests.
@@ -70,7 +71,7 @@ where
     fn on_next(&mut self, value: T) {
         let subscribed = self
             .state
-            .lock_ref(|lock| matches!(*lock, ChannelState::Subscribed));
+            .with_ref(|lock| matches!(*lock, ChannelState::Subscribed));
         // Panic outside the lock, which leaves it usable, and drops the value outside it too.
         assert!(
             subscribed,
@@ -90,7 +91,7 @@ where
         };
         // The channel ends before the observer it notifies does, so that a re-entrant use of it
         // sees a channel that is over.
-        let subscribed = self.state.lock_mut(|mut lock| match &*lock {
+        let subscribed = self.state.with_mut(|lock| match &*lock {
             ChannelState::Subscribed => {
                 *lock = terminated;
                 true
@@ -123,7 +124,7 @@ impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observer = BoxedObserver::new(observer);
-        let initialized = self.state.lock_mut(|mut lock| match &*lock {
+        let initialized = self.state.with_mut(|lock| match &*lock {
             ChannelState::Initialized => {
                 *lock = ChannelState::Subscribed;
                 true
@@ -159,7 +160,7 @@ impl<T, E> Disposable for ReceiverObservableDisposal<'_, T, E> {
     fn dispose(self) {
         // The channel is closed before the observer is released, so that a re-entrant use of it
         // sees a channel that is over.
-        let outcome = self.state.lock_mut(|mut lock| match &*lock {
+        let outcome = self.state.with_mut(|lock| match &*lock {
             ChannelState::Subscribed => {
                 *lock = ChannelState::Unsubscribed;
                 Ok(true)
@@ -201,6 +202,6 @@ impl<E> ChannelChecker<E> {
     where
         E: Clone,
     {
-        safe_lock!(clone: self.0)
+        self.0.clone_value()
     }
 }

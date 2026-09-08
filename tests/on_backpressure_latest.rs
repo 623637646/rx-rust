@@ -4,7 +4,6 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::test_struct::TestStruct;
-use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
@@ -13,13 +12,15 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::types::{Mutable, Shared};
+use rx_rust::utils::mutable::Mutable;
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::MutableHelper;
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock, safe_lock_option, safe_lock_vec};
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
 
@@ -35,38 +36,38 @@ fn test_completed_no_request() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 }
 
 #[test]
@@ -81,44 +82,44 @@ fn test_completed_request_before_emit() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 }
 
 #[test]
@@ -133,44 +134,44 @@ fn test_completed_request_after_emit() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 }
 
 #[test]
@@ -185,50 +186,50 @@ fn test_completed_request_before_completed() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -243,50 +244,50 @@ fn test_completed_request_after_completed() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -301,38 +302,38 @@ fn test_error_no_request() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 }
 
 #[test]
@@ -347,44 +348,44 @@ fn test_error_request_before_emit() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 }
 
 #[test]
@@ -399,44 +400,44 @@ fn test_error_request_after_emit() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 }
 
 #[test]
@@ -451,50 +452,50 @@ fn test_error_request_before_completed() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -509,50 +510,50 @@ fn test_error_request_after_completed() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -568,7 +569,7 @@ fn test_unsubscribe() {
     let observable = observable
         .on_backpressure_latest()
         .map(move |(value, request)| {
-            safe_lock_vec!(push: request_callback_cloned, request);
+            request_callback_cloned.with_mut(|values| values.push(request));
             value
         });
     let observable_1 = observable;
@@ -580,35 +581,35 @@ fn test_unsubscribe() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 0);
+    assert_eq!(request_callback.with_ref(Vec::len), 0);
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
     subject.on_next(222);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
     subject.on_next(333);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
     subject
         .clone()
@@ -617,25 +618,27 @@ fn test_unsubscribe() {
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
-    safe_lock!(mem_take: request_callback)
+    request_callback
+        .take_value()
         .into_iter()
         .for_each(|request| request.request());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111, 333]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 1);
+    assert_eq!(request_callback.with_ref(Vec::len), 1);
 
-    safe_lock!(mem_take: request_callback)
+    request_callback
+        .take_value()
         .into_iter()
         .for_each(|request| request.request());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111, 333]);
     assert_eq!(checker_2.state(), State::Completed);
-    assert_eq!(request_callback.test_lock_ref().len(), 0);
+    assert_eq!(request_callback.with_ref(Vec::len), 0);
 }
 
 #[test]
@@ -655,50 +658,50 @@ fn test_ref() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(&value_1);
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(&value_2);
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(&value_3);
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [&value_1, &value_3]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [&value_1, &value_3]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Error(&error));
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [&value_1, &value_3]);
     assert_eq!(checker.state(), State::Error(&error));
     assert_eq!(channel_checker.state(), ChannelState::Error(&error));
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -721,7 +724,7 @@ fn test_mut_ref() {
     let request_callback_cloned = request_callback.clone();
     let subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe_with_callback(
@@ -730,7 +733,7 @@ fn test_mut_ref() {
             },
             |termination| assert!(matches!(termination, Termination::Error("error"))),
         );
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
     drop(request_callback);
     subscription.dispose();
 
@@ -754,7 +757,7 @@ fn test_async() {
             .spawn(async move {
                 observable
                     .map(move |(value, request)| {
-                        safe_lock_option!(replace: request_callback_cloned, request);
+                        request_callback_cloned.replace_value(Some(request));
                         value
                     })
                     .subscribe(observer)
@@ -764,7 +767,7 @@ fn test_async() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert!(request_callback.test_lock_ref().is_none());
+        assert!(request_callback.with_ref(Option::is_none));
 
         let mut sender = runtime
             .spawn(async move {
@@ -776,7 +779,7 @@ fn test_async() {
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert!(request_callback.test_lock_ref().is_some());
+        assert!(request_callback.with_ref(Option::is_some));
 
         let mut sender = runtime
             .spawn(async move {
@@ -788,7 +791,7 @@ fn test_async() {
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert!(request_callback.test_lock_ref().is_some());
+        assert!(request_callback.with_ref(Option::is_some));
 
         let sender = runtime
             .spawn(async move {
@@ -800,21 +803,19 @@ fn test_async() {
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert!(request_callback.test_lock_ref().is_some());
+        assert!(request_callback.with_ref(Option::is_some));
 
         let request_callback_cloned = request_callback.clone();
         runtime
             .spawn(async move {
-                safe_lock_option!(take: request_callback_cloned)
-                    .unwrap()
-                    .request();
+                request_callback_cloned.take_value().unwrap().request();
             })
             .await
             .unwrap();
         assert_eq!(checker.values(), [111, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-        assert!(request_callback.test_lock_ref().is_some());
+        assert!(request_callback.with_ref(Option::is_some));
 
         runtime
             .spawn(async move {
@@ -825,21 +826,19 @@ fn test_async() {
         assert_eq!(checker.values(), [111, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert!(request_callback.test_lock_ref().is_some());
+        assert!(request_callback.with_ref(Option::is_some));
 
         let request_callback_cloned = request_callback.clone();
         runtime
             .spawn(async move {
-                safe_lock_option!(take: request_callback_cloned)
-                    .unwrap()
-                    .request();
+                request_callback_cloned.take_value().unwrap().request();
             })
             .await
             .unwrap();
         assert_eq!(checker.values(), [111, 333]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert!(request_callback.test_lock_ref().is_none());
+        assert!(request_callback.with_ref(Option::is_none));
     });
 }
 
@@ -856,7 +855,7 @@ fn test_subscribe_by_different_observer() {
     let observable = observable
         .on_backpressure_latest()
         .map(move |(value, request)| {
-            safe_lock_vec!(push: request_callback_cloned, request);
+            request_callback_cloned.with_mut(|values| values.push(request));
             value
         });
     let observable_1 = observable;
@@ -869,28 +868,28 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 0);
+    assert_eq!(request_callback.with_ref(Vec::len), 0);
 
     subject.on_next(111);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
     subject.on_next(222);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
     subject.on_next(333);
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
     subject
         .clone()
@@ -899,25 +898,27 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
-    safe_lock!(mem_take: request_callback)
+    request_callback
+        .take_value()
         .into_iter()
         .for_each(|request| request.request());
     assert_eq!(checker_1.values(), [111, 333]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111, 333]);
     assert_eq!(checker_2.state(), State::Active);
-    assert_eq!(request_callback.test_lock_ref().len(), 2);
+    assert_eq!(request_callback.with_ref(Vec::len), 2);
 
-    safe_lock!(mem_take: request_callback)
+    request_callback
+        .take_value()
         .into_iter()
         .for_each(|request| request.request());
     assert_eq!(checker_1.values(), [111, 333]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [111, 333]);
     assert_eq!(checker_2.state(), State::Completed);
-    assert_eq!(request_callback.test_lock_ref().len(), 0);
+    assert_eq!(request_callback.with_ref(Vec::len), 0);
 }
 
 #[test]
@@ -932,26 +933,26 @@ fn test_unsub_on_next_by_take() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -967,84 +968,76 @@ fn test_multiple_operation() {
     let observable = observable
         .on_backpressure_latest()
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_1_cloned, request);
+            request_callback_1_cloned.replace_value(Some(request));
             value
         })
         .on_backpressure_latest()
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_2_cloned, request);
+            request_callback_2_cloned.replace_value(Some(request));
             value
         });
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback_1.test_lock_ref().is_none());
-    assert!(request_callback_2.test_lock_ref().is_none());
+    assert!(request_callback_1.with_ref(Option::is_none));
+    assert!(request_callback_2.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback_1.test_lock_ref().is_some());
-    assert!(request_callback_2.test_lock_ref().is_some());
+    assert!(request_callback_1.with_ref(Option::is_some));
+    assert!(request_callback_2.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback_1.test_lock_ref().is_some());
-    assert!(request_callback_2.test_lock_ref().is_some());
+    assert!(request_callback_1.with_ref(Option::is_some));
+    assert!(request_callback_2.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback_1.test_lock_ref().is_some());
-    assert!(request_callback_2.test_lock_ref().is_some());
+    assert!(request_callback_1.with_ref(Option::is_some));
+    assert!(request_callback_2.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback_1)
-        .unwrap()
-        .request();
+    request_callback_1.take_value().unwrap().request();
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback_1.test_lock_ref().is_some());
-    assert!(request_callback_2.test_lock_ref().is_some());
+    assert!(request_callback_1.with_ref(Option::is_some));
+    assert!(request_callback_2.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback_2)
-        .unwrap()
-        .request();
+    request_callback_2.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback_1.test_lock_ref().is_some());
-    assert!(request_callback_2.test_lock_ref().is_some());
+    assert!(request_callback_1.with_ref(Option::is_some));
+    assert!(request_callback_2.with_ref(Option::is_some));
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback_1.test_lock_ref().is_some());
-    assert!(request_callback_2.test_lock_ref().is_some());
+    assert!(request_callback_1.with_ref(Option::is_some));
+    assert!(request_callback_2.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback_1)
-        .unwrap()
-        .request();
+    request_callback_1.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback_1.test_lock_ref().is_none());
-    assert!(request_callback_2.test_lock_ref().is_some());
+    assert!(request_callback_1.with_ref(Option::is_none));
+    assert!(request_callback_2.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback_2)
-        .unwrap()
-        .request();
+    request_callback_2.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback_1.test_lock_ref().is_none());
-    assert!(request_callback_2.test_lock_ref().is_none());
+    assert!(request_callback_1.with_ref(Option::is_none));
+    assert!(request_callback_2.with_ref(Option::is_none));
 }
 
 #[test]
@@ -1059,50 +1052,50 @@ fn test_without_convenient_api() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 
     sender.on_next(111);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -1117,38 +1110,38 @@ fn test_next_on_sub() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     subject.on_next(222);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     subject.on_next(333);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
     subject.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
-    assert!(request_callback.test_lock_ref().is_some());
+    assert!(request_callback.with_ref(Option::is_some));
 
-    safe_lock_option!(take: request_callback).unwrap().request();
+    request_callback.take_value().unwrap().request();
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Completed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -1162,13 +1155,13 @@ fn test_complete_on_sub() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Completed);
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]
@@ -1182,13 +1175,13 @@ fn test_error_on_sub() {
     let request_callback_cloned = request_callback.clone();
     let _subscription = observable
         .map(move |(value, request)| {
-            safe_lock_option!(replace: request_callback_cloned, request);
+            request_callback_cloned.replace_value(Some(request));
             value
         })
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Error("error"));
-    assert!(request_callback.test_lock_ref().is_none());
+    assert!(request_callback.with_ref(Option::is_none));
 }
 
 #[test]

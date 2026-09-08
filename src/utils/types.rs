@@ -7,112 +7,18 @@ use std::marker::PhantomData;
 /// For more detail: <https://users.rust-lang.org/t/getting-phantomdata-to-have-a-static-lifetime/38505>
 pub type MarkerType<T> = PhantomData<fn(T) -> T>;
 
-pub trait MutableHelper {
-    type Value;
-
-    fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, Self::Value>) -> R) -> R;
-    fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, Self::Value>) -> R) -> R;
-}
-
-pub trait MutableBoolHelper {
-    fn read(&self) -> bool;
-    fn write(&self, value: bool);
-    // Change the contained value to `value`, returns true if it was changed. otherwise false.
-    fn change_if_not_equal(&self, value: bool) -> bool;
-}
-
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
-        use std::{
-            cell::{Ref, RefCell, RefMut, Cell},
-            rc::Rc,
-        };
-
-        pub type Shared<T> = Rc<T>;
+        pub type Shared<T> = std::rc::Rc<T>;
         pub type WeakShared<T> = std::rc::Weak<T>;
-        pub type Mutable<T> = RefCell<T>;
-
-        pub type MutGuard<'a, T> = RefMut<'a, T>;
-        pub type RefGuard<'a, T> = Ref<'a, T>;
-        impl<T> MutableHelper for RefCell<T> {
-            type Value = T;
-
-            fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R {
-                callback(self.borrow_mut())
-            }
-            fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R {
-                callback(self.borrow())
-            }
-        }
-
-        pub type MutableBool = Cell<bool>;
-        impl MutableBoolHelper for Cell<bool> {
-            fn read(&self) -> bool {
-                self.get()
-            }
-            fn write(&self, value: bool) {
-                self.set(value)
-            }
-            fn change_if_not_equal(&self, value: bool) -> bool {
-                let old = self.replace(value);
-                old != value
-            }
-        }
 
         pub trait MaybeSend {}
         impl<T> MaybeSend for T {}
         pub trait MaybeSync {}
         impl<T> MaybeSync for T {}
     } else {
-        use std::sync::{Arc, Mutex, MutexGuard};
-        use std::ops::Deref;
-        use educe::Educe;
-        use std::sync::atomic::{AtomicBool, Ordering};
-
-        pub type Shared<T> = Arc<T>;
+        pub type Shared<T> = std::sync::Arc<T>;
         pub type WeakShared<T> = std::sync::Weak<T>;
-        pub type Mutable<T> = Mutex<T>;
-
-        #[derive(Educe)]
-        #[educe(Debug)]
-        pub struct ReadOnlyMutexGuard<'a, T: ?Sized + 'a>(MutexGuard<'a, T>);
-        impl<'a, T> ReadOnlyMutexGuard<'a, T> {
-            pub fn new(guard: MutexGuard<'a, T>) -> Self {
-                Self(guard)
-            }
-        }
-        impl<T: ?Sized> Deref for ReadOnlyMutexGuard<'_, T> {
-            type Target = T;
-            fn deref(&self) -> &T {
-                &self.0
-            }
-        }
-
-        pub type MutGuard<'a, T> = MutexGuard<'a, T>;
-        pub type RefGuard<'a, T> = ReadOnlyMutexGuard<'a, T>;
-        impl<T> MutableHelper for Mutex<T> {
-            type Value = T;
-
-            fn lock_mut<R>(&self, callback: impl FnOnce(MutGuard<'_, T>) -> R) -> R {
-                callback(self.lock().unwrap())
-            }
-            fn lock_ref<R>(&self, callback: impl FnOnce(RefGuard<'_, T>) -> R) -> R {
-                callback(ReadOnlyMutexGuard(self.lock().unwrap()))
-            }
-        }
-
-        pub type MutableBool = AtomicBool;
-        impl MutableBoolHelper for MutableBool {
-            fn read(&self) -> bool {
-                self.load(Ordering::SeqCst)
-            }
-            fn write(&self, value: bool) {
-                self.store(value, Ordering::SeqCst)
-            }
-            fn change_if_not_equal(&self, value: bool) -> bool {
-                self.compare_exchange(!value, value, Ordering::SeqCst, Ordering::SeqCst).is_ok()
-            }
-        }
 
         pub trait MaybeSend: Send {}
         impl<T> MaybeSend for T where T: Send {}

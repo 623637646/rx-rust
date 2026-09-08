@@ -6,13 +6,12 @@ use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
-use rx_rust::safe_lock;
-use rx_rust::safe_lock_option;
-use rx_rust::safe_lock_option_disposable;
-use rx_rust::safe_lock_vec;
 use rx_rust::subject::Subject;
 use rx_rust::subject::replay_subject::ReplaySubject;
-use rx_rust::utils::types::{Mutable, Shared};
+use rx_rust::utils::mutable::Mutable;
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::MutableHelper;
+use rx_rust::utils::types::Shared;
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
@@ -875,27 +874,31 @@ fn test_unsub_on_next() {
     // unsubscribe before on_next
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable
             .clone()
             .hook_on_next(move |observer, value| {
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
                 observer.on_next(value);
             })
-            .subscribe(observer_2)
-    );
+            .subscribe(observer_2),
+    ));
 
     // unsubscribe after on_next
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable
             .hook_on_next(move |observer, value| {
                 observer.on_next(value);
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             })
-            .subscribe(observer_3)
-    );
+            .subscribe(observer_3),
+    ));
 
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
@@ -947,12 +950,14 @@ fn test_sub_on_next() {
             .hook_on_next(move |observer, value| {
                 // subscribe before on_next
                 if let Some(observer) = observer_2.take() {
-                    safe_lock_option!(replace: subscription_2_cloned, observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_next(value);
                 // subscribe after on_next
                 if let Some(observer) = observer_3.take() {
-                    safe_lock_option!(replace: subscription_3_cloned, observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),
@@ -1045,27 +1050,31 @@ fn test_unsub_on_completed() {
     // unsubscribe before on_termination
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
                 observer.on_termination(value);
             })
-            .subscribe(observer_2)
-    );
+            .subscribe(observer_2),
+    ));
 
     // unsubscribe after on_termination
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             })
-            .subscribe(observer_3)
-    );
+            .subscribe(observer_3),
+    ));
 
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
@@ -1117,12 +1126,14 @@ fn test_sub_on_completed() {
             .hook_on_termination(move |observer, value| {
                 // subscribe before termination
                 if let Some(observer) = observer_2.take() {
-                    safe_lock_option!(replace: subscription_2_cloned, observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_termination(value);
                 // subscribe after termination
                 if let Some(observer) = observer_3.take() {
-                    safe_lock_option!(replace: subscription_3_cloned, observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),
@@ -1179,27 +1190,31 @@ fn test_unsub_on_error() {
     // unsubscribe before on_termination
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable
             .clone()
             .hook_on_termination(move |observer, value| {
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
                 observer.on_termination(value);
             })
-            .subscribe(observer_2)
-    );
+            .subscribe(observer_2),
+    ));
 
     // unsubscribe after on_termination
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             })
-            .subscribe(observer_3)
-    );
+            .subscribe(observer_3),
+    ));
 
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
@@ -1254,12 +1269,14 @@ fn test_sub_on_error() {
             .hook_on_termination(move |observer, value| {
                 // subscribe before termination
                 if let Some(observer) = observer_2.take() {
-                    safe_lock_option!(replace: subscription_2_cloned, observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_termination(value);
                 // subscribe after termination
                 if let Some(observer) = observer_3.take() {
-                    safe_lock_option!(replace: subscription_3_cloned, observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),
@@ -1325,7 +1342,7 @@ fn test_next_on_sub() {
     let values_cloned = values.clone();
     let _subscription = observable.clone().subscribe_with_callback(
         move |value| {
-            safe_lock_vec!(push: values_cloned, value);
+            values_cloned.with_mut(|values| values.push(value));
             if value == 111 {
                 subject_cloned.on_next(222);
             }
@@ -1335,7 +1352,7 @@ fn test_next_on_sub() {
 
     // The observer had joined the subject before `222` was sent, so it sees it too, and it sees
     // what a subscriber arriving afterwards is replayed.
-    assert_eq!(safe_lock!(clone: values), [111, 222]);
+    assert_eq!(values.clone_value(), [111, 222]);
 
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);

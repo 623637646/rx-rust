@@ -1,6 +1,7 @@
+use crate::delegate_disposal;
 use crate::disposable::{Disposable, DisposableExt};
-use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared, WeakShared};
-use crate::{delegate_disposal, safe_lock, safe_lock_option};
+use crate::utils::mutable::{Mutable, MutableExt, MutableHelper};
+use crate::utils::types::{MaybeSend, Shared, WeakShared};
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
@@ -90,7 +91,8 @@ where
         if !has_sources {
             // Without a source, no one can ever win the race, so it completes right away.
             // The observer is taken out of its slot so that it is notified outside the lock.
-            let observer = safe_lock_option!(take: observer)
+            let observer = observer
+                .take_value()
                 .expect("a new amb must retain its downstream observer");
             observer.on_termination(Termination::Completed);
         }
@@ -112,7 +114,7 @@ fn reserve_subscription_slot<D>(context: &Mutable<AmbState<D>>) -> Option<usize>
 where
     D: Disposable,
 {
-    context.lock_mut(|mut lock| match &mut *lock {
+    context.with_mut(|state| match state {
         AmbState::Racing(subscriptions) => {
             let key = subscriptions.len();
             subscriptions.push(None);
@@ -133,7 +135,7 @@ where
     // Wrapped in an `Option` so that the branches which do not store the subscription leave it to
     // be dropped outside the lock.
     let mut subscription = Some(subscription);
-    let (keep_subscribing, replaced) = context.lock_mut(|mut lock| match &mut *lock {
+    let (keep_subscribing, replaced) = context.with_mut(|state| match state {
         // The race is still open: the subscription belongs in the reserved slot.
         AmbState::Racing(subscriptions) => {
             let slot = subscriptions
@@ -171,12 +173,12 @@ fn try_win<D, OR>(
 where
     D: Disposable,
 {
-    let losing_subscriptions = context.lock_mut(|mut lock| {
-        if !matches!(*lock, AmbState::Racing(_)) {
+    let losing_subscriptions = context.with_mut(|state| {
+        if !matches!(state, AmbState::Racing(_)) {
             return None;
         }
 
-        let AmbState::Racing(mut subscriptions) = std::mem::replace(&mut *lock, AmbState::Stopped)
+        let AmbState::Racing(mut subscriptions) = std::mem::replace(state, AmbState::Stopped)
         else {
             unreachable!()
         };
@@ -184,7 +186,7 @@ where
             .get_mut(key)
             .expect("a racing source must retain its subscription slot")
             .take();
-        *lock = AmbState::Won {
+        *state = AmbState::Won {
             key,
             subscription: winner_subscription,
         };
@@ -192,7 +194,8 @@ where
     })?;
     // The `Racing` -> `Won` transition above elects a single winner, so the downstream observer is
     // taken after the context lock is released: no other source can reach this point.
-    let observer = safe_lock_option!(take: shared_observer)
+    let observer = shared_observer
+        .take_value()
         .expect("a racing amb must retain its downstream observer");
     drop(losing_subscriptions); // Dispose losing subscriptions outside the lock.
     Some(observer)
@@ -276,7 +279,7 @@ where
     D: Disposable,
 {
     fn dispose(self) {
-        let old_state = safe_lock!(mem_replace: self.0, AmbState::Stopped);
+        let old_state = self.0.replace_value(AmbState::Stopped);
         drop(old_state); // Dispose the remaining subscriptions outside the lock.
     }
 }

@@ -18,7 +18,8 @@
    2. Clone，Send, Sync, 'static  
    3. lock/read 等锁。 检查是否需要用Context来用一个锁？不然可能有并发问题  
    4. 锁的使用  
-      1. 尽量使用safe_lock宏  
+      1. 使用 with_mut/with_ref，或 MutableExt 的单次操作（clone_value、replace_value、
+         take_value）；Mutable<Option<_>> 用 take_value().map(...)，把回调放到锁外  
       2. 检查锁是否及时释放  
          1. 在 on_next 时释放context锁  
          2. 在 on_termination 时，释放context锁和observer锁  
@@ -49,7 +50,7 @@
           7. test_sub_on_completed  
           8. test_unsub_on_error  
           9. test_sub_on_error    
-      12. Using lock(lock_mut|safe_lock.*!) 有的lock没 test_complete_after_next  
+      12. Using lock(with_mut|with_ref) 有的lock没 test_complete_after_next  
           1. test_next_on_sub  
           2. test_complete_on_sub  
           3. test_error_on_sub  
@@ -88,6 +89,6 @@
 # Others
 
 正则表达式：锁的使用
-lock_mut|lock_ref|safe_lock\w*!|\Wread\(\)|\Wwrite\(|\Wchange_if_not_equal\(
+with_mut|with_ref|clone_value|replace_value|take_value|\Wread\(\)|\Wwrite\(|\Wchange_if_not_equal\(
 194个结果
-排除路径：src/utils/safe_lock.rs,src/utils/types.rs
+排除路径：src/utils/mutable.rs,src/utils/types.rs

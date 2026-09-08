@@ -1,9 +1,9 @@
 use crate::{
     disposable::Disposable,
-    safe_lock,
     utils::{
         id_generator::{Id, IdGenerator},
-        types::{Mutable, MutableHelper, Shared},
+        mutable::{Mutable, MutableHelper},
+        types::Shared,
     },
 };
 use educe::Educe;
@@ -37,21 +37,21 @@ impl<D> SharedDisposal<D> {
     where
         D: Disposable,
     {
-        let id = self.0.lock_mut(|mut lock| {
-            if matches!(lock.state, State::Disposed) {
-                return None;
+        // The superseded disposal is handed back rather than disposed under the lock.
+        let (id, superseded) = self.0.with_mut(|inner| {
+            if matches!(inner.state, State::Disposed) {
+                return (None, None);
             }
-            let id = lock.id_generator.next_id();
-            match std::mem::replace(&mut lock.state, State::Building(id)) {
-                State::Idle | State::Building(_) => Some(id),
-                State::Active(disposal) => {
-                    drop(lock);
-                    disposal.dispose();
-                    Some(id)
-                }
+            let id = inner.id_generator.next_id();
+            match std::mem::replace(&mut inner.state, State::Building(id)) {
+                State::Idle | State::Building(_) => (Some(id), None),
+                State::Active(disposal) => (Some(id), Some(disposal)),
                 State::Disposed => unreachable!("the disposed state returned above"),
             }
         });
+        if let Some(disposal) = superseded {
+            disposal.dispose();
+        }
 
         let Some(id) = id else {
             return;
@@ -59,20 +59,22 @@ impl<D> SharedDisposal<D> {
 
         let disposable = disposal_builder();
 
-        self.0.lock_mut(|mut lock| {
-            let is_current = match &lock.state {
+        let stale = self.0.with_mut(|inner| {
+            let is_current = match &inner.state {
                 State::Building(current) => *current == id,
                 State::Idle | State::Active(_) | State::Disposed => false,
             };
             if is_current {
-                lock.state = State::Active(disposable);
+                inner.state = State::Active(disposable);
+                None
             } else {
-                // Reset, disposed, or superseded by a later build: this disposal is already dead,
-                // and is disposed outside the lock.
-                drop(lock);
-                disposable.dispose();
+                // Reset, disposed, or superseded by a later build: this disposal is already dead.
+                Some(disposable)
             }
         });
+        if let Some(disposable) = stale {
+            disposable.dispose();
+        }
     }
 }
 
@@ -83,7 +85,10 @@ where
     fn dispose(self) {
         // The state is replaced under the lock and matched after it is released, so the inner
         // disposal is disposed outside the lock.
-        match safe_lock!(mem_replace: self.0, state, State::Disposed) {
+        match self
+            .0
+            .with_mut(|inner| std::mem::replace(&mut inner.state, State::Disposed))
+        {
             State::Idle | State::Building(_) | State::Disposed => {}
             State::Active(disposable) => {
                 Disposable::dispose(disposable);

@@ -7,10 +7,11 @@ use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
-use rx_rust::safe_lock_option;
-use rx_rust::safe_lock_option_disposable;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::{Mutable, Shared};
+use rx_rust::utils::mutable::Mutable;
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::MutableHelper;
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     operators::creating::interval::Interval,
@@ -299,28 +300,30 @@ fn test_unsub_after_next() {
         let subscription = Shared::new(Mutable::new(None));
         let subscription_cloned = subscription.clone();
         let (mut on_next, on_termination) = observer.into_callbacks();
-        safe_lock_option!(replace: subscription, observable.subscribe_with_callback(
+        subscription.replace_value(Some(observable.subscribe_with_callback(
             move |value| {
                 on_next(value);
-                safe_lock_option_disposable!(dispose: subscription_cloned);
+                if let Some(subscription) = subscription_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             },
             |termination| {
                 on_termination(termination);
             },
-        ));
+        )));
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
-        assert!(safe_lock_option!(is_some: subscription));
+        assert!(subscription.with_ref(Option::is_some));
 
         runtime.sleep(DURATION_100_MS - DURATION_30_MS).await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
-        assert!(safe_lock_option!(is_some: subscription));
+        assert!(subscription.with_ref(Option::is_some));
 
         runtime.sleep(DURATION_30_MS * 2).await;
         assert_eq!(checker.values(), [0]);
         assert_eq!(checker.state(), State::Dropped);
-        assert!(safe_lock_option!(is_none: subscription));
+        assert!(subscription.with_ref(Option::is_none));
     });
 }
 

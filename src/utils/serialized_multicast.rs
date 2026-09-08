@@ -42,9 +42,10 @@
 use crate::disposable::Disposable;
 use crate::observer::{Observer, Termination, boxed_observer::BoxedObserver};
 use crate::utils::id_generator::{Id, IdGenerator};
+use crate::utils::mutable::{MutableBool, MutableBoolHelper};
 use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome};
-use crate::utils::types::{MaybeSend, MutableBool, MutableBoolHelper, Shared};
+use crate::utils::types::{MaybeSend, Shared};
 use educe::Educe;
 
 /// A shared, serialized delivery of events to many observers, guarding the host's state with it.

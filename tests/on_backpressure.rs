@@ -1,3 +1,4 @@
+use rx_rust::utils::mutable::MutableExt;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt, Subscription},
@@ -8,11 +9,11 @@ use rx_rust::{
     },
     subject::{behavior_subject::BehaviorSubject, publish_subject::PublishSubject},
     utils::{
+        mutable::{Mutable, MutableHelper},
         subscribe_with_context,
-        types::{MaybeSend, Mutable, MutableHelper, Shared},
+        types::{MaybeSend, Shared},
     },
 };
-use rx_rust::{safe_lock, safe_lock_vec};
 use std::convert::Infallible;
 
 #[derive(Clone)]
@@ -60,22 +61,22 @@ impl<'or, T, E> Recorder<'or, T, E> {
     where
         T: Clone,
     {
-        self.values.lock_ref(|values| values.clone())
+        self.values.with_ref(|values| values.clone())
     }
 
     fn request_count(&self) -> usize {
-        self.requests.lock_ref(|requests| requests.len())
+        self.requests.with_ref(|requests| requests.len())
     }
 
     fn take_request(&self) -> RequestToken<'or> {
-        self.requests.lock_mut(|mut requests| requests.remove(0))
+        self.requests.with_mut(|requests| requests.remove(0))
     }
 
     fn termination(&self) -> Option<Termination<E>>
     where
         E: Clone,
     {
-        self.termination.lock_ref(|termination| termination.clone())
+        self.termination.with_ref(|termination| termination.clone())
     }
 }
 
@@ -91,10 +92,12 @@ where
     let termination = recorder.termination.clone();
     let subscription = observable.subscribe_with_callback(
         move |(value, request)| {
-            safe_lock_vec!(push: values, value);
-            safe_lock_vec!(push: requests, request);
+            values.with_mut(|values| values.push(value));
+            requests.with_mut(|values| values.push(request));
         },
-        move |value| safe_lock!(set: termination, Some(value)),
+        move |value| {
+            termination.replace_value(Some(value));
+        },
     );
     (recorder, subscription)
 }
@@ -357,10 +360,12 @@ fn request_can_be_called_reentrantly_from_on_next() {
     let _subscription = OnBackpressure::new(subject.clone(), ChunksOfThree::default())
         .subscribe_with_callback(
             move |(value, request)| {
-                safe_lock_vec!(push: values_cloned, value);
+                values_cloned.with_mut(|values| values.push(value));
                 request.request();
             },
-            move |value| safe_lock!(set: termination_cloned, Some(value)),
+            move |value| {
+                termination_cloned.replace_value(Some(value));
+            },
         );
 
     for value in 1..=9 {
@@ -369,11 +374,11 @@ fn request_can_be_called_reentrantly_from_on_next() {
     subject.on_termination(Termination::Completed);
 
     assert_eq!(
-        values.lock_ref(|values| values.clone()),
+        values.with_ref(|values| values.clone()),
         [vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]]
     );
     assert_eq!(
-        termination.lock_ref(|termination| termination.clone()),
+        termination.with_ref(|termination| termination.clone()),
         Some(Termination::Completed)
     );
 }
@@ -389,22 +394,24 @@ fn upstream_can_terminate_reentrantly_from_on_next() {
     let _subscription = OnBackpressure::new(subject.clone(), ChunksOfThree::default())
         .subscribe_with_callback(
             move |(value, request)| {
-                safe_lock_vec!(push: values_cloned, value);
+                values_cloned.with_mut(|values| values.push(value));
                 request.request();
                 subject_cloned
                     .clone()
                     .on_termination(Termination::<Infallible>::Completed);
             },
-            move |value| safe_lock!(set: termination_cloned, Some(value)),
+            move |value| {
+                termination_cloned.replace_value(Some(value));
+            },
         );
 
     subject.on_next(1);
     subject.on_next(2);
     subject.on_next(3);
 
-    assert_eq!(values.lock_ref(|values| values.clone()), [vec![1, 2, 3]]);
+    assert_eq!(values.with_ref(|values| values.clone()), [vec![1, 2, 3]]);
     assert_eq!(
-        termination.lock_ref(|termination| termination.clone()),
+        termination.with_ref(|termination| termination.clone()),
         Some(Termination::Completed)
     );
 }

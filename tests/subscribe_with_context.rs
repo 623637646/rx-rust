@@ -1,16 +1,15 @@
 mod tests_utils;
 
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
 use rx_rust::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
-use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt, Subscription},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
-    safe_lock, safe_lock_option,
     utils::{
-        pending_events::EventBatch,
-        subscribe_with_context::subscribe_with_context,
-        types::{Mutable, Shared},
+        mutable::Mutable, pending_events::EventBatch,
+        subscribe_with_context::subscribe_with_context, types::Shared,
     },
 };
 use std::convert::Infallible;
@@ -57,11 +56,11 @@ fn dispose_during_batch_stops_remaining_events() {
         observer.on_next(value);
         if value == 2 {
             // Dropping the subscription disposes it.
-            drop(safe_lock_option!(take: dispose_slot));
+            drop(dispose_slot.take_value());
         }
     })
     .subscribe(observer);
-    safe_lock_option!(replace: subscription_slot, subscription);
+    subscription_slot.replace_value(Some(subscription));
     let context = context_out.unwrap();
 
     context.send(EventBatch::NextBatch(vec![1, 2, 3]));
@@ -89,11 +88,11 @@ fn dispose_during_batch_suppresses_pending_termination() {
     .hook_on_next(move |observer, value| {
         observer.on_next(value);
         if value == 2 {
-            drop(safe_lock_option!(take: dispose_slot));
+            drop(dispose_slot.take_value());
         }
     })
     .subscribe(observer);
-    safe_lock_option!(replace: subscription_slot, subscription);
+    subscription_slot.replace_value(Some(subscription));
     let context = context_out.unwrap();
 
     context.send(EventBatch::NextBatchAndTermination(
@@ -112,7 +111,7 @@ fn reentrant_send_is_queued_after_pending_events() {
     let mut context_out = None;
     let subscription = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
         subscribe_with_context(observer, (), |context| {
-            safe_lock_option!(replace: context_slot, context.clone());
+            context_slot.replace_value(Some(context.clone()));
             context_out = Some(context);
             Subscription::default()
         })
@@ -120,7 +119,7 @@ fn reentrant_send_is_queued_after_pending_events() {
     .hook_on_next(move |observer, value| {
         observer.on_next(value);
         if value == 1 {
-            let context = safe_lock!(clone: send_slot).unwrap();
+            let context = send_slot.clone_value().unwrap();
             context.send_next(10);
         }
     })
@@ -202,7 +201,7 @@ fn dispose_during_batch_unsubscribes_upstream() {
     let subscription = receiver
         .hook_on_subscription(|source, observer: BoxedObserver<'_, i32, Infallible>| {
             subscribe_with_context(observer, (), |context| {
-                safe_lock_option!(replace: context_slot, context.clone());
+                context_slot.replace_value(Some(context.clone()));
                 let weak = context.downgrade();
                 let weak_for_termination = weak.clone();
                 source.subscribe_with_callback(
@@ -223,15 +222,15 @@ fn dispose_during_batch_unsubscribes_upstream() {
             observer.on_next(value);
             if value == 1 {
                 // Queue a batch while value 1 is still being processed.
-                let context = safe_lock!(clone: send_slot).unwrap();
+                let context = send_slot.clone_value().unwrap();
                 context.send(EventBatch::NextBatch(vec![2, 3]));
             }
             if value == 2 {
-                drop(safe_lock_option!(take: dispose_slot));
+                drop(dispose_slot.take_value());
             }
         })
         .subscribe(observer);
-    safe_lock_option!(replace: subscription_slot, subscription);
+    subscription_slot.replace_value(Some(subscription));
 
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     sender.on_next(1);

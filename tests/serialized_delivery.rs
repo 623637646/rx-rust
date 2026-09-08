@@ -10,15 +10,17 @@
 mod tests_utils;
 
 use crate::tests_utils::drop_probe::{DropCallback, DropProbe};
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::MutableHelper;
 use rx_rust::{
     observer::{BoxedObserverExt, Observer, Termination, boxed_observer::BoxedObserver},
-    safe_lock, safe_lock_vec,
     utils::{
+        mutable::Mutable,
         pending_events::EventBatch,
         serialized_delivery::{
             DeliveryStopped, SerializedDelivery, UpdateOutcome, WeakSerializedDelivery,
         },
-        types::{MaybeSend, Mutable, Shared},
+        types::{MaybeSend, Shared},
     },
 };
 
@@ -50,11 +52,11 @@ fn new_log() -> Log {
 }
 
 fn record(log: &Log, record: Record) {
-    safe_lock_vec!(push: log, record);
+    log.with_mut(|values| values.push(record));
 }
 
 fn records(log: &Log) -> Vec<Record> {
-    safe_lock!(clone: log)
+    log.clone_value()
 }
 
 /// The values that reached the observer, which is what most tests assert on.
@@ -161,11 +163,12 @@ impl DeliveryHandle {
     }
 
     fn install(&self, delivery: &TestDelivery) {
-        safe_lock!(set: self.0, Some(delivery.downgrade()));
+        self.0.replace_value(Some(delivery.downgrade()));
     }
 
     fn get(&self) -> TestDelivery {
-        safe_lock!(clone: self.0)
+        self.0
+            .clone_value()
             .expect("the delivery is installed before anything can reach it")
             .upgrade()
             .expect("the tests keep a handle while their callbacks run")
@@ -973,7 +976,6 @@ fn dropping_the_last_handle_drops_the_observer_without_notifying_it() {
 #[test]
 fn a_panic_from_on_next_stops_the_delivery() {
     use crate::tests_utils::panic::expect_panic_on_drop;
-    use rx_rust::safe_lock_option;
 
     let log = new_log();
     let token = Shared::new(Mutable::new(None));
@@ -982,13 +984,13 @@ fn a_panic_from_on_next_stops_the_delivery() {
         .on_next(move |_delivery, number| {
             if number == 1 {
                 // Dropping the token panics, which unwinds out of this notification.
-                drop(safe_lock_option!(take: token_of_observer));
+                drop(token_of_observer.take_value());
             }
         })
         .build();
 
     expect_panic_on_drop(|panic_on_drop| {
-        safe_lock_option!(replace: token, panic_on_drop);
+        token.replace_value(Some(panic_on_drop));
         delivery.send(next_batch([1, 2, 3]));
     });
 
@@ -1009,19 +1011,18 @@ fn a_panic_from_on_next_stops_the_delivery() {
 #[test]
 fn a_panic_from_on_termination_drops_the_resources() {
     use crate::tests_utils::panic::expect_panic_on_drop;
-    use rx_rust::safe_lock_option;
 
     let log = new_log();
     let token = Shared::new(Mutable::new(None));
     let token_of_observer = token.clone();
     let delivery = builder(&log)
         .on_termination(move |_delivery, _termination| {
-            drop(safe_lock_option!(take: token_of_observer));
+            drop(token_of_observer.take_value());
         })
         .build();
 
     expect_panic_on_drop(|panic_on_drop| {
-        safe_lock_option!(replace: token, panic_on_drop);
+        token.replace_value(Some(panic_on_drop));
         delivery.send(completed());
     });
 
@@ -1042,7 +1043,7 @@ fn a_panic_from_on_termination_drops_the_resources() {
 #[cfg(not(feature = "single-threaded"))]
 #[test]
 fn concurrent_sends_are_delivered_one_at_a_time() {
-    use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
+    use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
 
     const THREADS: i32 = 4;
     const VALUES_PER_THREAD: i32 = 25;

@@ -9,13 +9,13 @@
 //! terminates, and is empty again afterwards, which is how a test tells a subscription that is
 //! still live apart from one that is gone.
 
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::MutableHelper;
 use rx_rust::{
     observer::{Observer, Termination},
-    safe_lock, safe_lock_option,
     utils::{
-        pending_events::EventBatch,
-        serialized_delivery::SerializedDelivery,
-        types::{Mutable, Shared},
+        mutable::Mutable, pending_events::EventBatch, serialized_delivery::SerializedDelivery,
+        types::Shared,
     },
 };
 
@@ -52,18 +52,20 @@ where
 
     /// Parks `observer` here, returning whether nothing was parked before.
     pub(crate) fn set(&self, observer: OR) -> bool {
-        safe_lock_option!(replace: self.0, SerializedDelivery::idle(observer, ())).is_none()
+        self.0
+            .replace_value(Some(SerializedDelivery::idle(observer, ())))
+            .is_none()
     }
 
     /// Whether no observer is parked here, either because none was set or because the stream was
     /// terminated and the observer dropped.
     pub(crate) fn is_empty(&self) -> bool {
-        safe_lock_option!(is_none: self.0)
+        self.0.with_ref(Option::is_none)
     }
 
     /// Notifies the parked observer, returning whether one was parked.
     pub(crate) fn on_next(&self, value: T) -> bool {
-        match safe_lock!(clone: self.0) {
+        match self.0.clone_value() {
             Some(delivery) => delivery.send(EventBatch::Next(value)),
             None => false,
         }
@@ -75,7 +77,7 @@ where
     /// A delivery that is running stops as soon as it looks for its next event, so this also ends
     /// a stream from inside the delivery it is re-entering.
     pub(crate) fn stop(&self) -> bool {
-        match safe_lock_option!(take: self.0) {
+        match self.0.take_value() {
             Some(delivery) => {
                 delivery.stop();
                 true
@@ -86,7 +88,7 @@ where
 
     /// Terminates the parked observer and empties this handle, returning whether one was parked.
     pub(crate) fn on_termination(&self, termination: Termination<E>) -> bool {
-        match safe_lock_option!(take: self.0) {
+        match self.0.take_value() {
             Some(delivery) => delivery.send(EventBatch::Termination(termination)),
             None => false,
         }

@@ -18,10 +18,10 @@ use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
     observer::{Event, Observer, Termination, boxed_observer::BoxedObserver},
-    safe_lock,
     utils::{
+        mutable::{Mutable, MutableBool, MutableBoolHelper, MutableExt, MutableHelper},
         pending_events::PendingEvents,
-        types::{MaybeSend, Mutable, MutableBool, MutableBoolHelper, MutableHelper, Shared},
+        types::{MaybeSend, Shared},
     },
 };
 use educe::Educe;
@@ -178,7 +178,7 @@ impl<T, E> Drop for UnicastSender<'_, T, E> {
         // Terminating the pipe consumes the sender, so this also runs right after the last event
         // was queued. That event still has to reach the observer, whether it is waiting in the
         // queue for a late subscriber or for the delivery that is running.
-        let previous_state = self.pipe.state.lock_mut(|mut lock| match &mut *lock {
+        let previous_state = self.pipe.state.with_mut(|current| match current {
             State::Pending(pending) if pending.is_terminated() => None,
             state => Some(std::mem::replace(state, State::Closed)),
         });
@@ -205,32 +205,28 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
             self.send_held(value);
             return;
         }
-        let delivery = self.pipe.state.lock_mut(|mut lock| match &mut *lock {
+        // Whatever the value ends up as when it is not delivered - rejected by the queue or
+        // dropped by a closed pipe - is handed back, to be dropped once the lock is released.
+        let (delivery, rejected, discarded) = self.pipe.state.with_mut(|current| match current {
             State::Pending(pending) => {
                 // Terminating consumes the sender, so no value can arrive after the termination.
-                let rejected = pending.push(Event::Next(value));
-                drop(lock);
-                // Asserted with the lock released: a failing assertion would otherwise unwind
-                // while holding it, which poisons it for every later event.
-                debug_assert!(rejected.is_none());
-                drop(rejected); // Drop outside the lock to avoid potential deadlock
-                None
+                (None, pending.push(Event::Next(value)), None)
             }
             state @ State::Attached(_) => {
                 let State::Attached(observer) = std::mem::replace(state, State::Held) else {
                     unreachable!()
                 };
-                Some((observer, value))
+                (Some((observer, value)), None, None)
             }
             // The sender takes the fast path above while it holds the observer, so it never looks
             // at a state it is itself the subject of.
             State::Held => unreachable!(),
-            State::Closed => {
-                drop(lock);
-                drop(value); // Drop outside the lock to avoid potential deadlock
-                None
-            }
+            State::Closed => (None, None, Some(value)),
         });
+        // Asserted with the lock released: a failing assertion would otherwise unwind while
+        // holding it, which poisons it for every later event.
+        debug_assert!(rejected.is_none());
+        drop((rejected, discarded)); // Drop outside the lock to avoid potential deadlock
         if let Some((observer, value)) = delivery {
             // The observer stays here from now on, so this is the last event that has to look for
             // it in the state of the pipe.
@@ -244,7 +240,7 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
             // The observer is held here, so the state only has to be closed, and the drop of the
             // sender that runs right after this has nothing left to close or to hand over. It is
             // [`State::Held`], unless a disposal closed it while the observer was held here.
-            let previous_state = safe_lock!(mem_replace: self.pipe.state, State::Closed);
+            let previous_state = self.pipe.state.replace_value(State::Closed);
             let is_disposed = matches!(previous_state, State::Closed);
             drop(previous_state); // Drop outside the lock to avoid potential deadlock
             if is_disposed {
@@ -257,31 +253,27 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
             }
             return;
         }
-        let delivery = self.pipe.state.lock_mut(|mut lock| match &mut *lock {
+        // Like in `on_next`, a termination that is not delivered is handed back to be dropped
+        // once the lock is released.
+        let (delivery, rejected, discarded) = self.pipe.state.with_mut(|current| match current {
             State::Pending(pending) => {
                 // Terminating consumes the sender, so it cannot be terminated twice.
-                let rejected = pending.push(Event::Termination(termination));
-                drop(lock);
-                // Asserted with the lock released: a failing assertion would otherwise unwind
-                // while holding it, which poisons it for every later event.
-                debug_assert!(rejected.is_none());
-                drop(rejected); // Drop outside the lock to avoid potential deadlock
-                None
+                (None, pending.push(Event::Termination(termination)), None)
             }
             state @ State::Attached(_) => {
                 let State::Attached(observer) = std::mem::replace(state, State::Closed) else {
                     unreachable!()
                 };
-                Some((observer, termination))
+                (Some((observer, termination)), None, None)
             }
             // Terminating while the sender holds the observer is the fast path above.
             State::Held => unreachable!(),
-            State::Closed => {
-                drop(lock);
-                drop(termination); // Drop outside the lock to avoid potential deadlock
-                None
-            }
+            State::Closed => (None, None, Some(termination)),
         });
+        // Asserted with the lock released: a failing assertion would otherwise unwind while
+        // holding it, which poisons it for every later event.
+        debug_assert!(rejected.is_none());
+        drop((rejected, discarded)); // Drop outside the lock to avoid potential deadlock
         if let Some((observer, termination)) = delivery {
             observer.on_termination(termination); // Notify outside the lock
         }
@@ -384,7 +376,7 @@ fn close<T, E>(pipe: &SharedPipe<'_, T, E>) {
     // Raised before the state is replaced, so that the sender never delivers an event to an
     // observer that the state has already given up on.
     pipe.is_disposed.write(true);
-    let previous_state = safe_lock!(mem_replace: pipe.state, State::Closed);
+    let previous_state = pipe.state.replace_value(State::Closed);
     drop(previous_state); // Drop outside the lock to avoid potential deadlock
 }
 
@@ -436,8 +428,8 @@ fn deliver<'or, T, E>(
     mut observer: BoxedObserver<'or, T, E>,
 ) -> bool {
     loop {
-        let step = pipe.state.lock_mut(|mut lock| {
-            let pending = match &mut *lock {
+        let step = pipe.state.with_mut(|current| {
+            let pending = match &mut *current {
                 State::Pending(pending) => pending,
                 State::Closed => return Step::Close(observer),
                 // This replay holds the observer until it parks it below, so neither the state nor
@@ -447,11 +439,11 @@ fn deliver<'or, T, E>(
             match pending.pop() {
                 Some(Event::Next(value)) => Step::Next(observer, value),
                 Some(Event::Termination(termination)) => {
-                    *lock = State::Closed;
+                    *current = State::Closed;
                     Step::Terminate(observer, termination)
                 }
                 None => {
-                    *lock = State::Attached(observer);
+                    *current = State::Attached(observer);
                     Step::Park
                 }
             }

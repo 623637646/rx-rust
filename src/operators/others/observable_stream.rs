@@ -1,7 +1,8 @@
 use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
-    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
+    utils::mutable::{Mutable, MutableHelper},
+    utils::types::{MaybeSend, Shared},
 };
 use educe::Educe;
 use futures::Stream;
@@ -91,11 +92,11 @@ where
         let waker = cx.waker().clone();
         // The waker this one replaces is handed back, because dropping a `Waker` runs the
         // external code of its vtable, which must not run under the lock.
-        let (poll, previous_waker) = self.context.lock_mut(|mut lock| {
-            let previous_waker = lock.waker.replace(waker);
-            let poll = if let Some(event) = lock.values.pop_front() {
+        let (poll, previous_waker) = self.context.with_mut(|context| {
+            let previous_waker = context.waker.replace(waker);
+            let poll = if let Some(event) = context.values.pop_front() {
                 Poll::Ready(Some(event))
-            } else if lock.terminated {
+            } else if context.terminated {
                 Poll::Ready(None)
             } else {
                 Poll::Pending
@@ -115,9 +116,9 @@ impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
     fn on_next(&mut self, value: T) {
         // The waker is taken under the lock and woken after it is released, because waking runs
         // external code, which must not run under the lock.
-        let waker = self.context.lock_mut(|mut lock| {
-            lock.values.push_back(value);
-            lock.waker.take()
+        let waker = self.context.with_mut(|context| {
+            context.values.push_back(value);
+            context.waker.take()
         });
         if let Some(waker) = waker {
             waker.wake();
@@ -126,9 +127,9 @@ impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
 
     fn on_termination(self, _: Termination<Infallible>) {
         // The waker is woken outside the lock, like in `on_next`.
-        let waker = self.context.lock_mut(|mut lock| {
-            lock.terminated = true;
-            lock.waker.take()
+        let waker = self.context.with_mut(|context| {
+            context.terminated = true;
+            context.waker.take()
         });
         if let Some(waker) = waker {
             waker.wake();

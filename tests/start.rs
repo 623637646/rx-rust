@@ -4,8 +4,8 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::observable::{Observable, ObservableExt};
 use rx_rust::operators::creating::start::Start;
+use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
 use rx_rust::utils::types::Shared;
-use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use tests_utils::checker::Checker;
 
 #[test]

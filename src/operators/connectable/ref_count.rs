@@ -7,7 +7,8 @@ use crate::operators::connectable::connectable_controller::{
 };
 use crate::subject::Subject;
 use crate::subject::subject_observable::SubjectObservable;
-use crate::utils::types::{MaybeSend, Mutable, MutableHelper, Shared};
+use crate::utils::mutable::{Mutable, MutableHelper};
+use crate::utils::types::{MaybeSend, Shared};
 use educe::Educe;
 use std::num::NonZeroUsize;
 
@@ -111,7 +112,7 @@ where
     type D = Disposal<'or, T, E, OE, S>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        let controller = self.state.lock_mut(|mut lock| match &mut *lock {
+        let controller = self.state.with_mut(|current| match &mut *current {
             state @ State::Disconnected { .. } => {
                 let State::Disconnected { controller } =
                     std::mem::replace(state, State::ConnectingOrDisconnecting { subscribers: 1 })
@@ -154,7 +155,7 @@ where
     S: Observer<T, E> + Clone + MaybeSend + 'or,
 {
     fn dispose(self) {
-        let controller = self.state.lock_mut(|mut lock| match &mut *lock {
+        let controller = self.state.with_mut(|current| match &mut *current {
             State::Disconnected { .. } => unreachable!(),
             State::ConnectingOrDisconnecting { subscribers } => {
                 *subscribers = subscribers
@@ -168,10 +169,9 @@ where
                 None
             }
             State::Connected { .. } => {
-                let State::Connected { controller, .. } = std::mem::replace(
-                    &mut *lock,
-                    State::ConnectingOrDisconnecting { subscribers: 0 },
-                ) else {
+                let State::Connected { controller, .. } =
+                    std::mem::replace(current, State::ConnectingOrDisconnecting { subscribers: 0 })
+                else {
                     unreachable!()
                 };
                 Some(controller)
@@ -202,14 +202,14 @@ fn handle_connecting_or_disconnecting<'or, T, E, OE, S>(
         let next = match purpose {
             Purpose::Connect(controller) => {
                 let controller = controller.connect();
-                state.lock_mut(|mut lock| match &mut *lock {
+                state.with_mut(|current| match &mut *current {
                     State::Disconnected { .. } => unreachable!(),
                     State::ConnectingOrDisconnecting { subscribers } => {
                         if *subscribers == 0 {
                             // It's unsubscribed, so we should disconnect
                             Some(Purpose::Disconnect(controller))
                         } else {
-                            *lock = State::Connected {
+                            *current = State::Connected {
                                 subscribers: NonZeroUsize::new(*subscribers).unwrap(),
                                 controller,
                             };
@@ -221,11 +221,11 @@ fn handle_connecting_or_disconnecting<'or, T, E, OE, S>(
             }
             Purpose::Disconnect(controller) => {
                 let controller = controller.disconnect();
-                state.lock_mut(|mut lock| match &mut *lock {
+                state.with_mut(|current| match &mut *current {
                     State::Disconnected { .. } => unreachable!(),
                     State::ConnectingOrDisconnecting { subscribers } => {
                         if *subscribers == 0 {
-                            *lock = State::Disconnected { controller };
+                            *current = State::Disconnected { controller };
                             None
                         } else {
                             // It's not unsubscribed, so we should reconnect

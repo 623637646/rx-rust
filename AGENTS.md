@@ -73,7 +73,7 @@ cargo tarpaulin --out Html --features tokio-scheduler
   `src/observable/mod.rs` is the fluent API; every operator gets a method there.
 - `src/operators/<category>/<name>.rs` — one operator per file, categories mirror reactivex.io.
 - `src/subject/`, `src/scheduler/` — hot sources and runtime adapters.
-- `src/utils/` — shared machinery: `safe_lock`, `types`, `serialized_delivery`,
+- `src/utils/` — shared machinery: `mutable`, `types`, `serialized_delivery`,
   `subscribe_with_context`, `pending_events`.
 - `tests/<name>.rs` — integration tests, one file per operator; shared helpers in
   `tests/tests_utils/`.
@@ -81,10 +81,16 @@ cargo tarpaulin --out Html --features tokio-scheduler
 ## Code conventions
 
 - No `unsafe`. The crate-level `forbid` makes this a hard error.
-- **Locks**: use the `safe_lock!` macro rather than hand-written `lock()`/`borrow_mut()`. Never hold
-  two guards in one expression (see the module docs in `src/utils/safe_lock.rs`). Release the
-  context lock before calling `on_next`, and both the context and observer locks before
-  `on_termination`. One "transaction" should take the lock once, not repeatedly.
+- **Locks**: reach a `Mutable` through `MutableHelper::with_mut` / `with_ref`, or through the
+  one-shot helpers in `MutableExt` (`clone_value`, `replace_value`, `take_value`) — never
+  `lock()` / `borrow_mut()`. The callback gets a `&mut T` / `&T`, so a guard cannot escape it;
+  what it must not do is run anything that can take the same lock again, dropping an owned value
+  included. Take the value out under the lock and act on it afterwards (`take_value().map(...)`
+  for a `Mutable<Option<_>>`), or return an action from the callback and run it after `with_mut`
+  returns. Release the context lock before calling `on_next`, and both the context and observer
+  locks before `on_termination`. One "transaction" should take the lock once, not repeatedly.
+  Debug builds panic when a thread takes a lock it already holds. See the module docs in
+  `src/utils/mutable.rs`. The tests call those methods directly too.
 - **Subscription helpers**: prefer the existing helpers over hand-rolled state:
   `subscribe_with_context` when the operator can only terminate from inside the source's own
   `on_termination`; `subscribe_with_context_owning_source` when it can terminate while the

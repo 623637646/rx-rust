@@ -6,9 +6,10 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
-use rx_rust::safe_lock_option;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::{Mutable, Shared};
+use rx_rust::utils::mutable::Mutable;
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt, cloneable_boxed_observable::CloneableBoxedObservable},
     observer::{Observer, Termination},
@@ -310,7 +311,7 @@ fn test_lifetime_or() {
 
     {
         let observable = Create::new(|observer| {
-            safe_lock_option!(replace: life_marker_1, observer);
+            life_marker_1.replace_value(Some(observer));
             Subscription::default()
         });
         let observable = observable.into_cloneable_boxed();

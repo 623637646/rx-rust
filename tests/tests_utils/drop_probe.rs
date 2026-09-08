@@ -1,8 +1,9 @@
 //! A value that reports its own drop.
 
+use rx_rust::utils::mutable::MutableExt;
 use rx_rust::{
-    safe_lock,
-    utils::types::{Mutable, MutableHelper, Shared},
+    utils::mutable::{Mutable, MutableHelper},
+    utils::types::Shared,
 };
 
 cfg_if::cfg_if! {
@@ -65,11 +66,11 @@ impl DropCount {
     }
 
     pub(crate) fn get(&self) -> usize {
-        safe_lock!(clone: self.0)
+        self.0.clone_value()
     }
 
     pub(crate) fn increment(&self) {
-        self.0.lock_mut(|mut lock| *lock += 1);
+        self.0.with_mut(|lock| *lock += 1);
     }
 
     /// A callback counting one drop, for a probe that does something else as well.

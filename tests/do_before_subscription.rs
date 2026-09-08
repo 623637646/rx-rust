@@ -6,8 +6,8 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
+use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
 use rx_rust::utils::types::Shared;
-use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},

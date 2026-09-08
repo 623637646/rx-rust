@@ -5,7 +5,6 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
-use crate::tests_utils::types::TestMutableHelper;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
@@ -13,13 +12,12 @@ use rx_rust::operators::connectable::ref_count::RefCount;
 use rx_rust::operators::creating::defer::Defer;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
-use rx_rust::safe_lock_option;
-use rx_rust::safe_lock_option_disposable;
-use rx_rust::safe_lock_vec;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::Subject;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::types::{Mutable, MutableBool, MutableBoolHelper, MutableHelper, Shared};
+use rx_rust::utils::mutable::MutableExt;
+use rx_rust::utils::mutable::{Mutable, MutableBool, MutableBoolHelper, MutableHelper};
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -40,7 +38,11 @@ fn test_completed() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -58,7 +60,7 @@ fn test_completed() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -66,7 +68,7 @@ fn test_completed() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -76,7 +78,7 @@ fn test_completed() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -86,7 +88,7 @@ fn test_completed() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -96,7 +98,7 @@ fn test_completed() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -106,7 +108,7 @@ fn test_completed() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -116,7 +118,7 @@ fn test_completed() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Completed);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Completed
     );
 }
@@ -131,7 +133,11 @@ fn test_error() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -149,7 +155,7 @@ fn test_error() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -157,7 +163,7 @@ fn test_error() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -167,7 +173,7 @@ fn test_error() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -177,7 +183,7 @@ fn test_error() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -187,7 +193,7 @@ fn test_error() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -197,7 +203,7 @@ fn test_error() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -207,7 +213,7 @@ fn test_error() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Error("error")
     );
 }
@@ -222,7 +228,11 @@ fn test_unsubscribe() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -240,7 +250,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -248,7 +258,7 @@ fn test_unsubscribe() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -258,7 +268,7 @@ fn test_unsubscribe() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -268,7 +278,7 @@ fn test_unsubscribe() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -278,7 +288,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -288,7 +298,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -298,7 +308,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [2, 3]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -308,7 +318,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [2, 3]);
     assert_eq!(checker_2.state(), State::Dropped);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Unsubscribed
     );
 }
@@ -372,7 +382,11 @@ fn test_ref() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -397,7 +411,7 @@ fn test_ref() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -405,7 +419,7 @@ fn test_ref() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -415,7 +429,7 @@ fn test_ref() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -425,7 +439,7 @@ fn test_ref() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -435,7 +449,7 @@ fn test_ref() {
     assert_eq!(checker_2.values(), [&value_2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -445,7 +459,7 @@ fn test_ref() {
     assert_eq!(checker_2.values(), [&value_2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -455,7 +469,7 @@ fn test_ref() {
     assert_eq!(checker_2.values(), [&value_2]);
     assert_eq!(checker_2.state(), State::Error(&error));
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Error(&error)
     );
 }
@@ -471,7 +485,11 @@ fn test_async() {
         let observable = Defer::new(move || {
             let (sender, observable, channel_checker) = test_channel();
             assert!(sender_cloned.set(sender));
-            assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+            assert!(
+                channel_checker_cloned
+                    .replace_value(Some(channel_checker))
+                    .is_none()
+            );
             observable
         });
         let (checker_1, observer_1) = Checker::new();
@@ -489,7 +507,7 @@ fn test_async() {
         assert_eq!(checker_1.state(), State::Active);
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
-        assert!(channel_checker.test_lock_ref().is_none());
+        assert!(channel_checker.with_ref(Option::is_none));
 
         let subscription_1 = runtime
             .spawn(async move { observable_1.subscribe(observer_1) })
@@ -500,7 +518,7 @@ fn test_async() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
         assert_eq!(
-            channel_checker.test_lock_ref().as_ref().unwrap().state(),
+            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
             ChannelState::Subscribed
         );
 
@@ -516,7 +534,7 @@ fn test_async() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
         assert_eq!(
-            channel_checker.test_lock_ref().as_ref().unwrap().state(),
+            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
             ChannelState::Subscribed
         );
 
@@ -529,7 +547,7 @@ fn test_async() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
         assert_eq!(
-            channel_checker.test_lock_ref().as_ref().unwrap().state(),
+            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
             ChannelState::Subscribed
         );
 
@@ -545,7 +563,7 @@ fn test_async() {
         assert_eq!(checker_2.values(), [2]);
         assert_eq!(checker_2.state(), State::Active);
         assert_eq!(
-            channel_checker.test_lock_ref().as_ref().unwrap().state(),
+            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
             ChannelState::Subscribed
         );
 
@@ -559,7 +577,7 @@ fn test_async() {
         assert_eq!(checker_2.values(), [2]);
         assert_eq!(checker_2.state(), State::Active);
         assert_eq!(
-            channel_checker.test_lock_ref().as_ref().unwrap().state(),
+            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
             ChannelState::Subscribed
         );
 
@@ -572,7 +590,7 @@ fn test_async() {
         assert_eq!(checker_2.values(), [2]);
         assert_eq!(checker_2.state(), State::Error("error"));
         assert_eq!(
-            channel_checker.test_lock_ref().as_ref().unwrap().state(),
+            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
             ChannelState::Error("error")
         );
     });
@@ -588,7 +606,11 @@ fn test_subscribe_by_different_observer() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -606,7 +628,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -614,7 +636,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -624,7 +646,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -635,7 +657,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -645,7 +667,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -655,7 +677,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -665,7 +687,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Error("error")
     );
 }
@@ -680,7 +702,11 @@ fn test_unsub_on_next_by_take() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker, observer) = Checker::new();
@@ -695,13 +721,13 @@ fn test_unsub_on_next_by_take() {
 
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let _subscription = observable_1.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -709,7 +735,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.values(), [1]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Unsubscribed
     );
 }
@@ -724,7 +750,11 @@ fn test_multiple_operation() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -744,7 +774,7 @@ fn test_multiple_operation() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -752,7 +782,7 @@ fn test_multiple_operation() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -762,7 +792,7 @@ fn test_multiple_operation() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -772,7 +802,7 @@ fn test_multiple_operation() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -782,7 +812,7 @@ fn test_multiple_operation() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -792,7 +822,7 @@ fn test_multiple_operation() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -802,7 +832,7 @@ fn test_multiple_operation() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Error("error")
     );
 }
@@ -817,7 +847,11 @@ fn test_without_convenient_api() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -835,7 +869,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -843,7 +877,7 @@ fn test_without_convenient_api() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -853,7 +887,7 @@ fn test_without_convenient_api() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -863,7 +897,7 @@ fn test_without_convenient_api() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -873,7 +907,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -883,7 +917,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -893,7 +927,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker_2.values(), [2]);
     assert_eq!(checker_2.state(), State::Error("error"));
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Error("error")
     );
 }
@@ -980,7 +1014,11 @@ fn test_unsub_on_next() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -1002,7 +1040,7 @@ fn test_unsub_on_next() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     // no unsubscribe
     let subscription = observable_1.subscribe(observer_1);
@@ -1010,26 +1048,30 @@ fn test_unsub_on_next() {
     // unsubscribe before on_next
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable_2
             .hook_on_next(move |observer, value| {
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
                 observer.on_next(value);
             })
-            .subscribe(observer_2)
-    );
+            .subscribe(observer_2),
+    ));
 
     // unsubscribe after on_next
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable_3
             .hook_on_next(move |observer, value| {
                 observer.on_next(value);
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             })
-            .subscribe(observer_3)
-    );
+            .subscribe(observer_3),
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -1038,7 +1080,7 @@ fn test_unsub_on_next() {
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1050,7 +1092,7 @@ fn test_unsub_on_next() {
     assert_eq!(checker_3.values(), [1]);
     assert_eq!(checker_3.state(), State::Dropped);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1062,7 +1104,7 @@ fn test_unsub_on_next() {
     assert_eq!(checker_3.values(), [1]);
     assert_eq!(checker_3.state(), State::Dropped);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Unsubscribed
     );
 }
@@ -1077,7 +1119,11 @@ fn test_sub_on_next() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -1103,12 +1149,14 @@ fn test_sub_on_next() {
             .hook_on_next(move |observer, value| {
                 // subscribe before on_next
                 if let Some(observer) = observer_2.take() {
-                    safe_lock_option!(replace: subscription_2_cloned, observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_next(value);
                 // subscribe after on_next
                 if let Some(observer) = observer_3.take() {
-                    safe_lock_option!(replace: subscription_3_cloned, observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),
@@ -1120,7 +1168,7 @@ fn test_sub_on_next() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1132,7 +1180,7 @@ fn test_sub_on_next() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1144,7 +1192,7 @@ fn test_sub_on_next() {
     assert_eq!(checker_3.values(), [2]);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 }
@@ -1206,7 +1254,11 @@ fn test_unsub_on_completed() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -1228,7 +1280,7 @@ fn test_unsub_on_completed() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     // no unsubscribe
     let _subscription = observable_1.subscribe(observer_1);
@@ -1236,26 +1288,30 @@ fn test_unsub_on_completed() {
     // unsubscribe before termination
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable_2
             .hook_on_termination(move |observer, value| {
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
                 observer.on_termination(value);
             })
-            .subscribe(observer_2)
-    );
+            .subscribe(observer_2),
+    ));
 
     // unsubscribe after on_next
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable_3
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             })
-            .subscribe(observer_3)
-    );
+            .subscribe(observer_3),
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -1264,7 +1320,7 @@ fn test_unsub_on_completed() {
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1276,7 +1332,7 @@ fn test_unsub_on_completed() {
     assert_eq!(checker_3.values(), [1]);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1288,7 +1344,7 @@ fn test_unsub_on_completed() {
     assert_eq!(checker_3.values(), [1]);
     assert_eq!(checker_3.state(), State::Completed);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Completed
     );
 }
@@ -1303,7 +1359,11 @@ fn test_sub_on_completed() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -1329,12 +1389,14 @@ fn test_sub_on_completed() {
             .hook_on_termination(move |observer, value| {
                 // subscribe before termination
                 if let Some(observer) = observer_2.take() {
-                    safe_lock_option!(replace: subscription_2_cloned, observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_termination(value);
                 // subscribe after termination
                 if let Some(observer) = observer_3.take() {
-                    safe_lock_option!(replace: subscription_3_cloned, observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),
@@ -1346,7 +1408,7 @@ fn test_sub_on_completed() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1358,7 +1420,7 @@ fn test_sub_on_completed() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1370,7 +1432,7 @@ fn test_sub_on_completed() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1382,7 +1444,7 @@ fn test_sub_on_completed() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Completed);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Completed
     );
 }
@@ -1397,7 +1459,11 @@ fn test_unsub_on_error() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -1419,7 +1485,7 @@ fn test_unsub_on_error() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     // no unsubscribe
     let _subscription = observable_1.subscribe(observer_1);
@@ -1427,26 +1493,30 @@ fn test_unsub_on_error() {
     // unsubscribe before termination
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable_2
             .hook_on_termination(move |observer, value| {
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
                 observer.on_termination(value);
             })
-            .subscribe(observer_2)
-    );
+            .subscribe(observer_2),
+    ));
 
     // unsubscribe after on_next
     let sub = Shared::new(Mutable::new(None));
     let sub_cloned = sub.clone();
-    safe_lock_option!(replace: sub,
+    sub.replace_value(Some(
         observable_3
             .hook_on_termination(move |observer, value| {
                 observer.on_termination(value);
-                safe_lock_option_disposable!(dispose: sub_cloned);
+                if let Some(subscription) = sub_cloned.take_value() {
+                    Disposable::dispose(subscription);
+                }
             })
-            .subscribe(observer_3)
-    );
+            .subscribe(observer_3),
+    ));
 
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
@@ -1455,7 +1525,7 @@ fn test_unsub_on_error() {
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1467,7 +1537,7 @@ fn test_unsub_on_error() {
     assert_eq!(checker_3.values(), [1]);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1479,7 +1549,7 @@ fn test_unsub_on_error() {
     assert_eq!(checker_3.values(), [1]);
     assert_eq!(checker_3.state(), State::Error("error"));
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Error("error")
     );
 }
@@ -1494,7 +1564,11 @@ fn test_sub_on_error() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -1520,12 +1594,14 @@ fn test_sub_on_error() {
             .hook_on_termination(move |observer, value| {
                 // subscribe before termination
                 if let Some(observer) = observer_2.take() {
-                    safe_lock_option!(replace: subscription_2_cloned, observable.clone().subscribe(observer));
+                    subscription_2_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
                 observer.on_termination(value);
                 // subscribe after termination
                 if let Some(observer) = observer_3.take() {
-                    safe_lock_option!(replace: subscription_3_cloned, observable.clone().subscribe(observer));
+                    subscription_3_cloned
+                        .replace_value(Some(observable.clone().subscribe(observer)));
                 }
             })
             .subscribe(observer_1),
@@ -1537,7 +1613,7 @@ fn test_sub_on_error() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1549,7 +1625,7 @@ fn test_sub_on_error() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1561,7 +1637,7 @@ fn test_sub_on_error() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1573,7 +1649,7 @@ fn test_sub_on_error() {
     assert_eq!(checker_3.values(), []);
     assert_eq!(checker_3.state(), State::Error("error"));
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Error("error")
     );
 }
@@ -1710,7 +1786,11 @@ fn test_sub_on_sub() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -1728,14 +1808,14 @@ fn test_sub_on_sub() {
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
-    assert!(channel_checker.test_lock_ref().is_none());
+    assert!(channel_checker.with_ref(Option::is_none));
 
     let subscription_2 = Shared::new(Mutable::new(None));
     let subscription_1 = observable_1
         .hook_on_subscription(|observable, observer| {
             let sub = observable.subscribe(observer);
             let sub2 = observable_2.subscribe(observer_2);
-            assert!(safe_lock_option!(replace: subscription_2, sub2).is_none());
+            assert!(subscription_2.replace_value(Some(sub2)).is_none());
             sub
         })
         .subscribe(observer_1);
@@ -1744,7 +1824,7 @@ fn test_sub_on_sub() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1754,7 +1834,7 @@ fn test_sub_on_sub() {
     assert_eq!(checker_2.values(), [1]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
@@ -1764,17 +1844,19 @@ fn test_sub_on_sub() {
     assert_eq!(checker_2.values(), [1]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Subscribed
     );
 
-    safe_lock_option_disposable!(dispose: subscription_2);
+    if let Some(subscription) = subscription_2.take_value() {
+        Disposable::dispose(subscription);
+    }
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [1]);
     assert_eq!(checker_2.state(), State::Dropped);
     assert_eq!(
-        channel_checker.test_lock_ref().as_ref().unwrap().state(),
+        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Unsubscribed
     );
 }
@@ -1786,7 +1868,7 @@ fn test_subscribe_after_all_unsubscribed() {
     let sender_channel_checker_cloned = sender_channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        safe_lock_vec!(push: sender_channel_checker_cloned, (sender, channel_checker));
+        sender_channel_checker_cloned.with_mut(|values| values.push((sender, channel_checker)));
         observable
     });
     let (checker_1, observer_1) = Checker::new();
@@ -1808,7 +1890,7 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 0);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 0);
 
     let subscription_1 = observable_1.subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -1817,18 +1899,13 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 1);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 1);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Subscribed
     );
 
-    sender_channel_checker.lock_mut(|mut lock| {
+    sender_channel_checker.with_mut(|lock| {
         lock[0].0.on_next(());
     });
     assert_eq!(checker_1.values(), [1]);
@@ -1837,14 +1914,9 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 1);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 1);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Subscribed
     );
 
@@ -1855,18 +1927,13 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 1);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 1);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Subscribed
     );
 
-    sender_channel_checker.lock_mut(|mut lock| {
+    sender_channel_checker.with_mut(|lock| {
         lock[0].0.on_next(());
     });
     assert_eq!(checker_1.values(), [1, 2]);
@@ -1875,14 +1942,9 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 1);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 1);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Subscribed
     );
 
@@ -1893,14 +1955,9 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 1);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 1);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Subscribed
     );
 
@@ -1911,14 +1968,9 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Dropped);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 1);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 1);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Unsubscribed
     );
 
@@ -1929,27 +1981,17 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Dropped);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 2);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 2);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Unsubscribed
     );
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .last()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.last().unwrap().1.state()),
         ChannelState::Subscribed
     );
 
-    sender_channel_checker.lock_mut(|mut lock| {
+    sender_channel_checker.with_mut(|lock| {
         lock[1].0.on_next(());
     });
     assert_eq!(checker_1.values(), [1, 2]);
@@ -1958,23 +2000,13 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Dropped);
     assert_eq!(checker_3.values(), [3]);
     assert_eq!(checker_3.state(), State::Active);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 2);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 2);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Unsubscribed
     );
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .last()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.last().unwrap().1.state()),
         ChannelState::Subscribed
     );
 
@@ -1985,23 +2017,13 @@ fn test_subscribe_after_all_unsubscribed() {
     assert_eq!(checker_2.state(), State::Dropped);
     assert_eq!(checker_3.values(), [3]);
     assert_eq!(checker_3.state(), State::Dropped);
-    assert_eq!(sender_channel_checker.test_lock_ref().len(), 2);
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 2);
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .first()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.first().unwrap().1.state()),
         ChannelState::Unsubscribed
     );
     assert_eq!(
-        sender_channel_checker
-            .test_lock_ref()
-            .last()
-            .unwrap()
-            .1
-            .state(),
+        sender_channel_checker.with_ref(|channels| channels.last().unwrap().1.state()),
         ChannelState::Unsubscribed
     );
 }
@@ -2042,7 +2064,7 @@ fn test_lifetime_or() {
 
     {
         let observable = Create::new(|observer| {
-            safe_lock_option!(replace: life_marker, Some(observer));
+            life_marker.replace_value(Some(Some(observer)));
             Subscription::default()
         });
         let observable = observable.publish().ref_count();
@@ -2095,7 +2117,11 @@ fn test_type_inference_with_subscribe() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let observable = observable.publish().ref_count();
@@ -2115,7 +2141,11 @@ fn test_type_inference_without_subscribe() {
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         assert!(sender_cloned.set(sender));
-        assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
+        assert!(
+            channel_checker_cloned
+                .replace_value(Some(channel_checker))
+                .is_none()
+        );
         observable
     });
     let observable = observable.publish().ref_count();

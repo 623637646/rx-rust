@@ -1,13 +1,14 @@
 use crate::tests_utils::test_runtime::TestRuntime;
 use educe::Educe;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::utils::mutable::MutableExt;
 use rx_rust::{
     disposable::Disposable,
     observer::{Observer, Termination},
     scheduler::Scheduler,
-    utils::types::{MaybeSend, Mutable, MutableHelper, Shared},
+    utils::mutable::{Mutable, MutableHelper},
+    utils::types::{MaybeSend, Shared},
 };
-use rx_rust::{safe_lock, safe_lock_vec};
 use {
     futures::Stream, futures::stream::StreamExt, rx_rust::observable::Subscription,
     std::convert::Infallible,
@@ -47,14 +48,14 @@ impl<T, E> Checker<T, E> {
     where
         T: Clone,
     {
-        safe_lock!(clone: self.values)
+        self.values.clone_value()
     }
 
     pub(crate) fn state(&self) -> State<E>
     where
         E: Clone,
     {
-        safe_lock!(clone: self.state)
+        self.state.clone_value()
     }
 }
 
@@ -78,7 +79,7 @@ impl<T, E> CheckerObserver<T, E> {
     {
         let values = self.values.clone();
         (
-            move |value| safe_lock_vec!(push: values, value),
+            move |value| values.with_mut(|values| values.push(value)),
             |termination| self.on_termination(termination),
         )
     }
@@ -86,7 +87,7 @@ impl<T, E> CheckerObserver<T, E> {
 
 impl<T, E> Drop for CheckerObserver<T, E> {
     fn drop(&mut self) {
-        self.state.lock_mut(|mut lock| match &*lock {
+        self.state.with_mut(|lock| match &*lock {
             State::Active => *lock = State::Dropped,
             State::Completed | State::Error(_) => {}
             State::Dropped => panic!(),
@@ -96,7 +97,7 @@ impl<T, E> Drop for CheckerObserver<T, E> {
 
 impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
     fn on_next(&mut self, value: T) {
-        safe_lock_vec!(push: self.values, value);
+        self.values.with_mut(|values| values.push(value));
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -104,7 +105,7 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
             Termination::Completed => State::Completed,
             Termination::Error(error) => State::Error(error),
         };
-        match safe_lock!(mem_replace: self.state, new_value) {
+        match self.state.replace_value(new_value) {
             State::Active => {}
             State::Completed | State::Error(_) | State::Dropped => panic!(),
         }
@@ -127,9 +128,9 @@ impl<T> Checker<T, Infallible> {
         let handle = runtime.spawn_future(async move {
             let mut stream = std::pin::pin!(stream);
             while let Some(value) = stream.next().await {
-                safe_lock_vec!(push: values_cloned, value);
+                values_cloned.with_mut(|values| values.push(value));
             }
-            match safe_lock!(mem_replace: state_cloned, State::Completed) {
+            match state_cloned.replace_value(State::Completed) {
                 State::Active => {}
                 State::Completed | State::Error(_) | State::Dropped => panic!(),
             }
@@ -142,7 +143,7 @@ impl<T> Checker<T, Infallible> {
             Subscription::new(CallbackDisposal::new(move || {
                 use rx_rust::disposable::Disposable;
                 handle.dispose();
-                state.lock_mut(|mut lock| match &*lock {
+                state.with_mut(|lock| match &*lock {
                     State::Active => *lock = State::Dropped,
                     State::Completed | State::Error(_) => {}
                     State::Dropped => panic!(),

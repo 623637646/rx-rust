@@ -15,8 +15,8 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::types::MutableBool;
-use rx_rust::utils::types::MutableBoolHelper;
+use rx_rust::utils::mutable::MutableBool;
+use rx_rust::utils::mutable::MutableBoolHelper;
 use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
