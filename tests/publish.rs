@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::types::TestMutableHelper;
@@ -16,7 +17,7 @@ use rx_rust::{
     operators::creating::create::Create,
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock_option, safe_lock_option_observer, safe_lock_vec};
+use rx_rust::{safe_lock_option, safe_lock_vec};
 use std::convert::Infallible;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
@@ -24,13 +25,13 @@ use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::Tes
 #[test]
 fn test_completed() {
     let counter = AtomicUsize::new(0);
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -68,7 +69,7 @@ fn test_completed() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -88,7 +89,7 @@ fn test_completed() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
@@ -98,7 +99,7 @@ fn test_completed() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_termination: sender, Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [2]);
@@ -112,13 +113,13 @@ fn test_completed() {
 #[test]
 fn test_error() {
     let counter = AtomicUsize::new(0);
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -156,7 +157,7 @@ fn test_error() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -176,7 +177,7 @@ fn test_error() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
@@ -186,7 +187,7 @@ fn test_error() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_termination: sender, Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Error("error"));
     assert_eq!(checker_2.values(), [2]);
@@ -200,13 +201,13 @@ fn test_error() {
 #[test]
 fn test_unsubscribe() {
     let counter = AtomicUsize::new(0);
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -244,7 +245,7 @@ fn test_unsubscribe() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -264,7 +265,7 @@ fn test_unsubscribe() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
@@ -284,7 +285,7 @@ fn test_unsubscribe() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2, 3]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
@@ -322,13 +323,13 @@ fn test_ref() {
     let value_2 = 222;
     let error = -1;
 
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -373,7 +374,7 @@ fn test_ref() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [&value_1]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -393,7 +394,7 @@ fn test_ref() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [&value_1, &value_2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [&value_2]);
@@ -403,7 +404,7 @@ fn test_ref() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_termination: sender, Termination::Error(&error));
+    sender.on_termination(Termination::Error(&error));
     assert_eq!(checker_1.values(), [&value_1, &value_2]);
     assert_eq!(checker_1.state(), State::Error(&error));
     assert_eq!(checker_2.values(), [&value_2]);
@@ -418,13 +419,13 @@ fn test_ref() {
 fn test_async() {
     block_on(|runtime| async move {
         let counter = Shared::new(AtomicUsize::new(0));
-        let sender = Shared::new(Mutable::new(None));
+        let sender = SharedSender::default();
         let channel_checker = Shared::new(Mutable::new(None));
         let sender_cloned = sender.clone();
         let channel_checker_cloned = channel_checker.clone();
         let observable = Defer::new(move || {
             let (sender, observable, channel_checker) = test_channel();
-            assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+            assert!(sender_cloned.set(sender));
             assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
             observable
         });
@@ -470,7 +471,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                safe_lock_option_observer!(on_next: sender, ());
+                sender.on_next(());
                 sender
             })
             .await
@@ -499,7 +500,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                safe_lock_option_observer!(on_next: sender, ());
+                sender.on_next(());
                 sender
             })
             .await
@@ -514,9 +515,7 @@ fn test_async() {
         );
 
         runtime
-            .spawn(async move {
-                safe_lock_option_observer!(on_termination: sender, Termination::Error("error"))
-            })
+            .spawn(async move { sender.on_termination(Termination::Error("error")) })
             .await
             .unwrap();
         assert_eq!(checker_1.values(), [1, 2]);
@@ -533,13 +532,13 @@ fn test_async() {
 #[test]
 fn test_subscribe_by_different_observer() {
     let counter = AtomicUsize::new(0);
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -577,7 +576,7 @@ fn test_subscribe_by_different_observer() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -598,7 +597,7 @@ fn test_subscribe_by_different_observer() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
@@ -608,7 +607,7 @@ fn test_subscribe_by_different_observer() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_termination: sender, Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Error("error"));
     assert_eq!(checker_2.values(), [2]);
@@ -622,13 +621,13 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_on_next_by_take() {
     let counter = AtomicUsize::new(0);
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -666,7 +665,7 @@ fn test_unsub_on_next_by_take() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Completed);
     assert!(checker_2.values().is_empty());
@@ -686,7 +685,7 @@ fn test_unsub_on_next_by_take() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [2]);
@@ -696,7 +695,7 @@ fn test_unsub_on_next_by_take() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [2, 3]);
@@ -710,13 +709,13 @@ fn test_unsub_on_next_by_take() {
 #[test]
 fn test_multiple_operation() {
     let counter = AtomicUsize::new(0);
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -755,7 +754,7 @@ fn test_multiple_operation() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -775,7 +774,7 @@ fn test_multiple_operation() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
@@ -785,7 +784,7 @@ fn test_multiple_operation() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_termination: sender, Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Error("error"));
     assert_eq!(checker_2.values(), [2]);
@@ -799,13 +798,13 @@ fn test_multiple_operation() {
 #[test]
 fn test_without_convenient_api() {
     let counter = AtomicUsize::new(0);
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -845,7 +844,7 @@ fn test_without_convenient_api() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -865,7 +864,7 @@ fn test_without_convenient_api() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
@@ -875,7 +874,7 @@ fn test_without_convenient_api() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_termination: sender, Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [2]);
@@ -889,13 +888,13 @@ fn test_without_convenient_api() {
 #[test]
 fn test_share_api() {
     let counter = AtomicUsize::new(0);
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -925,7 +924,7 @@ fn test_share_api() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -945,7 +944,7 @@ fn test_share_api() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_next: sender, ());
+    sender.on_next(());
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [2]);
@@ -965,7 +964,7 @@ fn test_share_api() {
         ChannelState::Subscribed
     );
 
-    safe_lock_option_observer!(on_termination: sender, Termination::Completed);
+    sender.on_termination(Termination::Completed);
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [2]);
@@ -1396,13 +1395,13 @@ fn test_lifetime_or_sub() {
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });
@@ -1417,13 +1416,13 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let sender_cloned = sender.clone();
     let channel_checker_cloned = channel_checker.clone();
     let observable = Defer::new(move || {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
-        assert!(safe_lock_option!(replace: sender_cloned, sender).is_none());
+        assert!(sender_cloned.set(sender));
         assert!(safe_lock_option!(replace: channel_checker_cloned, channel_checker).is_none());
         observable
     });

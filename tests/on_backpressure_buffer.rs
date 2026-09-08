@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_runtime::block_on;
 use crate::tests_utils::test_struct::TestStruct;
@@ -19,7 +20,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock, safe_lock_option, safe_lock_option_observer, safe_lock_vec};
+use rx_rust::{safe_lock, safe_lock_option, safe_lock_vec};
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
 
@@ -1117,13 +1118,13 @@ fn test_request_on_request() {
 
     let request_callback = Shared::new(Mutable::new(None));
     let request_callback_cloned = request_callback.clone();
-    let sender = Shared::new(Mutable::new(Some(sender)));
+    let sender = SharedSender::new(sender);
     let sender_cloned = sender.clone();
     let _subscription = observable
         .map(move |(values, request)| {
             if values.len() > 1 {
                 request.request();
-                safe_lock_option_observer!(on_termination: sender_cloned, Termination::<Infallible>::Completed);
+                sender_cloned.on_termination(Termination::<Infallible>::Completed);
             } else {
                 safe_lock_option!(replace: request_callback_cloned, request);
             }
@@ -1135,19 +1136,19 @@ fn test_request_on_request() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_none());
 
-    safe_lock_option_observer!(on_next: sender, 111);
+    sender.on_next(111);
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option_observer!(on_next: sender, 222);
+    sender.on_next(222);
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(request_callback.test_lock_ref().is_some());
 
-    safe_lock_option_observer!(on_next: sender, 333);
+    sender.on_next(333);
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);

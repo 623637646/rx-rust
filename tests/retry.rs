@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::{ChannelChecker, ReceiverObservable, SenderObserver};
 use crate::tests_utils::test_runtime::block_on;
@@ -10,6 +11,7 @@ use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::safe_lock_option;
+use rx_rust::safe_lock_vec;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
@@ -21,23 +23,25 @@ use rx_rust::{
     },
     subject::publish_subject::PublishSubject,
 };
-use rx_rust::{safe_lock_option_observer, safe_lock_vec};
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 fn new_channel<'or, T, E>(
-    sender: Shared<Mutable<Option<SenderObserver<'or, T, E>>>>,
+    sender: SharedSender<T, E, SenderObserver<'or, T, E>>,
     channel_checker: Shared<Mutable<Option<ChannelChecker<E>>>>,
-) -> ReceiverObservable<'or, T, E> {
+) -> ReceiverObservable<'or, T, E>
+where
+    E: Clone,
+{
     let (sender_1, observable, channel_checker_1) = test_channel();
-    safe_lock_option!(replace: sender, sender_1);
+    sender.set(sender_1);
     safe_lock_option!(replace: channel_checker, channel_checker_1);
     observable
 }
 
 #[test]
 fn test_completed_no_retry() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -62,7 +66,7 @@ fn test_completed_no_retry() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -71,9 +75,7 @@ fn test_completed_no_retry() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(
-        safe_lock_option_observer!(on_termination: sender, Termination::<Infallible>::Completed)
-    );
+    assert!(sender.on_termination(Termination::<Infallible>::Completed));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -85,7 +87,7 @@ fn test_completed_no_retry() {
 
 #[test]
 fn test_completed_retry_once() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -110,7 +112,7 @@ fn test_completed_retry_once() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -119,7 +121,7 @@ fn test_completed_retry_once() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(sender.on_termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -128,7 +130,7 @@ fn test_completed_retry_once() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert!(sender.on_next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -137,7 +139,7 @@ fn test_completed_retry_once() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
+    assert!(sender.on_termination(Termination::Completed));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -149,7 +151,7 @@ fn test_completed_retry_once() {
 
 #[test]
 fn test_completed_retry_twice() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -174,7 +176,7 @@ fn test_completed_retry_twice() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -183,7 +185,7 @@ fn test_completed_retry_twice() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(sender.on_termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -192,7 +194,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert!(sender.on_next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -201,7 +203,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
+    assert!(sender.on_termination(Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -210,7 +212,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 333));
+    assert!(sender.on_next(333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -219,7 +221,7 @@ fn test_completed_retry_twice() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
+    assert!(sender.on_termination(Termination::Completed));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -265,7 +267,7 @@ fn test_completed_different_retry_observable() {
 
 #[test]
 fn test_completed_synchronous_throw() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -296,7 +298,7 @@ fn test_completed_synchronous_throw() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -305,7 +307,7 @@ fn test_completed_synchronous_throw() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error(-1)));
+    assert!(sender.on_termination(Termination::Error(-1)));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -314,7 +316,7 @@ fn test_completed_synchronous_throw() {
     );
     assert_eq!(*errors.test_lock_ref(), [-1, 0]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert!(sender.on_next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -323,7 +325,7 @@ fn test_completed_synchronous_throw() {
     );
     assert_eq!(*errors.test_lock_ref(), [-1, 0]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
+    assert!(sender.on_termination(Termination::Completed));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -335,7 +337,7 @@ fn test_completed_synchronous_throw() {
 
 #[test]
 fn test_erryr_no_retry() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
 
@@ -351,7 +353,7 @@ fn test_erryr_no_retry() {
         ChannelState::Subscribed
     );
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -359,7 +361,7 @@ fn test_erryr_no_retry() {
         ChannelState::Subscribed
     );
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(sender.on_termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(
@@ -370,7 +372,7 @@ fn test_erryr_no_retry() {
 
 #[test]
 fn test_error_retry_once() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -399,7 +401,7 @@ fn test_error_retry_once() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -408,7 +410,7 @@ fn test_error_retry_once() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(sender.on_termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -417,7 +419,7 @@ fn test_error_retry_once() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert!(sender.on_next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -426,7 +428,7 @@ fn test_error_retry_once() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
+    assert!(sender.on_termination(Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
     assert_eq!(
@@ -438,7 +440,7 @@ fn test_error_retry_once() {
 
 #[test]
 fn test_error_retry_twice() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -467,7 +469,7 @@ fn test_error_retry_twice() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -476,7 +478,7 @@ fn test_error_retry_twice() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(sender.on_termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -485,7 +487,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert!(sender.on_next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -494,7 +496,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
+    assert!(sender.on_termination(Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -503,7 +505,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 333));
+    assert!(sender.on_next(333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -512,7 +514,7 @@ fn test_error_retry_twice() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error", "error2"]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error3")));
+    assert!(sender.on_termination(Termination::Error("error3")));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
     assert_eq!(
@@ -561,7 +563,7 @@ fn test_error_source_and_retry_are_same() {
 
 #[test]
 fn test_unsubscribe_before_retry() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -590,7 +592,7 @@ fn test_unsubscribe_before_retry() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -611,7 +613,7 @@ fn test_unsubscribe_before_retry() {
 
 #[test]
 fn test_unsubscribe_after_retry() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -640,7 +642,7 @@ fn test_unsubscribe_after_retry() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -649,7 +651,7 @@ fn test_unsubscribe_after_retry() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(sender.on_termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -658,7 +660,7 @@ fn test_unsubscribe_after_retry() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert!(sender.on_next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -683,7 +685,7 @@ fn test_ref() {
     let value_2 = 222;
     let error = -1;
 
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -712,7 +714,7 @@ fn test_ref() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, &value_1));
+    assert!(sender.on_next(&value_1));
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -721,7 +723,7 @@ fn test_ref() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error(&error)));
+    assert!(sender.on_termination(Termination::Error(&error)));
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -730,7 +732,7 @@ fn test_ref() {
     );
     assert_eq!(*errors.test_lock_ref(), [&error]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, &value_2));
+    assert!(sender.on_next(&value_2));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -739,7 +741,7 @@ fn test_ref() {
     );
     assert_eq!(*errors.test_lock_ref(), [&error]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error(&error)));
+    assert!(sender.on_termination(Termination::Error(&error)));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Error(&error));
     assert_eq!(
@@ -754,7 +756,7 @@ fn test_mut_ref() {
     let mut value_1 = 111;
     let mut value_2 = 222;
 
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
 
     // Custom operations
@@ -774,10 +776,10 @@ fn test_mut_ref() {
         |_| {},
     );
 
-    assert!(safe_lock_option_observer!(on_next: sender, &mut value_1));
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
-    assert!(safe_lock_option_observer!(on_next: sender, &mut value_2));
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Completed));
+    assert!(sender.on_next(&mut value_1));
+    assert!(sender.on_termination(Termination::Error("error")));
+    assert!(sender.on_next(&mut value_2));
+    assert!(sender.on_termination(Termination::Completed));
     drop(sender);
     drop(subscription);
     drop(channel_checker);
@@ -789,7 +791,7 @@ fn test_mut_ref() {
 #[test]
 fn test_async() {
     block_on(|runtime| async move {
-        let sender = Shared::new(Mutable::new(None));
+        let sender = SharedSender::default();
         let channel_checker = Shared::new(Mutable::new(None));
         let (checker, observer) = Checker::new();
         let errors = Shared::new(Mutable::new(Vec::new()));
@@ -823,7 +825,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                assert!(safe_lock_option_observer!(on_next: sender, 111));
+                assert!(sender.on_next(111));
                 sender
             })
             .await
@@ -838,9 +840,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                assert!(
-                    safe_lock_option_observer!(on_termination: sender, Termination::Error("error"))
-                );
+                assert!(sender.on_termination(Termination::Error("error")));
                 sender
             })
             .await
@@ -855,7 +855,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                assert!(safe_lock_option_observer!(on_next: sender, 222));
+                assert!(sender.on_next(222));
                 sender
             })
             .await
@@ -870,9 +870,7 @@ fn test_async() {
 
         let _sender = runtime
             .spawn(async move {
-                assert!(
-                    safe_lock_option_observer!(on_termination: sender, Termination::Error("error2"))
-                );
+                assert!(sender.on_termination(Termination::Error("error2")));
                 sender
             })
             .await
@@ -938,7 +936,7 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::<_, &str>::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -965,7 +963,7 @@ fn test_unsub_on_next_by_take() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(
@@ -977,7 +975,7 @@ fn test_unsub_on_next_by_take() {
 
 #[test]
 fn test_multiple_operation() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors_1 = Shared::new(Mutable::new(Vec::new()));
@@ -1023,7 +1021,7 @@ fn test_multiple_operation() {
     assert!(safe_lock_vec!(is_empty: errors_1));
     assert!(safe_lock_vec!(is_empty: errors_2));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1033,7 +1031,7 @@ fn test_multiple_operation() {
     assert!(safe_lock_vec!(is_empty: errors_1));
     assert!(safe_lock_vec!(is_empty: errors_2));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(sender.on_termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1043,7 +1041,7 @@ fn test_multiple_operation() {
     assert_eq!(*errors_1.test_lock_ref(), ["error"]);
     assert!(safe_lock_vec!(is_empty: errors_2));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert!(sender.on_next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1053,7 +1051,7 @@ fn test_multiple_operation() {
     assert_eq!(*errors_1.test_lock_ref(), ["error"]);
     assert!(safe_lock_vec!(is_empty: errors_2));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
+    assert!(sender.on_termination(Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1063,7 +1061,7 @@ fn test_multiple_operation() {
     assert_eq!(*errors_1.test_lock_ref(), ["error", "error2"]);
     assert_eq!(*errors_2.test_lock_ref(), ["error2"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 333));
+    assert!(sender.on_next(333));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1073,7 +1071,7 @@ fn test_multiple_operation() {
     assert_eq!(*errors_1.test_lock_ref(), ["error", "error2"]);
     assert_eq!(*errors_2.test_lock_ref(), ["error2"]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error3")));
+    assert!(sender.on_termination(Termination::Error("error3")));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
     assert_eq!(
@@ -1086,7 +1084,7 @@ fn test_multiple_operation() {
 
 #[test]
 fn test_without_convenient_api() {
-    let sender = Shared::new(Mutable::new(None));
+    let sender = SharedSender::default();
     let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
     let errors = Shared::new(Mutable::new(Vec::new()));
@@ -1115,7 +1113,7 @@ fn test_without_convenient_api() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_next: sender, 111));
+    assert!(sender.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1124,7 +1122,7 @@ fn test_without_convenient_api() {
     );
     assert!(safe_lock_vec!(is_empty: errors));
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error")));
+    assert!(sender.on_termination(Termination::Error("error")));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1133,7 +1131,7 @@ fn test_without_convenient_api() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_next: sender, 222));
+    assert!(sender.on_next(222));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(
@@ -1142,7 +1140,7 @@ fn test_without_convenient_api() {
     );
     assert_eq!(*errors.test_lock_ref(), ["error"]);
 
-    assert!(safe_lock_option_observer!(on_termination: sender, Termination::Error("error2")));
+    assert!(sender.on_termination(Termination::Error("error2")));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
     assert_eq!(

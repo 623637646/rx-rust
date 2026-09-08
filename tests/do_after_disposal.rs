@@ -2,14 +2,13 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
-use rx_rust::safe_lock_option;
-use rx_rust::safe_lock_option_observer;
 use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::{Mutable, Shared};
+use rx_rust::utils::types::Shared;
 use rx_rust::utils::types::{MutableBool, MutableBoolHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt},
@@ -259,12 +258,12 @@ fn test_async() {
     block_on(|runtime| async move {
         let disposed = Shared::new(MutableBool::new(false));
         let called = Shared::new(MutableBool::new(false));
-        let boxed_observer = Shared::new(Mutable::new(None));
+        let boxed_observer = SharedSender::default();
 
         let disposed_cloned = disposed.clone();
         let boxed_observer_cloned = boxed_observer.clone();
         let observable = Create::new(move |observer| {
-            safe_lock_option!(replace: boxed_observer_cloned, observer);
+            boxed_observer_cloned.set(observer);
             Subscription::new(CallbackDisposal::new(move || {
                 disposed_cloned.write(true);
             }))
@@ -290,7 +289,7 @@ fn test_async() {
 
         let boxed_observer = runtime
             .spawn(async move {
-                assert!(safe_lock_option_observer!(on_next: boxed_observer, 111));
+                assert!(boxed_observer.on_next(111));
                 boxed_observer
             })
             .await
@@ -312,11 +311,10 @@ fn test_async() {
 
         runtime
             .spawn(async move {
-                assert!(
-                    safe_lock_option_observer!(on_termination: boxed_observer, Termination::<Infallible>::Completed)
-                );
+                assert!(boxed_observer.on_termination(Termination::<Infallible>::Completed));
             })
-            .await.unwrap();
+            .await
+            .unwrap();
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert!(disposed.read());
@@ -330,15 +328,15 @@ fn test_subscribe_by_different_observer() {
     let disposed_2 = Shared::new(MutableBool::new(false));
     let called_1 = Shared::new(MutableBool::new(false));
     let called_2 = Shared::new(MutableBool::new(false));
-    let boxed_observer_1 = Shared::new(Mutable::new(None));
-    let boxed_observer_2 = Shared::new(Mutable::new(None));
+    let boxed_observer_1 = SharedSender::default();
+    let boxed_observer_2 = SharedSender::default();
 
     let observable = Create::new(|observer| {
-        let disposed = if safe_lock_option!(is_none: boxed_observer_1) {
-            safe_lock_option!(replace: boxed_observer_1, observer);
+        let disposed = if boxed_observer_1.is_empty() {
+            boxed_observer_1.set(observer);
             disposed_1.clone()
         } else {
-            safe_lock_option!(replace: boxed_observer_2, observer);
+            boxed_observer_2.set(observer);
             disposed_2.clone()
         };
         Subscription::new(CallbackDisposal::new(move || {
@@ -379,8 +377,8 @@ fn test_subscribe_by_different_observer() {
     assert!(!called_1.read());
     assert!(!called_2.read());
 
-    assert!(safe_lock_option_observer!(on_next: boxed_observer_1, 111));
-    assert!(safe_lock_option_observer!(on_next: boxed_observer_2, 111));
+    assert!(boxed_observer_1.on_next(111));
+    assert!(boxed_observer_2.on_next(111));
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -401,12 +399,8 @@ fn test_subscribe_by_different_observer() {
     assert!(called_1.read());
     assert!(called_2.read());
 
-    assert!(
-        safe_lock_option_observer!(on_termination: boxed_observer_1, Termination::<Infallible>::Completed)
-    );
-    assert!(
-        safe_lock_option_observer!(on_termination: boxed_observer_2, Termination::<Infallible>::Completed)
-    );
+    assert!(boxed_observer_1.on_termination(Termination::<Infallible>::Completed));
+    assert!(boxed_observer_2.on_termination(Termination::<Infallible>::Completed));
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [111]);

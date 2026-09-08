@@ -3,6 +3,7 @@ pub(crate) mod checker;
 pub(crate) mod drop_probe;
 #[cfg(panic = "unwind")]
 pub(crate) mod panic;
+pub(crate) mod shared_sender;
 pub(crate) mod test_channel;
 pub(crate) mod test_runtime;
 pub(crate) mod test_struct;

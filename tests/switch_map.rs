@@ -2,16 +2,14 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
-use rx_rust::safe_lock_option;
-use rx_rust::safe_lock_option_observer;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::types::{Mutable, Shared};
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
@@ -1536,8 +1534,8 @@ fn test_race_condition_next_after_unsub() {
     // The inner observers are stashed in shared cells rather than in borrowed locals: the
     // mapping closure owns the inner observables for as long as the subscription lives, so a
     // borrow taken by them would still be held while the test sends below.
-    let sender_1 = Shared::new(Mutable::new(None));
-    let sender_2 = Shared::new(Mutable::new(None));
+    let sender_1 = SharedSender::default();
+    let sender_2 = SharedSender::default();
     let mut sender = None;
 
     let observable = Create::new(|observer| {
@@ -1546,13 +1544,13 @@ fn test_race_condition_next_after_unsub() {
     });
     let sender_1_cloned = sender_1.clone();
     let observable_1 = Create::new(move |observer| {
-        assert!(safe_lock_option!(replace: sender_1_cloned, observer).is_none());
+        assert!(sender_1_cloned.set(observer));
         Subscription::default()
     })
     .into_boxed();
     let sender_2_cloned = sender_2.clone();
     let observable_2 = Create::new(move |observer| {
-        assert!(safe_lock_option!(replace: sender_2_cloned, observer).is_none());
+        assert!(sender_2_cloned.set(observer));
         Subscription::default()
     })
     .into_boxed();
@@ -1585,17 +1583,15 @@ fn test_race_condition_next_after_unsub() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    assert!(safe_lock_option_observer!(on_next: sender_2, 111));
+    assert!(sender_2.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
-    assert!(safe_lock_option_observer!(on_next: sender_1, -1));
+    assert!(sender_1.on_next(-1));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
-    safe_lock_option!(take: sender_2)
-        .unwrap()
-        .on_termination(Termination::Completed);
+    assert!(sender_2.on_termination(Termination::Completed));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
@@ -1605,8 +1601,8 @@ fn test_race_condition_terminate_after_unsub() {
     // The inner observers are stashed in shared cells rather than in borrowed locals: the
     // mapping closure owns the inner observables for as long as the subscription lives, so a
     // borrow taken by them would still be held while the test sends below.
-    let sender_1 = Shared::new(Mutable::new(None));
-    let sender_2 = Shared::new(Mutable::new(None));
+    let sender_1 = SharedSender::default();
+    let sender_2 = SharedSender::default();
     let mut sender = None;
 
     let observable = Create::new(|observer| {
@@ -1615,13 +1611,13 @@ fn test_race_condition_terminate_after_unsub() {
     });
     let sender_1_cloned = sender_1.clone();
     let observable_1 = Create::new(move |observer| {
-        assert!(safe_lock_option!(replace: sender_1_cloned, observer).is_none());
+        assert!(sender_1_cloned.set(observer));
         Subscription::default()
     })
     .into_boxed();
     let sender_2_cloned = sender_2.clone();
     let observable_2 = Create::new(move |observer| {
-        assert!(safe_lock_option!(replace: sender_2_cloned, observer).is_none());
+        assert!(sender_2_cloned.set(observer));
         Subscription::default()
     })
     .into_boxed();
@@ -1654,19 +1650,15 @@ fn test_race_condition_terminate_after_unsub() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    safe_lock_option!(take: sender_1)
-        .unwrap()
-        .on_termination(Termination::Completed);
+    assert!(sender_1.on_termination(Termination::Completed));
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    assert!(safe_lock_option_observer!(on_next: sender_2, 111));
+    assert!(sender_2.on_next(111));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
-    safe_lock_option!(take: sender_2)
-        .unwrap()
-        .on_termination(Termination::Completed);
+    assert!(sender_2.on_termination(Termination::Completed));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
