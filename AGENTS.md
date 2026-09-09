@@ -6,7 +6,7 @@ Operational notes for AI coding agents working in this repository. Human-facing 
 ## What this is
 
 `rx-rust` is a ReactiveX implementation for Rust: `Observable` / `Observer` / `Disposable` plus a
-large set of operators. Edition 2024, MSRV 1.85, `#![forbid(unsafe_code)]`, zero required runtime
+large set of operators. Edition 2024, MSRV 1.88, `#![forbid(unsafe_code)]`, zero required runtime
 dependency — the async runtime is selected by feature flag.
 
 ## Testing: run the smallest thing that answers the question
