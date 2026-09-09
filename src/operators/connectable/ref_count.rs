@@ -134,11 +134,97 @@ where
                 None
             }
         });
+        // Subscribing notifies the observer inline when the subject has already terminated, so it
+        // can unwind while this subscriber is counted in and the controller is out of the state.
+        let guard = RestoreOnPanic {
+            state: self.state.clone(),
+            controller,
+        };
         let sub = self.observable.subscribe(observer);
+        let controller = guard.disarm();
         if let Some(controller) = controller {
             handle_connecting_or_disconnecting(self.state.clone(), Purpose::Connect(controller));
         }
         sub.then(RefCountDisposal { state: self.state }).map_into()
+    }
+}
+
+/// Puts back what [`RefCount::subscribe`] took, when subscribing the observer unwinds.
+///
+/// The subscriber is counted in — and the controller of a first subscription is taken out of the
+/// state — before the observer is subscribed to the subject. Without this, a panic from there
+/// would leave the count inflated forever, so the last subscription would no longer disconnect,
+/// and would lose the controller with the state stuck in
+/// [`ConnectingOrDisconnecting`](State::ConnectingOrDisconnecting).
+///
+/// A panic from the connection that follows is not covered: the controller is consumed by then,
+/// and nothing can put it back.
+struct RestoreOnPanic<'or, T, E, OE, S>
+where
+    OE: Observable<'or, T, E> + Clone,
+    S: Observer<T, E> + Clone + MaybeSend + 'or,
+{
+    state: Shared<Mutable<State<OE, S, OE::D>>>,
+    /// The controller a first subscription took, and must give back.
+    controller: Option<ConnectableController<OE, S, Disconnected>>,
+}
+
+impl<'or, T, E, OE, S> RestoreOnPanic<'or, T, E, OE, S>
+where
+    OE: Observable<'or, T, E> + Clone,
+    S: Observer<T, E> + Clone + MaybeSend + 'or,
+{
+    /// Hands the controller back once the observer is subscribed.
+    ///
+    /// Consuming the guard is what ends the guarded scope: what follows — the connection the
+    /// controller is handed back for — is not covered, and cannot be, since the controller is
+    /// consumed by then.
+    fn disarm(mut self) -> Option<ConnectableController<OE, S, Disconnected>> {
+        self.controller.take()
+    }
+}
+
+impl<'or, T, E, OE, S> Drop for RestoreOnPanic<'or, T, E, OE, S>
+where
+    OE: Observable<'or, T, E> + Clone,
+    S: Observer<T, E> + Clone + MaybeSend + 'or,
+{
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            return;
+        }
+        let Some(controller) = self.controller.take() else {
+            // Only the count was changed, so removing this subscriber is what disposing the
+            // subscription it never got would have done.
+            RefCountDisposal {
+                state: self.state.clone(),
+            }
+            .dispose();
+            return;
+        };
+        // The controller is held here, so nothing else can leave the connecting state, and the
+        // count can only have grown: the state is the one this subscription wrote.
+        let controller = self.state.with_mut(|current| {
+            let State::ConnectingOrDisconnecting { subscribers } = current else {
+                unreachable!("the controller of the connecting state is held by this guard")
+            };
+            let remaining = subscribers
+                .checked_sub(1)
+                .expect("RefCount subscriber count underflowed");
+            if remaining == 0 {
+                // Nobody is left to connect for, so the state goes back to what it was.
+                *current = State::Disconnected { controller };
+                None
+            } else {
+                *subscribers = remaining;
+                Some(controller)
+            }
+        });
+        if let Some(controller) = controller {
+            // Subscribers that arrived meanwhile are still waiting for the connection this
+            // subscription was going to make, so it is made here, as the returning path would.
+            handle_connecting_or_disconnecting(self.state.clone(), Purpose::Connect(controller));
+        }
     }
 }
 

@@ -2152,3 +2152,56 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_late_subscriber_keeps_the_ref_count() {
+    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
+
+    /// Panics from its termination, which is where a late subscriber is notified.
+    struct PanicOnTermination(Option<PanicOnDrop>);
+
+    impl Observer<i32, Infallible> for PanicOnTermination {
+        fn on_next(&mut self, _value: i32) {}
+
+        fn on_termination(self, _termination: Termination<Infallible>) {
+            drop(self.0);
+        }
+    }
+
+    let is_disconnected = Shared::new(MutableBool::new(false));
+    let is_disconnected_of_source = is_disconnected.clone();
+    // Completes as soon as it is connected, so that a later subscriber is notified inline, while
+    // the ref count stays connected until its last subscription is disposed.
+    let source = Create::new(move |observer: BoxedObserver<'_, i32, Infallible>| {
+        observer.on_termination(Termination::Completed);
+        let is_disconnected = is_disconnected_of_source.clone();
+        Subscription::new(CallbackDisposal::new(move || {
+            is_disconnected.write(true);
+        }))
+    });
+
+    // Custom operations
+    let observable = source.publish().ref_count();
+
+    let (checker, observer) = Checker::new();
+    let subscription = observable.clone().subscribe(observer);
+    assert_eq!(checker.state(), State::Completed);
+    assert!(!is_disconnected.read());
+
+    let observable_of_panic = observable.clone();
+    expect_panic_on_drop(|panic_on_drop| {
+        // The subject has terminated, so this observer is notified inside `subscribe`, and panics.
+        let _subscription = observable_of_panic.subscribe(PanicOnTermination(Some(panic_on_drop)));
+    });
+    assert!(!is_disconnected.read());
+
+    // The subscriber that never came back is not counted in, so the last live subscription is
+    // still the one that disconnects the source.
+    drop(subscription);
+    assert!(is_disconnected.read());
+
+    // Held until here, so that the disconnection above is the ref count's own, and not the state
+    // being dropped with its last handle.
+    drop(observable);
+}
