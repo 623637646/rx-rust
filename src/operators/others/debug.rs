@@ -147,10 +147,7 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        (self.callback)(
-            self.context.clone(),
-            DebugEvent::OnTermination(&termination),
-        );
+        (self.callback)(self.context, DebugEvent::OnTermination(&termination));
         self.observer.on_termination(termination);
     }
 }

@@ -89,7 +89,8 @@ where
                     observer.on_termination(Termination::Completed);
                 }
             }
-            Termination::Error(_) => unreachable!(),
+            // `Infallible` is uninhabited, so the compiler proves this arm unreachable.
+            Termination::Error(error) => match error {},
         }
     }
 }

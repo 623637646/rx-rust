@@ -7,7 +7,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits only the Nth item emitted by the source Observable.
+/// Emits only the item at `index`, counting from zero, emitted by the source Observable.
 /// See <https://reactivex.io/documentation/operators/elementat.html>
 ///
 /// # Examples

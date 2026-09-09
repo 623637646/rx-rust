@@ -3,7 +3,6 @@ use crate::{
     observable::{Observable, Subscription},
     observer::{Observer, Termination},
 };
-use educe::Educe;
 use std::convert::Infallible;
 
 /// Creates an Observable that emits no items and then terminates normally.
@@ -27,8 +26,7 @@ use std::convert::Infallible;
 ///
 /// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
-#[derive(Educe)]
-#[educe(Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Empty;
 
 impl<'or> Observable<'or, Infallible, Infallible> for Empty {

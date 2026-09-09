@@ -9,6 +9,10 @@ use educe::Educe;
 /// Emits the minimum item emitted by an Observable.
 /// See <https://reactivex.io/documentation/operators/min.html>
 ///
+/// `T` is only [`PartialOrd`], so values that do not compare — `f64::NAN` among them — are
+/// never seen as smaller and are skipped. A `NaN` that arrives first is therefore kept as the
+/// minimum for the rest of the stream, because nothing compares smaller than it.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{

@@ -3,7 +3,6 @@ use crate::{
     observable::{Observable, Subscription},
     observer::Observer,
 };
-use educe::Educe;
 use std::convert::Infallible;
 
 /// Creates an Observable that emits no items and never terminates.
@@ -22,8 +21,7 @@ use std::convert::Infallible;
 ///     |_| panic!("`Never` should not terminate"),
 /// );
 /// ```
-#[derive(Educe)]
-#[educe(Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Never;
 
 impl<'or> Observable<'or, Infallible, Infallible> for Never {

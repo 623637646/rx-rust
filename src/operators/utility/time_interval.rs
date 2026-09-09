@@ -81,8 +81,9 @@ where
     OR: Observer<(T, Duration), E>,
 {
     fn on_next(&mut self, value: T) {
-        let time_span = self.time_stamp.elapsed();
-        self.time_stamp = Instant::now();
+        let now = Instant::now();
+        let time_span = now.saturating_duration_since(self.time_stamp);
+        self.time_stamp = now;
         self.observer.on_next((value, time_span));
     }
 

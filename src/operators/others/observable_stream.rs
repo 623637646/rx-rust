@@ -12,6 +12,8 @@ use std::{
     task::{Poll, Waker},
 };
 
+#[derive(Educe)]
+#[educe(Debug)]
 struct ObservableStreamContext<T> {
     values: VecDeque<T>,
     waker: Option<Waker>,

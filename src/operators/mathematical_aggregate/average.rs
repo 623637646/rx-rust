@@ -54,8 +54,12 @@ impl<T, OE> Average<T, OE> {
 
 struct AverageObserver<T, OR> {
     observer: OR,
-    sum: T,
+    /// Accumulated in `f64`, the type of the result. Summing in the source's own type overflows
+    /// for the narrow ones long before the stream ends: three `100u8` items already exceed
+    /// `u8::MAX`.
+    sum: f64,
     count: usize,
+    _marker: MarkerType<T>,
 }
 
 macro_rules! average_observer_impl {
@@ -70,8 +74,9 @@ macro_rules! average_observer_impl {
             fn subscribe(self, observer: impl Observer<f64, E> + MaybeSend + 'or) -> Subscription<Self::D> {
                 let observer = AverageObserver {
                     observer,
-                    sum: 0 as $t,
+                    sum: 0f64,
                     count: 0,
+                    _marker: PhantomData,
                 };
                 self.source.subscribe(observer)
             }
@@ -82,7 +87,7 @@ macro_rules! average_observer_impl {
             OR: Observer<f64, E>,
         {
             fn on_next(&mut self, value: $t) {
-                self.sum += value;
+                self.sum += value as f64;
                 self.count += 1;
             }
 
@@ -90,7 +95,7 @@ macro_rules! average_observer_impl {
                 match termination {
                     Termination::Completed => {
                         if self.count != 0 {
-                            self.observer.on_next(self.sum as f64 / self.count as f64);
+                            self.observer.on_next(self.sum / self.count as f64);
                         }
                     }
                     Termination::Error(_) => {}

@@ -91,6 +91,11 @@ where
     F: FnMut(T) -> bool,
 {
     fn on_next(&mut self, value: T) {
+        // A source that does not honor the disposal keeps emitting; the callback is the caller's
+        // and may have side effects, so it must not run once the result was decided.
+        if self.observer.is_none() {
+            return;
+        }
         if !(self.callback)(value)
             && let Some(mut observer) = self.observer.take()
         {

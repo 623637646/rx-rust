@@ -4,7 +4,7 @@ use educe::Educe;
 /// A disposal that calls a callback when disposed.
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct CallbackDisposal<F: FnOnce()>(F);
+pub struct CallbackDisposal<F: FnOnce()>(#[educe(Debug(ignore))] F);
 
 impl<F: FnOnce()> CallbackDisposal<F> {
     pub fn new(callback: F) -> Self {

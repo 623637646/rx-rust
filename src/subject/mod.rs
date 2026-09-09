@@ -20,7 +20,7 @@ pub trait Subject<'or, T, E>: Observable<'or, T, E> + Observer<T, E> {
 }
 
 pub trait SubjectExt<'or, T, E>: Sized {
-    // Convert a subject into an observable, erase the observer behavior of the subject.
+    /// Converts a subject into an observable, erasing the observer behavior of the subject.
     fn into_observable(self) -> SubjectObservable<Self> {
         SubjectObservable::new(self)
     }

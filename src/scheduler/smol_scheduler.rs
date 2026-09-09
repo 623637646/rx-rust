@@ -3,12 +3,10 @@ use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
     utils::types::MaybeSend,
 };
-use educe::Educe;
 use std::time::Duration;
 
 /// Schedules tasks using the smol runtime utilities.
-#[derive(Educe)]
-#[educe(Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct SmolScheduler;
 
 /// Provides the smol-backed `Scheduler` implementation.

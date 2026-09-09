@@ -98,11 +98,9 @@ where
 {
     fn on_next(&mut self, value: T) {
         let key = (self.key_selector)(&value);
-        if self.emitted_keys.contains(&key) {
-            return;
+        if self.emitted_keys.insert(key) {
+            self.observer.on_next(value);
         }
-        self.emitted_keys.insert(key);
-        self.observer.on_next(value);
     }
 
     fn on_termination(self, termination: Termination<E>) {

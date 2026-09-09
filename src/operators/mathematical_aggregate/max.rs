@@ -9,6 +9,10 @@ use educe::Educe;
 /// Emits the maximum item emitted by an Observable.
 /// See <https://reactivex.io/documentation/operators/max.html>
 ///
+/// `T` is only [`PartialOrd`], so values that do not compare — `f64::NAN` among them — are
+/// never seen as greater and are skipped. A `NaN` that arrives first is therefore kept as the
+/// maximum for the rest of the stream, because nothing compares greater than it.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{

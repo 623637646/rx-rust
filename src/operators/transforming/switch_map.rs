@@ -9,7 +9,7 @@ use educe::Educe;
 use std::marker::PhantomData;
 
 /// Projects each source value to an Observable which is merged in the output Observable, emitting values only from the most recently projected Observable.
-/// See <https://reactivex.io/documentation/operators/flatmap.html>
+/// See <https://reactivex.io/documentation/operators/switch.html>
 ///
 /// # Examples
 /// ```rust

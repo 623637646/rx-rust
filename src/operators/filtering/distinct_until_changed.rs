@@ -97,9 +97,7 @@ where
 {
     fn on_next(&mut self, value: T) {
         let key = (self.key_selector)(&value);
-        if let Some(previous_key) = self.previous_key.as_ref()
-            && previous_key == &key
-        {
+        if self.previous_key.as_ref() == Some(&key) {
             return;
         }
         self.previous_key = Some(key);

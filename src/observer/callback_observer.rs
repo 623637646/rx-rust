@@ -4,7 +4,9 @@ use educe::Educe;
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct CallbackObserver<FN, FT> {
+    #[educe(Debug(ignore))]
     on_next: FN,
+    #[educe(Debug(ignore))]
     on_termination: FT,
 }
 

@@ -80,6 +80,11 @@ where
     F: FnMut(&T) -> bool,
 {
     fn on_next(&mut self, value: T) {
+        // A source that does not honor the disposal keeps emitting; the callback is the caller's
+        // and may have side effects, so it must not run once the window has closed.
+        if self.observer.is_none() {
+            return;
+        }
         let r#continue = (self.callback)(&value);
         if r#continue {
             if let Some(observer) = self.observer.as_mut() {

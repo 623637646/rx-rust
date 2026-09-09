@@ -196,10 +196,10 @@ where
 
         let mut disposal = Some(disposal);
         let _ = self.context.update(move |model| {
-            if let Model::Active { timer, .. } = model {
-                if timer.is_none() {
-                    *timer = disposal.take();
-                }
+            if let Model::Active { timer, .. } = model
+                && timer.is_none()
+            {
+                *timer = disposal.take();
             }
             // If the timer already fired (possible for a zero time span), dispose the returned
             // handle outside the lock.
