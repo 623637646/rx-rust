@@ -1,12 +1,14 @@
-use crate::tests_utils::shared_sender::SharedSender;
 use educe::Educe;
-use rx_rust::utils::mutable::MutableExt;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, Subscription},
     observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    utils::mutable::{Mutable, MutableHelper},
-    utils::types::{MaybeSend, Shared},
+    utils::{
+        mutable::{Mutable, MutableHelper},
+        pending_events::EventBatch,
+        serialized_delivery::SerializedDelivery,
+        types::{MaybeSend, Shared},
+    },
 };
 
 /// A strict single-consumer channel for the tests.
@@ -16,12 +18,12 @@ use rx_rust::{
 /// change there fail the tests of the operators that have nothing to do with it, and would let a
 /// bug of that implementation hide itself behind the very tests that should catch it.
 ///
-/// The one thing it does share is the delivery the observer is parked in, through the
-/// [`SharedSender`] below: that is what lets an event be delivered with no lock of this module
-/// held, and it is covered by its own tests. Everything above it is kept dumb: the channel holds
-/// nothing, buffers nothing and replays nothing. It panics whenever it is used out of order, which
-/// is what a test double is for: subscribing twice, disposing twice, or sending a value before the
-/// subscription, after the end of the channel, or after the subscription was disposed.
+/// The one thing it does share is the [`SerializedDelivery`] the observer is parked in: that is
+/// what lets an event be delivered with no lock of this module held, and it is covered by its own
+/// tests. Everything above it is kept dumb: the channel buffers nothing and replays nothing. It
+/// panics whenever it is used out of order, which is what a test double is for: subscribing twice,
+/// disposing twice, or sending a value before the subscription, after the end of the channel, or
+/// after the subscription was disposed.
 ///
 /// A value sent from inside the delivery of another one is not out of order: the delivery the
 /// observer is parked in serializes it behind the one that is running. That is what lets a test
@@ -29,39 +31,45 @@ use rx_rust::{
 pub(crate) fn test_channel<'or, T, E>() -> (
     SenderObserver<'or, T, E>,
     ReceiverObservable<'or, T, E>,
-    ChannelChecker<E>,
+    ChannelChecker<'or, T, E>,
 ) {
-    let state = Shared::new(Mutable::new(ChannelState::Initialized));
-    let sender = Sender::default();
+    let channel = Shared::new(Mutable::new(Channel {
+        state: ChannelState::Initialized,
+        delivery: None,
+    }));
     (
         SenderObserver {
-            state: state.clone(),
-            sender: sender.clone(),
+            channel: channel.clone(),
         },
         ReceiverObservable {
-            state: state.clone(),
-            sender,
+            channel: channel.clone(),
         },
-        ChannelChecker(state),
+        ChannelChecker(channel),
     )
 }
 
-/// The state of the channel, which is what says whether a use of it is legal, and what
-/// [`ChannelChecker`] reads.
+/// Everything the channel owns, behind the single lock of this module.
 ///
-/// The observer is not here: it is parked in the [`Sender`] below, which delivers to it with no
-/// lock of this module held. The channel therefore never holds two locks at once, and the checker
-/// does not have to name the type of the values.
-type SharedState<E> = Shared<Mutable<ChannelState<E>>>;
+/// The state is what says whether a use of the channel is legal, and what [`ChannelChecker`]
+/// reads; the delivery is where the observer is parked. They are one cell because every use of the
+/// channel reads the first to reach the second, and a lock taken once cannot be taken in the wrong
+/// order. `delivery` is `Some` exactly while `state` is [`ChannelState::Subscribed`]: it is filled
+/// by the subscription and emptied by whichever of the termination and the disposal comes first.
+///
+/// The delivery handle is cloned or taken out under the lock and used after it was released, so
+/// nothing is notified nor dropped while the lock is held: the values of the tests run arbitrary
+/// code when they are dropped, which is what the tests use to re-enter the pipeline.
+struct Channel<'or, T, E> {
+    state: ChannelState<E>,
+    delivery: Option<Delivery<'or, T, E>>,
+}
 
-/// The observer of the channel, which is empty until the subscription and once the channel is
-/// over. Nothing is notified nor dropped while the state above is locked: the values of the tests
-/// run arbitrary code when they are dropped, which is what the tests use to re-enter the pipeline.
-type Sender<'or, T, E> = SharedSender<T, E, BoxedObserver<'or, T, E>>;
+type SharedChannel<'or, T, E> = Shared<Mutable<Channel<'or, T, E>>>;
+
+type Delivery<'or, T, E> = SerializedDelivery<T, E, BoxedObserver<'or, T, E>, ()>;
 
 pub(crate) struct SenderObserver<'or, T, E> {
-    state: SharedState<E>,
-    sender: Sender<'or, T, E>,
+    channel: SharedChannel<'or, T, E>,
 }
 
 impl<T, E> Observer<T, E> for SenderObserver<'_, T, E>
@@ -69,15 +77,11 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) {
-        let subscribed = self
-            .state
-            .with_ref(|lock| matches!(*lock, ChannelState::Subscribed));
+        // A parked delivery is a subscribed channel, so this asks the two questions at once.
+        let delivery = self.channel.with_ref(|channel| channel.delivery.clone());
         // Panic outside the lock, which leaves it usable, and drops the value outside it too.
-        assert!(
-            subscribed,
-            "the channel takes a value only while it is subscribed to"
-        );
-        let delivered = self.sender.on_next(value); // Notify outside the lock
+        let delivery = delivery.expect("the channel takes a value only while it is subscribed to");
+        let delivered = delivery.send(EventBatch::Next(value)); // Notify outside the lock
         debug_assert!(
             delivered,
             "a subscribed channel has an observer to deliver to"
@@ -91,22 +95,19 @@ where
         };
         // The channel ends before the observer it notifies does, so that a re-entrant use of it
         // sees a channel that is over.
-        let subscribed = self.state.with_mut(|lock| match &*lock {
+        let delivery = self.channel.with_mut(|channel| match &channel.state {
             ChannelState::Subscribed => {
-                *lock = terminated;
-                true
+                channel.state = terminated;
+                channel.delivery.take()
             }
             ChannelState::Initialized
             | ChannelState::Completed
             | ChannelState::Error(_)
-            | ChannelState::Unsubscribed => false,
+            | ChannelState::Unsubscribed => None,
         });
-        // Panic outside the lock, which leaves it usable.
-        assert!(
-            subscribed,
-            "the channel ends only while it is subscribed to"
-        );
-        let notified = self.sender.on_termination(termination); // Notify outside the lock
+        // Panic outside the lock, which leaves it usable, and drops the termination outside it too.
+        let delivery = delivery.expect("the channel ends only while it is subscribed to");
+        let notified = delivery.send(EventBatch::Termination(termination)); // Notify outside the lock
         debug_assert!(
             notified,
             "a subscribed channel has an observer to terminate"
@@ -115,18 +116,26 @@ where
 }
 
 pub(crate) struct ReceiverObservable<'or, T, E> {
-    state: SharedState<E>,
-    sender: Sender<'or, T, E>,
+    channel: SharedChannel<'or, T, E>,
 }
 
 impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
     type D = ReceiverObservableDisposal<'or, T, E>;
 
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        let observer = BoxedObserver::new(observer);
-        let initialized = self.state.with_mut(|lock| match &*lock {
+        // Kept out of the closure below, so that a refused subscription drops the observer outside
+        // the lock, while the assertion unwinds.
+        let mut observer = Some(BoxedObserver::new(observer));
+        let initialized = self.channel.with_mut(|channel| match &channel.state {
             ChannelState::Initialized => {
-                *lock = ChannelState::Subscribed;
+                // The channel says it is subscribed to and parks the observer in one step, which
+                // the single lock of this module makes free: nothing could send in between anyway,
+                // as the channel has a single producer and it is the one subscribing right now.
+                channel.state = ChannelState::Subscribed;
+                channel.delivery = Some(SerializedDelivery::idle(
+                    observer.take().expect("the observer is parked once"),
+                    (),
+                ));
                 true
             }
             ChannelState::Subscribed
@@ -134,39 +143,30 @@ impl<'or, T, E> Observable<'or, T, E> for ReceiverObservable<'or, T, E> {
             | ChannelState::Error(_)
             | ChannelState::Unsubscribed => false,
         });
-        // Panic outside the lock, which leaves it usable. The observer is dropped by the
-        // unwinding, which the line above keeps outside of the lock too.
+        // Panic outside the lock, which leaves it usable.
         assert!(initialized, "the channel is subscribed to only once");
 
-        // The channel says it is subscribed to before the observer is parked, so the two are not
-        // one step. Nothing can send in between: the channel has a single producer, and it is the
-        // one that is subscribing right now.
-        let was_empty = self.sender.set(observer);
-        debug_assert!(was_empty, "the channel parks one observer at a time");
-
         Subscription::new(ReceiverObservableDisposal {
-            state: self.state,
-            sender: self.sender,
+            channel: self.channel,
         })
     }
 }
 
 pub(crate) struct ReceiverObservableDisposal<'or, T, E> {
-    state: SharedState<E>,
-    sender: Sender<'or, T, E>,
+    channel: SharedChannel<'or, T, E>,
 }
 
 impl<T, E> Disposable for ReceiverObservableDisposal<'_, T, E> {
     fn dispose(self) {
         // The channel is closed before the observer is released, so that a re-entrant use of it
         // sees a channel that is over.
-        let outcome = self.state.with_mut(|lock| match &*lock {
+        let outcome = self.channel.with_mut(|channel| match &channel.state {
             ChannelState::Subscribed => {
-                *lock = ChannelState::Unsubscribed;
-                Ok(true)
+                channel.state = ChannelState::Unsubscribed;
+                Ok(channel.delivery.take())
             }
-            // The channel ended on its own, which already emptied the sender.
-            ChannelState::Completed | ChannelState::Error(_) => Ok(false),
+            // The channel ended on its own, which already released the delivery.
+            ChannelState::Completed | ChannelState::Error(_) => Ok(None),
             ChannelState::Initialized | ChannelState::Unsubscribed => {
                 Err("the channel is disposed only once, and only after being subscribed to")
             }
@@ -174,18 +174,18 @@ impl<T, E> Disposable for ReceiverObservableDisposal<'_, T, E> {
         match outcome {
             // The observer is dropped outside the lock, unless a value is being delivered to it:
             // the delivery drops it as soon as it looks for its next event.
-            Ok(true) => {
-                self.sender.stop();
-            }
-            Ok(false) => {}
+            Ok(Some(delivery)) => delivery.stop(),
+            Ok(None) => {}
             Err(message) => panic!("{message}"), // Panic outside the lock, which leaves it usable
         }
     }
 }
 
+/// The read-only end of the channel, which reads the state and nothing else, so it stays usable
+/// after the channel released its observer.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub(crate) struct ChannelChecker<E>(SharedState<E>);
+pub(crate) struct ChannelChecker<'or, T, E>(SharedChannel<'or, T, E>);
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
@@ -197,11 +197,11 @@ pub(crate) enum ChannelState<E> {
     Unsubscribed,
 }
 
-impl<E> ChannelChecker<E> {
+impl<T, E> ChannelChecker<'_, T, E> {
     pub(crate) fn state(&self) -> ChannelState<E>
     where
         E: Clone,
     {
-        self.0.clone_value()
+        self.0.with_ref(|channel| channel.state.clone())
     }
 }

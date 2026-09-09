@@ -28,7 +28,7 @@ use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::Tes
 
 fn new_channel<'or, T, E>(
     sender: SharedSender<T, E, SenderObserver<'or, T, E>>,
-    channel_checker: Shared<Mutable<Option<ChannelChecker<E>>>>,
+    channel_checker: Shared<Mutable<Option<ChannelChecker<'or, T, E>>>>,
 ) -> ReceiverObservable<'or, T, E>
 where
     E: Clone,
