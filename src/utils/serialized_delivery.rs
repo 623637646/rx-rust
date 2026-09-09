@@ -14,6 +14,7 @@ use crate::{
     observer::{Observer, Termination},
     utils::{
         mutable::{Mutable, MutableExt, MutableHelper},
+        on_panic::on_panic,
         pending_events::{EventBatch, PendingEvents},
         types::{Shared, WeakShared},
     },
@@ -290,10 +291,11 @@ where
     /// delivering to it.
     ///
     /// Every observer callback runs outside the lock. If one unwinds, the delivery is stopped, so
-    /// a caught panic cannot leave it stuck in its delivering state.
+    /// a caught panic cannot leave it stuck in its delivering state — and locking from the guard is
+    /// safe on the panicking thread for that same reason.
     fn deliver(&self, mut observer: OR, first_next: Option<T>) {
         if let Some(value) = first_next {
-            let guard = StopOnPanic(self);
+            let guard = on_panic(|| self.stop());
             observer.on_next(value);
             drop(guard);
         }
@@ -302,7 +304,7 @@ where
             match self.0.with_mut(|state| state.next_step(observer)) {
                 Step::Next(next_observer, value) => {
                     observer = next_observer;
-                    let guard = StopOnPanic(self);
+                    let guard = on_panic(|| self.stop());
                     observer.on_next(value);
                     drop(guard);
                 }
@@ -311,7 +313,7 @@ where
                     termination,
                     resources,
                 } => {
-                    let guard = StopOnPanic(self);
+                    let guard = on_panic(|| self.stop());
                     observer.on_termination(termination);
                     drop(guard);
                     // The resources outlive the terminal notification, so a host can dispose its
@@ -333,20 +335,6 @@ where
 impl<T, E, OR, R> WeakSerializedDelivery<T, E, OR, R> {
     pub fn upgrade(&self) -> Option<SerializedDelivery<T, E, OR, R>> {
         self.0.upgrade().map(SerializedDelivery)
-    }
-}
-
-/// Stops the delivery if an observer callback unwinds.
-///
-/// The guard only surrounds observer callbacks, which always run outside the lock, so locking here
-/// is safe on the panicking thread.
-struct StopOnPanic<'a, T, E, OR, R>(&'a SerializedDelivery<T, E, OR, R>);
-
-impl<T, E, OR, R> Drop for StopOnPanic<'_, T, E, OR, R> {
-    fn drop(&mut self) {
-        if std::thread::panicking() {
-            self.0.stop();
-        }
     }
 }
 
