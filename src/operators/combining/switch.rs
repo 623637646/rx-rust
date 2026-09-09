@@ -159,8 +159,6 @@ where
     }
 }
 
-// TODO: Improve performance, if is_source_completed is true, stop the context and no more need to lock when sending next.
-// TODO: check all cases using subscribe_with_context whether it can be improved.
 struct SwitchInnerObserver<T, E, OR, ID: Disposable, SD: Disposable>(
     SubscriptionContext<T, E, OR, Model<ID>, SD>,
     Id,
