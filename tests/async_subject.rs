@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
@@ -1021,6 +1022,217 @@ fn test_next_on_sub() {
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_next_on_unsub() {
+    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    subject.on_next(111);
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    // The second observer sends a value into the subject while it is being released, so the value
+    // is sent from inside the unsubscription. It becomes the value the subject replays.
+    let mut subject_cloned = subject.clone();
+    let probe = DropProbe::new().on_drop(Box::new(move || {
+        subject_cloned.on_next(222);
+    }));
+    let (mut next_2, termination_2) = observer_2.into_callbacks();
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let subscription_2 = observable.subscribe_with_callback(
+        move |value| {
+            let _ = &probe;
+            next_2(value);
+        },
+        termination_2,
+    );
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    subscription_2.dispose();
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert!(subject.terminated().is_none());
+
+    subject.on_termination(Termination::Completed);
+    assert_eq!(checker_1.values(), [222]);
+    assert_eq!(checker_1.state(), State::Completed);
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    let subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject_seed = subject.clone();
+    subject_seed.on_next(111);
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    // The second observer completes the subject while it is being released, so the subject
+    // terminates from inside the unsubscription.
+    let subject_cloned = subject.clone();
+    let probe = DropProbe::new().on_drop(Box::new(move || {
+        subject_cloned.on_termination(Termination::Completed);
+    }));
+    let (mut next_2, termination_2) = observer_2.into_callbacks();
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let subscription_2 = observable.subscribe_with_callback(
+        move |value| {
+            let _ = &probe;
+            next_2(value);
+        },
+        termination_2,
+    );
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    subscription_2.dispose();
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert!(subject.terminated().is_some());
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let subject: AsyncSubject<'_, _, &str> = AsyncSubject::default();
+    let mut subject_seed = subject.clone();
+    subject_seed.on_next(111);
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    // The second observer fails the subject while it is being released, so the subject terminates
+    // from inside the unsubscription.
+    let subject_cloned = subject.clone();
+    let probe = DropProbe::new().on_drop(Box::new(move || {
+        subject_cloned.on_termination(Termination::Error("error"));
+    }));
+    let (mut next_2, termination_2) = observer_2.into_callbacks();
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let subscription_2 = observable.subscribe_with_callback(
+        move |value| {
+            let _ = &probe;
+            next_2(value);
+        },
+        termination_2,
+    );
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    subscription_2.dispose();
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Error("error"));
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert!(subject.terminated().is_some());
+}
+
+#[test]
+fn test_sub_on_sub() {
+    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    subject.on_next(111);
+    subject.clone().on_termination(Termination::Completed);
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    // The first observer subscribes the second one from the delivery of the value it is
+    // replayed, which runs while its own subscription is still in progress.
+    let observable_cloned = observable.clone();
+    let mut observer_2 = Some(observer_2);
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_2_cloned = subscription_2.clone();
+    let (mut next_1, termination_1) = observer_1.into_callbacks();
+
+    let _subscription_1 = observable.subscribe_with_callback(
+        move |value| {
+            if let Some(observer_2) = observer_2.take() {
+                subscription_2_cloned
+                    .replace_value(Some(observable_cloned.clone().subscribe(observer_2)));
+            }
+            next_1(value);
+        },
+        termination_1,
+    );
+    assert!(subscription_2.with_ref(Option::is_some));
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Completed);
+}
+
+#[test]
+fn test_sub_on_unsub() {
+    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    subject.on_next(111);
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone();
+
+    // The second observer subscribes the third one while it is being released, so that
+    // subscription runs from inside the unsubscription.
+    let observable_cloned = observable.clone();
+    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_3_cloned = subscription_3.clone();
+    let probe = DropProbe::new().on_drop(Box::new(move || {
+        subscription_3_cloned.replace_value(Some(observable_cloned.subscribe(observer_3)));
+    }));
+    let (mut next_2, termination_2) = observer_2.into_callbacks();
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let subscription_2 = observable.subscribe_with_callback(
+        move |value| {
+            let _ = &probe;
+            next_2(value);
+        },
+        termination_2,
+    );
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert!(checker_3.values().is_empty());
+    assert_eq!(checker_3.state(), State::Active);
+
+    subscription_2.dispose();
+    assert!(subscription_3.with_ref(Option::is_some));
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert!(checker_3.values().is_empty());
+    assert_eq!(checker_3.state(), State::Active);
+
+    subject.on_termination(Termination::Completed);
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_3.values(), [111]);
+    assert_eq!(checker_3.state(), State::Completed);
 }
 
 #[cfg(not(feature = "single-threaded"))]

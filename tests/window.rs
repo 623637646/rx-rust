@@ -2945,6 +2945,133 @@ fn test_error_on_sub() {
 }
 
 #[test]
+fn test_next_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), Infallible>();
+
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. It must be dropped instead of reaching the open window.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            observer.on_next(111);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.window(boundary_observable);
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
+
+    subscription.dispose();
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    for (checker, _sub) in checker_sub_vec.take_value() {
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Dropped);
+    }
+    assert_eq!(termination_checker.state(), State::Dropped);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), Infallible>();
+
+    // The source completes from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The termination must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.window(boundary_observable);
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
+
+    subscription.dispose();
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    for (checker, _sub) in checker_sub_vec.take_value() {
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Dropped);
+    }
+    assert_eq!(termination_checker.state(), State::Dropped);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), &str>();
+
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The error must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.window(boundary_observable);
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    assert_eq!(termination_checker.state(), State::Active);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
+
+    subscription.dispose();
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    for (checker, _sub) in checker_sub_vec.take_value() {
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Dropped);
+    }
+    assert_eq!(termination_checker.state(), State::Dropped);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
 fn test_error_on_sub_from_boundary() {
     let (_sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();

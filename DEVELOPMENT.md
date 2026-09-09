@@ -1,5 +1,5 @@
 
-# TODO
+# TODOs
 
 * Features  
   * Async 转换 + Single 抽象（[最后验证操作符是不是全](https://reactivex.io/documentation/single.html)）  
@@ -54,11 +54,13 @@
           1. test_next_on_sub  
           2. test_complete_on_sub  
           3. test_error_on_sub  
-          4. test_sub_on_sub (TODO)
-          5. test_next_on_unsub (TODO)
-          6. test_complete_on_unsub (TODO)
-          7. test_error_on_unsub (TODO)
-          8. test_sub_on_unsub (TODO)
+          4. test_sub_on_sub（另一个订阅发生在订阅过程中。只有 Hot Observable 有共享状态，冷操作符
+             每次订阅各有各的 context，不适用）
+          5. test_next_on_unsub（事件从上游自己的 disposal 里发出，即发生在退订过程中。上游直通的
+             操作符会把它转发给 observer，用 context 的操作符会丢弃它）
+          6. test_complete_on_unsub
+          7. test_error_on_unsub
+          8. test_sub_on_unsub（同 4，只有 Hot Observable 适用）
           9. test_race_condition (WIP)
       13. Using schedule(: Scheduler|::from_stream\\() 有的scheduler没有test_next_on_sub （如 from future）  
           1. ALL TESTS IN "Using lock"  

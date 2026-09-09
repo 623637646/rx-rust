@@ -19,7 +19,7 @@ use rx_rust::utils::mutable::MutableHelper;
 use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::BoxedObserver},
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
@@ -1237,6 +1237,103 @@ fn test_error_on_sub() {
         .subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Error("error"));
+    assert!(request_callback.with_ref(Option::is_none));
+}
+
+#[test]
+fn test_next_on_unsub() {
+    let (checker, observer) = Checker::new();
+
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. It must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            observer.on_next(111);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.on_backpressure_buffer();
+
+    let request_callback = Shared::new(Mutable::new(None));
+    let request_callback_cloned = request_callback.clone();
+    let observable = observable.map(move |(values, request)| {
+        request_callback_cloned.replace_value(Some(request));
+        values
+    });
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert!(request_callback.with_ref(Option::is_none));
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    let (checker, observer) = Checker::new();
+
+    // The source completes from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The termination must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.on_backpressure_buffer();
+
+    let request_callback = Shared::new(Mutable::new(None));
+    let request_callback_cloned = request_callback.clone();
+    let observable = observable.map(move |(values, request)| {
+        request_callback_cloned.replace_value(Some(request));
+        values
+    });
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert!(request_callback.with_ref(Option::is_none));
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let (checker, observer) = Checker::new();
+
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The error must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.on_backpressure_buffer();
+
+    let request_callback = Shared::new(Mutable::new(None));
+    let request_callback_cloned = request_callback.clone();
+    let observable = observable.map(move |(values, request)| {
+        request_callback_cloned.replace_value(Some(request));
+        values
+    });
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
     assert!(request_callback.with_ref(Option::is_none));
 }
 

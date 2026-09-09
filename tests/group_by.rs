@@ -17,7 +17,7 @@ use rx_rust::utils::mutable::MutableHelper;
 use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, transforming::group_by::GroupBy},
     subject::publish_subject::PublishSubject,
 };
@@ -613,6 +613,101 @@ fn test_error_on_sub() {
             termination_observer.on_termination(termination);
         },
     );
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
+    assert_eq!(termination_checker.state(), State::Error("error"));
+}
+
+#[test]
+fn test_next_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let group_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. GroupBy hands the observer to its source, so the value still reaches it and
+    // opens a group.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            observer.on_next(111);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.group_by(|value| value % 2);
+
+    let group_vec_cloned = group_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subscription.dispose();
+    assert_eq!(group_vec.with_ref(Vec::len), 1);
+    assert_eq!(termination_checker.state(), State::Dropped);
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let group_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // The source completes from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. GroupBy hands the observer to its source, so the completion still reaches it.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.group_by(|value| value % 2);
+
+    let group_vec_cloned = group_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subscription.dispose();
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
+    assert_eq!(termination_checker.state(), State::Completed);
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let group_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. GroupBy hands the observer to its source, so the error still reaches it.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.group_by(|value| value % 2);
+
+    let group_vec_cloned = group_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |group| group_vec_cloned.with_mut(|values| values.push(group)),
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(group_vec.with_ref(Vec::len), 0);
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subscription.dispose();
     assert_eq!(group_vec.with_ref(Vec::len), 0);
     assert_eq!(termination_checker.state(), State::Error("error"));
 }

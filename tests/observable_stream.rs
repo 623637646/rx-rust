@@ -419,6 +419,59 @@ fn test_complete_on_sub() {
 }
 
 #[test]
+fn test_next_on_unsub() {
+    block_on(|runtime| async move {
+        // The source emits from inside its own disposal, so the value arrives while the stream is
+        // being dropped. It must be dropped instead of reaching the stream.
+        let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+            Subscription::new(CallbackDisposal::new(move || {
+                let mut observer = observer;
+                observer.on_next(111);
+            }))
+        });
+
+        // Custom operations
+        let stream = observable.into_stream();
+
+        let (checker, subscription) = Checker::from_stream(stream, runtime.clone());
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+    });
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    block_on(|runtime| async move {
+        // The source completes from inside its own disposal, so it terminates while the stream is
+        // being dropped. The termination must be dropped instead of ending the stream.
+        let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+            Subscription::new(CallbackDisposal::new(move || {
+                observer.on_termination(Termination::Completed);
+            }))
+        });
+
+        // Custom operations
+        let stream = observable.into_stream();
+
+        let (checker, subscription) = Checker::from_stream(stream, runtime.clone());
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+    });
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;

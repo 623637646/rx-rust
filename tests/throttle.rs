@@ -15,7 +15,7 @@ use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{
         creating::{create::Create, never::Never},
         filtering::throttle::Throttle,
@@ -594,6 +594,86 @@ fn test_error_on_sub() {
 
         let _subscription = observable.subscribe(observer);
         assert_eq!(checker.values(), vec![]);
+        assert_eq!(checker.state(), State::Error("error"));
+    });
+}
+
+#[test]
+fn test_next_on_unsub() {
+    block_on(|_runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // The source emits from inside its own disposal, so the value arrives while downstream is
+        // unsubscribing. Throttle hands the observer to its source, so the value still reaches it.
+        let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+            Subscription::new(CallbackDisposal::new(move || {
+                let mut observer = observer;
+                observer.on_next(111);
+            }))
+        });
+
+        // Custom operations
+        let observable = observable.throttle(DURATION_100_MS);
+
+        let subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+    });
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    block_on(|_runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // The source completes from inside its own disposal, so it terminates while downstream is
+        // unsubscribing. Throttle hands the observer to its source, so the completion still
+        // reaches it.
+        let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+            Subscription::new(CallbackDisposal::new(move || {
+                observer.on_termination(Termination::Completed);
+            }))
+        });
+
+        // Custom operations
+        let observable = observable.throttle(DURATION_100_MS);
+
+        let subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_error_on_unsub() {
+    block_on(|_runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // The source fails from inside its own disposal, so it terminates while downstream is
+        // unsubscribing. Throttle hands the observer to its source, so the error still reaches it.
+        let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+            Subscription::new(CallbackDisposal::new(move || {
+                observer.on_termination(Termination::Error("error"));
+            }))
+        });
+
+        // Custom operations
+        let observable = observable.throttle(DURATION_100_MS);
+
+        let subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
     });
 }

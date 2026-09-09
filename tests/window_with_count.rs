@@ -15,7 +15,7 @@ use rx_rust::utils::mutable::MutableHelper;
 use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{creating::create::Create, transforming::window_with_count::WindowWithCount},
     subject::{publish_subject::PublishSubject, unicast_subject::unicast_subject},
 };
@@ -1640,6 +1640,127 @@ fn test_error_on_sub() {
             }
         }
     });
+    assert_eq!(termination_checker.state(), State::Error("error"));
+}
+
+#[test]
+fn test_next_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. WindowWithCount hands the observer to its source, so the value still reaches
+    // the open window.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            observer.on_next(111);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subscription.dispose();
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    for (checker, _sub) in checker_sub_vec.take_value() {
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+    }
+    assert_eq!(termination_checker.state(), State::Dropped);
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // The source completes from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. WindowWithCount hands the observer to its source, so the completion still
+    // reaches the open window and the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subscription.dispose();
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    for (checker, _sub) in checker_sub_vec.take_value() {
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Completed);
+    }
+    assert_eq!(termination_checker.state(), State::Completed);
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
+    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. WindowWithCount hands the observer to its source, so the error still reaches
+    // the open window and the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
+
+    let checker_sub_vec_cloned = checker_sub_vec.clone();
+    let subscription = observable.subscribe_with_callback(
+        move |value| {
+            let (checker, observer) = Checker::new();
+            let sub = value.subscribe(observer);
+            checker_sub_vec_cloned.with_mut(|values| values.push((checker, sub)));
+        },
+        |termination| {
+            termination_observer.on_termination(termination);
+        },
+    );
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    assert_eq!(termination_checker.state(), State::Active);
+
+    subscription.dispose();
+    assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
+    for (checker, _sub) in checker_sub_vec.take_value() {
+        assert_eq!(checker.values(), []);
+        assert_eq!(checker.state(), State::Error("error"));
+    }
     assert_eq!(termination_checker.state(), State::Error("error"));
 }
 

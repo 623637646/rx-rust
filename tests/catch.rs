@@ -631,6 +631,90 @@ fn test_error_on_sub() {
 }
 
 #[test]
+fn test_next_on_unsub() {
+    let (_, observable_1, channel_checker_1) = test_channel::<'_, i32, &str>();
+    let (checker, observer) = Checker::new();
+
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. Catch hands the observer to its source, so the value still reaches it.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            observer.on_next(111);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.catch(move |_| observable_1);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+
+    subscription.dispose();
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    let (_, observable_1, channel_checker_1) = test_channel::<'_, i32, &str>();
+    let (checker, observer) = Checker::new();
+
+    // The source completes from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. Catch hands the observer to its source, so the completion still reaches it,
+    // and the fallback is not subscribed, as a completion ends Catch.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.catch(move |_| observable_1);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let (_, observable_1, channel_checker_1) = test_channel::<'_, i32, &str>();
+    let (checker, observer) = Checker::new();
+
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The fallback must not be subscribed after that, and the error must be dropped
+    // instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.catch(move |_| observable_1);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+}
+
+#[test]
 fn test_race_condition_error_after_unsub() {
     let mut sender = None;
     let observable = Create::new(|observer| {

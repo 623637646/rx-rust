@@ -1,6 +1,8 @@
 #![cfg(not(feature = "single-threaded"))]
 mod tests_utils;
 
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
+
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerScheduler, get_thread_name};
 use crate::tests_utils::{
@@ -16,7 +18,7 @@ use rx_rust::{
     disposable::Disposable,
     observable::Subscription,
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Observer, Termination, boxed_observer::BoxedObserver},
     operators::{
         creating::{create::Create, never::Never},
         utility::subscribe_on::SubscribeOn,
@@ -1379,6 +1381,94 @@ fn test_error_on_sub() {
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(call_history.load(Ordering::SeqCst), 0b11110011);
+    });
+}
+
+#[test]
+fn test_next_on_unsub() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // The source emits from inside its own disposal, so the value arrives while downstream is
+        // unsubscribing. SubscribeOn hands the observer to its source, so the value still reaches
+        // it.
+        let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+            Subscription::new(CallbackDisposal::new(move || {
+                let mut observer = observer;
+                observer.on_next(111);
+            }))
+        });
+
+        // Custom operations
+        let observable = observable.subscribe_on(runtime.clone());
+
+        let subscription = observable.subscribe(observer);
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        runtime.sleep(DURATION_10_MS).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+    });
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // The source completes from inside its own disposal, so it terminates while downstream is
+        // unsubscribing. SubscribeOn hands the observer to its source, so the completion still
+        // reaches it.
+        let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+            Subscription::new(CallbackDisposal::new(move || {
+                observer.on_termination(Termination::Completed);
+            }))
+        });
+
+        // Custom operations
+        let observable = observable.subscribe_on(runtime.clone());
+
+        let subscription = observable.subscribe(observer);
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_error_on_unsub() {
+    block_on(|runtime| async move {
+        let (checker, observer) = Checker::new();
+
+        // The source fails from inside its own disposal, so it terminates while downstream is
+        // unsubscribing. SubscribeOn hands the observer to its source, so the error still reaches
+        // it.
+        let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+            Subscription::new(CallbackDisposal::new(move || {
+                observer.on_termination(Termination::Error("error"));
+            }))
+        });
+
+        // Custom operations
+        let observable = observable.subscribe_on(runtime.clone());
+
+        let subscription = observable.subscribe(observer);
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        subscription.dispose();
+        runtime.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Error("error"));
     });
 }
 

@@ -706,6 +706,63 @@ fn test_complete_on_unsub() {
 }
 
 #[test]
+fn test_next_on_unsub() {
+    let (_, observable_1, channel_checker_1) = test_channel::<'_, i32, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. Concat hands the observer to its first source, so the value still reaches it,
+    // but the second source must not be subscribed.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            observer.on_next(111);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.concat_with(observable_1);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+
+    subscription.dispose();
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let (_, observable_1, channel_checker_1) = test_channel::<'_, i32, &str>();
+    let (checker, observer) = Checker::new();
+
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. Concat hands the observer to its first source, so the error still reaches it,
+    // and the second source is not subscribed, as an error ends Concat.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.concat_with(observable_1);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker_1 = TestStruct;

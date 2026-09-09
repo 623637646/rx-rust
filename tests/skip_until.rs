@@ -722,6 +722,88 @@ fn test_error_on_sub() {
 }
 
 #[test]
+fn test_next_on_unsub() {
+    let (_, observable_1, channel_checker_1) = test_channel::<'_, (), Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. It must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            observer.on_next(111);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.skip_until(observable_1);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    let (_, observable_1, channel_checker_1) = test_channel::<'_, (), Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // The source completes from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The termination must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.skip_until(observable_1);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let (_, observable_1, channel_checker_1) = test_channel::<'_, (), &str>();
+    let (checker, observer) = Checker::new();
+
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The error must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.skip_until(observable_1);
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Subscribed);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker_1 = TestStruct;

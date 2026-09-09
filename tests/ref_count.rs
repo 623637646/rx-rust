@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_runtime::block_on;
@@ -1859,6 +1860,142 @@ fn test_sub_on_sub() {
         channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
         ChannelState::Unsubscribed
     );
+}
+
+#[test]
+fn test_next_on_unsub() {
+    let (checker_1, observer_1) = Checker::new();
+
+    // The source emits from inside its own disposal, so the value arrives while the last
+    // subscription is being disposed, which disconnects the connectable observable. It must be
+    // dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            observer.on_next(111);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.publish().ref_count();
+
+    let subscription_1 = observable.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+
+    subscription_1.dispose();
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Dropped);
+}
+
+#[test]
+fn test_complete_on_unsub() {
+    let (checker_1, observer_1) = Checker::new();
+
+    // The source completes from inside its own disposal, so it terminates while the last
+    // subscription is being disposed, which disconnects the connectable observable. The
+    // termination must be dropped instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.publish().ref_count();
+
+    let subscription_1 = observable.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+
+    subscription_1.dispose();
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Dropped);
+}
+
+#[test]
+fn test_error_on_unsub() {
+    let (checker_1, observer_1) = Checker::new();
+
+    // The source fails from inside its own disposal, so it terminates while the last subscription
+    // is being disposed, which disconnects the connectable observable. The error must be dropped
+    // instead of reaching the observer.
+    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    // Custom operations
+    let observable = observable.publish().ref_count();
+
+    let subscription_1 = observable.subscribe(observer_1);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+
+    subscription_1.dispose();
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Dropped);
+}
+
+#[test]
+fn test_sub_on_unsub() {
+    let sender_channel_checker = Shared::new(Mutable::new(Vec::new()));
+    let sender_channel_checker_cloned = sender_channel_checker.clone();
+    let observable = Defer::new(move || {
+        let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+        sender_channel_checker_cloned.with_mut(|values| values.push((sender, channel_checker)));
+        observable
+    });
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Custom operations
+    let observable = observable.publish().ref_count();
+    let observable_1 = observable.clone();
+    let observable_2 = observable.clone();
+
+    // The only observer subscribes another one while it is being released, so that subscription
+    // runs from inside the disposal that would disconnect the connectable observable.
+    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_2_cloned = subscription_2.clone();
+    let probe = DropProbe::new().on_drop(Box::new(move || {
+        subscription_2_cloned.replace_value(Some(observable_2.subscribe(observer_2)));
+    }));
+    let (mut next_1, termination_1) = observer_1.into_callbacks();
+
+    let subscription_1 = observable_1.subscribe_with_callback(
+        move |value| {
+            let _ = &probe;
+            next_1(value);
+        },
+        termination_1,
+    );
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 1);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+
+    subscription_1.dispose();
+    assert!(subscription_2.with_ref(Option::is_some));
+    // The subscription made from inside the disposal arrives before the connection is released,
+    // so the connectable observable stays connected to the source it already had.
+    assert_eq!(sender_channel_checker.with_ref(Vec::len), 1);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    sender_channel_checker.with_ref(|values| {
+        assert_eq!(values[0].1.state(), ChannelState::Subscribed);
+    });
+
+    // That source is the one feeding the second subscriber.
+    sender_channel_checker.with_mut(|values| values[0].0.on_next(111));
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [111]);
+    assert_eq!(checker_2.state(), State::Active);
 }
 
 #[test]
