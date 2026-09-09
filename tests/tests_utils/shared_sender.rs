@@ -9,6 +9,7 @@
 //! terminates, and is empty again afterwards, which is how a test tells a subscription that is
 //! still live apart from one that is gone.
 
+use educe::Educe;
 use rx_rust::utils::mutable::MutableExt;
 use rx_rust::utils::mutable::MutableHelper;
 use rx_rust::{
@@ -22,14 +23,9 @@ use rx_rust::{
 type Delivery<T, E, OR> = SerializedDelivery<T, E, OR, ()>;
 
 /// A shared, initially empty handle sending through at most one observer.
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub(crate) struct SharedSender<T, E, OR>(Shared<Mutable<Option<Delivery<T, E, OR>>>>);
-
-impl<T, E, OR> Clone for SharedSender<T, E, OR> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
 
 impl<T, E, OR> Default for SharedSender<T, E, OR> {
     fn default() -> Self {
