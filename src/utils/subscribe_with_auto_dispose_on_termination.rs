@@ -63,7 +63,30 @@ where
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.observer.on_termination(termination);
-        self.shared_disposal.dispose(); // TODO: if on_termination panic, the disposal is not disposed
+        let Self {
+            observer,
+            shared_disposal,
+        } = self;
+        {
+            let _guard = DisposeOnPanic(&shared_disposal);
+            observer.on_termination(termination);
+        }
+        shared_disposal.dispose();
+    }
+}
+
+/// Disposes the subscription when the downstream `on_termination` unwinds.
+///
+/// Without this the source stays subscribed after the termination, until the subscription this
+/// function returned is dropped. The returning path disposes right after the callback, so the
+/// panicking path takes exactly the locks the returning one would: nothing new can deadlock on the
+/// unwinding thread.
+struct DisposeOnPanic<'a, D: Disposable>(&'a SharedDisposal<Subscription<D>>);
+
+impl<D: Disposable> Drop for DisposeOnPanic<'_, D> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.0.clone().dispose();
+        }
     }
 }
