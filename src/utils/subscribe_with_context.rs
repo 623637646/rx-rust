@@ -18,14 +18,14 @@ use educe::Educe;
 // The disposal of a context that does not own its source subscription: stopping the context,
 // followed by the caller's own subscription. Returned by `subscribe_with_context`.
 delegate_disposal!(
-    Disposal<'or, D>,
-    ChainDisposal<BoxedDisposal<'or>, D>,
+    Disposal<'or_sub, D>,
+    ChainDisposal<BoxedDisposal<'or_sub>, D>,
     where D: Disposable
 );
 
 /// The type-erased disposal of a context that owns its source subscription. Returned by
 /// [`subscribe_with_context_owning_source`].
-pub type OwningDisposal<'or> = BoxedDisposal<'or>;
+pub type OwningDisposal<'or_sub> = BoxedDisposal<'or_sub>;
 
 /// Creates a subscription backed by a shared, serialized context containing the downstream
 /// observer and a mutable model.
@@ -40,17 +40,17 @@ pub type OwningDisposal<'or> = BoxedDisposal<'or>;
 /// When the context can instead terminate while the source is still active — from a notifier, from
 /// a scheduler task, or from another source of a multi-source operator — use
 /// [`subscribe_with_context_owning_source`] so that the source is disposed on termination.
-pub fn subscribe_with_context<'or, T, E, OR, D, M, F>(
+pub fn subscribe_with_context<'or_sub, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
     builder: F,
-) -> Subscription<Disposal<'or, D>>
+) -> Subscription<Disposal<'or_sub, D>>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OR: MaybeSend + 'or,
+    T: MaybeSend + 'or_sub,
+    E: MaybeSend + 'or_sub,
+    OR: MaybeSend + 'or_sub,
     D: Disposable,
-    M: MaybeSend + 'or,
+    M: MaybeSend + 'or_sub,
     F: FnOnce(SubscriptionContext<T, E, OR, M>) -> Subscription<D>,
 {
     debug_assert_observer_compatibility::<OR>();
@@ -69,20 +69,20 @@ where
 ///
 /// Use this whenever the context can terminate while the source is still active — from a notifier,
 /// from a scheduler task, or from another source of a multi-source operator. Owning the source
-/// costs `D: MaybeSend + 'or` and erases the disposal into [`OwningDisposal`], so when
+/// costs `D: MaybeSend + 'or_sub` and erases the disposal into [`OwningDisposal`], so when
 /// the context can only terminate from inside the source's own `on_termination` prefer
 /// [`subscribe_with_context`], which keeps `D` concrete.
-pub fn subscribe_with_context_owning_source<'or, T, E, OR, D, M, F>(
+pub fn subscribe_with_context_owning_source<'or_sub, T, E, OR, D, M, F>(
     observer: OR,
     model: M,
     builder: F,
-) -> Subscription<OwningDisposal<'or>>
+) -> Subscription<OwningDisposal<'or_sub>>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OR: Observer<T, E> + MaybeSend + 'or,
-    D: Disposable + MaybeSend + 'or,
-    M: MaybeSend + 'or,
+    T: MaybeSend + 'or_sub,
+    E: MaybeSend + 'or_sub,
+    OR: Observer<T, E> + MaybeSend + 'or_sub,
+    D: Disposable + MaybeSend + 'or_sub,
+    M: MaybeSend + 'or_sub,
     F: FnOnce(SubscriptionContext<T, E, OR, M, D>) -> Subscription<D>,
 {
     debug_assert_observer_compatibility::<OR>();
