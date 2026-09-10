@@ -510,6 +510,23 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         ObserveOn::new(self, scheduler)
     }
 
+    /// Turns a source that pushes at its own pace into a demand-driven stream, accumulating
+    /// items with `collection` and emitting each output alongside a
+    /// [`RequestToken`](crate::operators::backpressure::on_backpressure::RequestToken) that the
+    /// downstream observer consumes to ask for the next one.
+    ///
+    /// The downstream starts with one outstanding request, so the first output is emitted
+    /// without asking; afterwards nothing is emitted until a token is used. A request that
+    /// arrives while `collection` is empty is remembered and satisfied by the next item, and a
+    /// termination that arrives while the downstream is busy is held back until the downstream
+    /// has drained.
+    ///
+    /// The demand goes no further than this operator: the source is subscribed unconditionally
+    /// and is never slowed down, so `collection` alone decides what is kept — and at what cost —
+    /// while the downstream is busy. See
+    /// [`on_backpressure_buffer`](ObservableExt::on_backpressure_buffer) and
+    /// [`on_backpressure_latest`](ObservableExt::on_backpressure_latest) for the two ready-made
+    /// collections.
     fn on_backpressure<C>(self, collection: C) -> OnBackpressure<Self, C>
     where
         C: BackpressureCollection<Input = T>,
@@ -517,10 +534,25 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         OnBackpressure::new(self, collection)
     }
 
+    /// Collects the items that arrive while the downstream is busy into a `Vec<T>` and emits the
+    /// batch when the downstream requests it. See
+    /// [`on_backpressure`](ObservableExt::on_backpressure) for how the requests work.
+    ///
+    /// The buffer is unbounded and drops nothing, so a source faster than the downstream grows it
+    /// without bound. Batches also appear only when the downstream falls behind, and their size
+    /// is whatever the timing produced: this is not a batching operator. Use
+    /// [`buffer`](ObservableExt::buffer), [`buffer_with_count`](ObservableExt::buffer_with_count)
+    /// or [`buffer_with_time`](ObservableExt::buffer_with_time) for deterministic batches.
     fn on_backpressure_buffer(self) -> OnBackpressureBuffer<Self> {
         OnBackpressureBuffer::new(self)
     }
 
+    /// Keeps only the most recent item that arrived while the downstream was busy and emits it
+    /// when the downstream requests the next one, dropping the items it superseded. See
+    /// [`on_backpressure`](ObservableExt::on_backpressure) for how the requests work.
+    ///
+    /// Unlike [`on_backpressure_buffer`](ObservableExt::on_backpressure_buffer) this holds a
+    /// single item, so a source faster than the downstream costs a bounded amount of memory.
     fn on_backpressure_latest(self) -> OnBackpressureLatest<Self> {
         OnBackpressureLatest::new(self)
     }
