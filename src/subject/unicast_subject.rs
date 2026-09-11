@@ -375,9 +375,14 @@ impl<T, E> Disposable for Disposal<'_, T, E> {
 /// event or when it is dropped itself.
 fn close<T, E>(pipe: &SharedPipe<'_, T, E>) {
     // Raised before the state is replaced, so that the sender never delivers an event to an
-    // observer that the state has already given up on.
-    pipe.is_disposed.write(true);
-    let previous_state = pipe.state.replace_value(State::Closed);
+    // observer that the state has already given up on, and raised under the lock, so that a sender
+    // that read it cannot find the state still [`State::Held`]: it reads the flag without the lock,
+    // then drops the observer it holds and goes back to the state for its next event, and that
+    // takes the lock, which this holds until the state is closed.
+    let previous_state = pipe.state.with_mut(|state| {
+        pipe.is_disposed.write(true);
+        std::mem::replace(state, State::Closed)
+    });
     drop(previous_state); // Drop outside the lock to avoid potential deadlock
 }
 

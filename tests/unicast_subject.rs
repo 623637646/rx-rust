@@ -122,6 +122,42 @@ fn test_unsubscribe_releases_the_observer_when_the_pipe_terminates() {
     assert_eq!(checker.state(), State::Dropped);
 }
 
+/// A disposal that runs on another thread than the sender closes the pipe as a whole: once the
+/// sender sees it, the state is closed too, so the events it keeps sending are dropped instead of
+/// finding the state still marked as held by a sender that let go of the observer.
+#[test]
+fn test_unsubscribe_from_another_thread() {
+    block_on(|runtime| async move {
+        let (mut sender, observable) = unicast_subject::<i32, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let subscription = observable.subscribe(observer);
+        sender.on_next(111);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+
+        runtime
+            .spawn(async move { Disposable::dispose(subscription) })
+            .await
+            .unwrap();
+        assert_eq!(checker.state(), State::Active);
+        assert!(sender.is_disposed());
+
+        // The first event releases the observer, the next ones find the pipe closed.
+        sender.on_next(222);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+
+        sender.on_next(333);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+
+        sender.on_termination(Termination::Completed);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+    });
+}
+
 #[test]
 fn test_next_before_subscribe() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
