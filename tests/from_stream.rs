@@ -3,12 +3,17 @@ mod tests_utils;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
-use futures::{SinkExt, stream};
+use futures::{SinkExt, StreamExt, stream};
 use rx_rust::scheduler::Scheduler;
+use rx_rust::utils::types::Shared;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
     operators::creating::from_stream::FromStream,
+};
+use std::{
+    convert::Infallible,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 use tests_utils::checker::Checker;
 
@@ -172,6 +177,52 @@ fn test_unsub_on_next_by_take() {
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
+    });
+}
+
+#[test]
+fn test_stop_on_next() {
+    block_on(|runtime| async move {
+        let pulled = Shared::new(AtomicUsize::new(0));
+        let pulled_stream = pulled.clone();
+        // Infinite and always ready: only the observer's answer can end it.
+        let stream = stream::iter(1..).inspect(move |_| {
+            pulled_stream.fetch_add(1, Ordering::SeqCst);
+        });
+        let observable = FromStream::new(stream, runtime.clone());
+        let (checker, observer) = Checker::<_, Infallible>::stopping_after(2);
+
+        let _subscription = observable.subscribe(observer);
+        runtime.sleep(DURATION_10_MS).await;
+        // The observer ended its own stream on the second value, so the scheduler stops polling
+        // the stream right there and the observer is dropped instead of being completed.
+        assert_eq!(checker.values(), [1, 2]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(pulled.load(Ordering::SeqCst), 2);
+
+        runtime.sleep(DURATION_10_MS).await;
+        assert_eq!(pulled.load(Ordering::SeqCst), 2);
+    });
+}
+
+#[test]
+fn test_stop_on_next_by_take() {
+    block_on(|runtime| async move {
+        let pulled = Shared::new(AtomicUsize::new(0));
+        let pulled_stream = pulled.clone();
+        let stream = stream::iter(1..).inspect(move |_| {
+            pulled_stream.fetch_add(1, Ordering::SeqCst);
+        });
+        let observable = FromStream::new(stream, runtime.clone()).take(2);
+        let (checker, observer) = Checker::new();
+
+        let _subscription = observable.subscribe(observer);
+        runtime.sleep(DURATION_10_MS).await;
+        // `take` stops the source once it has its values, so the values behind them are never
+        // pulled: only the completion of the operator itself reaches the observer.
+        assert_eq!(checker.values(), [1, 2]);
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(pulled.load(Ordering::SeqCst), 2);
     });
 }
 

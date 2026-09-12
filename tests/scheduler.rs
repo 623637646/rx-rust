@@ -280,6 +280,44 @@ fn test_schedule_periodically_rejects_zero_period() {
     });
 }
 
+#[test]
+fn test_schedule_stream() {
+    block_on(|runtime| async move {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let _disposal = runtime.schedule_stream(futures::stream::iter([1, 2, 3]), move |item| {
+            tx.unbounded_send(item).unwrap();
+            true
+        });
+        let mut results = Vec::new();
+        while let Some(result) = rx.next().await {
+            results.push(result);
+        }
+        // Each element arrives, and the end of the stream is announced with a `None`.
+        assert_eq!(results, [Some(1), Some(2), Some(3), None]);
+    });
+}
+
+#[test]
+fn test_schedule_stream_stops_on_false() {
+    block_on(|runtime| async move {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let stream = futures::stream::iter(1..);
+        let _disposal = runtime.schedule_stream(stream, move |item| {
+            let item = item.unwrap();
+            tx.unbounded_send(item).unwrap();
+            item < 2
+        });
+        // A `false` answer ends the task, which drops `tx` and closes the channel. If the loop
+        // kept polling the infinite stream, this would hang forever.
+        let mut results = Vec::new();
+        while let Some(result) = rx.next().await {
+            results.push(result);
+        }
+        // The final `None` is not delivered after a stop: it would `unwrap` above.
+        assert_eq!(results, [1, 2]);
+    });
+}
+
 #[cfg(feature = "tokio-scheduler")]
 #[test]
 fn test_tokio_handle_schedules_outside_runtime_context() {

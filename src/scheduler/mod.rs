@@ -164,6 +164,10 @@ pub trait Scheduler {
     /// Drives `stream` to completion, invoking `result_callback` with
     /// `Some(item)` for each element and a final `None` when the stream ends.
     ///
+    /// The callback's answer is what keeps the stream running: returning
+    /// `false` stops polling it right there, and the final `None` is then
+    /// never delivered — the stream is dropped along with the task.
+    ///
     /// Disposal aborts the task without delivering the final `None`.
     ///
     /// The loop yields to the executor after each element (even when the
@@ -173,7 +177,7 @@ pub trait Scheduler {
     fn schedule_stream<SM>(
         &self,
         stream: SM,
-        mut result_callback: impl FnMut(Option<SM::Item>) + MaybeSend + 'static,
+        mut result_callback: impl FnMut(Option<SM::Item>) -> bool + MaybeSend + 'static,
     ) -> BoundDropDisposal<Self::D>
     where
         SM: Stream + MaybeSend + 'static,
@@ -184,14 +188,18 @@ pub trait Scheduler {
                 // A `while let` would keep the `Option<Item>` temporary alive
                 // across the yield below, requiring `SM::Item: Send`.
                 match stream.next().await {
-                    Some(item) => result_callback(Some(item)),
+                    Some(item) => {
+                        if !result_callback(Some(item)) {
+                            return;
+                        }
+                    }
                     None => break,
                 }
                 // Yield so other tasks can run and disposal can take effect,
                 // even when the stream is always ready.
                 YieldNow(false).await;
             }
-            result_callback(None);
+            let _ = result_callback(None);
         })
     }
 }

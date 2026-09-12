@@ -85,15 +85,18 @@ where
                         None => Flow::Stop,
                     };
                     if flow.is_stop() {
-                        // The observer ended its own stream, so it is released here and the
-                        // values the stream keeps producing find nothing to deliver to.
+                        // The observer ended its own stream: release it here and tell the
+                        // scheduler to stop polling the stream, so an infinite one is not driven
+                        // for values that have nothing to be delivered to.
                         drop(observer.take());
                     }
+                    flow.is_continue()
                 }
                 None => {
                     if let Some(observer) = observer.take() {
                         observer.on_termination(Termination::Completed)
                     }
+                    false
                 }
             })
     }
