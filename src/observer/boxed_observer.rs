@@ -1,4 +1,4 @@
-use super::{Observer, Termination};
+use super::{Flow, Observer, Termination};
 use crate::utils::types::MaybeSend;
 
 trait ErasedObserver<T, E>: Observer<T, E> {
@@ -32,8 +32,8 @@ impl<'or, T, E> BoxedObserver<'or, T, E> {
 
 impl<T, E> Observer<T, E> for BoxedObserver<'_, T, E> {
     #[inline]
-    fn on_next(&mut self, value: T) {
-        self.0.on_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0.on_next(value)
     }
 
     #[inline]

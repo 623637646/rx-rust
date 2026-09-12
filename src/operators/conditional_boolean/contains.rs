@@ -3,7 +3,7 @@ use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_aut
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -81,19 +81,24 @@ where
     OR: Observer<bool, E>,
     T: PartialEq,
 {
-    fn on_next(&mut self, value: T) {
-        if self.item == value
-            && let Some(mut observer) = self.observer.take()
-        {
-            observer.on_next(true);
+    fn on_next(&mut self, value: T) -> Flow {
+        if self.item != value {
+            return Flow::Continue;
+        }
+        // The item was found, so the result is decided and the rest of the source is of no use.
+        let Some(mut observer) = self.observer.take() else {
+            return Flow::Stop;
+        };
+        if observer.on_next(true).is_continue() {
             observer.on_termination(Termination::Completed);
         }
+        Flow::Stop
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
         if let Some(mut observer) = self.observer.take() {
             match termination {
-                Termination::Completed => observer.on_next(false),
+                Termination::Completed => drop(observer.on_next(false)),
                 Termination::Error(_) => {}
             }
             observer.on_termination(termination);

@@ -254,7 +254,7 @@ fn test_completed_different_retry_observable() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -547,7 +547,7 @@ fn test_error_source_and_retry_are_same() {
     assert_eq!(checker.state(), State::Active);
     assert!(errors.with_ref(Vec::is_empty));
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert!(errors.with_ref(Vec::is_empty));
@@ -913,7 +913,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(errors.with_ref(Vec::is_empty));
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -1200,7 +1200,7 @@ fn test_next_on_unsub() {
     let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
         Subscription::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
         }))
     });
 
@@ -1292,7 +1292,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(Just::new(1));
+            assert!(observer.on_next(Just::new(1)).is_continue());
             observer.on_termination(Termination::Error("error"));
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
@@ -1323,7 +1323,7 @@ fn test_lifetime_or() {
         let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);
 
         let (_, mut observer) = Checker::new();
-        observer.on_next(&life_marker_2);
+        assert!(observer.on_next(&life_marker_2).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -1357,7 +1357,7 @@ fn test_lifetime_or_sub() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });

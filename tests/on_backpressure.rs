@@ -121,12 +121,12 @@ fn waits_until_collection_can_produce_an_output() {
     let mut subject = PublishSubject::<i32, Infallible>::new();
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
-    subject.on_next(1);
-    subject.on_next(2);
+    assert!(subject.on_next(1).is_continue());
+    assert!(subject.on_next(2).is_continue());
     assert!(recorder.values().is_empty());
     assert_eq!(recorder.request_count(), 0);
 
-    subject.on_next(3);
+    assert!(subject.on_next(3).is_continue());
     assert_eq!(recorder.values(), [vec![1, 2, 3]]);
     assert_eq!(recorder.request_count(), 1);
     assert_eq!(recorder.termination(), None);
@@ -138,7 +138,7 @@ fn buffers_multiple_ready_outputs_until_each_is_requested() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=9 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     assert_eq!(recorder.values(), [vec![1, 2, 3]]);
 
@@ -160,7 +160,7 @@ fn request_with_partial_buffer_waits_for_more_input() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=5 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     assert_eq!(recorder.values(), [vec![1, 2, 3]]);
 
@@ -168,7 +168,7 @@ fn request_with_partial_buffer_waits_for_more_input() {
     assert_eq!(recorder.values(), [vec![1, 2, 3]]);
     assert_eq!(recorder.request_count(), 0);
 
-    subject.on_next(6);
+    assert!(subject.on_next(6).is_continue());
     assert_eq!(recorder.values(), [vec![1, 2, 3], vec![4, 5, 6]]);
     assert_eq!(recorder.request_count(), 1);
 }
@@ -179,13 +179,13 @@ fn request_with_empty_buffer_allows_the_next_output_through() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=3 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     recorder.take_request().request();
     assert_eq!(recorder.request_count(), 0);
 
     for value in 4..=6 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     assert_eq!(recorder.values(), [vec![1, 2, 3], vec![4, 5, 6]]);
     assert_eq!(recorder.request_count(), 1);
@@ -196,8 +196,8 @@ fn completion_before_any_output_discards_partial_input() {
     let mut subject = PublishSubject::<i32, Infallible>::new();
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
-    subject.on_next(1);
-    subject.on_next(2);
+    assert!(subject.on_next(1).is_continue());
+    assert!(subject.on_next(2).is_continue());
     subject.on_termination(Termination::Completed);
 
     assert!(recorder.values().is_empty());
@@ -211,7 +211,7 @@ fn pending_completion_discards_partial_input_on_request() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=5 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     subject.on_termination(Termination::Completed);
     assert_eq!(recorder.termination(), None);
@@ -228,7 +228,7 @@ fn completion_waits_until_all_complete_outputs_are_requested() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=9 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     subject.on_termination(Termination::Completed);
 
@@ -251,8 +251,8 @@ fn error_before_any_output_discards_partial_input() {
     let mut subject = PublishSubject::<i32, &str>::new();
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
-    subject.on_next(1);
-    subject.on_next(2);
+    assert!(subject.on_next(1).is_continue());
+    assert!(subject.on_next(2).is_continue());
     subject.on_termination(Termination::Error("error"));
 
     assert!(recorder.values().is_empty());
@@ -266,7 +266,7 @@ fn pending_error_discards_partial_input_on_request() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=5 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     subject.on_termination(Termination::Error("error"));
     assert_eq!(recorder.termination(), None);
@@ -283,7 +283,7 @@ fn error_waits_until_all_complete_outputs_are_requested() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=9 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     subject.on_termination(Termination::Error("error"));
 
@@ -305,7 +305,7 @@ fn termination_is_immediate_after_requesting_an_empty_buffer() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=3 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     recorder.take_request().request();
     subject.on_termination(Termination::Completed);
@@ -321,7 +321,7 @@ fn termination_is_immediate_after_requesting_a_partial_buffer() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=5 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     recorder.take_request().request();
     assert_eq!(recorder.request_count(), 0);
@@ -337,12 +337,12 @@ fn request_after_disposal_is_a_no_op() {
     let (recorder, subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=3 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     subscription.dispose();
     recorder.take_request().request();
     for value in 4..=6 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
 
     assert_eq!(recorder.values(), [vec![1, 2, 3]]);
@@ -369,7 +369,7 @@ fn request_can_be_called_reentrantly_from_on_next() {
         );
 
     for value in 1..=9 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     subject.on_termination(Termination::Completed);
 
@@ -405,9 +405,9 @@ fn upstream_can_terminate_reentrantly_from_on_next() {
             },
         );
 
-    subject.on_next(1);
-    subject.on_next(2);
-    subject.on_next(3);
+    assert!(subject.on_next(1).is_continue());
+    assert!(subject.on_next(2).is_continue());
+    assert!(subject.on_next(3).is_continue());
 
     assert_eq!(values.with_ref(|values| values.clone()), [vec![1, 2, 3]]);
     assert_eq!(
@@ -420,7 +420,7 @@ fn upstream_can_terminate_reentrantly_from_on_next() {
 fn handles_synchronous_emission_and_termination_during_subscribe() {
     let source = Create::new(|mut observer| {
         for value in 1..=6 {
-            observer.on_next(value);
+            assert!(observer.on_next(value).is_continue());
         }
         observer.on_termination(Termination::<Infallible>::Completed);
         Subscription::default()
@@ -463,7 +463,7 @@ fn subscriptions_have_independent_collection_and_request_state() {
     let (recorder_2, _subscription_2) = record_observable(observable);
 
     for value in 1..=6 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     assert_eq!(recorder_1.values(), [vec![1, 2, 3]]);
     assert_eq!(recorder_2.values(), [vec![1, 2, 3]]);
@@ -489,14 +489,14 @@ fn downstream_take_disposes_upstream_and_invalidates_the_token() {
     let (recorder, _subscription) = record_observable(observable);
 
     for value in 1..=3 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     assert_eq!(recorder.values(), [vec![1, 2, 3]]);
     assert_eq!(recorder.termination(), Some(Termination::Completed));
 
     recorder.take_request().request();
     for value in 4..=6 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     assert_eq!(recorder.values(), [vec![1, 2, 3]]);
     assert_eq!(recorder.request_count(), 0);
@@ -510,7 +510,7 @@ fn supports_borrowed_values_and_errors() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in &values {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     subject.on_termination(Termination::Error(error));
     assert_eq!(
@@ -528,9 +528,9 @@ fn supports_mutably_borrowed_values() {
     let mut value_2 = 2;
     let mut value_3 = 3;
     let source = Create::new(|mut observer| {
-        observer.on_next(&mut value_1);
-        observer.on_next(&mut value_2);
-        observer.on_next(&mut value_3);
+        assert!(observer.on_next(&mut value_1).is_continue());
+        assert!(observer.on_next(&mut value_2).is_continue());
+        assert!(observer.on_next(&mut value_3).is_continue());
         observer.on_termination(Termination::<Infallible>::Completed);
         Subscription::default()
     });
@@ -555,8 +555,8 @@ fn handles_values_emitted_synchronously_on_subscription() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     assert!(recorder.values().is_empty());
-    subject.on_next(2);
-    subject.on_next(3);
+    assert!(subject.on_next(2).is_continue());
+    assert!(subject.on_next(3).is_continue());
     assert_eq!(recorder.values(), [vec![1, 2, 3]]);
     assert_eq!(recorder.request_count(), 1);
 }
@@ -592,7 +592,7 @@ fn request_token_can_be_used_from_another_thread() {
     let (recorder, _subscription) = subscribe_chunks(subject.clone());
 
     for value in 1..=6 {
-        subject.on_next(value);
+        assert!(subject.on_next(value).is_continue());
     }
     let request = recorder.take_request();
     std::thread::spawn(move || request.request())

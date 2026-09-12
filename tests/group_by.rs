@@ -45,7 +45,7 @@ fn test_completed() {
     assert_eq!(checker.state(), State::Active);
 
     for i in 0..=9 {
-        subject.on_next(i);
+        assert!(subject.on_next(i).is_continue());
     }
 
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
@@ -77,7 +77,7 @@ fn test_error() {
     assert_eq!(checker.state(), State::Active);
 
     for i in 0..=9 {
-        subject.on_next(i);
+        assert!(subject.on_next(i).is_continue());
     }
 
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
@@ -124,7 +124,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.state(), State::Active);
 
     for i in 0..=9 {
-        subject.on_next(i);
+        assert!(subject.on_next(i).is_continue());
     }
 
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
@@ -138,7 +138,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19, 121]);
@@ -176,15 +176,15 @@ fn test_ref() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(&value_1);
+    assert!(subject.on_next(&value_1).is_continue());
     assert_eq!(checker.values(), [(0, &value_1)]);
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(&value_2);
+    assert!(subject.on_next(&value_2).is_continue());
     assert_eq!(checker.values(), [(0, &value_1), (1, &value_2)]);
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(&value_3);
+    assert!(subject.on_next(&value_3).is_continue());
     assert_eq!(
         checker.values(),
         [(0, &value_1), (1, &value_2), (0, &value_3)]
@@ -229,7 +229,7 @@ fn test_async() {
         runtime
             .spawn(async move {
                 for i in 0..=9 {
-                    subject_cloned.on_next(i);
+                    assert!(subject_cloned.on_next(i).is_continue());
                 }
             })
             .await
@@ -292,7 +292,7 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.state(), State::Active);
 
     for i in 0..=9 {
-        subject.on_next(i);
+        assert!(subject.on_next(i).is_continue());
     }
     assert_eq!(checker_1.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
     assert_eq!(checker_1.state(), State::Active);
@@ -327,7 +327,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -365,7 +365,7 @@ fn test_multiple_operation() {
     assert_eq!(checker.state(), State::Active);
 
     for i in 0..=9 {
-        subject.on_next(i);
+        assert!(subject.on_next(i).is_continue());
     }
 
     assert_eq!(checker.values(), [0, 111, 22, 133, 4, 115, 26, 137, 8, 119]);
@@ -397,7 +397,7 @@ fn test_without_convenient_api() {
     assert_eq!(checker.state(), State::Active);
 
     for i in 0..=9 {
-        subject.on_next(i);
+        assert!(subject.on_next(i).is_continue());
     }
 
     assert_eq!(checker.values(), [0, 11, 2, 13, 4, 15, 6, 17, 8, 19]);
@@ -433,7 +433,7 @@ fn test_revert_completed() {
     assert_eq!(checker_3.state(), State::Active);
 
     for i in 0..=9 {
-        subject.on_next(i);
+        assert!(subject.on_next(i).is_continue());
     }
 
     assert_eq!(checker_1.values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -480,7 +480,7 @@ fn test_revert_error() {
     assert_eq!(checker_3.state(), State::Active);
 
     for i in 0..=9 {
-        subject.on_next(i);
+        assert!(subject.on_next(i).is_continue());
     }
 
     assert_eq!(checker_1.values(), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -535,7 +535,7 @@ fn test_next_on_sub() {
     });
     assert_eq!(termination_checker.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -547,7 +547,7 @@ fn test_next_on_sub() {
         }
     });
 
-    subject.on_next(333);
+    assert!(subject.on_next(333).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -628,7 +628,7 @@ fn test_next_on_unsub() {
     let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
         Subscription::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
         }))
     });
 
@@ -729,10 +729,10 @@ fn test_subscribe_groups_late_with_buffered_values() {
 
     // Each key opens a group on its first value, and both groups buffer while
     // they have no subscriber.
-    sender.on_next(1);
-    sender.on_next(2);
-    sender.on_next(3);
-    sender.on_next(4);
+    assert!(sender.on_next(1).is_continue());
+    assert!(sender.on_next(2).is_continue());
+    assert!(sender.on_next(3).is_continue());
+    assert!(sender.on_next(4).is_continue());
     assert_eq!(group_vec.with_ref(Vec::len), 2);
 
     let mut groups = group_vec.take_value();
@@ -751,8 +751,8 @@ fn test_subscribe_groups_late_with_buffered_values() {
     assert_eq!(checker_even.state(), State::Active);
 
     // Later values are delivered directly.
-    sender.on_next(5);
-    sender.on_next(6);
+    assert!(sender.on_next(5).is_continue());
+    assert!(sender.on_next(6).is_continue());
     assert_eq!(checker_odd.values(), [1, 3, 5]);
     assert_eq!(checker_even.values(), [2, 4, 6]);
 
@@ -780,7 +780,7 @@ fn test_subscribe_group_after_termination() {
         |termination| termination_observer.on_termination(termination),
     );
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(group_vec.with_ref(Vec::len), 1);
 
     // The source terminates while the group is still unsubscribed. The group
@@ -811,7 +811,7 @@ fn test_subscribe_group_after_unsubscribe() {
         |_termination| {},
     );
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(group_vec.with_ref(Vec::len), 1);
 
     // Unsubscribing is not a termination: the group never completed nor errored.
@@ -840,8 +840,8 @@ fn test_values_of_ended_group_are_discarded() {
         |_termination| {},
     );
 
-    sender.on_next(1);
-    sender.on_next(2);
+    assert!(sender.on_next(1).is_continue());
+    assert!(sender.on_next(2).is_continue());
     let mut groups = group_vec.take_value();
     let group_even = groups.pop().unwrap();
     let group_odd = groups.pop().unwrap();
@@ -859,8 +859,8 @@ fn test_values_of_ended_group_are_discarded() {
 
     // Values of the ended group have nowhere to go and no new group is emitted
     // for its key, while the other group keeps working.
-    sender.on_next(3);
-    sender.on_next(4);
+    assert!(sender.on_next(3).is_continue());
+    assert!(sender.on_next(4).is_continue());
     assert_eq!(checker_odd.values(), [1]);
     assert_eq!(checker_even.values(), [2, 4]);
     assert_eq!(group_vec.with_ref(Vec::len), 0);
@@ -885,8 +885,8 @@ fn test_unsub_on_inner_termination_still_terminates_other_groups() {
     );
     let outer_subscription = Shared::new(Mutable::new(Some(subscription)));
 
-    sender.on_next(1);
-    sender.on_next(2);
+    assert!(sender.on_next(1).is_continue());
+    assert!(sender.on_next(2).is_continue());
     let mut groups = group_vec.take_value();
     let group_even = groups.pop().unwrap();
     let group_odd = groups.pop().unwrap();
@@ -939,7 +939,7 @@ fn test_dropping_unsubscribed_group_releases_buffered_values() {
     );
 
     let drops = DropCount::new();
-    sender.on_next(drops.probe());
+    assert!(sender.on_next(drops.probe()).is_continue());
     assert_eq!(group_vec.with_ref(Vec::len), 1);
     assert_eq!(drops.get(), 0);
 
@@ -971,7 +971,7 @@ fn test_dropping_ignored_value_does_not_poison_group_context() {
     );
 
     // The first value opens the group and carries no panicking payload.
-    sender.on_next(None);
+    assert!(sender.on_next(None).is_continue());
     assert_eq!(inner_subscriptions.with_ref(Vec::len), 1);
 
     // Ending the group makes the following value take the ignored-value path.
@@ -999,7 +999,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(1);
+            assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
@@ -1031,7 +1031,7 @@ fn test_lifetime_or() {
         let observable = observable.group_by(|v: &i32| *v).merge_all().map(|_| None);
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(Some(&life_marker_2));
+        assert!(observer.on_next(Some(&life_marker_2)).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -1055,7 +1055,7 @@ fn test_fn() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });

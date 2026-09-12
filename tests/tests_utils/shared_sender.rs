@@ -62,7 +62,12 @@ where
     /// Notifies the parked observer, returning whether one was parked.
     pub(crate) fn on_next(&self, value: T) -> bool {
         match self.0.clone_value() {
-            Some(delivery) => delivery.send(EventBatch::Next(value)),
+            Some(delivery) => {
+                // What the observer answers is the caller's business, not this handle's: this
+                // reports only whether there was one to notify.
+                let _ = delivery.send(EventBatch::Next(value));
+                true
+            }
             None => false,
         }
     }
@@ -85,7 +90,10 @@ where
     /// Terminates the parked observer and empties this handle, returning whether one was parked.
     pub(crate) fn on_termination(&self, termination: Termination<E>) -> bool {
         match self.0.take_value() {
-            Some(delivery) => delivery.send(EventBatch::Termination(termination)),
+            Some(delivery) => {
+                let _ = delivery.send(EventBatch::Termination(termination));
+                true
+            }
             None => false,
         }
     }

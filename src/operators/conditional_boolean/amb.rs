@@ -4,7 +4,7 @@ use crate::utils::mutable::{Mutable, MutableExt, MutableHelper};
 use crate::utils::types::{MaybeSend, Shared, WeakShared};
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -218,13 +218,13 @@ where
     D: Disposable,
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         match &mut self.0 {
             AmbObserverState::Won(observer) => {
-                observer.on_next(value);
-                return;
+                return observer.on_next(value);
             }
-            AmbObserverState::Lost => return,
+            // This source lost the race, so nothing it emits is wanted anymore.
+            AmbObserverState::Lost => return Flow::Stop,
             AmbObserverState::Racing { .. } => {}
         }
 
@@ -237,16 +237,17 @@ where
             unreachable!()
         };
         let Some(shared_context) = context.upgrade() else {
-            return;
+            return Flow::Stop;
         };
         let Some(mut observer) = try_win(&shared_context, &shared_observer, key) else {
-            return;
+            return Flow::Stop;
         };
         drop(shared_context);
         drop(shared_observer);
 
-        observer.on_next(value);
+        let flow = observer.on_next(value);
         self.0 = AmbObserverState::Won(observer);
+        flow
     }
 
     fn on_termination(self, termination: Termination<E>) {

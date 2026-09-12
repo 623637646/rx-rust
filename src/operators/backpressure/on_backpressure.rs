@@ -6,7 +6,7 @@ use crate::utils::subscribe_with_context::{
 use crate::utils::types::{MaybeSend, MaybeSync, Shared};
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -150,8 +150,8 @@ where
     C: BackpressureCollection + MaybeSend + 'or,
     C::Output: MaybeSend + 'or,
 {
-    fn on_next(&mut self, value: C::Input) {
-        let _ = self.context.update(|model| {
+    fn on_next(&mut self, value: C::Input) -> Flow {
+        self.context.update_flow(|model| {
             if model.termination.is_some() {
                 // The value arrived after the termination: it is dropped outside the lock.
                 return UpdateOutcome::empty()
@@ -176,7 +176,7 @@ where
                     .without_drop_outside()
                     .without_events()
             }
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

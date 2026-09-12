@@ -8,7 +8,7 @@ use crate::utils::subscribe_with_context::{
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::types::MarkerType,
 };
@@ -131,14 +131,14 @@ where
     OE1::D: MaybeSend + 'or,
     SD: Disposable + MaybeSend + 'or,
 {
-    fn on_next(&mut self, value: OE1) {
+    fn on_next(&mut self, value: OE1) -> Flow {
         // Insert a placeholder subscription.
         let result = self
             .0
             .update(|model| UpdateOutcome::new(model.insert_placeholder()));
         let key = match result {
             Ok(key) => key,
-            Err(_) => return,
+            Err(_) => return Flow::Stop,
         };
         let observer = MergeAllInnerObserver {
             context: self.0.clone(),
@@ -146,7 +146,7 @@ where
         };
         let sub = value.subscribe(observer);
 
-        let _ = self.0.update(|model| {
+        self.0.update_flow(|model| {
             if let Some(slot) = model.subscriptions.get_mut(&key) {
                 *slot = Some(sub);
                 UpdateOutcome::empty().without_drop_outside()
@@ -154,7 +154,7 @@ where
                 // already terminated
                 UpdateOutcome::empty().with_drop_outside(sub)
             }
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -187,8 +187,8 @@ where
     ID: Disposable,
     SD: Disposable,
 {
-    fn on_next(&mut self, value: T) {
-        self.context.send_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        self.context.send_next(value)
     }
 
     fn on_termination(self, termination: Termination<E>) {

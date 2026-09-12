@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::num::NonZeroUsize;
@@ -77,21 +77,26 @@ impl<T, E, OR> Observer<T, E> for BufferWithCountObserver<T, OR>
 where
     OR: Observer<Vec<T>, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         self.values.push(value);
         if self.values.len() >= self.count.get() {
-            self.observer.on_next(std::mem::take(&mut self.values));
+            self.observer.on_next(std::mem::take(&mut self.values))
+        } else {
+            Flow::Continue
         }
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                if !self.values.is_empty() {
-                    self.observer.on_next(self.values);
-                }
-            }
-            Termination::Error(_) => {}
+        // The final value ends the stream, so a downstream that stopped on it is not completed
+        // on top of that: it has already ended itself.
+        if matches!(termination, Termination::Completed)
+            && !self.values.is_empty()
+            && self
+                .observer
+                .on_next(std::mem::take(&mut self.values))
+                .is_stop()
+        {
+            return;
         }
         self.observer.on_termination(termination);
     }

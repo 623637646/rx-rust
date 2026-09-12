@@ -1415,7 +1415,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
@@ -1448,7 +1448,7 @@ fn test_lifetime_or() {
         let observable = controller.observable();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(vec![&life_marker_2]);
+        assert!(observer.on_next(vec![&life_marker_2]).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -1465,7 +1465,7 @@ fn test_lifetime_or_sub() {
 
     {
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(&life_marker);
+        assert!(observer.on_next(&life_marker).is_continue());
 
         let observable =
             Create::new(|_: BoxedObserver<'_, &TestStruct, Infallible>| Subscription::default());

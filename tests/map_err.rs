@@ -11,7 +11,7 @@ use std::convert::Infallible;
 #[test]
 fn test_completed() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
+        assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::<Infallible>::Completed);
         Subscription::default()
     });
@@ -28,7 +28,7 @@ fn test_completed() {
 #[test]
 fn test_error() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
+        assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("boom"));
         Subscription::default()
     });
@@ -72,7 +72,7 @@ fn test_without_convenient_api() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });

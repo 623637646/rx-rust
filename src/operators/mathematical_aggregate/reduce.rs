@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::types::MarkerType,
 };
 use educe::Educe;
@@ -87,16 +87,18 @@ where
     OR: Observer<T, E>,
     F: FnMut(T, T1) -> T,
 {
-    fn on_next(&mut self, value: T1) {
+    fn on_next(&mut self, value: T1) -> Flow {
         self.value = Some((self.callback)(self.value.take().unwrap(), value));
+        Flow::Continue
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                self.observer.on_next(self.value.unwrap());
-            }
-            Termination::Error(_) => {}
+        // The final value ends the stream, so a downstream that stopped on it is not completed
+        // on top of that: it has already ended itself.
+        if matches!(termination, Termination::Completed)
+            && self.observer.on_next(self.value.take().unwrap()).is_stop()
+        {
+            return;
         }
         self.observer.on_termination(termination)
     }

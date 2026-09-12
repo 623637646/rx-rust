@@ -6,7 +6,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::collections::VecDeque;
@@ -101,8 +101,8 @@ macro_rules! impl_zip_observer {
             OR: Observer<(T1, T2), E>,
             D: Disposable,
         {
-            fn on_next(&mut self, value: $input_t) {
-                let _ = self.0.update(|model| {
+            fn on_next(&mut self, value: $input_t) -> Flow {
+                self.0.update_flow(|model| {
                     if let Some(other) = model.$other_field.0.pop_front() {
                         if model.$other_field.1 && model.$other_field.0.is_empty() {
                             UpdateOutcome::empty().with_next_and_termination_events(
@@ -116,7 +116,7 @@ macro_rules! impl_zip_observer {
                         model.$this_field.0.push_back(value);
                         UpdateOutcome::empty().without_events()
                     }
-                });
+                })
             }
 
             fn on_termination(self, termination: Termination<E>) {

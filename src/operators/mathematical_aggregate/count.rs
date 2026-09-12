@@ -2,7 +2,7 @@ use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -76,16 +76,18 @@ impl<T, E, OR> Observer<T, E> for CountObserver<OR>
 where
     OR: Observer<usize, E>,
 {
-    fn on_next(&mut self, _: T) {
+    fn on_next(&mut self, _: T) -> Flow {
         self.count += 1;
+        Flow::Continue
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                self.observer.on_next(self.count);
-            }
-            Termination::Error(_) => {}
+        // The final value ends the stream, so a downstream that stopped on it is not completed
+        // on top of that: it has already ended itself.
+        if matches!(termination, Termination::Completed)
+            && self.observer.on_next(self.count).is_stop()
+        {
+            return;
         }
         self.observer.on_termination(termination)
     }

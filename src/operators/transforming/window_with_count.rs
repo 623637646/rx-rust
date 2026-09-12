@@ -1,8 +1,9 @@
+use crate::disposable::{DisposableExt, option_disposal::OptionDisposal};
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
 };
 use educe::Educe;
@@ -96,14 +97,17 @@ where
     E: Clone + MaybeSend + 'or,
     OE: Observable<'or, T, E>,
 {
-    type D = OE::D;
+    type D = OptionDisposal<Subscription<OE::D>>;
 
     fn subscribe(
         self,
         mut observer: impl Observer<UnicastObservable<'or, T, E>, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
         let (sender, window) = unicast_subject();
-        observer.on_next(window);
+        if observer.on_next(window).is_stop() {
+            // The first window ended the stream, so the source is never subscribed to.
+            return OptionDisposal::none().into_subscription();
+        }
 
         let observer = WindowWithCountObserver {
             observer,
@@ -111,7 +115,10 @@ where
             count: self.count,
             sent_count: 0,
         };
-        self.source.subscribe(observer)
+        self.source
+            .subscribe(observer)
+            .into_option()
+            .into_subscription()
     }
 }
 
@@ -127,19 +134,22 @@ where
     E: Clone,
     OR: Observer<UnicastObservable<'or, T, E>, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
+        // The consumer of one window stops that window, not the operator: only what the observer
+        // of the windows themselves answers can stop the source.
         match (self.sent_count + 1).cmp(&self.count.get()) {
             Ordering::Less => {
-                self.sender.on_next(value);
+                let _ = self.sender.on_next(value);
                 self.sent_count += 1;
+                Flow::Continue
             }
             Ordering::Equal => {
                 let (new_sender, new_window) = unicast_subject();
                 let mut old_sender = std::mem::replace(&mut self.sender, new_sender);
-                old_sender.on_next(value);
+                let _ = old_sender.on_next(value);
                 old_sender.on_termination(Termination::Completed);
-                self.observer.on_next(new_window);
                 self.sent_count = 0;
+                self.observer.on_next(new_window)
             }
             Ordering::Greater => unreachable!(),
         }

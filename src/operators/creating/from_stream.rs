@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     scheduler::Scheduler,
 };
 use educe::Educe;
@@ -80,8 +80,14 @@ where
         self.scheduler
             .schedule_stream(self.stream, move |result| match result {
                 Some(value) => {
-                    if let Some(observer) = observer.as_mut() {
-                        observer.on_next(value)
+                    let flow = match observer.as_mut() {
+                        Some(observer) => observer.on_next(value),
+                        None => Flow::Stop,
+                    };
+                    if flow.is_stop() {
+                        // The observer ended its own stream, so it is released here and the
+                        // values the stream keeps producing find nothing to deliver to.
+                        drop(observer.take());
                     }
                 }
                 None => {

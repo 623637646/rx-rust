@@ -53,7 +53,7 @@ fn test_completed_time_last_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -61,11 +61,11 @@ fn test_completed_time_last_empty() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -108,7 +108,7 @@ fn test_completed_time_last_not_empty() {
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker.values(), [vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -116,11 +116,11 @@ fn test_completed_time_last_not_empty() {
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(checker.values(), [vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -156,7 +156,7 @@ fn test_completed_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -164,11 +164,11 @@ fn test_completed_no_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -217,7 +217,7 @@ fn test_completed_time_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker.values(), [vec![], vec![]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -225,11 +225,11 @@ fn test_completed_time_small_delay() {
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -270,27 +270,27 @@ fn test_completed_count_last_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(checker.values(), [vec![111, 222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(444);
+        assert!(subject.on_next(444).is_continue());
         assert_eq!(checker.values(), [vec![111, 222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(555);
+        assert!(subject.on_next(555).is_continue());
         assert_eq!(checker.values(), [vec![111, 222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(666);
+        assert!(subject.on_next(666).is_continue());
         assert_eq!(checker.values(), [vec![111, 222, 333], vec![444, 555, 666]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -321,23 +321,23 @@ fn test_completed_count_last_not_empty() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(checker.values(), [vec![111, 222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(444);
+        assert!(subject.on_next(444).is_continue());
         assert_eq!(checker.values(), [vec![111, 222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(555);
+        assert!(subject.on_next(555).is_continue());
         assert_eq!(checker.values(), [vec![111, 222, 333]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -372,8 +372,8 @@ fn test_completed_time_and_count() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -381,8 +381,8 @@ fn test_completed_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -390,8 +390,8 @@ fn test_completed_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -405,7 +405,7 @@ fn test_completed_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(444);
+        assert!(subject.on_next(444).is_continue());
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -419,8 +419,8 @@ fn test_completed_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(555);
-        subject.on_next(666);
+        assert!(subject.on_next(555).is_continue());
+        assert!(subject.on_next(666).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -475,7 +475,7 @@ fn test_completed_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(777);
+        assert!(subject.on_next(777).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -533,8 +533,8 @@ fn test_error_time_and_count() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -542,8 +542,8 @@ fn test_error_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -551,8 +551,8 @@ fn test_error_time_and_count() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -566,7 +566,7 @@ fn test_error_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(444);
+        assert!(subject.on_next(444).is_continue());
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -580,8 +580,8 @@ fn test_error_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(555);
-        subject.on_next(666);
+        assert!(subject.on_next(555).is_continue());
+        assert!(subject.on_next(666).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -636,7 +636,7 @@ fn test_error_time_and_count() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(777);
+        assert!(subject.on_next(777).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -699,8 +699,8 @@ fn test_unsubscribe() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(111);
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![111, 111]]);
@@ -712,8 +712,8 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![111, 111]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
@@ -725,8 +725,8 @@ fn test_unsubscribe() {
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(333);
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -744,7 +744,7 @@ fn test_unsubscribe() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(444);
+        assert!(subject.on_next(444).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -762,8 +762,8 @@ fn test_unsubscribe() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(555);
-        subject.on_next(666);
+        assert!(subject.on_next(555).is_continue());
+        assert!(subject.on_next(666).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -826,7 +826,7 @@ fn test_unsubscribe() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(777);
+        assert!(subject.on_next(777).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -894,8 +894,8 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(111);
-                subject_cloned.on_next(111);
+                assert!(subject_cloned.on_next(111).is_continue());
+                assert!(subject_cloned.on_next(111).is_continue());
             })
             .await
             .unwrap();
@@ -909,8 +909,8 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(222);
-                subject_cloned.on_next(222);
+                assert!(subject_cloned.on_next(222).is_continue());
+                assert!(subject_cloned.on_next(222).is_continue());
             })
             .await
             .unwrap();
@@ -924,8 +924,8 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(333);
-                subject_cloned.on_next(333);
+                assert!(subject_cloned.on_next(333).is_continue());
+                assert!(subject_cloned.on_next(333).is_continue());
             })
             .await
             .unwrap();
@@ -945,7 +945,7 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(444);
+                assert!(subject_cloned.on_next(444).is_continue());
             })
             .await
             .unwrap();
@@ -965,8 +965,8 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(555);
-                subject_cloned.on_next(666);
+                assert!(subject_cloned.on_next(555).is_continue());
+                assert!(subject_cloned.on_next(666).is_continue());
             })
             .await
             .unwrap();
@@ -1027,7 +1027,7 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(777);
+                assert!(subject_cloned.on_next(777).is_continue());
             })
             .await
             .unwrap();
@@ -1108,8 +1108,8 @@ fn test_subscribe_by_different_observer() {
         assert!(checker_2.values().is_empty());
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(111);
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![111, 111]]);
@@ -1121,8 +1121,8 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![111, 111]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
@@ -1134,8 +1134,8 @@ fn test_subscribe_by_different_observer() {
         assert_eq!(checker_2.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(333);
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1153,7 +1153,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(444);
+        assert!(subject.on_next(444).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1171,8 +1171,8 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(555);
-        subject.on_next(666);
+        assert!(subject.on_next(555).is_continue());
+        assert!(subject.on_next(666).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1235,7 +1235,7 @@ fn test_subscribe_by_different_observer() {
         );
         assert_eq!(checker_2.state(), State::Active);
 
-        subject.on_next(777);
+        assert!(subject.on_next(777).is_continue());
         assert_eq!(checker_1.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(
@@ -1337,10 +1337,10 @@ fn test_multiple_operation() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
-        subject.on_next(111);
-        subject.on_next(111);
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
+        assert!(subject.on_next(111).is_continue());
+        assert!(subject.on_next(111).is_continue());
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -1348,10 +1348,10 @@ fn test_multiple_operation() {
         assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(222);
-        subject.on_next(222);
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -1371,10 +1371,10 @@ fn test_multiple_operation() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
-        subject.on_next(333);
-        subject.on_next(333);
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
+        assert!(subject.on_next(333).is_continue());
+        assert!(subject.on_next(333).is_continue());
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -1396,8 +1396,8 @@ fn test_multiple_operation() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(444);
-        subject.on_next(444);
+        assert!(subject.on_next(444).is_continue());
+        assert!(subject.on_next(444).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -1420,10 +1420,10 @@ fn test_multiple_operation() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(555);
-        subject.on_next(555);
-        subject.on_next(666);
-        subject.on_next(666);
+        assert!(subject.on_next(555).is_continue());
+        assert!(subject.on_next(555).is_continue());
+        assert!(subject.on_next(666).is_continue());
+        assert!(subject.on_next(666).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -1475,8 +1475,8 @@ fn test_without_convenient_api() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
+        assert!(subject.on_next(111).is_continue());
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -1484,8 +1484,8 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![111, 111]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(222);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(222).is_continue());
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
@@ -1493,8 +1493,8 @@ fn test_without_convenient_api() {
         assert_eq!(checker.values(), [vec![111, 111], vec![222, 222]]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(333);
-        subject.on_next(333);
+        assert!(subject.on_next(333).is_continue());
+        assert!(subject.on_next(333).is_continue());
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -1508,7 +1508,7 @@ fn test_without_convenient_api() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(444);
+        assert!(subject.on_next(444).is_continue());
         assert_eq!(
             checker.values(),
             [vec![111, 111], vec![222, 222], vec![333, 333]]
@@ -1522,8 +1522,8 @@ fn test_without_convenient_api() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(555);
-        subject.on_next(666);
+        assert!(subject.on_next(555).is_continue());
+        assert!(subject.on_next(666).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -1578,7 +1578,7 @@ fn test_without_convenient_api() {
         );
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(777);
+        assert!(subject.on_next(777).is_continue());
         assert_eq!(
             checker.values(),
             [
@@ -1629,7 +1629,7 @@ fn test_complete_after_next() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(111);
+        assert!(sender.on_next(111).is_continue());
         sender.on_termination(Termination::<Infallible>::Completed);
         assert_eq!(checker.values(), [vec![111]]);
         assert_eq!(checker.state(), State::Completed);
@@ -1656,7 +1656,7 @@ fn test_error_after_next() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(111);
+        assert!(sender.on_next(111).is_continue());
         sender.on_termination(Termination::Error("error"));
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
@@ -1683,7 +1683,7 @@ fn test_unsub_after_next() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(111);
+        assert!(sender.on_next(111).is_continue());
         subscription.dispose();
         runtime.sleep(DURATION_10_MS).await;
         assert!(checker.values().is_empty());
@@ -1822,7 +1822,7 @@ fn test_next_on_unsub() {
         let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
             Subscription::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
-                observer.on_next(111);
+                assert!(observer.on_next(111).is_stop());
             }))
         });
 
@@ -1922,7 +1922,7 @@ fn test_lifetime_sub() {
 
         {
             let observable = Create::new(move |mut observer| {
-                observer.on_next(111);
+                assert!(observer.on_next(111).is_continue());
                 Subscription::new(CallbackDisposal::new(move || {
                     life_marker.consume_ref();
                 }))
@@ -1945,7 +1945,7 @@ fn test_lifetime_sub() {
 fn test_clone() {
     block_on(|runtime| async move {
         let observable = Create::new(|mut observer| {
-            observer.on_next(TestStruct);
+            assert!(observer.on_next(TestStruct).is_continue());
             observer.on_termination(Termination::Error(TestStruct));
             Subscription::default()
         });

@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::collections::VecDeque;
@@ -72,24 +72,28 @@ impl<T, E, OR> Observer<T, E> for TakeLastObserver<T, OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
+        // The buffer is only replayed on completion, so the source must run to its end even when
+        // nothing is kept: stopping it here would leave downstream without its termination.
         if self.count == 0 {
-            return;
+            return Flow::Continue;
         }
         self.buffer.push_back(value);
         if self.buffer.len() > self.count {
             self.buffer.pop_front();
         }
+        Flow::Continue
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                for value in self.buffer.into_iter() {
-                    self.observer.on_next(value);
+        if matches!(termination, Termination::Completed) {
+            for value in std::mem::take(&mut self.buffer) {
+                if self.observer.on_next(value).is_stop() {
+                    // The replay ended the stream downstream, so it is not completed on top of
+                    // that: it has already ended itself.
+                    return;
                 }
             }
-            Termination::Error(_) => {}
         }
         self.observer.on_termination(termination);
     }

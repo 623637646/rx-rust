@@ -1,11 +1,11 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
-use crate::utils::serialized_delivery::UpdateOutcome;
+use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     scheduler::{RecursionAction, Scheduler},
 };
 use educe::Educe;
@@ -128,7 +128,7 @@ where
     OR: Observer<T, E> + MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         let timer_setup = self.context.update(|model| {
             let deadline = Instant::now() + self.time_span;
             let (timer_setup, previous_value) = match model {
@@ -152,8 +152,11 @@ where
             };
             UpdateOutcome::new(timer_setup).with_drop_outside(previous_value)
         });
-        let Ok(Some(deadline)) = timer_setup else {
-            return;
+        let deadline = match timer_setup {
+            Ok(Some(deadline)) => deadline,
+            // The value replaced the pending one, whose timer is still running.
+            Ok(None) => return Flow::Continue,
+            Err(DeliveryStopped) => return Flow::Stop,
         };
 
         let weak_context = self.context.downgrade();
@@ -195,7 +198,7 @@ where
         );
 
         let mut disposal = Some(disposal);
-        let _ = self.context.update(move |model| {
+        self.context.update_flow(move |model| {
             if let Model::Active { timer, .. } = model
                 && timer.is_none()
             {
@@ -204,7 +207,7 @@ where
             // If the timer already fired (possible for a zero time span), dispose the returned
             // handle outside the lock.
             UpdateOutcome::empty().with_drop_outside(disposal)
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

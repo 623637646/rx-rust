@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::types::MarkerType,
 };
 use educe::Educe;
@@ -69,7 +69,7 @@ impl<T, E, OR> Observer<Infallible, E> for WithItemTypeObserver<T, OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: Infallible) {
+    fn on_next(&mut self, value: Infallible) -> Flow {
         match value {}
     }
 

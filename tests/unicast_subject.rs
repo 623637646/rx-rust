@@ -5,7 +5,7 @@ use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::{Observable, ObservableExt};
-use rx_rust::observer::{Observer, Termination};
+use rx_rust::observer::{Flow, Observer, Termination};
 use rx_rust::subject::unicast_subject::{
     UnicastSender, unicast_subject, unicast_subject_with_capacity,
 };
@@ -27,12 +27,12 @@ fn test_completed() {
     assert_eq!(checker.state(), State::Active);
     assert!(!sender.is_disposed());
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert!(!sender.is_disposed());
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
     assert!(!sender.is_disposed());
@@ -49,7 +49,7 @@ fn test_error() {
 
     let _subscription = observable.subscribe(observer);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -64,7 +64,7 @@ fn test_unsubscribe() {
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert!(!sender.is_disposed());
@@ -77,7 +77,7 @@ fn test_unsubscribe() {
     assert!(sender.is_disposed());
 
     // The events after the disposal are dropped, and so is the observer.
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
 
@@ -92,7 +92,7 @@ fn test_unsubscribe_releases_the_observer_when_the_sender_is_dropped() {
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.state(), State::Active);
 
     // Nothing is sent after the disposal, so the observer the sender holds is released by the drop
@@ -111,7 +111,7 @@ fn test_unsubscribe_releases_the_observer_when_the_pipe_terminates() {
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     drop(subscription);
     assert_eq!(checker.state(), State::Active);
 
@@ -132,7 +132,7 @@ fn test_unsubscribe_from_another_thread() {
         let (checker, observer) = Checker::new();
 
         let subscription = observable.subscribe(observer);
-        sender.on_next(111);
+        assert!(sender.on_next(111).is_continue());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
 
@@ -144,11 +144,11 @@ fn test_unsubscribe_from_another_thread() {
         assert!(sender.is_disposed());
 
         // The first event releases the observer, the next ones find the pipe closed.
-        sender.on_next(222);
+        assert!(sender.on_next(222).is_stop());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
 
-        sender.on_next(333);
+        assert!(sender.on_next(333).is_stop());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
 
@@ -163,8 +163,8 @@ fn test_next_before_subscribe() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
 
     // The values sent before the subscription are buffered instead of being dropped.
-    sender.on_next(111);
-    sender.on_next(222);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
     assert!(!sender.is_disposed());
 
     let (checker, observer) = Checker::new();
@@ -172,7 +172,7 @@ fn test_next_before_subscribe() {
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
 
@@ -185,8 +185,8 @@ fn test_next_before_subscribe() {
 fn test_complete_before_subscribe() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
 
-    sender.on_next(111);
-    sender.on_next(222);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
     sender.on_termination(Termination::Completed);
 
     let (checker, observer) = Checker::new();
@@ -199,8 +199,8 @@ fn test_complete_before_subscribe() {
 fn test_error_before_subscribe() {
     let (mut sender, observable) = unicast_subject::<i32, &str>();
 
-    sender.on_next(111);
-    sender.on_next(222);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
     sender.on_termination(Termination::Error("error"));
 
     // The buffered values are delivered before the error, unlike a `ReplaySubject`, which drops
@@ -215,10 +215,10 @@ fn test_error_before_subscribe() {
 fn test_with_capacity() {
     let (mut sender, observable) = unicast_subject_with_capacity::<i32, Infallible>(2);
 
-    sender.on_next(111);
-    sender.on_next(222);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
     // The capacity is only a hint, so the buffer still grows.
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
 
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);
@@ -230,14 +230,14 @@ fn test_with_capacity() {
 fn test_drop_observable_without_subscribe() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert!(!sender.is_disposed());
 
     // Dropping the observable end closes the pipe, so the buffer stops growing.
     drop(observable);
     assert!(sender.is_disposed());
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_stop());
     sender.on_termination(Termination::Completed);
 }
 
@@ -247,7 +247,7 @@ fn test_drop_sender_without_termination() {
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     // Nothing can reach the observer once the only sender is gone, so the pipe is closed and the
     // observer is dropped. It is not reported as a completion.
     drop(sender);
@@ -259,7 +259,7 @@ fn test_drop_sender_without_termination() {
 fn test_drop_sender_after_termination_keeps_the_buffered_termination() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     // Terminating consumes the sender, so this also drops it. The last event still has to reach a
     // late subscriber.
     sender.on_termination(Termination::Completed);
@@ -273,7 +273,7 @@ fn test_drop_sender_after_termination_keeps_the_buffered_termination() {
 #[test]
 fn test_subscribe_after_drop_sender() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     drop(sender);
 
     // The pipe is closed, so a late subscriber observes neither the buffered values nor a
@@ -290,14 +290,14 @@ fn test_ref() {
     let value_2 = 222;
 
     let (mut sender, observable) = unicast_subject::<&i32, Infallible>();
-    sender.on_next(&value_1);
+    assert!(sender.on_next(&value_1).is_continue());
 
     let (checker, observer) = Checker::new();
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
 
-    sender.on_next(&value_2);
+    assert!(sender.on_next(&value_2).is_continue());
     assert_eq!(checker.values(), [&value_1, &value_2]);
 
     sender.on_termination(Termination::Completed);
@@ -314,7 +314,7 @@ fn test_async() {
         let mut sender = runtime
             .spawn(async move {
                 let mut sender = sender;
-                sender.on_next(111);
+                assert!(sender.on_next(111).is_continue());
                 sender
             })
             .await
@@ -331,7 +331,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                sender.on_next(222);
+                assert!(sender.on_next(222).is_continue());
                 sender
             })
             .await
@@ -357,22 +357,23 @@ fn test_async() {
 #[test]
 fn test_next_on_next() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
-    sender.on_next(1);
-    sender.on_next(2);
+    assert!(sender.on_next(1).is_continue());
+    assert!(sender.on_next(2).is_continue());
 
     let (checker, observer) = Checker::new();
     let sender_holder = Shared::new(Mutable::new(Some(sender)));
     let sender_holder_cloned = sender_holder.clone();
     let _subscription = observable
         .hook_on_next(move |downstream, value: i32| {
-            downstream.on_next(value);
+            let flow = downstream.on_next(value);
             if value == 1 {
                 let mut sender = sender_holder_cloned
                     .take_value()
                     .expect("the sender is put back after every re-entrant call");
-                sender.on_next(111);
+                assert!(sender.on_next(111).is_continue());
                 sender_holder_cloned.replace_value(Some(sender));
             }
+            flow
         })
         .subscribe(observer);
 
@@ -381,27 +382,62 @@ fn test_next_on_next() {
     assert_eq!(checker.state(), State::Active);
 
     let mut sender = sender_holder.take_value().unwrap();
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker.values(), [1, 2, 111, 222]);
     assert_eq!(checker.state(), State::Active);
 }
 
 #[test]
+fn test_stop_on_next() {
+    let (mut sender, observable) = unicast_subject::<i32, Infallible>();
+    let (checker, observer) = Checker::stopping_after(1);
+
+    let _subscription = observable.subscribe(observer);
+
+    // The observer ended its own stream, so the sender releases it right away and every later
+    // value is dropped instead of being delivered.
+    assert!(Observer::on_next(&mut sender, 111).is_stop());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert!(sender.is_disposed());
+
+    assert!(Observer::on_next(&mut sender, 222).is_stop());
+    assert_eq!(checker.values(), [111]);
+}
+
+#[test]
+fn test_stop_on_next_while_replaying() {
+    let (mut sender, observable) = unicast_subject::<i32, Infallible>();
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
+
+    let (checker, observer) = Checker::stopping_after(1);
+    let _subscription = observable.subscribe(observer);
+
+    // The replay stops on the value that ended the stream, so the value still buffered behind it
+    // is dropped with the pipe instead of being delivered.
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert!(sender.is_disposed());
+}
+
+#[test]
 fn test_complete_on_next() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
-    sender.on_next(111);
-    sender.on_next(222);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
 
     let (checker, observer) = Checker::new();
     let sender_holder = Shared::new(Mutable::new(Some(sender)));
     let sender_holder_cloned = sender_holder.clone();
     let _subscription = observable
         .hook_on_next(move |downstream, value: i32| {
-            downstream.on_next(value);
+            let flow = downstream.on_next(value);
             if value == 111 {
                 let sender = sender_holder_cloned.take_value().unwrap();
                 sender.on_termination(Termination::Completed);
             }
+            flow
         })
         .subscribe(observer);
 
@@ -414,19 +450,20 @@ fn test_complete_on_next() {
 #[test]
 fn test_error_on_next() {
     let (mut sender, observable) = unicast_subject::<i32, &str>();
-    sender.on_next(111);
-    sender.on_next(222);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
 
     let (checker, observer) = Checker::new();
     let sender_holder = Shared::new(Mutable::new(Some(sender)));
     let sender_holder_cloned = sender_holder.clone();
     let _subscription = observable
         .hook_on_next(move |downstream, value: i32| {
-            downstream.on_next(value);
+            let flow = downstream.on_next(value);
             if value == 111 {
                 let sender = sender_holder_cloned.take_value().unwrap();
                 sender.on_termination(Termination::Error("error"));
             }
+            flow
         })
         .subscribe(observer);
 
@@ -445,20 +482,21 @@ fn test_unsub_on_next() {
     subscription.replace_value(Some(
         observable
             .hook_on_next(move |downstream, value| {
-                downstream.on_next(value);
+                assert!(downstream.on_next(value).is_continue());
                 if let Some(subscription) = subscription_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
+                Flow::Continue
             })
             .subscribe(observer),
     ));
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
     assert!(sender.is_disposed());
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
 }
@@ -470,12 +508,12 @@ fn test_unsub_on_next_by_take() {
 
     let _subscription = observable.take(1).subscribe(observer);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert!(sender.is_disposed());
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
@@ -483,9 +521,9 @@ fn test_unsub_on_next_by_take() {
 #[test]
 fn test_take_during_replay() {
     let (mut sender, observable) = unicast_subject::<i32, Infallible>();
-    sender.on_next(111);
-    sender.on_next(222);
-    sender.on_next(333);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
+    assert!(sender.on_next(333).is_continue());
 
     // A downstream that stops during the replay of the buffered values closes the pipe once the
     // subscription it disposes exists, which is as soon as `subscribe` returns.
@@ -495,7 +533,7 @@ fn test_take_during_replay() {
     assert_eq!(checker.state(), State::Completed);
     assert!(sender.is_disposed());
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }
@@ -518,7 +556,7 @@ fn test_unsub_on_completed() {
             .subscribe(observer),
     ));
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -544,7 +582,9 @@ fn reentrant_probe(holder: &SenderHolder, drops: &DropCount) -> DropProbe {
         let Some(mut sender) = holder.take_value() else {
             return;
         };
-        sender.on_next(drops.probe());
+        // What the pipe answers depends on the test this probe is dropped in; the tests count the
+        // drops, and this helper is not where the flow is asserted.
+        let _ = sender.on_next(drops.probe());
         holder.replace_value(Some(sender));
     }))
 }
@@ -554,8 +594,16 @@ fn test_drop_buffered_value_outside_lock() {
     let drops = DropCount::new();
     let sender_holder: SenderHolder = Shared::new(Mutable::new(None));
     let (mut sender, observable) = unicast_subject::<DropProbe, Infallible>();
-    sender.on_next(reentrant_probe(&sender_holder, &drops));
-    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert!(
+        sender
+            .on_next(reentrant_probe(&sender_holder, &drops))
+            .is_continue()
+    );
+    assert!(
+        sender
+            .on_next(reentrant_probe(&sender_holder, &drops))
+            .is_continue()
+    );
     sender_holder.replace_value(Some(sender));
 
     // Closing the pipe drops the buffered values, each of which re-enters the pipe while being
@@ -570,8 +618,16 @@ fn test_drop_replayed_value_outside_lock() {
     let drops = DropCount::new();
     let sender_holder: SenderHolder = Shared::new(Mutable::new(None));
     let (mut sender, observable) = unicast_subject::<DropProbe, Infallible>();
-    sender.on_next(reentrant_probe(&sender_holder, &drops));
-    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert!(
+        sender
+            .on_next(reentrant_probe(&sender_holder, &drops))
+            .is_continue()
+    );
+    assert!(
+        sender
+            .on_next(reentrant_probe(&sender_holder, &drops))
+            .is_continue()
+    );
     sender_holder.replace_value(Some(sender));
 
     // The observer drops each replayed value, which re-enters the pipe while the replay is still
@@ -591,11 +647,19 @@ fn test_drop_delivered_value_outside_lock() {
     // from inside that delivery. Sending consumes the sender exclusively, so the re-entrant value
     // finds no sender to send with: the pipe cannot be fed from inside a delivery of its own, and
     // the observer is reached once per value.
-    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert!(
+        sender
+            .on_next(reentrant_probe(&sender_holder, &drops))
+            .is_continue()
+    );
     assert_eq!(drops.get(), 1);
 
     // The observer was parked back, so the pipe keeps working.
-    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert!(
+        sender
+            .on_next(reentrant_probe(&sender_holder, &drops))
+            .is_continue()
+    );
     assert_eq!(drops.get(), 2);
     assert!(!sender.is_disposed());
 }
@@ -614,21 +678,30 @@ fn test_drop_delivered_value_after_unsubscribe_outside_lock() {
     subscription.replace_value(Some(
         observable
             .hook_on_next(move |downstream: &mut _, value| {
-                Observer::on_next(downstream, value);
+                let flow = Observer::on_next(downstream, value);
                 if let Some(subscription) = subscription_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
+                flow
             })
             .subscribe_with_callback(drop, |_| {}),
     ));
 
-    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert!(
+        sender
+            .on_next(reentrant_probe(&sender_holder, &drops))
+            .is_stop()
+    );
     assert_eq!(drops.get(), 1);
     assert!(sender.is_disposed());
 
     // The pipe is closed, so the value is dropped instead of being delivered, still outside the
     // lock.
-    sender.on_next(reentrant_probe(&sender_holder, &drops));
+    assert!(
+        sender
+            .on_next(reentrant_probe(&sender_holder, &drops))
+            .is_stop()
+    );
     assert_eq!(drops.get(), 2);
 }
 
@@ -636,7 +709,7 @@ fn test_drop_delivered_value_after_unsubscribe_outside_lock() {
 fn test_non_clone() {
     // Make sure the pipe works when neither the item nor the error is `Clone`.
     let (mut sender, observable) = unicast_subject::<TestStruct, TestStruct>();
-    sender.on_next(TestStruct);
+    assert!(sender.on_next(TestStruct).is_continue());
     let _subscription = observable.subscribe_with_callback(TestStruct::consume, |_| {});
     sender.on_termination(Termination::Error(TestStruct));
 }
@@ -653,7 +726,7 @@ fn test_lifetime_or_sub() {
 
     {
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(&life_marker);
+        assert!(observer.on_next(&life_marker).is_continue());
         let (_sender, observable) = unicast_subject();
         _subscription = observable.subscribe(observer);
     }
@@ -687,14 +760,14 @@ fn test_panicking_replay_closes_the_pipe() {
         // Both values are buffered, so subscribing replays them while the pipe still holds the
         // observer on the replay stack. The first one panics when the callback drops it, and the
         // second one carries no payload, so closing the pipe can drop what is left of the queue.
-        sender.on_next(Some(value));
-        sender.on_next(None);
+        assert!(sender.on_next(Some(value)).is_continue());
+        assert!(sender.on_next(None).is_continue());
         let _subscription = observable.subscribe_with_callback(|_value| {}, |_termination| {});
     });
 
     // The panic took the observer away with it, so the pipe is over instead of queuing the events
     // that follow for a replay that will never resume.
     assert!(sender.is_disposed());
-    sender.on_next(None);
+    assert!(sender.on_next(None).is_stop());
     assert!(sender.is_disposed());
 }

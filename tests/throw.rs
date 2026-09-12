@@ -43,7 +43,7 @@ fn test_mut_ref() {
 
     let (_, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(
-        |_| unreachable!(),
+        |_| -> () { unreachable!() },
         |termination| match termination {
             Termination::Completed => unreachable!(),
             Termination::Error(error) => {

@@ -1,5 +1,9 @@
 use crate::utils::types::MaybeSend;
-use crate::{observable::Observable, observable::Subscription, observer::Observer};
+use crate::{
+    observable::Observable,
+    observable::Subscription,
+    observer::{Flow, Observer},
+};
 use educe::Educe;
 
 /// Invokes a callback for each item emitted by the source Observable before the item is emitted to the downstream observer.
@@ -76,9 +80,9 @@ where
     OR: Observer<T, E>,
     F: FnMut(&T),
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         (self.callback)(&value);
-        self.observer.on_next(value);
+        self.observer.on_next(value)
     }
 
     fn on_termination(self, termination: crate::observer::Termination<E>) {

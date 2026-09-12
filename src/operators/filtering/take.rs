@@ -6,7 +6,7 @@ use crate::utils::subscribe_with_auto_dispose_on_termination;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
@@ -89,17 +89,28 @@ impl<T, E, OR> Observer<T, E> for TakeObserver<OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
-        if let Some(observer) = &mut self.observer {
-            observer.on_next(value);
-            self.count -= 1;
-            if self.count == 0 {
-                self.observer
-                    .take()
-                    .unwrap()
-                    .on_termination(Termination::Completed);
-            }
+    fn on_next(&mut self, value: T) -> Flow {
+        let Some(observer) = &mut self.observer else {
+            return Flow::Stop;
+        };
+        let flow = observer.on_next(value);
+        self.count -= 1;
+        if flow.is_stop() {
+            // Downstream ended the stream first, so nothing is completed here: the observer is
+            // released like a disposed one.
+            drop(self.observer.take());
+            return Flow::Stop;
         }
+        if self.count == 0 {
+            self.observer
+                .take()
+                .unwrap()
+                .on_termination(Termination::Completed);
+            // The count is reached, so the source is told to stop instead of running to its own
+            // end, which is what lets a synchronous one — an infinite one included — return.
+            return Flow::Stop;
+        }
+        Flow::Continue
     }
 
     fn on_termination(mut self, termination: Termination<E>) {

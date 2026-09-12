@@ -16,7 +16,7 @@ use crate::utils::serialized_multicast::{Admission, MulticastDisposal, Serialize
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -77,21 +77,24 @@ where
     T: Clone,
     E: Clone,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.0.update(|last, terminated| {
-            if terminated.is_some() {
-                // Replacing the value now would change what the later subscribers observe, after
-                // the completion already replayed the previous one.
-                return UpdateOutcome::empty()
-                    .with_drop_outside(Some(value))
-                    .without_events();
-            }
-            // The replaced value is dropped outside the lock: dropping it can run arbitrary code.
-            let previous = last.replace(value);
-            UpdateOutcome::empty()
-                .with_drop_outside(previous)
-                .without_events()
-        });
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0
+            .update(|last, terminated| {
+                if terminated.is_some() {
+                    // Replacing the value now would change what the later subscribers observe,
+                    // after the completion already replayed the previous one.
+                    return UpdateOutcome::new(Flow::Stop)
+                        .with_drop_outside(Some(value))
+                        .without_events();
+                }
+                // The replaced value is dropped outside the lock: dropping it can run arbitrary
+                // code.
+                let previous = last.replace(value);
+                UpdateOutcome::new(Flow::Continue)
+                    .with_drop_outside(previous)
+                    .without_events()
+            })
+            .unwrap_or(Flow::Stop)
     }
 
     fn on_termination(self, termination: Termination<E>) {

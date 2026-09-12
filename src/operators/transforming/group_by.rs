@@ -1,6 +1,6 @@
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
     utils::types::{MarkerType, MaybeSend},
 };
@@ -154,19 +154,26 @@ where
     F: FnMut(&T) -> K,
     K: Eq + Hash,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         let key = (self.key_selector)(&value);
+        // The consumer of one group stops that group, not the operator: the other groups, and the
+        // groups still to come, have their own consumers. Only the observer of the groups
+        // themselves can stop the source.
         match self.senders.entry(key) {
             // A group whose consumer is gone drops the value instead of buffering it.
-            Entry::Occupied(entry) => entry.into_mut().on_next(value),
+            Entry::Occupied(entry) => {
+                let _ = entry.into_mut().on_next(value);
+                Flow::Continue
+            }
             Entry::Vacant(entry) => {
                 let (sender, group) = unicast_subject();
                 let sender = entry.insert(sender);
                 // The group is emitted before its first value, so it can be subscribed to before
                 // that value arrives. A value sent to a group that nobody subscribed to yet waits
                 // in the group itself.
-                self.observer.on_next(group);
-                sender.on_next(value);
+                let flow = self.observer.on_next(group);
+                let _ = sender.on_next(value);
+                flow
             }
         }
     }

@@ -7,7 +7,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -104,14 +104,14 @@ where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.0.update(|model| {
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0.update_flow(|model| {
             if model.started {
                 UpdateOutcome::empty().with_next_event(value)
             } else {
                 UpdateOutcome::empty().without_events()
             }
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -129,13 +129,15 @@ where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) {
+    fn on_next(&mut self, _: ()) -> Flow {
         if !self.started {
             self.started = true;
-            let _ = self.context.update(|model| {
+            self.context.update_flow(|model| {
                 model.started = true;
                 UpdateOutcome::empty()
-            });
+            })
+        } else {
+            Flow::Continue
         }
     }
 

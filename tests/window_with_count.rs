@@ -57,7 +57,7 @@ fn test_completed() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -73,7 +73,7 @@ fn test_completed() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -93,7 +93,7 @@ fn test_completed() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -113,7 +113,7 @@ fn test_completed() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -197,7 +197,7 @@ fn test_error() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -213,7 +213,7 @@ fn test_error() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -233,7 +233,7 @@ fn test_error() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -253,7 +253,7 @@ fn test_error() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -337,7 +337,7 @@ fn test_unsubscribe() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -353,7 +353,7 @@ fn test_unsubscribe() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -373,7 +373,7 @@ fn test_unsubscribe() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -393,7 +393,7 @@ fn test_unsubscribe() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -484,7 +484,7 @@ fn test_ref() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(&value_1);
+    assert!(sender.on_next(&value_1).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -500,7 +500,7 @@ fn test_ref() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(&value_2);
+    assert!(sender.on_next(&value_2).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -520,7 +520,7 @@ fn test_ref() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(&value_3);
+    assert!(sender.on_next(&value_3).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -604,7 +604,7 @@ fn test_async() {
 
         let mut sender = runtime
             .spawn(async move {
-                sender.on_next(111);
+                assert!(sender.on_next(111).is_continue());
                 sender
             })
             .await
@@ -626,7 +626,7 @@ fn test_async() {
 
         let mut sender = runtime
             .spawn(async move {
-                sender.on_next(222);
+                assert!(sender.on_next(222).is_continue());
                 sender
             })
             .await
@@ -652,7 +652,7 @@ fn test_async() {
 
         let sender = runtime
             .spawn(async move {
-                sender.on_next(333);
+                assert!(sender.on_next(333).is_continue());
                 sender
             })
             .await
@@ -764,7 +764,7 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 2);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -800,7 +800,7 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 3);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -844,7 +844,7 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    subject.on_next(333);
+    assert!(subject.on_next(333).is_continue());
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 4);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -986,7 +986,9 @@ fn test_unsub_on_next_by_take() {
         }
     });
     assert_eq!(termination_checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    // The first window is emitted before the source is subscribed to, so taking one window ends
+    // the stream while there is nothing to subscribe to yet: the source is never reached.
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 }
 
 #[test]
@@ -1044,7 +1046,7 @@ fn test_multiple_operation() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(context.with_ref(Vec::len), 2);
     context.with_ref(|context| {
         for (index, (checker, _)) in context.iter().enumerate() {
@@ -1077,7 +1079,7 @@ fn test_multiple_operation() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(context.with_ref(Vec::len), 2);
     context.with_ref(|context| {
         for (index, (checker, _)) in context.iter().enumerate() {
@@ -1121,7 +1123,7 @@ fn test_multiple_operation() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(context.with_ref(Vec::len), 3);
     context.with_ref(|context| {
         for (index, (checker, _)) in context.iter().enumerate() {
@@ -1259,7 +1261,7 @@ fn test_without_convenient_api() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1275,7 +1277,7 @@ fn test_without_convenient_api() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1295,7 +1297,7 @@ fn test_without_convenient_api() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1315,7 +1317,7 @@ fn test_without_convenient_api() {
     assert_eq!(termination_checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1388,7 +1390,7 @@ fn test_revert_completed() {
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -1396,7 +1398,7 @@ fn test_revert_completed() {
     assert_eq!(checker_3.values(), [111]);
     assert_eq!(checker_3.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111, 222]);
@@ -1437,7 +1439,7 @@ fn test_revert_error() {
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -1445,7 +1447,7 @@ fn test_revert_error() {
     assert_eq!(checker_3.values(), [111]);
     assert_eq!(checker_3.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111, 222]);
@@ -1475,9 +1477,9 @@ fn test_subscribe_window_after_values() {
             |_| {},
         );
 
-    subject.on_next(111);
-    subject.on_next(222);
-    subject.on_next(333);
+    assert!(subject.on_next(111).is_continue());
+    assert!(subject.on_next(222).is_continue());
+    assert!(subject.on_next(333).is_continue());
 
     // The windows were collected without being subscribed to, so their items are buffered instead
     // of being dropped.
@@ -1536,7 +1538,7 @@ fn test_next_on_sub() {
     });
     assert_eq!(termination_checker.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1654,7 +1656,7 @@ fn test_next_on_unsub() {
     let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
         Subscription::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
         }))
     });
 
@@ -1782,8 +1784,8 @@ fn test_subscribe_stale_window_observable() {
 
     // Window 1 is still unsubscribed: its values are buffered. The second value
     // closes it and opens window 2.
-    sender.on_next(111);
-    sender.on_next(222);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(window_vec.with_ref(Vec::len), 2);
 
     let mut windows = window_vec.take_value();
@@ -1793,7 +1795,7 @@ fn test_subscribe_stale_window_observable() {
     // The current window (window 2) receives source values.
     let (checker_2, observer_2) = Checker::new();
     let _sub_2 = window_2.subscribe(observer_2);
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker_2.values(), [333]);
     assert_eq!(checker_2.state(), State::Active);
 
@@ -1805,7 +1807,7 @@ fn test_subscribe_stale_window_observable() {
     assert_eq!(checker_1.state(), State::Completed);
 
     // Source values keep flowing to the current window's subscriber only.
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker_2.values(), [333, 444]);
     assert_eq!(checker_2.state(), State::Completed);
     assert_eq!(checker_1.values(), [111, 222]);
@@ -1827,7 +1829,7 @@ fn test_subscribe_current_window_late_with_earlier_values() {
     );
 
     // The value arrives while the current window has no subscriber yet.
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
 
     // Subscribing replays the buffered value.
     let window_1 = window_vec.with_mut(Vec::pop).unwrap();
@@ -1837,12 +1839,12 @@ fn test_subscribe_current_window_late_with_earlier_values() {
     assert_eq!(checker_1.state(), State::Active);
 
     // Later values are delivered directly.
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Active);
 
     // The count includes the buffered value, so the third value closes the window.
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker_1.values(), [111, 222, 333]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(window_vec.with_ref(Vec::len), 1);
@@ -1865,7 +1867,7 @@ fn test_subscribe_window_observable_after_termination() {
     );
     assert_eq!(window_vec.with_ref(Vec::len), 1);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
 
     // The source terminates while window 1 is still unsubscribed. The window
     // itself was completed by the source termination.
@@ -1896,7 +1898,7 @@ fn test_subscribe_window_observable_after_unsubscribe() {
     );
     assert_eq!(window_vec.with_ref(Vec::len), 1);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
 
     // Disposing the outer subscription drops the sender of the open window. Its buffered values
     // are released without completing or erroring the window.
@@ -1930,7 +1932,7 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     let window_1 = window_vec.with_mut(Vec::pop).unwrap();
     let (checker_1, observer_1) = Checker::new();
     let sub_1 = window_1.subscribe(observer_1);
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     drop(sub_1);
 
@@ -1941,16 +1943,16 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     // Later values of this window have nowhere to go, but they still count
     // towards the window size and the pipeline stays healthy. The first of them is what makes the
     // window notice the disposal and release the observer.
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker_1.state(), State::Dropped);
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker_1.values(), [111]);
 
     // The next window works as usual.
     let window_2 = window_vec.with_mut(Vec::pop).unwrap();
     let (checker_2, observer_2) = Checker::new();
     let _sub_2 = window_2.subscribe(observer_2);
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker_2.values(), [444]);
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(termination_checker.state(), State::Active);
@@ -1974,7 +1976,7 @@ fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
     assert_eq!(window_vec.with_ref(Vec::len), 1);
 
     let drops = DropCount::new();
-    sender.on_next(drops.probe());
+    assert!(sender.on_next(drops.probe()).is_continue());
     assert_eq!(drops.get(), 0);
 
     // Dropping the only handle to an unsubscribed window must release its
@@ -2026,9 +2028,9 @@ fn test_non_clone_item() {
     let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
     let source = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
-        observer.on_next(TestStruct);
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
+        assert!(observer.on_next(TestStruct).is_continue());
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::<Infallible>::Completed);
         Subscription::default()
     });
@@ -2064,7 +2066,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
@@ -2095,8 +2097,8 @@ fn test_lifetime_or() {
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         let (mut sender, window) = unicast_subject();
-        sender.on_next(&life_marker_2);
-        observer.on_next(window);
+        assert!(sender.on_next(&life_marker_2).is_continue());
+        assert!(observer.on_next(window).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -2104,7 +2106,7 @@ fn test_lifetime_or() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });

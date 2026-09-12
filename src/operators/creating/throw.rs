@@ -21,7 +21,7 @@ use std::convert::Infallible;
 /// let mut terminations = Vec::new();
 ///
 /// Throw::new("boom").subscribe_with_callback(
-///     |value: Infallible| panic!("`Throw` should not emit values"),
+///     |_: Infallible| -> () { panic!("`Throw` should not emit values") },
 ///     |termination| terminations.push(termination),
 /// );
 ///

@@ -40,43 +40,43 @@ fn test_completed() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -104,43 +104,43 @@ fn test_completed_from_sampler() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -166,15 +166,15 @@ fn test_completed_source_and_sampler_are_same() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker.values(), [()]);
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker.values(), [(), ()]);
     assert_eq!(checker.state(), State::Active);
 
@@ -203,7 +203,7 @@ fn test_completed_with_interval() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(111);
+        assert!(sender.on_next(111).is_continue());
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -213,12 +213,12 @@ fn test_completed_with_interval() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(222);
+        assert!(sender.on_next(222).is_continue());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(333);
+        assert!(sender.on_next(333).is_continue());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -228,7 +228,7 @@ fn test_completed_with_interval() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(444);
+        assert!(sender.on_next(444).is_continue());
         assert_eq!(checker.values(), [111, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -255,43 +255,43 @@ fn test_error() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -319,43 +319,43 @@ fn test_error_from_sampler() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -384,15 +384,15 @@ fn test_error_source_and_sampler_are_same() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker.values(), [()]);
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker.values(), [(), ()]);
     assert_eq!(checker.state(), State::Active);
 
@@ -421,19 +421,19 @@ fn test_unsubscribe() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -445,19 +445,19 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(333);
+    assert!(subject.on_next(333).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111, 333]);
@@ -492,31 +492,31 @@ fn test_ref() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(&value_1);
+    assert!(sender.on_next(&value_1).is_continue());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(&value_2);
+    assert!(sender.on_next(&value_2).is_continue());
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(&value_3);
+    assert!(sender.on_next(&value_3).is_continue());
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -548,11 +548,11 @@ fn test_mut_ref() {
         |_| unreachable!(),
     );
 
-    sender.on_next(&mut value_1);
-    sampler_sender.on_next(());
-    sender.on_next(&mut value_2);
-    sender.on_next(&mut value_3);
-    sampler_sender.on_next(());
+    assert!(sender.on_next(&mut value_1).is_continue());
+    assert!(sampler_sender.on_next(()).is_continue());
+    assert!(sender.on_next(&mut value_2).is_continue());
+    assert!(sender.on_next(&mut value_3).is_continue());
+    assert!(sampler_sender.on_next(()).is_continue());
 
     drop(subscription);
     drop(sender);
@@ -584,7 +584,7 @@ fn test_async() {
 
         let mut sampler_sender = runtime
             .spawn(async move {
-                sampler_sender.on_next(());
+                assert!(sampler_sender.on_next(()).is_continue());
                 sampler_sender
             })
             .await
@@ -596,7 +596,7 @@ fn test_async() {
 
         let _sender = runtime
             .spawn(async move {
-                sender.on_next(111);
+                assert!(sender.on_next(111).is_continue());
                 sender
             })
             .await
@@ -608,7 +608,7 @@ fn test_async() {
 
         let _sampler_sender = runtime
             .spawn(async move {
-                sampler_sender.on_next(());
+                assert!(sampler_sender.on_next(()).is_continue());
                 sampler_sender
             })
             .await
@@ -652,31 +652,31 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(333);
+    assert!(subject.on_next(333).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -706,19 +706,19 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -744,49 +744,49 @@ fn test_multiple_operation() {
     assert_eq!(sampler_channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_2.state(), ChannelState::Subscribed);
 
-    sampler_sender_2.on_next(());
+    assert!(sampler_sender_2.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_2.state(), ChannelState::Subscribed);
 
-    sampler_sender_1.on_next(());
+    assert!(sampler_sender_1.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_2.state(), ChannelState::Subscribed);
 
-    sampler_sender_2.on_next(());
+    assert!(sampler_sender_2.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_2.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_2.state(), ChannelState::Subscribed);
 
-    sampler_sender_2.on_next(());
+    assert!(sampler_sender_2.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_2.state(), ChannelState::Subscribed);
 
-    sampler_sender_1.on_next(());
+    assert!(sampler_sender_1.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_1.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker_2.state(), ChannelState::Subscribed);
 
-    sampler_sender_2.on_next(());
+    assert!(sampler_sender_2.on_next(()).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -823,37 +823,37 @@ fn test_multiple_operation_same_sampler() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_subject.on_next(());
+    assert!(sampler_subject.on_next(()).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -879,43 +879,43 @@ fn test_without_convenient_api() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(222);
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(333);
+    assert!(sender.on_next(333).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sampler_sender.on_next(());
+    assert!(sampler_sender.on_next(()).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert_eq!(sampler_channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(444);
+    assert!(sender.on_next(444).is_continue());
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -941,7 +941,7 @@ fn test_next_on_sub() {
     assert_eq!(checker.values(), vec![]);
     assert_eq!(checker.state(), State::Active);
 
-    subject_1.on_next(());
+    assert!(subject_1.on_next(()).is_continue());
     assert_eq!(checker.values(), vec![111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -984,7 +984,7 @@ fn test_next_on_unsub() {
     let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
         Subscription::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_stop());
         }))
     });
 
@@ -1070,13 +1070,13 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker_1.consume_ref();
             }))
         });
         let sampler_subject = Create::new(|mut observer| {
-            observer.on_next(());
+            assert!(observer.on_next(()).is_continue());
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker_2.consume_ref();
             }))
@@ -1112,7 +1112,7 @@ fn test_lifetime_or() {
         let observable = observable.sample(sampler_subject);
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(vec![&life_marker_3]);
+        assert!(observer.on_next(vec![&life_marker_3]).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -1158,7 +1158,7 @@ fn test_lifetime_or_sub() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });

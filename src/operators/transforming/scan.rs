@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::types::MarkerType,
 };
 use educe::Educe;
@@ -88,7 +88,7 @@ where
     OR: Observer<T, E>,
     F: FnMut(T, T1) -> T,
 {
-    fn on_next(&mut self, value: T1) {
+    fn on_next(&mut self, value: T1) -> Flow {
         self.value = (self.callback)(self.value.clone(), value);
         self.observer.on_next(self.value.clone())
     }

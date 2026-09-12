@@ -1,7 +1,7 @@
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
     utils::{
         pending_events::EventBatch,
@@ -130,8 +130,9 @@ where
         // serializes the actions below and owns the source and boundary subscriptions.
         subscribe_with_context_owning_source(observer, (), |context| {
             // The first window is opened before subscribing, so that a synchronous source has a
-            // window to deliver its values to.
-            context.send_next(DelegateAction::EmitWindow);
+            // window to deliver its values to. An observer that stops on that first window stops
+            // the context, which disposes the subscriptions below as soon as they are installed.
+            let _ = context.send_next(DelegateAction::EmitWindow);
             let boundary_subscription = self.boundary.subscribe(BoundaryObserver(context.clone()));
             let source_subscription = self.source.subscribe(SourceObserver(context));
             boundary_subscription.preceded_by_bound(source_subscription)
@@ -150,9 +151,9 @@ where
     OR: Observer<UnicastObservable<'or, T, E>, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         // The value is queued as an action, so that it reaches the window outside the lock.
-        self.0.send_next(DelegateAction::ForwardValue(value));
+        self.0.send_next(DelegateAction::ForwardValue(value))
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -169,7 +170,7 @@ fn terminate<'or, T, E, OR, D>(
     OR: Observer<UnicastObservable<'or, T, E>, E>,
     D: Disposable,
 {
-    context.send(EventBatch::NextAndTermination(
+    let _ = context.send(EventBatch::NextAndTermination(
         DelegateAction::TerminateWindow(termination.clone()),
         termination,
     ));
@@ -183,13 +184,13 @@ where
     OR: Observer<UnicastObservable<'or, T, E>, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) {
+    fn on_next(&mut self, _: ()) -> Flow {
         // Two events rather than one, so that disposing the outer subscription while the current
         // window is completing suppresses the new window.
         self.0.send(EventBatch::NextBatch(vec![
             DelegateAction::TerminateWindow(Termination::Completed),
             DelegateAction::EmitWindow,
-        ]));
+        ]))
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -224,25 +225,33 @@ impl<'or, T, E, OR> Observer<DelegateAction<T, E>, E> for DelegateObserver<'or, 
 where
     OR: Observer<UnicastObservable<'or, T, E>, E>,
 {
-    fn on_next(&mut self, action: DelegateAction<T, E>) {
+    fn on_next(&mut self, action: DelegateAction<T, E>) -> Flow {
         match action {
-            DelegateAction::ForwardValue(value) => match &mut self.sender {
-                Some(sender) => sender.on_next(value),
-                // No window accepts values, so this one has nowhere to go.
-                None => drop(value),
-            },
+            DelegateAction::ForwardValue(value) => {
+                match &mut self.sender {
+                    // The consumer of one window stops that window, not the operator: the next
+                    // window has its own consumer.
+                    Some(sender) => {
+                        let _ = sender.on_next(value);
+                    }
+                    // No window accepts values, so this one has nowhere to go.
+                    None => drop(value),
+                }
+                Flow::Continue
+            }
             DelegateAction::TerminateWindow(termination) => {
                 if let Some(sender) = self.sender.take() {
                     sender.on_termination(termination);
                 }
+                Flow::Continue
             }
             DelegateAction::EmitWindow => {
                 debug_assert!(self.sender.is_none());
                 let (sender, window) = unicast_subject();
                 self.sender = Some(sender);
-                self.outer_observer.on_next(window);
+                self.outer_observer.on_next(window)
             }
-        };
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {

@@ -1,13 +1,13 @@
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::pending_events::EventBatch;
-use crate::utils::serialized_delivery::UpdateOutcome;
+use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     scheduler::{RecursionAction, Scheduler},
 };
 use educe::Educe;
@@ -153,7 +153,11 @@ where
     S: Scheduler + Clone + MaybeSend + 'static,
 {
     /// Queues `value`, or the completion when it is `None`, and starts the timer if needed.
-    fn queue_event(&self, value: Option<T>) {
+    ///
+    /// Returns [`Flow::Stop`] once the context has stopped: the event was then dropped, and so
+    /// would every later one be. What downstream itself answers is only known once the timer
+    /// fires, so this is otherwise [`Flow::Continue`].
+    fn queue_event(&self, value: Option<T>) -> Flow {
         let timer_setup = self.context.update(|model| {
             let deadline = Instant::now() + self.delay;
             match value {
@@ -163,8 +167,11 @@ where
             let start_timer = model.timer.reserve_if_idle();
             UpdateOutcome::new(start_timer.then_some(deadline))
         });
-        let Ok(Some(deadline)) = timer_setup else {
-            return;
+        let deadline = match timer_setup {
+            Ok(Some(deadline)) => deadline,
+            // The timer is already running, and will find the event when it fires.
+            Ok(None) => return Flow::Continue,
+            Err(DeliveryStopped) => return Flow::Stop,
         };
 
         let weak_context = self.context.downgrade();
@@ -215,11 +222,13 @@ where
             Some(deadline.saturating_duration_since(Instant::now())),
         );
 
-        let _ = self.context.update(move |model| {
+        // A zero delay can fire the timer before this runs, and that firing can end the stream:
+        // the flow of this update is what reports it.
+        self.context.update_flow(move |model| {
             // If the timer already stopped (possible for a zero delay), `fill` gives the handle
             // back to dispose outside the lock.
             UpdateOutcome::empty().with_drop_outside(model.timer.fill(disposal))
-        });
+        })
     }
 }
 
@@ -230,13 +239,16 @@ where
     OR: Observer<T, E> + MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    fn on_next(&mut self, value: T) {
-        self.queue_event(Some(value));
+    fn on_next(&mut self, value: T) -> Flow {
+        self.queue_event(Some(value))
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => self.queue_event(None),
+            // The completion is the last event, so what the context answers is of no use here.
+            Termination::Completed => {
+                let _ = self.queue_event(None);
+            }
             // An error is not delayed: it terminates the subscription right away, which drops the
             // values that are still waiting along with the timer.
             error @ Termination::Error(_) => {

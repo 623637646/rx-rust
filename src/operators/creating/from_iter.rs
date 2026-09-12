@@ -49,7 +49,13 @@ where
         mut observer: impl Observer<T, Infallible> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
         for value in self.0.into_iter() {
-            observer.on_next(value);
+            if observer.on_next(value).is_stop() {
+                // The observer ended its own stream, so the iteration stops here instead of
+                // running to an end an infinite iterator never reaches, and nothing is completed:
+                // the observer is released like a disposed one. Nothing else could stop it — the
+                // subscription only exists once this returns.
+                return Subscription::default();
+            }
         }
         observer.on_termination(Termination::Completed);
         Subscription::default()

@@ -46,8 +46,9 @@ impl<'or, T, E> Observable<'or, T, E> for FromResult<T, E> {
     ) -> Subscription<Self::D> {
         match self.0 {
             Ok(value) => {
-                observer.on_next(value);
-                observer.on_termination(Termination::Completed);
+                if observer.on_next(value).is_continue() {
+                    observer.on_termination(Termination::Completed);
+                }
             }
             Err(error) => observer.on_termination(Termination::Error(error)),
         }

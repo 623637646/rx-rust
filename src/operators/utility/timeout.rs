@@ -2,7 +2,7 @@ use crate::disposable::{
     Disposable, bound_drop_disposal::BoundDropDisposal, option_disposal::OptionDisposal,
 };
 use crate::observable::{Observable, Subscription};
-use crate::observer::{Observer, Termination};
+use crate::observer::{Flow, Observer, Termination};
 use crate::scheduler::{RecursionAction, Scheduler};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
@@ -129,11 +129,11 @@ where
     OR: Observer<T, Error<E>> + MaybeSend + 'static,
     D: Disposable + MaybeSend + 'static,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.context.update(|model| {
+    fn on_next(&mut self, value: T) -> Flow {
+        self.context.update_flow(|model| {
             model.deadline = Instant::now() + self.duration;
             UpdateOutcome::empty().with_next_event(value)
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

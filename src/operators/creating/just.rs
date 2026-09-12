@@ -45,8 +45,9 @@ impl<'or, T> Observable<'or, T, Infallible> for Just<T> {
         self,
         mut observer: impl Observer<T, Infallible> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
-        observer.on_next(self.0);
-        observer.on_termination(Termination::Completed);
+        if observer.on_next(self.0).is_continue() {
+            observer.on_termination(Termination::Completed);
+        }
         Subscription::default()
     }
 }

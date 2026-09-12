@@ -2,7 +2,7 @@ use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::{fmt::Display, marker::PhantomData};
@@ -141,9 +141,9 @@ where
     C: Clone,
     F: Fn(C, DebugEvent<'_, T, E>),
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         (self.callback)(self.context.clone(), DebugEvent::OnNext(&value));
-        self.observer.on_next(value);
+        self.observer.on_next(value)
     }
 
     fn on_termination(self, termination: Termination<E>) {

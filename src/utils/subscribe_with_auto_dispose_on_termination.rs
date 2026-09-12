@@ -2,7 +2,7 @@ use crate::{
     delegate_disposal,
     disposable::{Disposable, DisposableExt, shared_disposal::SharedDisposal},
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::on_panic::on_panic,
 };
 use educe::Educe;
@@ -59,8 +59,15 @@ where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, value: T) {
-        self.observer.on_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        let flow = self.observer.on_next(value);
+        if flow.is_stop() {
+            // The observer ended its own stream, which is what a termination does too, so the
+            // subscription is disposed here as well: the source is asked to stop by the flow this
+            // returns, and released by the disposal whether or not it honors it.
+            self.shared_disposal.clone().dispose();
+        }
+        flow
     }
 
     fn on_termination(self, termination: Termination<E>) {

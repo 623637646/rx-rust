@@ -80,10 +80,9 @@ where
         mut observer: impl Observer<usize, Infallible> + MaybeSend + 'static,
     ) -> Subscription<Self::D> {
         self.scheduler.schedule_periodically(
-            move |count| {
-                observer.on_next(count);
-                true
-            },
+            // The callback's answer is what keeps the schedule running, so an observer that
+            // stopped ends it: nothing is completed, since an interval never completes anyway.
+            move |count| observer.on_next(count).is_continue(),
             self.period,
             self.delay,
         )

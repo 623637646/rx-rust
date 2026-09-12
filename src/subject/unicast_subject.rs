@@ -17,7 +17,7 @@
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Event, Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Event, Flow, Observer, Termination, boxed_observer::BoxedObserver},
     utils::{
         mutable::{Mutable, MutableBool, MutableBoolHelper, MutableExt, MutableHelper},
         on_panic::on_panic,
@@ -139,7 +139,8 @@ struct Pipe<'or, T, E> {
     /// This is not a copy of [`State::Closed`], and only [`close`] raises it: it says that the
     /// observer was taken away from the pipe, not that the pipe is over. Terminating the pipe and
     /// dropping the sender close the state without touching it, because the sender is gone by then
-    /// and the sender is its only reader.
+    /// and the sender is its only reader. An observer that answers [`Flow::Stop`] is taken away
+    /// too, so the sender closes the pipe there, which raises this as any other disposal does.
     is_disposed: MutableBool,
     state: Mutable<State<'or, T, E>>,
 }
@@ -201,10 +202,9 @@ impl<T, E> UnicastSender<'_, T, E> {
 }
 
 impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         if self.observer.is_some() {
-            self.send_held(value);
-            return;
+            return self.send_held(value);
         }
         // Whatever the value ends up as when it is not delivered - rejected by the queue or
         // dropped by a closed pipe - is handed back, to be dropped once the lock is released.
@@ -227,13 +227,21 @@ impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
         // Asserted with the lock released: a failing assertion would otherwise unwind while
         // holding it, which poisons it for every later event.
         debug_assert!(rejected.is_none());
+        // A discarded value is one the closed pipe had nowhere to deliver to, and so is every
+        // later one: that is the answer, and it needs no second look at the flag.
+        let flow = if discarded.is_some() {
+            Flow::Stop
+        } else {
+            Flow::Continue
+        };
         drop((rejected, discarded)); // Drop outside the lock to avoid potential deadlock
         if let Some((observer, value)) = delivery {
             // The observer stays here from now on, so this is the last event that has to look for
             // it in the state of the pipe.
             self.observer = Some(observer);
-            self.send_held(value);
+            return self.send_held(value);
         }
+        flow
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
@@ -285,10 +293,12 @@ impl<T, E> UnicastSender<'_, T, E> {
     /// Sends `value` to the observer held by the sender, without taking the lock.
     ///
     /// The flag is what tells the sender that the observer went away while it was held here, so it
-    /// is read before the notification, to drop the value instead of delivering it, and after it,
-    /// to release an observer that was disposed by the notification itself. Nothing else is
-    /// needed: the state cannot change under a pipe whose only producer is the caller.
-    fn send_held(&mut self, value: T) {
+    /// is read before the notification, to drop the value instead of delivering it. It is read
+    /// after the notification too: an observer that answered [`Flow::Continue`] can still have
+    /// been disposed by that very notification, which the flag reports and the answer cannot.
+    /// Nothing else is needed: the state cannot change under a pipe whose only producer is the
+    /// caller.
+    fn send_held(&mut self, value: T) -> Flow {
         debug_assert!(self.observer.is_some());
         if self.pipe.is_disposed.read() {
             let observer = self.observer.take();
@@ -296,17 +306,25 @@ impl<T, E> UnicastSender<'_, T, E> {
             // dropped where they are.
             drop(observer);
             drop(value);
-            return;
+            return Flow::Stop;
         }
+        let mut flow = Flow::Continue;
         if let Some(observer) = &mut self.observer {
-            observer.on_next(value); // Notify without taking the lock
+            flow = observer.on_next(value); // Notify without taking the lock
         }
         // Disposing from inside that notification is how a consumer usually stops a stream, so the
         // flag is read once more to release the observer right away instead of at the next event.
-        if self.pipe.is_disposed.read() {
+        if flow.is_stop() || self.pipe.is_disposed.read() {
             let observer = self.observer.take();
-            drop(observer);
+            // An observer that ended its own stream leaves the pipe with nothing to deliver to,
+            // which is what a disposal leaves it with too: closing it keeps the state and the flag
+            // in step with the observer the sender has just let go of, so that the next event
+            // takes the closed path instead of looking for an observer that is gone.
+            close(&self.pipe);
+            drop(observer); // Drop outside the lock to avoid potential deadlock
+            return Flow::Stop;
         }
+        Flow::Continue
     }
 }
 
@@ -444,8 +462,15 @@ fn deliver<'or, T, E>(
                 // The observer is notified outside the lock, so closing from the guard is safe on
                 // the panicking thread.
                 let close_on_panic = on_panic(|| close(pipe));
-                observer.on_next(value); // Notify outside the lock
+                let flow = observer.on_next(value); // Notify outside the lock
                 drop(close_on_panic);
+                if flow.is_stop() {
+                    // The replayed value ended the stream downstream, so the pipe is over: the
+                    // observer is dropped without being terminated, like a disposed one.
+                    close(pipe);
+                    drop(observer); // Drop outside the lock to avoid potential deadlock
+                    return false;
+                }
             }
             Step::Terminate(next_observer, termination) => {
                 // The state was closed under the lock before this step, so a panicking termination

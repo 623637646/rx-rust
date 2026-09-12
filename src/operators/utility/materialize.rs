@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Event, Observer, Termination},
+    observer::{Event, Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::convert::Infallible;
@@ -69,12 +69,19 @@ impl<T, E, OR> Observer<T, E> for MaterializeObserver<OR>
 where
     OR: Observer<Event<T, E>, Infallible>,
 {
-    fn on_next(&mut self, value: T) {
-        self.0.on_next(Event::Next(value));
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0.on_next(Event::Next(value))
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        self.0.on_next(Event::Termination(termination));
-        self.0.on_termination(Termination::Completed);
+        // The materialized termination is the last value of the stream, so a downstream that
+        // stopped on it is not completed on top of that.
+        if self
+            .0
+            .on_next(Event::Termination(termination))
+            .is_continue()
+        {
+            self.0.on_termination(Termination::Completed);
+        }
     }
 }

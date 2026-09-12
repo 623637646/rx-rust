@@ -7,7 +7,7 @@ use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     scheduler::Scheduler,
 };
 use educe::Educe;
@@ -120,11 +120,11 @@ where
     OR: Observer<Vec<T>, E>,
     D: Disposable + MaybeSend + 'static,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.0.update(|values| {
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0.update_flow(|values| {
             values.push(value);
             UpdateOutcome::empty().without_events()
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
