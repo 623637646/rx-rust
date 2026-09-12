@@ -942,7 +942,10 @@ fn test_next_on_unsub() {
         });
 
         // Custom operations
-        let observable = observable.buffer_with_time(DURATION_100_MS, runtime.clone(), None);
+        // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
+        // the disposal below with an empty buffer.
+        let observable =
+            observable.buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_100_MS));
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -969,7 +972,10 @@ fn test_complete_on_unsub() {
         });
 
         // Custom operations
-        let observable = observable.buffer_with_time(DURATION_100_MS, runtime.clone(), None);
+        // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
+        // the disposal below with an empty buffer.
+        let observable =
+            observable.buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_100_MS));
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
@@ -996,7 +1002,10 @@ fn test_error_on_unsub() {
         });
 
         // Custom operations
-        let observable = observable.buffer_with_time(DURATION_100_MS, runtime.clone(), None);
+        // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
+        // the disposal below with an empty buffer.
+        let observable =
+            observable.buffer_with_time(DURATION_100_MS, runtime.clone(), Some(DURATION_100_MS));
 
         let subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());

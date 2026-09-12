@@ -1827,11 +1827,13 @@ fn test_next_on_unsub() {
         });
 
         // Custom operations
+        // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
+        // the disposal below with an empty buffer.
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             DURATION_100_MS,
             runtime.clone(),
-            None,
+            Some(DURATION_100_MS),
         );
 
         let subscription = observable.subscribe(observer);
@@ -1859,11 +1861,13 @@ fn test_complete_on_unsub() {
         });
 
         // Custom operations
+        // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
+        // the disposal below with an empty buffer.
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             DURATION_100_MS,
             runtime.clone(),
-            None,
+            Some(DURATION_100_MS),
         );
 
         let subscription = observable.subscribe(observer);
@@ -1891,11 +1895,13 @@ fn test_error_on_unsub() {
         });
 
         // Custom operations
+        // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
+        // the disposal below with an empty buffer.
         let observable = observable.buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             DURATION_100_MS,
             runtime.clone(),
-            None,
+            Some(DURATION_100_MS),
         );
 
         let subscription = observable.subscribe(observer);
