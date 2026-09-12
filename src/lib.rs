@@ -1,10 +1,7 @@
 #![forbid(unsafe_code)]
-
-//! RxRust: A Reactive Extensions library for Rust
-//!
-//! This library provides a set of tools for composing asynchronous and event-based programs
-//! using observable sequences and LINQ-style query operators.
-//! See <https://reactivex.io/>
+// The README is the crate-level documentation, and its examples are doctests. They use the Tokio
+// scheduler, so both only exist under that feature; docs.rs builds with it (see `Cargo.toml`).
+#![cfg_attr(feature = "tokio-scheduler", doc = include_str!("../README.md"))]
 
 #[cfg(all(
     feature = "single-threaded",

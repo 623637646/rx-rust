@@ -1,10 +1,6 @@
 
 # TODOs
 
-* Features  
-  * Async 转换 + Single 抽象（[最后验证操作符是不是全](https://reactivex.io/documentation/single.html)）  
-    * Future 转 Single，可以删掉 Future 转 Observable  
-    * Single 转 Future，可以删掉 Observable 转 Future（应该没有这个）  
 * Improve
   * Observable 的 T 和 E 用 associated type。但是rustc会卡住，等升级rustc再继续
 * NotBigDeal  
