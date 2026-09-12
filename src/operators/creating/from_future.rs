@@ -10,6 +10,10 @@ use std::convert::Infallible;
 /// Converts a Future into an Observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
+/// The output is emitted as the single item, and the Observable then completes. A future of a
+/// `Result` goes through [`FromTryFuture`](crate::operators::creating::from_try_future::FromTryFuture)
+/// instead, which turns its `Err` into the error of the Observable.
+///
 /// # Examples
 /// ```rust
 /// # #[cfg(not(feature = "tokio-scheduler"))]

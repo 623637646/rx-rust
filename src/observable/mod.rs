@@ -3,7 +3,9 @@ pub mod cloneable_boxed_observable;
 pub mod either_observable;
 
 #[cfg(feature = "futures")]
-use crate::operators::others::observable_stream::ObservableStream;
+use crate::operators::others::{
+    observable_stream::ObservableStream, observable_try_stream::ObservableTryStream,
+};
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
     observable::{
@@ -51,6 +53,8 @@ use crate::{
             hook_on_next::HookOnNext,
             hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination,
+            observable_future::ObservableFuture,
+            observable_try_future::ObservableTryFuture,
             with_error_type::WithErrorType,
             with_item_type::WithItemType,
         },
@@ -441,13 +445,46 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
         CloneableBoxedObservable::new(self)
     }
 
+    /// Converts the observable into a future of its first item: `Some(item)`, or `None` when the
+    /// source completes without one. The source is stopped as soon as the item is in.
+    ///
+    /// This is only for a source that cannot fail; a fallible one goes through
+    /// [`into_try_future`](Self::into_try_future). An operator that picks another item, such as
+    /// `last`, or one that always emits, such as `collect`, goes in front of it.
+    fn into_future(self) -> ObservableFuture<'or, T, Self>
+    where
+        Self: Observable<'or, T, std::convert::Infallible>,
+    {
+        ObservableFuture::new(self)
+    }
+
     /// Converts the observable into an async stream.
+    ///
+    /// A `Stream` has no error channel, so this is only for a source that cannot fail; a
+    /// fallible one goes through [`into_try_stream`](Self::into_try_stream).
     #[cfg(feature = "futures")]
     fn into_stream(self) -> ObservableStream<'or, T, Self>
     where
         Self: Observable<'or, T, std::convert::Infallible>,
     {
         ObservableStream::new(self)
+    }
+
+    /// Converts the observable into a future of its first item: `Ok(Some(item))`, `Ok(None)` when
+    /// the source completes without one, or `Err(error)` when it fails first. The source is
+    /// stopped as soon as the item is in.
+    ///
+    /// The output is the `Maybe` of ReactiveX; an operator that always emits, such as `collect`,
+    /// in front of it makes it a `Single`, and `last` picks the last item instead of the first.
+    fn into_try_future(self) -> ObservableTryFuture<'or, T, E, Self> {
+        ObservableTryFuture::new(self)
+    }
+
+    /// Converts the observable into an async stream of `Result`s: each item as `Ok`, and an error
+    /// as the last item, `Err`, before the stream ends.
+    #[cfg(feature = "futures")]
+    fn into_try_stream(self) -> ObservableTryStream<'or, T, E, Self> {
+        ObservableTryStream::new(self)
     }
 
     /// Emits only the final item produced by the source before completion.

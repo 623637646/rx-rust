@@ -6,6 +6,9 @@ pub mod from_iter;
 pub mod from_result;
 #[cfg(feature = "futures")]
 pub mod from_stream;
+pub mod from_try_future;
+#[cfg(feature = "futures")]
+pub mod from_try_stream;
 pub mod interval;
 pub mod just;
 pub mod never;

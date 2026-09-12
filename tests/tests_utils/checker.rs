@@ -178,3 +178,57 @@ impl<T> Checker<T, Infallible> {
         )
     }
 }
+
+impl<T, E> Checker<T, E> {
+    /// Like [`Checker::from_stream`], for a stream of `Result`s: an `Err` is recorded as
+    /// [`State::Error`], and nothing may follow it but the end of the stream.
+    pub(crate) fn from_try_stream(
+        stream: impl Stream<Item = Result<T, E>> + MaybeSend + 'static,
+        runtime: TestRuntime,
+    ) -> (Self, Subscription<impl Disposable + MaybeSend + 'static>)
+    where
+        T: MaybeSend + 'static,
+        E: MaybeSend + 'static,
+    {
+        let values = Shared::new(Mutable::new(Vec::new()));
+        let state = Shared::new(Mutable::new(State::Active));
+
+        let values_cloned = values.clone();
+        let state_cloned = state.clone();
+        let handle = runtime.spawn_future(async move {
+            let mut stream = std::pin::pin!(stream);
+            while let Some(item) = stream.next().await {
+                match item {
+                    Ok(value) => {
+                        state_cloned.with_ref(|state| assert!(matches!(state, State::Active)));
+                        values_cloned.with_mut(|values| values.push(value));
+                    }
+                    Err(error) => match state_cloned.replace_value(State::Error(error)) {
+                        State::Active => {}
+                        State::Completed | State::Error(_) | State::Dropped => panic!(),
+                    },
+                }
+            }
+            state_cloned.with_mut(|lock| match &*lock {
+                State::Active => *lock = State::Completed,
+                State::Error(_) => {}
+                State::Completed | State::Dropped => panic!(),
+            });
+        });
+        (
+            Self {
+                values,
+                state: state.clone(),
+            },
+            Subscription::new(CallbackDisposal::new(move || {
+                use rx_rust::disposable::Disposable;
+                handle.dispose();
+                state.with_mut(|lock| match &*lock {
+                    State::Active => *lock = State::Dropped,
+                    State::Completed | State::Error(_) => {}
+                    State::Dropped => panic!(),
+                });
+            })),
+        )
+    }
+}

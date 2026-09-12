@@ -2,7 +2,11 @@ pub mod debug;
 pub mod hook_on_next;
 pub mod hook_on_subscription;
 pub mod hook_on_termination;
+pub mod observable_future;
 #[cfg(feature = "futures")]
 pub mod observable_stream;
+pub mod observable_try_future;
+#[cfg(feature = "futures")]
+pub mod observable_try_stream;
 pub mod with_error_type;
 pub mod with_item_type;

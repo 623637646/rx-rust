@@ -1,26 +1,16 @@
 use crate::{
-    observable::{Observable, Subscription},
-    observer::{Flow, Observer, Termination},
-    utils::mutable::{Mutable, MutableHelper},
-    utils::types::{MaybeSend, Shared},
+    observable::Observable, operators::others::observable_try_stream::ObservableTryStream,
+    utils::types::MaybeSend,
 };
 use educe::Educe;
 use futures::Stream;
-use std::{
-    collections::VecDeque,
-    convert::Infallible,
-    task::{Poll, Waker},
-};
+use std::{convert::Infallible, task::Poll};
 
-#[derive(Educe)]
-#[educe(Debug)]
-struct ObservableStreamContext<T> {
-    values: VecDeque<T>,
-    waker: Option<Waker>,
-    terminated: bool,
-}
-
-/// Converts an Observable into a `futures::Stream` that can be used with `async/await`.
+/// Converts an Observable that cannot fail into a `futures::Stream` that can be used with
+/// `async/await`.
+///
+/// Each item is yielded as is and completion ends the stream. This is [`ObservableTryStream`]
+/// without the error it can never carry; see there for how it subscribes and buffers.
 ///
 /// # Examples
 /// ```rust
@@ -45,27 +35,16 @@ pub struct ObservableStream<'or, T, OE>
 where
     OE: Observable<'or, T, Infallible>,
 {
-    source: Option<OE>,
-    sub: Option<Subscription<OE::D>>,
-    context: Shared<Mutable<ObservableStreamContext<T>>>,
+    stream: ObservableTryStream<'or, T, Infallible, OE>,
 }
 
 impl<'or, T, OE> ObservableStream<'or, T, OE>
 where
     OE: Observable<'or, T, Infallible>,
 {
-    pub fn new(source: OE) -> Self
-    where
-        OE: Observable<'or, T, Infallible>,
-    {
+    pub fn new(source: OE) -> Self {
         Self {
-            source: Some(source),
-            sub: None,
-            context: Shared::new(Mutable::new(ObservableStreamContext {
-                terminated: false,
-                waker: None,
-                values: VecDeque::new(),
-            })),
+            stream: ObservableTryStream::new(source),
         }
     }
 }
@@ -83,61 +62,13 @@ where
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        if let Some(source) = self.source.take() {
-            let observer = ObservableStreamObserver {
-                context: self.context.clone(),
-            };
-            let sub = source.subscribe(observer);
-            self.sub = Some(sub);
-        }
-
-        let waker = cx.waker().clone();
-        // The waker this one replaces is handed back, because dropping a `Waker` runs the
-        // external code of its vtable, which must not run under the lock.
-        let (poll, previous_waker) = self.context.with_mut(|context| {
-            let previous_waker = context.waker.replace(waker);
-            let poll = if let Some(event) = context.values.pop_front() {
-                Poll::Ready(Some(event))
-            } else if context.terminated {
-                Poll::Ready(None)
-            } else {
-                Poll::Pending
-            };
-            (poll, previous_waker)
-        });
-        drop(previous_waker); // Drop outside the lock to avoid potential deadlock
-        poll
-    }
-}
-
-struct ObservableStreamObserver<T> {
-    context: Shared<Mutable<ObservableStreamContext<T>>>,
-}
-
-impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
-    fn on_next(&mut self, value: T) -> Flow {
-        // The waker is taken under the lock and woken after it is released, because waking runs
-        // external code, which must not run under the lock.
-        let waker = self.context.with_mut(|context| {
-            context.values.push_back(value);
-            context.waker.take()
-        });
-        if let Some(waker) = waker {
-            waker.wake();
-        }
-        // The stream buffers whatever arrives, so it never stops the source itself: dropping the
-        // stream disposes the subscription instead.
-        Flow::Continue
-    }
-
-    fn on_termination(self, _: Termination<Infallible>) {
-        // The waker is woken outside the lock, like in `on_next`.
-        let waker = self.context.with_mut(|context| {
-            context.terminated = true;
-            context.waker.take()
-        });
-        if let Some(waker) = waker {
-            waker.wake();
-        }
+        std::pin::Pin::new(&mut self.stream)
+            .poll_next(cx)
+            .map(|item| {
+                item.map(|result| {
+                    let Ok(value) = result;
+                    value
+                })
+            })
     }
 }
