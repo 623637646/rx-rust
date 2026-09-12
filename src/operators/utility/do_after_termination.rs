@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -87,8 +87,8 @@ where
     OR: Observer<T, E>,
     F: FnOnce(Termination<E>),
 {
-    fn on_next(&mut self, value: T) {
-        self.observer.on_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        self.observer.on_next(value)
     }
 
     fn on_termination(self, termination: Termination<E>) {

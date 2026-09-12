@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -77,7 +77,7 @@ where
     T: PartialOrd,
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         if let Some(min) = &mut self.min {
             if value < *min {
                 *min = value;
@@ -85,16 +85,17 @@ where
         } else {
             self.min = Some(value);
         }
+        Flow::Continue
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                if let Some(min) = self.min {
-                    self.observer.on_next(min);
-                }
-            }
-            Termination::Error(_) => {}
+        // The final value ends the stream, so a downstream that stopped on it is not completed
+        // on top of that: it has already ended itself.
+        if matches!(termination, Termination::Completed)
+            && let Some(min) = self.min.take()
+            && self.observer.on_next(min).is_stop()
+        {
+            return;
         }
         self.observer.on_termination(termination)
     }

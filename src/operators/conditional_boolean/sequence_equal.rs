@@ -6,7 +6,7 @@ use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::collections::VecDeque;
@@ -125,8 +125,8 @@ where
     T: PartialEq,
     D: Disposable,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.context.update(|model| {
+    fn on_next(&mut self, value: T) -> Flow {
+        self.context.update_flow(|model| {
             let (mine, other) = if self.is_first {
                 (&mut model.first, &mut model.second)
             } else {
@@ -159,7 +159,7 @@ where
                     }
                 }
             }
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

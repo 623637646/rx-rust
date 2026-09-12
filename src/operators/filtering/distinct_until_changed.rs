@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -95,13 +95,13 @@ where
     F: FnMut(&T) -> K,
     K: Eq,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         let key = (self.key_selector)(&value);
         if self.previous_key.as_ref() == Some(&key) {
-            return;
+            return Flow::Continue;
         }
         self.previous_key = Some(key);
-        self.observer.on_next(value);
+        self.observer.on_next(value)
     }
 
     fn on_termination(self, termination: Termination<E>) {

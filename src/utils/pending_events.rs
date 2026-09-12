@@ -13,6 +13,16 @@ pub enum EventBatch<T, E> {
     NextBatchAndTermination(Vec<T>, Termination<E>),
 }
 
+impl<T, E> EventBatch<T, E> {
+    /// Returns whether the batch carries a termination, after which nothing can be queued.
+    pub fn ends_stream(&self) -> bool {
+        matches!(
+            self,
+            Self::Termination(_) | Self::NextAndTermination(..) | Self::NextBatchAndTermination(..)
+        )
+    }
+}
+
 /// The events waiting to be delivered to an observer.
 ///
 /// A termination is the last event of a stream, so it is queued last and nothing is queued after

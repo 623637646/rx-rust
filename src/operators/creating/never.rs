@@ -17,7 +17,7 @@ use std::convert::Infallible;
 /// use std::convert::Infallible;
 ///
 /// let _subscription = Never.subscribe_with_callback(
-///     |value: Infallible| panic!("`Never` should not emit values"),
+///     |_: Infallible| -> () { panic!("`Never` should not emit values") },
 ///     |_| panic!("`Never` should not terminate"),
 /// );
 /// ```

@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::ops::AddAssign;
@@ -74,22 +74,23 @@ where
     T: AddAssign,
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         if let Some(sum) = &mut self.sum {
             *sum += value;
         } else {
             self.sum = Some(value);
         }
+        Flow::Continue
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                if let Some(sum) = self.sum {
-                    self.observer.on_next(sum);
-                }
-            }
-            Termination::Error(_) => {}
+        // The final value ends the stream, so a downstream that stopped on it is not completed
+        // on top of that: it has already ended itself.
+        if matches!(termination, Termination::Completed)
+            && let Some(sum) = self.sum.take()
+            && self.observer.on_next(sum).is_stop()
+        {
+            return;
         }
         self.observer.on_termination(termination)
     }

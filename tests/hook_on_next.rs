@@ -11,7 +11,7 @@ use rx_rust::observable::Subscription;
 use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     operators::{creating::create::Create, others::hook_on_next::HookOnNext},
     subject::publish_subject::PublishSubject,
 };
@@ -27,8 +27,8 @@ fn test_completed() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_2.on_next(value);
-        observer.on_next(value * 2);
+        assert!(observer_2.on_next(value).is_continue());
+        observer.on_next(value * 2)
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -37,7 +37,7 @@ fn test_completed() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -59,7 +59,8 @@ fn test_completed_no_call_original() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.hook_on_next(move |_, value| {
-        observer_2.on_next(value);
+        assert!(observer_2.on_next(value).is_continue());
+        Flow::Continue
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -68,7 +69,7 @@ fn test_completed_no_call_original() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -89,15 +90,15 @@ fn test_completed_resend_values() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.hook_on_next(move |observer, value| {
-        observer.on_next(value);
-        observer.on_next(value);
+        assert!(observer.on_next(value).is_continue());
+        observer.on_next(value)
     });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), [111, 111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -115,8 +116,8 @@ fn test_error() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_2.on_next(value);
-        observer.on_next(value * 2);
+        assert!(observer_2.on_next(value).is_continue());
+        observer.on_next(value * 2)
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -125,7 +126,7 @@ fn test_error() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -150,7 +151,7 @@ fn test_unsubscribe() {
     let observer_3 = SharedSender::new(observer_3);
     let observable = observable.hook_on_next(move |observer, value| {
         observer_3.on_next(value);
-        observer.on_next(value * 2);
+        observer.on_next(value * 2)
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -164,7 +165,7 @@ fn test_unsubscribe() {
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [222]);
@@ -180,7 +181,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_3.values(), [111, 111]);
     assert_eq!(checker_3.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [222, 444]);
@@ -212,8 +213,8 @@ fn test_ref() {
     // Custom operations
     let observable = subject.clone();
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_2.on_next(value);
-        observer.on_next(value_2_ref);
+        assert!(observer_2.on_next(value).is_continue());
+        observer.on_next(value_2_ref)
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -222,7 +223,7 @@ fn test_ref() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(&value_1);
+    assert!(subject.on_next(&value_1).is_continue());
     assert_eq!(checker_1.values(), [&value_2]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [&value_1]);
@@ -241,7 +242,7 @@ fn test_mut_ref() {
     let mut error = 222;
 
     let observable = Create::new(|mut observer| {
-        observer.on_next(&mut value);
+        assert!(observer.on_next(&mut value).is_continue());
         observer.on_termination(Termination::Error(&mut error));
         Subscription::default()
     });
@@ -249,8 +250,8 @@ fn test_mut_ref() {
 
     // Custom operations
     let observable = observable.hook_on_next(move |or, value| {
-        observer.on_next(*value);
-        or.on_next(value);
+        assert!(observer.on_next(*value).is_continue());
+        or.on_next(value)
     });
 
     let _subscription = observable.subscribe_with_callback(
@@ -281,8 +282,8 @@ fn test_async() {
         // Custom operations
         let observable = subject.clone();
         let observable = observable.hook_on_next(move |observer, value| {
-            observer_2.on_next(value);
-            observer.on_next(value * 2);
+            assert!(observer_2.on_next(value).is_continue());
+            observer.on_next(value * 2)
         });
 
         let subscription = runtime
@@ -297,7 +298,7 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(111);
+                assert!(subject_cloned.on_next(111).is_continue());
             })
             .await
             .unwrap();
@@ -342,7 +343,7 @@ fn test_subscribe_by_different_observer() {
     let observer_3 = SharedSender::new(observer_3);
     let observable = observable.hook_on_next(move |observer, value| {
         observer_3.on_next(value);
-        observer.on_next(value * 2);
+        observer.on_next(value * 2)
     });
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -358,7 +359,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [222]);
@@ -384,8 +385,8 @@ fn test_unsub_on_next_by_take() {
     // Custom operations
     let observable = observable
         .hook_on_next(move |observer, value| {
-            observer_2.on_next(value);
-            observer.on_next(value * 2);
+            assert!(observer_2.on_next(value).is_continue());
+            observer.on_next(value * 2)
         })
         .take(1);
 
@@ -396,7 +397,7 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker_2.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_stop());
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), [111]);
@@ -415,12 +416,12 @@ fn test_multiple_operation() {
     let observable = subject.clone();
     let observable = observable
         .hook_on_next(move |observer, value| {
-            observer_2.on_next(value);
-            observer.on_next(value * 2);
+            assert!(observer_2.on_next(value).is_continue());
+            observer.on_next(value * 2)
         })
         .hook_on_next(move |observer, value| {
-            observer_3.on_next(value);
-            observer.on_next(value * 2);
+            assert!(observer_3.on_next(value).is_continue());
+            observer.on_next(value * 2)
         });
 
     let _subscription = observable.subscribe(observer_1);
@@ -431,7 +432,7 @@ fn test_multiple_operation() {
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [444]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -457,8 +458,8 @@ fn test_without_convenient_api() {
     // Custom operations
     let observable = subject.clone();
     let observable = HookOnNext::new(observable, move |observer, value| {
-        observer_2.on_next(value);
-        observer.on_next(value * 2);
+        assert!(observer_2.on_next(value).is_continue());
+        observer.on_next(value * 2)
     });
 
     let _subscription = observable.subscribe(observer_1);
@@ -467,7 +468,7 @@ fn test_without_convenient_api() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [222]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -492,14 +493,14 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(1);
+            assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
 
-        let observable = observable.hook_on_next(|_, _| {});
+        let observable = observable.hook_on_next(|_, _| Flow::Continue);
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -521,10 +522,10 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
-        let observable = observable.hook_on_next(|_, _| {});
+        let observable = observable.hook_on_next(|_, _| Flow::Continue);
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(&life_marker_2);
+        assert!(observer.on_next(&life_marker_2).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -539,6 +540,7 @@ fn test_fn() {
     let observable = subject.clone();
     let observable = observable.hook_on_next(|_, _| {
         s.consume_mut();
+        Flow::Continue
     });
 
     let _ = observable.subscribe_with_callback(|_| {}, |_| {});
@@ -547,11 +549,11 @@ fn test_fn() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let observable = observable.hook_on_next(|_, _| {});
+    let observable = observable.hook_on_next(|_, _| Flow::Continue);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -559,7 +561,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.hook_on_next(|_, _| {});
+    let observable = subject.hook_on_next(|_, _| Flow::Continue);
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -570,7 +572,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.hook_on_next(|_, _| {});
+    let observable = subject.hook_on_next(|_, _| Flow::Continue);
 
     observable.filter(|_| true);
 }

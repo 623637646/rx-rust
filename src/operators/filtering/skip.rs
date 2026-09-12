@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -68,11 +68,12 @@ impl<T, E, OR> Observer<T, E> for SkipObserver<OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         if self.count > 0 {
             self.count -= 1;
+            Flow::Continue
         } else {
-            self.observer.on_next(value);
+            self.observer.on_next(value)
         }
     }
 

@@ -39,13 +39,13 @@ fn test_completed() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(333);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(333).is_continue());
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
@@ -64,7 +64,7 @@ fn test_completed_lazy_subscription() {
         let subscribed_cloned = subscribed.clone();
         let observable = Create::new(move |mut observer| {
             subscribed_cloned.write(true);
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
             observer.on_termination(Termination::Completed);
             Subscription::default()
         });
@@ -122,13 +122,13 @@ fn test_unsubscribe() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(333);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(333).is_continue());
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
@@ -156,7 +156,7 @@ fn test_ref() {
             _ = runtime.sleep(DURATION_10_MS).fuse()=>{}
         );
 
-        subject.on_next(&value);
+        assert!(subject.on_next(&value).is_continue());
         assert_eq!(stream.next().await, Some(&value));
 
         subject.on_termination(Termination::Completed);
@@ -171,7 +171,7 @@ fn test_mut_ref() {
         let mut value = 111;
 
         let observable = Create::new(|mut observer| {
-            observer.on_next(&mut value);
+            assert!(observer.on_next(&mut value).is_continue());
             observer.on_termination(Termination::Completed);
             Subscription::default()
         });
@@ -220,7 +220,7 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(111);
+                assert!(subject_cloned.on_next(111).is_continue());
             })
             .await
             .unwrap();
@@ -231,8 +231,8 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(222);
-                subject_cloned.on_next(333);
+                assert!(subject_cloned.on_next(222).is_continue());
+                assert!(subject_cloned.on_next(333).is_continue());
             })
             .await
             .unwrap();
@@ -269,13 +269,13 @@ fn test_without_convenient_api() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
 
-        subject.on_next(222);
-        subject.on_next(333);
+        assert!(subject.on_next(222).is_continue());
+        assert!(subject.on_next(333).is_continue());
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
@@ -300,7 +300,7 @@ fn test_complete_after_next() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(111);
+        assert!(sender.on_next(111).is_continue());
         sender.on_termination(Termination::Completed);
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
@@ -321,7 +321,7 @@ fn test_unsub_after_next() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        sender.on_next(111);
+        assert!(sender.on_next(111).is_continue());
         runtime.sleep(DURATION_10_MS).await;
         subscription.dispose();
         runtime.sleep(DURATION_10_MS).await;
@@ -371,7 +371,7 @@ fn test_order_with_continuous_next() {
 
         let values = (0..1000).collect::<Vec<_>>();
         for i in &values {
-            subject.on_next(*i);
+            assert!(subject.on_next(*i).is_continue());
         }
         runtime.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), values);
@@ -426,7 +426,7 @@ fn test_next_on_unsub() {
         let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
             Subscription::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
-                observer.on_next(111);
+                assert!(observer.on_next(111).is_continue());
             }))
         });
 
@@ -483,7 +483,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
             observer.on_termination(Termination::Completed);
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
@@ -505,7 +505,7 @@ fn test_lifetime_or() {
 
     {
         let observable = Create::new(|mut observer: BoxedObserver<'_, _, Infallible>| {
-            observer.on_next(&life_marker_2);
+            assert!(observer.on_next(&life_marker_2).is_continue());
             life_marker_1 = Some(observer);
             Subscription::default()
         });

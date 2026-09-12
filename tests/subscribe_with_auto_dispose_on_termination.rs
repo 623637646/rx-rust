@@ -3,7 +3,7 @@ mod tests_utils;
 use rx_rust::{
     disposable::callback_disposal::CallbackDisposal,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::{
         mutable::{MutableBool, MutableBoolHelper},
         subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
@@ -16,7 +16,9 @@ use std::convert::Infallible;
 struct HookOnTerminationObserver<F: FnOnce()>(F);
 
 impl<F: FnOnce()> Observer<i32, Infallible> for HookOnTerminationObserver<F> {
-    fn on_next(&mut self, _value: i32) {}
+    fn on_next(&mut self, _value: i32) -> Flow {
+        Flow::Continue
+    }
 
     fn on_termination(self, _termination: Termination<Infallible>) {
         (self.0)();

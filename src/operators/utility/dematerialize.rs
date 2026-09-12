@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Event, Observer, Termination},
+    observer::{Event, Flow, Observer, Termination},
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
@@ -67,17 +67,26 @@ impl<T, E, OR> Observer<Event<T, E>, Infallible> for DematerializeObserver<OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: Event<T, E>) {
+    fn on_next(&mut self, value: Event<T, E>) -> Flow {
         match value {
-            Event::Next(value) => {
-                if let Some(observer) = self.0.as_mut() {
-                    observer.on_next(value);
+            Event::Next(value) => match self.0.as_mut() {
+                Some(observer) => {
+                    let flow = observer.on_next(value);
+                    if flow.is_stop() {
+                        drop(self.0.take());
+                    }
+                    flow
                 }
-            }
+                // The materialized termination already ended the stream downstream.
+                None => Flow::Stop,
+            },
             Event::Termination(termination) => {
                 if let Some(observer) = self.0.take() {
                     observer.on_termination(termination);
                 }
+                // The stream ends with the value that carried the termination, so whatever the
+                // source has left is of no use anymore.
+                Flow::Stop
             }
         }
     }

@@ -4,14 +4,14 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::test_runtime::block_on;
 use std::convert::Infallible;
 
-use rx_rust::observer::{Observer, Termination, boxed_observer::BoxedObserver};
+use rx_rust::observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
     let (checker, observer) = Checker::new();
     let mut boxed_observer = BoxedObserver::new(observer);
-    boxed_observer.on_next(111);
+    assert!(boxed_observer.on_next(111).is_continue());
     boxed_observer.on_termination(Termination::<Infallible>::Completed);
 
     assert_eq!(checker.values(), [111]);
@@ -22,7 +22,7 @@ fn test_completed() {
 fn test_error() {
     let (checker, observer) = Checker::new();
     let mut boxed_observer = BoxedObserver::new(observer);
-    boxed_observer.on_next(111);
+    assert!(boxed_observer.on_next(111).is_continue());
     boxed_observer.on_termination(Termination::Error("error"));
 
     assert_eq!(checker.values(), [111]);
@@ -35,7 +35,7 @@ fn test_ref() {
     let error = 222;
     let (checker, observer) = Checker::new();
     let mut boxed_observer = BoxedObserver::new(observer);
-    boxed_observer.on_next(&value);
+    assert!(boxed_observer.on_next(&value).is_continue());
     boxed_observer.on_termination(Termination::Error(&error));
 
     assert_eq!(checker.values(), [&value]);
@@ -46,8 +46,9 @@ fn test_ref() {
 fn test_mut_ref() {
     struct MyObserver;
     impl Observer<&mut i32, &mut i32> for MyObserver {
-        fn on_next(&mut self, value: &mut i32) {
-            *value *= 2
+        fn on_next(&mut self, value: &mut i32) -> Flow {
+            *value *= 2;
+            Flow::Continue
         }
 
         fn on_termination(self, termination: Termination<&mut i32>) {
@@ -61,7 +62,7 @@ fn test_mut_ref() {
     let mut error = 222;
     let observer = MyObserver;
     let mut boxed_observer = BoxedObserver::new(observer);
-    boxed_observer.on_next(&mut value);
+    assert!(boxed_observer.on_next(&mut value).is_continue());
     boxed_observer.on_termination(Termination::Error(&mut error));
 
     assert_eq!(value, 222);
@@ -78,7 +79,7 @@ fn test_async() {
             .unwrap();
         runtime
             .spawn(async move {
-                boxed_observer.on_next(111);
+                assert!(boxed_observer.on_next(111).is_continue());
                 boxed_observer.on_termination(Termination::Error("error"));
                 assert_eq!(checker.values(), [111]);
                 assert_eq!(checker.state(), State::Error("error"));
@@ -100,7 +101,7 @@ fn test_lifetime_or() {
 
     {
         let (_, mut observer) = Checker::<_, &str>::new();
-        observer.on_next(&life_marker);
+        assert!(observer.on_next(&life_marker).is_continue());
         _boxed_observer = BoxedObserver::new(observer);
     }
 }

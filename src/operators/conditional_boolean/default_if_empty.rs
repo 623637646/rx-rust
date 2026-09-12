@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -75,19 +75,19 @@ impl<T, E, OR> Observer<T, E> for DefaultIfEmptyObserver<T, OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         self.default_value = None;
-        self.observer.on_next(value);
+        self.observer.on_next(value)
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        match termination {
-            Termination::Completed => {
-                if let Some(default_value) = self.default_value {
-                    self.observer.on_next(default_value);
-                }
-            }
-            Termination::Error(_) => {}
+        // The final value ends the stream, so a downstream that stopped on it is not completed
+        // on top of that: it has already ended itself.
+        if matches!(termination, Termination::Completed)
+            && let Some(default_value) = self.default_value.take()
+            && self.observer.on_next(default_value).is_stop()
+        {
+            return;
         }
         self.observer.on_termination(termination);
     }

@@ -7,7 +7,7 @@ use crate::utils::subscribe_with_context::{
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     scheduler::{RecursionAction, Scheduler},
 };
 use educe::Educe;
@@ -150,8 +150,8 @@ where
     OR: Observer<Vec<T>, E> + MaybeSend + 'static,
     D: Disposable,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.context.update(|model| {
+    fn on_next(&mut self, value: T) -> Flow {
+        self.context.update_flow(|model| {
             model.values.push(value);
             if model.values.len() >= self.count.get() {
                 model.last_sending_time_from_counting = Some(Instant::now());
@@ -161,7 +161,7 @@ where
             } else {
                 UpdateOutcome::empty().without_events()
             }
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

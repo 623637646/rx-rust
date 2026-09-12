@@ -75,8 +75,9 @@ where
     ) -> Subscription<Self::D> {
         self.scheduler.spawn_future(async {
             let result = self.future.await;
-            observer.on_next(result);
-            observer.on_termination(Termination::Completed);
+            if observer.on_next(result).is_continue() {
+                observer.on_termination(Termination::Completed);
+            }
         })
     }
 }

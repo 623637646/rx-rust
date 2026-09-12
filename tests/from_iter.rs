@@ -7,9 +7,10 @@ use rx_rust::scheduler::Scheduler;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
-    observer::Termination,
+    observer::{Flow, Termination},
     operators::creating::from_iter::FromIter,
 };
+use std::cell::Cell;
 use std::convert::Infallible;
 use tests_utils::checker::Checker;
 
@@ -222,6 +223,60 @@ fn test_unsub_on_next_by_take() {
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [1]);
     assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_stop_on_next() {
+    let pulled = Cell::new(0);
+    let observable = FromIter::new((1..).inspect(|_| pulled.set(pulled.get() + 1)));
+    let (checker, observer) = Checker::<_, Infallible>::stopping_after(2);
+
+    let _subscription = observable.subscribe(observer);
+    // The observer ended its own stream on the second value, so the iterator is never pulled
+    // again — an infinite one would otherwise never let `subscribe` return — and the observer is
+    // dropped instead of being completed.
+    assert_eq!(checker.values(), [1, 2]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(pulled.get(), 2);
+}
+
+#[test]
+fn test_stop_on_next_by_take() {
+    let pulled = Cell::new(0);
+    let observable = FromIter::new((1..).inspect(|_| pulled.set(pulled.get() + 1))).take(2);
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    // `take` stops the source once it has its values, so the values behind them are never
+    // produced: only the completion of the operator itself reaches the observer.
+    assert_eq!(checker.values(), [1, 2]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(pulled.get(), 2);
+}
+
+#[test]
+fn test_stop_on_next_by_callback() {
+    let pulled = Cell::new(0);
+    let observable = FromIter::new((1..).inspect(|_| pulled.set(pulled.get() + 1)));
+    let mut values = Vec::new();
+    let mut terminated = false;
+
+    // A plain callback can end its own stream by returning a `Flow`, which is what lets it break
+    // out of an infinite synchronous source; `on_termination` is then never called.
+    let _subscription = observable.subscribe_with_callback(
+        |value| {
+            values.push(value);
+            if value == 2 {
+                Flow::Stop
+            } else {
+                Flow::Continue
+            }
+        },
+        |_| terminated = true,
+    );
+    assert_eq!(values, [1, 2]);
+    assert!(!terminated);
+    assert_eq!(pulled.get(), 2);
 }
 
 #[test]

@@ -5,7 +5,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -94,8 +94,8 @@ where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, value: T) {
-        self.0.send_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0.send_next(value)
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -110,8 +110,10 @@ where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) {
+    fn on_next(&mut self, _: ()) -> Flow {
         self.0.send_termination(Termination::Completed);
+        // The first notification ends the stream, so the notifier is of no use afterwards.
+        Flow::Stop
     }
 
     fn on_termination(self, termination: Termination<E>) {

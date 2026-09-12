@@ -22,7 +22,7 @@ use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::Tes
 #[test]
 fn test_completed() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
+        assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::<String>::Completed);
         Subscription::default()
     });
@@ -46,7 +46,7 @@ fn test_completed_from_source() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -60,7 +60,7 @@ fn test_completed_from_source() {
 #[test]
 fn test_error() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
+        assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
         Subscription::default()
     });
@@ -84,7 +84,7 @@ fn test_error_from_source() {
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    sender.on_next(111);
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -100,13 +100,13 @@ fn test_unsubscribe() {
     block_on(|runtime| async move {
         let runtime_cloned = runtime.clone();
         let observable = Create::new(move |mut observer| {
-            observer.on_next(1);
+            assert!(observer.on_next(1).is_continue());
             let runtime = runtime_cloned.clone();
             let handle = runtime_cloned.spawn_future(async move {
                 runtime.sleep(DURATION_100_MS).await;
-                observer.on_next(2);
+                assert!(observer.on_next(2).is_continue());
                 runtime.sleep(DURATION_100_MS).await;
-                observer.on_next(3);
+                assert!(observer.on_next(3).is_continue());
                 runtime.sleep(DURATION_100_MS).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
@@ -164,7 +164,7 @@ fn test_unsubscribe_wrap_observable() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -172,7 +172,7 @@ fn test_unsubscribe_wrap_observable() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
 
@@ -187,7 +187,7 @@ fn test_ref() {
     let error = 222;
 
     let observable = Create::new(|mut observer| {
-        observer.on_next(&value);
+        assert!(observer.on_next(&value).is_continue());
         observer.on_termination(Termination::Error(&error));
         Subscription::default()
     });
@@ -204,7 +204,7 @@ fn test_mut_ref() {
     let mut error = 222;
 
     let observable = Create::new(|mut observer| {
-        observer.on_next(&mut value);
+        assert!(observer.on_next(&mut value).is_continue());
         observer.on_termination(Termination::Error(&mut error));
         Subscription::default()
     });
@@ -236,11 +236,11 @@ fn test_async() {
     block_on(|runtime| async move {
         let runtime_cloned = runtime.clone();
         let observable = Create::new(move |mut observer| {
-            observer.on_next(1);
+            assert!(observer.on_next(1).is_continue());
             let runtime = runtime_cloned.clone();
             let handle = runtime_cloned.spawn_future(async move {
                 runtime.sleep(DURATION_100_MS).await;
-                observer.on_next(2);
+                assert!(observer.on_next(2).is_continue());
                 runtime.sleep(DURATION_100_MS).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
@@ -280,7 +280,7 @@ fn test_async() {
 #[test]
 fn test_subscribe_by_different_observer() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
+        assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
         Subscription::default()
     });
@@ -305,8 +305,8 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_on_next_by_take() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
-        observer.on_next(222);
+        assert!(observer.on_next(111).is_stop());
+        assert!(observer.on_next(222).is_stop());
         observer.on_termination(Termination::Error("error"));
         Subscription::default()
     })
@@ -330,7 +330,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(1);
+            assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
@@ -359,7 +359,7 @@ fn test_lifetime_or() {
         });
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(&life_marker_2);
+        assert!(observer.on_next(&life_marker_2).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -370,7 +370,7 @@ fn test_fn() {
 
     Create::new(|mut observer| {
         s.consume();
-        observer.on_next(111);
+        assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
         Subscription::default()
     });
@@ -379,7 +379,7 @@ fn test_fn() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
@@ -390,7 +390,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     // Custom operations
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
+        assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
         Subscription::default()
     });
@@ -404,7 +404,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     // Custom operations
     let observable = Create::new(|mut observer| {
-        observer.on_next(111);
+        assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
         Subscription::default()
     });

@@ -36,13 +36,20 @@
       6. test_async  
       7. test_subscribe_by_different_observer  
       8. test_unsub_on_next_by_take  
-      9. Non-creating observable  
-         1. test_multiple_operation  
-         2. test_without_convenient_api  
-      10. Revertible observable  
+      9. Flow（下游用 Flow::Stop 结束自己的流，源要停下来且不再 on_termination）  
+         1. test_stop_on_next（observer 自己 stop，用 Checker::stopping_after：不再收到值，也不被
+            终止，被 drop）  
+         2. Stop 经由 take 传回源：操作符和 subject 不单独写用例，而是在 test_unsub_on_next_by_take
+            里断言让 take 完成的那次发送答 `is_stop()`（走调度器的操作符答 `is_continue()`，值是
+            稍后投递的）。只有源（from_iter 等，没有 sender 可问）单独写 test_stop_on_next_by_take，
+            断言源停止了生产：同步源必须停下来，无限迭代器不能死循环  
+      10. Non-creating observable  
+          1. test_multiple_operation  
+          2. test_without_convenient_api  
+      11. Revertible observable  
           1. test_revert_completed  
           2. test_revert_error  
-      11. Hot Observable (e.g. Subject, ConnectableObservable, RefCount. Only those that can borrow sender or own sender at the same time)  
+      12. Hot Observable (e.g. Subject, ConnectableObservable, RefCount. Only those that can borrow sender or own sender at the same time)  
           1. test_complete_on_next  
           2. test_error_on_next  
           3. test_unsub_on_next
@@ -52,7 +59,7 @@
           7. test_sub_on_completed  
           8. test_unsub_on_error  
           9. test_sub_on_error    
-      12. Using lock(with_mut|with_ref) 有的lock没 test_complete_after_next  
+      13. Using lock(with_mut|with_ref) 有的lock没 test_complete_after_next  
           1. test_next_on_sub  
           2. test_complete_on_sub  
           3. test_error_on_sub  
@@ -64,7 +71,7 @@
           7. test_error_on_unsub
           8. test_sub_on_unsub（同 4，只有 Hot Observable 适用）
           9. test_race_condition (WIP)
-      13. Using schedule(: Scheduler|::from_stream\\() 有的scheduler没有test_next_on_sub （如 from future）  
+      14. Using schedule(: Scheduler|::from_stream\\() 有的scheduler没有test_next_on_sub （如 from future）  
           1. ALL TESTS IN "Using lock"  
           2. test_complete_after_next  
           3. test_error_after_next  
@@ -73,7 +80,7 @@
           6. test_unsub_after_error  
           7. test_order_with_continuous_next  
           8. test_no_delay (if appliable)  
-      14. Compiling checking  
+      15. Compiling checking  
           1. test_lifetime  
           2. test_fn  
           3. test_clone  

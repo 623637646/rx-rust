@@ -4,7 +4,7 @@ use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::utils::mutable::MutableExt;
 use rx_rust::{
     disposable::Disposable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     scheduler::Scheduler,
     utils::mutable::{Mutable, MutableHelper},
     utils::types::{MaybeSend, Shared},
@@ -33,6 +33,19 @@ pub(crate) struct Checker<T, E> {
 
 impl<T, E> Checker<T, E> {
     pub(crate) fn new() -> (Self, CheckerObserver<T, E>) {
+        Self::new_with_stop_after(None)
+    }
+
+    /// A checker whose observer answers [`Flow::Stop`] once it has recorded `count` values.
+    ///
+    /// This is how a test plays the role of an operator that ends its own stream, such as `take`:
+    /// the observer is not terminated afterwards, so a source that honors the flow drops it, which
+    /// the state records as [`State::Dropped`].
+    pub(crate) fn stopping_after(count: usize) -> (Self, CheckerObserver<T, E>) {
+        Self::new_with_stop_after(Some(count))
+    }
+
+    fn new_with_stop_after(stop_after: Option<usize>) -> (Self, CheckerObserver<T, E>) {
         let values = Shared::new(Mutable::new(Vec::new()));
         let state = Shared::new(Mutable::new(State::Active));
         (
@@ -40,7 +53,11 @@ impl<T, E> Checker<T, E> {
                 values: values.clone(),
                 state: state.clone(),
             },
-            CheckerObserver { values, state },
+            CheckerObserver {
+                values,
+                state,
+                stop_after,
+            },
         )
     }
 
@@ -64,6 +81,8 @@ impl<T, E> Checker<T, E> {
 pub(crate) struct CheckerObserver<T, E> {
     values: Shared<Mutable<Vec<T>>>,
     state: Shared<Mutable<State<E>>>,
+    /// How many values this observer accepts before it answers [`Flow::Stop`], if it ever does.
+    stop_after: Option<usize>,
 }
 
 impl<T, E> CheckerObserver<T, E> {
@@ -96,8 +115,15 @@ impl<T, E> Drop for CheckerObserver<T, E> {
 }
 
 impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
-    fn on_next(&mut self, value: T) {
-        self.values.with_mut(|values| values.push(value));
+    fn on_next(&mut self, value: T) -> Flow {
+        let count = self.values.with_mut(|values| {
+            values.push(value);
+            values.len()
+        });
+        match self.stop_after {
+            Some(stop_after) if count >= stop_after => Flow::Stop,
+            _ => Flow::Continue,
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {

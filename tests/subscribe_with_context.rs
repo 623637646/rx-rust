@@ -5,7 +5,7 @@ use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
 use rx_rust::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use rx_rust::{
     observable::{Observable, ObservableExt, Subscription},
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
     utils::{
         mutable::Mutable, pending_events::EventBatch,
@@ -29,7 +29,7 @@ fn delivers_batch_in_order_with_termination() {
     });
     let context = context_out.unwrap();
 
-    context.send(EventBatch::NextBatchAndTermination(
+    let _ = context.send(EventBatch::NextBatchAndTermination(
         vec![1, 2, 3],
         Termination::Completed,
     ));
@@ -53,22 +53,23 @@ fn dispose_during_batch_stops_remaining_events() {
         })
     })
     .hook_on_next(move |observer, value| {
-        observer.on_next(value);
+        assert!(observer.on_next(value).is_continue());
         if value == 2 {
             // Dropping the subscription disposes it.
             drop(dispose_slot.take_value());
         }
+        Flow::Continue
     })
     .subscribe(observer);
     subscription_slot.replace_value(Some(subscription));
     let context = context_out.unwrap();
 
-    context.send(EventBatch::NextBatch(vec![1, 2, 3]));
+    let _ = context.send(EventBatch::NextBatch(vec![1, 2, 3]));
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Dropped);
 
     // Later events are ignored as well.
-    context.send_next(4);
+    let _ = context.send_next(4);
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Dropped);
 }
@@ -86,16 +87,17 @@ fn dispose_during_batch_suppresses_pending_termination() {
         })
     })
     .hook_on_next(move |observer, value| {
-        observer.on_next(value);
+        assert!(observer.on_next(value).is_continue());
         if value == 2 {
             drop(dispose_slot.take_value());
         }
+        Flow::Continue
     })
     .subscribe(observer);
     subscription_slot.replace_value(Some(subscription));
     let context = context_out.unwrap();
 
-    context.send(EventBatch::NextBatchAndTermination(
+    let _ = context.send(EventBatch::NextBatchAndTermination(
         vec![1, 2],
         Termination::Completed,
     ));
@@ -117,22 +119,23 @@ fn reentrant_send_is_queued_after_pending_events() {
         })
     })
     .hook_on_next(move |observer, value| {
-        observer.on_next(value);
+        assert!(observer.on_next(value).is_continue());
         if value == 1 {
             let context = send_slot.clone_value().unwrap();
-            context.send_next(10);
+            let _ = context.send_next(10);
         }
+        Flow::Continue
     })
     .subscribe(observer);
     let context = context_out.unwrap();
 
-    context.send(EventBatch::NextBatch(vec![1, 2, 3]));
+    let _ = context.send(EventBatch::NextBatch(vec![1, 2, 3]));
     assert_eq!(checker.values(), [1, 2, 3, 10]);
     assert_eq!(checker.state(), State::Active);
 
     drop(subscription);
     assert_eq!(checker.state(), State::Dropped);
-    context.send_next(4);
+    let _ = context.send_next(4);
     assert_eq!(checker.values(), [1, 2, 3, 10]);
 }
 
@@ -146,11 +149,11 @@ fn empty_batch_is_a_no_op() {
     });
     let context = context_out.unwrap();
 
-    context.send(EventBatch::NextBatch(vec![]));
+    let _ = context.send(EventBatch::NextBatch(vec![]));
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
 
-    context.send_next(1);
+    let _ = context.send_next(1);
     assert_eq!(checker.values(), [1]);
     assert_eq!(checker.state(), State::Active);
 }
@@ -173,7 +176,7 @@ fn stopped_update_drops_callback_outside_lock() {
     let probe = DropProbe::new().on_drop(Box::new(move || {
         callback_dropped_on_drop.write(true);
         // This would deadlock if the callback were dropped while the context was locked.
-        reentrant_context.send_next(1);
+        let _ = reentrant_context.send_next(1);
     }));
 
     let result = context.update(move |_| {
@@ -207,7 +210,7 @@ fn dispose_during_batch_unsubscribes_upstream() {
                 source.subscribe_with_callback(
                     move |value| {
                         if let Some(context) = weak.upgrade() {
-                            context.send_next(value);
+                            let _ = context.send_next(value);
                         }
                     },
                     move |termination| {
@@ -219,21 +222,22 @@ fn dispose_during_batch_unsubscribes_upstream() {
             })
         })
         .hook_on_next(move |observer, value| {
-            observer.on_next(value);
+            assert!(observer.on_next(value).is_continue());
             if value == 1 {
                 // Queue a batch while value 1 is still being processed.
                 let context = send_slot.clone_value().unwrap();
-                context.send(EventBatch::NextBatch(vec![2, 3]));
+                let _ = context.send(EventBatch::NextBatch(vec![2, 3]));
             }
             if value == 2 {
                 drop(dispose_slot.take_value());
             }
+            Flow::Continue
         })
         .subscribe(observer);
     subscription_slot.replace_value(Some(subscription));
 
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    sender.on_next(1);
+    assert!(sender.on_next(1).is_stop());
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);

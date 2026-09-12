@@ -1,7 +1,7 @@
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::types::MaybeSend,
 };
 use educe::Educe;
@@ -80,11 +80,11 @@ impl<T, E, OR> Observer<T, E> for TimeIntervalObserver<OR>
 where
     OR: Observer<(T, Duration), E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         let now = Instant::now();
         let time_span = now.saturating_duration_since(self.time_stamp);
         self.time_stamp = now;
-        self.observer.on_next((value, time_span));
+        self.observer.on_next((value, time_span))
     }
 
     fn on_termination(self, termination: Termination<E>) {

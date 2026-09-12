@@ -7,7 +7,7 @@ use crate::{
     disposable::Disposable,
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -105,10 +105,10 @@ where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.0.update(|model| {
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0.update_flow(|model| {
             UpdateOutcome::empty().with_drop_outside(model.last_value.replace(value))
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -123,14 +123,14 @@ where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) {
-        let _ = self.0.update(|model| {
+    fn on_next(&mut self, _: ()) -> Flow {
+        self.0.update_flow(|model| {
             if let Some(value) = model.last_value.take() {
                 UpdateOutcome::empty().with_next_event(value)
             } else {
                 UpdateOutcome::empty().without_events()
             }
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

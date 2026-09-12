@@ -5,7 +5,7 @@ use crate::tests_utils::test_channel::ChannelState;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
-use rx_rust::observer::{Observer, Termination};
+use rx_rust::observer::{Flow, Observer, Termination};
 use rx_rust::utils::mutable::Mutable;
 use rx_rust::utils::mutable::MutableExt;
 use rx_rust::utils::types::Shared;
@@ -34,7 +34,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                observer.on_next(value);
+                observer.on_next(value)
             })
             .subscribe(observer_2),
     ));
@@ -45,10 +45,11 @@ fn test_unsub_on_next() {
     sub.replace_value(Some(
         observable_3
             .hook_on_next(move |observer, value| {
-                observer.on_next(value);
+                assert!(observer.on_next(value).is_continue());
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
+                Flow::Continue
             })
             .subscribe(observer_3),
     ));
@@ -63,9 +64,9 @@ fn test_unsub_on_next() {
     assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
 
-    sender_1.on_next(111);
-    sender_2.on_next(111);
-    sender_3.on_next(111);
+    assert!(sender_1.on_next(111).is_continue());
+    assert!(sender_2.on_next(111).is_stop());
+    assert!(sender_3.on_next(111).is_stop());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -127,9 +128,9 @@ fn test_unsub_on_completed() {
     assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
 
-    sender_1.on_next(111);
-    sender_2.on_next(111);
-    sender_3.on_next(111);
+    assert!(sender_1.on_next(111).is_continue());
+    assert!(sender_2.on_next(111).is_continue());
+    assert!(sender_3.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -204,9 +205,9 @@ fn test_unsub_on_error() {
     assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
     assert_eq!(channel_checker_3.state(), ChannelState::Subscribed);
 
-    sender_1.on_next(111);
-    sender_2.on_next(111);
-    sender_3.on_next(111);
+    assert!(sender_1.on_next(111).is_continue());
+    assert!(sender_2.on_next(111).is_continue());
+    assert!(sender_3.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);

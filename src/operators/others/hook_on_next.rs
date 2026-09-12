@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -22,7 +22,7 @@ use educe::Educe;
 /// let mut terminations = Vec::new();
 ///
 /// let observable = HookOnNext::new(FromIter::new(vec![1, 2]), |observer, value| {
-///     observer.on_next(value * 10);
+///     observer.on_next(value * 10)
 /// });
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
@@ -43,7 +43,7 @@ impl<OE, F> HookOnNext<OE, F> {
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,
-        F: FnMut(&mut dyn Observer<T, E>, T),
+        F: FnMut(&mut dyn Observer<T, E>, T) -> Flow,
     {
         Self { source, callback }
     }
@@ -52,7 +52,7 @@ impl<OE, F> HookOnNext<OE, F> {
 impl<'or, T, E, OE, F> Observable<'or, T, E> for HookOnNext<OE, F>
 where
     OE: Observable<'or, T, E>,
-    F: FnMut(&mut dyn Observer<T, E>, T) + MaybeSend + 'or,
+    F: FnMut(&mut dyn Observer<T, E>, T) -> Flow + MaybeSend + 'or,
 {
     type D = OE::D;
 
@@ -73,10 +73,10 @@ struct HookOnNextObserver<OR, F> {
 impl<T, E, OR, F> Observer<T, E> for HookOnNextObserver<OR, F>
 where
     OR: Observer<T, E>,
-    F: FnMut(&mut dyn Observer<T, E>, T),
+    F: FnMut(&mut dyn Observer<T, E>, T) -> Flow,
 {
-    fn on_next(&mut self, value: T) {
-        (self.callback)(&mut self.observer, value);
+    fn on_next(&mut self, value: T) -> Flow {
+        (self.callback)(&mut self.observer, value)
     }
 
     fn on_termination(self, termination: Termination<E>) {

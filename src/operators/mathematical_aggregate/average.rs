@@ -2,7 +2,7 @@ use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -86,19 +86,20 @@ macro_rules! average_observer_impl {
         where
             OR: Observer<f64, E>,
         {
-            fn on_next(&mut self, value: $t) {
+            fn on_next(&mut self, value: $t) -> Flow {
                 self.sum += value as f64;
                 self.count += 1;
+                Flow::Continue
             }
 
             fn on_termination(mut self, termination: Termination<E>) {
-                match termination {
-                    Termination::Completed => {
-                        if self.count != 0 {
-                            self.observer.on_next(self.sum / self.count as f64);
-                        }
-                    }
-                    Termination::Error(_) => {}
+                // The final value ends the stream, so a downstream that stopped on it is not
+                // completed on top of that: it has already ended itself.
+                if matches!(termination, Termination::Completed)
+                    && self.count != 0
+                    && self.observer.on_next(self.sum / self.count as f64).is_stop()
+                {
+                    return;
                 }
                 self.observer.on_termination(termination)
             }

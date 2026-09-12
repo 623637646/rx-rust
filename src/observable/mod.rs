@@ -11,7 +11,9 @@ use crate::{
         either_observable::EitherObservable,
     },
     observer::{
-        Observer, Termination, boxed_observer::BoxedObserver, callback_observer::CallbackObserver,
+        Flow, Observer, Termination,
+        boxed_observer::BoxedObserver,
+        callback_observer::{CallbackObserver, IntoFlow},
     },
     operators::{
         backpressure::{
@@ -385,9 +387,12 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Hooks into the emission of items, allowing mutation of the downstream observer.
+    ///
+    /// The callback returns the [`Flow`] the operator answers, which is normally the one the
+    /// downstream observer it was handed answered.
     fn hook_on_next<F>(self, callback: F) -> HookOnNext<Self, F>
     where
-        F: FnMut(&mut dyn Observer<T, E>, T),
+        F: FnMut(&mut dyn Observer<T, E>, T) -> Flow,
     {
         HookOnNext::new(self, callback)
     }
@@ -674,13 +679,18 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     }
 
     /// Convenience helper for subscribing with plain callbacks instead of a full observer.
-    fn subscribe_with_callback<FN, FT>(
+    ///
+    /// `on_next` may return nothing, which keeps the source going, or a [`Flow`], which lets it
+    /// end its own stream with [`Flow::Stop`]: the source then stops pushing — a synchronous one
+    /// stops iterating — and drops the callbacks without calling `on_termination`.
+    fn subscribe_with_callback<FN, FT, R>(
         self,
         on_next: FN,
         on_termination: FT,
     ) -> Subscription<Self::D>
     where
-        FN: FnMut(T) + MaybeSend + 'or,
+        FN: FnMut(T) -> R + MaybeSend + 'or,
+        R: IntoFlow,
         FT: FnOnce(Termination<E>) + MaybeSend + 'or,
     {
         self.subscribe(CallbackObserver::new(on_next, on_termination))

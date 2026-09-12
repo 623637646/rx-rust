@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::{collections::HashSet, hash::Hash};
@@ -96,10 +96,12 @@ where
     F: FnMut(&T) -> K,
     K: Eq + Hash,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         let key = (self.key_selector)(&value);
         if self.emitted_keys.insert(key) {
-            self.observer.on_next(value);
+            self.observer.on_next(value)
+        } else {
+            Flow::Continue
         }
     }
 

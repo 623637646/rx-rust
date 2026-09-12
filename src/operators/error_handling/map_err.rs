@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::types::MarkerType,
 };
 use educe::Educe;
@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 ///     .with_item_type::<i32>()
 ///     .map_err(|error| error.len())
 ///     .subscribe_with_callback(
-///         |_| unreachable!(),
+///         |_| -> () { unreachable!() },
 ///         |termination| terminations.push(termination),
 ///     );
 ///
@@ -76,8 +76,8 @@ where
     OR: Observer<T, E1>,
     F: FnOnce(E) -> E1,
 {
-    fn on_next(&mut self, value: T) {
-        self.observer.on_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        self.observer.on_next(value)
     }
 
     fn on_termination(self, termination: Termination<E>) {

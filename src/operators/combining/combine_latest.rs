@@ -6,7 +6,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -109,8 +109,8 @@ macro_rules! impl_observer {
             OR: Observer<(T1, T2), E>,
             D: Disposable,
         {
-            fn on_next(&mut self, val: $t_self) {
-                let _ = self.0.update(|model| {
+            fn on_next(&mut self, val: $t_self) -> Flow {
+                self.0.update_flow(|model| {
                     // The latest value this one replaces is handed back, so that the `Drop` of
                     // the user's value runs outside the lock. Building the pair still clones
                     // under it: whether there is a pair to build at all is only known here.
@@ -126,7 +126,7 @@ macro_rules! impl_observer {
                             .with_drop_outside(replaced)
                             .without_events()
                     }
-                });
+                })
             }
 
             fn on_termination(self, termination: Termination<E>) {

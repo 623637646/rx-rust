@@ -100,6 +100,15 @@ cargo tarpaulin --out Html --features tokio-scheduler
 - Public items get doc comments; operators link to their reactivex.io page.
 - `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce parallel
   representations.
+- **`Flow`**: `Observer::on_next` returns `Flow::Continue` / `Flow::Stop`. `Stop` is a guarantee —
+  the observer accepts nothing more and must not be terminated, so the caller stops pushing and
+  drops it; `Continue` is only a hint ("no stop seen here"), so a source must still honor its
+  disposal. An operator that forwards values returns what its own downstream returned, so that the
+  answer reaches the source; an operator that ends its own stream returns `Stop`. A context-based
+  operator gets it from `SubscriptionContext::update_flow` / `send_next`; `send_termination` answers
+  nothing, since a termination is the last event anyway. The `#[must_use]` is what catches a
+  forgotten forward — `let _ =` only where ignoring it is deliberate. User callbacks
+  (`subscribe_with_callback`) return `()` or a `Flow`, via `callback_observer::IntoFlow` (a diverging `|_| unreachable!()` needs `-> ()`).
 
 ## Test conventions
 

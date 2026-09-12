@@ -31,7 +31,7 @@ fn test_completed() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -54,7 +54,7 @@ fn test_error() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -80,7 +80,7 @@ fn test_unsubscribe() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -92,7 +92,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111, 222]);
@@ -120,7 +120,7 @@ fn test_ref() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(&value);
+    assert!(subject.on_next(&value).is_continue());
     assert_eq!(checker.values(), [&value]);
     assert_eq!(checker.state(), State::Active);
 
@@ -148,7 +148,7 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(&111);
+                assert!(subject_cloned.on_next(&111).is_continue());
             })
             .await
             .unwrap();
@@ -194,7 +194,7 @@ fn test_subscribe_by_different_observer() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [111]);
@@ -219,7 +219,9 @@ fn test_unsub_on_next_by_take() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(111);
+    // The subject answers about itself, and it stays open: the subscriber that stopped took
+    // only itself away.
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::<Infallible>::Completed);
 }
@@ -239,7 +241,7 @@ fn test_multiple_operation() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -262,7 +264,7 @@ fn test_without_convenient_api() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
@@ -285,7 +287,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(1);
+            assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
@@ -317,7 +319,7 @@ fn test_lifetime_or() {
         let observable = observable.into_cloneable_boxed();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(&life_marker_2);
+        assert!(observer.on_next(&life_marker_2).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -335,7 +337,7 @@ fn test_lifetime_oe() {
     {
         let create = Create::new(|mut observer| {
             life_marker.consume_ref();
-            observer.on_next(1);
+            assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::default()
         });

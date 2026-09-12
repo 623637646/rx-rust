@@ -1,6 +1,6 @@
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::mutable::{Mutable, MutableHelper},
     utils::types::{MaybeSend, Shared},
 };
@@ -115,7 +115,7 @@ struct ObservableStreamObserver<T> {
 }
 
 impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         // The waker is taken under the lock and woken after it is released, because waking runs
         // external code, which must not run under the lock.
         let waker = self.context.with_mut(|context| {
@@ -125,6 +125,9 @@ impl<T> Observer<T, Infallible> for ObservableStreamObserver<T> {
         if let Some(waker) = waker {
             waker.wake();
         }
+        // The stream buffers whatever arrives, so it never stops the source itself: dropping the
+        // stream disposes the subscription instead.
+        Flow::Continue
     }
 
     fn on_termination(self, _: Termination<Infallible>) {

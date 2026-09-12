@@ -1,8 +1,8 @@
-use crate::utils::serialized_delivery::UpdateOutcome;
+use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
     observable::{Observable, Subscription},
-    observer::{Event, Observer, Termination},
+    observer::{Event, Flow, Observer, Termination},
     scheduler::{RecursionAction, Scheduler},
     utils::{
         pending_events::EventBatch,
@@ -125,7 +125,11 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
     /// Only one task exists at a time. `Observer` serializes its callers — `on_next` takes
     /// `&mut self` and `on_termination` takes `self` — so a task cannot be started here while
     /// another call is between starting a task and storing its disposal below.
-    fn queue_event(&self, event: Event<T, E>)
+    ///
+    /// Returns [`Flow::Stop`] once the context has stopped: the event was then dropped, and so
+    /// would every later one be. What downstream itself answers is only known once the task
+    /// delivers, so this is otherwise [`Flow::Continue`].
+    fn queue_event(&self, event: Event<T, E>) -> Flow
     where
         T: MaybeSend + 'static,
         E: MaybeSend + 'static,
@@ -139,9 +143,12 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
             }
             UpdateOutcome::new(model.task.reserve_if_idle())
         });
-        let Ok(true) = task_setup else {
-            return;
-        };
+        match task_setup {
+            Ok(true) => {}
+            // The task is already running, and will find the event on its next pass.
+            Ok(false) => return Flow::Continue,
+            Err(DeliveryStopped) => return Flow::Stop,
+        }
 
         // The context owns this task through the model, so the task only holds a weak reference
         // back: a strong one would form a cycle and leak the subscription.
@@ -197,11 +204,13 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
             None,
         );
 
-        let _ = self.context.update(move |model| {
+        // A scheduler that runs the task at once can have delivered, and ended, the stream before
+        // this runs: the flow of this update is what reports it.
+        self.context.update_flow(move |model| {
             // If the task already stopped, `fill` gives the handle back to dispose outside the
             // lock.
             UpdateOutcome::empty().with_drop_outside(model.task.fill(task))
-        });
+        })
     }
 }
 
@@ -212,11 +221,12 @@ where
     OR: Observer<T, E> + MaybeSend + 'static,
     S: Scheduler + Clone + MaybeSend + 'static,
 {
-    fn on_next(&mut self, value: T) {
-        self.queue_event(Event::Next(value));
+    fn on_next(&mut self, value: T) -> Flow {
+        self.queue_event(Event::Next(value))
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.queue_event(Event::Termination(termination));
+        // The termination is the last event, so what the context answers is of no use here.
+        let _ = self.queue_event(Event::Termination(termination));
     }
 }

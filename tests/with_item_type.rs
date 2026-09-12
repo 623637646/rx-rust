@@ -282,7 +282,7 @@ fn test_lifetime_or() {
         let observable = observable.with_item_type();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(&life_marker_2);
+        assert!(observer.on_next(&life_marker_2).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -290,7 +290,7 @@ fn test_lifetime_or() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });

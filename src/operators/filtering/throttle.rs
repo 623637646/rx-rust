@@ -2,7 +2,7 @@ use crate::observable::Subscription;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -98,7 +98,7 @@ impl<T, E, OR> Observer<T, E> for ThrottleObserver<OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         let now = Instant::now();
         // `on_next` takes `&mut self`, so it is called exclusively — a plain
         // field suffices, no shared/atomic state is needed.
@@ -108,7 +108,9 @@ where
         };
         if should_emit {
             self.last_emit = Some(now);
-            self.observer.on_next(value);
+            self.observer.on_next(value)
+        } else {
+            Flow::Continue
         }
     }
 

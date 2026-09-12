@@ -8,7 +8,7 @@ use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::types::MarkerType,
 };
@@ -125,7 +125,7 @@ where
     OE1::D: MaybeSend + 'or,
     SD: Disposable + MaybeSend + 'or,
 {
-    fn on_next(&mut self, value: OE1) {
+    fn on_next(&mut self, value: OE1) -> Flow {
         let result = self.0.update(|model| {
             if model.slot.reserve_if_idle() {
                 UpdateOutcome::new(Some(value))
@@ -136,16 +136,15 @@ where
         });
         let observable = match result {
             Ok(Some(observable)) => observable,
-            Ok(None) => return,
-            Err(DeliveryStopped) => return,
+            Ok(None) => return Flow::Continue,
+            Err(DeliveryStopped) => return Flow::Stop,
         };
         let observer = InnerObserver(self.0.clone());
         let sub = observable.subscribe(observer);
         // `fill` gives the subscription back when the slot was released while it was being built,
         // which means the operator already terminated.
-        let _ = self
-            .0
-            .update(|model| UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub)));
+        self.0
+            .update_flow(|model| UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub)))
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -185,8 +184,8 @@ where
     OE1::D: MaybeSend + 'or,
     SD: Disposable + MaybeSend + 'or,
 {
-    fn on_next(&mut self, value: T) {
-        self.0.send_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0.send_next(value)
     }
 
     fn on_termination(self, termination: Termination<E>) {

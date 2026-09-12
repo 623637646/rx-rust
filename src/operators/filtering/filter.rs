@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -75,9 +75,11 @@ where
     OR: Observer<T, E>,
     F: FnMut(&T) -> bool,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         if (self.callback)(&value) {
-            self.observer.on_next(value);
+            self.observer.on_next(value)
+        } else {
+            Flow::Continue
         }
     }
 

@@ -1,5 +1,9 @@
 use crate::utils::types::MaybeSend;
-use crate::{observable::Observable, observable::Subscription, observer::Observer};
+use crate::{
+    observable::Observable,
+    observable::Subscription,
+    observer::{Flow, Observer},
+};
 use educe::Educe;
 
 /// Invokes a callback for each item emitted by the source Observable after the item has been emitted to the downstream observer.
@@ -78,9 +82,12 @@ where
     OR: Observer<T, E>,
     F: FnMut(T),
 {
-    fn on_next(&mut self, value: T) {
-        self.observer.on_next(value.clone());
+    fn on_next(&mut self, value: T) -> Flow {
+        // The callback runs after the notification, so it runs even for the value that stopped
+        // downstream: the flow is kept and returned once it has.
+        let flow = self.observer.on_next(value.clone());
         (self.callback)(value);
+        flow
     }
 
     fn on_termination(self, termination: crate::observer::Termination<E>) {

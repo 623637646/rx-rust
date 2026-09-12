@@ -15,7 +15,7 @@ use crate::utils::serialized_multicast::{MulticastDisposal, SerializedMulticast}
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -65,14 +65,14 @@ where
     T: Clone,
     E: Clone,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         // A value that arrives after the termination is dropped outside the lock.
-        self.0.send(EventBatch::Next(value));
+        self.0.send(EventBatch::Next(value))
     }
 
     fn on_termination(self, termination: Termination<E>) {
         // Only the first termination is ever queued, and nothing joins the subject after it.
-        self.0.send(EventBatch::Termination(termination));
+        let _ = self.0.send(EventBatch::Termination(termination));
     }
 }
 

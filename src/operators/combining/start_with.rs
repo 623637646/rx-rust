@@ -1,3 +1,4 @@
+use crate::disposable::{DisposableExt, option_disposal::OptionDisposal};
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -53,15 +54,22 @@ where
     OE: Observable<'or, T, E>,
     I: IntoIterator<Item = T>,
 {
-    type D = OE::D;
+    type D = OptionDisposal<Subscription<OE::D>>;
 
     fn subscribe(
         self,
         mut observer: impl Observer<T, E> + MaybeSend + 'or,
     ) -> Subscription<Self::D> {
         for value in self.values.into_iter() {
-            observer.on_next(value);
+            if observer.on_next(value).is_stop() {
+                // The prepended values ended the stream, so the source is never subscribed to and
+                // there is nothing to dispose of.
+                return OptionDisposal::none().into_subscription();
+            }
         }
-        self.source.subscribe(observer)
+        self.source
+            .subscribe(observer)
+            .into_option()
+            .into_subscription()
     }
 }

@@ -5,7 +5,7 @@ use crate::utils::subscribe_with_auto_dispose_on_termination::{
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -90,24 +90,29 @@ where
     OR: Observer<bool, E>,
     F: FnMut(T) -> bool,
 {
-    fn on_next(&mut self, value: T) {
-        // A source that does not honor the disposal keeps emitting; the callback is the caller's
-        // and may have side effects, so it must not run once the result was decided.
+    fn on_next(&mut self, value: T) -> Flow {
+        // A source that does not honor the flow or the disposal keeps emitting; the callback is
+        // the caller's and may have side effects, so it must not run once the result was decided.
         if self.observer.is_none() {
-            return;
+            return Flow::Stop;
         }
-        if !(self.callback)(value)
-            && let Some(mut observer) = self.observer.take()
-        {
-            observer.on_next(false);
+        if (self.callback)(value) {
+            return Flow::Continue;
+        }
+        // One value that fails decides the result, so the rest of the source is of no use.
+        let Some(mut observer) = self.observer.take() else {
+            return Flow::Stop;
+        };
+        if observer.on_next(false).is_continue() {
             observer.on_termination(Termination::Completed);
         }
+        Flow::Stop
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
         if let Some(mut observer) = self.observer.take() {
             match termination {
-                Termination::Completed => observer.on_next(true),
+                Termination::Completed => drop(observer.on_next(true)),
                 Termination::Error(_) => {}
             }
             observer.on_termination(termination);

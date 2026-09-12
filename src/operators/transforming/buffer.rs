@@ -7,7 +7,7 @@ use crate::{
     disposable::Disposable,
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -127,11 +127,11 @@ where
     OR: Observer<Vec<T>, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.0.update(|values| {
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0.update_flow(|values| {
             values.push(value);
             UpdateOutcome::empty()
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -146,11 +146,11 @@ where
     OR: Observer<Vec<T>, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) {
-        let _ = self.0.update(|values| {
+    fn on_next(&mut self, _: ()) -> Flow {
+        self.0.update_flow(|values| {
             UpdateOutcome::empty()
                 .with_next_event(std::mem::replace(values, Vec::with_capacity(values.len())))
-        });
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {

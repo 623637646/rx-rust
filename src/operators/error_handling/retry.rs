@@ -6,7 +6,7 @@ use crate::observable::Subscription;
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -103,8 +103,8 @@ where
     OE1::D: MaybeSend + 'or,
     F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
 {
-    fn on_next(&mut self, value: T) {
-        self.observer.on_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        self.observer.on_next(value)
     }
 
     fn on_termination(mut self, termination: Termination<E>) {

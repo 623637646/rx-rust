@@ -82,8 +82,9 @@ where
     ) -> Subscription<Self::D> {
         self.scheduler.schedule(
             || {
-                observer.on_next(self.value);
-                observer.on_termination(Termination::Completed);
+                if observer.on_next(self.value).is_continue() {
+                    observer.on_termination(Termination::Completed);
+                }
             },
             Some(self.delay),
         )

@@ -21,7 +21,7 @@ use rx_rust::utils::mutable::{Mutable, MutableBool, MutableBoolHelper, MutableHe
 use rx_rust::utils::types::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver},
     operators::creating::create::Create,
     subject::publish_subject::PublishSubject,
 };
@@ -332,7 +332,9 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
     }
 
     impl Observer<(), Infallible> for RecordSourceStateOnDrop {
-        fn on_next(&mut self, _: ()) {}
+        fn on_next(&mut self, _: ()) -> Flow {
+            Flow::Continue
+        }
 
         fn on_termination(self, _: Termination<Infallible>) {}
     }
@@ -959,7 +961,7 @@ fn test_complete_on_next() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker.values(), [1]);
     assert_eq!(checker.state(), State::Completed);
 
@@ -996,7 +998,7 @@ fn test_error_on_next() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker.values(), [1]);
     assert_eq!(checker.state(), State::Error("error"));
 
@@ -1055,7 +1057,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                observer.on_next(value);
+                observer.on_next(value)
             })
             .subscribe(observer_2),
     ));
@@ -1066,10 +1068,11 @@ fn test_unsub_on_next() {
     sub.replace_value(Some(
         observable_3
             .hook_on_next(move |observer, value| {
-                observer.on_next(value);
+                assert!(observer.on_next(value).is_continue());
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
+                Flow::Continue
             })
             .subscribe(observer_3),
     ));
@@ -1153,12 +1156,13 @@ fn test_sub_on_next() {
                     subscription_2_cloned
                         .replace_value(Some(observable.clone().subscribe(observer)));
                 }
-                observer.on_next(value);
+                assert!(observer.on_next(value).is_continue());
                 // subscribe after on_next
                 if let Some(observer) = observer_3.take() {
                     subscription_3_cloned
                         .replace_value(Some(observable.clone().subscribe(observer)));
                 }
+                Flow::Continue
             })
             .subscribe(observer_1),
     );
@@ -1220,7 +1224,9 @@ fn test_next_on_next() {
             // termination is still queued behind that value.
             assert_eq!(subject_cloned.terminated().is_some(), value > 1);
             if value < 3 {
-                subject_cloned.on_next(());
+                // Like the termination above: the send of `1` is queued behind the running
+                // delivery, the send of `2` finds the subject terminated.
+                assert_eq!(subject_cloned.on_next(()).is_stop(), value > 1);
             }
             subject_cloned
                 .clone()
@@ -1231,7 +1237,7 @@ fn test_next_on_next() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     // The events are delivered in the order they were sent: the third value is sent from the
     // callback of the second one, after that callback has already sent the termination, so it
     // arrives once the subject has terminated and is dropped.
@@ -1682,7 +1688,7 @@ fn test_next_on_sub() {
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
     assert!(checker_2.values().is_empty());
@@ -1694,7 +1700,7 @@ fn test_next_on_sub() {
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
 
-    subject.on_next(());
+    assert!(subject.on_next(()).is_continue());
     assert_eq!(checker_1.values(), [1, 2, 3]);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), [3]);
@@ -1872,7 +1878,7 @@ fn test_next_on_unsub() {
     let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
         Subscription::new(CallbackDisposal::new(move || {
             let mut observer = observer;
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
         }))
     });
 
@@ -1991,7 +1997,11 @@ fn test_sub_on_unsub() {
     });
 
     // That source is the one feeding the second subscriber.
-    sender_channel_checker.with_mut(|values| values[0].0.on_next(111));
+    assert!(
+        sender_channel_checker
+            .with_mut(|values| values[0].0.on_next(111))
+            .is_continue()
+    );
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), [111]);
@@ -2043,7 +2053,7 @@ fn test_subscribe_after_all_unsubscribed() {
     );
 
     sender_channel_checker.with_mut(|lock| {
-        lock[0].0.on_next(());
+        assert!(lock[0].0.on_next(()).is_continue());
     });
     assert_eq!(checker_1.values(), [1]);
     assert_eq!(checker_1.state(), State::Active);
@@ -2071,7 +2081,7 @@ fn test_subscribe_after_all_unsubscribed() {
     );
 
     sender_channel_checker.with_mut(|lock| {
-        lock[0].0.on_next(());
+        assert!(lock[0].0.on_next(()).is_continue());
     });
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Active);
@@ -2129,7 +2139,7 @@ fn test_subscribe_after_all_unsubscribed() {
     );
 
     sender_channel_checker.with_mut(|lock| {
-        lock[1].0.on_next(());
+        assert!(lock[1].0.on_next(()).is_continue());
     });
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Dropped);
@@ -2177,7 +2187,7 @@ fn test_lifetime_sub() {
 
     {
         let observable = Create::new(|mut observer| {
-            observer.on_next(111);
+            assert!(observer.on_next(111).is_continue());
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
@@ -2207,7 +2217,7 @@ fn test_lifetime_or() {
         let observable = observable.publish().ref_count();
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(vec![&life_marker_2]);
+        assert!(observer.on_next(vec![&life_marker_2]).is_continue());
         let _subscription = observable.subscribe(observer);
     }
 }
@@ -2224,7 +2234,7 @@ fn test_lifetime_or_sub() {
 
     {
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(&life_marker);
+        assert!(observer.on_next(&life_marker).is_continue());
 
         let observable =
             Create::new(|_: BoxedObserver<'_, &TestStruct, Infallible>| Subscription::default());
@@ -2236,7 +2246,7 @@ fn test_lifetime_or_sub() {
 #[test]
 fn test_clone() {
     let observable = Create::new(|mut observer| {
-        observer.on_next(TestStruct);
+        assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
@@ -2299,7 +2309,9 @@ fn test_panicking_late_subscriber_keeps_the_ref_count() {
     struct PanicOnTermination(Option<PanicOnDrop>);
 
     impl Observer<i32, Infallible> for PanicOnTermination {
-        fn on_next(&mut self, _value: i32) {}
+        fn on_next(&mut self, _value: i32) -> Flow {
+            Flow::Continue
+        }
 
         fn on_termination(self, _termination: Termination<Infallible>) {
             drop(self.0);

@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
@@ -72,18 +72,19 @@ impl<T, E, OR> Observer<T, E> for ElementAtObserver<OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
-        if self.observer.is_none() {
-            return;
-        }
-        if self.index == 0 {
-            if let Some(mut observer) = self.observer.take() {
-                observer.on_next(value);
-                observer.on_termination(Termination::Completed);
-            }
-        } else {
+    fn on_next(&mut self, value: T) -> Flow {
+        if self.index > 0 {
             self.index -= 1;
+            return Flow::Continue;
         }
+        // The wanted element was reached, so the rest of the source is of no use.
+        let Some(mut observer) = self.observer.take() else {
+            return Flow::Stop;
+        };
+        if observer.on_next(value).is_continue() {
+            observer.on_termination(Termination::Completed);
+        }
+        Flow::Stop
     }
 
     fn on_termination(mut self, termination: Termination<E>) {

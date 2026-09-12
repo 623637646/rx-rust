@@ -2,7 +2,7 @@ use educe::Educe;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, Subscription},
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver},
     utils::{
         mutable::{Mutable, MutableHelper},
         pending_events::EventBatch,
@@ -76,16 +76,15 @@ impl<T, E> Observer<T, E> for SenderObserver<'_, T, E>
 where
     E: Clone,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         // A parked delivery is a subscribed channel, so this asks the two questions at once.
         let delivery = self.channel.with_ref(|channel| channel.delivery.clone());
         // Panic outside the lock, which leaves it usable, and drops the value outside it too.
         let delivery = delivery.expect("the channel takes a value only while it is subscribed to");
-        let delivered = delivery.send(EventBatch::Next(value)); // Notify outside the lock
-        debug_assert!(
-            delivered,
-            "a subscribed channel has an observer to deliver to"
-        );
+        // A subscribed channel always has an observer to deliver to, so the flow says whether
+        // the stream ended during this very delivery: by a disposal or a termination from inside
+        // it, or by the observer itself. It is handed to whoever drives the channel.
+        delivery.send(EventBatch::Next(value)) // Notify outside the lock
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -107,11 +106,9 @@ where
         });
         // Panic outside the lock, which leaves it usable, and drops the termination outside it too.
         let delivery = delivery.expect("the channel ends only while it is subscribed to");
-        let notified = delivery.send(EventBatch::Termination(termination)); // Notify outside the lock
-        debug_assert!(
-            notified,
-            "a subscribed channel has an observer to terminate"
-        );
+        // A subscribed channel always has an observer to terminate, and terminating ends the
+        // delivery, so the flow it answers is `Flow::Stop` either way and says nothing more.
+        let _ = delivery.send(EventBatch::Termination(termination)); // Notify outside the lock
     }
 }
 

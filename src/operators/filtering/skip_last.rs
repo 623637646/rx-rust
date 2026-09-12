@@ -2,7 +2,7 @@ use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 use std::collections::VecDeque;
@@ -72,10 +72,12 @@ impl<T, E, OR> Observer<T, E> for SkipLastObserver<T, OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
+    fn on_next(&mut self, value: T) -> Flow {
         self.buffer.push_back(value);
         if self.buffer.len() > self.count {
-            self.observer.on_next(self.buffer.pop_front().unwrap());
+            self.observer.on_next(self.buffer.pop_front().unwrap())
+        } else {
+            Flow::Continue
         }
     }
 

@@ -40,7 +40,7 @@
 //! subscription made while a delivery is running is served by that delivery instead.
 
 use crate::disposable::Disposable;
-use crate::observer::{Observer, Termination, boxed_observer::BoxedObserver};
+use crate::observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver};
 use crate::utils::id_generator::{Id, IdGenerator};
 use crate::utils::mutable::{MutableBool, MutableBoolHelper};
 use crate::utils::pending_events::EventBatch;
@@ -176,20 +176,22 @@ where
 
     /// Queues `events` for every observer, dropping them outside the lock once terminated.
     ///
-    /// Returns whether they were queued. This is [`Self::update`] for a host that reads nothing
-    /// and decides nothing.
-    pub fn send(&self, events: EventBatch<T, E>) -> bool {
+    /// Returns whether the multicast still accepts events, which is [`Flow::Stop`] only once it
+    /// has terminated: a multicast with no subscriber left is still open, and a subscriber that
+    /// stops takes only itself away. This is [`Self::update`] for a host that reads nothing and
+    /// decides nothing.
+    pub fn send(&self, events: EventBatch<T, E>) -> Flow {
         self.update(|_, terminated| {
             if terminated.is_some() {
-                return UpdateOutcome::new(false)
+                return UpdateOutcome::new(Flow::Stop)
                     .with_drop_outside(events)
                     .without_events();
             }
-            UpdateOutcome::new(true)
+            UpdateOutcome::new(Flow::Continue)
                 .without_drop_outside()
                 .with_events(events)
         })
-        .unwrap_or(false)
+        .unwrap_or(Flow::Stop)
     }
 
     /// Subscribes `observer`, replaying nothing and terminating it at once when already terminated.
@@ -228,7 +230,7 @@ where
                     let id = resources.ids.next_id();
                     let entry = Entry {
                         id,
-                        disposed: disposed.clone(),
+                        is_disposed: disposed.clone(),
                         observer: BoxedObserver::new(
                             observer.take().expect("the update runs at most once"),
                         ),
@@ -246,10 +248,18 @@ where
             }),
             Ok(Admitted::Terminated(values, termination)) => {
                 let mut observer = observer.take().expect("the update left the observer here");
+                // A replayed value can stop the newcomer, which is then dropped where it is
+                // instead of being terminated.
+                let mut flow = Flow::Continue;
                 for value in values {
-                    observer.on_next(value);
+                    flow = observer.on_next(value);
+                    if flow.is_stop() {
+                        break;
+                    }
                 }
-                observer.on_termination(termination);
+                if flow.is_continue() {
+                    observer.on_termination(termination);
+                }
                 None
             }
             Err(DeliveryStopped) => {
@@ -306,7 +316,7 @@ struct Entry<'or, T, E> {
     /// `Action::Add` is still queued.
     id: Id,
     /// Written by the disposal, read before every notification.
-    disposed: Shared<MutableBool>,
+    is_disposed: Shared<MutableBool>,
     observer: BoxedObserver<'or, T, E>,
 }
 
@@ -342,13 +352,16 @@ where
     T: Clone,
     E: Clone,
 {
-    fn on_next(&mut self, action: Action<'or, T, E>) {
+    fn on_next(&mut self, action: Action<'or, T, E>) -> Flow {
         match action {
             Action::Forward(value) => self.forward(value),
             Action::Add { entry, replay } => self.add(entry, replay),
             Action::Prune(id) => self.prune(id),
             Action::Terminate(termination) => self.terminate(termination),
         }
+        // A subscriber that stops takes only itself away, so the multicast itself never stops:
+        // it stays open for the subscribers it still has and for the ones still to come.
+        Flow::Continue
     }
 
     fn on_termination(self, _: Termination<E>) {
@@ -365,24 +378,30 @@ where
     E: Clone,
 {
     fn forward(&mut self, value: T) {
-        for entry in &mut self.entries {
-            if entry.disposed.read() {
-                continue; // Unsubscribed, possibly during this very dispatch.
+        // An entry whose observer stops is released right here, like a disposed one: it accepts
+        // nothing more, and must not be terminated either.
+        self.entries.retain_mut(|entry| {
+            if entry.is_disposed.read() {
+                // Unsubscribed, possibly during this very dispatch: its own `Action::Prune` is
+                // what removes it, so it is kept here.
+                return true;
             }
-            entry.observer.on_next(value.clone());
-        }
+            entry.observer.on_next(value.clone()).is_continue()
+        });
     }
 
     fn add(&mut self, mut entry: Entry<'or, T, E>, replay: Vec<T>) {
         // The replay is delivered here, where it is serialized with everything else: the values
         // the host snapshotted are exactly the ones queued before this action.
         for value in replay {
-            if entry.disposed.read() {
+            if entry.is_disposed.read() {
                 return; // Unsubscribed, possibly during this very replay.
             }
-            entry.observer.on_next(value);
+            if entry.observer.on_next(value).is_stop() {
+                return; // Stopped by the replay itself, so it never joins.
+            }
         }
-        if entry.disposed.read() {
+        if entry.is_disposed.read() {
             return; // Unsubscribed before it was ever added.
         }
         debug_assert!(
@@ -401,7 +420,7 @@ where
     fn terminate(&mut self, termination: Termination<E>) {
         // Nothing is queued behind the termination, so emptying the entries here is final.
         for entry in std::mem::take(&mut self.entries) {
-            if entry.disposed.read() {
+            if entry.is_disposed.read() {
                 continue; // Unsubscribed, possibly during this very dispatch.
             }
             entry.observer.on_termination(termination.clone());
@@ -424,6 +443,6 @@ where
     fn dispose(self) {
         // The flag is what stops the events; the action only releases the observer afterwards.
         self.disposed.write(true);
-        self.delivery.send(EventBatch::Next(Action::Prune(self.id)));
+        let _ = self.delivery.send(EventBatch::Next(Action::Prune(self.id)));
     }
 }

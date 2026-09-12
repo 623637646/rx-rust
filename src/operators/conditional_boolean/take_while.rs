@@ -3,7 +3,7 @@ use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_aut
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -79,20 +79,23 @@ where
     OR: Observer<T, E>,
     F: FnMut(&T) -> bool,
 {
-    fn on_next(&mut self, value: T) {
-        // A source that does not honor the disposal keeps emitting; the callback is the caller's
-        // and may have side effects, so it must not run once the window has closed.
-        if self.observer.is_none() {
-            return;
-        }
-        let r#continue = (self.callback)(&value);
-        if r#continue {
-            if let Some(observer) = self.observer.as_mut() {
-                observer.on_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        // A source that does not honor the flow or the disposal keeps emitting; the callback is
+        // the caller's and may have side effects, so it must not run once the window has closed.
+        let Some(observer) = self.observer.as_mut() else {
+            return Flow::Stop;
+        };
+        if !(self.callback)(&value) {
+            if let Some(observer) = self.observer.take() {
+                observer.on_termination(Termination::Completed);
             }
-        } else if let Some(observer) = self.observer.take() {
-            observer.on_termination(Termination::Completed);
+            return Flow::Stop;
         }
+        let flow = observer.on_next(value);
+        if flow.is_stop() {
+            drop(self.observer.take());
+        }
+        flow
     }
 
     fn on_termination(self, termination: Termination<E>) {

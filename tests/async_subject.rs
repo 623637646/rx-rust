@@ -6,7 +6,7 @@ use crate::tests_utils::test_runtime::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
-use rx_rust::observer::{Observer, Termination};
+use rx_rust::observer::{Flow, Observer, Termination};
 use rx_rust::subject::Subject;
 use rx_rust::subject::async_subject::AsyncSubject;
 use rx_rust::utils::mutable::Mutable;
@@ -38,12 +38,12 @@ fn test_completed() {
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
@@ -54,7 +54,7 @@ fn test_completed() {
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
 
     // on_next and on_termination after termination
-    subject.on_next(333);
+    assert!(subject.on_next(333).is_stop());
     subject.clone().on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [222]);
     assert_eq!(checker.state(), State::Completed);
@@ -89,12 +89,12 @@ fn test_error() {
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
@@ -108,7 +108,7 @@ fn test_error() {
     ));
 
     // on_next and on_termination after termination
-    subject.on_next(333);
+    assert!(subject.on_next(333).is_stop());
     subject.clone().on_termination(Termination::Completed);
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Error("error"));
@@ -147,7 +147,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -161,7 +161,7 @@ fn test_unsubscribe() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Dropped);
     assert_eq!(checker_2.values(), []);
@@ -194,12 +194,12 @@ fn test_ref() {
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(&value_1);
+    assert!(subject.on_next(&value_1).is_continue());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(&value_2);
+    assert!(subject.on_next(&value_2).is_continue());
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
@@ -232,7 +232,7 @@ fn test_async() {
         let mut subject_cloned = subject.clone();
         runtime
             .spawn(async move {
-                subject_cloned.on_next(&111);
+                assert!(subject_cloned.on_next(&111).is_continue());
             })
             .await
             .unwrap();
@@ -274,14 +274,14 @@ fn test_subscribe_by_different_observer() {
     assert_eq!(checker_2.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -320,12 +320,12 @@ fn test_unsub_on_next_by_take() {
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
@@ -351,7 +351,7 @@ fn test_complete_on_next() {
     let _subscription = observable.subscribe_with_callback(
         move |value| {
             if value < 3 {
-                subject_cloned.on_next(value + 1);
+                assert!(subject_cloned.on_next(value + 1).is_stop());
                 subject_cloned
                     .clone()
                     .on_termination(Termination::Completed);
@@ -363,7 +363,7 @@ fn test_complete_on_next() {
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(1);
+    assert!(subject.on_next(1).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
@@ -400,7 +400,7 @@ fn test_error_on_next() {
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
@@ -436,7 +436,7 @@ fn test_unsub_on_next() {
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
-                observer.on_next(value);
+                observer.on_next(value)
             })
             .subscribe(observer_2),
     ));
@@ -447,10 +447,11 @@ fn test_unsub_on_next() {
     sub.replace_value(Some(
         observable
             .hook_on_next(move |observer, value| {
-                observer.on_next(value);
+                assert!(observer.on_next(value).is_continue());
                 if let Some(subscription) = sub_cloned.take_value() {
                     Disposable::dispose(subscription);
                 }
+                Flow::Continue
             })
             .subscribe(observer_3),
     ));
@@ -463,7 +464,7 @@ fn test_unsub_on_next() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -506,11 +507,12 @@ fn test_sub_on_next() {
             if let Some(observer) = observer_2.take() {
                 subscription_2_cloned.replace_value(Some(observable.clone().subscribe(observer)));
             }
-            observer.on_next(value);
+            assert!(observer.on_next(value).is_continue());
             // subscribe after on_next
             if let Some(observer) = observer_3.take() {
                 subscription_3_cloned.replace_value(Some(observable.clone().subscribe(observer)));
             }
+            Flow::Continue
         })
         .subscribe(observer_1);
     assert!(checker_1.values().is_empty());
@@ -521,7 +523,7 @@ fn test_sub_on_next() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -530,7 +532,7 @@ fn test_sub_on_next() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -567,7 +569,7 @@ fn test_next_on_next() {
             // terminated when that value is delivered.
             assert!(subject_cloned.terminated().is_some());
             if value < 3 {
-                subject_cloned.on_next(value + 1);
+                assert!(subject_cloned.on_next(value + 1).is_stop());
                 subject_cloned
                     .clone()
                     .on_termination(Termination::Completed);
@@ -579,7 +581,7 @@ fn test_next_on_next() {
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(1);
+    assert!(subject.on_next(1).is_continue());
     assert_eq!(checker.values(), []);
     assert_eq!(checker.state(), State::Active);
     assert!(subject.terminated().is_none());
@@ -644,7 +646,7 @@ fn test_unsub_on_completed() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -706,7 +708,7 @@ fn test_sub_on_completed() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -715,7 +717,7 @@ fn test_sub_on_completed() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -784,7 +786,7 @@ fn test_unsub_on_error() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -849,7 +851,7 @@ fn test_sub_on_error() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -858,7 +860,7 @@ fn test_sub_on_error() {
     assert_eq!(checker_3.state(), State::Active);
     assert!(subject.terminated().is_none());
 
-    subject.on_next(222);
+    assert!(subject.on_next(222).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
     assert_eq!(checker_2.values(), []);
@@ -903,13 +905,13 @@ fn test_next_on_replayed_next() {
         move |value| {
             terminated_cloned.with_mut(|values| values.push(subject_cloned.terminated().is_some()));
             if value == 111 {
-                subject_cloned.on_next(222);
+                assert!(subject_cloned.on_next(222).is_stop());
             }
         },
         move |_| {},
     );
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
@@ -949,7 +951,7 @@ fn test_complete_on_replayed_next() {
         move |_| {},
     );
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
@@ -986,7 +988,7 @@ fn test_sub_on_replayed_next() {
     );
     let _subscription = observable.subscribe(observer_1);
 
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     subject.clone().on_termination(Termination::Completed);
 
     assert_eq!(checker_1.values(), [111]);
@@ -1000,7 +1002,7 @@ fn test_next_on_sub() {
     // Replaying the value to a late subscriber runs its callback: the subject has terminated long
     // ago, so a value sent from there is dropped and the replayed value stays what it was.
     let mut subject = AsyncSubject::default();
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     subject
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
@@ -1012,7 +1014,7 @@ fn test_next_on_sub() {
     let _subscription = observable.clone().subscribe_with_callback(
         move |value| {
             if value == 111 {
-                subject_cloned.on_next(222);
+                assert!(subject_cloned.on_next(222).is_stop());
             }
         },
         move |_| {},
@@ -1027,7 +1029,7 @@ fn test_next_on_sub() {
 #[test]
 fn test_next_on_unsub() {
     let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -1038,7 +1040,7 @@ fn test_next_on_unsub() {
     // is sent from inside the unsubscription. It becomes the value the subject replays.
     let mut subject_cloned = subject.clone();
     let probe = DropProbe::new().on_drop(Box::new(move || {
-        subject_cloned.on_next(222);
+        assert!(subject_cloned.on_next(222).is_continue());
     }));
     let (mut next_2, termination_2) = observer_2.into_callbacks();
 
@@ -1071,7 +1073,7 @@ fn test_next_on_unsub() {
 fn test_complete_on_unsub() {
     let subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
     let mut subject_seed = subject.clone();
-    subject_seed.on_next(111);
+    assert!(subject_seed.on_next(111).is_continue());
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -1111,7 +1113,7 @@ fn test_complete_on_unsub() {
 fn test_error_on_unsub() {
     let subject: AsyncSubject<'_, _, &str> = AsyncSubject::default();
     let mut subject_seed = subject.clone();
-    subject_seed.on_next(111);
+    assert!(subject_seed.on_next(111).is_continue());
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -1150,7 +1152,7 @@ fn test_error_on_unsub() {
 #[test]
 fn test_sub_on_sub() {
     let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     subject.clone().on_termination(Termination::Completed);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -1186,7 +1188,7 @@ fn test_sub_on_sub() {
 #[test]
 fn test_sub_on_unsub() {
     let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
-    subject.on_next(111);
+    assert!(subject.on_next(111).is_continue());
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -1249,7 +1251,7 @@ fn test_race_condition() {
 
     for _ in 0..200 {
         let mut subject: AsyncSubject<'static, i32, Infallible> = AsyncSubject::default();
-        subject.on_next(111);
+        assert!(subject.on_next(111).is_continue());
         let barrier = Arc::new(Barrier::new(SUBSCRIBERS + 1));
 
         let handles: Vec<_> = (0..SUBSCRIBERS)
@@ -1299,7 +1301,7 @@ fn test_lifetime_or_sub() {
 
     {
         let (_, mut observer) = Checker::<_, Infallible>::new();
-        observer.on_next(Some(&life_marker));
+        assert!(observer.on_next(Some(&life_marker)).is_continue());
         let subject = AsyncSubject::default();
         _subscription = subject.subscribe(observer);
     }

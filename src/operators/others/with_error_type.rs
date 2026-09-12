@@ -1,7 +1,7 @@
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::types::MarkerType,
 };
 use educe::Educe;
@@ -71,8 +71,8 @@ impl<T, E, OR> Observer<T, Infallible> for WithErrorTypeObserver<E, OR>
 where
     OR: Observer<T, E>,
 {
-    fn on_next(&mut self, value: T) {
-        self.observer.on_next(value);
+    fn on_next(&mut self, value: T) -> Flow {
+        self.observer.on_next(value)
     }
 
     fn on_termination(self, termination: Termination<Infallible>) {

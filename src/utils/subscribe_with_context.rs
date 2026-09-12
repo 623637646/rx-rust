@@ -5,7 +5,7 @@ use crate::{
         Disposable, DisposableExt, boxed_disposal::BoxedDisposal, chain_disposal::ChainDisposal,
     },
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::{
         pending_events::EventBatch,
         serialized_delivery::{SerializedDelivery, WeakSerializedDelivery},
@@ -173,6 +173,23 @@ where
             .update(|resources| callback(&mut resources.model))
     }
 
+    /// [`Self::update`] for an operator's `on_next`, reporting the flow instead of a result.
+    ///
+    /// The flow is what delivering the events the update produced answered, and [`Flow::Stop`]
+    /// when the context has stopped, so an operator observer can return it directly.
+    pub fn update_flow<DO, const EVENTS_DECIDED: bool>(
+        &self,
+        callback: impl FnOnce(&mut M) -> UpdateOutcome<T, E, (), DO, EVENTS_DECIDED>,
+    ) -> Flow {
+        match self
+            .delivery
+            .update_with_flow(|resources| callback(&mut resources.model))
+        {
+            Ok(((), flow)) => flow,
+            Err(DeliveryStopped) => Flow::Stop,
+        }
+    }
+
     /// Gives the context the source subscription it owns, to be disposed once the context stops.
     ///
     /// The subscription it replaces — none, unless it is installed twice — is handed back so that
@@ -187,21 +204,26 @@ where
         })
     }
 
-    /// Sends `value` downstream. Returns whether it was accepted, as [`Self::send`] does.
-    pub fn send_next(&self, value: T) -> bool {
+    /// Sends `value` downstream. Returns the flow of the delivery, as [`Self::send`] does.
+    pub fn send_next(&self, value: T) -> Flow {
         self.send(EventBatch::Next(value))
     }
 
-    /// Sends `termination` downstream. Returns whether it was accepted, as [`Self::send`] does.
-    pub fn send_termination(&self, termination: Termination<E>) -> bool {
-        self.send(EventBatch::Termination(termination))
+    /// Sends `termination` downstream.
+    ///
+    /// Nothing is answered: a termination is the last event, so the caller is done whether it
+    /// was delivered, queued behind a running delivery, or rejected by a context that had already
+    /// stopped — [`Self::send`] would say [`Flow::Stop`] in every case.
+    pub fn send_termination(&self, termination: Termination<E>) {
+        let _ = self.send(EventBatch::Termination(termination));
     }
 
     /// Sends `events` downstream, delivering them now or queueing them behind a running delivery.
     ///
-    /// Returns whether the events were accepted. They are rejected, and dropped, once the context
-    /// has stopped or a termination is already queued.
-    pub fn send(&self, events: EventBatch<T, E>) -> bool {
+    /// Returns whether downstream still accepts events. [`Flow::Stop`] means the events were
+    /// rejected and dropped, because the context has stopped or a termination is already queued,
+    /// or that the stream is over: `events` carried a termination, or delivering them ended it.
+    pub fn send(&self, events: EventBatch<T, E>) -> Flow {
         self.delivery.send(events)
     }
 }

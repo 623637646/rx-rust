@@ -20,7 +20,7 @@ use std::convert::Infallible;
 /// let mut terminations = Vec::new();
 ///
 /// Empty.subscribe_with_callback(
-///     |_: Infallible| unreachable!(),
+///     |_: Infallible| -> () { unreachable!() },
 ///     |termination| terminations.push(termination),
 /// );
 ///

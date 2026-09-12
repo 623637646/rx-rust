@@ -11,7 +11,7 @@
 //! this module events to queue and a value to drop once they were delivered.
 
 use crate::{
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::{
         mutable::{Mutable, MutableExt, MutableHelper},
         on_panic::on_panic,
@@ -219,11 +219,18 @@ where
 {
     /// Queues `events` and delivers whatever that makes deliverable.
     ///
-    /// Returns whether the events were queued. They are rejected, and dropped outside the lock,
-    /// once the delivery has stopped or the termination is already queued.
-    pub fn send(&self, events: EventBatch<T, E>) -> bool {
+    /// Returns whether the observer still accepts events. It is [`Flow::Stop`] once the delivery
+    /// has stopped or a termination is already queued — the events are then rejected and dropped
+    /// outside the lock — and also whenever `events` carries a termination, since nothing can be
+    /// queued after it. Values queued behind a delivery running elsewhere are reported as
+    /// [`Flow::Continue`], as [`Flow`] describes.
+    pub fn send(&self, events: EventBatch<T, E>) -> Flow {
+        // A batch that carries a termination ends the stream whatever the delivery answers:
+        // nothing can be queued after it, and it is delivered for certain once queued.
+        let ends_stream = events.ends_stream();
         let action = self.0.with_mut(|state| state.enqueue_batch(events));
-        self.perform(action)
+        let flow = self.perform(action);
+        if ends_stream { Flow::Stop } else { flow }
     }
 
     /// Updates the resources and queues the events that update produced, under one lock.
@@ -241,6 +248,18 @@ where
         &self,
         update: impl FnOnce(&mut R) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
     ) -> Result<Out, DeliveryStopped> {
+        self.update_with_flow(update).map(|(result, _)| result)
+    }
+
+    /// [`Self::update`], reporting as well whether the observer still accepts events.
+    ///
+    /// The flow is what delivering the queued events answered, or [`Flow::Continue`] when the
+    /// update queued none. A stopped delivery answers [`DeliveryStopped`] rather than a flow, so a
+    /// host that only needs the flow maps that error to [`Flow::Stop`].
+    pub fn update_with_flow<Out, DO, const EVENTS_DECIDED: bool>(
+        &self,
+        update: impl FnOnce(&mut R) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
+    ) -> Result<(Out, Flow), DeliveryStopped> {
         // Keep `update` out of the closure so that, when the delivery has stopped, its captures
         // are dropped only after the lock is released.
         let mut update = Some(update);
@@ -254,31 +273,35 @@ where
                     drop_outside,
                     result,
                 } = update(resources);
-                let action = events.map(|events| state.enqueue_batch(events));
+                let action =
+                    events.map(|events| (events.ends_stream(), state.enqueue_batch(events)));
                 Some((action, drop_outside, result))
             })
             .ok_or(DeliveryStopped)?;
-        if let Some(action) = action {
-            self.perform(action);
-        }
+        let flow = match action {
+            // As in `send`, a termination ends the stream whatever the delivery answers.
+            Some((true, action)) => {
+                let _ = self.perform(action);
+                Flow::Stop
+            }
+            Some((false, action)) => self.perform(action),
+            None => Flow::Continue,
+        };
         drop(drop_outside); // Drop after the delivery, outside the lock
-        Ok(result)
+        Ok((result, flow))
     }
 
     /// Performs, with the lock released, what `enqueue_batch` deferred to outside it.
-    fn perform(&self, action: EnqueueAction<T, E, OR>) -> bool {
+    fn perform(&self, action: EnqueueAction<T, E, OR>) -> Flow {
         match action {
             EnqueueAction::Start {
                 observer,
                 first_next,
-            } => {
-                self.deliver(observer, first_next);
-                true
-            }
-            EnqueueAction::Accepted => true,
+            } => self.deliver(observer, first_next),
+            EnqueueAction::Accepted => Flow::Continue,
             EnqueueAction::Rejected(events) => {
                 drop(events); // Drop outside the lock to avoid potential deadlock
-                false
+                Flow::Stop
             }
         }
     }
@@ -293,11 +316,18 @@ where
     /// Every observer callback runs outside the lock. If one unwinds, the delivery is stopped, so
     /// a caught panic cannot leave it stuck in its delivering state — and locking from the guard is
     /// safe on the panicking thread for that same reason.
-    fn deliver(&self, mut observer: OR, first_next: Option<T>) {
+    ///
+    /// Returns [`Flow::Stop`] once this delivery is over — because the observer stopped, because
+    /// it was terminated, or because the delivery had already been stopped — and
+    /// [`Flow::Continue`] when the observer was parked back, waiting for the next event.
+    fn deliver(&self, mut observer: OR, first_next: Option<T>) -> Flow {
         if let Some(value) = first_next {
             let guard = on_panic(|| self.stop());
-            observer.on_next(value);
+            let flow = observer.on_next(value);
             drop(guard);
+            if flow.is_stop() {
+                return self.stop_with(observer);
+            }
         }
 
         loop {
@@ -305,8 +335,11 @@ where
                 Step::Next(next_observer, value) => {
                     observer = next_observer;
                     let guard = on_panic(|| self.stop());
-                    observer.on_next(value);
+                    let flow = observer.on_next(value);
                     drop(guard);
+                    if flow.is_stop() {
+                        return self.stop_with(observer);
+                    }
                 }
                 Step::Terminate {
                     observer,
@@ -320,15 +353,26 @@ where
                     // source only after its downstream was told the stream ended. Unwinding from
                     // the callback drops them too.
                     drop(resources);
-                    return;
+                    return Flow::Stop;
                 }
-                Step::Parked => return,
+                Step::Parked => return Flow::Continue,
                 Step::Stopped(observer) => {
                     drop(observer); // Drop outside the lock to avoid potential deadlock
-                    return;
+                    return Flow::Stop;
                 }
             }
         }
+    }
+
+    /// Stops the delivery because `observer`, which the loop still holds, accepts nothing more.
+    ///
+    /// The observer is not terminated: [`Flow::Stop`] says it has already ended its own stream or
+    /// been disposed, so it is released like a disposed one. The state is stopped first, so that
+    /// anything its drop sends is rejected rather than queued for a delivery that is over.
+    fn stop_with(&self, observer: OR) -> Flow {
+        self.stop();
+        drop(observer); // Drop outside the lock to avoid potential deadlock
+        Flow::Stop
     }
 }
 

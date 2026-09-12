@@ -1,7 +1,7 @@
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     utils::types::MaybeSend,
 };
 use educe::Educe;
@@ -78,8 +78,8 @@ impl<T, E, OR> Observer<T, E> for TimestampObserver<OR>
 where
     OR: Observer<(T, Instant), E>,
 {
-    fn on_next(&mut self, value: T) {
-        self.observer.on_next((value, Instant::now()));
+    fn on_next(&mut self, value: T) -> Flow {
+        self.observer.on_next((value, Instant::now()))
     }
 
     fn on_termination(self, termination: Termination<E>) {

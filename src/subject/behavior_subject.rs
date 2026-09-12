@@ -15,7 +15,7 @@ use crate::utils::serialized_multicast::{Admission, MulticastDisposal, Serialize
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -81,25 +81,27 @@ where
     T: Clone,
     E: Clone,
 {
-    fn on_next(&mut self, value: T) {
-        let _ = self.0.update(|current, terminated| {
-            if terminated.is_some() {
-                return UpdateOutcome::empty()
-                    .with_drop_outside(Some(value))
-                    .without_events();
-            }
-            // Replacing the current value and forwarding it are one step, so the value a
-            // subscriber is given always matches the values it then receives. The replaced value
-            // is dropped outside the lock: dropping it can run arbitrary code.
-            let previous = std::mem::replace(current, value.clone());
-            UpdateOutcome::empty()
-                .with_drop_outside(Some(previous))
-                .with_next_event(value)
-        });
+    fn on_next(&mut self, value: T) -> Flow {
+        self.0
+            .update(|current, terminated| {
+                if terminated.is_some() {
+                    return UpdateOutcome::new(Flow::Stop)
+                        .with_drop_outside(Some(value))
+                        .without_events();
+                }
+                // Replacing the current value and forwarding it are one step, so the value a
+                // subscriber is given always matches the values it then receives. The replaced
+                // value is dropped outside the lock: dropping it can run arbitrary code.
+                let previous = std::mem::replace(current, value.clone());
+                UpdateOutcome::new(Flow::Continue)
+                    .with_drop_outside(Some(previous))
+                    .with_next_event(value)
+            })
+            .unwrap_or(Flow::Stop)
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        self.0.send(EventBatch::Termination(termination));
+        let _ = self.0.send(EventBatch::Termination(termination));
     }
 }
 
