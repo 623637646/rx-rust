@@ -4,7 +4,8 @@ pub mod either_observable;
 
 #[cfg(feature = "futures")]
 use crate::operators::others::{
-    observable_stream::ObservableStream, observable_try_stream::ObservableTryStream,
+    observable_stream::ObservableStream,
+    observable_try_stream::{ObservableTryStream, StreamBuffer},
 };
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
@@ -462,12 +463,56 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     ///
     /// A `Stream` has no error channel, so this is only for a source that cannot fail; a
     /// fallible one goes through [`into_try_stream`](Self::into_try_stream).
+    ///
+    /// The items that arrive between two polls are all kept, so a source faster than the
+    /// consumer grows the buffer without bound; [`into_stream_with`](Self::into_stream_with)
+    /// takes a buffer that bounds it.
     #[cfg(feature = "futures")]
     fn into_stream(self) -> ObservableStream<'or, T, Self>
     where
         Self: Observable<'or, T, std::convert::Infallible>,
     {
         ObservableStream::new(self)
+    }
+
+    /// Converts the observable into an async stream that keeps the items arriving between two
+    /// polls in `buffer`, which decides what a source faster than the consumer costs.
+    ///
+    /// [`Latest`](crate::operators::others::observable_try_stream::Latest) keeps only the newest item,
+    /// [`Bounded`](crate::operators::others::observable_try_stream::Bounded) a fixed number of them and
+    /// [`Unbounded`](crate::operators::others::observable_try_stream::Unbounded) — what
+    /// [`into_stream`](Self::into_stream) uses — everything; a
+    /// [`StreamBuffer`] of your own can
+    /// fold them instead. Whatever the buffer, the source is never slowed down: a `Stream`
+    /// only pulls from the buffer, not from the source.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use futures::{FutureExt, StreamExt};
+    /// use rx_rust::{
+    ///     observable::ObservableExt, observer::Observer,
+    ///     operators::others::observable_try_stream::Latest,
+    ///     subject::publish_subject::PublishSubject,
+    /// };
+    /// use std::convert::Infallible;
+    ///
+    /// let mut subject = PublishSubject::<_, Infallible>::new();
+    /// let mut stream = subject.clone().into_stream_with(Latest::new());
+    /// assert_eq!(stream.next().now_or_never(), None); // subscribes
+    ///
+    /// subject.on_next(1);
+    /// subject.on_next(2);
+    /// subject.on_next(3);
+    /// assert_eq!(stream.next().now_or_never(), Some(Some(3)));
+    /// assert_eq!(stream.next().now_or_never(), None);
+    /// ```
+    #[cfg(feature = "futures")]
+    fn into_stream_with<B>(self, buffer: B) -> ObservableStream<'or, T, Self, B>
+    where
+        Self: Observable<'or, T, std::convert::Infallible>,
+        B: StreamBuffer<T>,
+    {
+        ObservableStream::with_buffer(self, buffer)
     }
 
     /// Converts the observable into a future of its first item: `Ok(Some(item))`, `Ok(None)` when
@@ -482,9 +527,24 @@ pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
 
     /// Converts the observable into an async stream of `Result`s: each item as `Ok`, and an error
     /// as the last item, `Err`, before the stream ends.
+    ///
+    /// The items that arrive between two polls are all kept, so a source faster than the
+    /// consumer grows the buffer without bound;
+    /// [`into_try_stream_with`](Self::into_try_stream_with) takes a buffer that bounds it.
     #[cfg(feature = "futures")]
     fn into_try_stream(self) -> ObservableTryStream<'or, T, E, Self> {
         ObservableTryStream::new(self)
+    }
+
+    /// Converts the observable into an async stream of `Result`s that keeps the items arriving
+    /// between two polls in `buffer`. This is [`into_stream_with`](Self::into_stream_with) for
+    /// a source that can fail; see there for the buffers.
+    #[cfg(feature = "futures")]
+    fn into_try_stream_with<B>(self, buffer: B) -> ObservableTryStream<'or, T, E, Self, B>
+    where
+        B: StreamBuffer<T>,
+    {
+        ObservableTryStream::with_buffer(self, buffer)
     }
 
     /// Emits only the final item produced by the source before completion.

@@ -1,5 +1,6 @@
 use crate::{
-    observable::Observable, operators::others::observable_try_stream::ObservableTryStream,
+    observable::Observable,
+    operators::others::observable_try_stream::{ObservableTryStream, StreamBuffer, Unbounded},
     utils::types::MaybeSend,
 };
 use educe::Educe;
@@ -31,32 +32,49 @@ use std::{convert::Infallible, task::Poll};
 /// ```
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ObservableStream<'or, T, OE>
+pub struct ObservableStream<'or, T, OE, B = Unbounded<T>>
 where
     OE: Observable<'or, T, Infallible>,
 {
-    stream: ObservableTryStream<'or, T, Infallible, OE>,
+    stream: ObservableTryStream<'or, T, Infallible, OE, B>,
 }
 
 impl<'or, T, OE> ObservableStream<'or, T, OE>
 where
     OE: Observable<'or, T, Infallible>,
 {
+    /// Buffers every item until it is polled; see [`Unbounded`].
     pub fn new(source: OE) -> Self {
+        Self::with_buffer(source, Unbounded::new())
+    }
+}
+
+impl<'or, T, OE, B> ObservableStream<'or, T, OE, B>
+where
+    OE: Observable<'or, T, Infallible>,
+    B: StreamBuffer<T>,
+{
+    /// Keeps the items that arrive between two polls in `buffer`; see
+    /// [`ObservableTryStream::with_buffer`].
+    pub fn with_buffer(source: OE, buffer: B) -> Self {
         Self {
-            stream: ObservableTryStream::new(source),
+            stream: ObservableTryStream::with_buffer(source, buffer),
         }
     }
 }
 
-impl<'or, T, OE> Unpin for ObservableStream<'or, T, OE> where OE: Observable<'or, T, Infallible> {}
+impl<'or, T, OE, B> Unpin for ObservableStream<'or, T, OE, B> where
+    OE: Observable<'or, T, Infallible>
+{
+}
 
-impl<'or, T, OE> Stream for ObservableStream<'or, T, OE>
+impl<'or, T, OE, B> Stream for ObservableStream<'or, T, OE, B>
 where
     T: MaybeSend + 'or,
     OE: Observable<'or, T, Infallible>,
+    B: StreamBuffer<T> + MaybeSend + 'or,
 {
-    type Item = T;
+    type Item = B::Item;
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
