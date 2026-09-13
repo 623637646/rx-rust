@@ -92,10 +92,3 @@
 * cargo tarpaulin --out Html -- --test utils::unique_key_store  
 * cargo doc --open  
 * cargo expand
-
-# Others
-
-正则表达式：锁的使用
-with_mut|with_ref|clone_value|replace_value|take_value|\Wread\(\)|\Wwrite\(|\Wchange_if_not_equal\(
-194个结果
-排除路径：src/utils/mutable.rs,src/utils/types.rs
