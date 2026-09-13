@@ -339,7 +339,6 @@ Conditional and boolean     | `all`, `contains`, `sequence_equal`, `default_if_e
 Mathematical and aggregate  | `count`, `sum`, `average`, `min`, `max`, `reduce`, `collect`, `to_vec`
 Error handling              | `catch`, `map_err`, `retry`
 Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
-Backpressure                | `on_backpressure`, `on_backpressure_buffer`, `on_backpressure_latest`
 Connectable                 | `multicast`, `publish`, `publish_last`, `replay`, `share`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
 Conversion                  | `into_future`, `into_try_future`, `into_stream`, `into_stream_with`, `into_try_stream`, `into_try_stream_with`, `into_boxed`, `into_cloneable_boxed`, `with_item_type`, `with_error_type`
 Debugging                   | `debug`, `debug_default_print`, `hook_on_subscription`, `hook_on_next`, `hook_on_termination`
