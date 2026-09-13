@@ -1,11 +1,7 @@
 
 # TODOs
 
-* Improve
-  * Observable 的 T 和 E 用 associated type。但是rustc会卡住，等升级rustc再继续
-* NotBigDeal  
-  * 用 test_channel 代替 test 里的PublishSubject和create，just  
-  * Infallible 替换为Never  
+1. Observable 的 T 和 E 用 associated type。但是rustc会卡住，等升级rustc再继续
 
 # Check List
 
