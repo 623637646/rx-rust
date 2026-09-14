@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-14
+
 ### Added
 
 - GitHub Actions: `ci.yml` (rustfmt, clippy, `cargo hack` check of every feature, MSRV, docs and
@@ -110,7 +112,8 @@ themes rather than every change.
 
 Initial public release on crates.io.
 
-[Unreleased]: https://github.com/623637646/rx-rust/compare/1.0.0...HEAD
+[Unreleased]: https://github.com/623637646/rx-rust/compare/1.0.1...HEAD
+[1.0.1]: https://github.com/623637646/rx-rust/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/623637646/rx-rust/compare/0.3.0...1.0.0
 [0.3.0]: https://github.com/623637646/rx-rust/compare/0.2.2...0.3.0
 [0.2.2]: https://github.com/623637646/rx-rust/compare/0.2.1...0.2.2
