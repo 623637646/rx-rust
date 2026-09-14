@@ -360,9 +360,9 @@ Debugging                   | `debug`, `debug_default_print`, `hook_on_subscript
 
 ## Contributing
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the review checklist and the test case names every operator
-is expected to cover, and [AGENTS.md](AGENTS.md) for the build and test commands. Requires Rust 1.88
-or later.
+See [docs/testing.md](docs/testing.md) for the test case names every operator is expected to
+cover, [docs/decisions/](docs/decisions/) for design decisions, and [AGENTS.md](AGENTS.md) for the
+build and test commands. Requires Rust 1.88 or later.
 
 ## License
 
