@@ -19,8 +19,8 @@ All notable changes to this project are documented here. The format follows
   for crates.io.
 - The published crate now contains only `src/`, `Cargo.toml`, `LICENSE` and `README.md`
   (`include` whitelist); tests, editor settings and contributor docs stay in the repository.
-- `educe` and `futures` are required at their actual 0.x minor (`0.8` / `0.3`) instead of any
-  `0.*`.
+- `educe` and `futures` are required at their actual 0.x minor (`0.6` / `0.3`) instead of any
+  `0.*`. educe stays on 0.6: 0.7+ needs rustc 1.89, above this crate's MSRV.
 - `DebugEvent<'a, T, E>` spells out the `T: 'a, E: 'a` bounds that its reference fields already
   implied. No caller is affected.
 - The `paste` dev-dependency (archived upstream) is replaced with the drop-in `pastey`.

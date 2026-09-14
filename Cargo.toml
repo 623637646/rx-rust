@@ -15,7 +15,7 @@ include = ["src/**", "Cargo.toml", "LICENSE", "README.md"]
 features = ["tokio-scheduler"]
 
 [dependencies]
-educe = "0.8.1" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
+educe = "0.6" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
 cfg-if = "1"
 futures = { version = "0.3.34", optional = true } # It's optional even though most rust runtimes depend on it because users may implement their own runtimes without depending on futures.
 tokio = { version = "1", optional = true }
