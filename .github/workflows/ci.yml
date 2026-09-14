@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  # `release.yml` runs this whole workflow before publishing a tag.
+  workflow_call:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      # Clippy findings do not depend on which scheduler is compiled in, so one feature is enough.
+      - run: cargo clippy --locked --features tokio-scheduler --all-targets -- -D warnings
+
+  check:
+    # The scheduler features are mutually exclusive, so every combination is checked one by one
+    # instead of with `--all-features`. Same commands as the "cargo check all features" task in
+    # `.vscode/tasks.json`.
+    name: check every feature
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v2
+      # No `--locked` here: `--no-dev-deps` rewrites Cargo.toml for the duration of the run,
+      # which changes the resolved lock file.
+      - name: Library, each feature and no feature
+        run: cargo hack --each-feature --no-dev-deps --exclude-all-features check --lib
+      - name: Tests, each scheduler feature
+        run: >-
+          cargo hack --locked --each-feature --exclude-all-features --exclude-no-default-features
+          --exclude-features default,single-threaded check --tests
+
+  msrv:
+    name: MSRV (rust-version)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: echo "version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].rust_version')" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --locked --features tokio-scheduler --lib
+
+  doc:
+    name: docs and doctests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Same feature docs.rs builds with (see `[package.metadata.docs.rs]`).
+      - run: cargo doc --locked --no-deps --features tokio-scheduler
+      # nextest does not run doctests, and the README examples are doctests.
+      - run: cargo test --locked --doc --features tokio-scheduler
+
+  test:
+    name: test (${{ matrix.feature }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        feature:
+          - local-pool-scheduler
+          - thread-pool-scheduler
+          - tokio-scheduler
+          - async-std-scheduler
+          - smol-scheduler
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.feature }}
+      # The `ci` profile in `.config/nextest.toml` retries timing-sensitive tests and reports the
+      # ones that only passed on retry as flaky, so they stay visible without failing the run.
+      - run: cargo nextest run --locked --profile ci --features ${{ matrix.feature }}

@@ -1,8 +1,9 @@
 # rx-rust
 
 [![crates.io](https://img.shields.io/crates/v/rx-rust.svg)](https://crates.io/crates/rx-rust)
+[![CI](https://github.com/623637646/rx-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/623637646/rx-rust/actions/workflows/ci.yml)
 [![docs.rs](https://img.shields.io/docsrs/rx-rust)](https://docs.rs/rx-rust)
-[![license](https://img.shields.io/crates/l/rx-rust.svg)](LICENSE)
+[![license](https://img.shields.io/crates/l/rx-rust.svg)](https://github.com/623637646/rx-rust/blob/master/LICENSE)
 ![MSRV](https://img.shields.io/badge/MSRV-1.88-blue.svg)
 
 Reactive Extensions for Rust. `rx-rust` is a toolkit for composing asynchronous and event-driven
@@ -365,4 +366,4 @@ or later.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/623637646/rx-rust/blob/master/LICENSE).

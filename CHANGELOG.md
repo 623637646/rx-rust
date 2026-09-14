@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Actions: `ci.yml` (rustfmt, clippy, `cargo hack` check of every feature, MSRV, docs and
+  doctests, nextest per scheduler feature) and `release.yml` (publishes a pushed version tag to
+  crates.io through Trusted Publishing and creates the GitHub Release from this file).
+- A `ci` nextest profile that retries timing-sensitive tests and reports flaky ones.
+
 ### Changed
 
 - `Cargo.toml` metadata: `license = "MIT"` (was `license-file`), plus `keywords` and `categories`
@@ -21,6 +28,8 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 
 - README install snippet said `0.3`; it now matches the released `1.0`.
+- README `LICENSE` links were relative and resolved nowhere on docs.rs / crates.io; they now point
+  at the file on GitHub.
 
 ## [1.0.0] - 2026-09-14
 

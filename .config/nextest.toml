@@ -1,2 +1,14 @@
 [profile.default]
 leak-timeout = { period = "3000ms", result = "fail" }
+
+# `cargo nextest run --profile ci`, used by `.github/workflows/ci.yml`. Inherits `default`.
+# GitHub runners are slower and noisier than a workstation, and many tests here are timing based,
+# so a test gets two more tries before it counts as failed. A test that passes on a retry is
+# reported as FLAKY in the final summary rather than hidden.
+[profile.ci]
+retries = 2
+fail-fast = false
+failure-output = "final"
+status-level = "fail"
+final-status-level = "flaky"
+slow-timeout = { period = "60s", terminate-after = 3 }
