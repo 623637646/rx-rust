@@ -9,7 +9,7 @@ use std::{fmt::Display, marker::PhantomData};
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
-pub enum DebugEvent<'a, T, E> {
+pub enum DebugEvent<'a, T: 'a, E: 'a> {
     OnNext(&'a T),
     OnTermination(&'a Termination<E>),
     Subscribed,

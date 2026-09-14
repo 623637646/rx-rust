@@ -3,18 +3,21 @@ name = "rx-rust"
 version = "1.0.0"
 edition = "2024"
 rust-version = "1.88.0"
-license-file = "LICENSE"
+license = "MIT"
 repository = "https://github.com/623637646/rx-rust"
 description = "Reactive Programming in Rust inspired by ReactiveX https://reactivex.io/"
+keywords = ["reactive", "rx", "reactivex", "observable", "stream"]
+categories = ["asynchronous", "rust-patterns"]
+include = ["src/**", "Cargo.toml", "LICENSE", "README.md"]
 
 [package.metadata.docs.rs]
 # The README (crate-level docs) and the scheduler impls for Tokio are only compiled with this feature.
 features = ["tokio-scheduler"]
 
 [dependencies]
-educe = "0" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
+educe = "0.8.1" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
 cfg-if = "1"
-futures = { version = "0", optional = true } # It's optional even though most rust runtimes depend on it because users may implement their own runtimes without depending on futures.
+futures = { version = "0.3.34", optional = true } # It's optional even though most rust runtimes depend on it because users may implement their own runtimes without depending on futures.
 tokio = { version = "1", optional = true }
 async-std = { version = "1", optional = true }
 smol = { version = "2", optional = true }
@@ -22,8 +25,8 @@ async-io = { version = "2", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
-async-io = { version = "2" }
-paste = "1"
+async-io = "2"
+pastey = "0.1"
 
 [features]
 default = []

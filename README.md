@@ -23,7 +23,7 @@ Add the crate with the scheduler feature for the runtime you use:
 
 ```toml
 [dependencies]
-rx-rust = { version = "0.3", features = ["tokio-scheduler"] }
+rx-rust = { version = "1.0", features = ["tokio-scheduler"] }
 ```
 
 Pick exactly one of the scheduler features below; `tokio-scheduler` is the most common choice. The

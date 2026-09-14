@@ -4,7 +4,7 @@ use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
 use crate::tests_utils::test_runtime::block_on;
-use paste::paste;
+use pastey::paste;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
