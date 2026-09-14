@@ -1,7 +1,8 @@
 # AGENTS.md
 
 Operational notes for AI coding agents working in this repository. Human-facing docs live in
-[README.md](README.md) (usage) and [DEVELOPMENT.md](DEVELOPMENT.md) (TODOs and the review checklist).
+[README.md](README.md) (usage) and [docs/](docs/): `testing.md` (the test checklist), `todo.md`,
+and `decisions/` (design decisions that were made or rejected).
 
 ## What this is
 
@@ -116,7 +117,7 @@ Integration tests (not `#[cfg(test)]` modules). Each file starts with `mod tests
 sources with `test_channel()` plus a `Checker` observer, asserting on `checker.values()`,
 `checker.state()` and the channel state after each event.
 
-`DEVELOPMENT.md` holds the canonical checklist of case names (`test_completed`, `test_error`,
+`docs/testing.md` holds the canonical checklist of case names (`test_completed`, `test_error`,
 `test_unsubscribe`, `test_ref`, `test_async`, the hot-observable `test_*_on_next` family, the
 lock-related `test_*_on_sub` family, the scheduler-related `test_*_after_next` family, …). When
 adding an operator, follow the subset that applies to its shape and name the tests the same way — do
