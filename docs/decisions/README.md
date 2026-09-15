@@ -7,3 +7,4 @@ edited into a different conclusion — write a new one that supersedes it.
 | # | Decision |
 |---|---|
 | [0001](0001-no-borrowed-items.md) | No borrowed items (`type Item<'a>` GAT) |
+| [0002](0002-no-thread-mode-type-parameter.md) | No thread-mode type parameter (`Observable<'or, T, E, M>`) |
