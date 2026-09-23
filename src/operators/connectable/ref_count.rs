@@ -1,3 +1,8 @@
+//! The [`RefCount`] operator, behind
+//! [`ObservableExt::share`](crate::observable::ObservableExt::share),
+//! [`ObservableExt::share_last`](crate::observable::ObservableExt::share_last),
+//! [`ObservableExt::share_replay`](crate::observable::ObservableExt::share_replay).
+
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
 use crate::observable::{Observable, Subscription};
@@ -90,6 +95,8 @@ where
     OE: Observable<'or, T, E>,
     S: Clone,
 {
+    /// Creates a [`RefCount`] over a disconnected controller;
+    /// [`ConnectableController::ref_count`] is the fluent form.
     pub fn new(controller: ConnectableController<OE, S, Disconnected>) -> Self {
         Self {
             observable: controller.observable(),

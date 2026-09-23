@@ -1,3 +1,5 @@
+//! A cloneable slot for a disposal that is built, and maybe replaced, after the slot was handed out.
+
 use crate::{
     disposable::Disposable,
     utils::{
@@ -28,11 +30,39 @@ struct Inner<D> {
     id_generator: IdGenerator,
 }
 
+/// A cloneable slot holding at most one disposal, which can be filled or replaced later.
+///
+/// An operator that subscribes to something *after* it has already returned its own
+/// subscription — `concat` subscribing to its second source, `catch` to its fallback,
+/// `subscribe_on` from a scheduler task — hands the caller a clone of this slot and fills it when
+/// the time comes. Disposing the slot disposes whatever it holds then, and whatever is put in
+/// afterwards is disposed at once.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::disposable::{callback_disposal::CallbackDisposal, shared_disposal::SharedDisposal, Disposable};
+/// use std::cell::Cell;
+///
+/// let disposed = Cell::new(false);
+/// let slot = SharedDisposal::default();
+/// let handle = slot.clone();
+///
+/// slot.replace(|| CallbackDisposal::new(|| disposed.set(true))); // Filled later, through a clone.
+/// assert!(!disposed.get());
+///
+/// handle.dispose();
+/// assert!(disposed.get());
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone, Default)]
 pub struct SharedDisposal<D>(Shared<Mutable<Inner<D>>>);
 
 impl<D> SharedDisposal<D> {
+    /// Disposes the held disposal, if any, then builds and stores a new one.
+    ///
+    /// The builder runs with the lock released, so it may subscribe to anything. If the slot is
+    /// disposed, or replaced again, while the builder runs, what it built is disposed at once;
+    /// once the slot has been disposed the builder is not run at all.
     pub fn replace(&self, disposal_builder: impl FnOnce() -> D)
     where
         D: Disposable,

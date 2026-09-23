@@ -1,8 +1,11 @@
+//! The [`DoBeforeNext`] operator, behind
+//! [`ObservableExt::do_before_next`](crate::observable::ObservableExt::do_before_next).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Flow, Observer},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -46,6 +49,8 @@ pub struct DoBeforeNext<OE, F> {
 }
 
 impl<OE, F> DoBeforeNext<OE, F> {
+    /// Creates a [`DoBeforeNext`] over `source`;
+    /// [`ObservableExt::do_before_next`](crate::observable::ObservableExt::do_before_next) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,
@@ -85,7 +90,7 @@ where
         self.observer.on_next(value)
     }
 
-    fn on_termination(self, termination: crate::observer::Termination<E>) {
+    fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
     }
 }

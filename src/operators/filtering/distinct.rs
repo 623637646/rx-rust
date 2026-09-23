@@ -1,3 +1,7 @@
+//! The [`Distinct`] operator, behind
+//! [`ObservableExt::distinct`](crate::observable::ObservableExt::distinct),
+//! [`ObservableExt::distinct_with_key_selector`](crate::observable::ObservableExt::distinct_with_key_selector).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -41,6 +45,7 @@ pub struct Distinct<OE, F> {
 }
 
 impl<OE, F> Distinct<OE, F> {
+    /// Creates a [`Distinct`] over `source` that compares the keys `key_selector` computes.
     pub fn new_with_key_selector<'or, T, E, K>(source: OE, key_selector: F) -> Self
     where
         OE: Observable<'or, T, E>,
@@ -54,6 +59,8 @@ impl<OE, F> Distinct<OE, F> {
 }
 
 impl<T, OE> Distinct<OE, fn(&T) -> T> {
+    /// Creates a [`Distinct`] over `source`;
+    /// [`ObservableExt::distinct`](crate::observable::ObservableExt::distinct) is the fluent form.
     pub fn new<'or, E>(source: OE) -> Self
     where
         T: Clone,

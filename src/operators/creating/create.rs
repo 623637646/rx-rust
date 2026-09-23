@@ -1,3 +1,5 @@
+//! The [`Create`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
@@ -40,6 +42,7 @@ use educe::Educe;
 pub struct Create<F>(F);
 
 impl<F> Create<F> {
+    /// Creates a [`Create`].
     pub fn new<'or, T, E, D>(builder: F) -> Self
     where
         // Using `Subscription` instead of FnOnce() to make `Create` more easy to wrap other observables. See more in `test_unsubscribe_wrap_observable`.

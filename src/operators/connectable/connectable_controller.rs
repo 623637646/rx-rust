@@ -1,3 +1,9 @@
+//! The [`ConnectableController`], behind
+//! [`ObservableExt::multicast`](crate::observable::ObservableExt::multicast),
+//! [`ObservableExt::publish`](crate::observable::ObservableExt::publish),
+//! [`ObservableExt::publish_last`](crate::observable::ObservableExt::publish_last),
+//! [`ObservableExt::replay`](crate::observable::ObservableExt::replay).
+
 use super::ref_count::RefCount;
 use crate::disposable::Disposable;
 use crate::observable::{Observable, Subscription};
@@ -80,6 +86,8 @@ pub struct ConnectableController<OE, S, State = Disconnected> {
 }
 
 impl<OE, S> ConnectableController<OE, S, Disconnected> {
+    /// Creates a disconnected controller that will multicast `source` through `subject`;
+    /// [`ObservableExt::multicast`](crate::observable::ObservableExt::multicast) is the fluent form.
     pub fn new(source: OE, subject: S) -> Self {
         Self {
             source,
@@ -117,6 +125,7 @@ impl<OE, S> ConnectableController<OE, S, Disconnected> {
         }
     }
 
+    /// Connects while there is at least one subscriber, and disconnects when the last one leaves.
     pub fn ref_count<'or, T, E>(self) -> RefCount<'or, T, E, OE, S>
     where
         OE: Observable<'or, T, E>,
@@ -147,6 +156,7 @@ where
 }
 
 impl<OE, S, State> ConnectableController<OE, S, State> {
+    /// The observable side of the subject, for subscribers.
     pub fn observable(&self) -> SubjectObservable<S>
     where
         S: Clone,

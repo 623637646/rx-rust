@@ -1,3 +1,5 @@
+//! The [`Repeat`] source.
+
 use crate::operators::creating::from_iter::FromIter;
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -37,6 +39,7 @@ pub struct Repeat<T> {
 }
 
 impl<T> Repeat<T> {
+    /// Creates a [`Repeat`].
     pub fn new(value: T, n: usize) -> Self
     where
         T: Clone,

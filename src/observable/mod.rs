@@ -1,3 +1,32 @@
+//! The sending end of a stream: the [`Observable`] trait and the fluent operator API on it.
+//!
+//! An [`Observable`] is anything that can be subscribed to with an
+//! [`Observer`]; subscribing returns a [`Subscription`], which unsubscribes when dropped. Every
+//! operator is a struct in [`operators`](crate::operators) that implements `Observable` over its
+//! source, and [`ObservableExt`] gives each of them a method, so a pipeline reads as a chain of
+//! calls.
+//!
+//! [`BoxedObservable`] and
+//! [`CloneableBoxedObservable`] erase an
+//! observable's type; [`EitherObservable`] picks one of two
+//! types without boxing.
+//!
+//! # Examples
+//! ```rust
+//! use rx_rust::{observable::ObservableExt, observer::Termination, operators::creating::range::Range};
+//!
+//! let mut seen = Vec::new();
+//! Range::new(1..=10)
+//!     .filter(|value| value % 2 == 0)
+//!     .map(|value| value * value)
+//!     .take(3)
+//!     .subscribe_with_callback(
+//!         |value| seen.push(value),
+//!         |termination| assert_eq!(termination, Termination::Completed),
+//!     );
+//! assert_eq!(seen, [4, 16, 36]);
+//! ```
+
 pub mod boxed_observable;
 pub mod cloneable_boxed_observable;
 pub mod either_observable;
@@ -77,22 +106,30 @@ use crate::{
 };
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 
+/// What [`Observable::subscribe`] returns: a disposal that unsubscribes when it is dropped.
 pub type Subscription<D> = BoundDropDisposal<D>;
 
-/// The `Observable` trait represents a source of events that can be observed by an `Observer`.
-/// See <https://reactivex.io/documentation/observable.html>
+/// A source of values of type `T` that ends with a [`Termination<E>`].
+/// See <https://reactivex.io/documentation/observable.html>.
+///
+/// `'or` bounds the observer: a `'static` observable, such as one delivering through a
+/// scheduler, needs a `'static` observer, while a synchronous one can borrow.
 pub trait Observable<'or, T, E> {
+    /// The disposal of a subscription to this observable.
     type D: Disposable;
 
-    /// Subscribes an observer to this observable. When an observer is subscribed, it will start receiving events from the observable.
-    /// The `subscribe` method returns a `Subscription` which can be used to unsubscribe the observer from the observable.
-    /// We use `Subscription` struct instead of trait like `impl Cancellable`, because we need to cancel the subscription when the `Subscription` is dropped. It's not possible to implement Drop for a trait object.
+    /// Subscribes `observer`, which receives the events from now on, consuming the observable.
+    ///
+    /// The returned [`Subscription`] unsubscribes when dropped. It is a struct rather than a
+    /// trait so that it can implement `Drop`.
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D>;
 }
 
-/// Extension trait that exposes the full suite of RxRust operators on any type that
-/// implements [`Observable`]. Each method forwards to the corresponding operator
-/// constructor, allowing a fluent, ergonomic style when composing observable pipelines.
+/// The operators, as methods on every [`Observable`].
+///
+/// Each method builds the operator of the same name over `self`; the operator's own documentation
+/// in [`operators`](crate::operators) describes its behavior in detail and has an example. See the
+/// [module documentation](self) for a pipeline.
 pub trait ObservableExt<'or, T, E>: Observable<'or, T, E> + Sized {
     /// Emits a single `bool` indicating whether every item satisfies the provided predicate.
     fn all<F>(self, callback: F) -> All<T, Self, F>

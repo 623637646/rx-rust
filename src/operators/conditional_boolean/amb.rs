@@ -1,3 +1,6 @@
+//! The [`Amb`] operator, behind
+//! [`ObservableExt::amb_with`](crate::observable::ObservableExt::amb_with).
+
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, DisposableExt};
 use crate::utils::mutable::{Mutable, MutableExt, MutableHelper};
@@ -44,6 +47,8 @@ pub struct Amb<I> {
 }
 
 impl<I> Amb<I> {
+    /// Creates an [`Amb`] racing every observable of `sources`;
+    /// [`ObservableExt::amb_with`](crate::observable::ObservableExt::amb_with) is the two-source form.
     pub fn new(sources: I) -> Self {
         Self { sources }
     }

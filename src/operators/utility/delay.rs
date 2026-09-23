@@ -1,3 +1,6 @@
+//! The [`Delay`] operator, behind
+//! [`ObservableExt::delay`](crate::observable::ObservableExt::delay).
+
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
@@ -79,6 +82,8 @@ pub struct Delay<'or, OE, S> {
 }
 
 impl<'or, OE, S> Delay<'or, OE, S> {
+    /// Creates a [`Delay`] over `source`;
+    /// [`ObservableExt::delay`](crate::observable::ObservableExt::delay) is the fluent form.
     pub fn new(source: OE, delay: Duration, scheduler: S) -> Self {
         Self {
             source,
@@ -169,7 +174,9 @@ where
         });
         let deadline = match timer_setup {
             Ok(Some(deadline)) => deadline,
-            // The timer is already running, and will find the event when it fires.
+            // A build is in flight, so this event is left in the model for whoever finishes that
+            // handoff: either the running timer finds it when it fires, or — when the timer has
+            // already stopped — the `fill` below that hands its handle back does.
             Ok(None) => return Flow::Continue,
             Err(DeliveryStopped) => return Flow::Stop,
         };

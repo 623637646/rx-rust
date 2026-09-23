@@ -1,3 +1,6 @@
+//! The [`GroupBy`] operator, behind
+//! [`ObservableExt::group_by`](crate::observable::ObservableExt::group_by).
+
 use crate::{
     observable::{Observable, Subscription},
     observer::{Flow, Observer, Termination},
@@ -101,6 +104,8 @@ pub struct GroupBy<OE, F, K> {
 }
 
 impl<OE, F, K> GroupBy<OE, F, K> {
+    /// Creates a [`GroupBy`] over `source`;
+    /// [`ObservableExt::group_by`](crate::observable::ObservableExt::group_by) is the fluent form.
     pub fn new<'or, T, E>(source: OE, key_selector: F) -> Self
     where
         OE: Observable<'or, T, E>,

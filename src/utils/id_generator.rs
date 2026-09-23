@@ -12,6 +12,18 @@
 //!
 //! An [`Id`] can only come from an [`IdGenerator`], which never hands the same one out twice, so a
 //! holder of an id cannot forge one that collides with a later value.
+//!
+//! # Examples
+//! ```rust
+//! use rx_rust::utils::id_generator::IdGenerator;
+//!
+//! let mut ids = IdGenerator::default();
+//! assert_eq!(ids.latest(), None);
+//! let first = ids.next_id();
+//! let second = ids.next_id();
+//! assert!(first < second);
+//! assert_eq!(ids.latest(), Some(second)); // `first` is stale now.
+//! ```
 
 /// Hands out an [`Id`] that is never equal to any it handed out before.
 ///

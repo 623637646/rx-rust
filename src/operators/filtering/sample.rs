@@ -1,3 +1,6 @@
+//! The [`Sample`] operator, behind
+//! [`ObservableExt::sample`](crate::observable::ObservableExt::sample).
+
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
@@ -62,6 +65,8 @@ pub struct Sample<OE, OE1> {
 }
 
 impl<OE, OE1> Sample<OE, OE1> {
+    /// Creates a [`Sample`] over `source`;
+    /// [`ObservableExt::sample`](crate::observable::ObservableExt::sample) is the fluent form.
     pub fn new<'or, T, E>(source: OE, sampler: OE1) -> Self
     where
         OE: Observable<'or, T, E>,

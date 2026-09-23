@@ -1,3 +1,6 @@
+//! The [`Window`] operator, behind
+//! [`ObservableExt::window`](crate::observable::ObservableExt::window).
+
 use crate::{
     disposable::Disposable,
     observable::{Observable, Subscription},
@@ -98,6 +101,8 @@ pub struct Window<OE, OE1> {
 }
 
 impl<OE, OE1> Window<OE, OE1> {
+    /// Creates a [`Window`] over `source`;
+    /// [`ObservableExt::window`](crate::observable::ObservableExt::window) is the fluent form.
     pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
     where
         OE: Observable<'or, T, E>,

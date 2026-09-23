@@ -38,6 +38,36 @@
 //! The replay is consequently *not* guaranteed to happen before `subscribe` returns: it does when
 //! the delivery is idle, since the action is then applied on the subscribing thread, but a
 //! subscription made while a delivery is running is served by that delivery instead.
+//!
+//! # Examples
+//! ```rust
+//! use rx_rust::{
+//!     disposable::Disposable,
+//!     observer::{callback_observer::CallbackObserver, Flow, Termination},
+//!     utils::{pending_events::EventBatch, serialized_multicast::SerializedMulticast},
+//! };
+//! use std::sync::{Arc, Mutex};
+//!
+//! let seen = Arc::new(Mutex::new(Vec::new()));
+//! let multicast = SerializedMulticast::<i32, (), ()>::idle(());
+//!
+//! let seen_by_first = Arc::clone(&seen);
+//! let first = multicast
+//!     .clone()
+//!     .subscribe(CallbackObserver::new(move |value| seen_by_first.lock().unwrap().push(("first", value)), |_| {}))
+//!     .expect("not terminated yet");
+//! let seen_by_second = Arc::clone(&seen);
+//! let _second = multicast
+//!     .clone()
+//!     .subscribe(CallbackObserver::new(move |value| seen_by_second.lock().unwrap().push(("second", value)), |_| {}))
+//!     .expect("not terminated yet");
+//!
+//! assert_eq!(multicast.send(EventBatch::Next(1)), Flow::Continue);
+//! first.dispose();
+//! assert_eq!(multicast.send(EventBatch::Next(2)), Flow::Continue);
+//! assert_eq!(multicast.send(EventBatch::Termination(Termination::Completed)), Flow::Stop);
+//! assert_eq!(*seen.lock().unwrap(), [("first", 1), ("second", 1), ("second", 2)]);
+//! ```
 
 use crate::disposable::Disposable;
 use crate::observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver};
@@ -177,9 +207,9 @@ where
     /// Queues `events` for every observer, dropping them outside the lock once terminated.
     ///
     /// Returns whether the multicast still accepts events, which is [`Flow::Stop`] only once it
-    /// has terminated: a multicast with no subscriber left is still open, and a subscriber that
-    /// stops takes only itself away. This is [`Self::update`] for a host that reads nothing and
-    /// decides nothing.
+    /// has terminated — including by `events` itself: a multicast with no subscriber left is
+    /// still open, and a subscriber that stops takes only itself away. This is [`Self::update`]
+    /// for a host that reads nothing and decides nothing.
     pub fn send(&self, events: EventBatch<T, E>) -> Flow {
         self.update(|_, terminated| {
             if terminated.is_some() {

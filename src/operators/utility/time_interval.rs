@@ -1,3 +1,6 @@
+//! The [`TimeInterval`] operator, behind
+//! [`ObservableExt::time_interval`](crate::observable::ObservableExt::time_interval).
+
 use crate::{
     observable::Observable,
     observable::Subscription,
@@ -48,6 +51,8 @@ pub struct TimeInterval<OE> {
 }
 
 impl<OE> TimeInterval<OE> {
+    /// Creates a [`TimeInterval`] over `source`;
+    /// [`ObservableExt::time_interval`](crate::observable::ObservableExt::time_interval) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self { source }
     }

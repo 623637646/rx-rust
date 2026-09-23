@@ -1,3 +1,6 @@
+//! The [`SequenceEqual`] operator, behind
+//! [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal).
+
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
@@ -50,6 +53,8 @@ pub struct SequenceEqual<T, OE1, OE2> {
 }
 
 impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
+    /// Creates a [`SequenceEqual`] over `source_1` and `source_2`;
+    /// [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal) is the fluent form.
     pub fn new<'or, E>(source_1: OE1, source_2: OE2) -> Self
     where
         OE1: Observable<'or, T, E>,

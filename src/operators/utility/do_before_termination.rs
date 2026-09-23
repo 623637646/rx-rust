@@ -1,3 +1,6 @@
+//! The [`DoBeforeTermination`] operator, behind
+//! [`ObservableExt::do_before_termination`](crate::observable::ObservableExt::do_before_termination).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -50,6 +53,8 @@ pub struct DoBeforeTermination<OE, F> {
 }
 
 impl<OE, F> DoBeforeTermination<OE, F> {
+    /// Creates a [`DoBeforeTermination`] over `source`;
+    /// [`ObservableExt::do_before_termination`](crate::observable::ObservableExt::do_before_termination) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

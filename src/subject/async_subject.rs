@@ -20,15 +20,36 @@ use crate::{
 };
 use educe::Educe;
 
-/// Remembers only the last emission and replays it on completion.
+/// A subject that emits only its last value, when it completes.
 ///
-/// Unlike [`PublishSubject`](super::publish_subject::PublishSubject), an observer that subscribes after the subject completed still
-/// observes that last value, followed by the completion. An error replays nothing.
+/// Values are remembered, not forwarded: on completion the last one is delivered to every
+/// observer, including those that subscribe afterwards, followed by the completion. An error
+/// delivers no value.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::{Observer, Termination},
+///     subject::async_subject::AsyncSubject,
+/// };
+///
+/// let mut seen = Vec::new();
+/// let mut sender = AsyncSubject::<i32, std::convert::Infallible>::new();
+/// let subscription = sender.clone().subscribe_with_callback(|value| seen.push(value), |_| {});
+///
+/// let _ = sender.on_next(1);
+/// let _ = sender.on_next(2); // Nothing is delivered until the completion.
+/// sender.on_termination(Termination::Completed);
+/// drop(subscription);
+/// assert_eq!(seen, [2]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct AsyncSubject<'or, T, E>(SerializedMulticast<'or, T, E, Option<T>>);
 
 impl<T, E> AsyncSubject<'_, T, E> {
+    /// Creates a subject with no value, no observer and no termination.
     pub fn new() -> Self {
         Self(SerializedMulticast::idle(None))
     }

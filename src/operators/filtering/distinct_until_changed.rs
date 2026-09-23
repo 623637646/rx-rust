@@ -1,3 +1,7 @@
+//! The [`DistinctUntilChanged`] operator, behind
+//! [`ObservableExt::distinct_until_changed`](crate::observable::ObservableExt::distinct_until_changed),
+//! [`ObservableExt::distinct_until_changed_with_key_selector`](crate::observable::ObservableExt::distinct_until_changed_with_key_selector).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -40,6 +44,7 @@ pub struct DistinctUntilChanged<OE, F> {
 }
 
 impl<OE, F> DistinctUntilChanged<OE, F> {
+    /// Creates a [`DistinctUntilChanged`] over `source` that compares the keys `key_selector` computes.
     pub fn new_with_key_selector<'or, T, E, K>(source: OE, key_selector: F) -> Self
     where
         OE: Observable<'or, T, E>,
@@ -53,6 +58,8 @@ impl<OE, F> DistinctUntilChanged<OE, F> {
 }
 
 impl<T, OE> DistinctUntilChanged<OE, fn(&T) -> T> {
+    /// Creates a [`DistinctUntilChanged`] over `source`;
+    /// [`ObservableExt::distinct_until_changed`](crate::observable::ObservableExt::distinct_until_changed) is the fluent form.
     pub fn new<'or, E>(source: OE) -> Self
     where
         T: Clone,

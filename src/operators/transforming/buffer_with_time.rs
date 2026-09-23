@@ -1,3 +1,5 @@
+//! The [`BufferWithTime`] operator.
+
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
@@ -76,6 +78,7 @@ pub struct BufferWithTime<'or, OE, S> {
 }
 
 impl<'or, OE, S> BufferWithTime<'or, OE, S> {
+    /// Creates a [`BufferWithTime`] over `source`.
     pub fn new(source: OE, time_span: Duration, scheduler: S, delay: Option<Duration>) -> Self {
         Self {
             source,

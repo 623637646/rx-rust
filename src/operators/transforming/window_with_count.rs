@@ -1,3 +1,6 @@
+//! The [`WindowWithCount`] operator, behind
+//! [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count).
+
 use crate::disposable::{DisposableExt, option_disposal::OptionDisposal};
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -86,6 +89,8 @@ pub struct WindowWithCount<OE> {
 }
 
 impl<OE> WindowWithCount<OE> {
+    /// Creates a [`WindowWithCount`] over `source`;
+    /// [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count) is the fluent form.
     pub fn new(source: OE, count: NonZeroUsize) -> Self {
         Self { source, count }
     }

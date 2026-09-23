@@ -1,3 +1,6 @@
+//! The [`MergeAll`] operator, behind
+//! [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all).
+
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::id_generator::{Id, IdGenerator};
@@ -53,6 +56,8 @@ pub struct MergeAll<OE, OE1> {
 }
 
 impl<OE, OE1> MergeAll<OE, OE1> {
+    /// Creates a [`MergeAll`] over `source`;
+    /// [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all) is the fluent form.
     pub fn new<'or, T, E>(source: OE) -> Self
     where
         OE: Observable<'or, OE1, E>,
@@ -66,6 +71,7 @@ impl<OE, OE1> MergeAll<OE, OE1> {
 }
 
 impl<E, OE1, I> MergeAll<WithErrorType<E, FromIter<I>>, OE1> {
+    /// Creates a [`MergeAll`] over the observables of `into_iterator`.
     pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,

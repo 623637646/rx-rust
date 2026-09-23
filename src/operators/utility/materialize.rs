@@ -1,3 +1,6 @@
+//! The [`Materialize`] operator, behind
+//! [`ObservableExt::materialize`](crate::observable::ObservableExt::materialize).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -44,6 +47,8 @@ use std::convert::Infallible;
 pub struct Materialize<OE>(OE);
 
 impl<OE> Materialize<OE> {
+    /// Creates a [`Materialize`] over `source`;
+    /// [`ObservableExt::materialize`](crate::observable::ObservableExt::materialize) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self(source)
     }

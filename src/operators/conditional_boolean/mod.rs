@@ -1,3 +1,6 @@
+//! Operators that evaluate a condition over a sequence, or gate it on another one.
+//! See <https://reactivex.io/documentation/operators.html#conditional>.
+
 pub mod all;
 pub mod amb;
 pub mod contains;

@@ -1,3 +1,6 @@
+//! The [`IgnoreElements`] operator, behind
+//! [`ObservableExt::ignore_elements`](crate::observable::ObservableExt::ignore_elements).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable, observable::Subscription, observer::Observer,
@@ -38,6 +41,8 @@ pub struct IgnoreElements<OE> {
 }
 
 impl<OE> IgnoreElements<OE> {
+    /// Creates an [`IgnoreElements`] over `source`;
+    /// [`ObservableExt::ignore_elements`](crate::observable::ObservableExt::ignore_elements) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self { source }
     }

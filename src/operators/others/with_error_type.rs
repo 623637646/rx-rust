@@ -1,3 +1,6 @@
+//! The [`WithErrorType`] operator, behind
+//! [`ObservableExt::with_error_type`](crate::observable::ObservableExt::with_error_type).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -38,6 +41,8 @@ pub struct WithErrorType<E, OE> {
 }
 
 impl<E, OE> WithErrorType<E, OE> {
+    /// Creates a [`WithErrorType`] over `source`;
+    /// [`ObservableExt::with_error_type`](crate::observable::ObservableExt::with_error_type) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self {
             source,

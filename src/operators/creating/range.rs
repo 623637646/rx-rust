@@ -1,3 +1,5 @@
+//! The [`Range`] source.
+
 use crate::operators::creating::from_iter::FromIter;
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -34,6 +36,7 @@ use std::convert::Infallible;
 pub struct Range<I>(I);
 
 impl<I> Range<I> {
+    /// Creates a [`Range`].
     pub fn new(range: I) -> Self {
         Self(range)
     }

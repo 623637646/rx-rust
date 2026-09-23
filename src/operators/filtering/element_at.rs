@@ -1,3 +1,6 @@
+//! The [`ElementAt`] operator, behind
+//! [`ObservableExt::element_at`](crate::observable::ObservableExt::element_at).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -41,6 +44,8 @@ pub struct ElementAt<OE> {
 }
 
 impl<OE> ElementAt<OE> {
+    /// Creates an [`ElementAt`] over `source`;
+    /// [`ObservableExt::element_at`](crate::observable::ObservableExt::element_at) is the fluent form.
     pub fn new(source: OE, index: usize) -> Self {
         Self { source, index }
     }

@@ -1,3 +1,6 @@
+//! The [`TakeWhile`] operator, behind
+//! [`ObservableExt::take_while`](crate::observable::ObservableExt::take_while).
+
 use crate::utils::subscribe_with_auto_dispose_on_termination;
 use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
 use crate::utils::types::MaybeSend;
@@ -41,6 +44,8 @@ pub struct TakeWhile<OE, F> {
 }
 
 impl<OE, F> TakeWhile<OE, F> {
+    /// Creates a [`TakeWhile`] over `source`;
+    /// [`ObservableExt::take_while`](crate::observable::ObservableExt::take_while) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

@@ -1,3 +1,5 @@
+//! The [`Throw`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -32,6 +34,7 @@ use std::convert::Infallible;
 pub struct Throw<E>(E);
 
 impl<E> Throw<E> {
+    /// Creates a [`Throw`].
     pub fn new(error: E) -> Self {
         Self(error)
     }

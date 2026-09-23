@@ -1,3 +1,5 @@
+//! The [`Sum`] operator, behind [`ObservableExt::sum`](crate::observable::ObservableExt::sum).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -40,6 +42,8 @@ pub struct Sum<OE> {
 }
 
 impl<OE> Sum<OE> {
+    /// Creates a [`Sum`] over `source`;
+    /// [`ObservableExt::sum`](crate::observable::ObservableExt::sum) is the fluent form.
     pub fn new<'or, T, E>(source: OE) -> Self
     where
         OE: Observable<'or, T, E>,

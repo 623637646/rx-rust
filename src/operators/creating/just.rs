@@ -1,3 +1,5 @@
+//! The [`Just`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -33,6 +35,7 @@ use std::convert::Infallible;
 pub struct Just<T>(T);
 
 impl<T> Just<T> {
+    /// Creates a [`Just`].
     pub fn new(value: T) -> Self {
         Self(value)
     }

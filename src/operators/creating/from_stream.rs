@@ -1,3 +1,5 @@
+//! The [`FromStream`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -60,6 +62,7 @@ pub struct FromStream<SM, S> {
 }
 
 impl<SM, S> FromStream<SM, S> {
+    /// Creates a [`FromStream`].
     pub fn new(stream: SM, scheduler: S) -> Self {
         Self { stream, scheduler }
     }

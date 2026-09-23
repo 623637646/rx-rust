@@ -1,3 +1,6 @@
+//! The [`DefaultIfEmpty`] operator, behind
+//! [`ObservableExt::default_if_empty`](crate::observable::ObservableExt::default_if_empty).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -39,6 +42,8 @@ pub struct DefaultIfEmpty<T, OE> {
 }
 
 impl<T, OE> DefaultIfEmpty<T, OE> {
+    /// Creates a [`DefaultIfEmpty`] over `source`;
+    /// [`ObservableExt::default_if_empty`](crate::observable::ObservableExt::default_if_empty) is the fluent form.
     pub fn new<'or, E>(source: OE, item: T) -> Self
     where
         OE: Observable<'or, T, E>,

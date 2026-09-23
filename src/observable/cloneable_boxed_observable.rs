@@ -1,3 +1,5 @@
+//! A cloneable observable whose concrete type is erased.
+
 use super::{Observable, Observer};
 use crate::{
     disposable::{Disposable, DisposableExt, boxed_disposal::BoxedDisposal},
@@ -31,23 +33,41 @@ where
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
-        /// Cloneable `BoxedObservable` for single-threaded builds.
-        #[derive(Educe)]
-        #[educe(Clone)]
-        pub struct CloneableBoxedObservable<'or, 'sub, 'oe, T, E>(
-            Shared<dyn ErasedCloneableObservable<'or, 'sub, 'oe, T, E> + 'oe>,
-        );
+        type Erased<'or, 'sub, 'oe, T, E> = dyn ErasedCloneableObservable<'or, 'sub, 'oe, T, E> + 'oe;
     } else {
-        /// Cloneable `BoxedObservable` for multi-threaded builds.
-        #[derive(Educe)]
-        #[educe(Clone)]
-        pub struct CloneableBoxedObservable<'or, 'sub, 'oe, T, E>(
-            Shared<dyn ErasedCloneableObservable<'or, 'sub, 'oe, T, E> + Send + Sync + 'oe>,
-        );
+        type Erased<'or, 'sub, 'oe, T, E> =
+            dyn ErasedCloneableObservable<'or, 'sub, 'oe, T, E> + Send + Sync + 'oe;
     }
 }
 
+/// A [`BoxedObservable`](super::boxed_observable::BoxedObservable) that can be cloned.
+///
+/// The observable is kept behind a shared pointer and cloned on every subscription, so the
+/// wrapped type must be `Clone` (and `Sync` in a multi-threaded build). This is what an
+/// observable of observables holds when the inner ones must be erased, since
+/// `PublishSubject` and friends require `T: Clone`.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{observable::ObservableExt, operators::creating::just::Just};
+/// use std::sync::Mutex;
+///
+/// let seen = Mutex::new(Vec::new());
+/// let observable = Just::new(1).into_cloneable_boxed();
+/// let copy = observable.clone();
+///
+/// observable.subscribe_with_callback(|value| seen.lock().unwrap().push(value), |_| {});
+/// copy.subscribe_with_callback(|value| seen.lock().unwrap().push(value), |_| {});
+/// assert_eq!(*seen.lock().unwrap(), [1, 1]);
+/// ```
+#[derive(Educe)]
+#[educe(Clone)]
+pub struct CloneableBoxedObservable<'or, 'sub, 'oe, T, E>(Shared<Erased<'or, 'sub, 'oe, T, E>>);
+
 impl<'or, 'sub, 'oe, T, E> CloneableBoxedObservable<'or, 'sub, 'oe, T, E> {
+    /// Boxes `observable`;
+    /// [`ObservableExt::into_cloneable_boxed`](crate::observable::ObservableExt::into_cloneable_boxed)
+    /// is the fluent form.
     pub fn new(
         observable: impl Observable<'or, T, E, D = impl Disposable + MaybeSend + 'sub>
         + Clone

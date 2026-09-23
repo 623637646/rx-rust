@@ -1,3 +1,5 @@
+//! An observer made of closures.
+
 use super::{Flow, Observer, Termination};
 use educe::Educe;
 
@@ -11,6 +13,7 @@ use educe::Educe;
 /// A callback that only diverges, such as `|_| unreachable!()`, is inferred to return `!`, which
 /// no stable impl can cover: spell its return type out, as `|_| -> () { unreachable!() }`.
 pub trait IntoFlow {
+    /// The flow this answer stands for.
     fn into_flow(self) -> Flow;
 }
 
@@ -28,6 +31,28 @@ impl IntoFlow for Flow {
     }
 }
 
+/// An [`Observer`] made of two closures, one per event.
+///
+/// [`ObservableExt::subscribe_with_callback`](crate::observable::ObservableExt::subscribe_with_callback)
+/// builds one, so it is rarely named directly.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::observer::{callback_observer::CallbackObserver, Flow, Observer, Termination};
+///
+/// let mut seen = Vec::new();
+/// let mut observer = CallbackObserver::new(
+///     |value: i32| {
+///         seen.push(value);
+///         if value == 2 { Flow::Stop } else { Flow::Continue }
+///     },
+///     |_: Termination<()>| unreachable!("a stopped observer is not terminated"),
+/// );
+/// assert_eq!(observer.on_next(1), Flow::Continue);
+/// assert_eq!(observer.on_next(2), Flow::Stop);
+/// drop(observer);
+/// assert_eq!(seen, [1, 2]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct CallbackObserver<FN, FT> {
@@ -38,6 +63,8 @@ pub struct CallbackObserver<FN, FT> {
 }
 
 impl<FN, FT> CallbackObserver<FN, FT> {
+    /// Creates an observer that runs `on_next` for each value and `on_termination` for the last
+    /// event. `on_next` may return `()` or a [`Flow`], see [`IntoFlow`].
     pub fn new<T, E, R>(on_next: FN, on_termination: FT) -> Self
     where
         FN: FnMut(T) -> R,

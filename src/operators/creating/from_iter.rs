@@ -1,3 +1,5 @@
+//! The [`FromIter`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -33,6 +35,7 @@ use std::convert::Infallible;
 pub struct FromIter<I>(I);
 
 impl<I> FromIter<I> {
+    /// Creates a [`FromIter`].
     pub fn new(into_iterator: I) -> Self {
         Self(into_iterator)
     }

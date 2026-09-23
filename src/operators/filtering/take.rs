@@ -1,3 +1,5 @@
+//! The [`Take`] operator, behind [`ObservableExt::take`](crate::observable::ObservableExt::take).
+
 use crate::delegate_disposal;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::disposable::{Disposable, DisposableExt};
@@ -45,6 +47,8 @@ pub struct Take<OE> {
 }
 
 impl<OE> Take<OE> {
+    /// Creates a [`Take`] over `source`;
+    /// [`ObservableExt::take`](crate::observable::ObservableExt::take) is the fluent form.
     pub fn new(source: OE, count: usize) -> Self {
         Self { source, count }
     }

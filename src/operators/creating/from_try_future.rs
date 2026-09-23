@@ -1,3 +1,5 @@
+//! The [`FromTryFuture`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -62,6 +64,7 @@ pub struct FromTryFuture<FU, S> {
 }
 
 impl<FU, S> FromTryFuture<FU, S> {
+    /// Creates a [`FromTryFuture`].
     pub fn new(future: FU, scheduler: S) -> Self {
         Self { future, scheduler }
     }

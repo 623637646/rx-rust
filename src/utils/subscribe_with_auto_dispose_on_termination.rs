@@ -1,3 +1,13 @@
+//! The helper for an operator that ends the stream before its source does.
+//!
+//! `take`, `first`, `all` and friends terminate downstream on their own, and must then dispose
+//! their source. [`subscribe_with_auto_dispose_on_termination`] wraps the downstream observer so
+//! that terminating it — or its answering [`Flow::Stop`] — disposes the source subscription,
+//! including when that happens synchronously while the source is still being subscribed to.
+//!
+//! An operator with shared state uses [`subscribe_with_context`](crate::utils::subscribe_with_context)
+//! instead, whose owning form covers the same case.
+
 use crate::{
     delegate_disposal,
     disposable::{Disposable, DisposableExt, shared_disposal::SharedDisposal},
@@ -13,7 +23,48 @@ delegate_disposal!(
     where D: Disposable
 );
 
-/// Wraps subscription creation so that termination from the observer automatically disposes the inner subscription.
+/// Subscribes through `builder`, disposing the subscription it returns as soon as the observer
+/// is terminated or stops.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::{Observable, ObservableExt, Subscription},
+///     observer::{Flow, Observer, Termination},
+///     operators::creating::range::Range,
+///     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
+/// };
+///
+/// // An operator that completes after the first value: the source is disposed by the helper.
+/// struct FirstObserver<OR>(Option<OR>);
+///
+/// impl<OR: Observer<i32, E>, E> Observer<i32, E> for FirstObserver<OR> {
+///     fn on_next(&mut self, value: i32) -> Flow {
+///         if let Some(mut observer) = self.0.take() {
+///             if observer.on_next(value).is_continue() {
+///                 observer.on_termination(Termination::Completed); // Disposes the source.
+///             }
+///         }
+///         Flow::Stop
+///     }
+///     fn on_termination(self, termination: Termination<E>) {
+///         if let Some(observer) = self.0 {
+///             observer.on_termination(termination);
+///         }
+///     }
+/// }
+///
+/// let mut seen = Vec::new();
+/// let observer = rx_rust::observer::callback_observer::CallbackObserver::new(
+///     |value| seen.push(value),
+///     |termination| assert_eq!(termination, Termination::Completed),
+/// );
+/// let subscription = subscribe_with_auto_dispose_on_termination(observer, |observer| {
+///     Range::new(1..).subscribe(FirstObserver(Some(observer)))
+/// });
+/// drop(subscription);
+/// assert_eq!(seen, [1]);
+/// ```
 pub fn subscribe_with_auto_dispose_on_termination<OR, D, F>(
     observer: OR,
     builder: F,
@@ -47,6 +98,8 @@ pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
         == type_name_without_generics::<AutoDisposeOnTerminationObserver<(), ()>>()
 }
 
+/// The observer [`subscribe_with_auto_dispose_on_termination`] hands to its builder: the
+/// downstream observer, plus the disposal of the source to run when it terminates or stops.
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct AutoDisposeOnTerminationObserver<OR, D: Disposable> {

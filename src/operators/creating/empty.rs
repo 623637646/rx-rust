@@ -1,3 +1,5 @@
+//! The [`Empty`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},

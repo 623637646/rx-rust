@@ -1,15 +1,37 @@
+//! The queue of events waiting behind a running delivery, and the batches that feed it.
+//!
+//! # Examples
+//! ```rust
+//! use rx_rust::{observer::{Event, Termination}, utils::pending_events::PendingEvents};
+//!
+//! let mut pending = PendingEvents::<i32, ()>::new();
+//! assert!(pending.push(Event::Next(1)).is_none());
+//! assert!(pending.push(Event::Termination(Termination::Completed)).is_none());
+//! // Nothing can follow a termination: the event is handed back to be dropped elsewhere.
+//! assert!(pending.push(Event::Next(2)).is_some());
+//!
+//! assert_eq!(pending.pop(), Some(Event::Next(1)));
+//! assert_eq!(pending.pop(), Some(Event::Termination(Termination::Completed)));
+//! assert_eq!(pending.pop(), None);
+//! ```
+
 use crate::observer::{Event, Termination};
 use educe::Educe;
 use std::collections::VecDeque;
 
-/// One atomic batch of events to queue.
+/// Events queued as one unit, so that nothing can slip in between them.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
 pub enum EventBatch<T, E> {
+    /// One value.
     Next(T),
+    /// The termination alone.
     Termination(Termination<E>),
+    /// A last value, then the termination.
     NextAndTermination(T, Termination<E>),
+    /// Several values, in order.
     NextBatch(Vec<T>),
+    /// Several values, then the termination.
     NextBatchAndTermination(Vec<T>, Termination<E>),
 }
 
@@ -37,6 +59,7 @@ pub struct PendingEvents<T, E> {
 }
 
 impl<T, E> PendingEvents<T, E> {
+    /// An empty queue.
     pub fn new() -> Self {
         Self {
             values: VecDeque::new(),
@@ -44,6 +67,7 @@ impl<T, E> PendingEvents<T, E> {
         }
     }
 
+    /// An empty queue with room for `capacity` values before it reallocates.
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             values: VecDeque::with_capacity(capacity),

@@ -1,3 +1,6 @@
+//! The [`Timestamp`] operator, behind
+//! [`ObservableExt::timestamp`](crate::observable::ObservableExt::timestamp).
+
 use crate::{
     observable::Observable,
     observable::Subscription,
@@ -50,6 +53,8 @@ pub struct Timestamp<OE> {
 }
 
 impl<OE> Timestamp<OE> {
+    /// Creates a [`Timestamp`] over `source`;
+    /// [`ObservableExt::timestamp`](crate::observable::ObservableExt::timestamp) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self { source }
     }

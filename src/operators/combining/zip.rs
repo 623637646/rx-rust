@@ -1,3 +1,5 @@
+//! The [`Zip`] operator, behind [`ObservableExt::zip`](crate::observable::ObservableExt::zip).
+
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
@@ -48,6 +50,8 @@ pub struct Zip<OE1, OE2> {
 }
 
 impl<OE1, OE2> Zip<OE1, OE2> {
+    /// Creates a [`Zip`] over `source_1` and `source_2`;
+    /// [`ObservableExt::zip`](crate::observable::ObservableExt::zip) is the fluent form.
     pub fn new<'or, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
     where
         OE1: Observable<'or, T1, E>,

@@ -1,8 +1,11 @@
+//! The [`DoAfterNext`] operator, behind
+//! [`ObservableExt::do_after_next`](crate::observable::ObservableExt::do_after_next).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
     observable::Subscription,
-    observer::{Flow, Observer},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -46,6 +49,8 @@ pub struct DoAfterNext<OE, F> {
 }
 
 impl<OE, F> DoAfterNext<OE, F> {
+    /// Creates a [`DoAfterNext`] over `source`;
+    /// [`ObservableExt::do_after_next`](crate::observable::ObservableExt::do_after_next) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,
@@ -90,7 +95,7 @@ where
         flow
     }
 
-    fn on_termination(self, termination: crate::observer::Termination<E>) {
+    fn on_termination(self, termination: Termination<E>) {
         self.observer.on_termination(termination);
     }
 }

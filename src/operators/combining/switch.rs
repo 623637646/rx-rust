@@ -1,3 +1,6 @@
+//! The [`Switch`] operator, behind
+//! [`ObservableExt::switch`](crate::observable::ObservableExt::switch).
+
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::id_generator::{Id, IdGenerator};
@@ -52,6 +55,8 @@ pub struct Switch<OE, OE1> {
 }
 
 impl<OE, OE1> Switch<OE, OE1> {
+    /// Creates a [`Switch`] over `source`;
+    /// [`ObservableExt::switch`](crate::observable::ObservableExt::switch) is the fluent form.
     pub fn new<'or, T, E>(source: OE) -> Self
     where
         OE: Observable<'or, OE1, E>,
@@ -65,6 +70,7 @@ impl<OE, OE1> Switch<OE, OE1> {
 }
 
 impl<E, OE1, I> Switch<WithErrorType<E, FromIter<I>>, OE1> {
+    /// Creates a [`Switch`] over the observables of `into_iterator`.
     pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,

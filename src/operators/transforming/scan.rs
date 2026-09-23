@@ -1,3 +1,5 @@
+//! The [`Scan`] operator, behind [`ObservableExt::scan`](crate::observable::ObservableExt::scan).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -44,6 +46,8 @@ pub struct Scan<T, T1, OE, F> {
 }
 
 impl<T, T1, OE, F> Scan<T, T1, OE, F> {
+    /// Creates a [`Scan`] over `source`;
+    /// [`ObservableExt::scan`](crate::observable::ObservableExt::scan) is the fluent form.
     pub fn new<'or, E>(source: OE, initial_value: T, callback: F) -> Self
     where
         OE: Observable<'or, T1, E>,

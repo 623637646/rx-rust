@@ -1,3 +1,6 @@
+//! The [`Catch`] operator, behind
+//! [`ObservableExt::catch`](crate::observable::ObservableExt::catch).
+
 use crate::delegate_disposal;
 use crate::disposable::{
     Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
@@ -47,6 +50,8 @@ pub struct Catch<E0, OE, F> {
 }
 
 impl<E0, OE, F> Catch<E0, OE, F> {
+    /// Creates a [`Catch`] over `source`;
+    /// [`ObservableExt::catch`](crate::observable::ObservableExt::catch) is the fluent form.
     pub fn new<'or, T, E, OE1>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E0>,

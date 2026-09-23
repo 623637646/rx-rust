@@ -1,3 +1,6 @@
+//! The [`TakeUntil`] operator, behind
+//! [`ObservableExt::take_until`](crate::observable::ObservableExt::take_until).
+
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
@@ -58,6 +61,8 @@ pub struct TakeUntil<OE, OE1> {
 }
 
 impl<OE, OE1> TakeUntil<OE, OE1> {
+    /// Creates a [`TakeUntil`] over `source`;
+    /// [`ObservableExt::take_until`](crate::observable::ObservableExt::take_until) is the fluent form.
     pub fn new<'or, T, E>(source: OE, stop: OE1) -> Self
     where
         OE: Observable<'or, T, E>,

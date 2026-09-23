@@ -1,3 +1,6 @@
+//! The [`DoAfterDisposal`] operator, behind
+//! [`ObservableExt::do_after_disposal`](crate::observable::ObservableExt::do_after_disposal).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     disposable::{callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal},
@@ -46,6 +49,8 @@ pub struct DoAfterDisposal<OE, F> {
 }
 
 impl<OE, F> DoAfterDisposal<OE, F> {
+    /// Creates a [`DoAfterDisposal`] over `source`;
+    /// [`ObservableExt::do_after_disposal`](crate::observable::ObservableExt::do_after_disposal) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

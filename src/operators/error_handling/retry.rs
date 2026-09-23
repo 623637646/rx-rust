@@ -1,3 +1,6 @@
+//! The [`Retry`] operator, behind
+//! [`ObservableExt::retry`](crate::observable::ObservableExt::retry).
+
 use crate::delegate_disposal;
 use crate::disposable::{
     Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
@@ -12,8 +15,11 @@ use educe::Educe;
 
 #[derive(Educe)]
 #[educe(Debug, Clone)]
+/// What the callback of [`Retry`] decides about an error.
 pub enum RetryAction<E, OE1> {
+    /// Subscribe to this observable and keep going.
     Retry(OE1),
+    /// Give up and terminate downstream with this error.
     Stop(E),
 }
 
@@ -51,6 +57,8 @@ pub struct Retry<OE, F> {
 }
 
 impl<OE, F> Retry<OE, F> {
+    /// Creates a [`Retry`] over `source`;
+    /// [`ObservableExt::retry`](crate::observable::ObservableExt::retry) is the fluent form.
     pub fn new<'or, T, E, OE1>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

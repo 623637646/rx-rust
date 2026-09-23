@@ -1,3 +1,5 @@
+//! The [`Map`] operator, behind [`ObservableExt::map`](crate::observable::ObservableExt::map).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -43,6 +45,8 @@ pub struct Map<T0, OE, F> {
 }
 
 impl<T0, OE, F> Map<T0, OE, F> {
+    /// Creates a [`Map`] over `source`;
+    /// [`ObservableExt::map`](crate::observable::ObservableExt::map) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T0, E>,

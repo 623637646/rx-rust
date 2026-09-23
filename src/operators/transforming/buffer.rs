@@ -1,3 +1,6 @@
+//! The [`Buffer`] operator, behind
+//! [`ObservableExt::buffer`](crate::observable::ObservableExt::buffer).
+
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
@@ -88,6 +91,8 @@ pub struct Buffer<OE, OE1> {
 }
 
 impl<OE, OE1> Buffer<OE, OE1> {
+    /// Creates a [`Buffer`] over `source`;
+    /// [`ObservableExt::buffer`](crate::observable::ObservableExt::buffer) is the fluent form.
     pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
     where
         OE: Observable<'or, T, E>,

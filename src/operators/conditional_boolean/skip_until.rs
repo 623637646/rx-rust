@@ -1,3 +1,6 @@
+//! The [`SkipUntil`] operator, behind
+//! [`ObservableExt::skip_until`](crate::observable::ObservableExt::skip_until).
+
 use crate::disposable::Disposable;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
@@ -60,6 +63,8 @@ pub struct SkipUntil<OE, OE1> {
 }
 
 impl<OE, OE1> SkipUntil<OE, OE1> {
+    /// Creates a [`SkipUntil`] over `source`;
+    /// [`ObservableExt::skip_until`](crate::observable::ObservableExt::skip_until) is the fluent form.
     pub fn new<'or, T, E>(source: OE, start: OE1) -> Self
     where
         OE: Observable<'or, T, E>,

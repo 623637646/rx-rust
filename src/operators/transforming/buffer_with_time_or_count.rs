@@ -1,3 +1,5 @@
+//! The [`BufferWithTimeOrCount`] operator.
+
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::observable::Subscription;
 use crate::utils::serialized_delivery::UpdateOutcome;
@@ -81,6 +83,7 @@ pub struct BufferWithTimeOrCount<OE, S> {
 }
 
 impl<OE, S> BufferWithTimeOrCount<OE, S> {
+    /// Creates a [`BufferWithTimeOrCount`] over `source`.
     pub fn new(
         source: OE,
         count: NonZeroUsize,

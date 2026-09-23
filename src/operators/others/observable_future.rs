@@ -1,3 +1,6 @@
+//! The [`ObservableFuture`] adapter, behind
+//! [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future).
+
 use crate::{
     observable::Observable, operators::others::observable_try_future::ObservableTryFuture,
     utils::types::MaybeSend,
@@ -44,6 +47,8 @@ impl<'or, T, OE> ObservableFuture<'or, T, OE>
 where
     OE: Observable<'or, T, Infallible>,
 {
+    /// Creates an [`ObservableFuture`] over `source`;
+    /// [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self {
             future: ObservableTryFuture::new(source),
