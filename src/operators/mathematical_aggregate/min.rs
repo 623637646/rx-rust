@@ -1,3 +1,5 @@
+//! The [`Min`] operator, behind [`ObservableExt::min`](crate::observable::ObservableExt::min).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -43,6 +45,8 @@ pub struct Min<OE> {
 }
 
 impl<OE> Min<OE> {
+    /// Creates a [`Min`] over `source`;
+    /// [`ObservableExt::min`](crate::observable::ObservableExt::min) is the fluent form.
     pub fn new<'or, T, E>(source: OE) -> Self
     where
         OE: Observable<'or, T, E>,

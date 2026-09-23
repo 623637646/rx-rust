@@ -1,3 +1,6 @@
+//! The [`Contains`] operator, behind
+//! [`ObservableExt::contains`](crate::observable::ObservableExt::contains).
+
 use crate::utils::subscribe_with_auto_dispose_on_termination;
 use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
 use crate::utils::types::MaybeSend;
@@ -41,6 +44,8 @@ pub struct Contains<T, OE> {
 }
 
 impl<T, OE> Contains<T, OE> {
+    /// Creates a [`Contains`] over `source`;
+    /// [`ObservableExt::contains`](crate::observable::ObservableExt::contains) is the fluent form.
     pub fn new<'or, E>(source: OE, item: T) -> Self
     where
         OE: Observable<'or, T, E>,

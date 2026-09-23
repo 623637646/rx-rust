@@ -1,3 +1,5 @@
+//! The [`Last`] operator, behind [`ObservableExt::last`](crate::observable::ObservableExt::last).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable, observable::Subscription, observer::Observer,
@@ -38,6 +40,8 @@ pub struct Last<OE> {
 }
 
 impl<OE> Last<OE> {
+    /// Creates a [`Last`] over `source`;
+    /// [`ObservableExt::last`](crate::observable::ObservableExt::last) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self { source }
     }

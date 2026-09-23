@@ -1,3 +1,6 @@
+//! The [`HookOnNext`] operator, behind
+//! [`ObservableExt::hook_on_next`](crate::observable::ObservableExt::hook_on_next).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -40,6 +43,8 @@ pub struct HookOnNext<OE, F> {
 }
 
 impl<OE, F> HookOnNext<OE, F> {
+    /// Creates a [`HookOnNext`] over `source`;
+    /// [`ObservableExt::hook_on_next`](crate::observable::ObservableExt::hook_on_next) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

@@ -1,3 +1,6 @@
+//! The [`MapErr`] operator, behind
+//! [`ObservableExt::map_err`](crate::observable::ObservableExt::map_err).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -38,6 +41,8 @@ pub struct MapErr<E, OE, F> {
 }
 
 impl<E, OE, F> MapErr<E, OE, F> {
+    /// Creates a [`MapErr`] over `source`;
+    /// [`ObservableExt::map_err`](crate::observable::ObservableExt::map_err) is the fluent form.
     pub fn new<'or, T, E1>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

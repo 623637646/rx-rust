@@ -1,3 +1,6 @@
+//! The [`ConcatMap`] operator, behind
+//! [`ObservableExt::concat_map`](crate::observable::ObservableExt::concat_map).
+
 use super::map::Map;
 use crate::operators::combining::concat_all::ConcatAll;
 use crate::utils::subscribe_with_context;
@@ -45,6 +48,8 @@ pub struct ConcatMap<T0, OE, OE1, F> {
 }
 
 impl<T0, OE, OE1, F> ConcatMap<T0, OE, OE1, F> {
+    /// Creates a [`ConcatMap`] over `source`;
+    /// [`ObservableExt::concat_map`](crate::observable::ObservableExt::concat_map) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T0, E>,

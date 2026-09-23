@@ -1,3 +1,6 @@
+//! The [`ObservableTryFuture`] adapter, behind
+//! [`ObservableExt::into_try_future`](crate::observable::ObservableExt::into_try_future).
+
 use crate::{
     observable::{Observable, Subscription},
     observer::{Flow, Observer, Termination},
@@ -64,6 +67,8 @@ impl<'or, T, E, OE> ObservableTryFuture<'or, T, E, OE>
 where
     OE: Observable<'or, T, E>,
 {
+    /// Creates an [`ObservableTryFuture`] over `source`;
+    /// [`ObservableExt::into_try_future`](crate::observable::ObservableExt::into_try_future) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self {
             source: Some(source),

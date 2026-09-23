@@ -1,3 +1,7 @@
+//! The [`Collect`] operator, behind
+//! [`ObservableExt::collect`](crate::observable::ObservableExt::collect),
+//! [`ObservableExt::to_vec`](crate::observable::ObservableExt::to_vec).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -49,6 +53,8 @@ pub struct Collect<C, T, OE> {
 }
 
 impl<C, T, OE> Collect<C, T, OE> {
+    /// Creates a [`Collect`] over `source`;
+    /// [`ObservableExt::collect`](crate::observable::ObservableExt::collect) is the fluent form.
     pub fn new<'or, E>(source: OE) -> Self
     where
         OE: Observable<'or, T, E>,

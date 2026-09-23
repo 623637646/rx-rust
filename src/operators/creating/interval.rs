@@ -1,3 +1,5 @@
+//! The [`Interval`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -60,6 +62,7 @@ pub struct Interval<S> {
 }
 
 impl<S> Interval<S> {
+    /// Creates an [`Interval`].
     pub fn new(period: Duration, scheduler: S, delay: Option<Duration>) -> Self {
         Self {
             period,

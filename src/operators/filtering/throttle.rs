@@ -1,3 +1,6 @@
+//! The [`Throttle`] operator, behind
+//! [`ObservableExt::throttle`](crate::observable::ObservableExt::throttle).
+
 use crate::observable::Subscription;
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -68,6 +71,8 @@ pub struct Throttle<OE> {
 }
 
 impl<OE> Throttle<OE> {
+    /// Creates a [`Throttle`] over `source`;
+    /// [`ObservableExt::throttle`](crate::observable::ObservableExt::throttle) is the fluent form.
     pub fn new(source: OE, time_span: Duration) -> Self {
         Self { source, time_span }
     }

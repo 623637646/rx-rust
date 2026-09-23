@@ -21,10 +21,35 @@ use crate::{
 use educe::Educe;
 use std::collections::VecDeque;
 
-/// Buffers emissions and replays them to late subscribers.
+/// A subject that buffers what it emits and replays the buffer to every new subscriber.
 ///
-/// A subscriber that arrives after the subject terminated observes the buffered values followed by
-/// the termination, whether the subject completed or errored.
+/// The buffer keeps the last `buffer_size` values, or every value when the size is `None`. A
+/// subscriber that arrives after the subject terminated receives the buffered values and then the
+/// termination, whether the subject completed or errored.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::{Observer, Termination},
+///     subject::replay_subject::ReplaySubject,
+/// };
+///
+/// let mut seen = Vec::new();
+/// let subject = ReplaySubject::<i32, std::convert::Infallible>::new(Some(2));
+/// let mut sender = subject.clone();
+/// let _ = sender.on_next(1);
+/// let _ = sender.on_next(2);
+/// let _ = sender.on_next(3);
+/// sender.on_termination(Termination::Completed);
+///
+/// let subscription = subject.subscribe_with_callback(
+///     |value| seen.push(value),
+///     |termination| assert_eq!(termination, Termination::Completed),
+/// );
+/// drop(subscription);
+/// assert_eq!(seen, [2, 3]); // The last two, then the completion.
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ReplaySubject<'or, T, E>(SerializedMulticast<'or, T, E, Buffer<T>>);
@@ -39,6 +64,7 @@ struct Buffer<T> {
 }
 
 impl<T, E> ReplaySubject<'_, T, E> {
+    /// Creates a subject that keeps the last `buffer_size` values, or all of them for `None`.
     pub fn new(buffer_size: Option<usize>) -> Self {
         let values = match buffer_size {
             Some(size) => VecDeque::with_capacity(size),
@@ -110,9 +136,11 @@ where
 }
 
 impl<T> Buffer<T> {
-    /// Buffers `value`, returning the value it evicted, if any.
+    /// Buffers `value`, returning the value it evicted, if any, for the caller to drop outside
+    /// the lock.
     ///
-    /// A buffer of size zero keeps nothing: the value is only forwarded.
+    /// A buffer of size zero keeps nothing: the value is only forwarded, and it is the value
+    /// itself that is handed back.
     fn push(&mut self, value: T) -> Option<T> {
         match self.size {
             Some(0) => Some(value),

@@ -1,3 +1,6 @@
+//! The [`ConcatAll`] operator, behind
+//! [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all).
+
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::utils::serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutcome};
@@ -52,6 +55,8 @@ pub struct ConcatAll<OE, OE1> {
 }
 
 impl<OE, OE1> ConcatAll<OE, OE1> {
+    /// Creates a [`ConcatAll`] over `source`;
+    /// [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all) is the fluent form.
     pub fn new<'or, T, E>(source: OE) -> Self
     where
         OE: Observable<'or, OE1, E>,
@@ -65,6 +70,7 @@ impl<OE, OE1> ConcatAll<OE, OE1> {
 }
 
 impl<E, OE1, I> ConcatAll<WithErrorType<E, FromIter<I>>, OE1> {
+    /// Creates a [`ConcatAll`] over the observables of `into_iterator`.
     pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
@@ -104,6 +110,8 @@ struct Model<'or, T, E, OE1>
 where
     OE1: Observable<'or, T, E>,
 {
+    /// Values wait here while an inner is active or its subscription is still being built.
+    /// An idle slot always has an empty queue.
     pending_observables: VecDeque<OE1>,
     slot: SubscriptionSlot<Subscription<OE1::D>>,
     is_source_completed: bool,

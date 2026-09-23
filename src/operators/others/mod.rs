@@ -1,3 +1,5 @@
+//! Conversions to futures and streams, type adapters, and debugging hooks.
+
 pub mod debug;
 pub mod hook_on_next;
 pub mod hook_on_subscription;

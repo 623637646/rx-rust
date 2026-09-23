@@ -1,3 +1,5 @@
+//! The [`Timer`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -60,6 +62,7 @@ pub struct Timer<T, S> {
 }
 
 impl<T, S> Timer<T, S> {
+    /// Creates a [`Timer`].
     pub fn new(value: T, delay: Duration, scheduler: S) -> Self {
         Self {
             value,

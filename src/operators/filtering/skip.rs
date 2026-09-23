@@ -1,3 +1,5 @@
+//! The [`Skip`] operator, behind [`ObservableExt::skip`](crate::observable::ObservableExt::skip).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -40,6 +42,8 @@ pub struct Skip<OE> {
 }
 
 impl<OE> Skip<OE> {
+    /// Creates a [`Skip`] over `source`;
+    /// [`ObservableExt::skip`](crate::observable::ObservableExt::skip) is the fluent form.
     pub fn new(source: OE, count: usize) -> Self {
         Self { source, count }
     }

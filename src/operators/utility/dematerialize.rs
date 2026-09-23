@@ -1,3 +1,6 @@
+//! The [`Dematerialize`] operator, behind
+//! [`ObservableExt::dematerialize`](crate::observable::ObservableExt::dematerialize).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -42,6 +45,8 @@ use std::convert::Infallible;
 pub struct Dematerialize<OE>(OE);
 
 impl<OE> Dematerialize<OE> {
+    /// Creates a [`Dematerialize`] over `source`;
+    /// [`ObservableExt::dematerialize`](crate::observable::ObservableExt::dematerialize) is the fluent form.
     pub fn new(source: OE) -> Self {
         Self(source)
     }

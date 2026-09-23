@@ -1,3 +1,9 @@
+//! Sources: observables that emit from a value, an iterator, a future, a stream, a timer, or a
+//! closure. See <https://reactivex.io/documentation/operators.html#creating>.
+//!
+//! These are types, not methods: a pipeline starts with one of them, e.g.
+//! [`FromIter::new(vec![1, 2, 3])`](from_iter::FromIter) or [`Just::new(1)`](just::Just).
+
 pub mod create;
 pub mod defer;
 pub mod empty;

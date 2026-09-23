@@ -1,3 +1,73 @@
+//! The helper most stateful operators are written with.
+//!
+//! A [`SubscriptionContext`] holds the downstream observer and the operator's own model behind one
+//! lock (a [`SerializedDelivery`]). The
+//! operator's observers update the model and queue events in one step, and the events are
+//! delivered outside the lock, in order, whichever thread produced them. That is what makes an
+//! operator with several sources, a notifier or a scheduler task correct without any locking of
+//! its own.
+//!
+//! Two entry points differ in who owns the source subscription — see each for when to use it:
+//! [`subscribe_with_context`] chains it after the context, [`subscribe_with_context_owning_source`]
+//! puts it inside, so that the context disposes it when it terminates on its own.
+//!
+//! # Examples
+//! An operator that emits the running total and completes on its own once it exceeds a limit —
+//! which is why it owns its source:
+//! ```rust
+//! use rx_rust::{
+//!     observable::{Observable, ObservableExt, Subscription},
+//!     observer::{Flow, Observer, Termination},
+//!     operators::creating::range::Range,
+//!     utils::{
+//!         serialized_delivery::UpdateOutcome,
+//!         subscribe_with_context::{self, subscribe_with_context_owning_source, SubscriptionContext},
+//!         types::MaybeSend,
+//!     },
+//!     disposable::Disposable,
+//! };
+//!
+//! struct TotalUntil<OE> { source: OE, limit: i32 }
+//!
+//! impl<'or, E: MaybeSend + 'or, OE: Observable<'or, i32, E>> Observable<'or, i32, E> for TotalUntil<OE>
+//! where
+//!     OE::D: MaybeSend + 'or,
+//! {
+//!     type D = subscribe_with_context::OwningDisposal<'or>;
+//!
+//!     fn subscribe(self, observer: impl Observer<i32, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+//!         let limit = self.limit;
+//!         subscribe_with_context_owning_source(observer, 0, |context| {
+//!             self.source.subscribe(TotalObserver { context, limit })
+//!         })
+//!     }
+//! }
+//!
+//! struct TotalObserver<OR, E, D: Disposable> { context: SubscriptionContext<i32, E, OR, i32, D>, limit: i32 }
+//!
+//! impl<OR: Observer<i32, E>, E, D: Disposable> Observer<i32, E> for TotalObserver<OR, E, D> {
+//!     fn on_next(&mut self, value: i32) -> Flow {
+//!         // The model is read and written, and the events queued, under one lock.
+//!         self.context.update_flow(|total| {
+//!             *total += value;
+//!             if *total > self.limit {
+//!                 UpdateOutcome::empty().with_next_and_termination_events(*total, Termination::Completed)
+//!             } else {
+//!                 UpdateOutcome::empty().with_next_event(*total)
+//!             }
+//!         })
+//!     }
+//!     fn on_termination(self, termination: Termination<E>) {
+//!         self.context.send_termination(termination);
+//!     }
+//! }
+//!
+//! let mut seen = Vec::new();
+//! TotalUntil { source: Range::new(1..), limit: 5 }
+//!     .subscribe_with_callback(|total| seen.push(total), |t| assert_eq!(t, Termination::Completed));
+//! assert_eq!(seen, [1, 3, 6]);
+//! ```
+
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     delegate_disposal,
@@ -114,9 +184,14 @@ struct ContextResources<M, D: Disposable> {
 type ContextDelivery<T, E, OR, M, D> = SerializedDelivery<T, E, OR, ContextResources<M, D>>;
 type WeakContextDelivery<T, E, OR, M, D> = WeakSerializedDelivery<T, E, OR, ContextResources<M, D>>;
 
-/// Context used by operator observers to serialize model updates and downstream events.
+/// The shared state of an operator: its model and its downstream observer, behind one lock.
 ///
-/// `D` is the disposal of the source subscription the context owns, and `()` when it owns none.
+/// Handed to the builder of [`subscribe_with_context`] / [`subscribe_with_context_owning_source`],
+/// cloned into each of the operator's observers, and driven through [`update`](Self::update),
+/// [`update_flow`](Self::update_flow), [`send_next`](Self::send_next) and
+/// [`send_termination`](Self::send_termination). `D` is the disposal of the source subscription
+/// the context owns, and `()` when it owns none. See the [module documentation](self) for an
+/// example.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SubscriptionContext<T, E, OR, M, D: Disposable = ()> {

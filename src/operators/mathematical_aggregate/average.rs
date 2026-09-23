@@ -1,3 +1,6 @@
+//! The [`Average`] operator, behind
+//! [`ObservableExt::average`](crate::observable::ObservableExt::average).
+
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
@@ -41,6 +44,8 @@ pub struct Average<T, OE> {
 }
 
 impl<T, OE> Average<T, OE> {
+    /// Creates an [`Average`] over `source`;
+    /// [`ObservableExt::average`](crate::observable::ObservableExt::average) is the fluent form.
     pub fn new<'or, E>(source: OE) -> Self
     where
         OE: Observable<'or, T, E>,

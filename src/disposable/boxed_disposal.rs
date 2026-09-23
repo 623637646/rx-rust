@@ -1,3 +1,5 @@
+//! A disposal whose concrete type is erased.
+
 use crate::{disposable::Disposable, utils::types::MaybeSend};
 
 trait ErasedDisposable {
@@ -15,15 +17,34 @@ where
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
-        /// Type-erased disposal for single-threaded builds to handle this problem <https://stackoverflow.com/q/46620790/9315497>
-        pub struct BoxedDisposal<'dis>(Box<dyn ErasedDisposable + 'dis>);
+        type Erased<'dis> = dyn ErasedDisposable + 'dis;
     } else {
-        /// Type-erased disposal for multi-threaded builds to handle this problem <https://stackoverflow.com/q/46620790/9315497>
-        pub struct BoxedDisposal<'dis>(Box<dyn ErasedDisposable + Send + 'dis>);
+        type Erased<'dis> = dyn ErasedDisposable + Send + 'dis;
     }
 }
 
+/// A disposal whose concrete type is erased.
+///
+/// [`Disposable::dispose`] takes `self` by value, which a `Box<dyn Disposable>` could not call
+/// (see <https://stackoverflow.com/q/46620790/9315497>), so the erasure goes through a private
+/// trait that disposes a `Box<Self>` instead. In a multi-threaded build the box is also `Send`.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::disposable::{
+///     boxed_disposal::BoxedDisposal, callback_disposal::CallbackDisposal, Disposable, DisposableExt,
+/// };
+///
+/// let mut disposed = false;
+/// let boxed: BoxedDisposal<'_> = CallbackDisposal::new(|| disposed = true).into_boxed();
+/// boxed.dispose();
+/// assert!(disposed);
+/// ```
+pub struct BoxedDisposal<'dis>(Box<Erased<'dis>>);
+
 impl<'dis> BoxedDisposal<'dis> {
+    /// Boxes `disposal`; [`DisposableExt::into_boxed`](crate::disposable::DisposableExt::into_boxed)
+    /// is the fluent form.
     pub fn new(disposal: impl Disposable + MaybeSend + 'dis) -> Self {
         Self(Box::new(disposal))
     }

@@ -1,3 +1,6 @@
+//! The [`ObserveOn`] operator, behind
+//! [`ObservableExt::observe_on`](crate::observable::ObservableExt::observe_on).
+
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
@@ -68,6 +71,8 @@ pub struct ObserveOn<'or, OE, S> {
 }
 
 impl<'or, OE, S> ObserveOn<'or, OE, S> {
+    /// Creates an [`ObserveOn`] over `source`;
+    /// [`ObservableExt::observe_on`](crate::observable::ObservableExt::observe_on) is the fluent form.
     pub fn new(source: OE, scheduler: S) -> Self {
         Self {
             source,
@@ -145,7 +150,9 @@ impl<T, E, OR, S: Scheduler> ObserveOnObserver<T, E, OR, S> {
         });
         match task_setup {
             Ok(true) => {}
-            // The task is already running, and will find the event on its next pass.
+            // A build is in flight, so this event is left in the model for whoever finishes that
+            // handoff: either the running task picks it up on its next pass, or — when the task
+            // has already stopped — the `fill` below that hands its handle back does.
             Ok(false) => return Flow::Continue,
             Err(DeliveryStopped) => return Flow::Stop,
         }

@@ -1,3 +1,6 @@
+//! The [`Reduce`] operator, behind
+//! [`ObservableExt::reduce`](crate::observable::ObservableExt::reduce).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -44,6 +47,8 @@ pub struct Reduce<T, T1, OE, F> {
 }
 
 impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
+    /// Creates a [`Reduce`] over `source`;
+    /// [`ObservableExt::reduce`](crate::observable::ObservableExt::reduce) is the fluent form.
     pub fn new<'or, E>(source: OE, initial_value: T, callback: F) -> Self
     where
         OE: Observable<'or, T1, E>,
@@ -78,6 +83,7 @@ where
 
 struct ReduceObserver<T, OR, F> {
     observer: OR,
+    /// `None` only once the callback has panicked, which takes the accumulator with it.
     value: Option<T>,
     callback: F,
 }

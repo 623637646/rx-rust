@@ -1,3 +1,7 @@
+//! The [`ObservableTryStream`] adapter, behind
+//! [`ObservableExt::into_try_stream`](crate::observable::ObservableExt::into_try_stream),
+//! [`ObservableExt::into_try_stream_with`](crate::observable::ObservableExt::into_try_stream_with).
+
 use crate::{
     observable::{Observable, Subscription},
     observer::{Flow, Observer, Termination},
@@ -271,6 +275,7 @@ pub trait StreamBuffer<T> {
 pub struct Unbounded<T>(VecDeque<T>);
 
 impl<T> Unbounded<T> {
+    /// Creates an empty buffer.
     pub fn new() -> Self {
         Self(VecDeque::new())
     }
@@ -300,6 +305,7 @@ impl<T> StreamBuffer<T> for Unbounded<T> {
 pub struct Latest<T>(Option<T>);
 
 impl<T> Latest<T> {
+    /// Creates an empty buffer.
     pub fn new() -> Self {
         Self(None)
     }

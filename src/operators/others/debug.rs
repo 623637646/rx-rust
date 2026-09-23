@@ -1,3 +1,7 @@
+//! The [`struct@Debug`] operator, behind
+//! [`ObservableExt::debug`](crate::observable::ObservableExt::debug),
+//! [`ObservableExt::debug_default_print`](crate::observable::ObservableExt::debug_default_print).
+
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     disposable::Disposable,
@@ -9,10 +13,15 @@ use std::{fmt::Display, marker::PhantomData};
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
+/// What [`struct@Debug`] reports to its callback, with a borrow of the value where there is one.
 pub enum DebugEvent<'a, T: 'a, E: 'a> {
+    /// A value is about to be forwarded.
     OnNext(&'a T),
+    /// The termination is about to be forwarded.
     OnTermination(&'a Termination<E>),
+    /// The source is about to be subscribed to.
     Subscribed,
+    /// The subscription has just been disposed.
     Disposed,
 }
 
@@ -50,6 +59,8 @@ pub struct Debug<OE, C, F> {
 }
 
 impl<OE, C, F> Debug<OE, C, F> {
+    /// Creates a [`struct@Debug`] over `source`;
+    /// [`ObservableExt::debug`](crate::observable::ObservableExt::debug) is the fluent form.
     pub fn new<T, E>(source: OE, context: C, callback: F) -> Self
     where
         F: Fn(C, DebugEvent<'_, T, E>),
@@ -62,9 +73,13 @@ impl<OE, C, F> Debug<OE, C, F> {
     }
 }
 
+/// The callback type of [`Debug::new_default_print`](struct@Debug#method.new_default_print), which prints each event to stdout.
 pub type DefaultPrintType<C, T, E> = fn(C, DebugEvent<'_, T, E>);
 
 impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
+    /// Creates a [`struct@Debug`] over `source` that prints every event to stdout, prefixed by `label`;
+    /// [`ObservableExt::debug_default_print`](crate::observable::ObservableExt::debug_default_print)
+    /// is the fluent form.
     pub fn new_default_print(source: OE, label: C) -> Self
     where
         C: Display,
@@ -111,6 +126,8 @@ where
     }
 }
 
+/// The disposal of a [`struct@Debug`] subscription: disposes the source, then reports
+/// [`DebugEvent::Disposed`].
 pub struct DebugDisposal<D, C, F, T, E> {
     source_disposal: D,
     context: C,

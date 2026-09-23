@@ -1,3 +1,6 @@
+//! The [`Count`] operator, behind
+//! [`ObservableExt::count`](crate::observable::ObservableExt::count).
+
 use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     observable::Observable,
@@ -41,6 +44,8 @@ pub struct Count<T, OE> {
 }
 
 impl<T, OE> Count<T, OE> {
+    /// Creates a [`Count`] over `source`;
+    /// [`ObservableExt::count`](crate::observable::ObservableExt::count) is the fluent form.
     pub fn new<'or, E>(source: OE) -> Self
     where
         OE: Observable<'or, T, E>,

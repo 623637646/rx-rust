@@ -1,3 +1,6 @@
+//! The [`TakeLast`] operator, behind
+//! [`ObservableExt::take_last`](crate::observable::ObservableExt::take_last).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -41,6 +44,8 @@ pub struct TakeLast<OE> {
 }
 
 impl<OE> TakeLast<OE> {
+    /// Creates a [`TakeLast`] over `source`;
+    /// [`ObservableExt::take_last`](crate::observable::ObservableExt::take_last) is the fluent form.
     pub fn new(source: OE, count: usize) -> Self {
         Self { source, count }
     }

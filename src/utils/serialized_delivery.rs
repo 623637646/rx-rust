@@ -9,6 +9,30 @@
 //! [`SerializedDelivery::update`], which runs its callback under the same lock that then queues
 //! the events. The callback describes its outcome with an [`UpdateOutcome`], the one way to hand
 //! this module events to queue and a value to drop once they were delivered.
+//!
+//! # Examples
+//! ```rust
+//! use rx_rust::{
+//!     observer::{callback_observer::CallbackObserver, Flow, Termination},
+//!     utils::{pending_events::EventBatch, serialized_delivery::{SerializedDelivery, UpdateOutcome}},
+//! };
+//! use std::sync::{Arc, Mutex};
+//!
+//! let seen = Arc::new(Mutex::new(Vec::new()));
+//! let seen_in_observer = Arc::clone(&seen);
+//! let observer = CallbackObserver::new(move |value| seen_in_observer.lock().unwrap().push(value), |_| {});
+//!
+//! // The resources here are a counter the host updates under the delivery's lock.
+//! let delivery = SerializedDelivery::<i32, (), _, i32>::idle(observer, 0);
+//! assert_eq!(delivery.send(EventBatch::Next(1)), Flow::Continue);
+//! let count = delivery.update(|count| {
+//!     *count += 1;
+//!     UpdateOutcome::new(*count).with_next_event(10)
+//! });
+//! assert_eq!(count, Ok(1));
+//! assert_eq!(delivery.send(EventBatch::Termination(Termination::Completed)), Flow::Stop);
+//! assert_eq!(*seen.lock().unwrap(), [1, 10]);
+//! ```
 
 use crate::{
     observer::{Flow, Observer, Termination},
@@ -104,6 +128,8 @@ pub struct UpdateOutcome<T, E, R = (), DO = DropUndecided, const EVENTS_DECIDED:
 }
 
 impl<T, E, R> UpdateOutcome<T, E, R> {
+    /// An outcome that gives `result` back to the caller of the update, with the events and the
+    /// value to drop still to be decided.
     pub fn new(result: R) -> Self {
         Self {
             events: None,
@@ -114,6 +140,7 @@ impl<T, E, R> UpdateOutcome<T, E, R> {
 }
 
 impl<T, E> UpdateOutcome<T, E> {
+    /// [`Self::new`] with no result.
     pub fn empty() -> Self {
         Self::new(())
     }
@@ -132,6 +159,8 @@ impl<T, E, R, DO, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DO, EVENTS_
 }
 
 impl<T, E, R, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DropUndecided, EVENTS_DECIDED> {
+    /// Hands `drop_outside` over to be dropped after the lock is released — and after the events
+    /// are delivered. This is where a value the update displaced, or rejected, goes.
     pub fn with_drop_outside<DO>(
         self,
         drop_outside: DO,
@@ -143,6 +172,7 @@ impl<T, E, R, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DropUndecided, 
         }
     }
 
+    /// States that nothing needs to be dropped outside the lock.
     pub fn without_drop_outside<DO>(
         self,
     ) -> UpdateOutcome<T, E, R, DropDecided<DO>, EVENTS_DECIDED> {
@@ -155,10 +185,12 @@ impl<T, E, R, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DropUndecided, 
 }
 
 impl<T, E, R, DO> UpdateOutcome<T, E, R, DO, false> {
+    /// Queues one value.
     pub fn with_next_event(self, next: T) -> UpdateOutcome<T, E, R, DO, true> {
         self.with_events(EventBatch::Next(next))
     }
 
+    /// Queues the termination, after which nothing more can be queued.
     pub fn with_termination_event(
         self,
         termination: Termination<E>,
@@ -166,6 +198,7 @@ impl<T, E, R, DO> UpdateOutcome<T, E, R, DO, false> {
         self.with_events(EventBatch::Termination(termination))
     }
 
+    /// Queues a last value and then the termination.
     pub fn with_next_and_termination_events(
         self,
         next: T,
@@ -174,6 +207,7 @@ impl<T, E, R, DO> UpdateOutcome<T, E, R, DO, false> {
         self.with_events(EventBatch::NextAndTermination(next, termination))
     }
 
+    /// Queues `events` as one unit.
     pub fn with_events(self, events: EventBatch<T, E>) -> UpdateOutcome<T, E, R, DO, true> {
         UpdateOutcome {
             events: Some(events),
@@ -182,6 +216,7 @@ impl<T, E, R, DO> UpdateOutcome<T, E, R, DO, false> {
         }
     }
 
+    /// States that the update queues nothing.
     pub fn without_events(self) -> UpdateOutcome<T, E, R, DO, true> {
         UpdateOutcome {
             events: None,
@@ -208,6 +243,7 @@ impl<T, E, OR, R> SerializedDelivery<T, E, OR, R> {
         let _deferred_drop = self.0.replace_value(State::Stopped);
     }
 
+    /// A non-owning reference, for a scheduler task that must not keep the delivery alive.
     pub fn downgrade(&self) -> WeakSerializedDelivery<T, E, OR, R> {
         WeakSerializedDelivery(Shared::downgrade(&self.0))
     }
@@ -377,6 +413,7 @@ where
 }
 
 impl<T, E, OR, R> WeakSerializedDelivery<T, E, OR, R> {
+    /// The delivery, or `None` once every owning reference to it is gone.
     pub fn upgrade(&self) -> Option<SerializedDelivery<T, E, OR, R>> {
         self.0.upgrade().map(SerializedDelivery)
     }

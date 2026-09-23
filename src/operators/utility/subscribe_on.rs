@@ -1,3 +1,6 @@
+//! The [`SubscribeOn`] operator, behind
+//! [`ObservableExt::subscribe_on`](crate::observable::ObservableExt::subscribe_on).
+
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal},
@@ -63,6 +66,8 @@ pub struct SubscribeOn<'or, OE, S> {
 }
 
 impl<'or, OE, S> SubscribeOn<'or, OE, S> {
+    /// Creates a [`SubscribeOn`] over `source`;
+    /// [`ObservableExt::subscribe_on`](crate::observable::ObservableExt::subscribe_on) is the fluent form.
     pub fn new(source: OE, scheduler: S) -> Self {
         Self {
             source,

@@ -1,3 +1,6 @@
+//! The [`StartWith`] operator, behind
+//! [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with).
+
 use crate::disposable::{DisposableExt, option_disposal::OptionDisposal};
 use crate::utils::types::MaybeSend;
 use crate::{
@@ -40,6 +43,8 @@ pub struct StartWith<OE, I> {
 }
 
 impl<OE, I> StartWith<OE, I> {
+    /// Creates a [`StartWith`] over `source`;
+    /// [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with) is the fluent form.
     pub fn new<'or, T, E>(source: OE, values: I) -> Self
     where
         OE: Observable<'or, T, E>,

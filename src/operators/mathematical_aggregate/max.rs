@@ -1,3 +1,5 @@
+//! The [`Max`] operator, behind [`ObservableExt::max`](crate::observable::ObservableExt::max).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -43,6 +45,8 @@ pub struct Max<OE> {
 }
 
 impl<OE> Max<OE> {
+    /// Creates a [`Max`] over `source`;
+    /// [`ObservableExt::max`](crate::observable::ObservableExt::max) is the fluent form.
     pub fn new<'or, T, E>(source: OE) -> Self
     where
         OE: Observable<'or, T, E>,

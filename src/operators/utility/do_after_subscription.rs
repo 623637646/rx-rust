@@ -1,3 +1,6 @@
+//! The [`DoAfterSubscription`] operator, behind
+//! [`ObservableExt::do_after_subscription`](crate::observable::ObservableExt::do_after_subscription).
+
 use crate::utils::types::MaybeSend;
 use crate::{observable::Observable, observable::Subscription, observer::Observer};
 use educe::Educe;
@@ -34,6 +37,8 @@ pub struct DoAfterSubscription<OE, F> {
 }
 
 impl<OE, F> DoAfterSubscription<OE, F> {
+    /// Creates a [`DoAfterSubscription`] over `source`;
+    /// [`ObservableExt::do_after_subscription`](crate::observable::ObservableExt::do_after_subscription) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

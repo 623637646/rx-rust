@@ -1,3 +1,6 @@
+//! The [`Debounce`] operator, behind
+//! [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce).
+
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
@@ -68,6 +71,8 @@ pub struct Debounce<'or, OE, S> {
 }
 
 impl<'or, OE, S> Debounce<'or, OE, S> {
+    /// Creates a [`Debounce`] over `source`;
+    /// [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce) is the fluent form.
     pub fn new(source: OE, time_span: Duration, scheduler: S) -> Self {
         Self {
             source,

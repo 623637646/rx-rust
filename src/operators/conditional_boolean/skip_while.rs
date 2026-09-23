@@ -1,3 +1,6 @@
+//! The [`SkipWhile`] operator, behind
+//! [`ObservableExt::skip_while`](crate::observable::ObservableExt::skip_while).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -39,6 +42,8 @@ pub struct SkipWhile<OE, F> {
 }
 
 impl<OE, F> SkipWhile<OE, F> {
+    /// Creates a [`SkipWhile`] over `source`;
+    /// [`ObservableExt::skip_while`](crate::observable::ObservableExt::skip_while) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

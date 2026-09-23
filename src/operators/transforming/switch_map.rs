@@ -1,3 +1,6 @@
+//! The [`SwitchMap`] operator, behind
+//! [`ObservableExt::switch_map`](crate::observable::ObservableExt::switch_map).
+
 use super::map::Map;
 use crate::operators::combining::switch::Switch;
 use crate::utils::subscribe_with_context;
@@ -45,6 +48,8 @@ pub struct SwitchMap<T0, OE, OE1, F> {
 }
 
 impl<T0, OE, OE1, F> SwitchMap<T0, OE, OE1, F> {
+    /// Creates a [`SwitchMap`] over `source`;
+    /// [`ObservableExt::switch_map`](crate::observable::ObservableExt::switch_map) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T0, E>,

@@ -1,3 +1,5 @@
+//! The [`Defer`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -5,7 +7,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Do not create the Observable until a Observer subscribes, and create a fresh Observable for each Observer.
+/// Do not create the Observable until an Observer subscribes, and create a fresh Observable for each Observer.
 /// See <https://reactivex.io/documentation/operators/defer.html>
 ///
 /// # Examples
@@ -33,6 +35,7 @@ use educe::Educe;
 pub struct Defer<F>(F);
 
 impl<F> Defer<F> {
+    /// Creates a [`Defer`].
     pub fn new<OE>(builder: F) -> Self
     where
         F: FnOnce() -> OE,

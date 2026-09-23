@@ -19,12 +19,35 @@ use crate::{
 };
 use educe::Educe;
 
-/// Keeps the latest value and emits it immediately to new subscribers.
+/// A subject with a current value, which every new subscriber receives first.
+///
+/// The current value is replaced by each value the subject receives; [`value`](Self::value)
+/// reads it. Once the subject has terminated, a late subscriber receives the termination only.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::Observer,
+///     subject::behavior_subject::BehaviorSubject,
+/// };
+///
+/// let mut seen = Vec::new();
+/// let mut sender = BehaviorSubject::<i32, std::convert::Infallible>::new(0);
+/// let _ = sender.on_next(1);
+/// assert_eq!(sender.value(), 1);
+///
+/// let subscription = sender.clone().subscribe_with_callback(|value| seen.push(value), |_| {});
+/// let _ = sender.on_next(2);
+/// drop((subscription, sender));
+/// assert_eq!(seen, [1, 2]); // The current value first, then what follows.
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct BehaviorSubject<'or, T, E>(SerializedMulticast<'or, T, E, T>);
 
 impl<T, E> BehaviorSubject<'_, T, E> {
+    /// Creates a subject whose current value is `value`.
     pub fn new(value: T) -> Self {
         Self(SerializedMulticast::idle(value))
     }

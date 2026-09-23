@@ -19,15 +19,35 @@ use crate::{
 };
 use educe::Educe;
 
-/// Basic multicast subject that forwards events to all observers.
+/// The plain multicast subject: forwards what it receives to every current observer.
 ///
-/// Observers are notified in subscription order, and an observer that unsubscribes does not
-/// disturb the order of the others.
+/// A late subscriber receives only what is emitted after it subscribed, or the termination at
+/// once if the subject has already terminated. Observers are notified in subscription order.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::{Observer, Termination},
+///     subject::publish_subject::PublishSubject,
+/// };
+///
+/// let mut seen = Vec::new();
+/// let mut sender = PublishSubject::<i32, std::convert::Infallible>::new();
+/// let _ = sender.on_next(1); // Nobody is subscribed yet: dropped.
+///
+/// let subscription = sender.clone().subscribe_with_callback(|value| seen.push(value), |_| {});
+/// let _ = sender.on_next(2);
+/// sender.on_termination(Termination::Completed);
+/// drop(subscription);
+/// assert_eq!(seen, [2]);
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct PublishSubject<'or, T, E>(SerializedMulticast<'or, T, E>);
 
 impl<T, E> PublishSubject<'_, T, E> {
+    /// Creates a subject with no observer and no termination.
     pub fn new() -> Self {
         Self(SerializedMulticast::idle(()))
     }

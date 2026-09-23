@@ -1,3 +1,5 @@
+//! The [`Start`] source.
+
 use crate::operators::creating::defer::Defer;
 use crate::operators::creating::just::Just;
 use crate::utils::types::MaybeSend;
@@ -35,6 +37,7 @@ use std::convert::Infallible;
 pub struct Start<F>(F);
 
 impl<F> Start<F> {
+    /// Creates a [`Start`].
     pub fn new<T>(builder: F) -> Self
     where
         F: FnOnce() -> T,

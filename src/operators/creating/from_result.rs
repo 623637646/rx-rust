@@ -1,3 +1,5 @@
+//! The [`FromResult`] source.
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -32,6 +34,7 @@ use educe::Educe;
 pub struct FromResult<T, E>(Result<T, E>);
 
 impl<T, E> FromResult<T, E> {
+    /// Creates a [`FromResult`].
     pub fn new(result: Result<T, E>) -> Self {
         Self(result)
     }

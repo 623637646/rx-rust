@@ -1,3 +1,5 @@
+//! [`Scheduler`] for async-std.
+
 use super::Scheduler;
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
@@ -6,11 +8,33 @@ use crate::{
 use futures::future::abortable;
 use std::time::{Duration, Instant};
 
-/// Schedules tasks using the async-std runtime utilities.
+/// The scheduler for async-std, whose runtime is global and needs no handle.
+///
+/// # Examples
+/// ```rust
+/// # #[cfg(not(feature = "async-std-scheduler"))]
+/// # fn main() {}
+/// # #[cfg(feature = "async-std-scheduler")]
+/// fn main() {
+///     use futures::StreamExt;
+///     use rx_rust::{
+///         observable::ObservableExt, operators::creating::from_iter::FromIter,
+///         scheduler::async_std_scheduler::AsyncStdScheduler,
+///     };
+///     use std::time::Duration;
+///
+///     let values = async_std::task::block_on(
+///         FromIter::new(vec![1, 2, 3])
+///             .delay(Duration::from_millis(5), AsyncStdScheduler)
+///             .into_stream()
+///             .collect::<Vec<_>>(),
+///     );
+///     assert_eq!(values, [1, 2, 3]);
+/// }
+/// ```
 #[derive(Debug, Clone)]
 pub struct AsyncStdScheduler;
 
-/// Provides the async-std-backed `Scheduler` implementation.
 impl Scheduler for AsyncStdScheduler {
     type D = AsyncStdDisposal;
 
@@ -35,6 +59,7 @@ impl Scheduler for AsyncStdScheduler {
     }
 }
 
+/// The handle of a task spawned on async-std; disposing it aborts the task.
 pub struct AsyncStdDisposal(futures::future::AbortHandle);
 
 impl Disposable for AsyncStdDisposal {

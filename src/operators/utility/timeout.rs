@@ -1,3 +1,6 @@
+//! The [`Timeout`] operator, behind
+//! [`ObservableExt::timeout`](crate::observable::ObservableExt::timeout).
+
 use crate::disposable::{
     Disposable, bound_drop_disposal::BoundDropDisposal, option_disposal::OptionDisposal,
 };
@@ -14,8 +17,11 @@ use std::time::{Duration, Instant};
 
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
+/// The error type of [`Timeout`]: either the deadline passed, or the source itself failed.
 pub enum Error<E> {
+    /// No item arrived within the duration.
     Timeout,
+    /// The source terminated with this error.
     SourceError(E),
 }
 
@@ -75,6 +81,8 @@ pub struct Timeout<'or, OE, S> {
 }
 
 impl<'or, OE, S> Timeout<'or, OE, S> {
+    /// Creates a [`Timeout`] over `source`;
+    /// [`ObservableExt::timeout`](crate::observable::ObservableExt::timeout) is the fluent form.
     pub fn new(source: OE, duration: Duration, scheduler: S) -> Self {
         Self {
             source,

@@ -1,3 +1,6 @@
+//! The [`CombineLatest`] operator, behind
+//! [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest).
+
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
@@ -52,6 +55,8 @@ pub struct CombineLatest<OE1, OE2> {
 }
 
 impl<OE1, OE2> CombineLatest<OE1, OE2> {
+    /// Creates a [`CombineLatest`] over `source_1` and `source_2`;
+    /// [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest) is the fluent form.
     pub fn new<'or, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
     where
         OE1: Observable<'or, T1, E>,

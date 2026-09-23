@@ -1,16 +1,56 @@
+//! The receiving end of a stream: the [`Observer`] trait and the events it receives.
+//!
+//! An observer gets each value through [`Observer::on_next`], answering with a [`Flow`] that says
+//! whether it accepts more, and the last event through [`Observer::on_termination`], which
+//! consumes it. [`Termination`] is that last event, and [`Event`] is either kind of event as a
+//! value, for `materialize` and friends.
+//!
+//! A pair of closures is an observer too, through
+//! [`CallbackObserver`](callback_observer::CallbackObserver), and
+//! [`BoxedObserver`] erases an observer's type.
+//!
+//! # Examples
+//! ```rust
+//! use rx_rust::{
+//!     observable::Observable,
+//!     observer::{Flow, Observer, Termination},
+//!     operators::creating::from_iter::FromIter,
+//! };
+//! use std::convert::Infallible;
+//!
+//! struct Summing(i32);
+//!
+//! impl Observer<i32, Infallible> for Summing {
+//!     fn on_next(&mut self, value: i32) -> Flow {
+//!         self.0 += value;
+//!         Flow::Continue
+//!     }
+//!
+//!     fn on_termination(self, termination: Termination<Infallible>) {
+//!         assert_eq!(termination, Termination::Completed);
+//!         assert_eq!(self.0, 6);
+//!     }
+//! }
+//!
+//! FromIter::new([1, 2, 3]).subscribe(Summing(0));
+//! ```
+
 pub mod boxed_observer;
 pub mod callback_observer;
 
 use crate::{observer::boxed_observer::BoxedObserver, utils::types::MaybeSend};
 use educe::Educe;
 
-/// Represents the termination state of an operation, which can either be completed successfully or with an error.
+/// The last event of a stream: it either completed or failed with an error.
+///
+/// There is one termination type rather than separate `on_completed` / `on_error` callbacks, so
+/// that an operator that treats both the same way handles them in one place.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
 pub enum Termination<E> {
-    /// Indicates that the operation has completed successfully.
+    /// The stream ended after delivering every value.
     Completed,
-    /// Indicates that the operation has completed with an error.
+    /// The stream ended because of `E`; no more values follow.
     Error(E),
 }
 
@@ -58,9 +98,9 @@ impl Flow {
     }
 }
 
-/// A trait for observing the progress and termination state of an operation.
+/// Receives the values of a stream, then its termination. See the [module documentation](self).
 pub trait Observer<T, E> {
-    /// Called when the next value in the operation is available.
+    /// Receives the next value.
     ///
     /// Returns whether the observer accepts further events. [`Flow::Stop`] means it accepts none
     /// and must not be terminated either, so the caller stops pushing and drops it; see [`Flow`]
@@ -68,18 +108,24 @@ pub trait Observer<T, E> {
     /// its own downstream returned, so that the answer reaches the source at the end of the chain.
     fn on_next(&mut self, value: T) -> Flow;
 
-    /// Called when the operation has reached its termination state.
+    /// Receives the last event, consuming the observer.
     fn on_termination(self, termination: Termination<E>);
 }
 
+/// Either event of a stream as a value: what [`materialize`](crate::observable::ObservableExt::materialize)
+/// emits and [`dematerialize`](crate::observable::ObservableExt::dematerialize) consumes.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
 pub enum Event<T, E> {
+    /// A value.
     Next(T),
+    /// The last event.
     Termination(Termination<E>),
 }
 
+/// Type erasure for any [`Observer`].
 pub trait BoxedObserverExt<T, E>: Observer<T, E> + Sized {
+    /// Erases the type of this observer.
     fn into_boxed<'or>(self) -> BoxedObserver<'or, T, E>
     where
         Self: MaybeSend + 'or,

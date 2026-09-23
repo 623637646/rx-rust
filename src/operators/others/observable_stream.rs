@@ -1,3 +1,7 @@
+//! The [`ObservableStream`] adapter, behind
+//! [`ObservableExt::into_stream`](crate::observable::ObservableExt::into_stream),
+//! [`ObservableExt::into_stream_with`](crate::observable::ObservableExt::into_stream_with).
+
 use crate::{
     observable::Observable,
     operators::others::observable_try_stream::{ObservableTryStream, StreamBuffer, Unbounded},

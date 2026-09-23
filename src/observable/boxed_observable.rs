@@ -1,3 +1,5 @@
+//! An observable whose concrete type is erased.
+
 use super::{Observable, Observer};
 use crate::{
     disposable::{Disposable, DisposableExt, boxed_disposal::BoxedDisposal},
@@ -30,19 +32,46 @@ where
 
 cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
-        /// Type-erased observable for single-threaded builds to handle this problem <https://stackoverflow.com/q/46620790/9315497>
-        pub struct BoxedObservable<'or, 'sub, 'oe, T, E>(
-            Box<dyn ErasedObservable<'or, 'sub, T, E> + 'oe>,
-        );
+        type Erased<'or, 'sub, 'oe, T, E> = dyn ErasedObservable<'or, 'sub, T, E> + 'oe;
     } else {
-        /// Type-erased observable for multi-threaded builds to handle this problem <https://stackoverflow.com/q/46620790/9315497>
-        pub struct BoxedObservable<'or, 'sub, 'oe, T, E>(
-            Box<dyn ErasedObservable<'or, 'sub, T, E> + Send + 'oe>,
-        );
+        type Erased<'or, 'sub, 'oe, T, E> = dyn ErasedObservable<'or, 'sub, T, E> + Send + 'oe;
     }
 }
 
+/// An observable whose concrete type is erased.
+///
+/// Two observables of different types can then be stored together, or returned from either
+/// branch of an `if`. [`Observable::subscribe`] takes `self` by value, which a
+/// `Box<dyn Observable>` could not call (see <https://stackoverflow.com/q/46620790/9315497>), so
+/// the erasure goes through a private trait that subscribes a `Box<Self>` instead; the observer
+/// and the disposal are boxed along with it. In a multi-threaded build the box is also `Send`.
+///
+/// The lifetimes bound the observer (`'or`), the disposal (`'sub`) and the observable itself
+/// (`'oe`); `'static` for all three is the common case.
+///
+/// # Examples
+/// ```rust
+/// use rx_rust::{
+///     observable::{boxed_observable::BoxedObservable, ObservableExt},
+///     operators::creating::{from_iter::FromIter, just::Just},
+/// };
+/// use std::sync::Mutex;
+///
+/// let seen = Mutex::new(Vec::new());
+/// let observables: Vec<BoxedObservable<'_, 'static, 'static, i32, _>> = vec![
+///     Just::new(1).into_boxed(),
+///     FromIter::new([2, 3]).into_boxed(),
+/// ];
+/// for observable in observables {
+///     observable.subscribe_with_callback(|value| seen.lock().unwrap().push(value), |_| {});
+/// }
+/// assert_eq!(*seen.lock().unwrap(), [1, 2, 3]);
+/// ```
+pub struct BoxedObservable<'or, 'sub, 'oe, T, E>(Box<Erased<'or, 'sub, 'oe, T, E>>);
+
 impl<'or, 'sub, 'oe, T, E> BoxedObservable<'or, 'sub, 'oe, T, E> {
+    /// Boxes `observable`; [`ObservableExt::into_boxed`](crate::observable::ObservableExt::into_boxed)
+    /// is the fluent form.
     pub fn new(
         observable: impl Observable<'or, T, E, D = impl Disposable + MaybeSend + 'sub> + MaybeSend + 'oe,
     ) -> Self

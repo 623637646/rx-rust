@@ -1,3 +1,6 @@
+//! The [`HookOnTermination`] operator, behind
+//! [`ObservableExt::hook_on_termination`](crate::observable::ObservableExt::hook_on_termination).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::{Observable, Subscription},
@@ -45,6 +48,8 @@ pub struct HookOnTermination<OE, F> {
 }
 
 impl<OE, F> HookOnTermination<OE, F> {
+    /// Creates a [`HookOnTermination`] over `source`;
+    /// [`ObservableExt::hook_on_termination`](crate::observable::ObservableExt::hook_on_termination) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

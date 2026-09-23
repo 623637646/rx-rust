@@ -1,3 +1,6 @@
+//! The [`BufferWithCount`] operator, behind
+//! [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -42,6 +45,8 @@ pub struct BufferWithCount<OE> {
 }
 
 impl<OE> BufferWithCount<OE> {
+    /// Creates a [`BufferWithCount`] over `source`;
+    /// [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count) is the fluent form.
     pub fn new(source: OE, count: NonZeroUsize) -> Self {
         Self { source, count }
     }

@@ -1,3 +1,6 @@
+//! The [`FlatMap`] operator, behind
+//! [`ObservableExt::flat_map`](crate::observable::ObservableExt::flat_map).
+
 use super::map::Map;
 use crate::operators::combining::merge_all::MergeAll;
 use crate::utils::subscribe_with_context;
@@ -45,6 +48,8 @@ pub struct FlatMap<T0, OE, OE1, F> {
 }
 
 impl<T0, OE, OE1, F> FlatMap<T0, OE, OE1, F> {
+    /// Creates a [`FlatMap`] over `source`;
+    /// [`ObservableExt::flat_map`](crate::observable::ObservableExt::flat_map) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T0, E>,

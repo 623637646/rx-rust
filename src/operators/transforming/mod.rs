@@ -1,3 +1,6 @@
+//! Operators that transform items, or regroup them into buffers, windows and groups.
+//! See <https://reactivex.io/documentation/operators.html#transforming>.
+
 pub mod buffer;
 pub mod buffer_with_count;
 pub mod buffer_with_time;

@@ -1,3 +1,6 @@
+//! The [`DoAfterTermination`] operator, behind
+//! [`ObservableExt::do_after_termination`](crate::observable::ObservableExt::do_after_termination).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -50,6 +53,8 @@ pub struct DoAfterTermination<OE, F> {
 }
 
 impl<OE, F> DoAfterTermination<OE, F> {
+    /// Creates a [`DoAfterTermination`] over `source`;
+    /// [`ObservableExt::do_after_termination`](crate::observable::ObservableExt::do_after_termination) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

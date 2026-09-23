@@ -1,3 +1,6 @@
+//! The [`Filter`] operator, behind
+//! [`ObservableExt::filter`](crate::observable::ObservableExt::filter).
+
 use crate::utils::types::MaybeSend;
 use crate::{
     observable::Observable,
@@ -40,6 +43,8 @@ pub struct Filter<OE, F> {
 }
 
 impl<OE, F> Filter<OE, F> {
+    /// Creates a [`Filter`] over `source`;
+    /// [`ObservableExt::filter`](crate::observable::ObservableExt::filter) is the fluent form.
     pub fn new<'or, T, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

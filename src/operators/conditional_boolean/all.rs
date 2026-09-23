@@ -1,3 +1,5 @@
+//! The [`All`] operator, behind [`ObservableExt::all`](crate::observable::ObservableExt::all).
+
 use crate::observable::Subscription;
 use crate::utils::subscribe_with_auto_dispose_on_termination::{
     self, subscribe_with_auto_dispose_on_termination,
@@ -45,6 +47,8 @@ pub struct All<T, OE, F> {
 }
 
 impl<T, OE, F> All<T, OE, F> {
+    /// Creates an [`All`] over `source`;
+    /// [`ObservableExt::all`](crate::observable::ObservableExt::all) is the fluent form.
     pub fn new<'or, E>(source: OE, callback: F) -> Self
     where
         OE: Observable<'or, T, E>,

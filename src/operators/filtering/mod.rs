@@ -1,3 +1,6 @@
+//! Operators that select which items to pass on, by predicate, position, distinctness or timing.
+//! See <https://reactivex.io/documentation/operators.html#filtering>.
+
 pub mod debounce;
 pub mod distinct;
 pub mod distinct_until_changed;

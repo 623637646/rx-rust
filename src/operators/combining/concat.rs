@@ -1,3 +1,6 @@
+//! The [`Concat`] operator, behind
+//! [`ObservableExt::concat_with`](crate::observable::ObservableExt::concat_with).
+
 use crate::delegate_disposal;
 use crate::disposable::{
     Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
@@ -44,6 +47,8 @@ pub struct Concat<OE1, OE2> {
 }
 
 impl<OE1, OE2> Concat<OE1, OE2> {
+    /// Creates a [`Concat`] over `source_1` and `source_2`;
+    /// [`ObservableExt::concat_with`](crate::observable::ObservableExt::concat_with) is the fluent form.
     pub fn new<'or, T, E>(source_1: OE1, source_2: OE2) -> Self
     where
         OE1: Observable<'or, T, E>,

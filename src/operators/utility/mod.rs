@@ -1,3 +1,10 @@
+//! Operators that time, schedule, observe or wrap a sequence without changing its items.
+//! See <https://reactivex.io/documentation/operators.html#utility>.
+//!
+//! `Using` is not implemented: a resource tied to a subscription is dropped with it, so an owned
+//! value in the pipeline does the same. `Serialize` is not needed, since every operator here is
+//! already safe to drive from several threads.
+
 pub mod delay;
 pub mod dematerialize;
 pub mod do_after_disposal;
