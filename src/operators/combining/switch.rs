@@ -125,7 +125,8 @@ where
 {
     fn on_next(&mut self, value: OE1) -> Flow {
         let result = self.0.update(|model| {
-            UpdateOutcome::new(model.sub_ids.next_id()).with_drop_outside(model.slot.reserve())
+            UpdateOutcome::new(model.sub_ids.next_id())
+                .with_drop_outside(model.slot.reserve_replacing())
         });
         let sub_id = match result {
             Ok(sub_id) => sub_id,
@@ -172,9 +173,15 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         self.0.update_flow(|model| {
             if model.sub_ids.latest() != Some(self.1) {
-                return UpdateOutcome::empty().without_events();
+                // A value of a superseded inner observable is dropped outside the lock: dropping
+                // it can run arbitrary code.
+                return UpdateOutcome::empty()
+                    .with_drop_outside(value)
+                    .without_events();
             }
-            UpdateOutcome::empty().with_next_event(value)
+            UpdateOutcome::empty()
+                .without_drop_outside()
+                .with_next_event(value)
         })
     }
 
@@ -192,10 +199,9 @@ where
                             .with_termination_event(completion)
                             .without_drop_outside()
                     } else {
-                        assert!(
-                            !model.slot.is_idle(),
-                            "the terminating inner subscription is still held or reserved"
-                        );
+                        // The terminating inner is the current one, so its subscription is still
+                        // held or being built: `release` itself rejects an idle slot, and does so
+                        // without the in-lock assertion that would poison the lock on the way out.
                         UpdateOutcome::empty()
                             .without_events()
                             .with_drop_outside(model.slot.release())

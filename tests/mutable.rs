@@ -1,5 +1,7 @@
 //! The guarantees of the [`Mutable`] API: what runs under the lock, and what does not.
 
+mod tests_utils;
+
 use rx_rust::utils::mutable::{Mutable, MutableExt, MutableHelper};
 use rx_rust::utils::types::Shared;
 
@@ -76,4 +78,56 @@ fn test_nested_locks_are_allowed() {
     let second = Mutable::new(2);
     let sum = first.with_ref(|first| second.with_ref(|second| first + second));
     assert_eq!(sum, 3);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_access_after_with_mut_panic() {
+    let value = Mutable::new(0);
+    tests_utils::panic::expect_panic_on_drop(|panic_on_drop| {
+        value.with_mut(|value| {
+            *value = 1;
+            drop(panic_on_drop);
+        });
+    });
+
+    assert_eq!(value.with_ref(|value| *value), 1);
+    value.with_mut(|value| *value += 1);
+    assert_eq!(value.clone_value(), 2);
+    #[cfg(not(feature = "single-threaded"))]
+    assert!(value.is_poisoned());
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_access_after_with_ref_panic() {
+    let value = Mutable::new(1);
+    tests_utils::panic::expect_panic_on_drop(|panic_on_drop| {
+        value.with_ref(|_| drop(panic_on_drop));
+    });
+
+    assert_eq!(value.with_ref(|value| *value), 1);
+    value.with_mut(|value| *value += 1);
+    assert_eq!(value.clone_value(), 2);
+    #[cfg(not(feature = "single-threaded"))]
+    assert!(value.is_poisoned());
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_cleanup_during_unwinding_after_lock_panic() {
+    use rx_rust::utils::on_panic::on_panic;
+
+    let value = Mutable::new(Some(1));
+    tests_utils::panic::expect_panic_on_drop(|panic_on_drop| {
+        // Runs after the lock guard has unwound, but before the original panic is caught.
+        let _cleanup = on_panic(|| {
+            assert!(std::thread::panicking());
+            assert_eq!(value.with_ref(|value| *value), Some(1));
+            assert_eq!(value.take_value(), Some(1));
+        });
+        value.with_mut(|_| drop(panic_on_drop));
+    });
+
+    assert_eq!(value.clone_value(), None);
 }

@@ -114,19 +114,18 @@ impl<T> Buffer<T> {
     ///
     /// A buffer of size zero keeps nothing: the value is only forwarded.
     fn push(&mut self, value: T) -> Option<T> {
-        let Some(size) = self.size else {
-            self.values.push_back(value);
-            return None;
-        };
-        if self.values.len() < size {
-            self.values.push_back(value);
-            return None;
+        match self.size {
+            Some(0) => Some(value),
+            Some(size) if self.values.len() >= size => {
+                let evicted = self.values.pop_front();
+                self.values.push_back(value);
+                evicted
+            }
+            Some(_) | None => {
+                self.values.push_back(value);
+                None
+            }
         }
-        let evicted = self.values.pop_front();
-        if evicted.is_some() {
-            self.values.push_back(value);
-        }
-        evicted
     }
 }
 

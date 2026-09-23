@@ -148,6 +148,11 @@ where
             (poll, previous_waker)
         });
         drop(previous_waker); // Drop outside the lock to avoid potential deadlock
+        if matches!(poll, Poll::Ready(None) | Poll::Ready(Some(Err(_)))) {
+            // The stream is over, so the source is released now instead of whenever the stream
+            // itself is dropped.
+            self.sub = None;
+        }
         poll
     }
 }

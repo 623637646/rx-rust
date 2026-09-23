@@ -1,64 +1,71 @@
-//! The [`Mutable`] abstraction over the single-threaded and the multi-threaded backend, the
-//! handful of traits that are the only sanctioned way to reach through it, and the rules a
-//! callback has to follow.
+//! The [`Mutable`] lock — `RefCell` in the single-threaded build, `Mutex` otherwise — and the
+//! only sanctioned way to reach through it: a callback that gets a reference and returns.
 //!
 //! # Rule 1: the guard must not outlive the operation
 //!
-//! Refer to this case: <https://stackoverflow.com/q/79621758/9315497>
-//! And this case:
+//! Two guards of the same lock alive in one statement deadlock a `Mutex`
+//! (<https://stackoverflow.com/q/79621758/9315497>):
 //!
 //! ```ignore
-//! let lock = Mutex::new("My String".to_owned());
-//! // let equals = { lock.lock().unwrap().clone() } == { lock.lock().unwrap().clone() }; // No deadlock
 //! let equals = lock.lock().unwrap().clone() == lock.lock().unwrap().clone(); // Deadlock
 //! ```
 //!
-//! Both guards are temporaries of the same statement, so the first one is still alive when the
-//! second is taken. [`MutableHelper::with_mut`] and [`with_ref`](MutableHelper::with_ref) rule
-//! this out structurally: they hand the callback a `&mut T` / `&T`, keep the guard as a temporary
-//! of their own body, and release it before returning. A guard can no longer be named, stored or
-//! compared.
+//! [`MutableHelper::with_mut`] and [`with_ref`](MutableHelper::with_ref) rule this out
+//! structurally: the callback gets a `&mut T` / `&T`, and the guard is released before they
+//! return, so it can never be named, stored or compared.
 //!
 //! # Rule 2: the callback must not run anything that can take the same lock again
 //!
-//! This is the rule the type system cannot enforce, and it is the one that bites. Dropping a value
-//! counts as running code: the obvious `clear` on a collection of subscriptions
-//!
-//! ```ignore
-//! self.subscriptions.with_mut(Vec::clear) // Deadlock: dropping a Subscription disposes it,
-//!                                         // and disposing it takes this very lock again.
-//! ```
-//!
-//! is a deadlock in the `Disposable` of `merge_all`. So is calling an `Observer` or a `Disposable`
-//! from inside the callback, because both are user code that can re-enter the operator.
+//! This is the rule the type system cannot enforce. Calling an [`Observer`](crate::observer::Observer)
+//! or a [`Disposable`](crate::disposable::Disposable) from the callback is user code that can
+//! re-enter the operator, and so is *dropping* a value: `subscriptions.with_mut(Vec::clear)`
+//! deadlocks `merge_all`, because dropping a subscription disposes it, which takes this very lock.
 //!
 //! The fix is always the same shape — **take the value out under the lock, act on it afterwards**:
 //!
-//! - [`MutableExt::take_value`] instead of `clear`, and [`MutableExt::replace_value`] instead of
-//!   an assignment: both return the value they displaced, so the caller acts on it — and drops it
-//!   — outside the lock.
-//! - When the operator has to decide *what* to do while holding the lock, let the callback compute
-//!   an action and return it, and run that action after `with_mut` has returned. This is what
-//!   `ref_count`, `unicast_subject`, `amb` and `serialized_delivery` do.
+//! - [`MutableExt::take_value`] / [`MutableExt::replace_value`] hand the displaced value back, so
+//!   the caller drops it outside the lock;
+//! - when the decision itself needs the lock, return an action from the callback and run it after
+//!   `with_mut` returns, as `ref_count`, `unicast_subject` and `serialized_delivery` do.
 //!
-//! In debug builds this rule is checked at runtime: taking a lock the current thread already holds
-//! panics at the offending call site instead of deadlocking.
+//! Debug builds check the rule at runtime: taking a lock the current thread already holds panics
+//! at the offending call site instead of deadlocking.
+//!
+//! # Panics and poisoning
+//!
+//! Callback panics propagate normally. The `Mutex` backend recovers the guard from a poison
+//! error so that later access, including cleanup during unwinding, does not panic merely because
+//! the lock is poisoned. This neither clears the poison flag nor repairs or rolls back the value:
+//! callbacks must leave state suitable for subsequent access and cleanup if they panic.
+//!
+//! # Examples
+//! ```rust
+//! use rx_rust::utils::mutable::{Mutable, MutableExt, MutableHelper};
+//!
+//! let counter = Mutable::new(vec![1, 2, 3]);
+//! let sum = counter.with_ref(|values| values.iter().sum::<i32>());
+//! assert_eq!(sum, 6);
+//!
+//! counter.with_mut(|values| values.push(4));
+//! let taken = counter.take_value(); // Drop the values outside the lock.
+//! assert_eq!(taken, [1, 2, 3, 4]);
+//! assert!(counter.with_ref(Vec::is_empty));
+//! ```
 
 mod reentrancy;
 
-/// The single entry point to a [`Mutable`], for both the single-threaded and the multi-threaded
-/// backend.
+/// The single entry point to a [`Mutable`], for both backends.
 ///
-/// The callback is handed a plain reference rather than the backend's guard, which is what makes
-/// the lock impossible to hold longer than the callback: the guard is a temporary inside
-/// `with_mut` / `with_ref` and is released before either returns. Everything the callback produces
-/// therefore lives — and is dropped — outside the lock.
-///
-/// See the [module documentation](self) for the rules a callback has to follow.
+/// The callback gets a plain reference, never the guard, so the lock cannot be held past the
+/// callback, and whatever the callback returns lives — and is dropped — outside it. See the
+/// [module documentation](self) for what the callback must not do.
 pub trait MutableHelper {
+    /// The guarded value.
     type Value;
 
+    /// Runs `callback` with exclusive access to the value, releasing the lock before returning.
     fn with_mut<R>(&self, callback: impl FnOnce(&mut Self::Value) -> R) -> R;
+    /// Runs `callback` with shared access to the value, releasing the lock before returning.
     fn with_ref<R>(&self, callback: impl FnOnce(&Self::Value) -> R) -> R;
 }
 
@@ -106,10 +113,14 @@ pub trait MutableExt: MutableHelper {
 
 impl<M: MutableHelper + ?Sized> MutableExt for M {}
 
+/// A lock-free flag: [`MutableBool`] is a `Cell<bool>` in the single-threaded build and an
+/// `AtomicBool` otherwise.
 pub trait MutableBoolHelper {
+    /// The current value.
     fn read(&self) -> bool;
+    /// Sets the value.
     fn write(&self, value: bool);
-    // Change the contained value to `value`, returns true if it was changed. otherwise false.
+    /// Sets the value to `value` and returns whether that changed it.
     fn change_if_not_equal(&self, value: bool) -> bool;
 }
 
@@ -117,6 +128,8 @@ cfg_if::cfg_if! {
     if #[cfg(feature = "single-threaded")] {
         use std::cell::{Cell, RefCell};
 
+        /// The lock: a `RefCell` in the single-threaded build, a `Mutex` otherwise. Reach through
+        /// it with [`MutableHelper`] and [`MutableExt`] only.
         pub type Mutable<T> = RefCell<T>;
 
         impl<T> MutableHelper for RefCell<T> {
@@ -132,6 +145,7 @@ cfg_if::cfg_if! {
             }
         }
 
+        /// The flag: a `Cell<bool>` in the single-threaded build, an `AtomicBool` otherwise.
         pub type MutableBool = Cell<bool>;
         impl MutableBoolHelper for Cell<bool> {
             fn read(&self) -> bool {
@@ -146,9 +160,11 @@ cfg_if::cfg_if! {
             }
         }
     } else {
-        use std::sync::Mutex;
+        use std::sync::{Mutex, PoisonError};
         use std::sync::atomic::{AtomicBool, Ordering};
 
+        /// The lock: a `Mutex` in the multi-threaded build, a `RefCell` otherwise. Reach through
+        /// it with [`MutableHelper`] and [`MutableExt`] only.
         pub type Mutable<T> = Mutex<T>;
 
         impl<T> MutableHelper for Mutex<T> {
@@ -156,14 +172,15 @@ cfg_if::cfg_if! {
 
             fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
                 let _held = reentrancy::held_lock(self);
-                callback(&mut self.lock().unwrap())
+                callback(&mut self.lock().unwrap_or_else(PoisonError::into_inner))
             }
             fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
                 let _held = reentrancy::held_lock(self);
-                callback(&self.lock().unwrap())
+                callback(&self.lock().unwrap_or_else(PoisonError::into_inner))
             }
         }
 
+        /// The flag: an `AtomicBool` in the multi-threaded build, a `Cell<bool>` otherwise.
         pub type MutableBool = AtomicBool;
         impl MutableBoolHelper for MutableBool {
             fn read(&self) -> bool {

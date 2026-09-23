@@ -69,7 +69,7 @@ where
     fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
         let observer = ScanObserver {
             observer,
-            value: self.initial_value,
+            value: Some(self.initial_value),
             callback: self.callback,
         };
         self.source.subscribe(observer)
@@ -78,7 +78,8 @@ where
 
 struct ScanObserver<T, OR, F> {
     observer: OR,
-    value: T,
+    /// `None` only once the callback has panicked, which takes the accumulator with it.
+    value: Option<T>,
     callback: F,
 }
 
@@ -89,8 +90,17 @@ where
     F: FnMut(T, T1) -> T,
 {
     fn on_next(&mut self, value: T1) -> Flow {
-        self.value = (self.callback)(self.value.clone(), value);
-        self.observer.on_next(self.value.clone())
+        let Some(accumulated) = self.value.take() else {
+            // The callback panicked and the accumulator went with it, so there is nothing left to
+            // accumulate into: this observer accepts nothing more.
+            return Flow::Stop;
+        };
+        let accumulated = (self.callback)(accumulated, value);
+        // The one clone: the accumulator is kept and a copy of it goes downstream. It is put back
+        // before the notification, so a downstream that re-enters synchronously sees it.
+        let to_send = accumulated.clone();
+        self.value = Some(accumulated);
+        self.observer.on_next(to_send)
     }
 
     fn on_termination(self, termination: Termination<E>) {

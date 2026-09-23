@@ -297,6 +297,25 @@ fn test_unsub_on_next_by_take() {
 }
 
 #[test]
+fn test_stop_on_next() {
+    let (sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::stopping_after(1);
+
+    // Custom operations
+    let observable = observable.contains(999);
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    // The result is the last value of the stream, and downstream stops on it: it is not completed
+    // on top of that.
+    sender.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [false]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+#[test]
 fn test_multiple_operation_positive_true() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
