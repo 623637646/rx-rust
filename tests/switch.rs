@@ -1477,6 +1477,40 @@ fn test_next_on_sub() {
     assert_eq!(checker.state(), State::Completed);
 }
 
+/// The source emits, re-entrantly, while an inner observable is being subscribed to: the new
+/// inner must supersede the one whose subscription is still in flight. This is
+/// `test_next_on_sub` for the *inner* subscription.
+#[test]
+fn test_next_on_inner_sub() {
+    let mut subject = PublishSubject::<_, Infallible>::new();
+    let mut subject_2 = PublishSubject::<i32, Infallible>::new();
+    let (checker, observer) = Checker::new();
+
+    let observable = subject.clone().switch();
+    let _subscription = observable.subscribe(observer);
+
+    let mut subject_cloned = subject.clone();
+    let subject_2_cloned = subject_2.clone();
+    let observable_1 = Create::new(move |mut observer: BoxedObserver<'_, i32, Infallible>| {
+        // The source emits the next inner while this one is still being subscribed to.
+        let _ = observer.on_next(111);
+        let _ = subject_cloned.on_next(subject_2_cloned.into_cloneable_boxed());
+        Subscription::default()
+    });
+
+    assert!(
+        subject
+            .on_next(observable_1.into_cloneable_boxed())
+            .is_continue()
+    );
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
+    assert!(subject_2.on_next(222).is_continue());
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Active);
+}
+
 #[test]
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();

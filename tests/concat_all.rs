@@ -400,6 +400,34 @@ fn test_completed_new_from_iter() {
     assert_eq!(channel_checker_2.state(), ChannelState::Completed);
 }
 
+/// A queue of immediately completing inners is drained by a loop, not nested subscriptions.
+#[test]
+fn test_completed_with_synchronous_inner_chain() {
+    let mut subject = PublishSubject::<_, Infallible>::new();
+    let first = PublishSubject::<i32, Infallible>::new();
+    let (checker, observer) = Checker::new();
+    let _subscription = subject.clone().concat_all().subscribe(observer);
+    assert!(
+        subject
+            .on_next(first.clone().into_cloneable_boxed())
+            .is_continue()
+    );
+    for value in 0..10_000 {
+        assert!(
+            subject
+                .on_next(Just::new(value).into_cloneable_boxed())
+                .is_continue()
+        );
+    }
+    subject.on_termination(Termination::Completed);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    first.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), (0..10_000).collect::<Vec<_>>());
+    assert_eq!(checker.state(), State::Completed);
+}
+
 #[test]
 fn test_error_inner_finish() {
     let (mut sender, observable, channel_checker) = test_channel();
@@ -1462,6 +1490,130 @@ fn test_next_on_sub() {
     assert_eq!(checker.state(), State::Completed);
 }
 
+/// The source emits, from another thread, while an inner observable that terminates synchronously
+/// is being subscribed to by the completion of the previous one: the value it emits must be
+/// queued behind the subscription in flight, not race it for the slot.
+#[cfg(not(feature = "single-threaded"))]
+#[test]
+fn test_next_on_inner_sub_from_another_thread() {
+    let mut subject = PublishSubject::<_, Infallible>::new();
+    let mut subject_1 = PublishSubject::<i32, Infallible>::new();
+    let mut subject_3 = PublishSubject::<i32, Infallible>::new();
+    let (checker, observer) = Checker::new();
+
+    // Custom operations
+    let observable = subject.clone().concat_all();
+
+    let _subscription = observable.subscribe(observer);
+
+    assert!(
+        subject
+            .on_next(subject_1.clone().into_cloneable_boxed())
+            .is_continue()
+    );
+    let subject_cloned = subject.clone();
+    let subject_3_cloned = subject_3.clone();
+    let observable_2 = Create::new(move |observer: BoxedObserver<'_, i32, Infallible>| {
+        // Terminates synchronously, and only then lets the source emit the next observable, from
+        // a thread the source's own delivery does not serialize with this subscription.
+        observer.on_termination(Termination::Completed);
+        let mut subject_cloned = subject_cloned;
+        std::thread::spawn(move || {
+            assert!(
+                subject_cloned
+                    .on_next(subject_3_cloned.into_cloneable_boxed())
+                    .is_continue()
+            );
+        })
+        .join()
+        .unwrap();
+        Subscription::default()
+    });
+    assert!(
+        subject
+            .on_next(observable_2.into_cloneable_boxed())
+            .is_continue()
+    );
+    // This queued inner must run before the one emitted during observable_2.subscribe().
+    assert!(
+        subject
+            .on_next(Just::new(222).into_cloneable_boxed())
+            .is_continue()
+    );
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    assert!(subject_1.on_next(111).is_continue());
+    assert_eq!(checker.values(), [111]);
+
+    // Completing the first inner subscribes to the second, which completes at once while the
+    // third arrives: the third is subscribed to next, in order.
+    subject_1.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Active);
+
+    assert!(subject_3.on_next(333).is_continue());
+    assert_eq!(checker.values(), [111, 222, 333]);
+    assert_eq!(checker.state(), State::Active);
+
+    subject.on_termination(Termination::Completed);
+    assert_eq!(checker.state(), State::Active);
+    subject_3.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111, 222, 333]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+/// The source emits, re-entrantly, while an inner observable that terminates synchronously is
+/// being subscribed to: that value must be queued behind the subscription in flight, not race it
+/// for the slot. This is `test_next_on_sub` for the *inner* subscription.
+#[test]
+fn test_next_on_inner_sub() {
+    let mut subject = PublishSubject::<_, Infallible>::new();
+    let subject_1 = PublishSubject::<i32, Infallible>::new();
+    let mut subject_3 = PublishSubject::<i32, Infallible>::new();
+    let (checker, observer) = Checker::new();
+
+    let observable = subject.clone().concat_all();
+    let _subscription = observable.subscribe(observer);
+
+    assert!(
+        subject
+            .on_next(subject_1.clone().into_cloneable_boxed())
+            .is_continue()
+    );
+
+    let mut subject_cloned = subject.clone();
+    let subject_3_cloned = subject_3.clone();
+    let observable_2 = Create::new(move |observer: BoxedObserver<'_, i32, Infallible>| {
+        // Terminates synchronously, and only then lets the source emit the next observable — on
+        // this very thread, from inside the first inner observable's own termination.
+        observer.on_termination(Termination::Completed);
+        let _ = subject_cloned.on_next(subject_3_cloned.into_cloneable_boxed());
+        Subscription::default()
+    });
+    assert!(
+        subject
+            .on_next(observable_2.into_cloneable_boxed())
+            .is_continue()
+    );
+
+    assert!(
+        subject
+            .on_next(Just::new(222).into_cloneable_boxed())
+            .is_continue()
+    );
+
+    subject_1.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [222]);
+    assert_eq!(checker.state(), State::Active);
+    assert!(subject_3.on_next(333).is_continue());
+    assert_eq!(checker.values(), [222, 333]);
+    subject.on_termination(Termination::Completed);
+    assert_eq!(checker.state(), State::Active);
+    subject_3.on_termination(Termination::Completed);
+    assert_eq!(checker.state(), State::Completed);
+}
+
 #[test]
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
@@ -1471,6 +1623,35 @@ fn test_complete_on_sub() {
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+/// Source completion during an inner build must wait for its outstanding reservation to finish.
+#[test]
+fn test_complete_on_inner_sub() {
+    let mut subject = PublishSubject::<_, Infallible>::new();
+    let first = PublishSubject::<i32, Infallible>::new();
+    let (checker, observer) = Checker::new();
+    let _subscription = subject.clone().concat_all().subscribe(observer);
+    assert!(
+        subject
+            .on_next(first.clone().into_cloneable_boxed())
+            .is_continue()
+    );
+
+    let source = subject.clone();
+    let checker_during_sub = checker.clone();
+    let inner = Create::new(move |observer: BoxedObserver<'_, i32, Infallible>| {
+        observer.on_termination(Termination::Completed);
+        source.on_termination(Termination::Completed);
+        // The builder still owns the continuation until it returns its subscription.
+        assert_eq!(checker_during_sub.state(), State::Active);
+        Subscription::default()
+    });
+    assert!(subject.on_next(inner.into_cloneable_boxed()).is_continue());
+
+    first.on_termination(Termination::Completed);
+    assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Completed);
 }
 

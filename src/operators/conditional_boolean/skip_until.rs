@@ -107,9 +107,14 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         self.0.update_flow(|model| {
             if model.started {
-                UpdateOutcome::empty().with_next_event(value)
+                UpdateOutcome::empty()
+                    .without_drop_outside()
+                    .with_next_event(value)
             } else {
-                UpdateOutcome::empty().without_events()
+                // A skipped value is dropped outside the lock: dropping it can run arbitrary code.
+                UpdateOutcome::empty()
+                    .with_drop_outside(value)
+                    .without_events()
             }
         })
     }

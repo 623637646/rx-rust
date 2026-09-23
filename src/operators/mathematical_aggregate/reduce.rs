@@ -88,15 +88,24 @@ where
     F: FnMut(T, T1) -> T,
 {
     fn on_next(&mut self, value: T1) -> Flow {
-        self.value = Some((self.callback)(self.value.take().unwrap(), value));
+        let Some(accumulated) = self.value.take() else {
+            // The callback panicked and the accumulator went with it, so there is nothing left to
+            // accumulate into: this observer accepts nothing more.
+            return Flow::Stop;
+        };
+        self.value = Some((self.callback)(accumulated, value));
         Flow::Continue
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
+        let Some(accumulated) = self.value.take() else {
+            // No accumulator left to emit, see `on_next`: the termination still goes downstream.
+            return self.observer.on_termination(termination);
+        };
         // The final value ends the stream, so a downstream that stopped on it is not completed
         // on top of that: it has already ended itself.
         if matches!(termination, Termination::Completed)
-            && self.observer.on_next(self.value.take().unwrap()).is_stop()
+            && self.observer.on_next(accumulated).is_stop()
         {
             return;
         }

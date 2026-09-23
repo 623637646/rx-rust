@@ -1,6 +1,6 @@
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
-use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
+use crate::utils::serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutcome};
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
@@ -134,17 +134,14 @@ where
                 UpdateOutcome::new(None)
             }
         });
-        let observable = match result {
-            Ok(Some(observable)) => observable,
-            Ok(None) => return Flow::Continue,
-            Err(DeliveryStopped) => return Flow::Stop,
-        };
-        let observer = InnerObserver(self.0.clone());
-        let sub = observable.subscribe(observer);
-        // `fill` gives the subscription back when the slot was released while it was being built,
-        // which means the operator already terminated.
-        self.0
-            .update_flow(|model| UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub)))
+        match result {
+            Ok(Some(observable)) => match subscribe_observables(&self.0, observable) {
+                Ok(()) => Flow::Continue,
+                Err(DeliveryStopped) => Flow::Stop,
+            },
+            Ok(None) => Flow::Continue,
+            Err(DeliveryStopped) => Flow::Stop,
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -153,7 +150,7 @@ where
                 let _ = self.0.update(|model| {
                     model.is_source_completed = true;
                     if model.slot.is_idle() {
-                        // The slot is only possible to be reserved or active when the pending_observables is not empty.
+                        // An idle slot has no inner subscription or queued work left.
                         debug_assert!(model.pending_observables.is_empty());
                         UpdateOutcome::empty().with_termination_event(completion)
                     } else {
@@ -190,7 +187,15 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
-            Termination::Completed => subscribe_next_observable_until_finished(self.0.clone()),
+            Termination::Completed => {
+                let next = self.0.update(|model| {
+                    let finished = model.slot.release();
+                    next_step(model, finished)
+                });
+                if let Ok(Some(observable)) = next {
+                    let _ = subscribe_observables(&self.0, observable);
+                }
+            }
             error @ Termination::Error(_) => {
                 self.0.send_termination(error);
             }
@@ -198,9 +203,42 @@ where
     }
 }
 
-fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
-    context: SubscriptionContext<T, E, OR, Model<'or, T, E, OE1>, SD>,
-) where
+type NextStep<T, E, OE, D> =
+    UpdateOutcome<T, E, Option<OE>, DropDecided<Option<Subscription<D>>>, true>;
+
+/// `fill` and `release` hand back the finished subscription to whichever runs second. Only
+/// that caller advances the queue; the first leaves the slot occupied for the other to finish.
+/// This runs under the same lock as the handoff, so taking the next observable and reserving its
+/// slot cannot race a source emission. The returned subscription is dropped outside the lock.
+fn next_step<'or, T, E, OE1>(
+    model: &mut Model<'or, T, E, OE1>,
+    finished: Option<Subscription<OE1::D>>,
+) -> NextStep<T, E, OE1, OE1::D>
+where
+    OE1: Observable<'or, T, E>,
+{
+    let outcome = if finished.is_none() {
+        UpdateOutcome::new(None).without_events()
+    } else if let Some(observable) = model.pending_observables.pop_front() {
+        // A successful handoff made the slot idle under this same lock.
+        let _ = model.slot.reserve_if_idle();
+        UpdateOutcome::new(Some(observable)).without_events()
+    } else if model.is_source_completed {
+        UpdateOutcome::new(None).with_termination_event(Termination::Completed)
+    } else {
+        UpdateOutcome::new(None).without_events()
+    };
+    outcome.with_drop_outside(finished)
+}
+
+/// Subscribes to the already reserved observable, then loops over any successors that complete
+/// before their subscription is filled. An inner that stays active hands the continuation to its
+/// completion callback instead, so immediately completing chains never recurse.
+fn subscribe_observables<'or, T, E, OR, OE1, SD>(
+    context: &SubscriptionContext<T, E, OR, Model<'or, T, E, OE1>, SD>,
+    mut observable: OE1,
+) -> Result<(), DeliveryStopped>
+where
     T: MaybeSend + 'or,
     E: MaybeSend + 'or,
     OR: Observer<T, E> + MaybeSend + 'or,
@@ -209,53 +247,14 @@ fn subscribe_next_observable_until_finished<'or, T, E, OR, OE1, SD>(
     SD: Disposable + MaybeSend + 'or,
 {
     loop {
-        let result = context.update(|model| {
-            if model.slot.is_reserved() {
-                // Already terminated. Releasing a reserved slot makes the pending fill give its
-                // subscription back; the slot itself holds nothing, so this hands nothing out,
-                // and it is handed out rather than asserted under the lock.
-                let released = model.slot.release();
-                return UpdateOutcome::new(None)
-                    .without_events()
-                    .with_drop_outside(released);
-            }
-            if let Some(observable) = model.pending_observables.pop_front() {
-                UpdateOutcome::new(Some(observable))
-                    .without_events()
-                    .with_drop_outside(model.slot.reserve())
-            } else if model.is_source_completed {
-                UpdateOutcome::new(None)
-                    .with_termination_event(Termination::Completed)
-                    .without_drop_outside()
-            } else {
-                UpdateOutcome::new(None)
-                    .without_events()
-                    .with_drop_outside(model.slot.release())
-            }
-        });
-        let observable = match result {
-            Ok(Some(observable)) => observable,
-            Ok(None) => break,
-            Err(DeliveryStopped) => {
-                break;
-            }
-        };
-        let observer = InnerObserver(context.clone());
-        let sub = observable.subscribe(observer);
-        let result = context.update(|model| {
-            // `fill` gives the subscription back when the slot was released while it was being
-            // built, which means the inner observable already terminated: the loop then goes on
-            // to the next pending observable instead of waiting for this subscription.
-            let unused = model.slot.fill(sub);
-            UpdateOutcome::new(unused.is_none()).with_drop_outside(unused)
-        });
-        match result {
-            Ok(subscribed) => {
-                if subscribed {
-                    break;
-                }
-            }
-            Err(DeliveryStopped) => break,
+        let subscription = observable.subscribe(InnerObserver(context.clone()));
+        let next = context.update(|model| {
+            let finished = model.slot.fill(subscription);
+            next_step(model, finished)
+        })?;
+        match next {
+            Some(next) => observable = next,
+            None => return Ok(()),
         }
     }
 }

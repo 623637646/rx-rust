@@ -110,12 +110,14 @@ where
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        if let Some(mut observer) = self.observer.take() {
-            match termination {
-                Termination::Completed => drop(observer.on_next(true)),
-                Termination::Error(_) => {}
-            }
-            observer.on_termination(termination);
+        let Some(mut observer) = self.observer.take() else {
+            return;
+        };
+        // The result is the last value of the stream, so a downstream that stopped on it is not
+        // completed on top of that: it has already ended itself.
+        if matches!(termination, Termination::Completed) && observer.on_next(true).is_stop() {
+            return;
         }
+        observer.on_termination(termination);
     }
 }

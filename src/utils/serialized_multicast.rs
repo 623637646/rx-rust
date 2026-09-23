@@ -187,7 +187,12 @@ where
                     .with_drop_outside(events)
                     .without_events();
             }
-            UpdateOutcome::new(Flow::Continue)
+            let flow = if events.ends_stream() {
+                Flow::Stop
+            } else {
+                Flow::Continue
+            };
+            UpdateOutcome::new(flow)
                 .without_drop_outside()
                 .with_events(events)
         })
