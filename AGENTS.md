@@ -7,7 +7,7 @@ and `decisions/` (design decisions that were made or rejected).
 ## What this is
 
 `rx-rust` is a ReactiveX implementation for Rust: `Observable` / `Observer` / `Disposable` plus a
-large set of operators. Edition 2024, MSRV 1.88, `#![forbid(unsafe_code)]`, zero required runtime
+large set of operators. Edition 2024, MSRV 1.89, `#![forbid(unsafe_code)]`, zero required runtime
 dependency — the async runtime is selected by feature flag.
 
 ## Testing: run the smallest thing that answers the question

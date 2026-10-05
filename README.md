@@ -4,7 +4,7 @@
 [![CI](https://github.com/623637646/rx-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/623637646/rx-rust/actions/workflows/ci.yml)
 [![docs.rs](https://img.shields.io/docsrs/rx-rust)](https://docs.rs/rx-rust)
 [![license](https://img.shields.io/crates/l/rx-rust.svg)](https://github.com/623637646/rx-rust/blob/master/LICENSE)
-![MSRV](https://img.shields.io/badge/MSRV-1.88-blue.svg)
+![MSRV](https://img.shields.io/badge/MSRV-1.89-blue.svg)
 
 Reactive Extensions for Rust. `rx-rust` is a toolkit for composing asynchronous and event-driven
 programs by chaining observables and operators in a declarative style, inspired by
@@ -362,7 +362,7 @@ Debugging                   | `debug`, `debug_default_print`, `hook_on_subscript
 
 See [docs/testing.md](docs/testing.md) for the test case names every operator is expected to
 cover, [docs/decisions/](docs/decisions/) for design decisions, and [AGENTS.md](AGENTS.md) for the
-build and test commands. Requires Rust 1.88 or later.
+build and test commands. Requires Rust 1.89 or later.
 
 ## License
 

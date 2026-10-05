@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the MSRV is 1.89 (was 1.88), for educe 0.8 (was 0.6). educe 0.6 bounded a derived
+  `Eq` by `PartialEq` only, which made `Termination<f64>`, `Event<f64, _>`, `EventBatch`,
+  `DebugEvent` and `timeout::Error` `Eq` over a type that is not; they now require `Eq`.
+
 ## [1.0.1] - 2026-09-14
 
 ### Added
