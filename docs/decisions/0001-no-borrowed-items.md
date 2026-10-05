@@ -29,8 +29,8 @@ c.fork().subscribe(|v: &mut i32| *v += 1);
 c.fork().subscribe(|v: &mut i32| *v *= 2);
 ```
 
-This is the same distinction as `Iterator` vs. a lending iterator. In our `Observable<'or, T, E>`,
-`T` is a fixed type parameter: `T = &'x mut Foo` can emit references too, but `'x` is fixed at
+This is the same distinction as `Iterator` vs. a lending iterator. In our `ObservableTypes`,
+`Item` is a plain associated type: `Item = &'x mut Foo` can emit references too, but `'x` is fixed at
 subscription time and the closure is allowed to keep the reference until `'x` ends, so the same
 `&'x mut` cannot go to two subscribers, and a subject cannot lend out its own internal value.
 
@@ -63,7 +63,7 @@ subscription time and the closure is allowed to keep the reference until `'x` en
    that goes through a scheduler — cannot hold an `Item<'a>` and must require
    `for<'a> Item<'a>: 'static` or owned values. Past an async boundary, borrowed items are all but
    unusable.
-5. **It is a crate-wide breaking change.** `Observable<'or, T, E>` becomes a GAT, every operator
+5. **It is a crate-wide breaking change.** `ObservableTypes::Item` becomes a GAT, every operator
    signature changes with it, and the interaction with `Flow` and
    `Observer::on_next(&mut self, value: T)` has to be worked out.
 6. **It is not part of Rx semantics.** In ReactiveX the stream carries values; RxJava / RxSwift
@@ -72,10 +72,11 @@ subscription time and the closure is allowed to keep the reference until `'x` en
 
 ## Alternatives under the current design
 
-- Zero-copy: use `Rc<T>` / `Arc<T>` (`Shared<T>`, chosen by the build mode) as the item; `Clone` is
-  a refcount bump.
-- Referencing data that outlives the subscription: `T = &'x T` is already supported.
-- Broadcasting in-place mutation: use `Shared<Mutable<T>>` as the item and let subscribers modify it
-  through `with_mut` — consistent with the existing lock discipline, no trait changes. The only
+- Zero-copy: use `Arc<T>` (or `Rc<T>` in a `Local` pipeline) as the item; `Clone` is a refcount
+  bump.
+- Referencing data that outlives the subscription: `Item = &'x T` is already supported.
+- Broadcasting in-place mutation: use `Arc<Mutex<T>>` (or `Rc<RefCell<T>>` in a `Local` pipeline)
+  as the item and let subscribers modify it through `MutableHelper::with_mut` — consistent with the
+  existing lock discipline, no trait changes. The only
   thing that is genuinely impossible is "a subject re-borrows its internal value to multiple
   subscribers", and there is no demand for it.

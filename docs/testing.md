@@ -3,7 +3,7 @@
 The canonical list of test case names. Every operator, subject and source gets its own file under
 `tests/` and covers the subset of cases below that applies to its shape, using these exact names —
 do not invent new names for existing cases. See [AGENTS.md](../AGENTS.md) for how the tests are
-built (`test_channel()`, `Checker`) and how to run them narrowly.
+built (`test_channel()`, `Checker`, and which source fits which case) and how to run them narrowly.
 
 ## Basic cases (every observable)
 
