@@ -109,15 +109,15 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
 
 /// The thread mode of a [`BufferWithTimeOrCount`]: the timer's thread and the source's both emit
 /// buffers.
-pub type BufferWithTimeOrCountMode<OE, S> =
+type BufferWithTimeOrCountMode<OE, S> =
     Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The source subscription a [`BufferWithTimeOrCount`] context owns: the timer, then the source.
-pub type BufferWithTimeOrCountSources<OE, S> =
+type BufferWithTimeOrCountSources<OE, S> =
     ChainDisposal<<S as SchedulerTypes>::D, <OE as ObservableTypes>::D>;
 
 /// The task of a [`BufferWithTimeOrCount`] timer.
-pub type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
+type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
     EmitTimer<
         WeakSubscriptionContext<
             BufferWithTimeOrCountMode<OE, S>,
@@ -187,7 +187,7 @@ where
     }
 }
 
-pub struct Model<T> {
+struct Model<T> {
     values: Vec<T>,
     last_sending_time_from_counting: Option<Instant>,
 }
@@ -238,7 +238,7 @@ where
 
 /// The state of a [`BufferWithTimeOrCount`] timer: the context, held weakly so that the task does
 /// not keep the observer alive once the subscription is gone, and the schedule.
-pub struct EmitTimer<W> {
+struct EmitTimer<W> {
     weak_context: W,
     next_time: Instant,
     time_span: Duration,

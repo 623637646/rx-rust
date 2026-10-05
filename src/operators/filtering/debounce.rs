@@ -87,15 +87,15 @@ impl<OE, S> Debounce<OE, S> {
 
 /// The thread mode of a [`Debounce`]: the timer's thread emits the values, the source's the
 /// terminations.
-pub type DebounceMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
+type DebounceMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The context of a [`Debounce`] subscription.
-pub type DebounceContext<M, T, E, OR, S> =
+type DebounceContext<M, T, E, OR, S> =
     SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>;
 
 /// The task of a [`Debounce`] timer: it holds the context weakly, so that it does not keep the
 /// observer alive once the subscription is gone.
-pub type DebounceTask<M, T, E, OR, S> =
+type DebounceTask<M, T, E, OR, S> =
     RecursiveContext<WeakSubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>>;
 
 delegate_disposal!(
@@ -135,7 +135,7 @@ where
 }
 
 /// The state of a [`Debounce`] subscription.
-pub enum Model<T, D: Disposable> {
+enum Model<T, D: Disposable> {
     Idle,
     Active {
         value: T,

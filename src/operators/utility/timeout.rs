@@ -100,17 +100,17 @@ impl<OE, S> Timeout<OE, S> {
 
 /// The thread mode of a [`Timeout`]: the source's thread emits the values, the timer's the
 /// timeout.
-pub type TimeoutMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
+type TimeoutMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The source subscription a [`Timeout`] context owns: the timer, then the source.
-pub type TimeoutSources<OE, S> = ChainDisposal<
+type TimeoutSources<OE, S> = ChainDisposal<
     OptionDisposal<BoundDropDisposal<<S as SchedulerTypes>::D>>,
     <OE as ObservableTypes>::D,
 >;
 
 /// The task of a [`Timeout`] timer: it holds the context weakly, so that it does not keep the
 /// observer alive once the subscription is gone.
-pub type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
+type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
     WeakSubscriptionContext<TimeoutMode<OE, S>, T, Error<E>, OR, Model, TimeoutSources<OE, S>>,
 >;
 
@@ -158,7 +158,7 @@ where
 }
 
 /// The state of a [`Timeout`] subscription.
-pub struct Model {
+struct Model {
     deadline: Instant,
 }
 

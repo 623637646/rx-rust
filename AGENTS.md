@@ -132,8 +132,12 @@ cargo tarpaulin --out Html
 - **Implementing an observable** takes two impls: `ObservableTypes` with the associated `Item`,
   `Error`, `Mode` and disposal `D` — which must not mention the observer — and `Observable<OR>`,
   whose bounds name the observer the source is subscribed with
-  (`OE: Observable<MapObserver<OR, F>, Item = T0>`; that observer type is `pub`, its fields are
-  not). `Mode` is the source's, `Joined<A, B>` for several sources, or the scheduler's. Ask for
+  (`OE: Observable<MapObserver<OR, F>, Item = T0>`). That observer type is `pub`, its fields are
+  not: the non-boxed `create`, `hook_on_subscription` and `hook_on_termination` hand the
+  downstream observer to a user closure, and Rust rejects user code holding a value of a private
+  type, so the observer and every type in its generic arguments must be public. What sits only in
+  its fields or in the where-clauses of trait impls — the model, the context, scheduler task and
+  mode aliases — stays private: privacy does not check those where-clauses. `Mode` is the source's, `Joined<A, B>` for several sources, or the scheduler's. Ask for
   `OR: IntoBoxedObserver<'a, T, E, M>` only where the observer is boxed (a subject, `create`, a
   hook), box it with `M::boxed(observer)`, and bound a generic mode there by `M: ObserverMode`.
   Inside the bounds of the impl being written, project qualified — `<OE as ObservableTypes>::D`,

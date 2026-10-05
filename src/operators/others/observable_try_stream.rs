@@ -19,7 +19,7 @@ use std::{
 
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ObservableTryStreamContext<E, B> {
+struct ObservableTryStreamContext<E, B> {
     buffer: B,
     waker: Option<Waker>,
     termination: Option<Termination<E>>,

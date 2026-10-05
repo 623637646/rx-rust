@@ -99,16 +99,15 @@ impl<OE, S> BufferWithTime<OE, S> {
 
 /// The thread mode of a [`BufferWithTime`]: the timer's thread emits the buffers, the source's
 /// the last one.
-pub type BufferWithTimeMode<OE, S> =
-    Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
+type BufferWithTimeMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The source subscription a [`BufferWithTime`] context owns: the timer, then the source.
-pub type BufferWithTimeSources<OE, S> =
+type BufferWithTimeSources<OE, S> =
     ChainDisposal<<S as SchedulerTypes>::D, <OE as ObservableTypes>::D>;
 
 /// The task of a [`BufferWithTime`] timer: it holds the context weakly, so that it does not keep
 /// the observer alive once the subscription is gone.
-pub type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
+type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
     WeakSubscriptionContext<
         BufferWithTimeMode<OE, S>,
         Vec<T>,

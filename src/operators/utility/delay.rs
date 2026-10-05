@@ -101,15 +101,15 @@ impl<OE, S> Delay<OE, S> {
 
 /// The thread mode of a [`Delay`]: the timer's thread delivers the values, the source's the
 /// errors.
-pub type DelayMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
+type DelayMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The context of a [`Delay`] subscription.
-pub type DelayContext<M, T, E, OR, S> =
+type DelayContext<M, T, E, OR, S> =
     SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>;
 
 /// The task of a [`Delay`] timer: it holds the context weakly until the source terminates, so that
 /// it does not keep the observer alive once the subscription is gone.
-pub type DelayTask<M, T, E, OR, S> =
+type DelayTask<M, T, E, OR, S> =
     RecursiveContext<PromotableWeakContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>>;
 
 delegate_disposal!(
@@ -154,7 +154,7 @@ where
 }
 
 /// The state of a [`Delay`] subscription.
-pub struct Model<T, D: Disposable> {
+struct Model<T, D: Disposable> {
     /// The values with the instant at which each of them is due, in ascending order.
     values: VecDeque<(Instant, T)>,
     /// The instant at which the completion is due, once the source has completed.
@@ -192,14 +192,19 @@ impl<M, T, E, OR, S> DelayObserver<M, T, E, OR, S>
 where
     OR: Observer<T, E>,
     M: ThreadMode,
-    S: Scheduler<DelayTask<M, T, E, OR, S>>,
+    S: SchedulerTypes,
 {
     /// Queues `value`, or the completion when it is `None`, and starts the timer if needed.
     ///
     /// Returns [`Flow::Stop`] once the context has stopped: the event was then dropped, and so
     /// would every later one be. What downstream itself answers is only known once the timer
     /// fires, so this is otherwise [`Flow::Continue`].
-    fn queue_event(&self, value: Option<T>) -> Flow {
+    // The scheduler bound is on the method rather than the impl: it names the private model, which
+    // the bounds of an impl on a public type may not.
+    fn queue_event(&self, value: Option<T>) -> Flow
+    where
+        S: Scheduler<DelayTask<M, T, E, OR, S>>,
+    {
         let timer_setup = self.context.update(|model| {
             let deadline = Instant::now() + self.delay;
             match value {

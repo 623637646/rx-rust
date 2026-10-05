@@ -272,7 +272,7 @@ where
     }
 }
 
-pub enum DelegateAction<T, E> {
+enum DelegateAction<T, E> {
     /// Sends a source value to the current window, if there is one.
     ForwardValue(T),
     /// Terminates the current window, if there is one.

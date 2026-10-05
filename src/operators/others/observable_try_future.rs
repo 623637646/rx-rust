@@ -11,7 +11,7 @@ use crate::{
 use educe::Educe;
 use std::task::{Poll, Waker};
 
-pub struct ObservableTryFutureContext<T, E> {
+struct ObservableTryFutureContext<T, E> {
     result: Option<Result<Option<T>, E>>,
     waker: Option<Waker>,
 }

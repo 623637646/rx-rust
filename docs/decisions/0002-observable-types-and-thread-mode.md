@@ -69,7 +69,10 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    of synchronous operators takes a non-`Send` observer and is monomorphized and inlined as before.
    Each implementation names the observer it subscribes its source with, e.g.
    `OE: Observable<MapObserver<OR, F>, Item = T0>`; those observer types are `pub`, their fields
-   are not. `ObservableExt` needs only `ObservableTypes`, so the fluent API did not change.
+   are not. They must be public because the non-boxed `create`, `hook_on_subscription` and
+   `hook_on_termination` give the downstream observer to a user closure, and a value of a private
+   type in user code is an error; the where-clause naming them alone would not need it, since
+   privacy does not check the where-clauses of trait impls. `ObservableExt` needs only `ObservableTypes`, so the fluent API did not change.
 2. **The disposal lives on `ObservableTypes`, which does not know the observer.** An operator that
    owns two subscriptions, such as `merge`, subscribes each source with an observer whose type
    contains the other source's disposal. If a disposal could depend on its observer, the second

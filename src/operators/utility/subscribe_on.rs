@@ -85,15 +85,14 @@ delegate_disposal!(
 ///
 /// It is not the source's mode alone: `Just.subscribe_on(pool).merge(Just)` would then share the
 /// state of `merge` through an `Rc`, which both the pool's thread and the subscribing one reach.
-pub type SubscribeOnMode<OE, S> =
-    Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
+type SubscribeOnMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The slot the task puts the source's subscription into once it has subscribed.
-pub type UpstreamSlot<OE, S> =
+type UpstreamSlot<OE, S> =
     SharedDisposal<SubscribeOnMode<OE, S>, Subscription<<OE as ObservableTypes>::D>>;
 
 /// The task of a [`SubscribeOn`]: the source, the observer, and where to put the subscription.
-pub type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;
+type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;
 
 impl<T, E, OE, S> ObservableTypes for SubscribeOn<OE, S>
 where

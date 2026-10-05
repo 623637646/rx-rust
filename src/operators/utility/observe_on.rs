@@ -84,16 +84,16 @@ impl<OE, S> ObserveOn<OE, S> {
 
 /// The thread mode of the state an [`ObserveOn`] shares between its source's thread and the
 /// scheduler's.
-pub type ObserveOnContextMode<OE, S> =
+type ObserveOnContextMode<OE, S> =
     Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The context of an [`ObserveOn`] subscription.
-pub type ObserveOnContext<M, T, E, OR, S> =
+type ObserveOnContext<M, T, E, OR, S> =
     SubscriptionContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::D>>;
 
 /// The task of an [`ObserveOn`]: it holds the context weakly until the source terminates, so
 /// that it does not keep the observer alive once the subscription is gone.
-pub type ObserveOnTask<M, T, E, OR, S> =
+type ObserveOnTask<M, T, E, OR, S> =
     RecursiveContext<PromotableWeakContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::D>>>;
 
 delegate_disposal!(
@@ -138,7 +138,7 @@ where
 }
 
 /// The state of an [`ObserveOn`] subscription.
-pub struct Model<T, E, D: Disposable> {
+struct Model<T, E, D: Disposable> {
     values: Vec<T>,
     termination: Option<Termination<E>>,
     /// Keeps at most one recursive scheduler task alive while events are waiting. The slot is
