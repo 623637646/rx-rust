@@ -144,7 +144,7 @@ where
     }
 }
 
-pub struct Model<D: Disposable> {
+struct Model<D: Disposable> {
     slot: SubscriptionSlot<Subscription<D>>,
     is_source_completed: bool,
     /// The current inner subscription is always the one subscribed last, so the id it was handed

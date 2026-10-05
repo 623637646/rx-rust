@@ -124,7 +124,7 @@ where
     }
 }
 
-pub struct Model<T1, T2> {
+struct Model<T1, T2> {
     /// The values of the first source waiting for a partner, and whether that source completed.
     first: (VecDeque<T1>, bool),
     /// The same for the second source.

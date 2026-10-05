@@ -146,7 +146,7 @@ where
     }
 }
 
-pub struct Model<D: Disposable> {
+struct Model<D: Disposable> {
     /// Keys are never reused, so a late inner observer can never remove another
     /// inner observer's subscription.
     subscriptions: HashMap<Id, Option<Subscription<D>>>,

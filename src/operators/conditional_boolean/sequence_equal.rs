@@ -147,12 +147,12 @@ where
     }
 }
 
-pub struct SourceState<T> {
+struct SourceState<T> {
     queue: VecDeque<T>,
     completed: bool,
 }
 
-pub struct Model<T> {
+struct Model<T> {
     first: SourceState<T>,
     second: SourceState<T>,
 }

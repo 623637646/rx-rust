@@ -121,7 +121,7 @@ where
     }
 }
 
-pub struct Model {
+struct Model {
     one_is_completed: bool,
 }
 

@@ -149,7 +149,7 @@ where
     }
 }
 
-pub struct Model<OE1>
+struct Model<OE1>
 where
     OE1: ObservableTypes,
 {

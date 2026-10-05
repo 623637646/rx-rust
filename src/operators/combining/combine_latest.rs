@@ -135,7 +135,7 @@ where
     }
 }
 
-pub struct Model<T1, T2> {
+struct Model<T1, T2> {
     latest_1: Option<T1>,
     latest_2: Option<T2>,
     should_completed: bool,

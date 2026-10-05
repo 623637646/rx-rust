@@ -19,7 +19,7 @@ use educe::Educe;
 use std::num::NonZeroUsize;
 
 /// The connection of a [`RefCount`] and its number of subscribers, shared by its subscriptions.
-pub enum State<OE, S, D>
+enum State<OE, S, D>
 where
     D: Disposable,
 {
@@ -229,7 +229,7 @@ fn restore_subscriber<T, E, OE, S>(
     }
 }
 
-pub struct RefCountDisposal<OE, S>
+struct RefCountDisposal<OE, S>
 where
     OE: ObservableTypes,
 {

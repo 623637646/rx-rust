@@ -136,7 +136,7 @@ where
     }
 }
 
-pub struct Model<T> {
+struct Model<T> {
     last_value: Option<T>,
 }
 

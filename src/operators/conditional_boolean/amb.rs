@@ -112,7 +112,7 @@ where
     }
 }
 
-pub enum AmbState<D: Disposable> {
+enum AmbState<D: Disposable> {
     Racing(Vec<Option<Subscription<D>>>),
     Won {
         key: usize,

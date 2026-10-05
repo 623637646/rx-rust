@@ -136,7 +136,7 @@ where
     }
 }
 
-pub struct Model {
+struct Model {
     started: bool,
 }
 
