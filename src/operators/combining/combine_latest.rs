@@ -15,7 +15,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Combines multiple Observables to create an Observable whose values are calculated from the latest values of each of its input Observables.
+/// Emits the latest values of two Observables as a pair whenever either of them emits, once both
+/// have emitted.
 /// See <https://reactivex.io/documentation/operators/combinelatest.html>
 ///
 /// # Examples
@@ -58,7 +59,8 @@ pub struct CombineLatest<OE1, OE2> {
 
 impl<OE1, OE2> CombineLatest<OE1, OE2> {
     /// Creates a [`CombineLatest`] over `source_1` and `source_2`;
-    /// [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest) is the fluent form.
+    /// [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest) is the
+    /// fluent form.
     pub fn new<T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
     where
         OE1: ObservableTypes<Item = T1, Error = E>,

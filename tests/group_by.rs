@@ -29,7 +29,6 @@ fn test_completed() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     let _subscription = observable
@@ -63,7 +62,6 @@ fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     let _subscription = observable
@@ -99,7 +97,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -175,7 +172,6 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, &i32, &i32>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| *value % 2);
 
     let _subscription = observable
@@ -222,7 +218,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.group_by(|value| value % 2);
 
         let subscription = scheduler
@@ -269,7 +264,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -323,7 +317,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     let _subscription = observable
@@ -352,7 +345,6 @@ fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 4).group_by(|_| {
         index += 1;
         index % 2
@@ -395,7 +387,6 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = GroupBy::new(observable, |value| value % 2);
 
     let _subscription = observable
@@ -430,7 +421,6 @@ fn test_revert_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
     let observable_1 = observable.clone().merge_all();
     let observable_2 = observable.clone().concat_all();
@@ -489,7 +479,6 @@ fn test_revert_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
     let observable_1 = observable.clone().merge_all();
     let observable_2 = observable.clone().concat_all();
@@ -545,7 +534,6 @@ fn test_next_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = source.group_by(|value| value % 2);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -623,7 +611,6 @@ fn test_complete_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let group_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = Empty.into_shared().group_by(|_value| 0);
 
     let group_vec_cloned = group_vec.clone();
@@ -643,7 +630,6 @@ fn test_error_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let group_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = Throw::new("error").into_shared().group_by(|_value| 0);
 
     let group_vec_cloned = group_vec.clone();
@@ -672,7 +658,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     let group_vec_cloned = group_vec.clone();
@@ -703,7 +688,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     let group_vec_cloned = group_vec.clone();
@@ -734,7 +718,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     let group_vec_cloned = group_vec.clone();
@@ -756,7 +739,6 @@ fn test_error_on_unsub() {
 fn test_subscribe_groups_late_with_buffered_values() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     // Collect the group observables without subscribing to them immediately.
@@ -809,7 +791,6 @@ fn test_subscribe_group_after_termination() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     // Hold the group observable without subscribing to it.
@@ -840,7 +821,6 @@ fn test_subscribe_group_after_termination() {
 fn test_subscribe_group_after_unsubscribe() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     // Hold the group observable without subscribing to it.
@@ -870,7 +850,6 @@ fn test_subscribe_group_after_unsubscribe() {
 fn test_values_of_ended_group_are_discarded() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     let group_vec = Arc::new(Mutex::new(Vec::new()));
@@ -916,7 +895,6 @@ fn test_unsub_on_inner_termination_still_terminates_other_groups() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, i32, Infallible>();
     let (outer_termination_checker, outer_termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.group_by(|value| value % 2);
 
     let group_vec = Arc::new(Mutex::new(Vec::new()));
@@ -970,7 +948,6 @@ fn test_dropping_unsubscribed_group_releases_buffered_values() {
 
     let (mut sender, observable, _channel_checker) = test_channel::<'_, DropProbe, Infallible>();
 
-    // Custom operations
     let observable = observable.group_by(|_value| 0);
 
     let group_vec = Arc::new(Mutex::new(Vec::new()));
@@ -999,7 +976,6 @@ fn test_dropping_ignored_value_does_not_poison_group_context() {
     let (mut sender, observable, channel_checker) =
         test_channel::<'_, Option<PanicOnDrop>, Infallible>();
 
-    // Custom operations
     let observable = observable.group_by(|_value| 0);
 
     let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
@@ -1084,7 +1060,6 @@ fn test_fn() {
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
 
-    // Custom operations
     let observable = observable.group_by(|value| {
         s.consume_mut();
         value.to_string()
@@ -1106,7 +1081,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.group_by(|value| value.to_string());
 
@@ -1117,7 +1091,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.group_by(|value| value.to_string());
 

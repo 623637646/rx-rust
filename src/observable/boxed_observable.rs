@@ -6,7 +6,7 @@
 //! - **Observer.** [`BoxedObservable`] accepts any observer and boxes it on subscription, so every
 //!   event is a dynamic call. [`BoxedObservableFor`] names the observer type `OR`: only the
 //!   subscription is dynamic, the events are not.
-//! - **Cloning.** [`BoxedObservable`] subscribes its source once and accepts anything.
+//! - **Cloning.** [`BoxedObservable`] subscribes its source once and accepts any source.
 //!   [`CloneableBoxedObservable`] keeps the source behind a shared pointer and clones it on every
 //!   subscription, so it can be cloned itself but requires the source to be `Clone`.
 //! - **Threads.** The `Send` flavors keep the ability to move to another thread and so require
@@ -33,8 +33,8 @@ use std::{marker::PhantomData, rc::Rc, sync::Arc};
 ///
 /// The storage decides the rest: `FnOnce` subscribes the source it owns once, `Fn` clones the
 /// source on every subscription and makes both types `Clone`. `source` lists the bounds on the
-/// boxed observable besides its `Observable` impls; a trailing `Send` also requires the disposal
-/// and the observers to be `Send`.
+/// boxed observable besides its `Observable` impls; a trailing `Send` also requires the disposal,
+/// and the observers that `$observable` boxes, to be `Send`.
 macro_rules! boxed_observable {
     (@subscribe FnOnce, $source:ident) => {
         $source

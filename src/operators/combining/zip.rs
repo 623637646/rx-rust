@@ -15,7 +15,8 @@ use crate::{
 use educe::Educe;
 use std::collections::VecDeque;
 
-/// Combines the emissions of multiple Observables together via a specified function and emits single items for each combination based on the sequence of their emissions.
+/// Pairs the items of two Observables in order: the first of each, then the second of each, and so
+/// on. It completes once a source has completed and every item it emitted was paired.
 /// See <https://reactivex.io/documentation/operators/zip.html>
 ///
 /// # Examples
@@ -122,8 +123,10 @@ where
 }
 
 pub struct Model<T1, T2> {
-    first: (VecDeque<T1>, bool),  // bool means completed
-    second: (VecDeque<T2>, bool), // bool means completed
+    /// The values of the first source waiting for a partner, and whether that source completed.
+    first: (VecDeque<T1>, bool),
+    /// The same for the second source.
+    second: (VecDeque<T2>, bool),
 }
 
 macro_rules! impl_zip_observer {

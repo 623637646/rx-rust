@@ -29,7 +29,6 @@ fn test_completed() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
@@ -86,7 +85,6 @@ fn test_error() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
@@ -145,7 +143,6 @@ fn test_unsubscribe() {
         let (checker_2, observer_2) = Checker::new();
         let (checker_3, observer_3) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -190,7 +187,9 @@ fn test_unsubscribe() {
 
         subscription_1.dispose();
         assert_eq!(checker_1.values(), [111]);
-        // This assert is ok in multi-threaded because the scheduler is finished. Even if it is not, the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        // This assert is ok in multi-threaded because the scheduler is finished. Even if it is not,
+        // the scheduler doesn't keep the observer so the observer is dropped immediately after
+        // unsubscribing.
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(channels.state(0), ChannelState::Unsubscribed);
         assert_eq!(checker_2.values(), [111]);
@@ -240,7 +239,8 @@ fn test_unsubscribe() {
         assert_eq!(checker_1.state(), State::Dropped);
         assert_eq!(channels.state(0), ChannelState::Unsubscribed);
         assert_eq!(checker_2.values(), [111, 222]);
-        // This assert is ok in multi-threaded because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        // This assert is ok in multi-threaded because the scheduler doesn't keep the observer so
+        // the observer is dropped immediately after unsubscribing.
         assert_eq!(checker_2.state(), State::Dropped);
         assert_eq!(channels.state(1), ChannelState::Unsubscribed);
         assert_eq!(checker_3.values(), [111, 222]);
@@ -288,7 +288,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = scheduler
@@ -310,7 +309,8 @@ fn test_async() {
 
         scheduler.spawn(async { subscription.dispose() }).await;
         assert_eq!(checker.values(), [&111]);
-        // This assert is ok in multi-threaded because the scheduler doesn't keep the observer so the observer is dropped immediately after unsubscribing.
+        // This assert is ok in multi-threaded because the scheduler doesn't keep the observer so
+        // the observer is dropped immediately after unsubscribing.
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
@@ -323,7 +323,6 @@ fn test_subscribe_by_different_observer() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -365,7 +364,6 @@ fn test_unsub_on_next_by_take() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS).take(1);
 
         let _subscription = observable.subscribe(observer);
@@ -386,7 +384,6 @@ fn test_multiple_operation() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable
             .throttle(DURATION_100_MS)
             .throttle(DURATION_100_MS + DURATION_30_MS * 2);
@@ -426,7 +423,6 @@ fn test_without_convenient_api() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = Throttle::new(observable, DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
@@ -483,7 +479,6 @@ fn test_complete_after_next() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
@@ -505,7 +500,6 @@ fn test_error_after_next() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
@@ -527,7 +521,6 @@ fn test_unsub_after_next() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
@@ -549,7 +542,6 @@ fn test_unsub_after_completed() {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
@@ -571,7 +563,6 @@ fn test_unsub_after_error() {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
@@ -593,7 +584,6 @@ fn test_next_on_sub() {
         let subject = BehaviorSubject::<_, Infallible, _>::shared(111);
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = subject.clone().throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
@@ -611,7 +601,6 @@ fn test_complete_on_sub() {
     block_on(|_scheduler| async move {
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = Empty.throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
@@ -625,7 +614,6 @@ fn test_error_on_sub() {
     block_on(|_scheduler| async move {
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = Throw::new("error").throttle(DURATION_100_MS);
 
         let _subscription = observable.subscribe(observer);
@@ -649,7 +637,6 @@ fn test_next_on_unsub() {
                 }))
             });
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
@@ -677,7 +664,6 @@ fn test_complete_on_unsub() {
                 }))
             });
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
@@ -703,7 +689,6 @@ fn test_error_on_unsub() {
             }))
         });
 
-        // Custom operations
         let observable = observable.throttle(DURATION_100_MS);
 
         let subscription = observable.subscribe(observer);
@@ -762,7 +747,6 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     block_on(|_scheduler| async move {
-        // Custom operations
         let observable = Never.throttle(DURATION_100_MS);
 
         let observable = observable.filter(|_| true);
@@ -774,7 +758,6 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     block_on(|_scheduler| async move {
-        // Custom operations
         let observable = Never.throttle(DURATION_100_MS);
 
         observable.filter(|_| true);

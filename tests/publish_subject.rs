@@ -22,7 +22,6 @@ fn test_completed() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -30,7 +29,7 @@ fn test_completed() {
     let _subscription = observable.subscribe_with_callback(
         |_| {},
         move |_| {
-            // Terminate Subject itself first. Then terminate Observers in Subject.
+            // The subject is terminated before its observers are told.
             assert!(subject_cloned.terminated().is_some());
         },
     );
@@ -68,7 +67,6 @@ fn test_error() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -76,7 +74,7 @@ fn test_error() {
     let _subscription = observable.subscribe_with_callback(
         |_| {},
         move |_| {
-            // Terminate Subject itself first. Then terminate Observers in Subject.
+            // The subject is terminated before its observers are told.
             assert!(subject_cloned.terminated().is_some());
         },
     );
@@ -124,7 +122,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -177,7 +174,6 @@ fn test_ref() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.subscribe(observer);
@@ -205,7 +201,6 @@ fn test_async() {
         let subject = PublishSubject::shared();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = subject.clone();
 
         let subscription = scheduler
@@ -252,7 +247,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -290,7 +284,6 @@ fn test_unsub_on_next_by_take() {
     let mut subject = PublishSubject::<_, Infallible, _>::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().take(1);
 
     let _subscription = observable.clone().subscribe(observer);
@@ -319,7 +312,6 @@ fn test_complete_on_next() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -354,7 +346,6 @@ fn test_error_on_next() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -395,7 +386,6 @@ fn test_unsub_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -449,7 +439,7 @@ fn test_unsub_on_next() {
     assert!(subject.terminated().is_none());
 }
 
-// An observer that another observer disposes mid-dispatch must not receive the value that is
+/// An observer that another observer disposes mid-dispatch must not receive the value that is
 /// being dispatched, whether it is disposed before or after it would have been visited.
 #[test]
 fn test_unsub_other_on_next() {
@@ -458,7 +448,6 @@ fn test_unsub_other_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // Subscribed first, so it is visited first and disposes the other two before they are.
@@ -508,7 +497,6 @@ fn test_sub_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -570,7 +558,6 @@ fn test_stop_on_next() {
     let (checker_1, observer_1) = Checker::stopping_after(1);
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription_1 = observable.clone().subscribe(observer_1);
@@ -598,7 +585,6 @@ fn test_next_on_next() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -647,7 +633,6 @@ fn test_unsub_on_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -716,7 +701,6 @@ fn test_sub_on_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -787,7 +771,6 @@ fn test_unsub_on_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -859,7 +842,6 @@ fn test_sub_on_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -932,7 +914,6 @@ fn test_next_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer sends a value into the subject while it is being released, so the value
@@ -971,7 +952,6 @@ fn test_complete_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer completes the subject while it is being released, so the subject
@@ -1010,7 +990,6 @@ fn test_error_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer fails the subject while it is being released, so the subject terminates
@@ -1050,7 +1029,6 @@ fn test_sub_on_sub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The subject has terminated, so the first observer is terminated from inside its own
@@ -1078,7 +1056,6 @@ fn test_sub_on_unsub() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer subscribes the third one while it is being released, so that
@@ -1147,7 +1124,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let subject: PublishSubject<'_, i32, String, _> = PublishSubject::shared();
     let observable = subject;
 
@@ -1158,7 +1134,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let subject: PublishSubject<'_, i32, String, _> = PublishSubject::shared();
     let observable = subject;
 
@@ -1186,7 +1161,6 @@ fn test_notification_order() {
     };
     let mut subscriptions: Vec<_> = (0..5).map(&subscribe).collect();
 
-    // Custom operations
     assert!(subject.on_next(111).is_continue());
     assert_eq!(
         notifications.take_value(),
@@ -1234,8 +1208,8 @@ fn test_notification_order() {
 // MARK: - Concurrency
 
 /// An id is handed out and the entry carrying it queued under one lock, so entries reach the
-/// delegate in the order their ids were handed out however many threads subscribe at once. Out of
-/// order, the delegate's entries would no longer be sorted: the ids could not be found anymore, so
+/// subscribers in the order their ids were handed out however many threads subscribe at once. Out
+/// of order, the entries would no longer be sorted: the ids could not be found anymore, so
 /// unsubscribing would stop releasing the observers.
 #[test]
 fn observers_that_subscribe_concurrently_are_notified_and_released() {

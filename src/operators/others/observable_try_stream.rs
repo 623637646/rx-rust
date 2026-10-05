@@ -92,9 +92,8 @@ where
     B: StreamBuffer<T>,
 {
     /// Keeps the items that arrive between two polls in `buffer`, which decides what a source
-    /// faster than the consumer costs: [`Unbounded`] keeps everything,
-    /// [`Latest`] only the newest item and
-    /// [`Bounded`] a fixed number of them.
+    /// faster than the consumer costs: [`Unbounded`] keeps everything, [`Latest`] only the newest
+    /// item and [`Bounded`] a fixed number of them.
     pub fn with_buffer(source: OE, buffer: B) -> Self {
         Self {
             subscription: LazySubscription::new(source),
@@ -268,7 +267,8 @@ pub trait StreamBuffer<T> {
     fn pop(&mut self) -> Option<Self::Item>;
 }
 
-/// Keeps every item, in order. This is what [`into_stream`](crate::observable::ObservableExt::into_stream) uses.
+/// Keeps every item, in order. This is what
+/// [`into_stream`](crate::observable::ObservableExt::into_stream) uses.
 ///
 /// Nothing is ever dropped, so a source faster than the consumer grows the buffer without bound.
 #[derive(Educe)]

@@ -33,7 +33,8 @@ macro_rules! mutable_tests {
             type Mutable<T> = $mutable;
             const POISONS: bool = $poisons;
 
-            /// A value whose drop takes the lock it was stored in, which deadlocks if it is dropped under it.
+            /// A value whose drop takes the lock it was stored in, which deadlocks if it is dropped
+            /// under it.
             struct DropsIntoItsOwnLock(Shared<Mutable<Vec<DropsIntoItsOwnLock>>>);
 
             impl Drop for DropsIntoItsOwnLock {
@@ -49,12 +50,13 @@ macro_rules! mutable_tests {
                     Shared::new(Mutable::new(Vec::new()));
                 values.with_mut(|slot| slot.push(DropsIntoItsOwnLock(values.clone())));
 
-                // `with_mut(Vec::clear)` would drop the element under the lock, and its drop takes that lock
-                // again. Taking the vec out hands the drop to this scope, where the lock is free.
+                // `with_mut(Vec::clear)` would drop the element under the lock, and its drop takes
+                // that lock again. Taking the vec out hands the drop to this scope, where the lock
+                // is free.
                 drop(values.take_value());
 
-                // The drop above re-entered the lock and left its own replacement behind, which proves it ran
-                // outside. That replacement is dropped by the same route.
+                // The drop above re-entered the lock and left its own replacement behind, which
+                // proves it ran outside. That replacement is dropped by the same route.
                 assert_eq!(values.with_ref(Vec::len), 1);
                 drop(values.take_value());
             }
@@ -91,8 +93,8 @@ macro_rules! mutable_tests {
                 assert_eq!(slot.take_value(), None);
             }
 
-            /// Re-entering the same lock deadlocks a `Mutex` and panics a `RefCell`, so debug builds report it
-            /// at the call site instead.
+            /// Re-entering the same lock deadlocks a `Mutex` and panics a `RefCell`, so debug
+            /// builds report it at the call site instead.
             #[cfg(debug_assertions)]
             #[test]
             #[should_panic(expected = "already held by the current thread")]
@@ -150,7 +152,8 @@ macro_rules! mutable_tests {
 
                 let value = Mutable::new(Some(1));
                 crate::tests_utils::panic::expect_panic_on_drop(|panic_on_drop| {
-                    // Runs after the lock guard has unwound, but before the original panic is caught.
+                    // Runs after the lock guard has unwound, but before the original panic is
+                    // caught.
                     let _cleanup = on_panic(|| {
                         assert!(std::thread::panicking());
                         assert_eq!(value.with_ref(|value| *value), Some(1));

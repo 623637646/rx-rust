@@ -1,4 +1,5 @@
-//! A disposal that disposes when it is dropped: the [`Subscription`](crate::observable::Subscription) type.
+//! A disposal that disposes when it is dropped: the
+//! [`Subscription`](crate::observable::Subscription) type.
 
 use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
 use educe::Educe;
@@ -50,8 +51,6 @@ impl<D: Disposable> BoundDropDisposal<D> {
         BoundDropDisposal::new(ChainDisposal::new(other.into_inner(), self.into_inner()))
     }
 
-    /// Converts the inner disposal with [`From`], typically into a type made by
-    /// [`delegate_disposal!`](crate::delegate_disposal).
     /// Converts the inner disposal with `f`, keeping it bound.
     ///
     /// Unlike [`map_into`](Self::map_into) it needs no `From`, which is what erasing the disposal
@@ -60,6 +59,8 @@ impl<D: Disposable> BoundDropDisposal<D> {
         BoundDropDisposal::new(f(self.into_inner()))
     }
 
+    /// Converts the inner disposal with [`From`], typically into a type made by
+    /// [`delegate_disposal!`](crate::delegate_disposal).
     pub fn map_into<D1>(self) -> BoundDropDisposal<D1>
     where
         D1: From<D> + Disposable,
@@ -82,7 +83,7 @@ impl Default for BoundDropDisposal<()> {
 
 impl<D: Disposable> Disposable for BoundDropDisposal<D> {
     fn dispose(self) {
-        // Drop to call the dispose
+        // Dropping `self` disposes the inner disposal.
     }
 }
 

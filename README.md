@@ -148,9 +148,10 @@ assert_eq!(seen, [1, 2, 3]);
 
 A callback that returns `()` is `Flow::Continue`, so the common case needs no trailing value.
 Operators forward the answer of their downstream to the source, so `take`, `first`, `take_until`
-and friends stop their source the same way. When the source is not the one calling `on_next` —
-when it delivers through a scheduler — the value is queued and the stop reaches the source with the
-next push, which is why `Flow::Continue` is only a hint and disposal is still needed.
+and friends stop their source the same way. When the source is not the one calling
+`on_next` — when it delivers through a scheduler — the value is queued and the stop reaches the
+source with the next push, which is why `Flow::Continue` is only a hint and disposal is still
+needed.
 
 ## Schedulers
 
@@ -216,10 +217,10 @@ async fn main() {
 }
 ```
 
-In the other direction, `into_future()` — or `into_try_future()` for a source that can fail — turns
-an observable into a future of its first item, stopping the source as soon as that item is in. It
-resolves with an `Option<T>`, or a `Result<Option<T>, E>`. Put `last()`, `collect()` or `reduce()`
-in front of it to pick another item or to make the source always emit:
+In the other direction, `into_future()` — or `into_try_future()` for a source that can fail —
+turns an observable into a future of its first item, stopping the source as soon as that item is
+in. It resolves with an `Option<T>`, or a `Result<Option<T>, E>`. Put `last()`, `collect()` or
+`reduce()` in front of it to pick another item or to make the source always emit:
 
 ```rust
 #[tokio::main]
@@ -289,23 +290,25 @@ ReactiveX     | Rust
 `Maybe<T>`    | `Future<Output = Result<Option<T>, E>>`
 `Completable` | `Future<Output = Result<(), E>>`
 
-The operators of `Single` map onto plain async code — `map`/`flatMap` is `async { f(future.await?) }`,
-`zip` is `futures::try_join!`, `amb` is `futures::future::select`, `timeout`/`delay` are the
-runtime's `timeout`/`sleep`, `retry` is a `loop` around `.await`, `cache` is `FutureExt::shared`,
-and dropping the future is its `Disposable`. `into_try_future()` is the bridge: its output is
-exactly a `Maybe`, and with `collect()` in front, a `Single`. Keeping one-shot results as futures
-also keeps this crate's operator set a single one: every operator works on `Observable`, and none
-needs a second implementation for `Single`.
+The operators of `Single` map onto plain async code — `map`/`flatMap` is
+`async { f(future.await?) }`, `zip` is `futures::try_join!`, `amb` is `futures::future::select`,
+`timeout`/`delay` are the runtime's `timeout`/`sleep`, `retry` is a `loop` around `.await`, `cache`
+is `FutureExt::shared`, and dropping the future is its `Disposable`. `into_try_future()` is the
+bridge: its output is exactly a `Maybe`, and with `collect()` in front, a `Single`. Keeping one-shot
+results as futures also keeps this crate's operator set a single one: every operator works on
+`Observable`, and none needs a second implementation for `Single`.
 
 ## Thread modes
 
-Every observable declares a `Mode`: `thread_mode::Local` or `thread_mode::Shared`. A `Local` pipeline
-keeps its shared state in `Rc<RefCell<_>>` and needs nothing to be `Send`; a `Shared` one uses
-`Arc<Mutex<_>>` and can be driven from several threads. Sources pick their mode (`Create::local` /
-`Create::shared` and their `_boxed` variants, `PublishSubject::local()` / `PublishSubject::shared()`, …; plain values such as
-`Just` or `FromIter` are `Local`), an operator with several sources is `Shared` as soon as one of them
-is, and a scheduler fixes the mode of what runs on it: `Local` for the single-threaded schedulers
-(`TokioLocalScheduler`, `SmolLocalScheduler`, `LocalPoolScheduler`), `Shared` for the others. `Send` is only asked for where a value really crosses threads.
+Every observable declares a `Mode`: `thread_mode::Local` or `thread_mode::Shared`. A `Local`
+pipeline keeps its shared state in `Rc<RefCell<_>>` and needs nothing to be `Send`; a `Shared` one
+uses `Arc<Mutex<_>>` and can be driven from several threads. Sources pick their mode
+(`Create::local` / `Create::shared` and their `_boxed` variants, `PublishSubject::local()` /
+`PublishSubject::shared()`, …; plain values such as `Just` or `FromIter` are `Local`), an operator
+with several sources is `Shared` as soon as one of them is, and a scheduler fixes the mode of what
+runs on it: `Local` for the single-threaded schedulers (`TokioLocalScheduler`, `SmolLocalScheduler`,
+`LocalPoolScheduler`), `Shared` for the others. `Send` is only asked for where a value really
+crosses threads.
 
 Erasing the type is explicit and says what it keeps: `into_boxed` / `into_cloneable_boxed` for a
 single thread, `into_send_boxed` / `into_send_cloneable_boxed` for values that must be `Send`.

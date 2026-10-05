@@ -7,8 +7,8 @@
 //!   [`SharedDisposal`](crate::disposable::shared_disposal::SharedDisposal) and
 //!   [`Switch`](crate::operators::combining::switch::Switch);
 //! - a *key*, identifying an entry of a collection — see
-//!   [`MergeAll`](crate::operators::combining::merge_all::MergeAll) and
-//!   [`PublishSubject`](crate::subject::publish_subject::PublishSubject).
+//!   [`MergeAll`](crate::operators::combining::merge_all::MergeAll) and the observers of
+//!   [`SerializedMulticast`](crate::utils::serialized_multicast::SerializedMulticast).
 //!
 //! An [`Id`] can only come from an [`IdGenerator`], which never hands the same one out twice, so a
 //! holder of an id cannot forge one that collides with a later value.

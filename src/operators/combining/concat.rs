@@ -13,7 +13,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Concatenates multiple Observables to create an Observable that emits all of the values from the first, then all of the values from the second, and so on.
+/// Emits all of the values of the first Observable, then, once it completes, all of the values of
+/// the second.
 /// See <https://reactivex.io/documentation/operators/concat.html>
 ///
 /// # Examples
@@ -49,7 +50,8 @@ pub struct Concat<OE1, OE2> {
 
 impl<OE1, OE2> Concat<OE1, OE2> {
     /// Creates a [`Concat`] over `source_1` and `source_2`;
-    /// [`ObservableExt::concat_with`](crate::observable::ObservableExt::concat_with) is the fluent form.
+    /// [`ObservableExt::concat_with`](crate::observable::ObservableExt::concat_with) is the fluent
+    /// form.
     pub fn new<T, E>(source_1: OE1, source_2: OE2) -> Self
     where
         OE1: ObservableTypes<Item = T, Error = E>,

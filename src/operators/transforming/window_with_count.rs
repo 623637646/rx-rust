@@ -14,7 +14,8 @@ use educe::Educe;
 use std::marker::PhantomData;
 use std::{cmp::Ordering, num::NonZeroUsize};
 
-/// Periodically subdivides items from an Observable into Observable windows, each containing a specified number of items.
+/// Subdivides the items of an Observable into Observable windows of a specified number of items.
+/// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// A window is emitted before its first item is delivered, and each window can be subscribed to
 /// once. Items emitted while a window has no subscriber are buffered and replayed to a later
@@ -24,7 +25,6 @@ use std::{cmp::Ordering, num::NonZeroUsize};
 /// it happens: the window releases it on its next item, when it ends, or when the outer
 /// subscription is disposed, whichever comes first. See
 /// [the unicast subject](crate::subject::unicast_subject) each window is built on.
-/// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// # Examples
 /// ```rust
@@ -88,15 +88,16 @@ use std::{cmp::Ordering, num::NonZeroUsize};
 pub struct WindowWithCount<'a, OE> {
     source: OE,
     count: NonZeroUsize,
-    /// The observer of a window may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left to
-    /// an unboxed default: the window is the `Item`, which [`ObservableTypes`] names without any
+    /// The observer of a window may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left
+    /// to an unboxed default: the window is the `Item`, which [`ObservableTypes`] names without any
     /// observer, and its observer arrives only later, so the window boxes it.
     _marker: MarkerType<&'a ()>,
 }
 
 impl<OE> WindowWithCount<'_, OE> {
     /// Creates a [`WindowWithCount`] over `source`;
-    /// [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count) is the fluent form.
+    /// [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count) is
+    /// the fluent form.
     pub fn new(source: OE, count: NonZeroUsize) -> Self {
         Self {
             source,

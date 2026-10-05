@@ -27,7 +27,6 @@ macro_rules! average_observer_impl {
                 let (mut sender, observable, channel_checker) = test_channel::<'_, $t, Infallible>();
                 let (checker, observer) = Checker::new();
 
-                // Custom operations
                 let observable = observable.average();
 
                 let _subscription = observable.subscribe(observer);
@@ -76,7 +75,6 @@ macro_rules! average_overflow_impl {
                 let (mut sender, observable, channel_checker) = test_channel::<'_, $t, Infallible>();
                 let (checker, observer) = Checker::new();
 
-                // Custom operations
                 let observable = observable.average();
 
                 let _subscription = observable.subscribe(observer);
@@ -115,7 +113,6 @@ fn test_completed_sum_overflows_f32() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, f32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.average();
 
     let _subscription = observable.subscribe(observer);
@@ -151,7 +148,6 @@ fn test_completed_precision_f32() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, f32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.average();
 
     let _subscription = observable.subscribe(observer);
@@ -184,7 +180,6 @@ fn test_completed_sum_overflows_f64() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, f64, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.average();
 
     let _subscription = observable.subscribe(observer);
@@ -213,7 +208,6 @@ fn test_completed_empty() {
     let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.average();
 
     let _subscription = observable.subscribe(observer);
@@ -232,7 +226,6 @@ fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.average();
 
     let _subscription = observable.subscribe(observer);
@@ -256,7 +249,6 @@ fn test_unsubscribe() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.average();
 
     let subscription = observable.subscribe(observer);
@@ -281,7 +273,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.average();
 
         let _subscription = scheduler
@@ -338,7 +329,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.average();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -395,7 +385,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.average().take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -429,7 +418,6 @@ fn test_unsub_on_next_by_take_2() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(1).average();
 
     let _subscription = observable.subscribe(observer);
@@ -448,7 +436,6 @@ fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.average().average();
 
     let _subscription = observable.subscribe(observer);
@@ -482,7 +469,6 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Average::new(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -577,7 +563,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let observable = Just::new(1).average();
 
     let observable = observable.filter(|_| false);
@@ -587,7 +572,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let observable = Just::new(1).average();
 
     observable.filter(|_| false);

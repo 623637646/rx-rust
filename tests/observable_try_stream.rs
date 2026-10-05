@@ -34,7 +34,6 @@ fn test_completed() {
     block_on(|scheduler| async move {
         let mut subject = PublishSubject::<_, &str, _>::shared();
 
-        // Custom operations
         let observable = subject.clone();
         let stream = observable.into_try_stream();
 
@@ -96,7 +95,6 @@ fn test_completed_without_next() {
     block_on(|scheduler| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let stream = observable.into_try_stream();
         let (checker, _subscription) = Checker::from_try_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -117,7 +115,6 @@ fn test_error() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel();
 
-        // Custom operations
         let stream = observable.into_try_stream();
 
         let (checker, _subscription) = Checker::from_try_stream(stream, scheduler.clone());
@@ -149,7 +146,6 @@ fn test_error_without_next() {
     block_on(|scheduler| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let stream = observable.into_try_stream();
         let (checker, _subscription) = Checker::from_try_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -170,7 +166,6 @@ fn test_unsubscribe() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, &str>();
 
-        // Custom operations
         let stream = observable.into_try_stream();
 
         let (checker, subscription) = Checker::from_try_stream(stream, scheduler.clone());
@@ -209,7 +204,6 @@ fn test_ref() {
         let value = 111;
         let (mut sender, observable, channel_checker) = test_channel();
 
-        // Custom operations
         let mut stream = observable.into_try_stream();
 
         // Subscribe in the first time of poll.
@@ -260,8 +254,6 @@ fn test_mut_ref() {
 fn test_async() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel();
-
-        // Custom operations
 
         let stream = scheduler
             .spawn(async move { observable.into_try_stream() })
@@ -320,7 +312,6 @@ fn test_without_convenient_api() {
     block_on(|scheduler| async move {
         let mut subject = PublishSubject::<_, &str, _>::shared();
 
-        // Custom operations
         let observable = subject.clone();
         let stream = ObservableTryStream::new(observable);
 
@@ -378,7 +369,6 @@ fn test_complete_after_next() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let stream = observable.into_try_stream();
         let (checker, _subscription) = Checker::from_try_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -399,7 +389,6 @@ fn test_error_after_next() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let stream = observable.into_try_stream();
         let (checker, _subscription) = Checker::from_try_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -420,7 +409,6 @@ fn test_unsub_after_next() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let stream = observable.into_try_stream();
         let (checker, subscription) = Checker::from_try_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -442,7 +430,6 @@ fn test_unsub_after_completed() {
     block_on(|scheduler| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let stream = observable.into_try_stream();
         let (checker, subscription) = Checker::from_try_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -464,7 +451,6 @@ fn test_unsub_after_error() {
     block_on(|scheduler| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let stream = observable.into_try_stream();
         let (checker, subscription) = Checker::from_try_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -486,7 +472,6 @@ fn test_order_with_continuous_next() {
     block_on(|scheduler| async move {
         let mut subject = PublishSubject::<_, &str, _>::shared();
 
-        // Custom operations
         let observable = subject.clone();
         let stream = observable.into_try_stream();
 
@@ -518,7 +503,6 @@ fn test_next_on_sub() {
     block_on(|scheduler| async move {
         let subject = BehaviorSubject::<_, &str, _>::shared(111);
 
-        // Custom operations
         let observable = subject.clone();
         let stream = observable.into_try_stream();
 
@@ -537,7 +521,6 @@ fn test_next_on_sub() {
 #[test]
 fn test_complete_on_sub() {
     block_on(|scheduler| async move {
-        // Custom operations
         let stream = Empty
             .with_item_type::<i32>()
             .with_error_type::<&str>()
@@ -553,7 +536,6 @@ fn test_complete_on_sub() {
 #[test]
 fn test_error_on_sub() {
     block_on(|scheduler| async move {
-        // Custom operations
         let stream = Throw::new("error")
             .with_item_type::<i32>()
             .into_try_stream();
@@ -577,7 +559,6 @@ fn test_next_on_unsub() {
             }))
         });
 
-        // Custom operations
         let stream = observable.into_try_stream();
 
         let (checker, subscription) = Checker::from_try_stream(stream, scheduler.clone());
@@ -603,7 +584,6 @@ fn test_complete_on_unsub() {
             }))
         });
 
-        // Custom operations
         let stream = observable.into_try_stream();
 
         let (checker, subscription) = Checker::from_try_stream(stream, scheduler.clone());
@@ -628,7 +608,6 @@ fn test_error_on_unsub() {
             }))
         });
 
-        // Custom operations
         let stream = observable.into_try_stream();
 
         let (checker, subscription) = Checker::from_try_stream(stream, scheduler.clone());

@@ -1,5 +1,5 @@
-//! [`Task`], its constructors, and how to run one: [`Stepper`] step by step, [`drive`] on an async
-//! executor.
+//! [`Task`], its constructors, and how to run one: [`Stepper`] step by step, [`drive()`] on an
+//! async executor.
 //!
 //! This module holds the task itself; `drive` holds the async driver, and every other submodule
 //! one constructor with the state type it names.
@@ -34,7 +34,7 @@ use std::{
 /// exactly when `TC: Send` and `P: Send`. Each constructor names its state type the same
 /// way (`OnceContext`, `PeriodicContext`, …).
 ///
-/// A task runs either through [`drive`], on an async executor, or step by step through
+/// A task runs either through [`drive()`], on an async executor, or step by step through
 /// [`split`](Self::split) and [`Stepper::step`], from a synchronous loop (a UI event loop, a game
 /// frame loop).
 pub struct Task<TC, P = ()> {
@@ -126,8 +126,8 @@ impl<TC, P> Task<TC, P> {
 /// - [`SleepUntil(at)`](TaskState::SleepUntil): step again at `at` at the earliest, and in any
 ///   case not before other tasks had a turn.
 ///
-/// The `delay` of [`run_task`](crate::scheduler::Scheduler::run_task) is the caller's to implement: wait that
-/// long before the first `step`.
+/// The `delay` of [`run_task`](crate::scheduler::Scheduler::run_task) is the caller's to
+/// implement: wait that long before the first `step`.
 pub struct Stepper<TC, P> {
     context: TC,
     handler: TaskHandler<TC, P>,

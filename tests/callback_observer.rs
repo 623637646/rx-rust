@@ -23,8 +23,6 @@ fn test_completed() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
-
     let (on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker.values().is_empty());
@@ -46,8 +44,6 @@ fn test_completed() {
 fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
-
-    // Custom operations
 
     let (on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(on_next, on_termination);
@@ -72,7 +68,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -129,8 +124,6 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
-
     let (on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker.values().is_empty());
@@ -174,8 +167,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, &i32, &str>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
-
         let subscription = scheduler
             .spawn(async move {
                 let (on_next, on_termination) = observer.into_callbacks();
@@ -209,8 +200,6 @@ fn test_multiple_operation() {
     let (channels, observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
-
-    // Custom operations
 
     let (on_next, on_termination) = observer_1.into_callbacks();
     let _subscription_1 = observable
@@ -295,8 +284,6 @@ fn test_fn() {
     let s2 = TestStruct;
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
-
-    // Custom operations
 
     let _subscription = observable.subscribe_with_callback(
         |_| {

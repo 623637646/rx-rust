@@ -22,7 +22,6 @@ fn test_completed_last_empty() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
@@ -71,7 +70,6 @@ fn test_completed_last_not_empty() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
@@ -115,7 +113,6 @@ fn test_completed_count_1() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(1).unwrap());
 
     let _subscription = observable.subscribe(observer);
@@ -144,7 +141,6 @@ fn test_error_last_empty() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
@@ -193,7 +189,6 @@ fn test_error_last_not_empty() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
@@ -237,7 +232,6 @@ fn test_error_count_1() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(1).unwrap());
 
     let _subscription = observable.subscribe(observer);
@@ -267,7 +261,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -352,7 +345,6 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
 
     let _subscription = observable.subscribe(observer);
@@ -387,7 +379,6 @@ fn test_mut_ref() {
     let mut value_2 = 222;
     let mut value_3 = 333;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(&mut value_1).is_continue());
         assert!(observer.on_next(&mut value_2).is_continue());
@@ -417,7 +408,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
 
         let subscription = scheduler
@@ -471,7 +461,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer_with_count(NonZeroUsize::new(2).unwrap());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -528,7 +517,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .buffer_with_count(NonZeroUsize::new(3).unwrap())
         .take(1);
@@ -559,7 +547,6 @@ fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .buffer_with_count(NonZeroUsize::new(2).unwrap())
         .buffer_with_count(NonZeroUsize::new(2).unwrap());
@@ -621,7 +608,6 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = BufferWithCount::new(observable, NonZeroUsize::new(3).unwrap());
 
     let _subscription = observable.subscribe(observer);
@@ -723,7 +709,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 
@@ -734,7 +719,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.buffer_with_count(NonZeroUsize::new(3).unwrap());
 

@@ -16,7 +16,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits the most recently emitted item from the source Observable whenever the sampler Observable emits an item.
+/// Emits the most recently emitted item from the source Observable whenever the sampler Observable
+/// emits an item.
 /// See <https://reactivex.io/documentation/operators/sample.html>
 ///
 /// # Examples

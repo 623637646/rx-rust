@@ -108,9 +108,9 @@ use crate::{
 };
 use educe::Educe;
 
-// The disposal of a context that does not own its source subscription: stopping the context,
-// followed by the caller's own subscription. Returned by `subscribe_with_context`.
 delegate_disposal!(
+    /// The disposal of a context that does not own its source subscription: stopping the context,
+    /// followed by the caller's own subscription. Returned by [`subscribe_with_context`].
     Disposal<M, T, E, MD, D>,
     ChainDisposal<ContextDisposal<M, T, E, MD, ()>, D>,
     where M: ThreadMode, D: Disposable
@@ -276,6 +276,7 @@ where
     ///
     /// The callback must not call external APIs or drop values that can re-enter this context.
     /// Return such values through [`UpdateOutcome::with_drop_outside`] instead.
+    ///
     /// If the context's delivery has stopped, the callback is not invoked and [`DeliveryStopped`]
     /// is returned.
     pub fn update<R, DO, const EVENTS_DECIDED: bool>(

@@ -12,7 +12,7 @@ dependency — the async runtime is selected by feature flag.
 
 ## Testing: run the smallest thing that answers the question
 
-The suite is large (~112 integration test files, ~2000 test functions) and many tests are timing
+The suite is large (~120 integration test files, ~2400 test functions) and many tests are timing
 based, so a full run is slow and wasteful. **Default to the narrowest scope, and widen only when the
 change justifies it.**
 
@@ -91,7 +91,7 @@ cargo tarpaulin --out Html
   `src/observable/mod.rs` is the fluent API; every operator gets a method there, in alphabetical
   order, except that each `into_*` conversion sits next to its `Send` twin.
 - `src/operators/<category>/<name>.rs` — one operator per file, categories mirror reactivex.io.
-- `src/subject/`, `src/scheduler/` — hot sources and runtime adapters.
+- `src/subject/` — the subjects, the hot sources.
 - `src/thread_mode/` — the bottom layer, depending on nothing else in the crate: `ThreadMode`,
   `Local`, `Shared`, `Joined` (the mode of an operator with several sources), the pointer, weak
   pointer and flag each mode picks, and the lock helpers (`thread_mode::mutable`). The boxed
@@ -111,16 +111,17 @@ cargo tarpaulin --out Html
 ## Code conventions
 
 - No `unsafe`. The crate-level `forbid` makes this a hard error.
-- **Locks**: reach a lock (`RefCell` / `Mutex`, or the `M::Ptr` wrapping one) through `MutableHelper::with_mut` / `with_ref`, or through the
-  one-shot helpers in `MutableExt` (`clone_value`, `replace_value`, `take_value`) — never
-  `lock()` / `borrow_mut()`. The callback gets a `&mut T` / `&T`, so a guard cannot escape it;
-  what it must not do is run anything that can take the same lock again, dropping an owned value
-  included. Take the value out under the lock and act on it afterwards (`take_value().map(...)`
-  for a lock around an `Option<_>`), or return an action from the callback and run it after `with_mut`
-  returns. Release the context lock before calling `on_next`, and both the context and observer
-  locks before `on_termination`. One "transaction" should take the lock once, not repeatedly.
-  Debug builds panic when a thread takes a lock it already holds. See the module docs in
-  `src/thread_mode/mutable.rs`. The tests call those methods directly too.
+- **Locks**: reach a lock (`RefCell` / `Mutex`, or the `M::Ptr` wrapping one) through
+  `MutableHelper::with_mut` / `with_ref`, or through the one-shot helpers in `MutableExt`
+  (`clone_value`, `replace_value`, `take_value`) — never `lock()` / `borrow_mut()`. The callback
+  gets a `&mut T` / `&T`, so a guard cannot escape it; what it must not do is run anything that can
+  take the same lock again, dropping an owned value included. Take the value out under the lock and
+  act on it afterwards (`take_value().map(...)` for a lock around an `Option<_>`), or return an
+  action from the callback and run it after `with_mut` returns. Release the context lock before
+  calling `on_next`, and both the context and observer locks before `on_termination`. One
+  "transaction" should take the lock once, not repeatedly. Debug builds panic when a thread takes a
+  lock it already holds. See the module docs in `src/thread_mode/mutable.rs`. The tests call those
+  methods directly too.
 - **Subscription helpers**: prefer the existing helpers over hand-rolled state:
   `subscribe_with_context` when the operator can only terminate from inside the source's own
   `on_termination`; `subscribe_with_context_owning_source` when it can terminate while the
@@ -141,18 +142,18 @@ cargo tarpaulin --out Html
   created where the operator is subscribed, instead of bounding its own `Observer` impl. See
   `docs/decisions/0002-observable-types-and-thread-mode.md`.
 - Keep `pub` surface minimal; add `Clone`/`Send`/`Sync`/`'static` bounds only where actually needed.
-- **Derives** on a generic type go through `#[derive(Educe)]`, not `#[derive(...)]` (which bounds every
-  type parameter) and not hand-written impls. A field that cannot or should not be printed gets
-  `#[educe(Debug(ignore))]`. Educe infers the bounds from the field types, and leaves out those it
-  knows always hold (`PhantomData`, `Arc` / `Rc` for `Clone`, function pointers, a `Vec<T>` reduced
-  to `T`), but it matches type names literally: through a type alias (`MarkerType`) or an
+- **Derives** on a generic type go through `#[derive(Educe)]`, not `#[derive(...)]` (which bounds
+  every type parameter) and not hand-written impls. A field that cannot or should not be printed
+  gets `#[educe(Debug(ignore))]`. Educe infers the bounds from the field types, and leaves out those
+  it knows always hold (`PhantomData`, `Arc` / `Rc` for `Clone`, function pointers, a `Vec<T>`
+  reduced to `T`), but it matches type names literally: through a type alias (`MarkerType`) or an
   associated type (`M::Ptr<_>`) it emits the whole field type as a bound. Where that bound would
   name a mode pointer or a private type, set it explicitly, `Clone(bound())` or
   `Clone(bound(S: Clone))`, so that the public impl does not list it. Write an impl by hand only
   when it is not structural, e.g. a `Default` that calls a constructor.
 - Public items get doc comments; operators link to their reactivex.io page.
-- `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce parallel
-  representations.
+- `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce
+  parallel representations.
 - **`Flow`**: `Observer::on_next` returns `Flow::Continue` / `Flow::Stop`. `Stop` is a guarantee —
   the observer accepts nothing more and must not be terminated, so the caller stops pushing and
   drops it; `Continue` is only a hint ("no stop seen here"), so a source must still honor its
@@ -161,7 +162,8 @@ cargo tarpaulin --out Html
   operator gets it from `SubscriptionContext::update_flow` / `send_next`; `send_termination` answers
   nothing, since a termination is the last event anyway. The `#[must_use]` is what catches a
   forgotten forward — `let _ =` only where ignoring it is deliberate. User callbacks
-  (`subscribe_with_callback`) return `()` or a `Flow`, via `callback_observer::IntoFlow` (a diverging `|_| unreachable!()` needs `-> ()`).
+  (`subscribe_with_callback`) return `()` or a `Flow`, via `callback_observer::IntoFlow` (a
+  diverging `|_| unreachable!()` needs `-> ()`).
 
 ## Test conventions
 

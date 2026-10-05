@@ -27,7 +27,6 @@ fn test_completed_first_and_last_empty() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -85,7 +84,6 @@ fn test_completed_first_and_last_not_empty() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -143,7 +141,6 @@ fn test_completed_from_boundary() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -194,7 +191,6 @@ fn test_completed_source_and_boundary_are_same() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable.buffer(subject.clone());
 
@@ -221,7 +217,6 @@ fn test_error_last_empty() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -279,7 +274,6 @@ fn test_error_last_not_empty() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -331,7 +325,6 @@ fn test_error_from_boundary() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -387,7 +380,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -498,7 +490,6 @@ fn test_ref() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -549,7 +540,6 @@ fn test_mut_ref() {
     let mut value_2 = 222;
     let mut value_3 = 333;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, Infallible>| {
         assert!(observer.on_next(&mut value_1).is_continue());
         assert!(observer.on_next(&mut value_2).is_continue());
@@ -589,7 +579,6 @@ fn test_async() {
         let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.buffer(boundary_observable);
 
         let subscription = scheduler
@@ -670,7 +659,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -761,7 +749,6 @@ fn test_unsub_on_next_by_take() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.buffer(boundary_observable).take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -790,7 +777,6 @@ fn test_multiple_operation() {
     let (mut boundary_sender_2, boundary_observable_2, boundary_channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .buffer(boundary_observable_1)
         .buffer(boundary_observable_2);
@@ -900,7 +886,6 @@ fn test_multiple_operation_same_boundary() {
     let mut boundary_subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable
         .buffer(boundary_subject.clone())
@@ -946,7 +931,6 @@ fn test_without_convenient_api() {
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Buffer::new(observable, boundary_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -999,7 +983,6 @@ fn test_next_on_sub() {
     let boundary_subject_source = boundary_subject_source.start_with([()]);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = source.buffer(boundary_subject_source);
 
     let _subscription = observable.subscribe(observer);
@@ -1019,7 +1002,6 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.buffer(Empty.with_item_type());
 
     let _subscription = observable.subscribe(observer);
@@ -1031,7 +1013,6 @@ fn test_complete_on_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error").buffer(Throw::new("error").with_item_type());
 
     let _subscription = observable.subscribe(observer);
@@ -1053,7 +1034,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.buffer(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1080,7 +1060,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.buffer(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1107,7 +1086,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.buffer(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1243,7 +1221,6 @@ fn test_equivalent_to_window_and_collect() {
     let (buffer_checker, buffer_observer) = Checker::new();
     let (window_checker, window_observer) = Checker::new();
 
-    // Custom operations
     let _buffer_subscription = subject
         .clone()
         .buffer(boundary_subject.clone())
@@ -1278,7 +1255,6 @@ fn test_diverges_from_window_and_collect_on_completed_boundary() {
     let (buffer_checker, buffer_observer) = Checker::new();
     let (window_checker, window_observer) = Checker::new();
 
-    // Custom operations
     let _buffer_subscription = subject
         .clone()
         .buffer(boundary_subject.clone())
@@ -1316,7 +1292,6 @@ fn test_diverges_from_window_and_collect_on_empty_pending_bundle() {
     let (buffer_checker, buffer_observer) = Checker::new();
     let (window_checker, window_observer) = Checker::new();
 
-    // Custom operations
     let _buffer_subscription = subject
         .clone()
         .buffer(boundary_subject.clone())
@@ -1341,7 +1316,6 @@ fn test_diverges_from_window_and_collect_on_empty_pending_bundle() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, boundary_observable, _) = test_channel();
     let observable = observable.buffer(boundary_observable);
@@ -1353,7 +1327,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, boundary_observable, _) = test_channel::<'_, (), String>();
     let observable = observable.buffer(boundary_observable);

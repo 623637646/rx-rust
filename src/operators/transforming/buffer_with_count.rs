@@ -9,7 +9,8 @@ use crate::{
 use educe::Educe;
 use std::num::NonZeroUsize;
 
-/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, when the bundle reaches a specified size.
+/// Gathers the items of an Observable into bundles of a specified size, emitted as `Vec<T>`; the
+/// last bundle, emitted on completion, may be smaller.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples
@@ -45,7 +46,8 @@ pub struct BufferWithCount<OE> {
 
 impl<OE> BufferWithCount<OE> {
     /// Creates a [`BufferWithCount`] over `source`;
-    /// [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count) is the fluent form.
+    /// [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count) is
+    /// the fluent form.
     pub fn new(source: OE, count: NonZeroUsize) -> Self {
         Self { source, count }
     }

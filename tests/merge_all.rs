@@ -31,7 +31,6 @@ fn test_completed_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -112,7 +111,6 @@ fn test_completed_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -191,7 +189,6 @@ fn test_completed_empty() {
     let (sender, observable, channel_checker) = test_channel::<'_, Just<i32>, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -211,7 +208,6 @@ fn test_completed_same_inner() {
     let mut subject_1 = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -261,7 +257,6 @@ fn test_completed_new_from_iter() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = MergeAll::new_from_iter([observable_1, observable_2]);
 
     let _subscription = observable.subscribe(observer);
@@ -314,7 +309,6 @@ fn test_error_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -395,7 +389,6 @@ fn test_error_only_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -469,7 +462,6 @@ fn test_error_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -550,7 +542,6 @@ fn test_error_only_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -622,7 +613,6 @@ fn test_error_empty() {
     let (sender, observable, channel_checker) = test_channel::<'_, Throw<_>, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -642,7 +632,6 @@ fn test_error_same_inner() {
     let mut subject_1 = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -692,7 +681,6 @@ fn test_error_new_from_iter() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = MergeAll::new_from_iter([observable_1, observable_2]);
 
     let _subscription = observable.subscribe(observer);
@@ -745,7 +733,6 @@ fn test_unsubscribe() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let subscription = observable.subscribe(observer);
@@ -799,7 +786,6 @@ fn test_unsubscribe_with_publish_subject() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable.merge_all();
     let observable_1 = observable;
@@ -886,7 +872,6 @@ fn test_ref() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -961,7 +946,6 @@ fn test_mut_ref() {
     let mut value_3 = 333;
     let mut error = -1;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(
             observer
@@ -1008,7 +992,6 @@ fn test_async() {
         let (mut sender_2, observable_2, channel_checker_2) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.merge_all();
 
         let subscription = scheduler
@@ -1082,7 +1065,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -1217,7 +1199,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all().take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -1248,7 +1229,6 @@ fn test_multiple_operation() {
     let (mut sender_4, observable_4, channel_checker_4) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.merge_all().merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1349,7 +1329,6 @@ fn test_without_convenient_api() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = MergeAll::new(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -1427,7 +1406,6 @@ fn test_next_on_sub() {
     let source = source.start_with([source_1]);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = source.merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1467,7 +1445,6 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.with_item_type::<Empty>().merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1479,7 +1456,6 @@ fn test_complete_on_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error").with_item_type::<Throw<_>>().merge_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1503,7 +1479,6 @@ fn test_next_on_unsub() {
         },
     );
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let subscription = observable.subscribe(observer);
@@ -1531,7 +1506,6 @@ fn test_complete_on_unsub() {
         },
     );
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let subscription = observable.subscribe(observer);
@@ -1557,7 +1531,6 @@ fn test_error_on_unsub() {
         },
     );
 
-    // Custom operations
     let observable = observable.merge_all();
 
     let subscription = observable.subscribe(observer);
@@ -1664,7 +1637,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, _>();
     let observable = observable.merge_all();
 
@@ -1675,7 +1647,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, Infallible>();
     let observable = observable.merge_all();
 

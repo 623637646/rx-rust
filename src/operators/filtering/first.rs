@@ -14,6 +14,8 @@ use educe::Educe;
 /// Emits only the first item emitted by an Observable.
 /// See <https://reactivex.io/documentation/operators/first.html>
 ///
+/// A source that completes without an item completes it without one, rather than with an error.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
@@ -77,7 +79,6 @@ where
         >,
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::D> {
-        // Or `self.source.take(1).subscribe(observer)`
         ElementAt::new(self.source, 0).subscribe(observer)
     }
 }

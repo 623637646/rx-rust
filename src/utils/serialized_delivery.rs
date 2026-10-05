@@ -60,6 +60,7 @@ use educe::Educe;
 /// observer is released before it wherever the stopping code owns the observer; a stop that finds
 /// the observer held by a delivery loop elsewhere, a [`DeliveryStop`], or a callback that unwinds,
 /// drops `R` first.
+///
 /// The pointers are the ones the thread mode `M` picks.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]

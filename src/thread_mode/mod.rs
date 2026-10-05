@@ -1,10 +1,10 @@
 //! The thread mode of an observable: whether its events can arrive from a thread other than the
 //! one that subscribed.
 //!
-//! Every observable computes its [`Mode`](crate::observable::ObservableTypes::Mode) along the chain,
-//! from the source down: a synchronous source is [`Local`], an operator that delivers through a
-//! scheduler takes the scheduler's mode, and an operator with several sources joins theirs
-//! ([`Joined`]). An operator that needs shared state picks its pointer from the mode — an
+//! Every observable computes its [`Mode`](crate::observable::ObservableTypes::Mode) along the
+//! chain, from the source down: a synchronous source is [`Local`], an operator that delivers
+//! through a scheduler takes the scheduler's mode, and an operator with several sources joins
+//! theirs ([`Joined`]). An operator that needs shared state picks its pointer from the mode — an
 //! `Rc<RefCell<_>>` for `Local`, an `Arc<Mutex<_>>` for `Shared` — so a chain that never leaves its
 //! thread pays for no lock and asks nothing of its observer, and both kinds of chain live in one
 //! binary.
@@ -12,8 +12,8 @@
 //! The mode is a choice of pointers, not a promise the compiler takes on trust: a `Local` state is
 //! an `Rc`, which is not `Send`, so declaring `Local` and emitting from another thread fails to
 //! compile wherever the state would cross the thread. `Send` itself is only ever required where a
-//! value really crosses one — when a task is handed to a multi-threaded scheduler, or an observer is
-//! boxed into a `Send` box.
+//! value really crosses one — when a task is handed to a multi-threaded scheduler, or an observer
+//! is boxed into a `Send` box.
 //!
 //! This module is the bottom layer of the crate: the mode, and the locks, pointers and flags it
 //! picks ([`mutable`]), depend on nothing else in it. What a mode means for an observer — which
@@ -74,8 +74,8 @@ pub trait ThreadMode: sealed::Mode + 'static {
 /// For an observable implemented by hand this is a contract. Getting it wrong is not a runtime
 /// error: `Local` makes the shared state downstream an `Rc<RefCell<_>>`, which is not `Send`, so a
 /// `Local` source that emits from another thread either fails to compile (there is shared state
-/// downstream) or is correct anyway (there is none). When unsure, declare [`Shared`]: it only costs a
-/// lock. To have the declaration enforced, put a `PhantomData<M>` into the observer wrapper the
+/// downstream) or is correct anyway (there is none). When unsure, declare [`Shared`]: it only costs
+/// a lock. To have the declaration enforced, put a `PhantomData<M>` into the observer wrapper the
 /// emitting code receives: `Local` is `!Send + !Sync`, so the wrapper is too.
 pub struct Local(PhantomData<*const ()>);
 

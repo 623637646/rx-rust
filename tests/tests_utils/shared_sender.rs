@@ -3,7 +3,8 @@
 //!
 //! The observer is parked in a [`SerializedDelivery`], so a test never notifies it while holding
 //! this handle's lock: a notification that re-enters the handle — a resubscription that fills it
-//! again, or a second event — would otherwise deadlock, or panic in single-threaded builds.
+//! again, or a second event — would otherwise deadlock, or fail the re-entry check of debug
+//! builds.
 //!
 //! The handle starts empty, holds the observer from [`set`](SharedSender::set) until the stream
 //! terminates, and is empty again afterwards, which is how a test tells a subscription that is

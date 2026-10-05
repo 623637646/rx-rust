@@ -30,7 +30,6 @@ fn test_completed() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -93,7 +92,6 @@ fn test_completed_then_error() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -156,7 +154,6 @@ fn test_error() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -221,7 +218,6 @@ fn test_unsubscribe() {
         let (checker_2, observer_2) = Checker::new();
         let (checker_3, observer_3) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -385,7 +381,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let subscription = scheduler
@@ -430,7 +425,6 @@ fn test_subscribe_by_different_observer() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -488,7 +482,6 @@ fn test_unsub_on_next_by_take() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone()).take(1);
 
         let _subscription = observable.subscribe(observer);
@@ -519,7 +512,6 @@ fn test_multiple_operation() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable
             .delay(DURATION_100_MS, scheduler.clone())
             .delay(DURATION_100_MS + DURATION_30_MS, scheduler.clone());
@@ -567,7 +559,6 @@ fn test_without_convenient_api() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = Delay::new(observable, DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -630,7 +621,6 @@ fn test_complete_after_next() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -662,7 +652,6 @@ fn test_error_after_next() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -694,7 +683,6 @@ fn test_unsub_after_next() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -727,7 +715,6 @@ fn test_unsub_after_completed() {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -760,7 +747,6 @@ fn test_unsub_after_error() {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -792,7 +778,6 @@ fn test_order_with_continuous_next() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -828,7 +813,6 @@ fn test_next_on_sub() {
         let source = source.start_with([111]);
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = source.delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -862,7 +846,6 @@ fn test_complete_on_sub() {
     block_on(|scheduler| async move {
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = Empty.delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -884,7 +867,6 @@ fn test_error_on_sub() {
     block_on(|scheduler| async move {
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = Throw::new("error").delay(DURATION_100_MS, scheduler.clone());
 
         let _subscription = observable.subscribe(observer);
@@ -908,7 +890,6 @@ fn test_next_on_unsub() {
                 }))
             });
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -936,7 +917,6 @@ fn test_complete_on_unsub() {
                 }))
             });
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -963,7 +943,6 @@ fn test_error_on_unsub() {
             }))
         });
 
-        // Custom operations
         let observable = observable.delay(DURATION_100_MS, scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -1023,7 +1002,6 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     block_on(|scheduler| async move {
-        // Custom operations
         let observable = Never.delay(DURATION_100_MS, scheduler.clone());
 
         let observable = observable.filter(|_| true);
@@ -1035,7 +1013,6 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     block_on(|scheduler| async move {
-        // Custom operations
         let observable = Never.delay(DURATION_100_MS, scheduler.clone());
 
         observable.filter(|_| true);

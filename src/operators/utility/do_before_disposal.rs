@@ -9,7 +9,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback when the subscription is disposed, before the disposal logic is executed.
+/// Invokes a callback when the subscription is disposed, before the source's subscription is
+/// disposed.
 /// See <https://reactivex.io/documentation/operators/do.html>
 ///
 /// # Examples
@@ -45,7 +46,8 @@ pub struct DoBeforeDisposal<OE, F> {
 
 impl<OE, F> DoBeforeDisposal<OE, F> {
     /// Creates a [`DoBeforeDisposal`] over `source`;
-    /// [`ObservableExt::do_before_disposal`](crate::observable::ObservableExt::do_before_disposal) is the fluent form.
+    /// [`ObservableExt::do_before_disposal`](crate::observable::ObservableExt::do_before_disposal)
+    /// is the fluent form.
     pub fn new<T, E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,

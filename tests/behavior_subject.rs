@@ -22,7 +22,6 @@ fn test_completed() {
     let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -30,7 +29,7 @@ fn test_completed() {
     let _subscription = observable.subscribe_with_callback(
         |_| {},
         move |_| {
-            // Terminate Subject itself first. Then terminate Observers in Subject.
+            // The subject is terminated before its observers are told.
             assert!(subject_cloned.terminated().is_some());
         },
     );
@@ -73,7 +72,6 @@ fn test_error() {
     let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -81,7 +79,7 @@ fn test_error() {
     let _subscription = observable.subscribe_with_callback(
         |_| {},
         move |_| {
-            // Terminate Subject itself first. Then terminate Observers in Subject.
+            // The subject is terminated before its observers are told.
             assert!(subject_cloned.terminated().is_some());
         },
     );
@@ -134,7 +132,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -193,7 +190,6 @@ fn test_ref() {
     let mut subject = BehaviorSubject::shared(&value_1);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.subscribe(observer);
@@ -224,7 +220,6 @@ fn test_async() {
         let subject = BehaviorSubject::shared(&-1);
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = subject.clone();
 
         let subscription = scheduler
@@ -275,7 +270,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -316,7 +310,6 @@ fn test_unsub_on_next_by_take() {
     let subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().take(1);
 
     let _subscription = observable.clone().subscribe(observer);
@@ -339,7 +332,6 @@ fn test_complete_on_next() {
     let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -377,7 +369,6 @@ fn test_error_on_next() {
     let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -424,7 +415,6 @@ fn test_unsub_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -487,7 +477,6 @@ fn test_sub_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -548,7 +537,6 @@ fn test_next_on_next() {
     let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -597,7 +585,6 @@ fn test_unsub_on_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -669,7 +656,6 @@ fn test_sub_on_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -731,7 +717,6 @@ fn test_unsub_on_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -806,7 +791,6 @@ fn test_sub_on_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -864,19 +848,19 @@ fn test_sub_on_error() {
     ));
 }
 
-// The cases below assert the behaviour `BehaviorSubject` is meant to have. It keeps its value in a
-// lock of its own, next to the lock of the `PublishSubject`'s delivery, and nothing is atomic
-// across the two, so they fail today: each of them names the window it walks through.
+// The cases below re-enter the subject, or race it from other threads, where a `BehaviorSubject`
+// that kept its value under a lock of its own would let another event slip in between two steps.
+// The value lives in the multicast's resources instead, so reading or replacing it and queueing
+// the events that go with it are one step under one lock.
 
 #[test]
 fn test_next_on_sub() {
-    // `subscribe` reads the value under one lock and joins the subject under the other, and the
-    // callback of that first value runs in between: the `222` it sends is forwarded before the
-    // observer is admitted, so the observer keeps a value that is no longer the subject's.
+    // The callback of the current value, replayed on subscription, sends `222`: the observer has
+    // joined by then, so it receives that value too instead of keeping one that is no longer the
+    // subject's.
     let subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(111);
     let (checker_1, observer_1) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer_1);
@@ -907,7 +891,6 @@ fn test_next_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer sends a value into the subject while it is being released, so the value
@@ -946,7 +929,6 @@ fn test_complete_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer completes the subject while it is being released, so the subject
@@ -984,7 +966,6 @@ fn test_error_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer fails the subject while it is being released, so the subject terminates
@@ -1022,7 +1003,6 @@ fn test_sub_on_sub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The first observer subscribes the second one from the delivery of the value it is
@@ -1063,7 +1043,6 @@ fn test_sub_on_unsub() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer subscribes the third one while it is being released, so that
@@ -1109,10 +1088,8 @@ fn test_sub_on_unsub() {
 
 #[test]
 fn test_race_condition() {
-    // Same window as `test_next_on_sub`, walked into by another thread: a value that lands between
-    // the read of the value and the subscription is forwarded before the observer is admitted, and
-    // never reaches it. Subscribing after the value was stored but before it was forwarded
-    // delivers it twice instead.
+    // Like `test_next_on_sub`, from another thread: a value sent while an observer subscribes must
+    // reach it exactly once, as the replayed current value or as a forwarded one.
     use std::sync::{Arc, Barrier};
 
     const SUBSCRIBERS: usize = 3;
@@ -1164,9 +1141,9 @@ fn test_race_condition() {
 
 #[test]
 fn test_race_condition_between_next() {
-    // Storing the value and forwarding it are two steps under two locks, so two threads can store
-    // in one order and forward in the other: the value the subject reports is then not the last
-    // value its observers were given.
+    // Storing the value and forwarding it are one step, so two threads sending at once cannot
+    // store in one order and forward in the other: the value the subject reports is the last value
+    // its observers were given.
     use std::sync::{Arc, Barrier};
 
     const SENDERS: usize = 16;
@@ -1226,7 +1203,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let subject: BehaviorSubject<'_, i32, String, _> = BehaviorSubject::shared(-1);
     let observable = subject;
 
@@ -1237,7 +1213,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let subject: BehaviorSubject<'_, i32, String, _> = BehaviorSubject::shared(-1);
     let observable = subject;
 

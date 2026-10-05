@@ -50,11 +50,11 @@ macro_rules! boxed_observer {
 boxed_observer!(
     /// An observer whose concrete type is erased.
     ///
-    /// [`Observer::on_termination`] takes `self` by value, which a `Box<dyn Observer>` could not call
-    /// (see <https://stackoverflow.com/q/46620790/9315497>), so the erasure goes through a private
-    /// trait that terminates a `Box<Self>` instead. It is not `Send`; [`SendBoxedObserver`] is.
-    /// Operators that hand the observer to user code, such as `create` and `hook_on_termination`,
-    /// pass the one their [thread mode](ObserverMode::BoxedObserver) picks.
+    /// [`Observer::on_termination`] takes `self` by value, which a `Box<dyn Observer>` could not
+    /// call (see <https://stackoverflow.com/q/46620790/9315497>), so the erasure goes through a
+    /// private trait that terminates a `Box<Self>` instead. It is not `Send`; [`SendBoxedObserver`]
+    /// is. Operators that hand the observer to user code, such as `create` and
+    /// `hook_on_termination`, pass the one their [thread mode](ObserverMode::BoxedObserver) picks.
     ///
     /// # Examples
     /// ```rust

@@ -672,8 +672,8 @@ fn test_unsub_on_completed() {
 type SenderHolder = Arc<Mutex<Option<BoxedUnicastSender<'static, DropProbe, Infallible, Shared>>>>;
 
 /// A probe that sends another one into the pipe while being dropped, to check that a value is
-/// never dropped while the state of the pipe is locked. Dropping it under the lock would panic in
-/// single-threaded builds and deadlock otherwise.
+/// never dropped while the state of the pipe is locked. Dropping it under the lock would fail the
+/// re-entry check of debug builds and deadlock otherwise.
 ///
 /// The probe it sends only counts its own drop, so re-entering never recurses any further.
 fn reentrant_probe(holder: &SenderHolder, drops: &DropCount) -> DropProbe {
@@ -838,7 +838,6 @@ fn test_lifetime_or_sub() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_sender, observable) = unicast_subject::shared::<i32, String, _>();
 
     let observable = observable.filter(|_| true);
@@ -848,7 +847,7 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations. Nothing subscribes, so the observer type is only known to the boxed pipe.
+    // Nothing subscribes, so the observer type is only known to the boxed pipe.
     let (_sender, observable) = unicast_subject::shared_boxed::<i32, String>();
 
     observable.filter(|_| true);

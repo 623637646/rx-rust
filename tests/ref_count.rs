@@ -36,7 +36,6 @@ fn test_completed() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -100,7 +99,6 @@ fn test_error() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -164,7 +162,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -286,7 +283,6 @@ fn test_ref() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| {
             let counter = counter.fetch_add(1, Ordering::SeqCst) + 1;
@@ -358,7 +354,6 @@ fn test_async() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
-        // Custom operations
         let observable = observable
             .map(move |_| counter.fetch_add(1, Ordering::SeqCst) + 1)
             .publish()
@@ -446,7 +441,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -510,7 +504,6 @@ fn test_unsub_on_next_by_take() {
     let (channels, observable) = test_channels::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -540,7 +533,6 @@ fn test_multiple_operation() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -606,7 +598,6 @@ fn test_without_convenient_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish();
@@ -669,7 +660,6 @@ fn test_complete_on_next() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
@@ -706,7 +696,6 @@ fn test_error_on_next() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
@@ -743,7 +732,6 @@ fn test_unsub_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -827,7 +815,6 @@ fn test_sub_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -892,7 +879,6 @@ fn test_next_on_next() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
@@ -943,7 +929,6 @@ fn test_unsub_on_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -1026,7 +1011,6 @@ fn test_sub_on_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -1101,7 +1085,6 @@ fn test_unsub_on_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -1184,7 +1167,6 @@ fn test_sub_on_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -1258,7 +1240,6 @@ fn test_next_on_sub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject
         .clone()
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
@@ -1315,7 +1296,6 @@ fn test_complete_on_sub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = Empty
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -1347,7 +1327,6 @@ fn test_error_on_sub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error")
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -1380,7 +1359,6 @@ fn test_sub_on_sub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -1447,7 +1425,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.publish().ref_count();
 
     let subscription_1 = observable.subscribe(observer_1);
@@ -1472,7 +1449,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.publish().ref_count();
 
     let subscription_1 = observable.subscribe(observer_1);
@@ -1497,7 +1473,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.publish().ref_count();
 
     let subscription_1 = observable.subscribe(observer_1);
@@ -1515,7 +1490,6 @@ fn test_sub_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.publish().ref_count();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
@@ -1569,7 +1543,6 @@ fn test_subscribe_after_all_unsubscribed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish()
@@ -1763,7 +1736,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable) = test_channels::<'_, i32, Infallible>();
     let observable = observable.publish().ref_count();
 
@@ -1774,7 +1746,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable) = test_channels::<'_, i32, Infallible>();
     let observable = observable.publish().ref_count();
 
@@ -1811,7 +1782,6 @@ fn test_panicking_late_subscriber_keeps_the_ref_count() {
         }))
     });
 
-    // Custom operations
     let observable = source.publish().ref_count();
 
     let (checker, observer) = Checker::new();

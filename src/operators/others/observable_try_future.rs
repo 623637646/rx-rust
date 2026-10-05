@@ -77,7 +77,8 @@ where
     OE: ObservableTypes,
 {
     /// Creates an [`ObservableTryFuture`] over `source`;
-    /// [`ObservableExt::into_try_future`](crate::observable::ObservableExt::into_try_future) is the fluent form.
+    /// [`ObservableExt::into_try_future`](crate::observable::ObservableExt::into_try_future) is the
+    /// fluent form.
     pub fn new(source: OE) -> Self {
         Self {
             subscription: LazySubscription::new(source),

@@ -25,7 +25,8 @@ pub enum RetryAction<E, OE1> {
     Stop(E),
 }
 
-/// Retries an Observable in case of an error, based on a retry policy.
+/// Re-subscribes after an error, to the Observable the callback returns, until the callback
+/// gives up with an error of its own.
 /// See <https://reactivex.io/documentation/operators/retry.html>
 ///
 /// # Examples

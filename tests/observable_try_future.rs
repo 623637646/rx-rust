@@ -28,7 +28,6 @@ fn test_completed() {
     block_on(|_| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let mut future = observable.into_try_future();
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
 
@@ -75,7 +74,6 @@ fn test_completed_without_next() {
     block_on(|_| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let mut future = observable.into_try_future();
         assert!((&mut future).now_or_never().is_none());
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -91,7 +89,6 @@ fn test_error() {
     block_on(|_| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let mut future = observable.into_try_future();
         assert!((&mut future).now_or_never().is_none());
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -107,7 +104,6 @@ fn test_unsubscribe() {
     block_on(|_| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let mut future = observable.into_try_future();
         assert!((&mut future).now_or_never().is_none());
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -124,7 +120,6 @@ fn test_ref() {
         let value = 111;
         let mut subject = PublishSubject::<_, &str, _>::shared();
 
-        // Custom operations
         let observable = subject.clone();
         let mut future = observable.into_try_future();
 
@@ -164,7 +159,6 @@ fn test_async() {
     block_on(|scheduler| async move {
         let subject = PublishSubject::<_, &str, _>::shared();
 
-        // Custom operations
         let observable = subject.clone();
         let future = observable.into_try_future();
 
@@ -188,7 +182,6 @@ fn test_without_convenient_api() {
     block_on(|_| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
 
-        // Custom operations
         let mut future = ObservableTryFuture::new(observable);
         assert!((&mut future).now_or_never().is_none());
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -245,7 +238,6 @@ fn test_next_on_sub() {
     block_on(|_| async move {
         let subject = BehaviorSubject::<_, &str, _>::shared(111);
 
-        // Custom operations
         let observable = subject.clone();
         let future = observable.into_try_future();
 
@@ -257,7 +249,6 @@ fn test_next_on_sub() {
 #[test]
 fn test_complete_on_sub() {
     block_on(|_| async move {
-        // Custom operations
         let future = Empty
             .with_item_type::<i32>()
             .with_error_type::<&str>()
@@ -270,7 +261,6 @@ fn test_complete_on_sub() {
 #[test]
 fn test_error_on_sub() {
     block_on(|_| async move {
-        // Custom operations
         let future = Throw::new("error")
             .with_item_type::<i32>()
             .into_try_future();
@@ -291,7 +281,6 @@ fn test_next_on_unsub() {
             }))
         });
 
-        // Custom operations
         let mut future = observable.into_try_future();
         assert!((&mut future).now_or_never().is_none());
 
@@ -310,7 +299,6 @@ fn test_complete_on_unsub() {
             }))
         });
 
-        // Custom operations
         let mut future = observable.into_try_future();
         assert!((&mut future).now_or_never().is_none());
 
@@ -328,7 +316,6 @@ fn test_error_on_unsub() {
             }))
         });
 
-        // Custom operations
         let mut future = observable.into_try_future();
         assert!((&mut future).now_or_never().is_none());
 

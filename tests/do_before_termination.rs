@@ -26,7 +26,6 @@ fn test_completed() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<(), _>::new();
 
-    // Custom operations
     let observable = observable.do_before_termination(move |termination| {
         observer_2.on_termination(termination.clone());
     });
@@ -59,7 +58,6 @@ fn test_completed_order() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<(), _>::new();
 
-    // Custom operations
     let checker_1_cloned = checker_1.clone();
     let checker_2_cloned = checker_2.clone();
     let observable = observable.do_before_termination(move |termination| {
@@ -98,7 +96,6 @@ fn test_error() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<(), _>::new();
 
-    // Custom operations
     let observable = observable.do_before_termination(move |termination| {
         observer_2.on_termination(termination.clone());
     });
@@ -132,7 +129,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.do_before_termination(|termination| {
         terminations.with_mut(|values| values.push(termination.clone()));
     });
@@ -200,7 +196,6 @@ fn test_ref() {
 
     let (mut sender, observable, channel_checker) = test_channel();
 
-    // Custom operations
     let observable = observable.do_before_termination(|termination| {
         observer_2.on_termination(termination.clone());
     });
@@ -240,7 +235,6 @@ fn test_mut_ref() {
     let (checker, observer) = Checker::<(), _>::new();
     let (_, on_termination) = observer.into_callbacks();
 
-    // Custom operations
     let observable = observable.do_before_termination(|termination| match termination {
         Termination::Completed => panic!(),
         Termination::Error(error) => {
@@ -273,7 +267,6 @@ fn test_async() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::<(), _>::new();
 
-        // Custom operations
         let observable = observable.do_before_termination(|termination| {
             observer_2.on_termination(termination.clone());
         });
@@ -316,7 +309,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
     let terminations = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let terminations_cloned = terminations.clone();
     let observable = observable.do_before_termination(move |termination| {
         terminations_cloned.with_mut(|values| values.push(termination.clone()));
@@ -366,7 +358,6 @@ fn test_unsub_on_next_by_take() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<(), _>::new();
 
-    // Custom operations
     let observable = observable
         .do_before_termination(move |termination| {
             observer_2.on_termination(termination.clone());
@@ -394,7 +385,6 @@ fn test_multiple_operation() {
     let (checker, observer) = Checker::new();
     let terminations = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let terminations_cloned_1 = terminations.clone();
     let terminations_cloned_2 = terminations.clone();
     let observable = observable
@@ -433,7 +423,6 @@ fn test_without_convenient_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<(), _>::new();
 
-    // Custom operations
     let observable = DoBeforeTermination::new(observable, move |termination| {
         observer_2.on_termination(termination.clone());
     });
@@ -515,7 +504,6 @@ fn test_fn() {
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
 
-    // Custom operations
     let observable = observable.do_before_termination(|_| {
         s.consume();
     });
@@ -536,7 +524,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.do_before_termination(|_| {});
 
@@ -547,7 +534,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.do_before_termination(|_| {});
 

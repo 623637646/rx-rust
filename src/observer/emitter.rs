@@ -11,10 +11,10 @@ use std::marker::PhantomData;
 /// [`hook_on_termination`](crate::observable::ObservableExt::hook_on_termination), in the mode of
 /// their source.
 ///
-/// It is a concrete type rather than the bare `OR`, so the callback's parameter needs no annotation:
-/// method lookup only needs the type constructor, and `OR` is inferred from the subscription later.
-/// It implements [`Observer`], so the callback can also hand it to another source:
-/// `source.subscribe(emitter)`. Its `PhantomData<M>` makes it `!Send + !Sync` for
+/// It is a concrete type rather than the bare `OR`, so the callback's parameter needs no
+/// annotation: method lookup only needs the type constructor, and `OR` is inferred from the
+/// subscription later. It implements [`Observer`], so the callback can also hand it to another
+/// source: `source.subscribe(emitter)`. Its `PhantomData<M>` makes it `!Send + !Sync` for
 /// [`Local`](crate::thread_mode::Local), and as `Send` as the observer for
 /// [`Shared`](crate::thread_mode::Shared).
 pub struct Emitter<OR, M: ThreadMode> {
@@ -22,10 +22,10 @@ pub struct Emitter<OR, M: ThreadMode> {
     /// Enforces the `local` declaration; memory safety does not need it. Without it, a `Local`
     /// builder that moves the emitter to another thread compiles as long as nothing downstream is
     /// `!Send` (`.map(..)` into a callback), and fails once something is (`.merge_with(..)`, whose
-    /// `Rc` state is `!Send`). That failure would point into the operator's internals instead of
-    /// at the declaration, and whether the builder compiles would depend on how the operators
-    /// downstream keep their state, which they may change. With it, the builder never compiles,
-    /// and the error names `Emitter<_, Local>`. `Shared` is `Send + Sync`, so it adds nothing there.
+    /// `Rc` state is `!Send`). That failure would point into the operator's internals instead of at
+    /// the declaration, and whether the builder compiles would depend on how the operators
+    /// downstream keep their state, which they may change. With it, the builder never compiles, and
+    /// the error names `Emitter<_, Local>`. `Shared` is `Send + Sync`, so it adds nothing there.
     _mode: PhantomData<M>,
 }
 

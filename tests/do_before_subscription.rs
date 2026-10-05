@@ -26,7 +26,6 @@ fn test_completed() {
     let (checker, observer) = Checker::new();
     let mut called = false;
 
-    // Custom operations
     let observable = observable.do_before_subscription(|| {
         called = true;
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
@@ -55,7 +54,6 @@ fn test_error() {
     let (checker, observer) = Checker::new();
     let mut called = false;
 
-    // Custom operations
     let observable = observable.do_before_subscription(|| {
         called = true;
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
@@ -84,7 +82,6 @@ fn test_unsubscribe() {
     let (checker, observer) = Checker::new();
     let mut called = false;
 
-    // Custom operations
     let observable = observable.do_before_subscription(|| {
         called = true;
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
@@ -116,7 +113,6 @@ fn test_ref() {
     let (checker, observer) = Checker::new();
     let mut called = false;
 
-    // Custom operations
     let observable = observable.do_before_subscription(|| {
         called = true;
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
@@ -145,7 +141,6 @@ fn test_mut_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let mut called = false;
 
-    // Custom operations
     let observable = observable.do_before_subscription(|| {
         called = true;
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
@@ -178,7 +173,6 @@ fn test_async() {
         let (checker, observer) = Checker::new();
         let called = Arc::new(AtomicBool::new(false));
 
-        // Custom operations
         let called_cloned = called.clone();
         let channel_checker_cloned = channel_checker.clone();
         let observable = observable.do_before_subscription(move || {
@@ -221,7 +215,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.do_before_subscription(|| {});
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -261,7 +254,6 @@ fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::new();
     let mut called = false;
 
-    // Custom operations
     let observable = observable
         .do_before_subscription(|| {
             called = true;
@@ -288,7 +280,6 @@ fn test_multiple_operation() {
     let mut called_1 = false;
     let mut called_2 = false;
 
-    // Custom operations
     let observable = observable
         .do_before_subscription(|| {
             called_1 = true;
@@ -323,7 +314,6 @@ fn test_without_convenient_api() {
     let (checker, observer) = Checker::new();
     let mut called = false;
 
-    // Custom operations
     let observable = DoBeforeSubscription::new(observable, || {
         called = true;
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
@@ -401,7 +391,6 @@ fn test_fn() {
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
 
-    // Custom operations
     let observable = observable.do_before_subscription(|| {
         s.consume();
     });
@@ -422,7 +411,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.do_before_subscription(|| {});
 
@@ -433,7 +421,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.do_before_subscription(|| {});
 

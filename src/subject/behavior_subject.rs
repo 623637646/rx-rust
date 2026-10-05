@@ -50,9 +50,9 @@ pub struct BehaviorSubject<'or, T, E, M: ObserverMode>(
 );
 
 impl<T, E, M: ObserverMode> BehaviorSubject<'_, T, E, M> {
-    /// Creates a subject in the mode `M`, for code that is generic over the mode, such as an operator
-    /// that creates it in the mode of its source; [`local`](Self::local) and [`shared`](Self::shared)
-    /// name the mode instead.
+    /// Creates a subject in the mode `M`, for code that is generic over the mode, such as an
+    /// operator that creates it in the mode of its source; [`local`](Self::local) and
+    /// [`shared`](Self::shared) name the mode instead.
     pub fn new(value: T) -> Self {
         Self(SerializedMulticast::idle(value))
     }
@@ -118,8 +118,8 @@ where
         match self
             .0
             .subscribe_with(observer, |value, terminated| match terminated {
-                // The current value is snapshotted under the very lock that queues the subscription,
-                // so it is followed by exactly the values emitted after it.
+                // The current value is snapshotted under the very lock that queues the
+                // subscription, so it is followed by exactly the values emitted after it.
                 None => Admission::Join(vec![value.clone()]),
                 Some(termination) => Admission::Terminated(Vec::new(), termination.clone()),
             }) {

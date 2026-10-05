@@ -14,6 +14,9 @@ use std::{
 /// Creates an Observable that emits a sequence of integers spaced by a given time interval.
 /// See <https://reactivex.io/documentation/operators/interval.html>
 ///
+/// `0` is emitted after `delay` — at once for `None`, unlike ReactiveX, which waits one period
+/// first — and every following count one `period` later, at a fixed rate. It never completes.
+///
 /// # Examples
 /// ```rust
 /// # #[cfg(not(feature = "tokio-scheduler"))]
@@ -64,7 +67,7 @@ pub struct Interval<S> {
 }
 
 impl<S> Interval<S> {
-    /// Creates an [`Interval`].
+    /// Creates an [`Interval`] that emits every `period`, starting after `delay`.
     pub fn new(period: Duration, scheduler: S, delay: Option<Duration>) -> Self {
         Self {
             period,

@@ -265,7 +265,6 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     block_on(|scheduler| async move {
-        // Custom operations
         let source = async { Ok::<_, &str>(111) };
         let observable = FromTryFuture::new(source, scheduler.clone());
 
@@ -278,7 +277,6 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     block_on(|scheduler| async move {
-        // Custom operations
         let source = async { Ok::<_, &str>(111) };
         let observable = FromTryFuture::new(source, scheduler.clone());
 

@@ -55,9 +55,9 @@ use std::marker::PhantomData;
 /// - [`local_boxed`](Create::local_boxed) / [`shared_boxed`](Create::shared_boxed) make a
 ///   `Create<.., true>`, whose builder gets a [`BoxedObserver`] / [`SendBoxedObserver`], at the
 ///   cost of one allocation per subscription and a virtual call per event. It subscribes any
-///   observer, so it is an ordinary value:
-///   return it, store it, clone it, subscribe it several times. `retry` and `catch` callbacks that
-///   return a `Create` need this form (or [`into_boxed`](crate::observable::ObservableExt::into_boxed)).
+///   observer, so it is an ordinary value: return it, store it, clone it, subscribe it several
+///   times. `retry` and `catch` callbacks that return a `Create` need this form (or
+///   [`into_boxed`](crate::observable::ObservableExt::into_boxed)).
 ///
 /// ```rust
 /// use rx_rust::{
@@ -112,9 +112,10 @@ use std::marker::PhantomData;
 /// Where the builder emits from is known to its author only, so the thread mode is declared here,
 /// with no default: `local` when it emits only on the subscribing thread, synchronously, and
 /// `shared` when it may emit from another one. A `Local` builder gets an observer that is not
-/// `Send` (an [`Emitter`] carrying the `!Send` [`Local`] as a `PhantomData`, or a [`BoxedObserver`]), so
-/// moving it to another thread does not compile, whatever the observer downstream is. A `Shared`
-/// emitter is as `Send` as the downstream observer; `shared_boxed` requires it to be `Send`.
+/// `Send` (an [`Emitter`] carrying the `!Send` [`Local`] as a `PhantomData`, or a
+/// [`BoxedObserver`]), so moving it to another thread does not compile, whatever the observer
+/// downstream is. A `Shared` emitter is as `Send` as the downstream observer; `shared_boxed`
+/// requires it to be `Send`.
 ///
 /// ```compile_fail
 /// use rx_rust::{
@@ -157,10 +158,10 @@ use std::marker::PhantomData;
 ///
 /// Both forms are this one type: `BOXED` is `false` for [`local`](Create::local) /
 /// [`shared`](Create::shared), and `true` for [`local_boxed`](Create::local_boxed) /
-/// [`shared_boxed`](Create::shared_boxed). It only picks the
-/// [`Observable`] impl: the builder gets an [`Emitter`] under `false` and the boxed observer of the
-/// mode under `true`. The lifetime that boxed observer may borrow for is not a parameter: it
-/// appears only in the builder's signature, and each subscription picks it.
+/// [`shared_boxed`](Create::shared_boxed). It only picks the [`Observable`] impl: the builder gets
+/// an [`Emitter`] under `false` and the boxed observer of the mode under `true`. The lifetime that
+/// boxed observer may borrow for is not a parameter: it appears only in the builder's signature,
+/// and each subscription picks it.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound(F: Clone)))]
 pub struct Create<T, E, D, F, M, const BOXED: bool = false> {

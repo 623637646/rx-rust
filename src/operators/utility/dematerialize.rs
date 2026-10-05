@@ -11,7 +11,8 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Converts an Observable that emits `Event` objects into a "live" Observable that emits the items and notifications embedded in those `Event` objects.
+/// Converts an Observable that emits [`Event`]s back into one that emits the items and the
+/// termination those events describe.
 /// See <https://reactivex.io/documentation/operators/materialize-dematerialize.html>
 ///
 /// # Examples
@@ -46,7 +47,8 @@ pub struct Dematerialize<OE>(OE);
 
 impl<OE> Dematerialize<OE> {
     /// Creates a [`Dematerialize`] over `source`;
-    /// [`ObservableExt::dematerialize`](crate::observable::ObservableExt::dematerialize) is the fluent form.
+    /// [`ObservableExt::dematerialize`](crate::observable::ObservableExt::dematerialize) is the
+    /// fluent form.
     pub fn new(source: OE) -> Self {
         Self(source)
     }

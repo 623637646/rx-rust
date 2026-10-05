@@ -38,7 +38,6 @@ fn test_completed() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -122,7 +121,6 @@ fn test_error() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -205,7 +203,6 @@ fn test_unsubscribe() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -277,7 +274,6 @@ fn test_async() {
         let call_history_7 = call_history.clone();
         let call_history_8 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(move || {
@@ -378,7 +374,6 @@ fn test_subscribe_by_different_observer() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .clone()
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
@@ -492,7 +487,6 @@ fn test_unsub_on_next_by_take() {
         let call_history_7 = call_history.clone();
         let call_history_8 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(move || {
@@ -554,7 +548,6 @@ fn test_unsub_in_the_middle_of_a_batch() {
         let delivered = Arc::new(AtomicUsize::new(0));
         let delivered_1 = delivered.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_after_next(move |_| {
@@ -600,7 +593,6 @@ fn test_multiple_operation() {
         let call_history_b_3 = call_history_b.clone();
         let call_history_b_4 = call_history_b.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -722,7 +714,6 @@ fn test_without_convenient_api() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = ObserveOn::new(observable, ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
                 call_history.fetch_or(1 << 0, Ordering::SeqCst);
@@ -805,7 +796,6 @@ fn test_complete_after_next() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -874,7 +864,6 @@ fn test_error_after_next() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -942,7 +931,6 @@ fn test_unsub_after_next() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -1010,7 +998,6 @@ fn test_unsub_after_completed() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -1082,7 +1069,6 @@ fn test_unsub_after_error() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -1154,7 +1140,6 @@ fn test_order_with_continuous_next() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -1221,7 +1206,6 @@ fn test_next_on_sub() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = source
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -1286,7 +1270,6 @@ fn test_complete_on_sub() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = Empty
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -1345,7 +1328,6 @@ fn test_error_on_sub() {
         let call_history_3 = call_history.clone();
         let call_history_4 = call_history.clone();
 
-        // Custom operations
         let observable = Throw::new("error")
             .observe_on(ThreadCheckerScheduler::new("thread_1"))
             .do_before_subscription(|| {
@@ -1409,7 +1391,6 @@ fn test_next_on_unsub() {
                 }))
             });
 
-        // Custom operations
         let observable = observable.observe_on(scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -1437,7 +1418,6 @@ fn test_complete_on_unsub() {
                 }))
             });
 
-        // Custom operations
         let observable = observable.observe_on(scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -1464,7 +1444,6 @@ fn test_error_on_unsub() {
             }))
         });
 
-        // Custom operations
         let observable = observable.observe_on(scheduler.clone());
 
         let subscription = observable.subscribe(observer);
@@ -1502,7 +1481,6 @@ fn test_observe_on_with_subscribe_on() {
         let call_history_b_7 = call_history_b.clone();
         let call_history_b_8 = call_history_b.clone();
 
-        // Custom operations
         let observable = observable
             .observe_on(ThreadCheckerScheduler::new("thread_o_1"))
             .do_before_subscription(move || {
@@ -1660,7 +1638,6 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     block_on(|_| async move {
-        // Custom operations
         let observable = Never.observe_on(ThreadCheckerScheduler::new("thread_1"));
 
         let observable = observable.filter(|_| true);
@@ -1672,7 +1649,6 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     block_on(|_| async move {
-        // Custom operations
         let observable = Never.observe_on(ThreadCheckerScheduler::new("thread_1"));
 
         observable.filter(|_| true);

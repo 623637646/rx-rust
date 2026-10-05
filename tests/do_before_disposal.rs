@@ -35,7 +35,6 @@ fn test_completed() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let called_cloned = called.clone();
     let observable = observable.do_before_disposal(|| {
         assert!(!disposed.read());
@@ -77,7 +76,6 @@ fn test_error() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let called_cloned = called.clone();
     let observable = observable.do_before_disposal(|| {
         assert!(!disposed.read());
@@ -119,7 +117,6 @@ fn test_unsubscribe() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let called_cloned = called.clone();
     let observable = observable.do_before_disposal(|| {
         assert!(!disposed.read());
@@ -170,7 +167,6 @@ fn test_ref() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let called_cloned = called.clone();
     let observable = observable.do_before_disposal(|| {
         assert!(!disposed.read());
@@ -226,7 +222,6 @@ fn test_mut_ref() {
         }))
     });
 
-    // Custom operations
     let called_cloned = called.clone();
     let observable = observable.do_before_disposal(|| {
         assert!(!disposed.read());
@@ -284,7 +279,6 @@ fn test_async() {
         });
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let disposed_cloned = disposed.clone();
         let called_cloned = called.clone();
         let observable = observable.do_before_disposal(move || {
@@ -354,7 +348,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let called_1_cloned = called_1.clone();
     let called_2_cloned = called_2.clone();
     let first_call = Arc::new(AtomicBool::new(true));
@@ -434,7 +427,6 @@ fn test_unsub_on_next_by_take() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .do_before_disposal(|| {
             assert!(!disposed.read());
@@ -470,7 +462,6 @@ fn test_multiple_operation() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let called_1_cloned = called_1.clone();
     let called_2_cloned = called_2.clone();
     let observable = observable
@@ -528,7 +519,6 @@ fn test_without_convenient_api() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let called_cloned = called.clone();
     let observable = DoBeforeDisposal::new(observable, || {
         assert!(!disposed.read());
@@ -617,7 +607,6 @@ fn test_fn() {
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
 
-    // Custom operations
     let observable = observable.do_before_disposal(|| {
         s.consume();
     });
@@ -638,7 +627,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.do_before_disposal(|| {});
 
@@ -649,7 +637,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.do_before_disposal(|| {});
 

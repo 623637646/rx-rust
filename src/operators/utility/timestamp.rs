@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::time::Instant;
 
-/// Attaches a timestamp to each item emitted by an Observable.
+/// Attaches the [`Instant`] it arrived at to each item emitted by an Observable.
 /// See <https://reactivex.io/documentation/operators/timestamp.html>
 ///
 /// # Examples
@@ -53,7 +53,8 @@ pub struct Timestamp<OE> {
 
 impl<OE> Timestamp<OE> {
     /// Creates a [`Timestamp`] over `source`;
-    /// [`ObservableExt::timestamp`](crate::observable::ObservableExt::timestamp) is the fluent form.
+    /// [`ObservableExt::timestamp`](crate::observable::ObservableExt::timestamp) is the fluent
+    /// form.
     pub fn new(source: OE) -> Self {
         Self { source }
     }

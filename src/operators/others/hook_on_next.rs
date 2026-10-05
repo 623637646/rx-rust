@@ -7,7 +7,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback for each item emitted by the source Observable.
+/// Hands each item of the source Observable, together with the downstream observer, to a callback
+/// that decides what to forward.
 ///
 /// # Examples
 /// ```rust
@@ -43,7 +44,8 @@ pub struct HookOnNext<OE, F> {
 
 impl<OE, F> HookOnNext<OE, F> {
     /// Creates a [`HookOnNext`] over `source`;
-    /// [`ObservableExt::hook_on_next`](crate::observable::ObservableExt::hook_on_next) is the fluent form.
+    /// [`ObservableExt::hook_on_next`](crate::observable::ObservableExt::hook_on_next) is the
+    /// fluent form.
     pub fn new<T, E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,

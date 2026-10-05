@@ -31,7 +31,6 @@ fn test_completed_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -105,7 +104,6 @@ fn test_completed_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -179,7 +177,6 @@ fn test_completed_inner_completed_fast() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -245,7 +242,6 @@ fn test_completed_outer_completed_fast() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -290,7 +286,6 @@ fn test_completed_empty() {
     let (sender, observable, channel_checker) = test_channel::<'_, Just<i32>, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -310,7 +305,6 @@ fn test_completed_same_inner() {
     let mut subject_1 = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -360,7 +354,6 @@ fn test_completed_new_from_iter() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = ConcatAll::new_from_iter([observable_1, observable_2]);
 
     let _subscription = observable.subscribe(observer);
@@ -435,7 +428,6 @@ fn test_error_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -509,7 +501,6 @@ fn test_error_only_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -576,7 +567,6 @@ fn test_error_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -650,7 +640,6 @@ fn test_error_only_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -715,7 +704,6 @@ fn test_error_empty() {
     let (sender, observable, channel_checker) = test_channel::<'_, Throw<_>, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -735,7 +723,6 @@ fn test_error_same_inner() {
     let mut subject_1 = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -785,7 +772,6 @@ fn test_error_new_from_iter() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = ConcatAll::new_from_iter([observable_1, observable_2]);
 
     let _subscription = observable.subscribe(observer);
@@ -832,7 +818,6 @@ fn test_unsubscribe() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let subscription = observable.subscribe(observer);
@@ -879,7 +864,6 @@ fn test_unsubscribe_with_publish_subject() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable.concat_all();
     let observable_1 = observable;
@@ -965,7 +949,6 @@ fn test_ref() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1035,7 +1018,6 @@ fn test_mut_ref() {
     let mut value_3 = 333;
     let mut error = -1;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(
             observer
@@ -1081,7 +1063,6 @@ fn test_mut_ref_completed() {
     let mut value_3 = 333;
     let mut completed = false;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(
             observer
@@ -1130,7 +1111,6 @@ fn test_async() {
         let (_, observable_2, channel_checker_2) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.concat_all();
 
         let subscription = scheduler
@@ -1192,7 +1172,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -1314,7 +1293,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all().take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -1345,7 +1323,6 @@ fn test_multiple_operation() {
     let (mut sender_4, observable_4, channel_checker_4) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all().concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1448,7 +1425,6 @@ fn test_without_convenient_api() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = ConcatAll::new(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -1521,7 +1497,6 @@ fn test_next_on_sub() {
     let source = source.start_with([source_1]);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = source.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1567,7 +1542,6 @@ fn test_next_on_inner_sub_from_another_thread() {
     let mut subject_3 = PublishSubject::<i32, Infallible, _>::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1581,8 +1555,8 @@ fn test_next_on_inner_sub_from_another_thread() {
     let subject_3_cloned = subject_3.clone();
     let observable_2 =
         Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
-            // Terminates synchronously, and only then lets the source emit the next observable, from
-            // a thread the source's own delivery does not serialize with this subscription.
+            // Terminates synchronously, and only then lets the source emit the next observable,
+            // from a thread the source's own delivery does not serialize with this subscription.
             observer.on_termination(Termination::Completed);
             let mut subject_cloned = subject_cloned;
             std::thread::spawn(move || {
@@ -1686,7 +1660,6 @@ fn test_next_on_inner_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.with_item_type::<Empty>().concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1731,7 +1704,6 @@ fn test_complete_on_inner_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error")
         .with_item_type::<Throw<_>>()
         .concat_all();
@@ -1757,7 +1729,6 @@ fn test_next_on_unsub() {
         },
     );
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let subscription = observable.subscribe(observer);
@@ -1785,7 +1756,6 @@ fn test_complete_on_unsub() {
         },
     );
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let subscription = observable.subscribe(observer);
@@ -1811,7 +1781,6 @@ fn test_error_on_unsub() {
         },
     );
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let subscription = observable.subscribe(observer);
@@ -1829,7 +1798,6 @@ fn test_inner_observer_pending_subscription_when_terminated() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.concat_all();
 
     let _subscription = observable.subscribe(observer);
@@ -1979,7 +1947,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, _>();
     let observable = observable.concat_all();
 
@@ -1990,7 +1957,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, Infallible>();
     let observable = observable.concat_all();
 

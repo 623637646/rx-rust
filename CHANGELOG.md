@@ -39,13 +39,14 @@ All notable changes to this project are documented here. The format follows
   nameable `Task` (a context, an optional future or stream, and a `fn` handler); the closure-based
   `schedule`, `schedule_periodically`, `spawn_future`, … moved to `SchedulerExt`, which every
   scheduler implements.
-- **Breaking:** type erasure is explicit: `into_boxed` / `into_cloneable_boxed` erase without `Send`,
-  `into_send_boxed` / `into_send_cloneable_boxed` (and `SendBoxedObserver`, `SendBoxedDisposal`)
-  keep it, and `into_boxed_for` / `into_send_boxed_for` fix the observer type.
+- **Breaking:** type erasure is explicit: `into_boxed` / `into_cloneable_boxed` erase without
+  `Send`, `into_send_boxed` / `into_send_cloneable_boxed` (and `SendBoxedObserver`,
+  `SendBoxedDisposal`) keep it, and `into_boxed_for` / `into_send_boxed_for` fix the observer type.
 - **Breaking:** `Create::local` / `Create::shared` hand the builder an `Emitter`, the unboxed
   downstream observer (no allocation, static dispatch); such a `Create` subscribes one observer
   type only. The former behavior, a boxed observer and a `Create` that subscribes any observer, is
-  `Create::local_boxed` / `Create::shared_boxed`. `Create` is now `Create<T, E, D, F, M>`.
+  `Create::local_boxed` / `Create::shared_boxed`. Both forms are one type,
+  `Create<T, E, D, F, M, const BOXED: bool = false>`.
 - **Breaking:** the lock helpers moved from `utils::mutable` to `thread_mode::mutable`, next to the
   modes that pick the locks; `thread_mode` depends on nothing else in the crate. The boxed observer
   of a mode is `ObserverMode::BoxedObserver`, and `IntoBoxedObserver` lives with it in
@@ -71,9 +72,9 @@ All notable changes to this project are documented here. The format follows
   `TokioLocalScheduler` — `ambient()` for the `LocalSet` the calling thread runs,
   `from_local_set(&local_set)` for a given one, which also accepts tasks before it runs —,
   and `SmolLocalScheduler::from_executor(&executor)` over a `LocalExecutor`. async-std has none:
-  its `spawn_local` needs its `unstable` feature. A scheduler built from an executor holds it weakly, so a
-  pending task does not keep its executor alive; running a task after the executor is dropped
-  panics.
+  its `spawn_local` needs its `unstable` feature. A scheduler built from an executor holds it
+  weakly, so a pending task does not keep its executor alive; running a task after the executor is
+  dropped panics.
 - **Breaking:** `publish`, `replay`, `share`, … multicast through a subject of the source's mode;
   `share*` require `Item: Clone` and `Error: Clone`.
 - After a dispose, a context-based operator releases its observer when the last handle to the

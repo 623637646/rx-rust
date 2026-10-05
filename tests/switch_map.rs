@@ -31,7 +31,6 @@ fn test_completed_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -104,7 +103,6 @@ fn test_completed_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -177,7 +175,6 @@ fn test_completed_first_completed() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -257,7 +254,6 @@ fn test_completed_inner_completed_fast() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -329,7 +325,6 @@ fn test_completed_outer_completed_fast() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let observable = observable.switch_map(move |value| match value {
         1 => observable_1_option.take().unwrap(),
@@ -378,7 +373,6 @@ fn test_completed_empty() {
     let (sender, observable, channel_checker) = test_channel::<'_, Just<i32>, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.switch_map(Just::new);
 
     let _subscription = observable.subscribe(observer);
@@ -398,7 +392,6 @@ fn test_completed_same_inner() {
     let mut subject_1 = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let subject_1_cloned = subject_1.clone();
     let observable = observable.switch_map(move |value| match value {
         1 => subject_1_cloned.clone(),
@@ -454,7 +447,6 @@ fn test_error_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -527,7 +519,6 @@ fn test_error_only_inner_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -593,7 +584,6 @@ fn test_error_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -666,7 +656,6 @@ fn test_error_only_outer_finish() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -730,7 +719,6 @@ fn test_error_empty() {
     let (sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.switch_map(Throw::new);
 
     let _subscription = observable.subscribe(observer);
@@ -750,7 +738,6 @@ fn test_error_same_inner() {
     let mut subject_1 = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let subject_1_cloned = subject_1.clone();
     let observable = observable.switch_map(move |value| match value {
         1 => subject_1_cloned.clone(),
@@ -806,7 +793,6 @@ fn test_unsubscribe() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -866,7 +852,6 @@ fn test_unsubscribe_with_publish_subject() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let subject_1_cloned = subject_1.clone();
     let subject_2_cloned = subject_2.clone();
@@ -958,7 +943,6 @@ fn test_ref() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1 = Some(observable_1);
     let mut observable_2 = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -1027,7 +1011,6 @@ fn test_mut_ref() {
     let mut value_3 = 333;
     let mut error = -1;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(
             observer
@@ -1073,7 +1056,6 @@ fn test_mut_ref_completed() {
     let mut value_3 = 333;
     let mut completed = false;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(
             observer
@@ -1122,7 +1104,6 @@ fn test_async() {
         let (mut sender_2, observable_2, channel_checker_2) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let mut observable_1 = Some(observable_1);
         let mut observable_2 = Some(observable_2);
         let observable = observable.switch_map(move |value| match value {
@@ -1202,7 +1183,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.switch_map(move |value| match value {
         1 => source_1.clone(),
         2 => source_2.clone(),
@@ -1316,7 +1296,6 @@ fn test_unsub_on_next_by_take() {
     let (_sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable
@@ -1358,7 +1337,6 @@ fn test_multiple_operation() {
     let (mut sender_4, observable_4, channel_checker_4) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1 = Some(observable_1);
     let mut observable_2 = Some(observable_2);
     let mut observable_3 = Some(observable_3);
@@ -1461,7 +1439,6 @@ fn test_without_convenient_api() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1 = Some(observable_1);
     let mut observable_2 = Some(observable_2);
     let observable = SwitchMap::new(observable, move |value| match value {
@@ -1530,7 +1507,6 @@ fn test_next_on_sub() {
     let mut subject = BehaviorSubject::shared(1);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let subject_1_cloned = subject_1.clone();
     let subject_2_cloned = subject_2.clone();
     let observable = subject.clone().switch_map(move |value| match value {
@@ -1576,7 +1552,6 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.with_item_type::<i32>().switch_map(Just::new);
 
     let _subscription = observable.subscribe(observer);
@@ -1588,7 +1563,6 @@ fn test_complete_on_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::<Infallible, &str>::new();
 
-    // Custom operations
     let observable = Throw::new("error")
         .with_item_type::<i32>()
         .switch_map(|_| Throw::new("inner error"));
@@ -1612,7 +1586,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let observable =
         observable.switch_map(move |_| observable_1_option.take().expect("mapped once"));
@@ -1641,7 +1614,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let observable =
         observable.switch_map(move |_| observable_1_option.take().expect("mapped once"));
@@ -1670,7 +1642,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let observable =
         observable.switch_map(move |_| observable_1_option.take().expect("mapped once"));
@@ -1713,7 +1684,6 @@ fn test_race_condition_next_after_unsub() {
     .into_send_boxed();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -1780,7 +1750,6 @@ fn test_race_condition_terminate_after_unsub() {
     .into_send_boxed();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let mut observable_2_option = Some(observable_2);
     let observable = observable.switch_map(move |value| match value {
@@ -1913,7 +1882,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, _>();
     let observable = observable.switch_map(|value| value);
 
@@ -1924,7 +1892,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, Infallible>();
     let observable = observable.switch_map(|value| value);
 

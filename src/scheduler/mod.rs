@@ -53,7 +53,7 @@
 //!     let ran = Arc::new(Mutex::new(false));
 //!     let ran_in_task = Arc::clone(&ran);
 //!
-//!     // Runs `task` after 5 ms; dropping the returned disposal before that would cancel it.
+//!     // Runs the closure after 5 ms; dropping the returned disposal before that would cancel it.
 //!     let _disposal = scheduler.schedule(
 //!         move || *ran_in_task.lock().unwrap() = true,
 //!         Some(Duration::from_millis(5)),

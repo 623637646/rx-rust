@@ -23,7 +23,6 @@ fn test_completed() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.hook_on_subscription(|observable, observer| {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
@@ -54,7 +53,6 @@ fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.hook_on_subscription(|observable, observer| {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
@@ -85,7 +83,6 @@ fn test_unsubscribe() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.hook_on_subscription(|observable, observer| {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
@@ -119,7 +116,6 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.hook_on_subscription(|observable, observer| {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
@@ -151,7 +147,6 @@ fn test_mut_ref() {
 
     let (mut sender, observable, channel_checker) = test_channel::<'_, &mut i32, Infallible>();
 
-    // Custom operations
     let observable = observable.hook_on_subscription(|observable, observer| {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
@@ -190,7 +185,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let channel_checker_cloned = channel_checker.clone();
         let observable = observable.hook_on_subscription(move |observable, observer| {
             assert_eq!(channel_checker_cloned.state(), ChannelState::Initialized);
@@ -233,7 +227,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .hook_on_subscription_boxed(move |observable, observer| observable.subscribe(observer));
     let observable_1 = observable;
@@ -275,7 +268,6 @@ fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::new();
     let channel_checker = Arc::new(channel_checker);
 
-    // Custom operations
     let observable = observable
         .hook_on_subscription(|observable, observer| {
             assert_eq!(channel_checker.state(), ChannelState::Initialized);
@@ -305,7 +297,6 @@ fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .hook_on_subscription(|observable, observer| {
             assert_eq!(channel_checker.state(), ChannelState::Initialized);
@@ -345,7 +336,6 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = HookOnSubscription::new(observable, |observable, observer| {
         assert_eq!(channel_checker.state(), ChannelState::Initialized);
         let sub = observable.subscribe(observer);
@@ -428,7 +418,6 @@ fn test_fn() {
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
 
-    // Custom operations
     let observable = observable.hook_on_subscription(|observable, observer| {
         s.consume();
         observable.subscribe(observer)
@@ -451,7 +440,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable =
         observable.hook_on_subscription(|observable, observer| observable.subscribe(observer));
@@ -463,7 +451,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable
         .hook_on_subscription_boxed(|observable, observer| observable.subscribe(observer));

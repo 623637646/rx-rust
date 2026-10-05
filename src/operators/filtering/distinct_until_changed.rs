@@ -9,7 +9,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits items from the source Observable only if the current item is different from the immediately preceding item.
+/// Emits an item from the source Observable only if it differs from the immediately preceding
+/// item.
 /// See <https://reactivex.io/documentation/operators/distinctuntilchanged.html>
 ///
 /// # Examples
@@ -43,7 +44,8 @@ pub struct DistinctUntilChanged<OE, F> {
 }
 
 impl<OE, F> DistinctUntilChanged<OE, F> {
-    /// Creates a [`DistinctUntilChanged`] over `source` that compares the keys `key_selector` computes.
+    /// Creates a [`DistinctUntilChanged`] over `source` that compares the keys `key_selector`
+    /// computes.
     pub fn new_with_key_selector<T, E, K>(source: OE, key_selector: F) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,
@@ -58,7 +60,8 @@ impl<OE, F> DistinctUntilChanged<OE, F> {
 
 impl<T, OE> DistinctUntilChanged<OE, fn(&T) -> T> {
     /// Creates a [`DistinctUntilChanged`] over `source`;
-    /// [`ObservableExt::distinct_until_changed`](crate::observable::ObservableExt::distinct_until_changed) is the fluent form.
+    /// [`ObservableExt::distinct_until_changed`](crate::observable::ObservableExt::distinct_until_changed)
+    /// is the fluent form.
     pub fn new<E>(source: OE) -> Self
     where
         T: Clone,

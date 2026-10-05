@@ -28,7 +28,6 @@ fn test_completed() {
     let (_stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -62,7 +61,6 @@ fn test_error() {
     let (_stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -96,7 +94,6 @@ fn test_completed_stop_next() {
     let (mut stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -130,7 +127,6 @@ fn test_completed_stop_completed() {
     let (stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -164,7 +160,6 @@ fn test_error_stop_error() {
     let (stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -197,7 +192,6 @@ fn test_same_source_stop_next() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable.take_until(subject.clone());
 
@@ -223,7 +217,6 @@ fn test_same_source_stop_completed() {
     let subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable.take_until(subject.clone());
 
@@ -241,7 +234,6 @@ fn test_same_source_stop_error() {
     let subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable.take_until(subject.clone());
 
@@ -261,7 +253,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -329,7 +320,6 @@ fn test_ref() {
     let (stop_sender, stop_observable, stop_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -360,7 +350,6 @@ fn test_mut_ref() {
     let mut value_2 = 222;
     let mut value_3 = 333;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(&mut value_1).is_continue());
         assert!(observer.on_next(&mut value_2).is_continue());
@@ -399,7 +388,6 @@ fn test_async() {
         let (_, stop_observable, stop_channel_checker) = test_channel::<'_, (), &str>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.take_until(stop_observable);
 
         let subscription = scheduler
@@ -445,7 +433,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -492,7 +479,6 @@ fn test_unsub_on_next_by_take() {
     let (_stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take_until(stop_observable).take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -515,7 +501,6 @@ fn test_multiple_operation_stop_1() {
     let (_, stop_observable_2, _) = test_channel::<'_, (), Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .take_until(stop_observable_1)
         .take_until(stop_observable_2);
@@ -544,7 +529,6 @@ fn test_multiple_operation_stop_2() {
     let (mut stop_sender_2, stop_observable_2, stop_channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .take_until(stop_observable_1)
         .take_until(stop_observable_2);
@@ -572,7 +556,6 @@ fn test_multiple_operation_same_stop() {
     let mut stop_subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable
         .take_until(stop_subject.clone())
@@ -597,7 +580,6 @@ fn test_without_convenient_api() {
     let (mut stop_sender, stop_observable, stop_channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = TakeUntil::new(observable, stop_observable);
 
     let _subscription = observable.subscribe(observer);
@@ -629,7 +611,6 @@ fn test_next_on_sub() {
     let source_1 = source_1.start_with([()]);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().take_until(source_1);
 
     let _subscription = observable.subscribe(observer);
@@ -642,7 +623,6 @@ fn test_complete_on_sub() {
     let (_, observable, channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.take_until(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -656,7 +636,6 @@ fn test_error_on_sub() {
     let (_, observable, channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error").take_until(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -679,7 +658,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.take_until(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -706,7 +684,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.take_until(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -733,7 +710,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.take_until(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -849,7 +825,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, stop_observable, _) = test_channel::<'_, (), _>();
     let observable = observable.take_until(stop_observable);
@@ -861,7 +836,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, stop_observable, _) = test_channel::<'_, (), String>();
     let observable = observable.take_until(stop_observable);

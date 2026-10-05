@@ -28,7 +28,6 @@ fn test_completed() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(None);
@@ -92,7 +91,6 @@ fn test_completed_with_buffer_0() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(Some(0));
@@ -156,7 +154,6 @@ fn test_completed_with_buffer_1() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(Some(1));
@@ -227,7 +224,6 @@ fn test_error() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(None);
@@ -291,7 +287,6 @@ fn test_error_with_buffer_0() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(Some(0));
@@ -355,7 +350,6 @@ fn test_error_with_buffer_1() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(Some(1));
@@ -426,7 +420,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(None);
@@ -514,7 +507,6 @@ fn test_ref() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| {
             let counter = counter.fetch_add(1, Ordering::SeqCst) + 1;
@@ -586,7 +578,6 @@ fn test_async() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
-        // Custom operations
         let controller = observable
             .map(move |_| counter.fetch_add(1, Ordering::SeqCst) + 1)
             .replay(None);
@@ -673,7 +664,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(None);
@@ -738,7 +728,6 @@ fn test_unsub_on_next_by_take() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .replay(None);
@@ -795,7 +784,6 @@ fn test_multiple_operation() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
     let controller_1 = observable.replay(None);
     let controller_2 = controller_1.observable().replay(None);
@@ -860,7 +848,6 @@ fn test_without_convenient_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
     let controller = ConnectableController::<_, ReplaySubject<'_, _, _, Shared>>::new(
         observable,
@@ -926,7 +913,6 @@ fn test_share_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .share_replay(None);
@@ -1065,7 +1051,6 @@ fn test_lifetime_or_sub() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable) = test_channels::<'_, i32, Infallible>();
     let controller = observable.replay(None);
     let observable = controller.observable();
@@ -1077,7 +1062,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable) = test_channels::<'_, i32, Infallible>();
     let controller = observable.replay(None);
     let observable = controller.observable();

@@ -25,6 +25,9 @@ use std::{
 /// Shifts the emissions from an Observable forward in time by a specified duration.
 /// See <https://reactivex.io/documentation/operators/delay.html>
 ///
+/// The completion is delayed like the values, but an error is not: it is delivered at once, and
+/// the values still waiting are dropped.
+///
 /// # Examples
 /// ```rust
 /// # #[cfg(not(feature = "tokio-scheduler"))]

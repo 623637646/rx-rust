@@ -20,8 +20,9 @@ use educe::Educe;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-/// Merges an Observable of Observables into a single Observable that emits all of their emissions.
-/// See <https://reactivex.io/documentation/operators/merge.html> (referencing merge operator for general concept)
+/// Flattens an Observable of Observables by emitting the values of every inner Observable as they
+/// arrive.
+/// See <https://reactivex.io/documentation/operators/merge.html>
 ///
 /// # Examples
 /// ```rust
@@ -58,7 +59,8 @@ pub struct MergeAll<OE, OE1> {
 
 impl<OE, OE1> MergeAll<OE, OE1> {
     /// Creates a [`MergeAll`] over `source`;
-    /// [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all) is the fluent form.
+    /// [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all) is the fluent
+    /// form.
     pub fn new<T, E>(source: OE) -> Self
     where
         OE: ObservableTypes<Item = OE1, Error = E>,
@@ -175,7 +177,6 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: OE1) -> Flow {
-        // Insert a placeholder subscription.
         let result = self
             .0
             .update(|model| UpdateOutcome::new(model.insert_placeholder()));
@@ -194,7 +195,8 @@ where
                 *slot = Some(sub);
                 UpdateOutcome::empty().without_drop_outside()
             } else {
-                // already terminated
+                // The inner observable completed while it was being subscribed, and removed its
+                // own entry.
                 UpdateOutcome::empty().with_drop_outside(sub)
             }
         })

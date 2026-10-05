@@ -18,7 +18,8 @@ use educe::Educe;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-/// Emits a single boolean value that indicates whether two Observables emit the same sequence of items.
+/// Emits a single boolean value that indicates whether two Observables emit the same sequence of
+/// items.
 /// See <https://reactivex.io/documentation/operators/sequenceequal.html>
 ///
 /// # Examples
@@ -57,7 +58,8 @@ pub struct SequenceEqual<T, OE1, OE2> {
 
 impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
     /// Creates a [`SequenceEqual`] over `source_1` and `source_2`;
-    /// [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal) is the fluent form.
+    /// [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal) is the
+    /// fluent form.
     pub fn new<E>(source_1: OE1, source_2: OE2) -> Self
     where
         OE1: ObservableTypes<Item = T, Error = E>,

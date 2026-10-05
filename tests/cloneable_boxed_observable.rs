@@ -27,7 +27,6 @@ fn test_completed() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_send_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
@@ -51,7 +50,6 @@ fn test_error() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_send_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
@@ -76,7 +74,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable_1 = observable.into_send_cloneable_boxed();
     let observable_2 = observable_1.clone();
 
@@ -131,7 +128,6 @@ fn test_ref() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_send_cloneable_boxed();
 
     let _subscription = observable.subscribe(observer);
@@ -156,7 +152,6 @@ fn test_async() {
         let (channels, observable) = test_channels::<'_, &i32, &str>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.into_send_cloneable_boxed();
 
         let subscription = scheduler
@@ -190,7 +185,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable_1 = observable.clone().into_send_cloneable_boxed();
     let observable_2 = observable.clone().into_send_cloneable_boxed();
 
@@ -229,7 +223,6 @@ fn test_unsub_on_next_by_take() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_send_cloneable_boxed().take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -248,7 +241,6 @@ fn test_multiple_operation() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .clone()
         .into_send_cloneable_boxed()
@@ -275,7 +267,6 @@ fn test_without_convenient_api() {
     let (channels, observable) = test_channels();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = SendCloneableBoxedObservable::new(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -300,7 +291,6 @@ fn test_fixed_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable_1 = observable
         .clone()
         .into_cloneable_boxed_for::<CheckerObserver<i32, &str>>();
@@ -401,7 +391,6 @@ fn test_lifetime_oe() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable) = test_channels::<'_, i32, String>();
     let observable = observable.into_send_cloneable_boxed();
 
@@ -412,7 +401,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable) = test_channels::<'_, i32, String>();
     let observable = observable.into_send_cloneable_boxed();
 

@@ -1,11 +1,12 @@
-//! The [`delegate_disposal!`] macro.
+//! The [`delegate_disposal!`](crate::delegate_disposal) macro.
 
 /// Defines a named disposal type wrapping an inner one, to which it delegates
 /// [`Disposable::dispose`].
 ///
-/// An operator's `type D` is often a nesting such as `ChainDisposal<SharedDisposal<Subscription<D2>>, D1>`;
-/// this macro puts a short, stable name in front of it. Use it for two or more nested wrapper
-/// layers (`Outer<Inner<D>>`), and return a single layer (`Outer<D>`) as it is.
+/// An operator's `type D` is often a nesting such as
+/// `ChainDisposal<SharedDisposal<Subscription<D2>>, D1>`; this macro puts a short, stable name in
+/// front of it. Use it for two or more nested wrapper layers (`Outer<Inner<D>>`), and return a
+/// single layer (`Outer<D>`) as it is.
 ///
 /// The generated type implements [`Disposable`] and `From<Inner>`, so
 /// [`DisposableExt::into_subscription`] turns the inner value into a [`Subscription`] of it.

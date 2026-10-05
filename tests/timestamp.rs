@@ -36,7 +36,6 @@ fn test_completed() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp();
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -82,7 +81,6 @@ fn test_error() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp();
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -128,7 +126,6 @@ fn test_unsubscribe() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp();
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -178,7 +175,6 @@ fn test_ref() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp();
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -235,7 +231,6 @@ fn test_mut_ref() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, &mut i32, _>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp();
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -281,7 +276,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp();
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -349,7 +343,6 @@ fn test_subscribe_by_different_observer() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp();
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
@@ -424,7 +417,6 @@ fn test_unsub_on_next_by_take() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp().take(1);
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -448,7 +440,6 @@ fn test_multiple_operation() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.timestamp().timestamp();
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -510,7 +501,6 @@ fn test_without_convenient_api() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = Timestamp::new(observable);
         scheduler.sleep(DURATION_30_MS).await;
 
@@ -616,7 +606,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
     let observable = observable.timestamp();
@@ -626,7 +615,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
     observable.timestamp();

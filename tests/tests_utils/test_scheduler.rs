@@ -1,4 +1,5 @@
-//! The scheduler the tests run on: [`block_on`] and the [`TestScheduler`] it hands to the test body.
+//! The scheduler the tests run on: [`block_on`] and the [`TestScheduler`] it hands to the test
+//! body.
 //!
 //! [`block_on`] runs the body once on every scheduler the crate has, multi-threaded and
 //! single-threaded alike, so that one build covers all of them. The environment variable

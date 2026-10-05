@@ -27,7 +27,6 @@ fn test_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -121,7 +120,6 @@ fn test_completed_from_another_source() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -214,7 +212,6 @@ fn test_completed_source_and_another_source_are_same() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().combine_latest(subject.clone());
 
     let _subscription = observable.subscribe(observer);
@@ -251,7 +248,6 @@ fn test_completed_3_sources() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .combine_latest(observable_1)
         .combine_latest(observable_2);
@@ -382,7 +378,6 @@ fn test_completed_empty_1st_source() {
     let (_sender_1, observable_1, channel_checker_1) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -404,7 +399,6 @@ fn test_completed_empty_2nd_source() {
     let (sender_1, observable_1, channel_checker_1) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -432,7 +426,6 @@ fn test_error() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -496,7 +489,6 @@ fn test_error_from_another_source() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -559,7 +551,6 @@ fn test_error_source_and_another_source_are_same() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().combine_latest(subject.clone());
 
     let _subscription = observable.subscribe(observer);
@@ -596,7 +587,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(source_1);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -729,7 +719,6 @@ fn test_ref() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -770,7 +759,6 @@ fn test_async() {
         let (mut sender_1, observable_1, channel_checker_1) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.combine_latest(observable_1);
 
         let subscription = scheduler
@@ -819,7 +807,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.combine_latest(another_source_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -888,7 +875,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.combine_latest(observable_2).take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -918,7 +904,6 @@ fn test_multiple_operation() {
     let (mut sender_3, observable_3, channel_checker_3) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .combine_latest(observable_1)
         .combine_latest(observable_2)
@@ -1073,7 +1058,6 @@ fn test_multiple_operation_same_another_source() {
     let mut another_source_subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .combine_latest(another_source_subject.clone())
         .combine_latest(another_source_subject.clone());
@@ -1161,7 +1145,6 @@ fn test_without_convenient_api() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = CombineLatest::new(observable, observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -1257,7 +1240,6 @@ fn test_next_on_sub() {
     let source_1 = source_1.start_with([111]);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = source.combine_latest(source_1);
 
     let _subscription = observable.subscribe(observer);
@@ -1286,7 +1268,6 @@ fn test_complete_on_sub() {
     let (_, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.combine_latest(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -1300,7 +1281,6 @@ fn test_error_on_sub() {
     let (_, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error").combine_latest(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -1323,7 +1303,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1350,7 +1329,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1377,7 +1355,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.combine_latest(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1510,7 +1487,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, another_source_observable, _) = test_channel::<'_, String, _>();
     let observable = observable.combine_latest(another_source_observable);
@@ -1522,7 +1498,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, another_source_observable, _) = test_channel::<'_, (), String>();
     let observable = observable.combine_latest(another_source_observable);

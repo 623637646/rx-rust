@@ -17,7 +17,11 @@ use educe::Educe;
 use std::time::Instant;
 use std::{num::NonZeroUsize, time::Duration};
 
-/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, either when the bundle reaches a specified size or after a specified time interval, whichever happens first.
+/// Gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, either when
+/// the bundle reaches `count` items or every `time_span`, whichever happens first.
+///
+/// The timer first fires after `delay` (at once for `None`). A bundle emitted because it is full
+/// restarts the timer, so the next timed bundle comes `time_span` after it.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples

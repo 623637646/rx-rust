@@ -40,7 +40,6 @@ fn test_unsubscribe() {
         let (checker_2, observer_2) = Checker::new();
         let (checker_3, observer_3) = Checker::new();
 
-        // Custom operations
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
         let observable_3 = observable_2.clone();
@@ -120,7 +119,6 @@ fn test_subscribe_by_different_observer() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
-        // Custom operations
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
@@ -178,7 +176,6 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     block_on(|scheduler| async move {
-        // Custom operations
         let observable = Timer::new(111, DURATION_100_MS, scheduler.clone());
 
         let observable = observable.filter(|_| true);
@@ -192,7 +189,6 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     block_on(|scheduler| async move {
-        // Custom operations
         let observable = Timer::new(111, DURATION_100_MS, scheduler.clone());
 
         observable.filter(|_| true);

@@ -8,7 +8,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback when the source Observable terminates (either completes or errors), after the termination notification has been emitted to the downstream observer.
+/// Invokes a callback when the source Observable terminates, after the termination has been
+/// emitted to the downstream observer.
 /// See <https://reactivex.io/documentation/operators/do.html>
 ///
 /// # Examples
@@ -53,7 +54,8 @@ pub struct DoAfterTermination<OE, F> {
 
 impl<OE, F> DoAfterTermination<OE, F> {
     /// Creates a [`DoAfterTermination`] over `source`;
-    /// [`ObservableExt::do_after_termination`](crate::observable::ObservableExt::do_after_termination) is the fluent form.
+    /// [`ObservableExt::do_after_termination`](crate::observable::ObservableExt::do_after_termination)
+    /// is the fluent form.
     pub fn new<T, E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,

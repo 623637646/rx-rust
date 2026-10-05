@@ -17,7 +17,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Projects each source value to an Observable which is merged in the output Observable.
+/// Maps each source value to an Observable and emits the values of all of them as they arrive.
 /// See <https://reactivex.io/documentation/operators/flatmap.html>
 ///
 /// # Examples

@@ -24,7 +24,6 @@ fn test_completed() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable.hook_on_next(move |observer, value| {
         assert!(observer_2.on_next(value).is_continue());
         observer.on_next(value * 2)
@@ -58,7 +57,6 @@ fn test_completed_no_call_original() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable.hook_on_next(move |_, value| {
         assert!(observer_2.on_next(value).is_continue());
         Flow::Continue
@@ -91,7 +89,6 @@ fn test_completed_resend_values() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.hook_on_next(move |observer, value| {
         assert!(observer.on_next(value).is_continue());
         observer.on_next(value)
@@ -119,7 +116,6 @@ fn test_error() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable.hook_on_next(move |observer, value| {
         assert!(observer_2.on_next(value).is_continue());
         observer.on_next(value * 2)
@@ -154,7 +150,6 @@ fn test_unsubscribe() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::<_, String>::new();
 
-    // Custom operations
     let observer_3 = SharedSender::new(observer_3);
     let observable = observable.hook_on_next(move |observer, value| {
         observer_3.on_next(value);
@@ -228,7 +223,6 @@ fn test_ref() {
 
     let (mut sender, observable, channel_checker) = test_channel::<'_, &i32, &i32>();
 
-    // Custom operations
     let observable = observable.hook_on_next(move |observer, value| {
         assert!(observer_2.on_next(value).is_continue());
         observer.on_next(value_2_ref)
@@ -268,7 +262,6 @@ fn test_mut_ref() {
     });
     let (checker, mut observer) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable.hook_on_next(move |or, value| {
         assert!(observer.on_next(*value).is_continue());
         or.on_next(value)
@@ -299,7 +292,6 @@ fn test_async() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-        // Custom operations
         let observable = observable.hook_on_next(move |observer, value| {
             assert!(observer_2.on_next(value).is_continue());
             observer.on_next(value * 2)
@@ -343,7 +335,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::<_, String>::new();
 
-    // Custom operations
     let observer_3 = SharedSender::new(observer_3);
     let observable = observable.hook_on_next(move |observer, value| {
         observer_3.on_next(value);
@@ -394,7 +385,6 @@ fn test_unsub_on_next_by_take() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable
         .hook_on_next(move |observer, value| {
             assert!(observer_2.on_next(value).is_continue());
@@ -424,7 +414,6 @@ fn test_multiple_operation() {
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
     let (checker_3, mut observer_3) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable
         .hook_on_next(move |observer, value| {
             assert!(observer_2.on_next(value).is_continue());
@@ -469,7 +458,6 @@ fn test_without_convenient_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = HookOnNext::new(observable, move |observer, value| {
         assert!(observer_2.on_next(value).is_continue());
         observer.on_next(value * 2)
@@ -552,7 +540,6 @@ fn test_fn() {
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
 
-    // Custom operations
     let observable = observable.hook_on_next(|_, _| {
         s.consume_mut();
         Flow::Continue
@@ -574,7 +561,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.hook_on_next(|_, _| Flow::Continue);
 
@@ -585,7 +571,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.hook_on_next(|_, _| Flow::Continue);
 

@@ -2,8 +2,8 @@
 //! See <https://reactivex.io/documentation/operators.html#utility>.
 //!
 //! `Using` is not implemented: a resource tied to a subscription is dropped with it, so an owned
-//! value in the pipeline does the same. `Serialize` is not needed, since every operator here is
-//! already safe to drive from several threads.
+//! value in the pipeline does the same. `Serialize` is not needed: `on_next` takes `&mut self`, so
+//! the type system already serializes the calls into an observer.
 
 pub mod delay;
 pub mod dematerialize;

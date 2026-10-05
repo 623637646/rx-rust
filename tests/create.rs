@@ -39,7 +39,6 @@ fn test_completed_from_source() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Create::shared_boxed(|observer| observable.subscribe(observer));
 
     let _subscription = observable.subscribe(observer);
@@ -77,7 +76,6 @@ fn test_error_from_source() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Create::shared_boxed(|observer| observable.subscribe(observer));
 
     let _subscription = observable.subscribe(observer);
@@ -284,7 +282,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable_1 = observable.clone();
     let observable_2 = observable_1.clone();
 
@@ -385,7 +382,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
@@ -399,7 +395,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
@@ -433,7 +428,6 @@ fn test_emitter_completed_from_source() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Create::shared(|emitter| observable.subscribe(emitter));
 
     let _subscription = observable.subscribe(observer);

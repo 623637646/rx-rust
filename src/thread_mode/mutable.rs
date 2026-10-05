@@ -18,10 +18,11 @@
 //!
 //! # Rule 2: the callback must not run anything that can take the same lock again
 //!
-//! This is the rule the type system cannot enforce. Calling an [`Observer`](crate::observer::Observer)
-//! or a [`Disposable`](crate::disposable::Disposable) from the callback is user code that can
-//! re-enter the operator, and so is *dropping* a value: `subscriptions.with_mut(Vec::clear)`
-//! deadlocks `merge_all`, because dropping a subscription disposes it, which takes this very lock.
+//! This is the rule the type system cannot enforce. Calling an
+//! [`Observer`](crate::observer::Observer) or a [`Disposable`](crate::disposable::Disposable) from
+//! the callback is user code that can re-enter the operator, and so is *dropping* a value:
+//! `subscriptions.with_mut(Vec::clear)` deadlocks `merge_all`, because dropping a subscription
+//! disposes it, which takes this very lock.
 //!
 //! The fix is always the same shape — **take the value out under the lock, act on it afterwards**:
 //!
@@ -107,8 +108,8 @@ pub trait MutableExt: MutableHelper {
 
     /// Takes the contained value out, leaving the default in its place.
     ///
-    /// For a `Mutable<Option<T>>` this is `Option::take`, and for a `Mutable<Vec<T>>` it is the
-    /// deadlock-free replacement for `clear`: the elements are dropped by the caller instead of
+    /// For a lock around an `Option<T>` this is `Option::take`, and for one around a `Vec<T>` it is
+    /// the deadlock-free replacement for `clear`: the elements are dropped by the caller instead of
     /// under the lock.
     ///
     /// This is the shape to reach for whenever what follows is anything the crate does not own —

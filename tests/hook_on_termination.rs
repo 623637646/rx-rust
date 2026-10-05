@@ -26,7 +26,6 @@ fn test_completed() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<(), _>::new();
 
-    // Custom operations
     let observable = observable.hook_on_termination(move |observer, termination| {
         observer_2.on_termination(termination);
         observer.on_termination(Termination::Error("error"));
@@ -60,7 +59,6 @@ fn test_completed_no_call_original() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.hook_on_termination(move |_, termination| {
         observer_2.on_termination(termination);
     });
@@ -92,7 +90,6 @@ fn test_completed_send_values_before_terminated() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.hook_on_termination(move |mut observer, termination| {
         assert!(observer.on_next(222).is_continue());
         observer.on_termination(termination);
@@ -120,7 +117,6 @@ fn test_error() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.hook_on_termination(move |observer, termination| {
         observer_2.on_termination(termination);
         observer.on_termination(Termination::Completed);
@@ -155,7 +151,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.hook_on_termination(|observer, termination| {
         match termination {
             Termination::Completed => panic!(),
@@ -231,7 +226,6 @@ fn test_ref() {
 
     let (mut sender, observable, channel_checker) = test_channel();
 
-    // Custom operations
     let observable = observable.hook_on_termination(|observer, termination| {
         observer_2.on_termination(termination);
         observer.on_termination(Termination::Error(&error_2));
@@ -273,7 +267,6 @@ fn test_mut_ref() {
     let (checker, observer) = Checker::<Infallible, _>::new();
     let (_, on_termination) = observer.into_callbacks();
 
-    // Custom operations
     let observable = observable.hook_on_termination(|observer, mut termination| {
         match &mut termination {
             Termination::Completed => panic!(),
@@ -311,7 +304,6 @@ fn test_async() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::<Infallible, _>::new();
 
-        // Custom operations
         let observable = observable.hook_on_termination(move |observer, termination| {
             observer_2.on_termination(termination);
             observer.on_termination(Termination::Completed);
@@ -356,7 +348,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
     let terminations = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let terminations_cloned = terminations.clone();
     let observable = observable.hook_on_termination_boxed(move |observer, termination| {
         terminations_cloned.with_mut(|values| values.push(termination));
@@ -407,7 +398,6 @@ fn test_unsub_on_next_by_take() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<(), _>::new();
 
-    // Custom operations
     let observable = observable
         .hook_on_termination(move |observer, termination| {
             observer_2.on_termination(termination);
@@ -437,7 +427,6 @@ fn test_multiple_operation() {
     let (checker_2, observer_2) = Checker::<Infallible, _>::new();
     let (checker_3, observer_3) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable
         .hook_on_termination(move |observer, termination| {
             observer_2.on_termination(termination);
@@ -482,7 +471,6 @@ fn test_without_convenient_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = HookOnTermination::new(observable, move |observer, termination| {
         observer_2.on_termination(termination);
         observer.on_termination(Termination::Completed);
@@ -565,7 +553,6 @@ fn test_fn() {
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
 
-    // Custom operations
     let observable = observable.hook_on_termination(|_, _| {
         s.consume();
     });
@@ -586,7 +573,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.hook_on_termination(|_, _| {});
 
@@ -597,7 +583,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.hook_on_termination_boxed(|_, _| {});
 

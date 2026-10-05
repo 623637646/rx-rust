@@ -113,8 +113,9 @@ pub trait Observer<T, E> {
     fn on_termination(self, termination: Termination<E>);
 }
 
-/// Either event of a stream as a value: what [`materialize`](crate::observable::ObservableExt::materialize)
-/// emits and [`dematerialize`](crate::observable::ObservableExt::dematerialize) consumes.
+/// Either event of a stream as a value: what
+/// [`materialize`](crate::observable::ObservableExt::materialize) emits and
+/// [`dematerialize`](crate::observable::ObservableExt::dematerialize) consumes.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
 pub enum Event<T, E> {

@@ -94,7 +94,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let source = 100..103;
     let observable = Range::new(source);
 
@@ -105,7 +104,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let source = 100..103;
     let observable = Range::new(source);
 

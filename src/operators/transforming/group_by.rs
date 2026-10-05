@@ -15,7 +15,9 @@ use std::{
     marker::PhantomData,
 };
 
-/// Divides an Observable into a set of Observables, each of which emits a different group of items from the original Observable, organized by key.
+/// Divides an Observable into a set of Observables, one per key, each of which emits the items of
+/// the original Observable that map to its key.
+/// See <https://reactivex.io/documentation/operators/groupby.html>
 ///
 /// A group is emitted before its first item is delivered, so each group can be subscribed to
 /// before its items arrive. Items emitted while a group has no subscriber are buffered and
@@ -37,7 +39,6 @@ use std::{
 /// happens: the group releases it on its next item, when it ends, or when the outer subscription
 /// is disposed, whichever comes first. See [the unicast subject](crate::subject::unicast_subject)
 /// each group is built on.
-/// See <https://reactivex.io/documentation/operators/groupby.html>
 ///
 /// # Examples
 /// ```rust
@@ -102,8 +103,8 @@ use std::{
 pub struct GroupBy<'a, OE, F, K> {
     source: OE,
     key_selector: F,
-    /// The observer of a group may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left to
-    /// an unboxed default: the group is the `Item`, which [`ObservableTypes`] names without any
+    /// The observer of a group may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left
+    /// to an unboxed default: the group is the `Item`, which [`ObservableTypes`] names without any
     /// observer, and its observer arrives only later, so the group boxes it.
     _marker: MarkerType<(&'a (), K)>,
 }

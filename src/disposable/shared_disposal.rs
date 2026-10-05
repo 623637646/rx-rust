@@ -1,4 +1,5 @@
-//! A cloneable slot for a disposal that is built, and maybe replaced, after the slot was handed out.
+//! A cloneable slot for a disposal that is built, and maybe replaced, after the slot was handed
+//! out.
 
 use crate::thread_mode::mutable::MutableHelper;
 use crate::{
@@ -107,7 +108,7 @@ impl<M: ThreadMode, D> SharedDisposal<M, D> {
                 inner.state = State::Active(disposable);
                 None
             } else {
-                // Reset, disposed, or superseded by a later build: this disposal is already dead.
+                // Disposed, or superseded by a later build: this disposal is already dead.
                 Some(disposable)
             }
         });

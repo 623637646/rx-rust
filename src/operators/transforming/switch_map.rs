@@ -17,7 +17,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Projects each source value to an Observable which is merged in the output Observable, emitting values only from the most recently projected Observable.
+/// Maps each source value to an Observable and emits the values of the most recent one only,
+/// unsubscribing from the previous one.
 /// See <https://reactivex.io/documentation/operators/switch.html>
 ///
 /// # Examples
@@ -55,7 +56,8 @@ pub struct SwitchMap<T0, OE, OE1, F> {
 
 impl<T0, OE, OE1, F> SwitchMap<T0, OE, OE1, F> {
     /// Creates a [`SwitchMap`] over `source`;
-    /// [`ObservableExt::switch_map`](crate::observable::ObservableExt::switch_map) is the fluent form.
+    /// [`ObservableExt::switch_map`](crate::observable::ObservableExt::switch_map) is the fluent
+    /// form.
     pub fn new<T, E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T0, Error = E>,

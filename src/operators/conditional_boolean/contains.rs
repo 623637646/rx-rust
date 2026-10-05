@@ -10,7 +10,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits a single boolean value that indicates whether a source Observable emits a specified item.
+/// Emits a single boolean value that indicates whether a source Observable emits a specified
+/// item.
 /// See <https://reactivex.io/documentation/operators/contains.html>
 ///
 /// # Examples

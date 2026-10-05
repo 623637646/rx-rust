@@ -12,7 +12,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Invokes a callback when the Observable is subscribed to.
+/// Hands each subscription to a callback, which gets the source and the downstream observer and
+/// subscribes them itself.
 ///
 /// # Examples
 /// ```rust

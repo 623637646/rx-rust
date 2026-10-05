@@ -14,7 +14,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits the items emitted by a source Observable until a second Observable emits an item or a notification.
+/// Emits the items emitted by a source Observable until a second Observable emits an item or
+/// terminates.
 /// See <https://reactivex.io/documentation/operators/takeuntil.html>
 ///
 /// # Examples
@@ -64,7 +65,8 @@ pub struct TakeUntil<OE, OE1> {
 
 impl<OE, OE1> TakeUntil<OE, OE1> {
     /// Creates a [`TakeUntil`] over `source`;
-    /// [`ObservableExt::take_until`](crate::observable::ObservableExt::take_until) is the fluent form.
+    /// [`ObservableExt::take_until`](crate::observable::ObservableExt::take_until) is the fluent
+    /// form.
     pub fn new<T, E>(source: OE, stop: OE1) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,

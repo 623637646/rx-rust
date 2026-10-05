@@ -44,8 +44,8 @@ use educe::Educe;
 /// assert_eq!(seen, [2]);
 /// ```
 ///
-/// The thread mode is declared when it is created: [`local`](Self::local) for a subject that is
-/// fed and subscribed to on one thread, [`shared`](Self::shared) for one that crosses threads, whose
+/// The thread mode is declared when it is created: [`local`](Self::local) for a subject that is fed
+/// and subscribed to on one thread, [`shared`](Self::shared) for one that crosses threads, whose
 /// observers must then be `Send`.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
@@ -54,9 +54,9 @@ pub struct PublishSubject<'or, T, E, M: ObserverMode>(
 );
 
 impl<T, E, M: ObserverMode> PublishSubject<'_, T, E, M> {
-    /// Creates a subject in the mode `M`, for code that is generic over the mode, such as an operator
-    /// that creates it in the mode of its source; [`local`](Self::local) and [`shared`](Self::shared)
-    /// name the mode instead.
+    /// Creates a subject in the mode `M`, for code that is generic over the mode, such as an
+    /// operator that creates it in the mode of its source; [`local`](Self::local) and
+    /// [`shared`](Self::shared) name the mode instead.
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self(SerializedMulticast::idle(()))

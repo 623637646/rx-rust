@@ -16,7 +16,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Catches errors on the observable to be handled by returning a new observable or throwing an error.
+/// Recovers from an error by continuing with the Observable the callback returns for it.
 /// See <https://reactivex.io/documentation/operators/catch.html>
 ///
 /// # Examples

@@ -12,6 +12,8 @@ use educe::Educe;
 /// Emits only the last item emitted by an Observable.
 /// See <https://reactivex.io/documentation/operators/last.html>
 ///
+/// A source that completes without an item completes it without one, rather than with an error.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{

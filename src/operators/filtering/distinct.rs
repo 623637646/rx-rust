@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::{collections::HashSet, hash::Hash};
 
-/// Emits all items from the source Observable that are distinct by comparison from previous items.
+/// Emits the items of the source Observable that are distinct from every previous one.
 /// See <https://reactivex.io/documentation/operators/distinct.html>
 ///
 /// # Examples

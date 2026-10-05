@@ -11,7 +11,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Given two or more source Observables, emit all of the items from only the first of these Observables to emit an item or notification.
+/// Given two or more source Observables, mirrors only the first of them to emit an item or a
+/// termination.
 /// See <https://reactivex.io/documentation/operators/amb.html>
 ///
 /// # Examples
@@ -48,7 +49,8 @@ pub struct Amb<I> {
 
 impl<I> Amb<I> {
     /// Creates an [`Amb`] racing every observable of `sources`;
-    /// [`ObservableExt::amb_with`](crate::observable::ObservableExt::amb_with) is the two-source form.
+    /// [`ObservableExt::amb_with`](crate::observable::ObservableExt::amb_with) is the two-source
+    /// form.
     pub fn new(sources: I) -> Self {
         Self { sources }
     }

@@ -24,7 +24,6 @@ fn test_completed() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable.do_before_next(move |value| {
         assert!(observer_2.on_next(*value).is_continue());
     });
@@ -57,7 +56,6 @@ fn test_completed_order() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let checker_1_cloned = checker_1.clone();
     let checker_2_cloned = checker_2.clone();
     let observable = observable.do_before_next(move |value| {
@@ -102,7 +100,6 @@ fn test_error() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable.do_before_next(move |value| {
         assert!(observer_2.on_next(*value).is_continue());
     });
@@ -136,7 +133,6 @@ fn test_unsubscribe() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::<_, String>::new();
 
-    // Custom operations
     let observer_3 = SharedSender::new(observer_3);
     let observable = observable.do_before_next(move |value| {
         observer_3.on_next(*value);
@@ -207,7 +203,6 @@ fn test_ref() {
 
     let (mut sender, observable, channel_checker) = test_channel();
 
-    // Custom operations
     let observable = observable.do_before_next(move |value| {
         assert!(observer_2.on_next(*value).is_continue());
     });
@@ -246,7 +241,6 @@ fn test_mut_ref() {
     });
     let (checker, mut observer) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable.do_before_next(move |value| {
         assert!(observer.on_next(**value).is_continue());
     });
@@ -276,7 +270,6 @@ fn test_async() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-        // Custom operations
         let observable = observable.do_before_next(move |value| {
             assert!(observer_2.on_next(*value).is_continue());
         });
@@ -319,7 +312,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::<_, String>::new();
 
-    // Custom operations
     let observer_3 = SharedSender::new(observer_3);
     let observable = observable.do_before_next(move |value| {
         observer_3.on_next(*value);
@@ -369,7 +361,6 @@ fn test_unsub_on_next_by_take() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable
         .do_before_next(move |value| {
             assert!(observer_2.on_next(*value).is_continue());
@@ -398,7 +389,6 @@ fn test_multiple_operation() {
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
     let (checker_3, mut observer_3) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = observable
         .do_before_next(move |value| {
             assert!(observer_2.on_next(*value).is_continue());
@@ -441,7 +431,6 @@ fn test_without_convenient_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, mut observer_2) = Checker::<_, String>::new();
 
-    // Custom operations
     let observable = DoBeforeNext::new(observable, move |value| {
         assert!(observer_2.on_next(*value).is_continue());
     });
@@ -523,7 +512,6 @@ fn test_fn() {
 
     let (_, observable, _) = test_channel::<'_, i32, &str>();
 
-    // Custom operations
     let observable = observable.do_before_next(|_| {
         s.consume_mut();
     });
@@ -544,7 +532,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.do_before_next(|_| {});
 
@@ -555,7 +542,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.do_before_next(|_| {});
 

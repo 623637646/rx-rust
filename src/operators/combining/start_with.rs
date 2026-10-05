@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits a specified sequence of values before beginning to emit the items from the source Observable.
+/// Emits a specified sequence of values, then the items of the source Observable.
 /// See <https://reactivex.io/documentation/operators/startwith.html>
 ///
 /// # Examples
@@ -43,7 +43,8 @@ pub struct StartWith<OE, I> {
 
 impl<OE, I> StartWith<OE, I> {
     /// Creates a [`StartWith`] over `source`;
-    /// [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with) is the fluent form.
+    /// [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with) is the fluent
+    /// form.
     pub fn new<T, E>(source: OE, values: I) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,

@@ -30,7 +30,6 @@ fn test_completed_from_source() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -198,7 +197,6 @@ fn test_completed_from_boundary() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -410,7 +408,6 @@ fn test_completed_source_and_boundary_are_same() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = subject.clone().window(subject.clone());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -511,7 +508,6 @@ fn test_error_from_source() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -680,7 +676,6 @@ fn test_error_from_boundary() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -717,7 +712,6 @@ fn test_error_from_boundary_while_window_pending() {
         test_channel::<'_, (), &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
@@ -756,7 +750,6 @@ fn test_error_from_boundary_while_no_window_subscribed() {
         test_channel::<'_, (), &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let window_vec = Arc::new(Mutex::new(Vec::new()));
@@ -797,7 +790,6 @@ fn test_completed_boundary_does_not_mask_later_source_error() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -989,7 +981,6 @@ fn test_unsubscribe() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1160,7 +1151,6 @@ fn test_ref() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1329,7 +1319,6 @@ fn test_async() {
         let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
         let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-        // Custom operations
         let observable = observable.window(boundary_observable);
 
         let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1531,7 +1520,6 @@ fn test_subscribe_by_different_observer() {
     let (termination_checker_2, termination_observer_2) = Checker::<Infallible, _>::new();
     let checker_sub_vec_2 = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -1823,7 +1811,6 @@ fn test_unsub_on_next_by_take() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(boundary_observable).take(1);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1862,7 +1849,6 @@ fn test_multiple_operation() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let context = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable
         .window(boundary_observable_1)
         .window(boundary_observable_2);
@@ -2195,7 +2181,6 @@ fn test_multiple_operation_same_boundary() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let context = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable
         .window(boundary_subject.clone())
         .window(boundary_subject.clone());
@@ -2520,7 +2505,6 @@ fn test_without_convenient_api() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = Window::new(observable, boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -2689,7 +2673,6 @@ fn test_revert_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
     let observable_1 = observable.clone().merge_all();
     let observable_2 = observable.clone().concat_all();
@@ -2784,7 +2767,6 @@ fn test_revert_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
     let observable_1 = observable.clone().merge_all();
     let observable_2 = observable.clone().concat_all();
@@ -2880,7 +2862,6 @@ fn test_next_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = source.window(boundary_subject_source);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -2956,7 +2937,6 @@ fn test_complete_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = Empty.into_shared().window(Empty.with_item_type());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -2990,7 +2970,6 @@ fn test_error_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = Throw::new("error")
         .into_shared()
         .window(Empty.with_item_type().with_error_type());
@@ -3036,7 +3015,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -3078,7 +3056,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -3120,7 +3097,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -3154,7 +3130,6 @@ fn test_error_on_sub_from_boundary() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window(Throw::new("boundary error").with_item_type());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -3192,7 +3167,6 @@ fn test_subscribe_stale_window_observable() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) = test_channel();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Collect the window observables without subscribing to them immediately.
@@ -3240,7 +3214,6 @@ fn test_subscribe_window_observable_after_termination() {
         test_channel::<'_, (), Infallible>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
@@ -3272,7 +3245,6 @@ fn test_subscribe_stale_window_observable_after_error() {
         test_channel::<'_, (), &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
@@ -3304,7 +3276,6 @@ fn test_subscribe_boundary_closed_window_after_later_error() {
         test_channel::<'_, (), &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold both window observables without subscribing to them immediately.
@@ -3344,7 +3315,6 @@ fn test_subscribe_window_observable_after_unsubscribe() {
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
@@ -3372,7 +3342,6 @@ fn test_subscribe_multiple_stale_window_observables() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) = test_channel();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold the window observables without subscribing to them.
@@ -3424,7 +3393,6 @@ fn test_subscribe_current_window_late_with_earlier_values() {
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
@@ -3455,7 +3423,6 @@ fn test_subscribe_current_window_after_buffered_values_and_completion() {
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold the current window without subscribing to it immediately.
@@ -3485,7 +3452,6 @@ fn test_reentrant_source_value_during_buffer_replay() {
     let (source, source_observable) = test_channels::<'_, i32, Infallible>();
     let (_, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = source_observable.window(boundary_observable);
 
     let window_vec = Arc::new(Mutex::new(Vec::new()));
@@ -3526,7 +3492,6 @@ fn test_disposing_outer_subscription_during_buffer_replay_keeps_remaining_values
     let (source, source_observable) = test_channels::<'_, i32, Infallible>();
     let (_, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = source_observable.window(boundary_observable);
 
     let windows = Arc::new(Mutex::new(Vec::new()));
@@ -3567,7 +3532,6 @@ fn test_reentrant_boundary_during_buffer_replay_keeps_the_order_of_the_old_windo
     let (source, source_observable) = test_channels::<'_, i32, Infallible>();
     let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = source_observable.window(boundary_observable);
 
     let window_vec = Arc::new(Mutex::new(Vec::new()));
@@ -3656,7 +3620,6 @@ fn test_boundary_completes_current_window_before_emitting_next_window() {
     let (_, source_observable) = test_channels::<'_, i32, Infallible>();
     let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = source_observable.window(boundary_observable);
 
     let events = Arc::new(Mutex::new(Vec::new()));
@@ -3703,7 +3666,6 @@ fn test_subscribing_inner_after_outer_termination_is_queued_observes_termination
     let (source, source_observable) = test_channels::<'_, i32, &'static str>();
     let (boundary, boundary_observable) = test_channels::<'_, (), &'static str>();
 
-    // Custom operations
     let observable = source_observable.window(boundary_observable);
 
     let (checker_2, observer_2) = Checker::new();
@@ -3751,7 +3713,6 @@ fn test_disposing_outer_subscription_from_old_window_completion_suppresses_new_w
     let (_, source_observable) = test_channels::<'_, i32, Infallible>();
     let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = source_observable.window(boundary_observable);
 
     let outer_subscription = Arc::new(Mutex::new(None));
@@ -3794,7 +3755,6 @@ fn test_disposing_outer_subscription_from_inner_termination_suppresses_outer_ter
     let (source, source_observable) = test_channels::<'_, i32, Infallible>();
     let (_, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = source_observable.window(boundary_observable);
 
     let outer_subscription = Arc::new(Mutex::new(None));
@@ -3834,7 +3794,6 @@ fn test_disposing_inner_subscription_after_termination_is_queued_suppresses_inne
     let (source, source_observable) = test_channels::<'_, i32, Infallible>();
     let (_, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = source_observable.window(boundary_observable);
 
     let inner_subscription = Arc::new(Mutex::new(None));
@@ -3985,9 +3944,9 @@ fn test_disposing_inner_subscription_after_value_is_queued_suppresses_value() {
                         |_termination| {},
                     );
 
-                    // Attach, forwarding this value, and detaching are all queued
-                    // behind the current EmitWindow callback. Disposal must make
-                    // the queued value unobservable before the queue drains.
+                    // The value is queued behind the running `EmitWindow` callback, so it
+                    // reaches the window only after the subscription is dropped below, and
+                    // must not be observed.
                     assert!(source_reentrant.on_next(0, 111).is_continue());
                     drop(sub);
                 }
@@ -4031,9 +3990,9 @@ fn test_disposing_inner_subscription_before_queued_attach_suppresses_buffered_va
                     inner_subscriptions_cloned.with_mut(|values| values.push(sub));
                 }
                 1 => {
-                    // Buffer a value before subscribing. The attach is queued behind
-                    // the current EmitWindow callback, so subscribe returns before
-                    // the buffered value can be replayed.
+                    // The value is queued behind the running `EmitWindow` callback, so the
+                    // window has nothing to replay when it is subscribed, and the value
+                    // arrives only after the subscription is dropped below.
                     assert!(source_reentrant.on_next(0, 111).is_continue());
 
                     let second_values = second_values_cloned.clone();
@@ -4149,7 +4108,6 @@ fn test_dropping_ignored_value_stops_the_subscription() {
     let (_boundary_sender, boundary_observable, boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
@@ -4184,7 +4142,6 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let window_vec = Arc::new(Mutex::new(Vec::new()));
@@ -4231,7 +4188,6 @@ fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
     let (_boundary_sender, boundary_observable, _boundary_channel_checker) =
         test_channel::<'_, (), Infallible>();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     let window_vec = Arc::new(Mutex::new(Vec::new()));
@@ -4258,7 +4214,6 @@ fn test_unsubscribed_window_values_do_not_leak_into_next_window() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, _boundary_channel_checker) = test_channel();
 
-    // Custom operations
     let observable = observable.window(boundary_observable);
 
     // Hold the window observables without subscribing to them.
@@ -4368,7 +4323,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, boundary_observable, _) = test_channel();
     let observable = observable.window(boundary_observable);
@@ -4380,7 +4334,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, boundary_observable, _) = test_channel::<'_, (), String>();
     let observable = observable.window(boundary_observable);

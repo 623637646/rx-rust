@@ -13,6 +13,9 @@ use educe::Educe;
 /// Emits only the item at `index`, counting from zero, emitted by the source Observable.
 /// See <https://reactivex.io/documentation/operators/elementat.html>
 ///
+/// A source that completes before reaching `index` completes it without an item, rather than with
+/// an error.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
@@ -45,7 +48,8 @@ pub struct ElementAt<OE> {
 
 impl<OE> ElementAt<OE> {
     /// Creates an [`ElementAt`] over `source`;
-    /// [`ObservableExt::element_at`](crate::observable::ObservableExt::element_at) is the fluent form.
+    /// [`ObservableExt::element_at`](crate::observable::ObservableExt::element_at) is the fluent
+    /// form.
     pub fn new(source: OE, index: usize) -> Self {
         Self { source, index }
     }

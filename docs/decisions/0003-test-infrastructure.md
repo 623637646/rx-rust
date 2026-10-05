@@ -17,8 +17,8 @@ The suite was two builds, picked by `#[cfg(feature = "local-pool-scheduler")]` a
   on the `Local` schedulers of Tokio and smol.
 
 It took two `block_on`s, two `TestRuntime`s, two cargo aliases and a CI matrix. A test that needed
-real threads was gated off the `Local` build. A plain `cargo test` failed on a `compile_error!` until
-it was given a scheduler feature.
+real threads was gated off the `Local` build. A plain `cargo test` failed on a `compile_error!`
+until it was given a scheduler feature.
 
 ### Decision
 
@@ -86,11 +86,11 @@ hard about it and what it would cost, so that a later attempt starts from here. 
 
 ### Motivation
 
-Every time-based test sleeps for real. The usual shape is to sleep `DURATION_100_MS - DURATION_30_MS`,
-check that nothing happened yet, then sleep `DURATION_30_MS * 2` and check that it did. The margins are
-there because a real sleep may oversleep. The tests are slow, the margins hide off-by-a-few-ms bugs,
-and they still flake: the `ci` profile of `.config/nextest.toml` retries every test twice for that
-reason.
+Every time-based test sleeps for real. The usual shape is to sleep
+`DURATION_100_MS - DURATION_30_MS`, check that nothing happened yet, then sleep `DURATION_30_MS * 2`
+and check that it did. The margins are there because a real sleep may oversleep. The tests are slow,
+the margins hide off-by-a-few-ms bugs, and they still flake: the `ci` profile of
+`.config/nextest.toml` retries every test twice for that reason.
 
 A virtual-time scheduler (RxJava's `TestScheduler`, RxJS's `VirtualTimeScheduler`) would make
 `sleep(d)` exact and free:
@@ -127,9 +127,9 @@ It drives tasks with `Task::split` / `Stepper::step`, not with `drive`.
 A scheduler only decides when a task runs. The operators compute and compare their deadlines with
 `Instant::now()`, so virtual sleeps alone break them. The calls are in these files:
 
-- Deadlines and anchors, at subscription or in `on_next`: `utility/delay.rs`, `filtering/debounce.rs`,
-  `utility/timeout.rs`, `creating/interval.rs`, `transforming/buffer_with_time.rs`,
-  `transforming/buffer_with_time_or_count.rs`.
+- Deadlines and anchors, at subscription or in `on_next`: `utility/delay.rs`,
+  `filtering/debounce.rs`, `utility/timeout.rs`, `creating/interval.rs`,
+  `transforming/buffer_with_time.rs`, `transforming/buffer_with_time_or_count.rs`.
 - Inside the `fn` task handlers, which cannot reach the scheduler: `delay`, `debounce`, `timeout`.
 - Timestamps, with no scheduler parameter at all: `filtering/throttle.rs`, `utility/timestamp.rs`,
   `utility/time_interval.rs`.
@@ -161,10 +161,10 @@ The alternatives considered:
 ### Difficulty 2: timestamps taken on two threads
 
 With a thread-local clock, a value that takes a timestamp on one thread and another on a different
-thread mixes virtual and real `Instant`s. That happens when a test pushes events from another thread,
-or when the virtual-time scheduler is combined with a real one (`observe_on(tokio)`). The error is
-silent: the virtual origin starts at the real `Instant::now()`, so the two clocks differ by only a
-few milliseconds at first.
+thread mixes virtual and real `Instant`s. That happens when a test pushes events from another
+thread, or when the virtual-time scheduler is combined with a real one (`observe_on(tokio)`). The
+error is silent: the virtual origin starts at the real `Instant::now()`, so the two clocks differ by
+only a few milliseconds at first.
 
 Considered:
 - Carrying the clock with the object, which is alternative 1 again.

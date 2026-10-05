@@ -39,7 +39,8 @@ pub struct WithItemType<T, OE> {
 
 impl<T, OE> WithItemType<T, OE> {
     /// Creates a [`WithItemType`] over `source`;
-    /// [`ObservableExt::with_item_type`](crate::observable::ObservableExt::with_item_type) is the fluent form.
+    /// [`ObservableExt::with_item_type`](crate::observable::ObservableExt::with_item_type) is the
+    /// fluent form.
     pub fn new(source: OE) -> Self {
         Self {
             source,

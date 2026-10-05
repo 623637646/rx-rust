@@ -29,7 +29,6 @@ fn test_completed() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.amb_with(observable_2);
 
     let _subscription = observable.subscribe(observer);
@@ -63,7 +62,6 @@ fn test_completed_without_next() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.amb_with(observable_2);
 
     let _subscription = observable.subscribe(observer);
@@ -85,7 +83,6 @@ fn test_error() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.amb_with(observable_2);
 
     let _subscription = observable.subscribe(observer);
@@ -119,7 +116,6 @@ fn test_error_without_next() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.amb_with(observable_2);
 
     let _subscription = observable.subscribe(observer);
@@ -141,7 +137,6 @@ fn test_unsubscribe() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.amb_with(observable_2);
 
     let subscription = observable.subscribe(observer);
@@ -178,7 +173,6 @@ fn test_ref() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.amb_with(observable_2);
 
     let _subscription = observable.subscribe(observer);
@@ -215,7 +209,6 @@ fn test_mut_ref() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.amb_with(observable_2).map(|e| {
         let result = *e;
         *e *= 2;
@@ -260,7 +253,6 @@ fn test_async() {
         let (_, observable_2, channel_checker_2) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable_1.amb_with(observable_2);
 
         let _subscription = scheduler
@@ -312,7 +304,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = source_1.amb_with(source_2);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -369,7 +360,6 @@ fn test_unsub_on_next_by_take() {
     let (_, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1.amb_with(observable_2).take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -393,7 +383,6 @@ fn test_multiple_operation() {
     let (_, observable_4, channel_checker_4) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable_1
         .amb_with(observable_2)
         .amb_with(observable_3.amb_with(observable_4));
@@ -438,7 +427,6 @@ fn test_without_convenient_api() {
     let (_, observable, _) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Amb::new([
         observable_1.into_send_boxed(),
         observable_2.into_send_boxed(),
@@ -474,7 +462,6 @@ fn test_without_convenient_api() {
 fn test_empty_sources() {
     let (checker, observer) = Checker::<Infallible, Infallible>::new();
 
-    // Custom operations
     let observable = Amb::new(Vec::<Empty>::new());
 
     let _subscription = observable.subscribe(observer);
@@ -489,7 +476,6 @@ fn test_three_sources() {
     let (_, observable_3, channel_checker_3) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Amb::new([observable_1, observable_2, observable_3]);
 
     let _subscription = observable.subscribe(observer);
@@ -522,7 +508,6 @@ fn test_three_sources_next_on_sub() {
     let (_, observable_3, channel_checker_3) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Amb::new([
         source.into_send_boxed(),
         observable_2.into_send_boxed(),
@@ -554,7 +539,6 @@ fn test_next_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = source.amb_with(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -580,7 +564,6 @@ fn test_next_on_later_sub() {
     let source = source.start_with([111]);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.amb_with(source);
 
     let _subscription = observable.subscribe(observer);
@@ -602,7 +585,6 @@ fn test_complete_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.amb_with(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -616,7 +598,6 @@ fn test_complete_on_later_sub() {
     let (_, observable, channel_checker) = test_channel::<'_, Infallible, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.amb_with(Empty);
 
     let _subscription = observable.subscribe(observer);
@@ -630,7 +611,6 @@ fn test_error_on_sub() {
     let (_, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error").amb_with(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -653,7 +633,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.amb_with(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -680,7 +659,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.amb_with(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -707,7 +685,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.amb_with(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -726,7 +703,6 @@ fn test_error_on_later_sub() {
     let (_, observable, channel_checker) = test_channel::<'_, Infallible, &str>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.amb_with(Throw::new("error"));
 
     let _subscription = observable.subscribe(observer);
@@ -828,7 +804,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
     let observable = observable.amb_with(test_channel::<'_, i32, Infallible>().1);
@@ -838,7 +813,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
     observable.amb_with(test_channel::<'_, i32, Infallible>().1);

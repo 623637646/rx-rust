@@ -20,8 +20,9 @@ use crate::{
 use educe::Educe;
 use std::{collections::VecDeque, marker::PhantomData};
 
-/// Concatenates an Observable of Observables, emitting all values from each inner Observable in sequence.
-/// See <https://reactivex.io/documentation/operators/concat.html> (referencing concat operator for general concept)
+/// Flattens an Observable of Observables by emitting all of the values of each inner Observable,
+/// one inner Observable after the other.
+/// See <https://reactivex.io/documentation/operators/concat.html>
 ///
 /// # Examples
 /// ```rust
@@ -58,7 +59,8 @@ pub struct ConcatAll<OE, OE1> {
 
 impl<OE, OE1> ConcatAll<OE, OE1> {
     /// Creates a [`ConcatAll`] over `source`;
-    /// [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all) is the fluent form.
+    /// [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all) is the fluent
+    /// form.
     pub fn new<T, E>(source: OE) -> Self
     where
         OE: ObservableTypes<Item = OE1, Error = E>,

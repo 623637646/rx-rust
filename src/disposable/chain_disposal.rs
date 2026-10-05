@@ -5,8 +5,8 @@ use crate::disposable::Disposable;
 /// A disposal that disposes `first`, then `second`.
 ///
 /// The order is a guarantee operators rely on: `do_before_disposal` puts its callback in `first`
-/// and `do_after_disposal` in `second`. [`DisposableExt::then`](crate::disposable::DisposableExt::then)
-/// builds one from any disposal.
+/// and `do_after_disposal` in `second`.
+/// [`DisposableExt::then`](crate::disposable::DisposableExt::then) builds one from any disposal.
 ///
 /// # Examples
 /// ```rust

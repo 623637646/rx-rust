@@ -14,7 +14,6 @@ fn test_completed() {
     let (checker, observer) = Checker::new();
     let called = AtomicBool::new(false);
 
-    // Custom operations
     let observable = Start::new(|| {
         called.write(true);
         111
@@ -33,7 +32,6 @@ fn test_ref() {
     let (checker, observer) = Checker::new();
     let called = AtomicBool::new(false);
 
-    // Custom operations
     let observable = Start::new(|| {
         called.write(true);
         &value
@@ -52,7 +50,6 @@ fn test_mut_ref() {
     let (checker, observer) = Checker::new();
     let called = AtomicBool::new(false);
 
-    // Custom operations
     let observable = Start::new(|| {
         called.write(true);
         &mut value
@@ -79,7 +76,6 @@ fn test_async() {
         let (checker, observer) = Checker::new();
         let called = Arc::new(AtomicBool::new(false));
         let called_cloned = called.clone();
-        // Custom operations
         let observable = Start::new(move || {
             called_cloned.write(true);
             111
@@ -101,7 +97,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
     let called = AtomicBool::new(false);
 
-    // Custom operations
     let observable = Start::new(|| {
         called.write(true);
         111
@@ -125,7 +120,6 @@ fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::new();
     let called = AtomicBool::new(false);
 
-    // Custom operations
     let observable = Start::new(|| {
         called.write(true);
         111
@@ -147,7 +141,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let observable = Start::new(|| 111);
 
     let observable = observable.filter(|_| true);
@@ -157,7 +150,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let observable = Start::new(|| 111);
 
     observable.filter(|_| true);

@@ -22,7 +22,6 @@ fn test_completed() {
     let (sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::<i32, String>::new();
 
-    // Custom operations
     let observable = observable.with_item_type();
 
     let _subscription = observable.subscribe(observer);
@@ -41,7 +40,6 @@ fn test_error() {
     let (sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::<i32, _>::new();
 
-    // Custom operations
     let observable = observable.with_item_type();
 
     let _subscription = observable.subscribe(observer);
@@ -61,7 +59,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::<i32, String>::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.with_item_type();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -99,7 +96,6 @@ fn test_ref() {
     let (sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::<&i32, _>::new();
 
-    // Custom operations
     let observable = observable.with_item_type();
 
     let _subscription = observable.subscribe(observer);
@@ -117,7 +113,6 @@ fn test_ref() {
 fn test_mut_ref() {
     let mut error = 111;
 
-    // Custom operations
     let observable = Create::shared_boxed(|observer| {
         observer.on_termination(Termination::Error(&mut error));
         Subscription::default()
@@ -147,7 +142,6 @@ fn test_async() {
         let (_, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::<&i32, String>::new();
 
-        // Custom operations
         let observable = observable.with_item_type();
 
         let subscription = scheduler
@@ -171,7 +165,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::<i32, String>::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.with_item_type();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -202,7 +195,6 @@ fn test_unsub_on_next_by_take() {
     let (_sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::<i32, String>::new();
 
-    // Custom operations
     let observable = observable.with_item_type().take(0);
 
     let _subscription = observable.subscribe(observer);
@@ -216,7 +208,6 @@ fn test_multiple_operation() {
     let (sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::<i32, String>::new();
 
-    // Custom operations
     let observable = observable.with_item_type().with_item_type();
 
     let _subscription = observable.subscribe(observer);
@@ -235,7 +226,6 @@ fn test_without_convenient_api() {
     let (sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::<i32, String>::new();
 
-    // Custom operations
     let observable = WithItemType::new(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -308,7 +298,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel();
     let observable = observable.with_item_type();
 
@@ -319,7 +308,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, _, String>();
     let observable = observable.with_item_type::<String>();
 

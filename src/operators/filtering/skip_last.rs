@@ -44,7 +44,8 @@ pub struct SkipLast<OE> {
 
 impl<OE> SkipLast<OE> {
     /// Creates a [`SkipLast`] over `source`;
-    /// [`ObservableExt::skip_last`](crate::observable::ObservableExt::skip_last) is the fluent form.
+    /// [`ObservableExt::skip_last`](crate::observable::ObservableExt::skip_last) is the fluent
+    /// form.
     pub fn new(source: OE, count: usize) -> Self {
         Self { source, count }
     }

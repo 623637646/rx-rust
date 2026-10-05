@@ -26,8 +26,13 @@ pub enum Error<E> {
     SourceError(E),
 }
 
-/// Mirrors the source Observable, but issues an error if a specified duration elapses between emissions.
+/// Mirrors the source Observable, but issues an error if a specified duration elapses between
+/// emissions.
 /// See <https://reactivex.io/documentation/operators/timeout.html>
+///
+/// The first item must arrive within `duration` of the subscription, and every later one within
+/// `duration` of the item before it; the source's own error is wrapped in
+/// [`Error::SourceError`].
 ///
 /// # Examples
 /// ```rust

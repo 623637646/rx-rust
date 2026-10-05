@@ -44,7 +44,8 @@ pub struct TakeLast<OE> {
 
 impl<OE> TakeLast<OE> {
     /// Creates a [`TakeLast`] over `source`;
-    /// [`ObservableExt::take_last`](crate::observable::ObservableExt::take_last) is the fluent form.
+    /// [`ObservableExt::take_last`](crate::observable::ObservableExt::take_last) is the fluent
+    /// form.
     pub fn new(source: OE, count: usize) -> Self {
         Self { source, count }
     }

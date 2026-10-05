@@ -25,7 +25,7 @@ pub enum DebugEvent<'a, T: 'a, E: 'a> {
     Disposed,
 }
 
-/// Logs all items from the source Observable to the console, and re-emits them. This is useful for debugging.
+/// Reports every event of the source Observable to a callback, and re-emits it unchanged.
 ///
 /// # Examples
 /// ```rust
@@ -73,11 +73,13 @@ impl<OE, C, F> Debug<OE, C, F> {
     }
 }
 
-/// The callback type of [`Debug::new_default_print`](struct@Debug#method.new_default_print), which prints each event to stdout.
+/// The callback type of [`Debug::new_default_print`](struct@Debug#method.new_default_print), which
+/// prints each event to stdout.
 pub type DefaultPrintType<C, T, E> = fn(C, DebugEvent<'_, T, E>);
 
 impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
-    /// Creates a [`struct@Debug`] over `source` that prints every event to stdout, prefixed by `label`;
+    /// Creates a [`struct@Debug`] over `source` that prints every event to stdout, prefixed by
+    /// `label`;
     /// [`ObservableExt::debug_default_print`](crate::observable::ObservableExt::debug_default_print)
     /// is the fluent form.
     pub fn new_default_print(source: OE, label: C) -> Self

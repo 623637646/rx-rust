@@ -28,7 +28,6 @@ fn test_completed() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish();
@@ -92,7 +91,6 @@ fn test_error() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish();
@@ -156,7 +154,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish();
@@ -245,7 +242,6 @@ fn test_ref() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| {
             let counter = counter.fetch_add(1, Ordering::SeqCst) + 1;
@@ -317,7 +313,6 @@ fn test_async() {
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
 
-        // Custom operations
         let controller = observable
             .map(move |_| counter.fetch_add(1, Ordering::SeqCst) + 1)
             .publish();
@@ -402,7 +397,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish();
@@ -467,7 +461,6 @@ fn test_unsub_on_next_by_take() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish();
@@ -531,7 +524,6 @@ fn test_multiple_operation() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
     let controller_1 = observable.publish();
     let controller_2 = controller_1.observable().publish();
@@ -596,7 +588,6 @@ fn test_without_convenient_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
     let controller = ConnectableController::<_, PublishSubject<'_, _, _, Shared>>::new(
         observable,
@@ -662,7 +653,6 @@ fn test_share_api() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .share();
@@ -723,7 +713,6 @@ fn test_connect_without_subscription() {
     let counter = AtomicUsize::new(0);
     let (channels, observable) = test_channels::<'_, i32, Infallible>();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish();
@@ -750,7 +739,6 @@ fn test_disconnect_and_reconnect() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let controller = observable
         .map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1)
         .publish();
@@ -977,7 +965,6 @@ fn test_lifetime_or_sub() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable) = test_channels::<'_, i32, Infallible>();
     let controller = observable.publish();
     let observable = controller.observable();
@@ -989,7 +976,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable) = test_channels::<'_, i32, Infallible>();
     let controller = observable.publish();
     let observable = controller.observable();

@@ -21,10 +21,11 @@ pub struct Disconnected;
 #[educe(Debug)]
 pub struct Connected<D: Disposable>(Subscription<D>);
 
-/// Multicasts a source `Observable` through a `Subject`, but waits until its [`connect`](ConnectableController::connect)
-/// method is called before subscribing to the source and emitting items to its observers.
-/// Subscribe to the multicast output through [`observable`](ConnectableController::observable).
-/// See <https://reactivex.io/documentation/operators/connect.html>
+/// Multicasts a source `Observable` through a `Subject`, but waits until its
+/// [`connect`](ConnectableController::connect) method is called before subscribing to the source
+/// and emitting items to its observers. Subscribe to the multicast output through
+/// [`observable`](ConnectableController::observable). See
+/// <https://reactivex.io/documentation/operators/connect.html>
 ///
 /// # Examples
 /// ```rust
@@ -87,7 +88,8 @@ pub struct ConnectableController<OE, S, State = Disconnected> {
 
 impl<OE, S> ConnectableController<OE, S, Disconnected> {
     /// Creates a disconnected controller that will multicast `source` through `subject`;
-    /// [`ObservableExt::multicast`](crate::observable::ObservableExt::multicast) is the fluent form.
+    /// [`ObservableExt::multicast`](crate::observable::ObservableExt::multicast) is the fluent
+    /// form.
     pub fn new(source: OE, subject: S) -> Self {
         Self {
             source,

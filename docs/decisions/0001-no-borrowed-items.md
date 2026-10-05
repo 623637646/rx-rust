@@ -29,8 +29,8 @@ c.fork().subscribe(|v: &mut i32| *v += 1);
 c.fork().subscribe(|v: &mut i32| *v *= 2);
 ```
 
-This is the same distinction as `Iterator` vs. a lending iterator. In our `ObservableTypes`,
-`Item` is a plain associated type: `Item = &'x mut Foo` can emit references too, but `'x` is fixed at
+This is the same distinction as `Iterator` vs. a lending iterator. In our `ObservableTypes`, `Item`
+is a plain associated type: `Item = &'x mut Foo` can emit references too, but `'x` is fixed at
 subscription time and the closure is allowed to keep the reference until `'x` ends, so the same
 `&'x mut` cannot go to two subscribers, and a subject cannot lend out its own internal value.
 
@@ -77,6 +77,5 @@ subscription time and the closure is allowed to keep the reference until `'x` en
 - Referencing data that outlives the subscription: `Item = &'x T` is already supported.
 - Broadcasting in-place mutation: use `Arc<Mutex<T>>` (or `Rc<RefCell<T>>` in a `Local` pipeline)
   as the item and let subscribers modify it through `MutableHelper::with_mut` — consistent with the
-  existing lock discipline, no trait changes. The only
-  thing that is genuinely impossible is "a subject re-borrows its internal value to multiple
-  subscribers", and there is no demand for it.
+  existing lock discipline, no trait changes. The only thing that is genuinely impossible is "a
+  subject re-borrows its internal value to multiple subscribers", and there is no demand for it.

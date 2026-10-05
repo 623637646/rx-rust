@@ -6,10 +6,8 @@
 //! source, and [`ObservableExt`] gives each of them a method, so a pipeline reads as a chain of
 //! calls.
 //!
-//! [`BoxedObservable`] and
-//! [`CloneableBoxedObservable`] erase an
-//! observable's type; [`EitherObservable`] picks one of two
-//! types without boxing.
+//! [`BoxedObservable`] and [`CloneableBoxedObservable`] erase an observable's type;
+//! [`EitherObservable`] picks one of two types without boxing.
 //!
 //! # Examples
 //! ```rust
@@ -132,8 +130,8 @@ pub trait ObservableTypes {
     ///
     /// It is computed along the chain from the source down: a synchronous source is `Local`, an
     /// operator delivering through a scheduler takes the scheduler's mode, and an operator with
-    /// several sources joins theirs ([`Joined`](crate::thread_mode::Joined)). An operator that needs
-    /// shared state picks its pointer from it. See [`thread_mode`](crate::thread_mode).
+    /// several sources joins theirs ([`Joined`](crate::thread_mode::Joined)). An operator that
+    /// needs shared state picks its pointer from it. See [`thread_mode`](crate::thread_mode).
     type Mode: ThreadMode;
     /// The disposal of a subscription to this observable.
     type D: Disposable;
@@ -168,8 +166,7 @@ where
 {
     /// Subscribes `observer`, which receives the events from now on, consuming the observable.
     ///
-    /// The returned [`Subscription`] unsubscribes when dropped. It is a struct rather than a
-    /// trait so that it can implement `Drop`.
+    /// The returned [`Subscription`] unsubscribes when dropped.
     fn subscribe(self, observer: OR) -> Subscription<Self::D>;
 }
 
@@ -187,7 +184,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         All::new(self, callback)
     }
 
-    /// Competes two observables and mirrors whichever one produces an item or error first.
+    /// Races two observables and mirrors whichever one emits an item or terminates first.
     fn amb_with<OE1>(self, other: OE1) -> Amb<[EitherObservable<Self, OE1>; 2]>
     where
         OE1: ObservableTypes<Item = Self::Item, Error = Self::Error>,
@@ -217,7 +214,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         BufferWithCount::new(self, count)
     }
 
-    /// Collects items into time-based buffers driven by the provided scheduler.
+    /// Collects items into a buffer emitted every `time_span`, the first after `delay` (at once for
+    /// `None`), on the provided scheduler.
     fn buffer_with_time<S>(
         self,
         time_span: Duration,
@@ -227,7 +225,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         BufferWithTime::new(self, time_span, scheduler, delay)
     }
 
-    /// Collects items into buffers using both size and time boundaries whichever occurs first.
+    /// Collects items into buffers emitted when they reach `count` items or every `time_span`,
+    /// whichever comes first; the timer first fires after `delay` (at once for `None`).
     fn buffer_with_time_or_count<S>(
         self,
         count: NonZeroUsize,
@@ -299,12 +298,13 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Count::new(self)
     }
 
-    /// Emits an item from the source Observable only after a particular time span has passed without another source emission.
+    /// Emits an item only once `time_span` has passed without the source emitting another one.
     fn debounce<S>(self, time_span: Duration, scheduler: S) -> Debounce<Self, S> {
         Debounce::new(self, time_span, scheduler)
     }
 
-    /// Attaches a label to the stream and logs lifecycle events for debugging purposes using the provided callback.
+    /// Reports every event of the stream — subscription, values, termination, disposal — to
+    /// `callback`, together with `context`.
     fn debug<C, F>(self, context: C, callback: F) -> Debug<Self, C, F>
     where
         F: Fn(C, DebugEvent<'_, Self::Item, Self::Error>),
@@ -312,7 +312,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Debug::new(self, context, callback)
     }
 
-    /// Attaches a label to the stream and logs lifecycle events for debugging purposes using the default print.
+    /// [`debug`](ObservableExt::debug) that prints every event with `println!`, prefixed by
+    /// `label`.
     fn debug_default_print<L>(
         self,
         label: L,
@@ -335,7 +336,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Delay::new(self, delay, scheduler)
     }
 
-    /// Converts a stream of notifications back into a normal observable sequence.
+    /// Turns a stream of [`Event`](crate::observer::Event)s back into the events they describe.
     fn dematerialize(self) -> Dematerialize<Self> {
         Dematerialize::new(self)
     }
@@ -454,7 +455,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Filter::new(self, callback)
     }
 
-    /// Emits only the first item from the source, then completes.
+    /// Emits only the first item from the source, then completes; nothing if there was none.
     fn first(self) -> First<Self> {
         First::new(self)
     }
@@ -477,7 +478,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         GroupBy::new(self, key_selector)
     }
 
-    /// Hooks into the emission of items, allowing mutation of the downstream observer.
+    /// Hands each item, together with the downstream observer, to a callback that decides what to
+    /// forward.
     ///
     /// The callback returns the [`Flow`] the operator answers, which is normally the one the
     /// downstream observer it was handed answered.
@@ -488,7 +490,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         HookOnNext::new(self, callback)
     }
 
-    /// Hooks into subscription, letting you override how the source subscribes observers.
+    /// Hands each subscription to a callback, which gets the source and the downstream observer
+    /// and subscribes them itself.
     ///
     /// The callback gets the downstream observer unboxed, so the operator subscribes that one
     /// observer type only; see [`HookOnSubscription`] and
@@ -519,7 +522,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         HookOnSubscription::new_boxed(self, callback)
     }
 
-    /// Hooks into termination, providing access to the observer and termination payload.
+    /// Hands the termination, together with the downstream observer, to a callback that decides
+    /// what to deliver.
     ///
     /// The callback gets the downstream observer unboxed, so the operator subscribes that one
     /// observer type only; see [`HookOnTermination`] and
@@ -550,9 +554,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
         IgnoreElements::new(self)
     }
 
-    /// Erases the observable's concrete type. See
-    /// [`boxed_observable`] for the flavors; the lifetimes
-    /// bound the observer (`'or`), the disposal (`'sub`) and the observable itself (`'oe`).
+    /// Erases the observable's concrete type. See [`boxed_observable`] for the flavors; the
+    /// lifetimes bound the observer (`'or`), the disposal (`'sub`) and the observable itself
+    /// (`'oe`).
     fn into_boxed<'or, 'sub, 'oe>(
         self,
     ) -> BoxedObservable<'or, 'sub, 'oe, Self::Item, Self::Error, Self::Mode>
@@ -714,12 +718,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Converts the observable into an async stream that keeps the items arriving between two
     /// polls in `buffer`, which decides what a source faster than the consumer costs.
     ///
-    /// [`Latest`](crate::operators::others::observable_try_stream::Latest) keeps only the newest item,
-    /// [`Bounded`](crate::operators::others::observable_try_stream::Bounded) a fixed number of them and
-    /// [`Unbounded`](crate::operators::others::observable_try_stream::Unbounded) — what
-    /// [`into_stream`](Self::into_stream) uses — everything; a
-    /// [`StreamBuffer`] of your own can
-    /// fold them instead. Whatever the buffer, the source is never slowed down: a `Stream`
+    /// [`Latest`](crate::operators::others::observable_try_stream::Latest) keeps only the newest
+    /// item, [`Bounded`](crate::operators::others::observable_try_stream::Bounded) a fixed number
+    /// of them and [`Unbounded`](crate::operators::others::observable_try_stream::Unbounded) —
+    /// what [`into_stream`](Self::into_stream) uses — everything; a [`StreamBuffer`] of your own
+    /// can fold them instead. Whatever the buffer, the source is never slowed down: a `Stream`
     /// only pulls from the buffer, not from the source.
     ///
     /// # Examples
@@ -786,7 +789,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         ObservableTryStream::with_buffer(self, buffer)
     }
 
-    /// Emits only the final item produced by the source before completion.
+    /// Emits only the last item of the source, on completion; nothing if there was none.
     fn last(self) -> Last<Self> {
         Last::new(self)
     }
@@ -807,7 +810,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         MapErr::new(self, callback)
     }
 
-    /// Wraps each item into a notification, turning the stream into explicit events.
+    /// Turns every event, the termination included, into an [`Event`](crate::observer::Event)
+    /// item, then completes.
     fn materialize(self) -> Materialize<Self> {
         Materialize::new(self)
     }
@@ -846,7 +850,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         ConnectableController::new(self, subject_maker())
     }
 
-    /// Schedules downstream observation on the provided scheduler.
+    /// Delivers the events downstream from tasks of the provided scheduler.
     fn observe_on<S>(self, scheduler: S) -> ObserveOn<Self, S> {
         ObserveOn::new(self, scheduler)
     }
@@ -881,7 +885,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Reduce::new(self, initial_value, callback)
     }
 
-    /// Multicasts the source using a `ReplaySubject` configured with the given buffer size.
+    /// Multicasts the source using a `ReplaySubject` that keeps the last `buffer_size` values, or
+    /// every value for `None`.
     #[allow(clippy::type_complexity)]
     fn replay<'a>(
         self,
@@ -937,7 +942,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         self.publish().ref_count()
     }
 
-    /// Shares a single subscription, replaying only the last item to new subscribers.
+    /// Shares a single subscription using `AsyncSubject` semantics: only the last item, on
+    /// completion.
     #[allow(clippy::type_complexity)]
     fn share_last<'a>(self) -> RefCount<Self, AsyncSubject<'a, Self::Item, Self::Error, Self::Mode>>
     where
@@ -948,7 +954,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         self.publish_last().ref_count()
     }
 
-    /// Shares a single subscription while replaying a bounded history to future subscribers.
+    /// Shares a single subscription using `ReplaySubject` semantics: later subscribers first get
+    /// the last `buffer_size` values, or every value for `None`.
     #[allow(clippy::type_complexity)]
     fn share_replay<'a>(
         self,
@@ -972,7 +979,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         SkipLast::new(self, count)
     }
 
-    /// Ignores items from the source until the notifier observable fires.
+    /// Ignores items from the source until the notifier observable emits; a notifier that
+    /// completes without emitting completes the result.
     fn skip_until<OE1>(self, start: OE1) -> SkipUntil<Self, OE1>
     where
         OE1: ObservableTypes<Item = (), Error = Self::Error>,
@@ -988,7 +996,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         SkipWhile::new(self, callback)
     }
 
-    /// Pre-pends the provided values before the source starts emitting.
+    /// Emits the provided values first, then subscribes to the source.
     fn start_with<I>(self, values: I) -> StartWith<Self, I>
     where
         I: IntoIterator<Item = Self::Item>,
@@ -1001,7 +1009,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         SubscribeOn::new(self, scheduler)
     }
 
-    /// Convenience helper for subscribing with plain callbacks instead of a full observer.
+    /// Subscribes with two closures instead of an [`Observer`].
     ///
     /// `on_next` may return nothing, which keeps the source going, or a [`Flow`], which lets it
     /// end its own stream with [`Flow::Stop`]: the source then stops pushing — a synchronous one
@@ -1052,7 +1060,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
         TakeLast::new(self, count)
     }
 
-    /// Relays items until the notifier observable emits, then completes.
+    /// Relays items until the notifier observable emits, then completes; a notifier that
+    /// terminates first terminates the result the same way.
     fn take_until<OE1>(self, stop: OE1) -> TakeUntil<Self, OE1>
     where
         OE1: ObservableTypes<Item = (), Error = Self::Error>,
@@ -1068,25 +1077,27 @@ pub trait ObservableExt: ObservableTypes + Sized {
         TakeWhile::new(self, callback)
     }
 
-    /// Throttles emissions to at most one item per specified timespan.
+    /// Throttles emissions to at most one item per `time_span`.
     ///
-    /// Leading-edge and scheduler-free: the cooldown is decided by comparing
-    /// item arrival times, so no timer is spawned.
+    /// Leading-edge and scheduler-free: the cooldown is decided by comparing item arrival times,
+    /// so no timer is spawned.
     fn throttle(self, time_span: Duration) -> Throttle<Self> {
         Throttle::new(self, time_span)
     }
 
-    /// Emits elapsed time between consecutive items as they flow through the stream.
+    /// Pairs each item with the time elapsed since the previous one, or since the subscription for
+    /// the first.
     fn time_interval(self) -> TimeInterval<Self> {
         TimeInterval::new(self)
     }
 
-    /// Errors if the next item does not arrive within the specified duration.
+    /// Errors if the next item, or the first since the subscription, does not arrive within
+    /// `duration`.
     fn timeout<S>(self, duration: Duration, scheduler: S) -> Timeout<Self, S> {
         Timeout::new(self, duration, scheduler)
     }
 
-    /// Annotates each item with the current timestamp when it is emitted.
+    /// Pairs each item with the [`Instant`](std::time::Instant) it arrived at.
     fn timestamp(self) -> Timestamp<Self> {
         Timestamp::new(self)
     }

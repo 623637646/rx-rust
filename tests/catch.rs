@@ -29,7 +29,6 @@ fn test_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         observable_1
@@ -72,7 +71,6 @@ fn test_completed_without_catch() {
     let (_sender_1, observable_1, channel_checker_1) = test_channel::<_, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.catch(move |_| observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -100,7 +98,6 @@ fn test_error() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         observable_1
@@ -142,7 +139,6 @@ fn test_error_source_and_catch_are_same() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let subject_cloned = subject.clone();
     let observable = subject.clone().catch(move |value| {
         assert_eq!(value, "error");
@@ -168,7 +164,6 @@ fn test_unsubscribe_before_catch() {
     let (mut _sender_1, observable_1, channel_checker_1) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.catch(move |_| observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -196,7 +191,6 @@ fn test_unsubscribe_after_catch() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         observable_1
@@ -243,7 +237,6 @@ fn test_ref() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.catch(move |value| {
         assert_eq!(value, &error);
         observable_1
@@ -288,7 +281,6 @@ fn test_mut_ref() {
     let (mut sender, observable, _) = test_channel();
     let (mut sender_1, observable_1, _) = test_channel();
 
-    // Custom operations
     let observable = observable.catch(move |error| {
         assert_eq!(error, "error");
         observable_1
@@ -321,7 +313,6 @@ fn test_async() {
         let (mut sender_1, observable_1, channel_checker_1) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.catch(move |value| {
             assert_eq!(value, "error");
             observable_1
@@ -386,7 +377,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         source_1.clone()
@@ -446,7 +436,6 @@ fn test_unsub_on_next_by_take() {
     let (_sender_1, observable_1, channel_checker_1) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .catch(move |value: &str| {
             assert_eq!(value, "error");
@@ -474,7 +463,6 @@ fn test_multiple_operation() {
     let (mut sender_2, observable_2, channel_checker_2) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .catch(move |value| {
             assert_eq!(value, "error");
@@ -550,7 +538,6 @@ fn test_without_convenient_api() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Catch::new(observable, move |value| {
         assert_eq!(value, "error");
         observable_1
@@ -592,7 +579,6 @@ fn test_next_on_sub() {
     let subject = BehaviorSubject::<_, &str, _>::shared(111);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().catch(move |value| {
         assert_eq!(value, "error");
         Just::new(222)
@@ -611,7 +597,6 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.catch(move |_| {
         if true {
             unreachable!();
@@ -628,7 +613,6 @@ fn test_complete_on_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error").catch(move |error| {
         assert_eq!(error, "error");
         Throw::new("error")
@@ -653,7 +637,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.catch(move |_| observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -681,7 +664,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.catch(move |_| observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -709,7 +691,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.catch(move |_| observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -733,7 +714,6 @@ fn test_race_condition_error_after_unsub() {
 
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.catch(move |value| {
         assert_eq!(value, "error");
         Just::new(222)
@@ -843,7 +823,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, String>();
     let observable = observable.catch(move |value| Throw::new(value).with_item_type());
 
@@ -854,7 +833,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, Infallible>();
     let observable = observable.catch(move |value| Throw::new(value).with_item_type());
 

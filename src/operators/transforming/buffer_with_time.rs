@@ -16,7 +16,12 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
-/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, after a specified time interval.
+/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`,
+/// every `time_span`.
+///
+/// The first bundle is emitted after `delay` — at once, and so empty, for `None` — and every
+/// following one `time_span` later, at a fixed rate, empty or not. On completion the pending
+/// bundle is emitted before the completion.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples

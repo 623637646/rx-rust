@@ -18,12 +18,13 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Periodically subdivides items from an Observable into Observable windows.
+/// Subdivides the items of an Observable into Observable windows, opening a new one whenever the
+/// `boundary` Observable emits an item.
+/// See <https://reactivex.io/documentation/operators/window.html>
 ///
-/// A new window is emitted whenever the `boundary` Observable emits an item.
 /// Completing the `boundary` stops future window rotation without terminating the current window
-/// or the outer Observable.
-/// An error from the `boundary` terminates the current window and the outer Observable.
+/// or the outer Observable. An error from the `boundary` terminates the current window and the
+/// outer Observable.
 ///
 /// Each window is a single-consumer pipe: it can be subscribed to once, it buffers the items that
 /// arrive while it has no subscriber, and dropping it without subscribing discards its items. A
@@ -37,7 +38,6 @@ use std::marker::PhantomData;
 /// it happens: the window releases it on its next item, when it ends, or when the outer
 /// subscription is disposed, whichever comes first. See
 /// [the unicast subject](crate::subject::unicast_subject) each window is built on.
-/// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// # Examples
 /// ```rust
@@ -103,8 +103,8 @@ use std::marker::PhantomData;
 pub struct Window<'a, OE, OE1> {
     source: OE,
     boundary: OE1,
-    /// The observer of a window may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left to
-    /// an unboxed default: the window is the `Item`, which [`ObservableTypes`] names without any
+    /// The observer of a window may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left
+    /// to an unboxed default: the window is the `Item`, which [`ObservableTypes`] names without any
     /// observer, and its observer arrives only later, so the window boxes it.
     _marker: MarkerType<&'a ()>,
 }

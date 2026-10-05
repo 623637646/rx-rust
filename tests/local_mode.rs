@@ -37,7 +37,7 @@ use std::{cell::RefCell, convert::Infallible, rc::Rc, time::Duration};
 const DURATION_10_MS: Duration = Duration::from_millis(10);
 const DURATION_100_MS: Duration = Duration::from_millis(100);
 
-/// What a [`recorder`] has seen: the values, then the termination.
+/// What [`record`] has seen: the values, then the termination.
 struct Record<T, E> {
     values: Rc<RefCell<Vec<T>>>,
     termination: Rc<RefCell<Option<Termination<E>>>>,

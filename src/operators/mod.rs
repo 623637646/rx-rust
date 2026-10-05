@@ -1,4 +1,5 @@
-//! The operators, one type per file, in the categories of <https://reactivex.io/documentation/operators.html>.
+//! The operators, one type per file, in the categories of
+//! <https://reactivex.io/documentation/operators.html>.
 //!
 //! Sources are the types of [`creating`]; every other operator wraps a source and is normally
 //! reached through the method of the same name on

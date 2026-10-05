@@ -17,7 +17,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Projects each source value to an Observable which is merged in a serialized fashion in the output Observable.
+/// Maps each source value to an Observable and emits all of the values of each, one Observable
+/// after the other.
 /// See <https://reactivex.io/documentation/operators/flatmap.html>
 ///
 /// # Examples
@@ -55,7 +56,8 @@ pub struct ConcatMap<T0, OE, OE1, F> {
 
 impl<T0, OE, OE1, F> ConcatMap<T0, OE, OE1, F> {
     /// Creates a [`ConcatMap`] over `source`;
-    /// [`ObservableExt::concat_map`](crate::observable::ObservableExt::concat_map) is the fluent form.
+    /// [`ObservableExt::concat_map`](crate::observable::ObservableExt::concat_map) is the fluent
+    /// form.
     pub fn new<T, E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T0, Error = E>,

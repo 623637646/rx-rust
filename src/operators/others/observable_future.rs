@@ -50,7 +50,8 @@ where
     OE: ObservableTypes<Error = Infallible>,
 {
     /// Creates an [`ObservableFuture`] over `source`;
-    /// [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future) is the fluent form.
+    /// [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future) is the fluent
+    /// form.
     pub fn new(source: OE) -> Self {
         Self {
             future: ObservableTryFuture::new(source),

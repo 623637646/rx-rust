@@ -8,7 +8,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback for each item emitted by the source Observable after the item has been emitted to the downstream observer.
+/// Invokes a callback for each item emitted by the source Observable, after the item has been
+/// emitted to the downstream observer.
 /// See <https://reactivex.io/documentation/operators/do.html>
 ///
 /// # Examples
@@ -49,7 +50,8 @@ pub struct DoAfterNext<OE, F> {
 
 impl<OE, F> DoAfterNext<OE, F> {
     /// Creates a [`DoAfterNext`] over `source`;
-    /// [`ObservableExt::do_after_next`](crate::observable::ObservableExt::do_after_next) is the fluent form.
+    /// [`ObservableExt::do_after_next`](crate::observable::ObservableExt::do_after_next) is the
+    /// fluent form.
     pub fn new<T, E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,

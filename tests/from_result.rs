@@ -89,7 +89,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable_1 = observable.clone();
     let observable_2 = observable_1.clone();
 
@@ -122,7 +121,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let observable = FromResult::<_, Infallible>::new(Ok(111));
 
     let observable = observable.filter(|_| true);
@@ -132,7 +130,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let observable = FromResult::<_, Infallible>::new(Ok(111));
 
     observable.filter(|_| true);

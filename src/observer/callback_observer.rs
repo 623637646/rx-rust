@@ -7,8 +7,7 @@ use educe::Educe;
 ///
 /// A callback bound as `FnMut(T) -> R` with `R: IntoFlow` may return `()`, which keeps the source
 /// going — so the common `|value| { ... }` needs no trailing [`Flow::Continue`] — or a [`Flow`],
-/// which lets it end its own stream. This is what
-/// [`CallbackObserver`] relies on.
+/// which lets it end its own stream. [`CallbackObserver`] relies on it.
 ///
 /// A callback that only diverges, such as `|_| unreachable!()`, is inferred to return `!`, which
 /// no stable impl can cover: spell its return type out, as `|_| -> () { unreachable!() }`.
@@ -85,8 +84,6 @@ where
     FT: FnOnce(Termination<E>),
 {
     fn on_next(&mut self, value: T) -> Flow {
-        // A callback that returns nothing keeps the source going; one that returns a `Flow` can
-        // end its own stream, see `IntoFlow`.
         (self.on_next)(value).into_flow()
     }
 

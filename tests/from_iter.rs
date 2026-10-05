@@ -283,7 +283,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let source = [1, 2, 3];
     let observable = FromIter::new(source);
 
@@ -294,7 +293,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let source = [1, 2, 3];
     let observable = FromIter::new(source);
 

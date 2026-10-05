@@ -34,8 +34,8 @@
 //! # Behavior
 //!
 //! Values sent before the subscription are buffered and replayed on subscription, followed by the
-//! termination if there was one. Once the observer is gone - its subscription disposed, or the
-//! [`UnicastObservable`] dropped without subscribing - later events are dropped.
+//! termination if there was one. Once the observer is gone — its subscription disposed, or the
+//! [`UnicastObservable`] dropped without subscribing — later events are dropped.
 //!
 //! Dropping the sender without terminating it ends the stream without a termination: the observer
 //! still receives every value sent before, whenever it subscribes, and is then dropped silently.
@@ -56,7 +56,7 @@
 //! again or goes away. [`UnicastSender::is_closed`] turns true at once, so a producer that may go
 //! quiet can drop its sender to release the observer.
 //!
-//! An observer that holds its own sender forms a cycle - observer → sender → observer - that the
+//! An observer that holds its own sender forms a cycle — observer → sender → observer — that the
 //! disposal does not break. Such an observer must drop the sender itself, when its `on_next`
 //! answers [`Flow::Stop`] and when its subscription is disposed; otherwise both leak.
 //!

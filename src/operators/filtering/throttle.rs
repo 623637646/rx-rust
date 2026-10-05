@@ -9,13 +9,13 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
-/// Emits an item from the source Observable then ignores subsequent items for a particular time span.
-/// See <https://reactivex.io/documentation/operators/debounce.html>
+/// Emits an item from the source Observable, then ignores subsequent items for a particular time
+/// span.
+/// See <https://reactivex.io/documentation/operators/sample.html> (`throttleFirst`).
 ///
-/// This is a purely synchronous, leading-edge throttle: it compares the arrival
-/// time of each item against the last emission and needs no scheduler. Dropping
-/// items during the cooldown window is decided by an [`Instant`] comparison, so
-/// there is no timer to spawn, cancel, or drift.
+/// This is a purely synchronous, leading-edge throttle: it compares the arrival time of each item
+/// against the last emission and needs no scheduler, so there is no timer to spawn, cancel, or
+/// drift.
 ///
 /// # Examples
 /// ```rust
@@ -113,8 +113,6 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         let now = Instant::now();
-        // `on_next` takes `&mut self`, so it is called exclusively — a plain
-        // field suffices, no shared/atomic state is needed.
         let should_emit = match self.last_emit {
             None => true,
             Some(last) => now.duration_since(last) >= self.time_span,

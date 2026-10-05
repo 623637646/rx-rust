@@ -21,7 +21,6 @@ fn test_completed() {
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -29,7 +28,7 @@ fn test_completed() {
     let _subscription = observable.subscribe_with_callback(
         |_| {},
         move |_| {
-            // Terminate Subject itself first. Then terminate Observers in Subject.
+            // The subject is terminated before its observers are told.
             assert!(subject_cloned.terminated().is_some());
         },
     );
@@ -72,7 +71,6 @@ fn test_error() {
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -80,7 +78,7 @@ fn test_error() {
     let _subscription = observable.subscribe_with_callback(
         |_| {},
         move |_| {
-            // Terminate Subject itself first. Then terminate Observers in Subject.
+            // The subject is terminated before its observers are told.
             assert!(subject_cloned.terminated().is_some());
         },
     );
@@ -133,7 +131,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -185,7 +182,6 @@ fn test_ref() {
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.subscribe(observer);
@@ -217,7 +213,6 @@ fn test_async() {
         let subject = AsyncSubject::shared();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = subject.clone();
 
         let _subscription = scheduler
@@ -255,7 +250,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -299,7 +293,6 @@ fn test_unsub_on_next_by_take() {
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().take(1);
 
     let _subscription = observable.clone().subscribe(observer);
@@ -339,7 +332,6 @@ fn test_complete_on_next() {
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -379,7 +371,6 @@ fn test_error_on_next() {
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -416,7 +407,6 @@ fn test_unsub_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -486,7 +476,6 @@ fn test_sub_on_next() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -554,7 +543,6 @@ fn test_next_on_next() {
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -599,7 +587,6 @@ fn test_unsub_on_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -668,7 +655,6 @@ fn test_sub_on_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -739,7 +725,6 @@ fn test_unsub_on_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // no unsubscribe
@@ -811,7 +796,6 @@ fn test_sub_on_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -878,20 +862,19 @@ fn test_sub_on_error() {
     ));
 }
 
-// The cases below assert the behaviour `AsyncSubject` is meant to have. It keeps its last value in
-// a lock of its own, next to the lock of the `PublishSubject`'s delivery, and nothing is atomic
-// across the two, so they fail today: each of them names the window it walks through.
+// The cases below re-enter the subject, or race it from other threads, where an `AsyncSubject`
+// that kept its last value under a lock of its own would let another event slip in between two
+// steps. The value lives in the multicast's resources instead, so reading it, recording the
+// termination and queueing the events are one step under one lock.
 
 #[test]
 fn test_next_on_replayed_next() {
-    // `on_termination` reads the value and forwards it *before* it records the termination, so a
-    // re-entrant `on_next` still passes the `terminated()` check and overwrites the value that
-    // late subscribers are replayed.
+    // A value sent from the callback of the replayed value must not replace what later subscribers
+    // are replayed: the termination is recorded by the step that queues the value.
     let mut subject = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let terminated_while_replaying = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer_1);
@@ -927,13 +910,11 @@ fn test_next_on_replayed_next() {
 
 #[test]
 fn test_complete_on_replayed_next() {
-    // The re-entrant termination reads the value and forwards it a second time, because forwarding
-    // the value and recording the termination are two steps: an `AsyncSubject` emits its value
-    // once.
+    // A termination sent from the callback of the replayed value must not deliver the value a
+    // second time: an `AsyncSubject` emits its value once.
     let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let _subscription = observable.clone().subscribe(observer);
@@ -959,14 +940,11 @@ fn test_complete_on_replayed_next() {
 #[test]
 fn test_sub_on_replayed_next() {
     // The value is replayed by `on_termination`, so an observer subscribing from that callback
-    // arrives at a terminated subject and must be replayed the value too. `test_sub_on_next`
-    // asserts what happens instead today: the termination alone reaches it, because the
-    // termination is recorded only after the value has been forwarded.
+    // arrives at a terminated subject, and is replayed the value too.
     let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
@@ -1003,7 +981,6 @@ fn test_next_on_sub() {
         .clone()
         .on_termination(Termination::<Infallible>::Completed);
 
-    // Custom operations
     let observable = subject.clone();
 
     let mut subject_cloned = subject.clone();
@@ -1029,7 +1006,6 @@ fn test_next_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer sends a value into the subject while it is being released, so the value
@@ -1073,7 +1049,6 @@ fn test_complete_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer completes the subject while it is being released, so the subject
@@ -1113,7 +1088,6 @@ fn test_error_on_unsub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer fails the subject while it is being released, so the subject terminates
@@ -1153,7 +1127,6 @@ fn test_sub_on_sub() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The first observer subscribes the second one from the delivery of the value it is
@@ -1189,7 +1162,6 @@ fn test_sub_on_unsub() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
 
     // The second observer subscribes the third one while it is being released, so that
@@ -1235,10 +1207,9 @@ fn test_sub_on_unsub() {
 
 #[test]
 fn test_race_condition() {
-    // `subscribe` reads `terminated()` under the delivery's lock and the value under the subject's
-    // own, so a termination can land between the two: the observer is then admitted by the
-    // terminated branch of `PublishSubject`, which knows nothing about the value and only
-    // terminates it. The subscribers race a termination often enough to walk into that window.
+    // The subscribers race the termination: reading the termination and the value is one step, so
+    // an observer is never terminated without the value, whichever side of the termination it
+    // lands on.
     use std::sync::{Arc, Barrier};
 
     const SUBSCRIBERS: usize = 3;
@@ -1310,7 +1281,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let subject: AsyncSubject<'_, i32, String, _> = AsyncSubject::shared();
     let observable = subject;
 
@@ -1321,7 +1291,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let subject: AsyncSubject<'_, i32, String, _> = AsyncSubject::shared();
     let observable = subject;
 

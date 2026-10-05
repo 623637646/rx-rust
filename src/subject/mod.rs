@@ -47,8 +47,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// A bridge that is both an [`Observer`] and an [`Observable`]. See the [module documentation](self)
-/// and <https://reactivex.io/documentation/subject.html>.
+/// A bridge that is both an [`Observer`] and an [`Observable`]. See the [module
+/// documentation](self) and <https://reactivex.io/documentation/subject.html>.
 pub trait Subject<T, E>: ObservableTypes<Item = T, Error = E> + Observer<T, E> {
     /// The termination this subject has received, if it has received one.
     fn terminated(&self) -> Option<Termination<E>>

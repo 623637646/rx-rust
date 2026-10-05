@@ -27,7 +27,6 @@ fn test_completed() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel();
 
-        // Custom operations
         let stream = observable.into_stream();
 
         let (checker, _subscription) = Checker::from_stream(stream, scheduler.clone());
@@ -92,7 +91,6 @@ fn test_completed_without_next() {
     block_on(|scheduler| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
 
-        // Custom operations
         let stream = observable.into_stream();
         let (checker, _subscription) = Checker::from_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -113,7 +111,6 @@ fn test_unsubscribe() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
 
-        // Custom operations
         let stream = observable.into_stream();
 
         let (checker, subscription) = Checker::from_stream(stream, scheduler.clone());
@@ -152,7 +149,6 @@ fn test_ref() {
         let value = 111;
         let (mut sender, observable, channel_checker) = test_channel();
 
-        // Custom operations
         let mut stream = observable.into_stream();
 
         // Subscribe in the first time of poll.
@@ -202,8 +198,6 @@ fn test_mut_ref() {
 fn test_async() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel();
-
-        // Custom operations
 
         let stream = scheduler
             .spawn(async move { observable.into_stream() })
@@ -262,7 +256,6 @@ fn test_without_convenient_api() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel();
 
-        // Custom operations
         let stream = ObservableStream::new(observable);
 
         let (checker, _subscription) = Checker::from_stream(stream, scheduler.clone());
@@ -300,7 +293,6 @@ fn test_complete_after_next() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
 
-        // Custom operations
         let stream = observable.into_stream();
         let (checker, _subscription) = Checker::from_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -321,7 +313,6 @@ fn test_unsub_after_next() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
 
-        // Custom operations
         let stream = observable.into_stream();
         let (checker, subscription) = Checker::from_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -343,7 +334,6 @@ fn test_unsub_after_completed() {
     block_on(|scheduler| async move {
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
 
-        // Custom operations
         let stream = observable.into_stream();
         let (checker, subscription) = Checker::from_stream(stream, scheduler.clone());
         scheduler.sleep(DURATION_10_MS).await; // make sure the stream is ready.
@@ -365,7 +355,6 @@ fn test_order_with_continuous_next() {
     block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel();
 
-        // Custom operations
         let stream = observable.into_stream();
 
         let (checker, _subscription) = Checker::from_stream(stream, scheduler.clone());
@@ -400,7 +389,6 @@ fn test_next_on_sub() {
         let (sender, source, _) = test_channel();
         let source = source.start_with([111]);
 
-        // Custom operations
         let observable = source;
         let stream = observable.into_stream();
 
@@ -419,7 +407,6 @@ fn test_next_on_sub() {
 #[test]
 fn test_complete_on_sub() {
     block_on(|scheduler| async move {
-        // Custom operations
         let stream = Empty.into_stream();
 
         let (checker, _subscription) = Checker::from_stream(stream, scheduler.clone());
@@ -442,7 +429,6 @@ fn test_next_on_unsub() {
                 }))
             });
 
-        // Custom operations
         let stream = observable.into_stream();
 
         let (checker, subscription) = Checker::from_stream(stream, scheduler.clone());
@@ -469,7 +455,6 @@ fn test_complete_on_unsub() {
                 }))
             });
 
-        // Custom operations
         let stream = observable.into_stream();
 
         let (checker, subscription) = Checker::from_stream(stream, scheduler.clone());

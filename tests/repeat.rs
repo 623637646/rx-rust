@@ -99,7 +99,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let observable = Repeat::new(3, 4);
 
     let observable = observable.filter(|_| true);
@@ -109,7 +108,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let observable = Repeat::new(3, 4);
 
     observable.filter(|_| true);

@@ -30,7 +30,6 @@ fn test_completed() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -170,7 +169,6 @@ fn test_error() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -310,7 +308,6 @@ fn test_unsubscribe() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -457,7 +454,6 @@ fn test_ref() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -570,7 +566,6 @@ fn test_async() {
         let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
         let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-        // Custom operations
         let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
         let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -706,7 +701,6 @@ fn test_subscribe_by_different_observer() {
     let (termination_checker_2, termination_observer_2) = Checker::<Infallible, _>::new();
     let checker_sub_vec_2 = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(1).unwrap());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -955,7 +949,6 @@ fn test_unsub_on_next_by_take() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable
         .window_with_count(NonZeroUsize::new(2).unwrap())
         .take(1);
@@ -976,8 +969,8 @@ fn test_unsub_on_next_by_take() {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
             match index {
                 0 => {
-                    // Taking one window disposes the outer subscription, which drops the sending end
-                    // of the open window, so its observer is dropped too.
+                    // Taking one window disposes the outer subscription, which drops the sending
+                    // end of the open window, so its observer is dropped too.
                     assert_eq!(checker.values(), []);
                     assert_eq!(checker.state(), State::Dropped);
                 }
@@ -997,7 +990,6 @@ fn test_multiple_operation() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let context = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = observable
         .window_with_count(NonZeroUsize::new(1).unwrap())
         .window_with_count(NonZeroUsize::new(2).unwrap());
@@ -1232,7 +1224,6 @@ fn test_without_convenient_api() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = WindowWithCount::new(observable, NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1373,7 +1364,6 @@ fn test_revert_completed() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone();
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
     let observable_1 = observable.clone().merge_all();
@@ -1422,7 +1412,6 @@ fn test_revert_error() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
     let observable_1 = observable.clone().merge_all();
     let observable_2 = observable.clone().concat_all();
@@ -1524,7 +1513,6 @@ fn test_next_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = source.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1598,7 +1586,6 @@ fn test_complete_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = Empty
         .into_shared()
         .window_with_count(NonZeroUsize::new(2).unwrap());
@@ -1634,7 +1621,6 @@ fn test_error_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = Throw::new("error")
         .into_shared()
         .window_with_count(NonZeroUsize::new(2).unwrap());
@@ -1680,7 +1666,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1720,7 +1705,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1760,7 +1744,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
@@ -1790,7 +1773,6 @@ fn test_error_on_unsub() {
 fn test_subscribe_stale_window_observable() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     // Collect the window observables without subscribing to them immediately.
@@ -1838,7 +1820,6 @@ fn test_subscribe_stale_window_observable() {
 fn test_subscribe_current_window_late_with_earlier_values() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(3).unwrap());
 
     let window_vec = Arc::new(Mutex::new(Vec::new()));
@@ -1875,7 +1856,6 @@ fn test_subscribe_window_observable_after_termination() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     // Hold the window observable without subscribing to it.
@@ -1906,7 +1886,6 @@ fn test_subscribe_window_observable_after_termination() {
 fn test_subscribe_window_observable_after_unsubscribe() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     // Hold the window observable without subscribing to it.
@@ -1938,7 +1917,6 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     let (mut sender, observable, _channel_checker) = test_channel::<'_, _, Infallible>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(3).unwrap());
 
     let window_vec = Arc::new(Mutex::new(Vec::new()));
@@ -1984,7 +1962,6 @@ fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
 
     let (mut sender, observable, _channel_checker) = test_channel::<'_, DropProbe, Infallible>();
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let window_vec = Arc::new(Mutex::new(Vec::new()));
@@ -2012,7 +1989,6 @@ fn test_dropping_ignored_value_does_not_poison_window_context() {
 
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
 
-    // Custom operations
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
     let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
@@ -2136,7 +2112,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 
@@ -2147,7 +2122,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.window_with_count(NonZeroUsize::new(2).unwrap());
 

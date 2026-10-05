@@ -5,7 +5,8 @@
 //! resources are dropped, and that nothing is ever dropped nor notified while the state is locked.
 //!
 //! The last one is checked with values whose `Drop` re-enters the delivery: a drop that ran under
-//! the lock would deadlock, or panic in single-threaded builds, instead of recording its note.
+//! the lock would deadlock, or fail the re-entry check of debug builds, instead of recording its
+//! note.
 
 mod tests_utils;
 
@@ -92,8 +93,8 @@ fn note_and_reenter(handle: &DeliveryHandle, log: &Log, text: &'static str) -> D
     let log = log.clone();
     Box::new(move || {
         record(&log, Record::Note(text));
-        // Locking here would deadlock, or panic in single-threaded builds, if this drop ran while
-        // the state was locked.
+        // Locking here would deadlock, or fail the re-entry check of debug builds, if this drop ran
+        // while the state was locked.
         let _ = handle.get().send(next(99));
     })
 }
@@ -1280,7 +1281,8 @@ fn concurrent_sends_are_delivered_one_at_a_time() {
         }
     });
 
-    // Whichever thread sent it, and whichever thread delivered it, every value arrives exactly once.
+    // Whichever thread sent it, and whichever thread delivered it, every value arrives exactly
+    // once.
     let mut delivered = values(&log);
     delivered.sort_unstable();
     assert_eq!(

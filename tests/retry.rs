@@ -33,7 +33,6 @@ fn test_completed_no_retry() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -67,7 +66,6 @@ fn test_completed_retry_once() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -114,7 +112,6 @@ fn test_completed_retry_twice() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -174,7 +171,6 @@ fn test_completed_different_retry_observable() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.retry(move |error| match error {
         -1 => RetryAction::Retry(
             Just::new(222)
@@ -219,7 +215,6 @@ fn test_completed_synchronous_throw() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -276,7 +271,6 @@ fn test_completed_synchronous_throw() {
 fn test_erryr_no_retry() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 
@@ -301,7 +295,6 @@ fn test_error_retry_once() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -352,7 +345,6 @@ fn test_error_retry_twice() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -417,7 +409,6 @@ fn test_error_source_and_retry_are_same() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let subject_cloned = subject.clone();
     let errors_cloned = errors.clone();
     let observable = subject.clone().retry(move |error| {
@@ -450,7 +441,6 @@ fn test_unsubscribe_before_retry() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -488,7 +478,6 @@ fn test_unsubscribe_after_retry() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -542,7 +531,6 @@ fn test_ref() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -593,7 +581,6 @@ fn test_mut_ref() {
     let mut value_1 = 111;
     let mut value_2 = 222;
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let observable = observable.retry(move |error: &str| {
@@ -626,7 +613,6 @@ fn test_async() {
         let (checker, observer) = Checker::new();
         let errors = Arc::new(Mutex::new(Vec::new()));
 
-        // Custom operations
         let (channels, observable) = test_channels();
         let source = observable.clone();
         let errors_cloned = errors.clone();
@@ -706,7 +692,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let observable = subject.clone();
     let observable_cloned = observable.clone();
     let errors_cloned = errors.clone();
@@ -750,7 +735,6 @@ fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::<_, &str>::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -781,7 +765,6 @@ fn test_multiple_operation() {
     let errors_1 = Arc::new(Mutex::new(Vec::new()));
     let errors_2 = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source_1 = observable.clone();
     let source_2 = observable.clone();
@@ -864,7 +847,6 @@ fn test_without_convenient_api() {
     let (checker, observer) = Checker::new();
     let errors = Arc::new(Mutex::new(Vec::new()));
 
-    // Custom operations
     let (channels, observable) = test_channels();
     let source = observable.clone();
     let errors_cloned = errors.clone();
@@ -915,7 +897,6 @@ fn test_next_on_sub() {
     let subject = BehaviorSubject::<_, &str, _>::shared(111);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().retry(move |error| {
         assert_eq!(error, "error");
         RetryAction::Retry(Just::new(222).with_error_type())
@@ -934,7 +915,6 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty
         .with_error_type()
         .retry(move |_| RetryAction::<_, Throw<_>>::Stop("error"));
@@ -948,7 +928,6 @@ fn test_complete_on_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error").retry(move |_| RetryAction::<_, Throw<_>>::Stop("error"));
 
     let _subscription = observable.subscribe(observer);
@@ -970,7 +949,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let observable = observable
         .retry(move |_| RetryAction::Retry(observable_1_option.take().expect("retried once")));
@@ -1000,7 +978,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let observable = observable
         .retry(move |_| RetryAction::Retry(observable_1_option.take().expect("retried once")));
@@ -1030,7 +1007,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let mut observable_1_option = Some(observable_1);
     let observable = observable
         .retry(move |_| RetryAction::Retry(observable_1_option.take().expect("retried once")));
@@ -1133,7 +1109,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, String>();
     let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 
@@ -1144,7 +1119,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Just<i32>, Infallible>();
     let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 

@@ -18,27 +18,32 @@ use crate::utils::on_panic::OnPanic;
 use educe::Educe;
 use std::num::NonZeroUsize;
 
+/// The connection of a [`RefCount`] and its number of subscribers, shared by its subscriptions.
 pub enum State<OE, S, D>
 where
     D: Disposable,
 {
+    /// No subscriber, and the source is not connected.
     Disconnected {
         controller: ConnectableController<OE, S, Disconnected>,
     },
+    /// A subscription holds the controller while it connects or disconnects the source with the
+    /// lock released.
     ConnectingOrDisconnecting {
-        /// Use `usize` instead of `NonZeroUsize`. If it's 0, there are no subscribers and should
-        /// disconnect. If it's not 0, there is at least one subscriber and should connect.
+        /// The subscribers so far, possibly none: once it is done, the holder of the controller
+        /// disconnects if there are none and connects if there are some.
         subscribers: usize,
     },
+    /// Connected, with at least one subscriber.
     Connected {
         subscribers: NonZeroUsize,
         controller: ConnectableController<OE, S, Connected<D>>,
     },
 }
 
-/// Makes a [`ConnectableController`] behave like an ordinary `Observable` that automatically connects
-/// on the first subscription and disconnects when the last subscription is disposed.
-/// See <https://reactivex.io/documentation/operators/refcount.html>
+/// Makes a [`ConnectableController`] behave like an ordinary `Observable` that automatically
+/// connects on the first subscription and disconnects when the last subscription is disposed. See
+/// <https://reactivex.io/documentation/operators/refcount.html>
 ///
 /// # Examples
 /// ```rust
@@ -288,7 +293,7 @@ fn handle_connecting_or_disconnecting<T, E, OE, S>(
                     State::Disconnected { .. } => unreachable!(),
                     State::ConnectingOrDisconnecting { subscribers } => {
                         if *subscribers == 0 {
-                            // It's unsubscribed, so we should disconnect
+                            // Every subscriber left while connecting: disconnect again.
                             Some(Purpose::Disconnect(controller))
                         } else {
                             *current = State::Connected {
@@ -310,7 +315,7 @@ fn handle_connecting_or_disconnecting<T, E, OE, S>(
                             *current = State::Disconnected { controller };
                             None
                         } else {
-                            // It's not unsubscribed, so we should reconnect
+                            // Subscribers arrived while disconnecting: connect again.
                             Some(Purpose::Connect(controller))
                         }
                     }

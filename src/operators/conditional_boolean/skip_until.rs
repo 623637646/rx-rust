@@ -16,7 +16,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Discards items emitted by a source Observable until a second Observable emits an item.
+/// Discards items emitted by a source Observable until a second Observable emits an item. A second
+/// Observable that completes before emitting completes the result.
 /// See <https://reactivex.io/documentation/operators/skipuntil.html>
 ///
 /// # Examples
@@ -66,7 +67,8 @@ pub struct SkipUntil<OE, OE1> {
 
 impl<OE, OE1> SkipUntil<OE, OE1> {
     /// Creates a [`SkipUntil`] over `source`;
-    /// [`ObservableExt::skip_until`](crate::observable::ObservableExt::skip_until) is the fluent form.
+    /// [`ObservableExt::skip_until`](crate::observable::ObservableExt::skip_until) is the fluent
+    /// form.
     pub fn new<T, E>(source: OE, start: OE1) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,

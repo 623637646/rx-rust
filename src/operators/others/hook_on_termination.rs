@@ -9,7 +9,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback when the source Observable terminates.
+/// Hands the termination of the source Observable, together with the downstream observer, to a
+/// callback that decides what to deliver.
 ///
 /// # Examples
 /// ```rust
@@ -22,15 +23,13 @@ use educe::Educe;
 ///     },
 /// };
 /// use rx_rust::observer::Observer;
-/// use std::cell::Cell;
-/// use std::rc::Rc;
 ///
 /// let mut values = Vec::new();
 /// let mut terminations = Vec::new();
 ///
 /// let observable =
 ///     HookOnTermination::new(FromIter::new(vec![1]), move |observer, termination| {
-///         // Do whatever you want here
+///         // The callback decides what reaches the observer: here, the termination as it is.
 ///         observer.on_termination(termination);
 ///     });
 /// observable.subscribe_with_callback(
@@ -49,8 +48,8 @@ use educe::Educe;
 /// downstream observer unboxed, so the operator subscribes that one observer type only.
 /// [`new_boxed`](HookOnTermination::new_boxed) makes a `HookOnTermination<.., true>`, whose
 /// callback gets the boxed observer of the source's mode, so it subscribes any observer, at the
-/// cost of one allocation per subscription. Both are this one type: `BOXED` only picks the [`Observable`]
-/// impl, and the lifetime the boxed observer may borrow for is not a parameter.
+/// cost of one allocation per subscription. Both are this one type: `BOXED` only picks the
+/// [`Observable`] impl, and the lifetime the boxed observer may borrow for is not a parameter.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct HookOnTermination<OE, F, const BOXED: bool = false> {

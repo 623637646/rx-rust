@@ -53,7 +53,8 @@ pub struct Merge<OE1, OE2> {
 
 impl<OE1, OE2> Merge<OE1, OE2> {
     /// Creates a [`Merge`] over `source_1` and `source_2`;
-    /// [`ObservableExt::merge_with`](crate::observable::ObservableExt::merge_with) is the fluent form.
+    /// [`ObservableExt::merge_with`](crate::observable::ObservableExt::merge_with) is the fluent
+    /// form.
     pub fn new<T, E>(source_1: OE1, source_2: OE2) -> Self
     where
         OE1: ObservableTypes<Item = T, Error = E>,

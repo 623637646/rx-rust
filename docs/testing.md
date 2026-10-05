@@ -37,12 +37,15 @@ Downstream ends its own stream with `Flow::Stop`; the source must stop and must 
 
 ## Revertible observable
 
+An operator that another one undoes — `materialize` / `dematerialize`, and `window` or `group_by`
+followed by a flattening operator — checks that the pair gives the source back.
+
 1. `test_revert_completed`
 2. `test_revert_error`
 
 ## Hot observable
 
-`Subject`, `ConnectableObservable`, `RefCount` — anything that can borrow or own the sender while a
+Subjects, `ConnectableController`, `RefCount` — anything that can borrow or own the sender while a
 subscription is active.
 
 1. `test_complete_on_next`
@@ -57,8 +60,6 @@ subscription is active.
 
 ## Using a lock (`with_mut` / `with_ref`)
 
-Some lock-based operators have no `test_complete_after_next`.
-
 1. `test_next_on_sub`
 2. `test_complete_on_sub`
 3. `test_error_on_sub`
@@ -71,9 +72,9 @@ Some lock-based operators have no `test_complete_after_next`.
 6. `test_complete_on_unsub`
 7. `test_error_on_unsub`
 8. `test_sub_on_unsub` — same as 4, hot observables only.
-9. `test_race_condition` (WIP)
+9. `test_race_condition` (only a few operators have it so far)
 
-## Using a scheduler (`: Scheduler` / `::from_stream()`)
+## Using a scheduler (the operator or source takes a `Scheduler`)
 
 Some scheduler-based operators have no `test_next_on_sub` (e.g. `from_future`).
 
@@ -84,11 +85,14 @@ Some scheduler-based operators have no `test_next_on_sub` (e.g. `from_future`).
 5. `test_unsub_after_completed`
 6. `test_unsub_after_error`
 7. `test_order_with_continuous_next`
-8. `test_no_delay` (if applicable)
+8. `test_completed_no_delay` (if applicable: the operator takes an optional delay)
 
 ## Compile checks
 
-1. `test_lifetime`
+1. `test_lifetime_sub`, `test_lifetime_or`, `test_lifetime_or_sub` — a value borrowed by the
+   subscription, the observer, or both, outlives what borrows it. Each test declares the borrowed
+   value first under `// OK`, and shows the reverse order, which must not compile, commented out
+   under `// Error`.
 2. `test_fn`
 3. `test_clone`
 4. `test_type_inference_with_subscribe`

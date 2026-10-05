@@ -18,7 +18,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Specifies the `Scheduler` on which an observer will observe this Observable.
+/// Specifies the `Scheduler` on which an observer will observe this Observable: every event is
+/// delivered from a task of that scheduler, in order.
 /// See <https://reactivex.io/documentation/operators/observeon.html>
 ///
 /// # Examples
@@ -209,8 +210,8 @@ where
                         }
                         // Recur instead of stopping: values arriving while this batch is
                         // delivered are pushed onto the model, and only another pass takes
-                        // them. They cannot start a task of their own, because this one is
-                        // still `Running` until a pass finds the model empty.
+                        // them. They cannot start a task of their own, because this one holds
+                        // the task slot until a pass finds the model empty.
                         None => (TaskState::Yield, EventBatch::NextBatch(values), None),
                         Some(completion @ Termination::Completed) => (
                             TaskState::Finished,

@@ -27,7 +27,6 @@ fn test_completed_both_empty_first_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -79,7 +78,6 @@ fn test_completed_both_empty_second_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -131,7 +129,6 @@ fn test_completed_both_empty_first_next() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -183,7 +180,6 @@ fn test_completed_both_empty_second_next() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -235,7 +231,6 @@ fn test_completed_first_empty_first_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -293,7 +288,6 @@ fn test_completed_second_empty_second_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -345,7 +339,6 @@ fn test_completed_first_some_completed_second_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -403,7 +396,6 @@ fn test_completed_second_some_completed_first_completed() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -461,7 +453,6 @@ fn test_completed_first_some_completed_second_next_same() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -525,7 +516,6 @@ fn test_completed_first_some_completed_second_next_different() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -583,7 +573,6 @@ fn test_completed_second_some_completed_first_next_same() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -647,7 +636,6 @@ fn test_completed_second_some_completed_first_next_different() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -705,7 +693,6 @@ fn test_completed_from_another_source() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -762,7 +749,6 @@ fn test_completed_source_and_another_source_are_same() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().sequence_equal(subject.clone());
 
     let _subscription = observable.subscribe(observer);
@@ -792,7 +778,6 @@ fn test_completed_with_different() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -826,7 +811,6 @@ fn test_error() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -884,7 +868,6 @@ fn test_error_from_another_source() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -941,7 +924,6 @@ fn test_error_source_and_another_source_are_same() {
     let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = subject.clone().sequence_equal(subject.clone());
 
     let _subscription = observable.subscribe(observer);
@@ -972,7 +954,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(source_1);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -1091,7 +1072,6 @@ fn test_ref() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -1128,7 +1108,6 @@ fn test_mut_ref() {
     let (mut sender, observable, _) = test_channel::<'_, &mut i32, Infallible>();
     let (mut sender_1, observable_1, _) = test_channel::<'_, &mut i32, _>();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let subscription = observable.subscribe_with_callback(
@@ -1156,7 +1135,6 @@ fn test_async() {
         let (mut sender_1, observable_1, channel_checker_1) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.sequence_equal(observable_1);
 
         let subscription = scheduler
@@ -1205,7 +1183,6 @@ fn test_async_with_continuous_next() {
         let (mut sender_1, observable_1, channel_checker_1) = test_channel();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.sequence_equal(observable_1);
 
         let _subscription = observable.subscribe(observer);
@@ -1256,7 +1233,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(another_source_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -1325,7 +1301,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1).take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -1367,7 +1342,6 @@ fn test_multiple_operation() {
     let (mut sender_3, observable_3, channel_checker_3) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .sequence_equal(observable_1)
         .sequence_equal(observable_2.sequence_equal(observable_3));
@@ -1451,7 +1425,6 @@ fn test_without_convenient_api() {
     let (mut sender_1, observable_1, channel_checker_1) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = SequenceEqual::new(observable, observable_1);
 
     let _subscription = observable.subscribe(observer);
@@ -1487,7 +1460,6 @@ fn test_next_on_sub() {
     let source_1 = source_1.start_with([111]);
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = source.sequence_equal(source_1);
 
     let _subscription = observable.subscribe(observer);
@@ -1515,7 +1487,6 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Empty.sequence_equal(Empty);
 
     let _subscription = observable.subscribe(observer);
@@ -1527,7 +1498,6 @@ fn test_complete_on_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Throw::new("error").sequence_equal(Throw::new("error_1"));
 
     let _subscription = observable.subscribe(observer);
@@ -1549,7 +1519,6 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1576,7 +1545,6 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1603,7 +1571,6 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Custom operations
     let observable = observable.sequence_equal(observable_1);
 
     let subscription = observable.subscribe(observer);
@@ -1732,7 +1699,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, another_source_observable, _) = test_channel::<'_, _, _>();
     let observable = observable.sequence_equal(another_source_observable);
@@ -1744,7 +1710,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let (_, another_source_observable, _) = test_channel::<'_, _, String>();
     let observable = observable.sequence_equal(another_source_observable);

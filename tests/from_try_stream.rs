@@ -411,7 +411,6 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     block_on(|scheduler| async move {
-        // Custom operations
         let source = stream::iter(vec![Ok::<_, &str>(111), Ok(222), Ok(333)]);
         let observable = FromTryStream::new(source, scheduler.clone());
 
@@ -424,7 +423,6 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     block_on(|scheduler| async move {
-        // Custom operations
         let source = stream::iter(vec![Ok::<_, &str>(111), Ok(222), Ok(333)]);
         let observable = FromTryStream::new(source, scheduler.clone());
 

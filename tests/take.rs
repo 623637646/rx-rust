@@ -23,7 +23,6 @@ fn test_completed() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(10);
 
     let _subscription = observable.subscribe(observer);
@@ -52,7 +51,6 @@ fn test_completed_reach_count() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(2);
 
     let _subscription = observable.subscribe(observer);
@@ -76,7 +74,6 @@ fn test_completed_0_count() {
     let (_, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(0);
 
     let _subscription = observable.subscribe(observer);
@@ -90,7 +87,6 @@ fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(10);
 
     let _subscription = observable.subscribe(observer);
@@ -119,7 +115,6 @@ fn test_unsubscribe() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(10);
 
     let subscription = observable.subscribe(observer);
@@ -147,7 +142,6 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(10);
 
     let _subscription = observable.subscribe(observer);
@@ -179,7 +173,6 @@ fn test_mut_ref() {
 
     let (mut sender, observable, channel_checker) = test_channel::<'_, &mut i32, Infallible>();
 
-    // Custom operations
     let observable = observable.take(10);
 
     let subscription = observable.subscribe_with_callback(
@@ -219,7 +212,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.take(10);
 
         let subscription = scheduler
@@ -264,7 +256,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(2);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -304,7 +295,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(10).take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -325,7 +315,6 @@ fn test_stop_on_next() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::stopping_after(1);
 
-    // Custom operations
     let observable = observable.take(10);
 
     let _subscription = observable.subscribe(observer);
@@ -344,7 +333,6 @@ fn test_multiple_operation_trigger_first() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(2).take(100);
 
     let _subscription = observable.subscribe(observer);
@@ -368,7 +356,6 @@ fn test_multiple_operation_trigger_second() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.take(100).take(2);
 
     let _subscription = observable.subscribe(observer);
@@ -392,7 +379,6 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Take::new(observable, 2);
 
     let _subscription = observable.subscribe(observer);
@@ -497,7 +483,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.take(2);
 
@@ -508,7 +493,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable = observable.take(2);
 

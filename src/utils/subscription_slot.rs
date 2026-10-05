@@ -13,7 +13,8 @@
 //! its own — it lives inside a model guarded by a
 //! [`SubscriptionContext`](crate::utils::subscribe_with_context::SubscriptionContext) — and it
 //! disposes nothing: each method hands the subscription it evicts back to the caller, which passes
-//! it to [`UpdateOutcome::with_drop_outside`](crate::utils::serialized_delivery::UpdateOutcome::with_drop_outside).
+//! it to
+//! [`UpdateOutcome::with_drop_outside`](crate::utils::serialized_delivery::UpdateOutcome::with_drop_outside).
 //!
 //! [`Reserved`](SubscriptionSlot::Reserved) and
 //! [`ReleasedWhileReserved`](SubscriptionSlot::ReleasedWhileReserved) distinguish a build in

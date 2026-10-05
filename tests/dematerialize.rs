@@ -22,7 +22,6 @@ fn test_completed_inner_finish() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize();
 
     let _subscription = observable.subscribe(observer);
@@ -55,7 +54,6 @@ fn test_completed_outer_finish() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::<_, Infallible>::new();
 
-    // Custom operations
     let observable = observable.dematerialize();
 
     let _subscription = observable.subscribe(observer);
@@ -84,7 +82,6 @@ fn test_error_inner_finish() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize();
 
     let _subscription = observable.subscribe(observer);
@@ -118,7 +115,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -179,7 +175,6 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize();
 
     let _subscription = observable.subscribe(observer);
@@ -224,7 +219,6 @@ fn test_mut_ref() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize();
 
     let (mut on_next, on_termination) = observer.into_callbacks();
@@ -255,7 +249,6 @@ fn test_async() {
             test_channel::<'_, Event<i32, &str>, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.dematerialize();
 
         let subscription = scheduler
@@ -289,7 +282,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -337,7 +329,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, Event<_, Infallible>, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize().take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -356,7 +347,6 @@ fn test_multiple_operation_complete() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize().dematerialize();
 
     let _subscription = observable.subscribe(observer);
@@ -388,7 +378,6 @@ fn test_multiple_operation_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize().dematerialize();
 
     let _subscription = observable.subscribe(observer);
@@ -417,7 +406,6 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Dematerialize::new(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -450,7 +438,6 @@ fn test_revert_completed() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize().materialize();
 
     let _subscription = observable.subscribe(observer);
@@ -490,7 +477,6 @@ fn test_revert_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.dematerialize().materialize();
 
     let _subscription = observable.subscribe(observer);
@@ -591,7 +577,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Event<i32, &str>, _>();
     let observable = observable.dematerialize();
 
@@ -602,7 +587,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let (_, observable, _) = test_channel::<'_, Event<i32, String>, _>();
     let observable = observable.dematerialize();
 

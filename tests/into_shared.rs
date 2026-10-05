@@ -29,7 +29,6 @@ fn test_completed() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_shared();
 
     let _subscription = observable.subscribe(observer);
@@ -53,7 +52,6 @@ fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_shared();
 
     let _subscription = observable.subscribe(observer);
@@ -78,7 +76,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_shared();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -118,7 +115,6 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_shared();
 
     let _subscription = observable.subscribe(observer);
@@ -142,7 +138,6 @@ fn test_mut_ref() {
     let mut value = 111;
     let mut error = 222;
 
-    // Custom operations
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(&mut value).is_continue());
         observer.on_termination(Termination::Error(&mut error));
@@ -172,7 +167,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.into_shared();
 
         let subscription = scheduler
@@ -206,7 +200,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_shared();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -245,7 +238,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_shared().take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -264,7 +256,6 @@ fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.into_shared().into_shared();
 
     let _subscription = observable.subscribe(observer);
@@ -288,7 +279,6 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = IntoShared::new(observable);
 
     let _subscription = observable.subscribe(observer);
@@ -313,7 +303,6 @@ fn test_erased_with_shared_source() {
     let mut subject = PublishSubject::<i32, Infallible, _>::shared();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let sources: Vec<SendBoxedObservable<'_, '_, '_, i32, Infallible, Shared>> = vec![
         Just::new(111).into_shared().into_send_boxed(),
         subject.clone().into_send_boxed(),
@@ -339,7 +328,6 @@ fn test_erased_with_shared_source() {
 fn test_send_boxed_local_chain() {
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Just::new(111)
         .into_shared()
         .with_error_type()
@@ -357,7 +345,6 @@ fn test_send_boxed_local_chain() {
 fn test_not_send_item() {
     let mut values = Vec::new();
 
-    // Custom operations
     let observable = Just::new(Rc::new(111)).into_shared().map(|value| *value);
 
     let _subscription = observable.subscribe_with_callback(|value| values.push(value), |_| {});
@@ -423,7 +410,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let observable = Just::new(1).into_shared();
 
     let observable = observable.filter(|_| true);
@@ -433,7 +419,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let observable = Just::new(1).into_shared();
 
     observable.filter(|_| true);

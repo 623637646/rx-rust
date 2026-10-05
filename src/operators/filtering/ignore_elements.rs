@@ -10,7 +10,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Suppresses all notifications from an Observable but `on_termination`.
+/// Ignores every item of an Observable, passing on only its termination.
 /// See <https://reactivex.io/documentation/operators/ignoreelements.html>
 ///
 /// # Examples
@@ -44,7 +44,8 @@ pub struct IgnoreElements<OE> {
 
 impl<OE> IgnoreElements<OE> {
     /// Creates an [`IgnoreElements`] over `source`;
-    /// [`ObservableExt::ignore_elements`](crate::observable::ObservableExt::ignore_elements) is the fluent form.
+    /// [`ObservableExt::ignore_elements`](crate::observable::ObservableExt::ignore_elements) is the
+    /// fluent form.
     pub fn new(source: OE) -> Self {
         Self { source }
     }

@@ -8,7 +8,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback when the Observable is subscribed to, after the subscription has been established.
+/// Invokes a callback when the Observable is subscribed to, after the source has been subscribed
+/// to.
 /// See <https://reactivex.io/documentation/operators/do.html>
 ///
 /// # Examples
@@ -41,7 +42,8 @@ pub struct DoAfterSubscription<OE, F> {
 
 impl<OE, F> DoAfterSubscription<OE, F> {
     /// Creates a [`DoAfterSubscription`] over `source`;
-    /// [`ObservableExt::do_after_subscription`](crate::observable::ObservableExt::do_after_subscription) is the fluent form.
+    /// [`ObservableExt::do_after_subscription`](crate::observable::ObservableExt::do_after_subscription)
+    /// is the fluent form.
     pub fn new<T, E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E>,

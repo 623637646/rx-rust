@@ -23,7 +23,6 @@ fn test_completed() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|value| value.to_string());
 
     let _subscription = observable.subscribe(observer);
@@ -47,7 +46,6 @@ fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|value| value.to_string());
 
     let _subscription = observable.subscribe(observer);
@@ -72,7 +70,6 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|value| value.to_string());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -132,7 +129,6 @@ fn test_ref() {
 
     let (mut sender, observable, channel_checker) = test_channel();
 
-    // Custom operations
     let observable = observable.map(move |value| {
         assert!(observer_2.on_next(value).is_continue());
         value_2_ref
@@ -172,7 +168,6 @@ fn test_mut_ref() {
     });
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|value| {
         *value *= 2;
         (value.to_string(), value)
@@ -205,7 +200,6 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
-        // Custom operations
         let observable = observable.map(|value| value.to_string());
 
         let subscription = scheduler
@@ -239,7 +233,6 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|value| value.to_string());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -278,7 +271,6 @@ fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable.map(|value| value.to_string()).take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -297,7 +289,6 @@ fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = observable
         .map(|value| value.to_string())
         .map(|value| value + "?");
@@ -323,7 +314,6 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    // Custom operations
     let observable = Map::new(observable, |value| value.to_string());
 
     let _subscription = observable.subscribe(observer);
@@ -395,7 +385,6 @@ fn test_lifetime_or() {
 fn test_fn() {
     let mut s = TestStruct;
 
-    // Custom operations
     let observable = Just::new(1).map(|value| {
         s.consume_mut();
         value.to_string()
@@ -417,7 +406,6 @@ fn test_clone() {
 
 #[test]
 fn test_type_inference_with_subscribe() {
-    // Custom operations
     let observable = Just::new(1).map(|value| value.to_string());
 
     let observable = observable.filter(|_| true);
@@ -427,7 +415,6 @@ fn test_type_inference_with_subscribe() {
 
 #[test]
 fn test_type_inference_without_subscribe() {
-    // Custom operations
     let observable = Just::new(1).map(|value| value.to_string());
 
     observable.filter(|_| true);
