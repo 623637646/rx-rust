@@ -1,7 +1,8 @@
 //! The [`WindowWithCount`] operator, behind
 //! [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count).
 
-use crate::disposable::{DisposableExt, option_disposal::OptionDisposal};
+use crate::delegate_disposal;
+use crate::disposable::{Disposable, DisposableExt, option_disposal::OptionDisposal};
 use crate::observer::boxed_observer::ObserverMode;
 use crate::utils::MarkerType;
 use crate::{
@@ -107,6 +108,12 @@ impl<OE> WindowWithCount<'_, OE> {
     }
 }
 
+delegate_disposal!(
+    Disposal<D>,
+    OptionDisposal<Subscription<D>>,
+    where D: Disposable
+);
+
 impl<'a, T, E, OE> ObservableTypes for WindowWithCount<'a, OE>
 where
     <OE as ObservableTypes>::Mode: ObserverMode,
@@ -116,7 +123,7 @@ where
     type Item = BoxedUnicastObservable<'a, T, E, OE::Mode>;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OptionDisposal<Subscription<OE::D>>;
+    type D = Disposal<OE::D>;
 }
 
 impl<'a, T, E, OE, OR> Observable<OR> for WindowWithCount<'a, OE>

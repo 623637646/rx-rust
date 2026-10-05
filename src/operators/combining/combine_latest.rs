@@ -1,6 +1,7 @@
 //! The [`CombineLatest`] operator, behind
 //! [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest).
 
+use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
@@ -70,6 +71,12 @@ impl<OE1, OE2> CombineLatest<OE1, OE2> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, T1, T2, E, D1, D2>,
+    subscribe_with_context::ContextDisposal<M, (T1, T2), E, Model<T1, T2>, ChainDisposal<D2, D1>>,
+    where M: ThreadMode, D1: Disposable, D2: Disposable
+);
+
 impl<T1, T2, E, OE1, OE2> ObservableTypes for CombineLatest<OE1, OE2>
 where
     T1: Clone,
@@ -80,13 +87,7 @@ where
     type Item = (T1, T2);
     type Error = E;
     type Mode = Joined<OE1::Mode, OE2::Mode>;
-    type D = subscribe_with_context::ContextDisposal<
-        Joined<OE1::Mode, OE2::Mode>,
-        (T1, T2),
-        E,
-        Model<T1, T2>,
-        ChainDisposal<OE2::D, OE1::D>,
-    >;
+    type D = Disposal<Joined<OE1::Mode, OE2::Mode>, T1, T2, E, OE1::D, OE2::D>;
 }
 
 impl<T1, T2, E, OE1, OE2, OR> Observable<OR> for CombineLatest<OE1, OE2>
@@ -130,6 +131,7 @@ where
             let sub_2 = self.source_2.subscribe(ObserverImpl2(context));
             sub_1.preceded_by_bound(sub_2)
         })
+        .map_into()
     }
 }
 

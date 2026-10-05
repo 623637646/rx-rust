@@ -1,6 +1,7 @@
 //! The [`Debounce`] operator, behind
 //! [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce).
 
+use crate::delegate_disposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
@@ -97,6 +98,12 @@ pub type DebounceContext<M, T, E, OR, S> =
 pub type DebounceTask<M, T, E, OR, S> =
     RecursiveContext<WeakSubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>>;
 
+delegate_disposal!(
+    Disposal<M, T, E, SD, D>,
+    subscribe_with_context::Disposal<M, T, E, Model<T, SD>, D>,
+    where M: ThreadMode, SD: Disposable, D: Disposable
+);
+
 impl<T, E, OE, S> ObservableTypes for Debounce<OE, S>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -105,7 +112,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = DebounceMode<OE, S>;
-    type D = subscribe_with_context::Disposal<DebounceMode<OE, S>, T, E, Model<T, S::D>, OE::D>;
+    type D = Disposal<DebounceMode<OE, S>, T, E, S::D, OE::D>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for Debounce<OE, S>
@@ -123,6 +130,7 @@ where
                 scheduler: self.scheduler,
             })
         })
+        .map_into()
     }
 }
 

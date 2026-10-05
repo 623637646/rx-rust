@@ -1,6 +1,7 @@
 //! The [`SequenceEqual`] operator, behind
 //! [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal).
 
+use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
@@ -73,6 +74,12 @@ impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, T, E, D1, D2>,
+    subscribe_with_context::ContextDisposal<M, bool, E, Model<T>, ChainDisposal<D2, D1>>,
+    where M: ThreadMode, D1: Disposable, D2: Disposable
+);
+
 impl<T, E, OE1, OE2> ObservableTypes for SequenceEqual<T, OE1, OE2>
 where
     T: PartialEq,
@@ -82,13 +89,7 @@ where
     type Item = bool;
     type Error = E;
     type Mode = Joined<OE1::Mode, OE2::Mode>;
-    type D = subscribe_with_context::ContextDisposal<
-        Joined<OE1::Mode, OE2::Mode>,
-        bool,
-        E,
-        Model<T>,
-        ChainDisposal<OE2::D, OE1::D>,
-    >;
+    type D = Disposal<Joined<OE1::Mode, OE2::Mode>, T, E, OE1::D, OE2::D>;
 }
 
 impl<T, E, OE1, OE2, OR> Observable<OR> for SequenceEqual<T, OE1, OE2>
@@ -142,6 +143,7 @@ where
             let subscription_2 = self.source_2.subscribe(observer_2);
             subscription_1.preceded_by_bound(subscription_2)
         })
+        .map_into()
     }
 }
 

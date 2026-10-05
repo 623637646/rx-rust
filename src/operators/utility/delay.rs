@@ -1,6 +1,7 @@
 //! The [`Delay`] operator, behind
 //! [`ObservableExt::delay`](crate::observable::ObservableExt::delay).
 
+use crate::delegate_disposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::scheduler::{RecursiveContext, SchedulerTypes, Task};
 use crate::thread_mode::{Joined, ThreadMode};
@@ -111,6 +112,12 @@ pub type DelayContext<M, T, E, OR, S> =
 pub type DelayTask<M, T, E, OR, S> =
     RecursiveContext<PromotableWeakContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>>;
 
+delegate_disposal!(
+    Disposal<M, T, E, SD, D>,
+    subscribe_with_context::Disposal<M, T, E, Model<T, SD>, D>,
+    where M: ThreadMode, SD: Disposable, D: Disposable
+);
+
 impl<T, E, OE, S> ObservableTypes for Delay<OE, S>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -119,7 +126,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = DelayMode<OE, S>;
-    type D = subscribe_with_context::Disposal<DelayMode<OE, S>, T, E, Model<T, S::D>, OE::D>;
+    type D = Disposal<DelayMode<OE, S>, T, E, S::D, OE::D>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for Delay<OE, S>
@@ -142,6 +149,7 @@ where
                 scheduler: self.scheduler,
             })
         })
+        .map_into()
     }
 }
 

@@ -1,6 +1,7 @@
 //! The [`Sample`] operator, behind
 //! [`ObservableExt::sample`](crate::observable::ObservableExt::sample).
 
+use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
@@ -79,6 +80,12 @@ impl<OE, OE1> Sample<OE, OE1> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, T, E, D, D1>,
+    subscribe_with_context::ContextDisposal<M, T, E, Model<T>, ChainDisposal<D, D1>>,
+    where M: ThreadMode, D: Disposable, D1: Disposable
+);
+
 impl<T, E, OE, OE1> ObservableTypes for Sample<OE, OE1>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -87,13 +94,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = subscribe_with_context::ContextDisposal<
-        Joined<OE::Mode, OE1::Mode>,
-        T,
-        E,
-        Model<T>,
-        ChainDisposal<OE::D, OE1::D>,
-    >;
+    type D = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::D, OE1::D>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for Sample<OE, OE1>
@@ -131,6 +132,7 @@ where
             let subscription_2 = self.source.subscribe(sample_observer);
             subscription_1.preceded_by_bound(subscription_2)
         })
+        .map_into()
     }
 }
 

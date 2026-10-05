@@ -1,9 +1,10 @@
 //! The [`Window`] operator, behind
 //! [`ObservableExt::window`](crate::observable::ObservableExt::window).
 
+use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::observer::boxed_observer::ObserverMode;
-use crate::thread_mode::Joined;
+use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::MarkerType;
 use crate::{
     disposable::Disposable,
@@ -125,6 +126,12 @@ impl<OE, OE1> Window<'_, OE, OE1> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, T, E, D, D1>,
+    subscribe_with_context::ContextDisposal<M, DelegateAction<T, E>, E, (), ChainDisposal<D, D1>>,
+    where M: ThreadMode, D: Disposable, D1: Disposable
+);
+
 impl<'a, T, E, OE, OE1> ObservableTypes for Window<'a, OE, OE1>
 where
     Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>: ObserverMode,
@@ -135,13 +142,7 @@ where
     type Item = BoxedUnicastObservable<'a, T, E, Joined<OE::Mode, OE1::Mode>>;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = subscribe_with_context::ContextDisposal<
-        Joined<OE::Mode, OE1::Mode>,
-        DelegateAction<T, E>,
-        E,
-        (),
-        ChainDisposal<OE::D, OE1::D>,
-    >;
+    type D = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::D, OE1::D>;
 }
 
 impl<'a, T, E, OE, OE1, OR> Observable<OR> for Window<'a, OE, OE1>
@@ -198,6 +199,7 @@ where
             let source_subscription = self.source.subscribe(SourceObserver(context));
             boundary_subscription.preceded_by_bound(source_subscription)
         })
+        .map_into()
     }
 }
 

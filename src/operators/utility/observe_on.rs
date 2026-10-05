@@ -1,6 +1,7 @@
 //! The [`ObserveOn`] operator, behind
 //! [`ObservableExt::observe_on`](crate::observable::ObservableExt::observe_on).
 
+use crate::delegate_disposal;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
@@ -95,6 +96,12 @@ pub type ObserveOnContext<M, T, E, OR, S> =
 pub type ObserveOnTask<M, T, E, OR, S> =
     RecursiveContext<PromotableWeakContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::D>>>;
 
+delegate_disposal!(
+    Disposal<M, T, E, SD, D>,
+    subscribe_with_context::Disposal<M, T, E, Model<T, E, SD>, D>,
+    where M: ThreadMode, SD: Disposable, D: Disposable
+);
+
 impl<T, E, OE, S> ObservableTypes for ObserveOn<OE, S>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -104,13 +111,7 @@ where
     type Error = E;
     /// Every event is delivered by the scheduler's task, so the mode is the scheduler's.
     type Mode = S::Mode;
-    type D = subscribe_with_context::Disposal<
-        ObserveOnContextMode<OE, S>,
-        T,
-        E,
-        Model<T, E, S::D>,
-        OE::D,
-    >;
+    type D = Disposal<ObserveOnContextMode<OE, S>, T, E, S::D, OE::D>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for ObserveOn<OE, S>
@@ -132,6 +133,7 @@ where
                 scheduler: self.scheduler,
             })
         })
+        .map_into()
     }
 }
 

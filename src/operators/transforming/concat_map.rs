@@ -7,7 +7,6 @@ use crate::operators::combining::concat_all::InnerObserver;
 use crate::operators::combining::concat_all::SourceObserver;
 use crate::operators::transforming::map::MapObserver;
 use crate::thread_mode::Joined;
-use crate::utils::subscribe_with_context;
 use crate::{
     observable::Subscription,
     observable::{Observable, ObservableTypes},
@@ -81,12 +80,13 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = subscribe_with_context::ContextDisposal<
+    /// The disposal of the [`ConcatAll`] this operator is built on.
+    type D = crate::operators::combining::concat_all::Disposal<
         Joined<OE::Mode, OE1::Mode>,
         T,
         E,
-        crate::operators::combining::concat_all::Model<OE1>,
         OE::D,
+        OE1,
     >;
 }
 

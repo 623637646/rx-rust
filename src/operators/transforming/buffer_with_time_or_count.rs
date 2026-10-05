@@ -1,5 +1,6 @@
 //! The [`BufferWithTimeOrCount`] operator.
 
+use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::observable::Subscription;
@@ -129,6 +130,12 @@ pub type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
     >,
 >;
 
+delegate_disposal!(
+    Disposal<M, T, E, SD, D>,
+    subscribe_with_context::ContextDisposal<M, Vec<T>, E, Model<T>, ChainDisposal<SD, D>>,
+    where M: ThreadMode, SD: Disposable, D: Disposable
+);
+
 impl<T, E, OE, S> ObservableTypes for BufferWithTimeOrCount<OE, S>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -137,13 +144,7 @@ where
     type Item = Vec<T>;
     type Error = E;
     type Mode = BufferWithTimeOrCountMode<OE, S>;
-    type D = subscribe_with_context::ContextDisposal<
-        BufferWithTimeOrCountMode<OE, S>,
-        Vec<T>,
-        E,
-        Model<T>,
-        BufferWithTimeOrCountSources<OE, S>,
-    >;
+    type D = Disposal<BufferWithTimeOrCountMode<OE, S>, T, E, S::D, OE::D>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for BufferWithTimeOrCount<OE, S>
@@ -182,6 +183,7 @@ where
             );
             sub.preceded_by_bound(disposal)
         })
+        .map_into()
     }
 }
 

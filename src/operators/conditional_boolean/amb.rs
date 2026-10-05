@@ -1,8 +1,7 @@
 //! The [`Amb`] operator, behind
 //! [`ObservableExt::amb_with`](crate::observable::ObservableExt::amb_with).
 
-use crate::delegate_disposal;
-use crate::disposable::{Disposable, DisposableExt};
+use crate::disposable::Disposable;
 use crate::thread_mode::ThreadMode;
 use crate::thread_mode::mutable::{MutableExt, MutableHelper};
 use crate::{
@@ -55,12 +54,6 @@ impl<I> Amb<I> {
         Self { sources }
     }
 }
-
-delegate_disposal!(
-    Disposal<M, D>,
-    AmbDisposal<M, D>,
-    where M: ThreadMode, D: Disposable
-);
 
 impl<T, E, OE, I> ObservableTypes for Amb<I>
 where
@@ -115,7 +108,7 @@ where
             observer.on_termination(Termination::Completed);
         }
 
-        AmbDisposal(context).into_subscription()
+        Subscription::new(Disposal(context))
     }
 }
 
@@ -288,9 +281,10 @@ where
     }
 }
 
-pub struct AmbDisposal<M: ThreadMode, D: Disposable>(M::Ptr<AmbState<D>>);
+/// The disposal of an [`Amb`] subscription: it disposes every source still racing, or the winner.
+pub struct Disposal<M: ThreadMode, D: Disposable>(M::Ptr<AmbState<D>>);
 
-impl<M, D> Disposable for AmbDisposal<M, D>
+impl<M, D> Disposable for Disposal<M, D>
 where
     M: ThreadMode,
     D: Disposable,

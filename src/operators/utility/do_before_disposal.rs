@@ -2,7 +2,8 @@
 //! [`ObservableExt::do_before_disposal`](crate::observable::ObservableExt::do_before_disposal).
 
 use crate::{
-    disposable::{callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal},
+    delegate_disposal,
+    disposable::{Disposable, callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal},
     observable::Subscription,
     observable::{Observable, ObservableTypes},
     observer::Observer,
@@ -57,6 +58,12 @@ impl<OE, F> DoBeforeDisposal<OE, F> {
     }
 }
 
+delegate_disposal!(
+    Disposal<D, F>,
+    ChainDisposal<CallbackDisposal<F>, D>,
+    where D: Disposable, F: FnOnce()
+);
+
 impl<T, E, OE, F> ObservableTypes for DoBeforeDisposal<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -65,7 +72,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = ChainDisposal<CallbackDisposal<F>, OE::D>;
+    type D = Disposal<OE::D, F>;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for DoBeforeDisposal<OE, F>
@@ -78,5 +85,6 @@ where
         self.source
             .subscribe(observer)
             .preceded_by(CallbackDisposal::new(self.callback))
+            .map_into()
     }
 }

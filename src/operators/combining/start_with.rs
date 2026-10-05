@@ -1,7 +1,8 @@
 //! The [`StartWith`] operator, behind
 //! [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with).
 
-use crate::disposable::{DisposableExt, option_disposal::OptionDisposal};
+use crate::delegate_disposal;
+use crate::disposable::{Disposable, DisposableExt, option_disposal::OptionDisposal};
 use crate::{
     observable::{Observable, ObservableTypes, Subscription},
     observer::Observer,
@@ -54,6 +55,12 @@ impl<OE, I> StartWith<OE, I> {
     }
 }
 
+delegate_disposal!(
+    Disposal<D>,
+    OptionDisposal<Subscription<D>>,
+    where D: Disposable
+);
+
 impl<T, E, OE, I> ObservableTypes for StartWith<OE, I>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -62,7 +69,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OptionDisposal<Subscription<OE::D>>;
+    type D = Disposal<OE::D>;
 }
 
 impl<T, E, OE, I, OR> Observable<OR> for StartWith<OE, I>

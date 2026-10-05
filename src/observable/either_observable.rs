@@ -1,7 +1,12 @@
 //! An observable that is one of two types, without boxing.
 
 use super::{Observable, ObservableTypes, Subscription};
-use crate::{disposable::either_disposal::EitherDisposal, observer::Observer, thread_mode::Joined};
+use crate::{
+    delegate_disposal,
+    disposable::{Disposable, either_disposal::EitherDisposal},
+    observer::Observer,
+    thread_mode::Joined,
+};
 use educe::Educe;
 
 /// An observable that is one of two concrete types.
@@ -37,6 +42,14 @@ pub enum EitherObservable<A, B> {
     Right(B),
 }
 
+delegate_disposal!(
+    /// The disposal of an [`EitherObservable`] subscription: the subscription of the side that was
+    /// subscribed to.
+    Disposal<A, B>,
+    EitherDisposal<Subscription<A>, Subscription<B>>,
+    where A: Disposable, B: Disposable
+);
+
 impl<A, B> ObservableTypes for EitherObservable<A, B>
 where
     A: ObservableTypes,
@@ -46,7 +59,7 @@ where
     type Error = A::Error;
     /// Either side can be the one subscribed to, so the mode is both sides' joined.
     type Mode = Joined<A::Mode, B::Mode>;
-    type D = EitherDisposal<Subscription<A::D>, Subscription<B::D>>;
+    type D = Disposal<A::D, B::D>;
 }
 
 impl<A, B, OR> Observable<OR> for EitherObservable<A, B>
@@ -58,10 +71,10 @@ where
     fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         match self {
             Self::Left(observable) => {
-                Subscription::new(EitherDisposal::Left(observable.subscribe(observer)))
+                Subscription::new(EitherDisposal::Left(observable.subscribe(observer)).into())
             }
             Self::Right(observable) => {
-                Subscription::new(EitherDisposal::Right(observable.subscribe(observer)))
+                Subscription::new(EitherDisposal::Right(observable.subscribe(observer)).into())
             }
         }
     }

@@ -1,6 +1,7 @@
 //! The [`Timeout`] operator, behind
 //! [`ObservableExt::timeout`](crate::observable::ObservableExt::timeout).
 
+use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{
     Disposable, bound_drop_disposal::BoundDropDisposal, option_disposal::OptionDisposal,
@@ -113,6 +114,12 @@ pub type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
     WeakSubscriptionContext<TimeoutMode<OE, S>, T, Error<E>, OR, Model, TimeoutSources<OE, S>>,
 >;
 
+delegate_disposal!(
+    Disposal<M, T, E, SD, D>,
+    subscribe_with_context::ContextDisposal<M, T, Error<E>, Model, ChainDisposal<OptionDisposal<BoundDropDisposal<SD>>, D>>,
+    where M: ThreadMode, SD: Disposable, D: Disposable
+);
+
 impl<T, E, OE, S> ObservableTypes for Timeout<OE, S>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -121,13 +128,7 @@ where
     type Item = T;
     type Error = Error<E>;
     type Mode = TimeoutMode<OE, S>;
-    type D = subscribe_with_context::ContextDisposal<
-        TimeoutMode<OE, S>,
-        T,
-        Error<E>,
-        Model,
-        TimeoutSources<OE, S>,
-    >;
+    type D = Disposal<TimeoutMode<OE, S>, T, E, S::D, OE::D>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for Timeout<OE, S>
@@ -152,6 +153,7 @@ where
             let timer = setup_timer(context, &self.scheduler);
             source_subscription.preceded_by(timer)
         })
+        .map_into()
     }
 }
 

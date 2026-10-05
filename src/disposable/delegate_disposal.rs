@@ -5,7 +5,8 @@
 ///
 /// An operator's `type D` is one of three:
 ///
-/// - the disposal of its source or scheduler, passed through (`OE::D`, `S::D`);
+/// - one passed through: the disposal of its source or scheduler (`OE::D`, `S::D`), or that of
+///   the operator it is built on;
 /// - the named disposal of a [`utils`](crate::utils) helper, used as it is, when its parameters
 ///   are only the operator's own (`subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode,
 ///   OE::D>`);

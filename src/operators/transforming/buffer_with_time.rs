@@ -1,5 +1,6 @@
 //! The [`BufferWithTime`] operator.
 
+use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::serialized_delivery::UpdateOutcome;
@@ -118,6 +119,12 @@ pub type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
     >,
 >;
 
+delegate_disposal!(
+    Disposal<M, T, E, SD, D>,
+    subscribe_with_context::ContextDisposal<M, Vec<T>, E, Vec<T>, ChainDisposal<SD, D>>,
+    where M: ThreadMode, SD: Disposable, D: Disposable
+);
+
 impl<T, E, OE, S> ObservableTypes for BufferWithTime<OE, S>
 where
     OE: ObservableTypes<Item = T, Error = E>,
@@ -126,13 +133,7 @@ where
     type Item = Vec<T>;
     type Error = E;
     type Mode = BufferWithTimeMode<OE, S>;
-    type D = subscribe_with_context::ContextDisposal<
-        BufferWithTimeMode<OE, S>,
-        Vec<T>,
-        E,
-        Vec<T>,
-        BufferWithTimeSources<OE, S>,
-    >;
+    type D = Disposal<BufferWithTimeMode<OE, S>, T, E, S::D, OE::D>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for BufferWithTime<OE, S>
@@ -159,6 +160,7 @@ where
             let disposal = setup_emit_timer(context, self.scheduler, self.time_span, self.delay);
             sub.preceded_by_bound(disposal)
         })
+        .map_into()
     }
 }
 

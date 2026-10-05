@@ -112,7 +112,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = DebugDisposal<Subscription<OE::D>, C, F, T, E>;
+    type D = Disposal<OE::D, C, F, T, E>;
 }
 
 impl<T, E, OE, C, F, OR> Observable<OR> for Debug<OE, C, F>
@@ -130,7 +130,7 @@ where
             callback: self.callback.clone(),
         };
         let source_disposal = self.source.subscribe(observer);
-        Subscription::new(DebugDisposal {
+        Subscription::new(Disposal {
             source_disposal,
             context: self.context,
             callback: self.callback,
@@ -141,14 +141,14 @@ where
 
 /// The disposal of a [`struct@Debug`] subscription: disposes the source, then reports
 /// [`DebugEvent::Disposed`].
-pub struct DebugDisposal<D, C, F, T, E> {
-    source_disposal: D,
+pub struct Disposal<D: Disposable, C, F, T, E> {
+    source_disposal: Subscription<D>,
     context: C,
     callback: F,
     _marker: MarkerType<(T, E)>,
 }
 
-impl<D, C, F, T, E> Disposable for DebugDisposal<D, C, F, T, E>
+impl<D, C, F, T, E> Disposable for Disposal<D, C, F, T, E>
 where
     D: Disposable,
     F: Fn(C, DebugEvent<'_, T, E>),

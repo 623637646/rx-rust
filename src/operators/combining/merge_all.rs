@@ -1,6 +1,7 @@
 //! The [`MergeAll`] operator, behind
 //! [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all).
 
+use crate::delegate_disposal;
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::thread_mode::Joined;
@@ -87,6 +88,12 @@ impl<E, OE1, I> MergeAll<WithErrorType<E, FromIter<I>>, OE1> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, T, E, D, D1>,
+    subscribe_with_context::ContextDisposal<M, T, E, Model<D1>, D>,
+    where M: ThreadMode, D: Disposable, D1: Disposable
+);
+
 impl<T, E, OE, OE1> ObservableTypes for MergeAll<OE, OE1>
 where
     OE: ObservableTypes<Item = OE1, Error = E>,
@@ -95,13 +102,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = subscribe_with_context::ContextDisposal<
-        Joined<OE::Mode, OE1::Mode>,
-        T,
-        E,
-        Model<OE1::D>,
-        OE::D,
-    >;
+    type D = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::D, OE1::D>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for MergeAll<OE, OE1>
@@ -141,6 +142,7 @@ where
         subscribe_with_context_owning_source(observer, model, |context| {
             self.source.subscribe(MergeAllObserver(context))
         })
+        .map_into()
     }
 }
 

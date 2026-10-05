@@ -1,6 +1,7 @@
 //! The [`Merge`] operator, behind
 //! [`ObservableExt::merge_with`](crate::observable::ObservableExt::merge_with).
 
+use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
@@ -64,6 +65,12 @@ impl<OE1, OE2> Merge<OE1, OE2> {
     }
 }
 
+delegate_disposal!(
+    Disposal<M, T, E, D1, D2>,
+    subscribe_with_context::ContextDisposal<M, T, E, Model, ChainDisposal<D2, D1>>,
+    where M: ThreadMode, D1: Disposable, D2: Disposable
+);
+
 impl<T, E, OE1, OE2> ObservableTypes for Merge<OE1, OE2>
 where
     OE1: ObservableTypes<Item = T, Error = E>,
@@ -72,13 +79,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE1::Mode, OE2::Mode>;
-    type D = subscribe_with_context::ContextDisposal<
-        Joined<OE1::Mode, OE2::Mode>,
-        T,
-        E,
-        Model,
-        ChainDisposal<OE2::D, OE1::D>,
-    >;
+    type D = Disposal<Joined<OE1::Mode, OE2::Mode>, T, E, OE1::D, OE2::D>;
 }
 
 impl<T, E, OE1, OE2, OR> Observable<OR> for Merge<OE1, OE2>
@@ -116,6 +117,7 @@ where
             let subscription_2 = self.source_2.subscribe(MergeObserver(context));
             subscription_1.preceded_by_bound(subscription_2)
         })
+        .map_into()
     }
 }
 
