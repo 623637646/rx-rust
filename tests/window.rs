@@ -2,24 +2,25 @@ mod tests_utils;
 
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_channel::test_channels;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
+use rx_rust::observer::boxed_observer::SendBoxedObserver;
+use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
-use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::mutable::Mutable;
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::mutable::MutableHelper;
-use rx_rust::utils::types::Shared;
+use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    operators::{creating::create::Create, transforming::window::Window},
-    subject::publish_subject::PublishSubject,
+    observer::{Observer, Termination},
+    operators::transforming::window::Window,
 };
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -27,7 +28,7 @@ fn test_completed_from_source() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(boundary_observable);
@@ -195,7 +196,7 @@ fn test_completed_from_boundary() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(boundary_observable);
@@ -405,9 +406,9 @@ fn test_completed_from_boundary() {
 
 #[test]
 fn test_completed_source_and_boundary_are_same() {
-    let mut subject = PublishSubject::<'_, _, Infallible>::default();
+    let mut subject = PublishSubject::<_, Infallible, _>::shared();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = subject.clone().window(subject.clone());
@@ -508,7 +509,7 @@ fn test_error_from_source() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(boundary_observable);
@@ -677,7 +678,7 @@ fn test_error_from_boundary() {
     let (boundary_sender, boundary_observable, boundary_channel_checker) =
         test_channel::<'_, (), &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(boundary_observable);
@@ -720,7 +721,7 @@ fn test_error_from_boundary_while_window_pending() {
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -758,7 +759,7 @@ fn test_error_from_boundary_while_no_window_subscribed() {
     // Custom operations
     let observable = observable.window(boundary_observable);
 
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -794,7 +795,7 @@ fn test_completed_boundary_does_not_mask_later_source_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(boundary_observable);
@@ -986,7 +987,7 @@ fn test_unsubscribe() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(boundary_observable);
@@ -1157,7 +1158,7 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(boundary_observable);
@@ -1322,17 +1323,17 @@ fn test_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
+    block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
         let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-        let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+        let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
         // Custom operations
         let observable = observable.window(boundary_observable);
 
         let checker_sub_vec_cloned = checker_sub_vec.clone();
-        let _subscription = runtime
+        let _subscription = scheduler
             .spawn(async move {
                 observable.subscribe_with_callback(
                     move |value| {
@@ -1345,8 +1346,7 @@ fn test_async() {
                     },
                 )
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
         checker_sub_vec.with_ref(|checker_sub_vec| {
             for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1363,13 +1363,12 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
-        let mut sender = runtime
+        let mut sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(111).is_continue());
                 sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker_sub_vec.with_ref(Vec::len), 1);
         checker_sub_vec.with_ref(|checker_sub_vec| {
             for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1386,13 +1385,12 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
-        let mut boundary_sender = runtime
+        let mut boundary_sender = scheduler
             .spawn(async move {
                 assert!(boundary_sender.on_next(()).is_continue());
                 boundary_sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
         checker_sub_vec.with_ref(|checker_sub_vec| {
             for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1413,13 +1411,12 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
-        let mut sender = runtime
+        let mut sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(222).is_continue());
                 sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
         checker_sub_vec.with_ref(|checker_sub_vec| {
             for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1440,13 +1437,12 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
-        let sender = runtime
+        let sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(333).is_continue());
                 sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
         checker_sub_vec.with_ref(|checker_sub_vec| {
             for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1467,13 +1463,12 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
-        let _boundary_sender = runtime
+        let _boundary_sender = scheduler
             .spawn(async move {
                 assert!(boundary_sender.on_next(()).is_continue());
                 boundary_sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
         checker_sub_vec.with_ref(|checker_sub_vec| {
             for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1498,10 +1493,9 @@ fn test_async() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
         assert_eq!(boundary_channel_checker.state(), ChannelState::Subscribed);
 
-        runtime
+        scheduler
             .spawn(async move { sender.on_termination(Termination::Completed) })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker_sub_vec.with_ref(Vec::len), 3);
         checker_sub_vec.with_ref(|checker_sub_vec| {
             for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -1530,16 +1524,15 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let mut subject = PublishSubject::<'_, _, Infallible>::default();
-    let mut boundary_subject = PublishSubject::default();
+    let (channels, observable) = test_channels::<'_, _, Infallible>();
+    let (boundary_channels, boundary_observable) = test_channels();
     let (termination_checker_1, termination_observer_1) = Checker::<Infallible, _>::new();
-    let checker_sub_vec_1 = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec_1 = Arc::new(Mutex::new(Vec::new()));
     let (termination_checker_2, termination_observer_2) = Checker::<Infallible, _>::new();
-    let checker_sub_vec_2 = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec_2 = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = subject.clone();
-    let observable = observable.window(boundary_subject.clone());
+    let observable = observable.window(boundary_observable);
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -1592,7 +1585,8 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    assert!(subject.on_next(111).is_continue());
+    assert!(channels.on_next(0, 111).is_continue());
+    assert!(channels.on_next(1, 111).is_continue());
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 1);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -1620,7 +1614,8 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    assert!(boundary_subject.on_next(()).is_continue());
+    assert!(boundary_channels.on_next(0, ()).is_continue());
+    assert!(boundary_channels.on_next(1, ()).is_continue());
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 2);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -1656,7 +1651,8 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    assert!(subject.on_next(222).is_continue());
+    assert!(channels.on_next(0, 222).is_continue());
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 2);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -1692,7 +1688,8 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    assert!(subject.on_next(333).is_continue());
+    assert!(channels.on_next(0, 333).is_continue());
+    assert!(channels.on_next(1, 333).is_continue());
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 2);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -1728,7 +1725,8 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    assert!(boundary_subject.on_next(()).is_continue());
+    assert!(boundary_channels.on_next(0, ()).is_continue());
+    assert!(boundary_channels.on_next(1, ()).is_continue());
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 3);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -1772,7 +1770,8 @@ fn test_subscribe_by_different_observer() {
     });
     assert_eq!(termination_checker_2.state(), State::Active);
 
-    subject.on_termination(Termination::Completed);
+    channels.on_termination(0, Termination::Completed);
+    channels.on_termination(1, Termination::Completed);
     assert_eq!(checker_sub_vec_1.with_ref(Vec::len), 3);
     checker_sub_vec_1.with_ref(|checker_sub_vec_1| {
         for (index, (checker, _)) in checker_sub_vec_1.iter().enumerate() {
@@ -1822,7 +1821,7 @@ fn test_unsub_on_next_by_take() {
     let (_sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (_boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(boundary_observable).take(1);
@@ -1861,7 +1860,7 @@ fn test_multiple_operation() {
     let (mut boundary_sender_1, boundary_observable_1, boundary_channel_checker_1) = test_channel();
     let (mut boundary_sender_2, boundary_observable_2, boundary_channel_checker_2) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let context = Shared::new(Mutable::new(Vec::new()));
+    let context = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable
@@ -1871,7 +1870,7 @@ fn test_multiple_operation() {
     let context_cloned = context.clone();
     let _subscription = observable.subscribe_with_callback(
         move |value| {
-            let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+            let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
             let checker_sub_vec_cloned = checker_sub_vec.clone();
             let sub = value.subscribe_with_callback(
                 move |value| {
@@ -2192,9 +2191,9 @@ fn test_multiple_operation() {
 #[test]
 fn test_multiple_operation_same_boundary() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-    let mut boundary_subject = PublishSubject::default();
+    let mut boundary_subject = PublishSubject::shared();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let context = Shared::new(Mutable::new(Vec::new()));
+    let context = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable
@@ -2204,7 +2203,7 @@ fn test_multiple_operation_same_boundary() {
     let context_cloned = context.clone();
     let _subscription = observable.subscribe_with_callback(
         move |value| {
-            let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+            let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
             let checker_sub_vec_cloned = checker_sub_vec.clone();
             let sub = value.subscribe_with_callback(
                 move |value| {
@@ -2519,7 +2518,7 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (mut boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = Window::new(observable, boundary_observable);
@@ -2684,15 +2683,14 @@ fn test_without_convenient_api() {
 
 #[test]
 fn test_revert_completed() {
-    let mut subject = PublishSubject::<'_, _, Infallible>::default();
-    let mut boundary_subject = PublishSubject::default();
+    let (channels, observable) = test_channels::<'_, _, Infallible>();
+    let (boundary_channels, boundary_observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
-    let observable = observable.window(boundary_subject.clone());
+    let observable = observable.window(boundary_observable);
     let observable_1 = observable.clone().merge_all();
     let observable_2 = observable.clone().concat_all();
     let observable_3 = observable.switch();
@@ -2702,55 +2700,92 @@ fn test_revert_completed() {
     let _subscription_3 = observable_3.subscribe(observer_3);
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Subscribed);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Subscribed);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Subscribed);
 
-    assert!(subject.on_next(111).is_continue());
+    assert!(channels.on_next(0, 111).is_continue());
+    assert!(channels.on_next(1, 111).is_continue());
+    assert!(channels.on_next(2, 111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Subscribed);
     assert_eq!(checker_3.values(), [111]);
     assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Subscribed);
 
-    assert!(boundary_subject.on_next(()).is_continue());
+    assert!(boundary_channels.on_next(0, ()).is_continue());
+    assert!(boundary_channels.on_next(1, ()).is_continue());
+    assert!(boundary_channels.on_next(2, ()).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Subscribed);
     assert_eq!(checker_3.values(), [111]);
     assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Subscribed);
 
-    assert!(subject.on_next(222).is_continue());
+    assert!(channels.on_next(0, 222).is_continue());
+    assert!(channels.on_next(1, 222).is_continue());
+    assert!(channels.on_next(2, 222).is_continue());
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Subscribed);
     assert_eq!(checker_3.values(), [111, 222]);
     assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::Completed);
+    channels.on_termination(0, Termination::Completed);
+    channels.on_termination(1, Termination::Completed);
+    channels.on_termination(2, Termination::Completed);
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(channels.state(0), ChannelState::Completed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Unsubscribed);
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(channels.state(1), ChannelState::Completed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Unsubscribed);
     assert_eq!(checker_3.values(), [111, 222]);
     assert_eq!(checker_3.state(), State::Completed);
+    assert_eq!(channels.state(2), ChannelState::Completed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Unsubscribed);
 }
 
 #[test]
 fn test_revert_error() {
-    let mut subject = PublishSubject::default();
-    let mut boundary_subject = PublishSubject::default();
+    let (channels, observable) = test_channels();
+    let (boundary_channels, boundary_observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
-    let observable = observable.window(boundary_subject.clone());
+    let observable = observable.window(boundary_observable);
     let observable_1 = observable.clone().merge_all();
     let observable_2 = observable.clone().concat_all();
     let observable_3 = observable.switch();
@@ -2760,53 +2795,93 @@ fn test_revert_error() {
     let _subscription_3 = observable_3.subscribe(observer_3);
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Subscribed);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Subscribed);
     assert!(checker_3.values().is_empty());
     assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Subscribed);
 
-    assert!(subject.on_next(111).is_continue());
+    assert!(channels.on_next(0, 111).is_continue());
+    assert!(channels.on_next(1, 111).is_continue());
+    assert!(channels.on_next(2, 111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Subscribed);
     assert_eq!(checker_3.values(), [111]);
     assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Subscribed);
 
-    assert!(boundary_subject.on_next(()).is_continue());
+    assert!(boundary_channels.on_next(0, ()).is_continue());
+    assert!(boundary_channels.on_next(1, ()).is_continue());
+    assert!(boundary_channels.on_next(2, ()).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Subscribed);
     assert_eq!(checker_3.values(), [111]);
     assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Subscribed);
 
-    assert!(subject.on_next(222).is_continue());
+    assert!(channels.on_next(0, 222).is_continue());
+    assert!(channels.on_next(1, 222).is_continue());
+    assert!(channels.on_next(2, 222).is_continue());
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(1), ChannelState::Subscribed);
     assert_eq!(checker_3.values(), [111, 222]);
     assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    assert_eq!(boundary_channels.state(2), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::Error("error"));
+    channels.on_termination(0, Termination::Error("error"));
+    channels.on_termination(1, Termination::Error("error"));
+    channels.on_termination(2, Termination::Error("error"));
     assert_eq!(checker_1.values(), [111, 222]);
     assert_eq!(checker_1.state(), State::Error("error"));
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(boundary_channels.state(0), ChannelState::Unsubscribed);
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Error("error"));
+    assert_eq!(boundary_channels.state(1), ChannelState::Unsubscribed);
     assert_eq!(checker_3.values(), [111, 222]);
     assert_eq!(checker_3.state(), State::Error("error"));
+    assert_eq!(channels.state(2), ChannelState::Error("error"));
+    assert_eq!(boundary_channels.state(2), ChannelState::Unsubscribed);
 }
 
 #[test]
 fn test_next_on_sub() {
-    let mut subject = BehaviorSubject::new(111);
-    let boundary_subject = BehaviorSubject::new(());
+    let (mut sender, source, _) = test_channel();
+    let source = source.start_with([111]);
+    let (_, boundary_subject_source, _) = test_channel();
+    let boundary_subject_source = boundary_subject_source.start_with([()]);
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = subject.clone().window(boundary_subject.clone());
+    let observable = source.window(boundary_subject_source);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(
@@ -2837,7 +2912,7 @@ fn test_next_on_sub() {
     });
     assert_eq!(termination_checker.state(), State::Active);
 
-    assert!(subject.on_next(222).is_continue());
+    assert!(sender.on_next(222).is_continue());
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -2856,7 +2931,7 @@ fn test_next_on_sub() {
     });
     assert_eq!(termination_checker.state(), State::Active);
 
-    subject.on_termination(Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker_sub_vec.with_ref(Vec::len), 2);
     checker_sub_vec.with_ref(|checker_sub_vec| {
         for (index, (checker, _)) in checker_sub_vec.iter().enumerate() {
@@ -2879,10 +2954,10 @@ fn test_next_on_sub() {
 #[test]
 fn test_complete_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = Empty.window(Empty.with_item_type());
+    let observable = Empty.into_shared().window(Empty.with_item_type());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(
@@ -2913,10 +2988,12 @@ fn test_complete_on_sub() {
 #[test]
 fn test_error_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = Throw::new("error").window(Empty.with_item_type().with_error_type());
+    let observable = Throw::new("error")
+        .into_shared()
+        .window(Empty.with_item_type().with_error_type());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(
@@ -2947,12 +3024,12 @@ fn test_error_on_sub() {
 #[test]
 fn test_next_on_unsub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
     let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), Infallible>();
 
     // The source emits from inside its own disposal, so the value arrives while downstream is
     // unsubscribing. It must be dropped instead of reaching the open window.
-    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         Subscription::new(CallbackDisposal::new(move || {
             let mut observer = observer;
             assert!(observer.on_next(111).is_stop());
@@ -2990,12 +3067,12 @@ fn test_next_on_unsub() {
 #[test]
 fn test_complete_on_unsub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
     let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), Infallible>();
 
     // The source completes from inside its own disposal, so it terminates while downstream is
     // unsubscribing. The termination must be dropped instead of reaching the observer.
-    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         Subscription::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Completed);
         }))
@@ -3032,12 +3109,12 @@ fn test_complete_on_unsub() {
 #[test]
 fn test_error_on_unsub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
     let (_, boundary_observable, boundary_channel_checker) = test_channel::<'_, (), &str>();
 
     // The source fails from inside its own disposal, so it terminates while downstream is
     // unsubscribing. The error must be dropped instead of reaching the observer.
-    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
         Subscription::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Error("error"));
         }))
@@ -3075,7 +3152,7 @@ fn test_error_on_unsub() {
 fn test_error_on_sub_from_boundary() {
     let (_sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
-    let checker_sub_vec = Shared::new(Mutable::new(Vec::new()));
+    let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = observable.window(Throw::new("boundary error").with_item_type());
@@ -3119,7 +3196,7 @@ fn test_subscribe_stale_window_observable() {
     let observable = observable.window(boundary_observable);
 
     // Collect the window observables without subscribing to them immediately.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3167,7 +3244,7 @@ fn test_subscribe_window_observable_after_termination() {
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3199,7 +3276,7 @@ fn test_subscribe_stale_window_observable_after_error() {
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3231,7 +3308,7 @@ fn test_subscribe_boundary_closed_window_after_later_error() {
     let observable = observable.window(boundary_observable);
 
     // Hold both window observables without subscribing to them immediately.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3271,7 +3348,7 @@ fn test_subscribe_window_observable_after_unsubscribe() {
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3299,7 +3376,7 @@ fn test_subscribe_multiple_stale_window_observables() {
     let observable = observable.window(boundary_observable);
 
     // Hold the window observables without subscribing to them.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3351,7 +3428,7 @@ fn test_subscribe_current_window_late_with_earlier_values() {
     let observable = observable.window(boundary_observable);
 
     // Hold the window observable without subscribing to it.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3382,7 +3459,7 @@ fn test_subscribe_current_window_after_buffered_values_and_completion() {
     let observable = observable.window(boundary_observable);
 
     // Hold the current window without subscribing to it immediately.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3405,13 +3482,13 @@ fn test_subscribe_current_window_after_buffered_values_and_completion() {
 
 #[test]
 fn test_reentrant_source_value_during_buffer_replay() {
-    let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (_, boundary_observable) = test_channels::<'_, (), Infallible>();
 
     // Custom operations
-    let observable = source.clone().window(boundary);
+    let observable = source_observable.window(boundary_observable);
 
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -3421,19 +3498,19 @@ fn test_reentrant_source_value_during_buffer_replay() {
 
     // Buffer multiple values before subscribing to the current window so a
     // reentrant source value cannot overtake values still being replayed.
-    assert!(source.on_next(111).is_continue());
-    assert!(source.on_next(222).is_continue());
+    assert!(source.on_next(0, 111).is_continue());
+    assert!(source.on_next(0, 222).is_continue());
 
     let window_1 = window_vec.with_mut(Vec::pop).unwrap();
-    let values = Shared::new(Mutable::new(Vec::new()));
+    let values = Arc::new(Mutex::new(Vec::new()));
     let values_cloned = values.clone();
-    let mut source_reentrant = source.clone();
+    let source_reentrant = source.clone();
     let _inner_subscription = window_1.subscribe_with_callback(
         move |value| {
             let should_reenter = value == 111;
             values_cloned.with_mut(|values| values.push(value));
             if should_reenter {
-                assert!(source_reentrant.on_next(333).is_continue());
+                assert!(source_reentrant.on_next(0, 333).is_continue());
             }
         },
         |_termination| {},
@@ -3445,27 +3522,27 @@ fn test_reentrant_source_value_during_buffer_replay() {
 }
 
 #[test]
-fn test_disposing_outer_subscription_during_buffer_replay_suppresses_remaining_values() {
-    let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+fn test_disposing_outer_subscription_during_buffer_replay_keeps_remaining_values() {
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (_, boundary_observable) = test_channels::<'_, (), Infallible>();
 
     // Custom operations
-    let observable = source.clone().window(boundary);
+    let observable = source_observable.window(boundary_observable);
 
-    let windows = Shared::new(Mutable::new(Vec::new()));
+    let windows = Arc::new(Mutex::new(Vec::new()));
     let windows_cloned = windows.clone();
-    let outer_subscription = Shared::new(Mutable::new(None));
+    let outer_subscription = Arc::new(Mutex::new(None));
     let subscription = observable.subscribe_with_callback(
         move |window| windows_cloned.with_mut(|values| values.push(window)),
         |_termination| {},
     );
     outer_subscription.replace_value(Some(subscription));
 
-    assert!(source.on_next(111).is_continue());
-    assert!(source.on_next(222).is_continue());
+    assert!(source.on_next(0, 111).is_continue());
+    assert!(source.on_next(0, 222).is_continue());
 
     let window = windows.with_mut(Vec::pop).unwrap();
-    let values = Shared::new(Mutable::new(Vec::new()));
+    let values = Arc::new(Mutex::new(Vec::new()));
     let values_cloned = values.clone();
     let outer_subscription_cloned = outer_subscription.clone();
     let _inner_subscription = window.subscribe_with_callback(
@@ -3479,22 +3556,25 @@ fn test_disposing_outer_subscription_during_buffer_replay_suppresses_remaining_v
         |_termination| {},
     );
 
-    assert_eq!(values.clone_value(), [111]);
+    // Disposing the outer subscription ends the window without a termination, but what the
+    // window had buffered stays sent, so the replay still delivers the value behind the one it
+    // was disposed in.
+    assert_eq!(values.clone_value(), [111, 222]);
 }
 
 #[test]
 fn test_reentrant_boundary_during_buffer_replay_keeps_the_order_of_the_old_window() {
-    let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
     // Custom operations
-    let observable = source.clone().window(boundary.clone());
+    let observable = source_observable.window(boundary_observable);
 
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
-    let events = Shared::new(Mutable::new(Vec::new()));
+    let events = Arc::new(Mutex::new(Vec::new()));
     let events_cloned = events.clone();
-    let window_index = Shared::new(Mutable::new(0usize));
+    let window_index = Arc::new(Mutex::new(0usize));
     let window_index_cloned = window_index.clone();
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| {
@@ -3514,17 +3594,17 @@ fn test_reentrant_boundary_during_buffer_replay_keeps_the_order_of_the_old_windo
 
     // Buffer multiple values before subscribing to window 1 so a reentrant
     // boundary cannot terminate the window before replay finishes.
-    assert!(source.on_next(111).is_continue());
-    assert!(source.on_next(222).is_continue());
+    assert!(source.on_next(0, 111).is_continue());
+    assert!(source.on_next(0, 222).is_continue());
 
     let window_1 = window_vec.with_mut(Vec::pop).unwrap();
-    let values_1 = Shared::new(Mutable::new(Vec::new()));
+    let values_1 = Arc::new(Mutex::new(Vec::new()));
     let values_1_cloned = values_1.clone();
-    let terminations_1 = Shared::new(Mutable::new(Vec::<Termination<Infallible>>::new()));
+    let terminations_1 = Arc::new(Mutex::new(Vec::<Termination<Infallible>>::new()));
     let terminations_1_cloned = terminations_1.clone();
     let events_values = events.clone();
     let events_termination = events.clone();
-    let mut boundary_reentrant = boundary.clone();
+    let boundary_reentrant = boundary.clone();
     let _sub_1 = window_1.subscribe_with_callback(
         move |value| {
             let should_reenter = value == 111;
@@ -3537,7 +3617,7 @@ fn test_reentrant_boundary_during_buffer_replay_keeps_the_order_of_the_old_windo
                 })
             });
             if should_reenter {
-                assert!(boundary_reentrant.on_next(()).is_continue());
+                assert!(boundary_reentrant.on_next(0, ()).is_continue());
             }
         },
         move |termination| {
@@ -3566,22 +3646,22 @@ fn test_reentrant_boundary_during_buffer_replay_keeps_the_order_of_the_old_windo
     let window_2 = window_vec.with_mut(Vec::pop).unwrap();
     let (checker_2, observer_2) = Checker::new();
     let _sub_2 = window_2.subscribe(observer_2);
-    assert!(source.on_next(333).is_continue());
+    assert!(source.on_next(0, 333).is_continue());
     assert_eq!(checker_2.values(), [333]);
     assert_eq!(checker_2.state(), State::Active);
 }
 
 #[test]
 fn test_boundary_completes_current_window_before_emitting_next_window() {
-    let source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (_, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
     // Custom operations
-    let observable = source.window(boundary.clone());
+    let observable = source_observable.window(boundary_observable);
 
-    let events = Shared::new(Mutable::new(Vec::new()));
-    let window_index = Shared::new(Mutable::new(0usize));
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let window_index = Arc::new(Mutex::new(0usize));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let events_cloned = events.clone();
     let window_index_cloned = window_index.clone();
     let inner_subscriptions_cloned = inner_subscriptions.clone();
@@ -3611,7 +3691,7 @@ fn test_boundary_completes_current_window_before_emitting_next_window() {
         |_termination| {},
     );
 
-    assert!(boundary.on_next(()).is_continue());
+    assert!(boundary.on_next(0, ()).is_continue());
     assert_eq!(
         events.clone_value(),
         ["window_1_completed", "window_2_emitted"]
@@ -3620,19 +3700,19 @@ fn test_boundary_completes_current_window_before_emitting_next_window() {
 
 #[test]
 fn test_subscribing_inner_after_outer_termination_is_queued_observes_termination() {
-    let source: PublishSubject<'_, i32, &'static str> = PublishSubject::default();
-    let mut boundary: PublishSubject<'_, (), &'static str> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, &'static str>();
+    let (boundary, boundary_observable) = test_channels::<'_, (), &'static str>();
 
     // Custom operations
-    let observable = source.clone().window(boundary.clone());
+    let observable = source_observable.window(boundary_observable);
 
     let (checker_2, observer_2) = Checker::new();
     let mut observer_2 = Some(observer_2);
     let mut source_reentrant = Some(source.clone());
     let mut window_index = 0usize;
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
-    let outer_terminations = Shared::new(Mutable::new(Vec::new()));
+    let outer_terminations = Arc::new(Mutex::new(Vec::new()));
     let outer_terminations_cloned = outer_terminations.clone();
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| {
@@ -3646,7 +3726,7 @@ fn test_subscribing_inner_after_outer_termination_is_queued_observes_termination
                     source_reentrant
                         .take()
                         .unwrap()
-                        .on_termination(Termination::Error("error"));
+                        .on_termination(0, Termination::Error("error"));
                     window.subscribe(observer_2.take().unwrap())
                 }
                 _ => unreachable!(),
@@ -3656,7 +3736,7 @@ fn test_subscribing_inner_after_outer_termination_is_queued_observes_termination
         move |termination| outer_terminations_cloned.with_mut(|values| values.push(termination)),
     );
 
-    assert!(boundary.on_next(()).is_continue());
+    assert!(boundary.on_next(0, ()).is_stop());
 
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Error("error"));
@@ -3668,17 +3748,17 @@ fn test_subscribing_inner_after_outer_termination_is_queued_observes_termination
 
 #[test]
 fn test_disposing_outer_subscription_from_old_window_completion_suppresses_new_window() {
-    let source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (_, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
     // Custom operations
-    let observable = source.window(boundary.clone());
+    let observable = source_observable.window(boundary_observable);
 
-    let outer_subscription = Shared::new(Mutable::new(None));
+    let outer_subscription = Arc::new(Mutex::new(None));
     let outer_subscription_cloned = outer_subscription.clone();
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
-    let window_count = Shared::new(Mutable::new(0usize));
+    let window_count = Arc::new(Mutex::new(0usize));
     let window_count_cloned = window_count.clone();
     let subscription = observable.subscribe_with_callback(
         move |window| {
@@ -3704,26 +3784,26 @@ fn test_disposing_outer_subscription_from_old_window_completion_suppresses_new_w
     );
     outer_subscription.replace_value(Some(subscription));
 
-    assert!(boundary.on_next(()).is_continue());
+    assert!(boundary.on_next(0, ()).is_stop());
 
     assert_eq!(window_count.clone_value(), 1);
 }
 
 #[test]
 fn test_disposing_outer_subscription_from_inner_termination_suppresses_outer_termination() {
-    let source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (_, boundary_observable) = test_channels::<'_, (), Infallible>();
 
     // Custom operations
-    let observable = source.clone().window(boundary);
+    let observable = source_observable.window(boundary_observable);
 
-    let outer_subscription = Shared::new(Mutable::new(None));
+    let outer_subscription = Arc::new(Mutex::new(None));
     let outer_subscription_cloned = outer_subscription.clone();
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
-    let inner_terminations = Shared::new(Mutable::new(Vec::new()));
+    let inner_terminations = Arc::new(Mutex::new(Vec::new()));
     let inner_terminations_cloned = inner_terminations.clone();
-    let outer_terminations = Shared::new(Mutable::new(Vec::new()));
+    let outer_terminations = Arc::new(Mutex::new(Vec::new()));
     let outer_terminations_cloned = outer_terminations.clone();
     let subscription = observable.subscribe_with_callback(
         move |window| {
@@ -3743,7 +3823,7 @@ fn test_disposing_outer_subscription_from_inner_termination_suppresses_outer_ter
     );
     outer_subscription.replace_value(Some(subscription));
 
-    source.on_termination(Termination::Completed);
+    source.on_termination(0, Termination::Completed);
 
     assert_eq!(inner_terminations.clone_value(), [Termination::Completed]);
     assert_eq!(outer_terminations.with_ref(Vec::len), 0);
@@ -3751,21 +3831,21 @@ fn test_disposing_outer_subscription_from_inner_termination_suppresses_outer_ter
 
 #[test]
 fn test_disposing_inner_subscription_after_termination_is_queued_suppresses_inner_termination() {
-    let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (_, boundary_observable) = test_channels::<'_, (), Infallible>();
 
     // Custom operations
-    let observable = source.clone().window(boundary);
+    let observable = source_observable.window(boundary_observable);
 
-    let inner_subscription = Shared::new(Mutable::new(None));
+    let inner_subscription = Arc::new(Mutex::new(None));
     let inner_subscription_outer = inner_subscription.clone();
-    let values = Shared::new(Mutable::new(Vec::new()));
+    let values = Arc::new(Mutex::new(Vec::new()));
     let values_cloned = values.clone();
-    let inner_terminations = Shared::new(Mutable::new(Vec::new()));
+    let inner_terminations = Arc::new(Mutex::new(Vec::new()));
     let inner_terminations_cloned = inner_terminations.clone();
-    let outer_terminations = Shared::new(Mutable::new(Vec::new()));
+    let outer_terminations = Arc::new(Mutex::new(Vec::new()));
     let outer_terminations_cloned = outer_terminations.clone();
-    let source_termination = Shared::new(Mutable::new(Some(source.clone())));
+    let source_termination = Arc::new(Mutex::new(Some(source.clone())));
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| {
             let inner_subscription = inner_subscription_outer.clone();
@@ -3780,7 +3860,7 @@ fn test_disposing_inner_subscription_after_termination_is_queued_suppresses_inne
                     // Queue the window termination, then dispose the inner
                     // subscription before that termination can be delivered.
                     let source = source_termination.take_value().unwrap();
-                    source.on_termination(Termination::Completed);
+                    source.on_termination(0, Termination::Completed);
                     let sub = inner_subscription_cloned.take_value();
                     drop(sub);
                 },
@@ -3791,7 +3871,7 @@ fn test_disposing_inner_subscription_after_termination_is_queued_suppresses_inne
         move |termination| outer_terminations_cloned.with_mut(|values| values.push(termination)),
     );
 
-    assert!(source.on_next(111).is_continue());
+    assert!(source.on_next(0, 111).is_stop());
 
     assert_eq!(values.clone_value(), [111]);
     assert_eq!(inner_terminations.with_ref(Vec::len), 0);
@@ -3801,22 +3881,22 @@ fn test_disposing_inner_subscription_after_termination_is_queued_suppresses_inne
 #[test]
 fn test_disposing_inner_subscription_after_boundary_rollover_is_queued_suppresses_old_termination()
 {
-    let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    let observable = source.clone().window(boundary.clone());
+    let observable = source_observable.window(boundary_observable);
 
-    let first_inner_subscription = Shared::new(Mutable::new(None));
+    let first_inner_subscription = Arc::new(Mutex::new(None));
     let first_inner_subscription_outer = first_inner_subscription.clone();
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
-    let first_terminations = Shared::new(Mutable::new(Vec::new()));
+    let first_terminations = Arc::new(Mutex::new(Vec::new()));
     let first_terminations_cloned = first_terminations.clone();
-    let second_values = Shared::new(Mutable::new(Vec::new()));
+    let second_values = Arc::new(Mutex::new(Vec::new()));
     let second_values_cloned = second_values.clone();
-    let window_count = Shared::new(Mutable::new(0usize));
+    let window_count = Arc::new(Mutex::new(0usize));
     let window_count_cloned = window_count.clone();
-    let boundary_reentrant = Shared::new(Mutable::new(Some(boundary)));
+    let boundary_reentrant = Arc::new(Mutex::new(Some(boundary)));
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| {
             let index = window_count_cloned.with_mut(|lock| {
@@ -3838,7 +3918,7 @@ fn test_disposing_inner_subscription_after_boundary_rollover_is_queued_suppresse
                                 boundary_reentrant
                                     .take_value()
                                     .unwrap()
-                                    .on_next(())
+                                    .on_next(0, ())
                                     .is_continue()
                             );
                             let sub = first_inner_subscription_cloned.take_value();
@@ -3864,8 +3944,8 @@ fn test_disposing_inner_subscription_after_boundary_rollover_is_queued_suppresse
         |_termination| {},
     );
 
-    assert!(source.on_next(111).is_continue());
-    assert!(source.on_next(222).is_continue());
+    assert!(source.on_next(0, 111).is_continue());
+    assert!(source.on_next(0, 222).is_continue());
 
     assert_eq!(window_count.clone_value(), 2);
     assert_eq!(first_terminations.with_ref(Vec::len), 0);
@@ -3874,18 +3954,18 @@ fn test_disposing_inner_subscription_after_boundary_rollover_is_queued_suppresse
 
 #[test]
 fn test_disposing_inner_subscription_after_value_is_queued_suppresses_value() {
-    let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    let observable = source.clone().window(boundary.clone());
+    let observable = source_observable.window(boundary_observable);
 
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
-    let second_values = Shared::new(Mutable::new(Vec::new()));
+    let second_values = Arc::new(Mutex::new(Vec::new()));
     let second_values_cloned = second_values.clone();
-    let window_count = Shared::new(Mutable::new(0usize));
+    let window_count = Arc::new(Mutex::new(0usize));
     let window_count_cloned = window_count.clone();
-    let mut source_reentrant = source.clone();
+    let source_reentrant = source.clone();
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| {
             let index = window_count_cloned.with_mut(|lock| {
@@ -3908,7 +3988,7 @@ fn test_disposing_inner_subscription_after_value_is_queued_suppresses_value() {
                     // Attach, forwarding this value, and detaching are all queued
                     // behind the current EmitWindow callback. Disposal must make
                     // the queued value unobservable before the queue drains.
-                    assert!(source_reentrant.on_next(111).is_continue());
+                    assert!(source_reentrant.on_next(0, 111).is_continue());
                     drop(sub);
                 }
                 _ => unreachable!(),
@@ -3917,8 +3997,8 @@ fn test_disposing_inner_subscription_after_value_is_queued_suppresses_value() {
         |_termination| {},
     );
 
-    assert!(boundary.on_next(()).is_continue());
-    assert!(source.on_next(222).is_continue());
+    assert!(boundary.on_next(0, ()).is_continue());
+    assert!(source.on_next(0, 222).is_continue());
 
     assert_eq!(window_count.clone_value(), 2);
     assert_eq!(second_values.with_ref(Vec::len), 0);
@@ -3926,18 +4006,18 @@ fn test_disposing_inner_subscription_after_value_is_queued_suppresses_value() {
 
 #[test]
 fn test_disposing_inner_subscription_before_queued_attach_suppresses_buffered_values() {
-    let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    let observable = source.clone().window(boundary.clone());
+    let observable = source_observable.window(boundary_observable);
 
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
-    let second_values = Shared::new(Mutable::new(Vec::new()));
+    let second_values = Arc::new(Mutex::new(Vec::new()));
     let second_values_cloned = second_values.clone();
-    let window_count = Shared::new(Mutable::new(0usize));
+    let window_count = Arc::new(Mutex::new(0usize));
     let window_count_cloned = window_count.clone();
-    let mut source_reentrant = source.clone();
+    let source_reentrant = source.clone();
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| {
             let index = window_count_cloned.with_mut(|lock| {
@@ -3954,7 +4034,7 @@ fn test_disposing_inner_subscription_before_queued_attach_suppresses_buffered_va
                     // Buffer a value before subscribing. The attach is queued behind
                     // the current EmitWindow callback, so subscribe returns before
                     // the buffered value can be replayed.
-                    assert!(source_reentrant.on_next(111).is_continue());
+                    assert!(source_reentrant.on_next(0, 111).is_continue());
 
                     let second_values = second_values_cloned.clone();
                     let sub = window.subscribe_with_callback(
@@ -3969,8 +4049,8 @@ fn test_disposing_inner_subscription_before_queued_attach_suppresses_buffered_va
         |_termination| {},
     );
 
-    assert!(boundary.on_next(()).is_continue());
-    assert!(source.on_next(222).is_continue());
+    assert!(boundary.on_next(0, ()).is_continue());
+    assert!(source.on_next(0, 222).is_continue());
 
     assert_eq!(window_count.clone_value(), 2);
     assert_eq!(second_values.with_ref(Vec::len), 0);
@@ -3979,24 +4059,24 @@ fn test_disposing_inner_subscription_before_queued_attach_suppresses_buffered_va
 #[test]
 fn test_disposing_old_inner_during_multiple_queued_boundary_rollovers_keeps_latest_window_working()
 {
-    let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+    let (source, source_observable) = test_channels::<'_, i32, Infallible>();
+    let (boundary, boundary_observable) = test_channels::<'_, (), Infallible>();
 
-    let observable = source.clone().window(boundary.clone());
+    let observable = source_observable.window(boundary_observable);
 
-    let first_inner_subscription = Shared::new(Mutable::new(None));
+    let first_inner_subscription = Arc::new(Mutex::new(None));
     let first_inner_subscription_outer = first_inner_subscription.clone();
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
-    let first_terminations = Shared::new(Mutable::new(Vec::new()));
+    let first_terminations = Arc::new(Mutex::new(Vec::new()));
     let first_terminations_cloned = first_terminations.clone();
-    let second_terminations = Shared::new(Mutable::new(Vec::new()));
+    let second_terminations = Arc::new(Mutex::new(Vec::new()));
     let second_terminations_cloned = second_terminations.clone();
-    let latest_values = Shared::new(Mutable::new(Vec::new()));
+    let latest_values = Arc::new(Mutex::new(Vec::new()));
     let latest_values_cloned = latest_values.clone();
-    let window_count = Shared::new(Mutable::new(0usize));
+    let window_count = Arc::new(Mutex::new(0usize));
     let window_count_cloned = window_count.clone();
-    let boundary_reentrant = Shared::new(Mutable::new(Some(boundary)));
+    let boundary_reentrant = Arc::new(Mutex::new(Some(boundary)));
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| {
             let index = window_count_cloned.with_mut(|lock| {
@@ -4015,9 +4095,9 @@ fn test_disposing_old_inner_during_multiple_queued_boundary_rollovers_keeps_late
                             // Both rollovers are queued while the old observer is
                             // still handling a value. The middle window is closed
                             // before it can be delivered to the outer observer.
-                            let mut boundary = boundary_reentrant.take_value().unwrap();
-                            assert!(boundary.on_next(()).is_continue());
-                            assert!(boundary.on_next(()).is_continue());
+                            let boundary = boundary_reentrant.take_value().unwrap();
+                            assert!(boundary.on_next(0, ()).is_continue());
+                            assert!(boundary.on_next(0, ()).is_continue());
                             let sub = first_inner_subscription_cloned.take_value();
                             drop(sub);
                         },
@@ -4051,8 +4131,8 @@ fn test_disposing_old_inner_during_multiple_queued_boundary_rollovers_keeps_late
         |_termination| {},
     );
 
-    assert!(source.on_next(111).is_continue());
-    assert!(source.on_next(222).is_continue());
+    assert!(source.on_next(0, 111).is_continue());
+    assert!(source.on_next(0, 222).is_continue());
 
     assert_eq!(window_count.clone_value(), 3);
     assert_eq!(first_terminations.with_ref(Vec::len), 0);
@@ -4060,7 +4140,6 @@ fn test_disposing_old_inner_during_multiple_queued_boundary_rollovers_keeps_late
     assert_eq!(latest_values.clone_value(), [222]);
 }
 
-#[cfg(not(feature = "single-threaded"))]
 #[cfg(panic = "unwind")]
 #[test]
 fn test_dropping_ignored_value_stops_the_subscription() {
@@ -4073,7 +4152,7 @@ fn test_dropping_ignored_value_stops_the_subscription() {
     // Custom operations
     let observable = observable.window(boundary_observable);
 
-    let inner_subscriptions = Shared::new(Mutable::new(Vec::new()));
+    let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
     let inner_subscriptions_cloned = inner_subscriptions.clone();
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| {
@@ -4108,7 +4187,7 @@ fn test_unsubscribe_window_subscription_keeps_stream_working() {
     // Custom operations
     let observable = observable.window(boundary_observable);
 
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -4155,7 +4234,7 @@ fn test_dropping_unsubscribed_inner_observable_releases_buffered_values() {
     // Custom operations
     let observable = observable.window(boundary_observable);
 
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _outer_subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -4183,7 +4262,7 @@ fn test_unsubscribed_window_values_do_not_leak_into_next_window() {
     let observable = observable.window(boundary_observable);
 
     // Hold the window observables without subscribing to them.
-    let window_vec = Shared::new(Mutable::new(Vec::new()));
+    let window_vec = Arc::new(Mutex::new(Vec::new()));
     let window_vec_cloned = window_vec.clone();
     let _subscription = observable.subscribe_with_callback(
         move |window| window_vec_cloned.with_mut(|values| values.push(window)),
@@ -4230,13 +4309,13 @@ fn test_lifetime_sub() {
     // let life_marker_2 = TestStruct;
 
     {
-        let observable = Create::new(|mut observer| {
+        let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(111).is_continue());
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker_1.consume_ref();
             }))
         });
-        let boundary_subject = Create::new(|mut observer| {
+        let boundary_subject = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(()).is_continue());
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker_2.consume_ref();
@@ -4260,13 +4339,14 @@ fn test_lifetime_or_sub() {
     // let life_marker_sub = TestStruct;
 
     {
-        let observable = Create::new(|observer: BoxedObserver<'_, &TestStruct, Infallible>| {
-            life_marker_or = Some(observer);
-            Subscription::new(CallbackDisposal::new(|| {
-                life_marker_sub.consume_ref();
-            }))
-        });
-        let boundary_subject = Create::new(|_| Subscription::default());
+        let observable =
+            Create::shared_boxed(|observer: SendBoxedObserver<'_, &TestStruct, Infallible>| {
+                life_marker_or = Some(observer);
+                Subscription::new(CallbackDisposal::new(|| {
+                    life_marker_sub.consume_ref();
+                }))
+            });
+        let boundary_subject = Create::shared_boxed(|_| Subscription::default());
         let observable = observable.window(boundary_subject);
 
         let (_, observer) = Checker::new();
@@ -4276,12 +4356,12 @@ fn test_lifetime_or_sub() {
 
 #[test]
 fn test_clone() {
-    let observable = Create::new(|mut observer| {
+    let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let boundary_subject = Create::new(|_| Subscription::default());
+    let boundary_subject = Create::shared_boxed(|_| Subscription::default());
     let observable = observable.window(boundary_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
@@ -4289,9 +4369,9 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let boundary_subject = PublishSubject::default();
-    let observable = subject.window(boundary_subject);
+    let (_, observable, _) = test_channel::<'_, i32, String>();
+    let (_, boundary_observable, _) = test_channel();
+    let observable = observable.window(boundary_observable);
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -4301,9 +4381,9 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let boundary_subject: PublishSubject<'_, (), String> = PublishSubject::default();
-    let observable = subject.window(boundary_subject);
+    let (_, observable, _) = test_channel::<'_, i32, String>();
+    let (_, boundary_observable, _) = test_channel::<'_, (), String>();
+    let observable = observable.window(boundary_observable);
 
     observable.filter(|_| true);
 }

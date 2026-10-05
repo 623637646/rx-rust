@@ -1,9 +1,8 @@
 //! The [`Max`] operator, behind [`ObservableExt::max`](crate::observable::ObservableExt::max).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -47,22 +46,32 @@ pub struct Max<OE> {
 impl<OE> Max<OE> {
     /// Creates a [`Max`] over `source`;
     /// [`ObservableExt::max`](crate::observable::ObservableExt::max) is the fluent form.
-    pub fn new<'or, T, E>(source: OE) -> Self
+    pub fn new<T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
     {
         Self { source }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Max<OE>
+impl<T, E, OE> ObservableTypes for Max<OE>
 where
-    T: PartialOrd + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    T: PartialOrd,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Max<OE>
+where
+    OR: Observer<T, E>,
+    T: PartialOrd,
+    OE: Observable<MaxObserver<T, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = MaxObserver {
             observer,
             max: None,
@@ -71,7 +80,7 @@ where
     }
 }
 
-struct MaxObserver<T, OR> {
+pub struct MaxObserver<T, OR> {
     observer: OR,
     max: Option<T>,
 }

@@ -5,22 +5,20 @@
 
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
-use crate::observable::{Observable, Subscription};
+use crate::observable::{Observable, ObservableTypes, Subscription};
 use crate::observer::Observer;
 use crate::operators::connectable::connectable_controller::{
     ConnectableController, Connected, Disconnected,
 };
 use crate::subject::Subject;
-use crate::subject::subject_observable::SubjectObservable;
-use crate::utils::mutable::{Mutable, MutableHelper};
+use crate::subject::SubjectObservable;
+use crate::thread_mode::ThreadMode;
+use crate::thread_mode::mutable::MutableHelper;
 use crate::utils::on_panic::OnPanic;
-use crate::utils::types::{MaybeSend, Shared};
 use educe::Educe;
 use std::num::NonZeroUsize;
 
-#[derive(Educe)]
-#[educe(Debug)]
-enum State<OE, S, D>
+pub enum State<OE, S, D>
 where
     D: Disposable,
 {
@@ -58,7 +56,7 @@ where
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
 /// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), subject);
 /// let observable = controller.ref_count();
 /// let values_observer = Arc::clone(&values);
@@ -81,18 +79,26 @@ where
 /// );
 /// ```
 #[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct RefCount<'or, T, E, OE, S>
+#[educe(Debug, Clone(bound(S: Clone)))]
+pub struct RefCount<OE, S>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes,
 {
+    #[educe(Debug(ignore))]
     observable: SubjectObservable<S>,
-    state: Shared<Mutable<State<OE, S, OE::D>>>,
+    #[educe(Debug(ignore))]
+    state: StatePtr<OE, S>,
 }
 
-impl<'or, T, E, OE, S> RefCount<'or, T, E, OE, S>
+/// The shared state of a [`RefCount`], behind the pointer the source's thread mode picks: it is
+/// reached from wherever subscribers subscribe and dispose, which is where the subject the source
+/// feeds is reached from too.
+type StatePtr<OE, S> =
+    <<OE as ObservableTypes>::Mode as ThreadMode>::Ptr<State<OE, S, <OE as ObservableTypes>::D>>;
+
+impl<OE, S> RefCount<OE, S>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes,
     S: Clone,
 {
     /// Creates a [`RefCount`] over a disconnected controller;
@@ -100,26 +106,37 @@ where
     pub fn new(controller: ConnectableController<OE, S, Disconnected>) -> Self {
         Self {
             observable: controller.observable(),
-            state: Shared::new(Mutable::new(State::Disconnected { controller })),
+            state: OE::Mode::ptr(State::Disconnected { controller }),
         }
     }
 }
 
 delegate_disposal!(
-    Disposal<'or, T, E, OE, S>,
-    ChainDisposal<S::D, RefCountDisposal<'or, T, E, OE, S>>,
-    where OE: Observable<'or, T, E>,
-        S: Subject<'or, T, E>
+    Disposal<OE, S>,
+    ChainDisposal<S::D, RefCountDisposal<OE, S>>,
+    where OE: ObservableTypes,
+        S: ObservableTypes
 );
 
-impl<'or, T, E, OE, S> Observable<'or, T, E> for RefCount<'or, T, E, OE, S>
+impl<T, E, OE, S> ObservableTypes for RefCount<OE, S>
 where
-    OE: Observable<'or, T, E> + Clone,
-    S: Subject<'or, T, E> + Clone + MaybeSend + 'or,
+    OE: Observable<S, Item = T, Error = E> + Clone,
+    S: Subject<T, E> + Clone,
 {
-    type D = Disposal<'or, T, E, OE, S>;
+    type Item = T;
+    type Error = E;
+    /// The subscribers are the subject's, so the mode is the subject's.
+    type Mode = S::Mode;
+    type D = Disposal<OE, S>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, S, OR> Observable<OR> for RefCount<OE, S>
+where
+    OR: Observer<T, E>,
+    OE: Observable<S, Item = T, Error = E> + Clone,
+    S: Subject<T, E> + Observable<OR> + Clone,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let controller = self.state.with_mut(|current| match &mut *current {
             state @ State::Disconnected { .. } => {
                 let State::Disconnected { controller } =
@@ -166,17 +183,17 @@ where
 /// would leave the count inflated forever, so the last subscription would no longer disconnect,
 /// and would lose the controller with the state stuck in
 /// [`ConnectingOrDisconnecting`](State::ConnectingOrDisconnecting).
-fn restore_subscriber<'or, T, E, OE, S>(
-    state: &Shared<Mutable<State<OE, S, OE::D>>>,
+fn restore_subscriber<T, E, OE, S>(
+    state: &StatePtr<OE, S>,
     controller: Option<ConnectableController<OE, S, Disconnected>>,
 ) where
-    OE: Observable<'or, T, E> + Clone,
-    S: Observer<T, E> + Clone + MaybeSend + 'or,
+    OE: Observable<S, Item = T, Error = E> + Clone,
+    S: Subject<T, E> + Clone,
 {
     let Some(controller) = controller else {
         // Only the count was changed, so removing this subscriber is what disposing the
         // subscription it never got would have done.
-        RefCountDisposal {
+        RefCountDisposal::<OE, S> {
             state: state.clone(),
         }
         .dispose();
@@ -207,17 +224,17 @@ fn restore_subscriber<'or, T, E, OE, S>(
     }
 }
 
-struct RefCountDisposal<'or, T, E, OE, S>
+pub struct RefCountDisposal<OE, S>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes,
 {
-    state: Shared<Mutable<State<OE, S, OE::D>>>,
+    state: StatePtr<OE, S>,
 }
 
-impl<'or, T, E, OE, S> Disposable for RefCountDisposal<'or, T, E, OE, S>
+impl<T, E, OE, S> Disposable for RefCountDisposal<OE, S>
 where
-    OE: Observable<'or, T, E> + Clone,
-    S: Observer<T, E> + Clone + MaybeSend + 'or,
+    OE: Observable<S, Item = T, Error = E> + Clone,
+    S: Subject<T, E> + Clone,
 {
     fn dispose(self) {
         let controller = self.state.with_mut(|current| match &mut *current {
@@ -248,20 +265,20 @@ where
     }
 }
 
-enum Purpose<'or, T, E, OE, S>
+enum Purpose<OE, S>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes,
 {
     Connect(ConnectableController<OE, S, Disconnected>),
     Disconnect(ConnectableController<OE, S, Connected<OE::D>>),
 }
 
-fn handle_connecting_or_disconnecting<'or, T, E, OE, S>(
-    state: Shared<Mutable<State<OE, S, OE::D>>>,
-    mut purpose: Purpose<'or, T, E, OE, S>,
+fn handle_connecting_or_disconnecting<T, E, OE, S>(
+    state: StatePtr<OE, S>,
+    mut purpose: Purpose<OE, S>,
 ) where
-    OE: Observable<'or, T, E> + Clone,
-    S: Observer<T, E> + Clone + MaybeSend + 'or,
+    OE: Observable<S, Item = T, Error = E> + Clone,
+    S: Subject<T, E> + Clone,
 {
     loop {
         let next = match purpose {

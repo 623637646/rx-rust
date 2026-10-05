@@ -3,25 +3,23 @@ mod tests_utils;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::drop_probe::DropProbe;
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Flow, Observer, Termination};
-use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::Subject;
 use rx_rust::subject::publish_subject::PublishSubject;
-use rx_rust::utils::mutable::Mutable;
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::mutable::MutableHelper;
-use rx_rust::utils::types::Shared;
+use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::MutableHelper;
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
 
 #[test]
 fn test_completed() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -67,7 +65,7 @@ fn test_completed() {
 
 #[test]
 fn test_error() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -122,7 +120,7 @@ fn test_error() {
 
 #[test]
 fn test_unsubscribe() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -176,7 +174,7 @@ fn test_ref() {
     let value = 111;
     let error = 222;
 
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -203,48 +201,42 @@ fn test_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
-        let subject = PublishSubject::default();
+    block_on(|scheduler| async move {
+        let subject = PublishSubject::shared();
         let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
 
-        let subscription = runtime
+        let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert!(subject.terminated().is_none());
 
         let mut subject_cloned = subject.clone();
-        runtime
+        scheduler
             .spawn(async move {
                 assert!(subject_cloned.on_next(&111).is_continue());
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Active);
         assert!(subject.terminated().is_none());
 
-        runtime
-            .spawn(async { subscription.dispose() })
-            .await
-            .unwrap();
-        runtime.sleep(DURATION_10_MS).await;
+        scheduler.spawn(async { subscription.dispose() }).await;
+        scheduler.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Dropped);
         assert!(subject.terminated().is_none());
 
         let subject_cloned = subject.clone();
-        runtime
+        scheduler
             .spawn(async move {
                 subject_cloned.on_termination(Termination::Error("error"));
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Dropped);
         assert!(matches!(
@@ -256,7 +248,7 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -295,7 +287,7 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    let mut subject = PublishSubject::<'_, _, Infallible>::default();
+    let mut subject = PublishSubject::<_, Infallible, _>::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -324,7 +316,7 @@ fn test_unsub_on_next_by_take() {
 
 #[test]
 fn test_complete_on_next() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -359,7 +351,7 @@ fn test_complete_on_next() {
 
 #[test]
 fn test_error_on_next() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -398,7 +390,7 @@ fn test_error_on_next() {
 
 #[test]
 fn test_unsub_on_next() {
-    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+    let mut subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -410,7 +402,7 @@ fn test_unsub_on_next() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_next
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -425,7 +417,7 @@ fn test_unsub_on_next() {
     ));
 
     // unsubscribe after on_next
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -461,7 +453,7 @@ fn test_unsub_on_next() {
 /// being dispatched, whether it is disposed before or after it would have been visited.
 #[test]
 fn test_unsub_other_on_next() {
-    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+    let mut subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -470,8 +462,8 @@ fn test_unsub_other_on_next() {
     let observable = subject.clone();
 
     // Subscribed first, so it is visited first and disposes the other two before they are.
-    let subscription_1 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_1 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
     let subscription_1_cloned = subscription_1.clone();
     let subscription_3_cloned = subscription_3.clone();
     subscription_1.replace_value(Some(
@@ -511,7 +503,7 @@ fn test_unsub_other_on_next() {
 
 #[test]
 fn test_sub_on_next() {
-    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+    let mut subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -521,8 +513,8 @@ fn test_sub_on_next() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -574,7 +566,7 @@ fn test_sub_on_next() {
 
 #[test]
 fn test_stop_on_next() {
-    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+    let mut subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::stopping_after(1);
     let (checker_2, observer_2) = Checker::new();
 
@@ -603,7 +595,7 @@ fn test_stop_on_next() {
 
 #[test]
 fn test_next_on_next() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -650,7 +642,7 @@ fn test_next_on_next() {
 
 #[test]
 fn test_unsub_on_completed() {
-    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+    let mut subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -662,7 +654,7 @@ fn test_unsub_on_completed() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -677,7 +669,7 @@ fn test_unsub_on_completed() {
     ));
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -719,7 +711,7 @@ fn test_unsub_on_completed() {
 
 #[test]
 fn test_sub_on_completed() {
-    let mut subject: PublishSubject<'_, _, Infallible> = PublishSubject::default();
+    let mut subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -729,8 +721,8 @@ fn test_sub_on_completed() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -790,7 +782,7 @@ fn test_sub_on_completed() {
 
 #[test]
 fn test_unsub_on_error() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -802,7 +794,7 @@ fn test_unsub_on_error() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -817,7 +809,7 @@ fn test_unsub_on_error() {
     ));
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -862,7 +854,7 @@ fn test_unsub_on_error() {
 
 #[test]
 fn test_sub_on_error() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -872,8 +864,8 @@ fn test_sub_on_error() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -936,7 +928,7 @@ fn test_sub_on_error() {
 
 #[test]
 fn test_next_on_unsub() {
-    let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+    let subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -975,7 +967,7 @@ fn test_next_on_unsub() {
 
 #[test]
 fn test_complete_on_unsub() {
-    let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+    let subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -1014,7 +1006,7 @@ fn test_complete_on_unsub() {
 
 #[test]
 fn test_error_on_unsub() {
-    let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let subject: PublishSubject<'_, i32, &str, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -1053,7 +1045,7 @@ fn test_error_on_unsub() {
 
 #[test]
 fn test_sub_on_sub() {
-    let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+    let subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
     subject.clone().on_termination(Termination::Completed);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -1064,7 +1056,7 @@ fn test_sub_on_sub() {
     // The subject has terminated, so the first observer is terminated from inside its own
     // subscription, and it subscribes the second one from there.
     let observable_cloned = observable.clone();
-    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
     let subscription_2_cloned = subscription_2.clone();
     let (next_1, termination_1) = observer_1.into_callbacks();
 
@@ -1081,7 +1073,7 @@ fn test_sub_on_sub() {
 
 #[test]
 fn test_sub_on_unsub() {
-    let mut subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+    let mut subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -1092,7 +1084,7 @@ fn test_sub_on_unsub() {
     // The second observer subscribes the third one while it is being released, so that
     // subscription runs from inside the unsubscription.
     let observable_cloned = observable.clone();
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
     let subscription_3_cloned = subscription_3.clone();
     let probe = DropProbe::new().on_drop(Box::new(move || {
         subscription_3_cloned.replace_value(Some(observable_cloned.subscribe(observer_3)));
@@ -1142,21 +1134,21 @@ fn test_lifetime_or_sub() {
     {
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(observer.on_next(&life_marker).is_continue());
-        let subject = PublishSubject::default();
+        let subject = PublishSubject::shared();
         _subscription = subject.subscribe(observer);
     }
 }
 
 #[test]
 fn test_clone() {
-    let observable = PublishSubject::<'_, TestStruct, TestStruct>::default();
+    let observable = PublishSubject::<TestStruct, TestStruct, _>::shared();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+    let subject: PublishSubject<'_, i32, String, _> = PublishSubject::shared();
     let observable = subject;
 
     let observable = observable.filter(|_| true);
@@ -1167,7 +1159,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+    let subject: PublishSubject<'_, i32, String, _> = PublishSubject::shared();
     let observable = subject;
 
     observable.filter(|_| true);
@@ -1180,8 +1172,8 @@ fn test_notification_order() {
     /// What one observer received, tagged with the index of the observer that received it.
     type Notification = (usize, Option<i32>);
 
-    let mut subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let notifications: Shared<Mutable<Vec<Notification>>> = Shared::new(Mutable::new(Vec::new()));
+    let mut subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
+    let notifications: Arc<Mutex<Vec<Notification>>> = Arc::new(Mutex::new(Vec::new()));
 
     let observable = subject.clone();
     let subscribe = |index: usize| {
@@ -1245,7 +1237,6 @@ fn test_notification_order() {
 /// delegate in the order their ids were handed out however many threads subscribe at once. Out of
 /// order, the delegate's entries would no longer be sorted: the ids could not be found anymore, so
 /// unsubscribing would stop releasing the observers.
-#[cfg(not(feature = "single-threaded"))]
 #[test]
 fn observers_that_subscribe_concurrently_are_notified_and_released() {
     use crate::tests_utils::drop_probe::DropCount;
@@ -1254,8 +1245,8 @@ fn observers_that_subscribe_concurrently_are_notified_and_released() {
     const SUBSCRIPTIONS_PER_THREAD: usize = 25;
     const SUBSCRIPTIONS: usize = THREADS * SUBSCRIPTIONS_PER_THREAD;
 
-    let mut subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let notifications: Shared<Mutable<Vec<i32>>> = Shared::new(Mutable::new(Vec::new()));
+    let mut subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
+    let notifications: Arc<Mutex<Vec<i32>>> = Arc::new(Mutex::new(Vec::new()));
     let releases = DropCount::new();
 
     let subscriptions: Vec<_> = std::thread::scope(|scope| {
@@ -1305,8 +1296,8 @@ fn observers_that_subscribe_concurrently_are_notified_and_released() {
 /// already subscribed, which the queued termination reaches later.
 #[test]
 fn a_subscriber_that_arrives_while_the_termination_is_queued_is_terminated_at_once() {
-    let mut subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-    let notifications: Shared<Mutable<Vec<&str>>> = Shared::new(Mutable::new(Vec::new()));
+    let mut subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
+    let notifications: Arc<Mutex<Vec<&str>>> = Arc::new(Mutex::new(Vec::new()));
 
     let observable = subject.clone();
     let notifications_first = notifications.clone();
@@ -1351,4 +1342,30 @@ fn a_subscriber_that_arrives_while_the_termination_is_queued_is_terminated_at_on
             "second: termination",
         ]
     );
+}
+
+/// An observer that panics kills the subject: the other observers are released without being
+/// notified, the subject reports no termination and rejects every event, and an observer that
+/// subscribes afterwards is dropped without being notified.
+#[test]
+fn a_panicking_observer_kills_the_subject() {
+    let mut subject: PublishSubject<'_, i32, &'static str, _> = PublishSubject::shared();
+    let (checker, observer) = Checker::new();
+    let _subscription = subject.clone().subscribe(observer);
+    let _subscription = subject
+        .clone()
+        .subscribe_with_callback(|_| -> () { panic!("the observer panics") }, |_| {});
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| subject.on_next(111)));
+    assert!(result.is_err());
+    // Notified in subscription order, so the first observer saw the value before the panic.
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert!(subject.terminated().is_none());
+    assert!(subject.on_next(222).is_stop());
+
+    let (late_checker, late_observer) = Checker::new();
+    let _subscription = subject.clone().subscribe(late_observer);
+    assert!(late_checker.values().is_empty());
+    assert_eq!(late_checker.state(), State::Dropped);
 }

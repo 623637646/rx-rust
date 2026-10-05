@@ -1,12 +1,13 @@
 //! The [`All`] operator, behind [`ObservableExt::all`](crate::observable::ObservableExt::all).
 
 use crate::observable::Subscription;
+use crate::utils::MarkerType;
+use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::{
     self, subscribe_with_auto_dispose_on_termination,
 };
-use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
-    observable::Observable,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -49,9 +50,9 @@ pub struct All<T, OE, F> {
 impl<T, OE, F> All<T, OE, F> {
     /// Creates an [`All`] over `source`;
     /// [`ObservableExt::all`](crate::observable::ObservableExt::all) is the fluent form.
-    pub fn new<'or, E>(source: OE, callback: F) -> Self
+    pub fn new<E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnMut(T) -> bool,
     {
         Self {
@@ -62,18 +63,35 @@ impl<T, OE, F> All<T, OE, F> {
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, bool, E> for All<T, OE, F>
+impl<T, E, OE, F> ObservableTypes for All<T, OE, F>
 where
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
-    F: FnMut(T) -> bool + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    F: FnMut(T) -> bool,
 {
-    type D = subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
+    type Item = bool;
+    type Error = E;
+    type Mode = OE::Mode;
+    type D = subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<bool, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for All<T, OE, F>
+where
+    OR: Observer<bool, E>,
+    OE: Observable<
+            AllObserver<
+                AutoDisposeOnTerminationObserver<
+                    <OE as ObservableTypes>::Mode,
+                    OR,
+                    <OE as ObservableTypes>::D,
+                >,
+                F,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    F: FnMut(T) -> bool,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let observer = AllObserver {
                 observer: Some(observer),
@@ -84,7 +102,7 @@ where
     }
 }
 
-struct AllObserver<OR, F> {
+pub struct AllObserver<OR, F> {
     observer: Option<OR>,
     callback: F,
 }

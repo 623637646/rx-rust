@@ -1,15 +1,17 @@
 //! The [`Buffer`] operator, behind
 //! [`ObservableExt::buffer`](crate::observable::ObservableExt::buffer).
 
+use crate::disposable::chain_disposal::ChainDisposal;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -57,8 +59,8 @@ use educe::Educe;
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-/// let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let mut source: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
+/// let mut boundary: PublishSubject<'_, (), Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
 /// let values_observer = Arc::clone(&values);
 /// let terminations_observer = Arc::clone(&terminations);
 ///
@@ -93,30 +95,59 @@ pub struct Buffer<OE, OE1> {
 impl<OE, OE1> Buffer<OE, OE1> {
     /// Creates a [`Buffer`] over `source`;
     /// [`ObservableExt::buffer`](crate::observable::ObservableExt::buffer) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
+    pub fn new<T, E>(source: OE, boundary: OE1) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), E>,
+        OE: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Item = (), Error = E>,
     {
         Self { source, boundary }
     }
 }
 
-impl<'or, T, E, OE, OE1> Observable<'or, Vec<T>, E> for Buffer<OE, OE1>
+impl<T, E, OE, OE1> ObservableTypes for Buffer<OE, OE1>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), E>,
-    OE1::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    OE1: ObservableTypes<Item = (), Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = Vec<T>;
+    type Error = E;
+    type Mode = Joined<OE::Mode, OE1::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE::Mode, OE1::Mode>,
+        Vec<T>,
+        E,
+        Vec<T>,
+        ChainDisposal<OE::D, OE1::D>,
+    >;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, OE1, OR> Observable<OR> for Buffer<OE, OE1>
+where
+    OR: Observer<Vec<T>, E>,
+    OE: Observable<
+            BufferObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    OE1: Observable<
+            BoundaryObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = (),
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         subscribe_with_context_owning_source(observer, Vec::new(), |context| {
             let subscription_1 = self.boundary.subscribe(BoundaryObserver(context.clone()));
             let subscription_2 = self.source.subscribe(BufferObserver(context));
@@ -125,9 +156,11 @@ where
     }
 }
 
-struct BufferObserver<T, E, OR, D: Disposable>(SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>);
+pub struct BufferObserver<M: ThreadMode, T, E, OR, D: Disposable>(
+    SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
+);
 
-impl<T, E, OR, D> Observer<T, E> for BufferObserver<T, E, OR, D>
+impl<M: ThreadMode, T, E, OR, D> Observer<T, E> for BufferObserver<M, T, E, OR, D>
 where
     OR: Observer<Vec<T>, E>,
     D: Disposable,
@@ -144,9 +177,11 @@ where
     }
 }
 
-struct BoundaryObserver<T, E, OR, D: Disposable>(SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>);
+pub struct BoundaryObserver<M: ThreadMode, T, E, OR, D: Disposable>(
+    SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
+);
 
-impl<T, E, OR, D> Observer<(), E> for BoundaryObserver<T, E, OR, D>
+impl<M: ThreadMode, T, E, OR, D> Observer<(), E> for BoundaryObserver<M, T, E, OR, D>
 where
     OR: Observer<Vec<T>, E>,
     D: Disposable,
@@ -163,8 +198,8 @@ where
     }
 }
 
-fn terminate<T, E, OR, D>(
-    context: SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>,
+fn terminate<M: ThreadMode, T, E, OR, D>(
+    context: SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
     termination: Termination<E>,
 ) where
     OR: Observer<Vec<T>, E>,

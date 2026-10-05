@@ -1,233 +1,171 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
-use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_channel::{ChannelChecker, ReceiverObservable, SenderObserver};
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_channel::ReceiverObservable;
+use crate::tests_utils::test_channel::test_channels;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
+use rx_rust::observer::boxed_observer::SendBoxedObserver;
+use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::mutable::Mutable;
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::mutable::MutableHelper;
-use rx_rust::utils::types::Shared;
+use rx_rust::thread_mode::Shared;
+use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Observer, Termination},
     operators::{
-        creating::{create::Create, just::Just, throw::Throw},
+        creating::{just::Just, throw::Throw},
         error_handling::retry::{Retry, RetryAction},
     },
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
-
-fn new_channel<'or, T, E>(
-    sender: SharedSender<T, E, SenderObserver<'or, T, E>>,
-    channel_checker: Shared<Mutable<Option<ChannelChecker<'or, T, E>>>>,
-) -> ReceiverObservable<'or, T, E>
-where
-    E: Clone,
-{
-    let (sender_1, observable, channel_checker_1) = test_channel();
-    sender.set(sender_1);
-    channel_checker.replace_value(Some(channel_checker_1));
-    observable
-}
 
 #[test]
 fn test_completed_no_retry() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
-        let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+        let observable = source.clone();
         RetryAction::Retry(observable)
     });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::<Infallible>::Completed));
+    channels.on_termination(0, Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Completed
-    );
+    assert_eq!(channels.state(0), ChannelState::Completed);
     assert_eq!(errors.clone_value(), []);
 }
 
 #[test]
 fn test_completed_retry_once() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
-        let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+        let observable = source.clone();
         RetryAction::Retry(observable)
     });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error("error")));
+    channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_next(222));
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_termination(Termination::Completed));
+    channels.on_termination(1, Termination::Completed);
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Completed
-    );
+    assert_eq!(channels.state(1), ChannelState::Completed);
     assert_eq!(errors.clone_value(), ["error"]);
 }
 
 #[test]
 fn test_completed_retry_twice() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
-        let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+        let observable = source.clone();
         RetryAction::Retry(observable)
     });
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error("error")));
+    channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_next(222));
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_termination(Termination::Error("error2")));
+    channels.on_termination(1, Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Error("error2"));
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error", "error2"]);
 
-    assert!(sender.on_next(333));
+    assert!(channels.on_next(2, 333).is_continue());
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error", "error2"]);
 
-    assert!(sender.on_termination(Termination::Completed));
+    channels.on_termination(2, Termination::Completed);
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Completed
-    );
+    assert_eq!(channels.state(2), ChannelState::Completed);
     assert_eq!(errors.clone_value(), ["error", "error2"]);
 }
 
@@ -240,12 +178,23 @@ fn test_completed_different_retry_observable() {
     let observable = observable.retry(move |error| match error {
         -1 => RetryAction::Retry(
             Just::new(222)
+                .into_shared()
                 .with_error_type()
-                .concat_with(Throw::new(0).with_item_type())
-                .into_boxed(),
+                .concat_with(Throw::new(0).into_shared().with_item_type())
+                .into_send_boxed(),
         ),
-        0 => RetryAction::Retry(Throw::new(1).with_item_type().into_boxed()),
-        1 => RetryAction::Retry(Just::new(333).with_error_type().into_boxed()),
+        0 => RetryAction::Retry(
+            Throw::new(1)
+                .with_item_type()
+                .into_shared()
+                .into_send_boxed(),
+        ),
+        1 => RetryAction::Retry(
+            Just::new(333)
+                .with_error_type()
+                .into_shared()
+                .into_send_boxed(),
+        ),
         _ => panic!(),
     });
 
@@ -267,23 +216,25 @@ fn test_completed_different_retry_observable() {
 
 #[test]
 fn test_completed_synchronous_throw() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
         match error {
-            -1 => RetryAction::Retry(Throw::new(0).with_item_type().into_boxed()),
+            -1 => RetryAction::Retry(
+                Throw::new(0)
+                    .with_item_type()
+                    .into_shared()
+                    .into_send_boxed(),
+            ),
             0 => {
-                let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
-                RetryAction::Retry(observable.into_boxed())
+                let observable = source.clone();
+                RetryAction::Retry(observable.into_send_boxed())
             }
             _ => panic!(),
         }
@@ -292,100 +243,72 @@ fn test_completed_synchronous_throw() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error(-1)));
+    channels.on_termination(0, Termination::Error(-1));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error(-1));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), [-1, 0]);
 
-    assert!(sender.on_next(222));
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), [-1, 0]);
 
-    assert!(sender.on_termination(Termination::Completed));
+    channels.on_termination(1, Termination::Completed);
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Completed
-    );
+    assert_eq!(channels.state(1), ChannelState::Completed);
     assert_eq!(errors.clone_value(), [-1, 0]);
 }
 
 #[test]
 fn test_erryr_no_retry() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);
+    let (channels, observable) = test_channels();
+    let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
 
-    assert!(sender.on_termination(Termination::Error("error")));
+    channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Error("error")
-    );
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
 }
 
 #[test]
 fn test_error_retry_once() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
         if errors_cloned.with_ref(Vec::len) <= 1 {
-            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+            let observable = source.clone();
             RetryAction::Retry(observable)
         } else {
             RetryAction::Stop(error)
@@ -395,65 +318,48 @@ fn test_error_retry_once() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error("error")));
+    channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_next(222));
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_termination(Termination::Error("error2")));
+    channels.on_termination(1, Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Error("error2")
-    );
+    assert_eq!(channels.state(1), ChannelState::Error("error2"));
     assert_eq!(errors.clone_value(), ["error", "error2"]);
 }
 
 #[test]
 fn test_error_retry_twice() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
         if errors_cloned.with_ref(Vec::len) <= 2 {
-            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+            let observable = source.clone();
             RetryAction::Retry(observable)
         } else {
             RetryAction::Stop(error)
@@ -463,72 +369,53 @@ fn test_error_retry_twice() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error("error")));
+    channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_next(222));
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_termination(Termination::Error("error2")));
+    channels.on_termination(1, Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Error("error2"));
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error", "error2"]);
 
-    assert!(sender.on_next(333));
+    assert!(channels.on_next(2, 333).is_continue());
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error", "error2"]);
 
-    assert!(sender.on_termination(Termination::Error("error3")));
+    channels.on_termination(2, Termination::Error("error3"));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Error("error3")
-    );
+    assert_eq!(channels.state(2), ChannelState::Error("error3"));
     assert_eq!(errors.clone_value(), ["error", "error2", "error3"]);
 }
 
 #[test]
 fn test_error_source_and_retry_are_same() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let subject_cloned = subject.clone();
@@ -560,20 +447,17 @@ fn test_error_source_and_retry_are_same() {
 
 #[test]
 fn test_unsubscribe_before_retry() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error: String| {
         errors_cloned.with_mut(|values| values.push(error.clone()));
         if errors_cloned.with_ref(Vec::len) <= 1 {
-            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+            let observable = source.clone();
             RetryAction::Retry(observable)
         } else {
             RetryAction::Stop(error)
@@ -583,47 +467,35 @@ fn test_unsubscribe_before_retry() {
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
     subscription.dispose();
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Dropped);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Unsubscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Unsubscribed);
     assert!(errors.with_ref(Vec::is_empty));
 }
 
 #[test]
 fn test_unsubscribe_after_retry() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
         if errors_cloned.with_ref(Vec::len) <= 1 {
-            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+            let observable = source.clone();
             RetryAction::Retry(observable)
         } else {
             RetryAction::Stop(error)
@@ -633,46 +505,32 @@ fn test_unsubscribe_after_retry() {
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error("error")));
+    channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_next(222));
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
     subscription.dispose();
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Dropped);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Unsubscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Unsubscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 }
 
@@ -681,21 +539,17 @@ fn test_ref() {
     let value_1 = 111;
     let value_2 = 222;
     let error = -1;
-
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable.retry(move |error| {
         errors_cloned.with_mut(|values| values.push(error));
         if errors_cloned.with_ref(Vec::len) <= 1 {
-            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+            let observable = source.clone();
             RetryAction::Retry(observable)
         } else {
             RetryAction::Stop(error)
@@ -705,46 +559,32 @@ fn test_ref() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(&value_1));
+    assert!(channels.on_next(0, &value_1).is_continue());
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error(&error)));
+    channels.on_termination(0, Termination::Error(&error));
     assert_eq!(checker.values(), [&value_1]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error(&error));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), [&error]);
 
-    assert!(sender.on_next(&value_2));
+    assert!(channels.on_next(1, &value_2).is_continue());
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), [&error]);
 
-    assert!(sender.on_termination(Termination::Error(&error)));
+    channels.on_termination(1, Termination::Error(&error));
     assert_eq!(checker.values(), [&value_1, &value_2]);
     assert_eq!(checker.state(), State::Error(&error));
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Error(&error)
-    );
+    assert_eq!(channels.state(1), ChannelState::Error(&error));
     assert_eq!(errors.clone_value(), [&error, &error]);
 }
 
@@ -753,16 +593,12 @@ fn test_mut_ref() {
     let mut value_1 = 111;
     let mut value_2 = 222;
 
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
-
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let observable = observable.retry(move |error: &str| {
         assert_eq!(error, "error");
-        let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+        let observable = source.clone();
         RetryAction::Retry(observable)
     });
 
@@ -773,13 +609,12 @@ fn test_mut_ref() {
         |_| {},
     );
 
-    assert!(sender.on_next(&mut value_1));
-    assert!(sender.on_termination(Termination::Error("error")));
-    assert!(sender.on_next(&mut value_2));
-    assert!(sender.on_termination(Termination::Completed));
-    drop(sender);
+    assert!(channels.on_next(0, &mut value_1).is_continue());
+    channels.on_termination(0, Termination::Error("error"));
+    assert!(channels.on_next(1, &mut value_2).is_continue());
+    channels.on_termination(1, Termination::Completed);
     drop(subscription);
-    drop(channel_checker);
+    drop(channels);
 
     assert_eq!(value_1, 222);
     assert_eq!(value_2, 444);
@@ -787,107 +622,89 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
-        let sender = SharedSender::default();
-        let channel_checker = Shared::new(Mutable::new(None));
+    block_on(|scheduler| async move {
         let (checker, observer) = Checker::new();
-        let errors = Shared::new(Mutable::new(Vec::new()));
+        let errors = Arc::new(Mutex::new(Vec::new()));
 
         // Custom operations
-        let observable = new_channel(sender.clone(), channel_checker.clone());
-        let sender_cloned = sender.clone();
-        let channel_checker_cloned = channel_checker.clone();
+        let (channels, observable) = test_channels();
+        let source = observable.clone();
         let errors_cloned = errors.clone();
         let observable = observable.retry(move |error| {
             errors_cloned.with_mut(|values| values.push(error));
             if errors_cloned.with_ref(Vec::len) <= 1 {
-                let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+                let observable = source.clone();
                 RetryAction::Retry(observable)
             } else {
                 RetryAction::Stop(error)
             }
         });
 
-        let _subscription = runtime
+        let _subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(
-            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-            ChannelState::Subscribed
-        );
+        assert_eq!(channels.state(0), ChannelState::Subscribed);
         assert!(errors.with_ref(Vec::is_empty));
 
-        let sender = runtime
+        let channels_cloned = channels.clone();
+
+        scheduler
             .spawn(async move {
-                assert!(sender.on_next(111));
-                sender
+                assert!(channels_cloned.on_next(0, 111).is_continue());
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(
-            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-            ChannelState::Subscribed
-        );
+        assert_eq!(channels.state(0), ChannelState::Subscribed);
         assert!(errors.with_ref(Vec::is_empty));
 
-        let sender = runtime
+        let channels_cloned = channels.clone();
+
+        scheduler
             .spawn(async move {
-                assert!(sender.on_termination(Termination::Error("error")));
-                sender
+                channels_cloned.on_termination(0, Termination::Error("error"));
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(
-            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-            ChannelState::Subscribed
-        );
+        assert_eq!(channels.state(0), ChannelState::Error("error"));
+        assert_eq!(channels.state(1), ChannelState::Subscribed);
         assert_eq!(errors.clone_value(), ["error"]);
 
-        let sender = runtime
+        let channels_cloned = channels.clone();
+
+        scheduler
             .spawn(async move {
-                assert!(sender.on_next(222));
-                sender
+                assert!(channels_cloned.on_next(1, 222).is_continue());
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Active);
-        assert_eq!(
-            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-            ChannelState::Subscribed
-        );
+        assert_eq!(channels.state(1), ChannelState::Subscribed);
         assert_eq!(errors.clone_value(), ["error"]);
 
-        let _sender = runtime
+        let channels_cloned = channels.clone();
+
+        scheduler
             .spawn(async move {
-                assert!(sender.on_termination(Termination::Error("error2")));
-                sender
+                channels_cloned.on_termination(1, Termination::Error("error2"));
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Error("error2"));
-        assert_eq!(
-            channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-            ChannelState::Error("error2")
-        );
+        assert_eq!(channels.state(1), ChannelState::Error("error2"));
         assert_eq!(errors.clone_value(), ["error", "error2"]);
     });
 }
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let mut subject = PublishSubject::default();
+    let mut subject = PublishSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = subject.clone();
@@ -930,20 +747,17 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::<_, &str>::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = observable
         .retry(move |error| {
             errors_cloned.with_mut(|values| values.push(error));
-            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+            let observable = source.clone();
             RetryAction::Retry(observable)
         })
         .take(1);
@@ -951,44 +765,33 @@ fn test_unsub_on_next_by_take() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Unsubscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Unsubscribed);
     assert!(errors.with_ref(Vec::is_empty));
 }
 
 #[test]
 fn test_multiple_operation() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors_1 = Shared::new(Mutable::new(Vec::new()));
-    let errors_2 = Shared::new(Mutable::new(Vec::new()));
+    let errors_1 = Arc::new(Mutex::new(Vec::new()));
+    let errors_2 = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned_1 = sender.clone();
-    let sender_cloned_2 = sender.clone();
-    let channel_checker_cloned_1 = channel_checker.clone();
-    let channel_checker_cloned_2 = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source_1 = observable.clone();
+    let source_2 = observable.clone();
     let errors_cloned_1 = errors_1.clone();
     let errors_cloned_2 = errors_2.clone();
     let observable = observable
         .retry(move |error| {
             errors_cloned_1.with_mut(|values| values.push(error));
             if errors_cloned_1.with_ref(Vec::len) <= 1 {
-                let observable =
-                    new_channel(sender_cloned_1.clone(), channel_checker_cloned_1.clone());
+                let observable = source_1.clone();
                 RetryAction::Retry(observable)
             } else {
                 RetryAction::Stop(error)
@@ -997,8 +800,7 @@ fn test_multiple_operation() {
         .retry(move |error| {
             errors_cloned_2.with_mut(|values| values.push(error));
             if errors_cloned_2.with_ref(Vec::len) <= 1 {
-                let observable =
-                    new_channel(sender_cloned_2.clone(), channel_checker_cloned_2.clone());
+                let observable = source_2.clone();
                 RetryAction::Retry(observable)
             } else {
                 RetryAction::Stop(error)
@@ -1008,90 +810,68 @@ fn test_multiple_operation() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors_1.with_ref(Vec::is_empty));
     assert!(errors_2.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors_1.with_ref(Vec::is_empty));
     assert!(errors_2.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error("error")));
+    channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors_1.clone_value(), ["error"]);
     assert!(errors_2.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(222));
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors_1.clone_value(), ["error"]);
     assert!(errors_2.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error("error2")));
+    channels.on_termination(1, Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Error("error2"));
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
     assert_eq!(errors_1.clone_value(), ["error", "error2"]);
     assert_eq!(errors_2.clone_value(), ["error2"]);
 
-    assert!(sender.on_next(333));
+    assert!(channels.on_next(2, 333).is_continue());
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
     assert_eq!(errors_1.clone_value(), ["error", "error2"]);
     assert_eq!(errors_2.clone_value(), ["error2"]);
 
-    assert!(sender.on_termination(Termination::Error("error3")));
+    channels.on_termination(2, Termination::Error("error3"));
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error3"));
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Error("error3")
-    );
+    assert_eq!(channels.state(2), ChannelState::Error("error3"));
     assert_eq!(errors_1.clone_value(), ["error", "error2"]);
     assert_eq!(errors_2.clone_value(), ["error2", "error3"]);
 }
 
 #[test]
 fn test_without_convenient_api() {
-    let sender = SharedSender::default();
-    let channel_checker = Shared::new(Mutable::new(None));
     let (checker, observer) = Checker::new();
-    let errors = Shared::new(Mutable::new(Vec::new()));
+    let errors = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
-    let observable = new_channel(sender.clone(), channel_checker.clone());
-    let sender_cloned = sender.clone();
-    let channel_checker_cloned = channel_checker.clone();
+    let (channels, observable) = test_channels();
+    let source = observable.clone();
     let errors_cloned = errors.clone();
     let observable = Retry::new(observable, move |error| {
         errors_cloned.with_mut(|values| values.push(error));
         if errors_cloned.with_ref(Vec::len) <= 1 {
-            let observable = new_channel(sender_cloned.clone(), channel_checker_cloned.clone());
+            let observable = source.clone();
             RetryAction::Retry(observable)
         } else {
             RetryAction::Stop(error)
@@ -1101,52 +881,38 @@ fn test_without_convenient_api() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_next(111));
+    assert!(channels.on_next(0, 111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(errors.with_ref(Vec::is_empty));
 
-    assert!(sender.on_termination(Termination::Error("error")));
+    channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_next(222));
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Active);
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Subscribed
-    );
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
     assert_eq!(errors.clone_value(), ["error"]);
 
-    assert!(sender.on_termination(Termination::Error("error2")));
+    channels.on_termination(1, Termination::Error("error2"));
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Error("error2"));
-    assert_eq!(
-        channel_checker.with_ref(|checker| checker.as_ref().unwrap().state()),
-        ChannelState::Error("error2")
-    );
+    assert_eq!(channels.state(1), ChannelState::Error("error2"));
     assert_eq!(errors.clone_value(), ["error", "error2"]);
 }
 
 #[test]
 fn test_next_on_sub() {
-    let subject = BehaviorSubject::<'_, _, &str>::new(111);
+    let subject = BehaviorSubject::<_, &str, _>::shared(111);
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -1197,7 +963,7 @@ fn test_next_on_unsub() {
 
     // The source emits from inside its own disposal, so the value arrives while downstream is
     // unsubscribing. Retry hands the observer to its source, so the value still reaches it.
-    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
         Subscription::new(CallbackDisposal::new(move || {
             let mut observer = observer;
             assert!(observer.on_next(111).is_continue());
@@ -1228,7 +994,7 @@ fn test_complete_on_unsub() {
     // The source completes from inside its own disposal, so it terminates while downstream is
     // unsubscribing. Retry hands the observer to its source, so the completion still reaches it,
     // and nothing is retried, as a completion ends Retry.
-    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
         Subscription::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Completed);
         }))
@@ -1258,7 +1024,7 @@ fn test_error_on_unsub() {
     // The source fails from inside its own disposal, so it terminates while downstream is
     // unsubscribing. The retried source must not be subscribed after that, and the error must be
     // dropped instead of reaching the observer.
-    let observable = Create::new(|observer: BoxedObserver<'_, i32, &str>| {
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
         Subscription::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Error("error"));
         }))
@@ -1291,14 +1057,14 @@ fn test_lifetime_sub() {
     // let life_marker = TestStruct;
 
     {
-        let observable = Create::new(|mut observer| {
+        let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(Just::new(1)).is_continue());
             observer.on_termination(Termination::Error("error"));
             Subscription::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
-        let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);
+        let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -1316,11 +1082,11 @@ fn test_lifetime_or() {
     // let life_marker_2 = TestStruct;
 
     {
-        let observable = Create::new(|observer: BoxedObserver<'_, _, String>| {
+        let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, _, String>| {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
-        let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);
+        let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 
         let (_, mut observer) = Checker::new();
         assert!(observer.on_next(&life_marker_2).is_continue());
@@ -1339,15 +1105,15 @@ fn test_lifetime_or_sub() {
     // let life_marker_sub = TestStruct;
 
     {
-        let observable = Create::new(
-            |observer: BoxedObserver<'_, Just<&TestStruct>, Infallible>| {
+        let observable = Create::shared_boxed(
+            |observer: SendBoxedObserver<'_, Just<&TestStruct>, Infallible>| {
                 life_marker_or = Some(observer);
                 Subscription::new(CallbackDisposal::new(|| {
                     life_marker_sub.consume_ref();
                 }))
             },
         );
-        let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);
+        let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 
         let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
@@ -1356,7 +1122,7 @@ fn test_lifetime_or_sub() {
 
 #[test]
 fn test_clone() {
-    let observable = Create::new(|mut observer| {
+    let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
@@ -1368,8 +1134,8 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, Just<i32>, String> = PublishSubject::default();
-    let observable = subject.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);
+    let (_, observable, _) = test_channel::<'_, Just<i32>, String>();
+    let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -1379,8 +1145,8 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, Just<i32>, Infallible> = PublishSubject::default();
-    let observable = subject.retry(RetryAction::<_, PublishSubject<'_, _, _>>::Stop);
+    let (_, observable, _) = test_channel::<'_, Just<i32>, Infallible>();
+    let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
 
     observable.filter(|_| true);
 }

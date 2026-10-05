@@ -3,10 +3,10 @@
 
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, DisposableExt};
-use crate::utils::mutable::{Mutable, MutableExt, MutableHelper};
-use crate::utils::types::{MaybeSend, Shared, WeakShared};
+use crate::thread_mode::ThreadMode;
+use crate::thread_mode::mutable::{MutableExt, MutableHelper};
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -55,26 +55,37 @@ impl<I> Amb<I> {
 }
 
 delegate_disposal!(
-    Disposal<D>,
-    AmbDisposal<D>,
-    where D: Disposable
+    Disposal<M, D>,
+    AmbDisposal<M, D>,
+    where M: ThreadMode, D: Disposable
 );
 
-impl<'or, T, E, OE, I> Observable<'or, T, E> for Amb<I>
+impl<T, E, OE, I> ObservableTypes for Amb<I>
 where
     I: IntoIterator<Item = OE>,
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
-    type D = Disposal<OE::D>;
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
+    type D = Disposal<OE::Mode, OE::D>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, I, OR> Observable<OR> for Amb<I>
+where
+    OR: Observer<T, E>,
+    I: IntoIterator<Item = OE>,
+    OE: Observable<
+            AmbObserver<<OE as ObservableTypes>::Mode, <OE as ObservableTypes>::D, OR>,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let sources = self.sources.into_iter();
         let minimum_source_count = sources.size_hint().0;
-        let observer = Shared::new(Mutable::new(Some(observer)));
-        let context = Shared::new(Mutable::new(AmbState::Racing(Vec::with_capacity(
-            minimum_source_count,
-        ))));
+        let observer = OE::Mode::ptr(Some(observer));
+        let context = OE::Mode::ptr(AmbState::Racing(Vec::with_capacity(minimum_source_count)));
 
         let mut has_sources = false;
         for source in sources {
@@ -84,7 +95,7 @@ where
             };
             let amb_observer = AmbObserver(AmbObserverState::Racing {
                 observer: observer.clone(),
-                context: Shared::downgrade(&context),
+                context: OE::Mode::downgrade(&context),
                 key,
             });
             let subscription = source.subscribe(amb_observer);
@@ -106,7 +117,7 @@ where
     }
 }
 
-enum AmbState<D: Disposable> {
+pub enum AmbState<D: Disposable> {
     Racing(Vec<Option<Subscription<D>>>),
     Won {
         key: usize,
@@ -115,9 +126,10 @@ enum AmbState<D: Disposable> {
     Stopped,
 }
 
-fn reserve_subscription_slot<D>(context: &Mutable<AmbState<D>>) -> Option<usize>
+fn reserve_subscription_slot<D, P>(context: &P) -> Option<usize>
 where
     D: Disposable,
+    P: MutableHelper<Value = AmbState<D>>,
 {
     context.with_mut(|state| match state {
         AmbState::Racing(subscriptions) => {
@@ -129,13 +141,10 @@ where
     })
 }
 
-fn store_subscription<D>(
-    context: &Mutable<AmbState<D>>,
-    key: usize,
-    subscription: Subscription<D>,
-) -> bool
+fn store_subscription<D, P>(context: &P, key: usize, subscription: Subscription<D>) -> bool
 where
     D: Disposable,
+    P: MutableHelper<Value = AmbState<D>>,
 {
     // Wrapped in an `Option` so that the branches which do not store the subscription leave it to
     // be dropped outside the lock.
@@ -170,13 +179,11 @@ where
     keep_subscribing
 }
 
-fn try_win<D, OR>(
-    context: &Mutable<AmbState<D>>,
-    shared_observer: &Mutable<Option<OR>>,
-    key: usize,
-) -> Option<OR>
+fn try_win<D, OR, P, PO>(context: &P, shared_observer: &PO, key: usize) -> Option<OR>
 where
     D: Disposable,
+    P: MutableHelper<Value = AmbState<D>>,
+    PO: MutableHelper<Value = Option<OR>>,
 {
     let losing_subscriptions = context.with_mut(|state| {
         if !matches!(state, AmbState::Racing(_)) {
@@ -206,20 +213,21 @@ where
     Some(observer)
 }
 
-enum AmbObserverState<D: Disposable, OR> {
+enum AmbObserverState<M: ThreadMode, D: Disposable, OR> {
     Racing {
-        observer: Shared<Mutable<Option<OR>>>,
-        context: WeakShared<Mutable<AmbState<D>>>,
+        observer: M::Ptr<Option<OR>>,
+        context: M::Weak<AmbState<D>>,
         key: usize,
     },
     Won(OR),
     Lost,
 }
 
-struct AmbObserver<D: Disposable, OR>(AmbObserverState<D, OR>);
+pub struct AmbObserver<M: ThreadMode, D: Disposable, OR>(AmbObserverState<M, D, OR>);
 
-impl<T, E, D, OR> Observer<T, E> for AmbObserver<D, OR>
+impl<M, T, E, D, OR> Observer<T, E> for AmbObserver<M, D, OR>
 where
+    M: ThreadMode,
     D: Disposable,
     OR: Observer<T, E>,
 {
@@ -241,7 +249,7 @@ where
         else {
             unreachable!()
         };
-        let Some(shared_context) = context.upgrade() else {
+        let Some(shared_context) = M::upgrade(&context) else {
             return Flow::Stop;
         };
         let Some(mut observer) = try_win(&shared_context, &shared_observer, key) else {
@@ -264,7 +272,7 @@ where
                 context,
                 key,
             } => {
-                let Some(shared_context) = context.upgrade() else {
+                let Some(shared_context) = M::upgrade(&context) else {
                     return;
                 };
                 let Some(observer) = try_win(&shared_context, &shared_observer, key) else {
@@ -278,10 +286,11 @@ where
     }
 }
 
-struct AmbDisposal<D: Disposable>(Shared<Mutable<AmbState<D>>>);
+pub struct AmbDisposal<M: ThreadMode, D: Disposable>(M::Ptr<AmbState<D>>);
 
-impl<D> Disposable for AmbDisposal<D>
+impl<M, D> Disposable for AmbDisposal<M, D>
 where
+    M: ThreadMode,
     D: Disposable,
 {
     fn dispose(self) {

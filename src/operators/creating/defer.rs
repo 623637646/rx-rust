@@ -1,8 +1,7 @@
 //! The [`Defer`] source.
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::Observer,
 };
 use educe::Educe;
@@ -44,14 +43,24 @@ impl<F> Defer<F> {
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for Defer<F>
+impl<T, E, OE, F> ObservableTypes for Defer<F>
 where
     F: FnOnce() -> OE,
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for Defer<F>
+where
+    OR: Observer<T, E>,
+    F: FnOnce() -> OE,
+    OE: Observable<OR, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observable = self.0();
         observable.subscribe(observer)
     }

@@ -1,10 +1,9 @@
 //! The [`FromTryStream`] source.
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
-    observer::{Flow, Observer, Termination},
-    scheduler::Scheduler,
+    observable::{Observable, ObservableTypes, Subscription},
+    observer::{Observer, Termination},
+    scheduler::{Scheduler, SchedulerTypes, StreamThenContext, Task},
 };
 use educe::Educe;
 use futures::Stream;
@@ -33,14 +32,14 @@ use futures::Stream;
 ///     use std::sync::{Arc, Mutex};
 ///     use tokio::time::{sleep, Duration};
 ///
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
 ///     let stream = stream::iter([Ok(10), Ok(20), Err("boom"), Ok(30)]);
 ///
-///     let subscription = FromTryStream::new(stream, handle).subscribe_with_callback(
+///     let subscription = FromTryStream::new(stream, scheduler).subscribe_with_callback(
 ///         move |value| values_observer.lock().unwrap().push(value),
 ///         move |termination| terminations_observer
 ///             .lock()
@@ -72,46 +71,47 @@ impl<SM, S> FromTryStream<SM, S> {
     }
 }
 
-impl<T, E, SM, S> Observable<'static, T, E> for FromTryStream<SM, S>
+impl<T, E, SM, S> ObservableTypes for FromTryStream<SM, S>
 where
-    SM: Stream<Item = Result<T, E>> + MaybeSend + 'static,
-    S: Scheduler,
+    SM: Stream<Item = Result<T, E>>,
+    S: SchedulerTypes,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = S::Mode;
     type D = S::D;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
-        let mut observer = Some(observer);
-        self.scheduler
-            .schedule_stream(self.stream, move |result| match result {
-                Some(Ok(value)) => {
-                    let flow = match observer.as_mut() {
-                        Some(observer) => observer.on_next(value),
-                        None => Flow::Stop,
-                    };
-                    if flow.is_stop() {
-                        // The observer ended its own stream: release it here and tell the
-                        // scheduler to stop polling the stream, so an infinite one is not driven
-                        // for values that have nothing to be delivered to.
-                        drop(observer.take());
-                    }
-                    flow.is_continue()
-                }
+impl<T, E, SM, S, OR> Observable<OR> for FromTryStream<SM, S>
+where
+    OR: Observer<T, E>,
+    SM: Stream<Item = Result<T, E>>,
+    S: Scheduler<StreamThenContext<Option<OR>, Result<T, E>>, SM>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        let task = Task::from_stream_then(
+            Some(observer),
+            self.stream,
+            |observer, result| match result {
+                // The observer ending its own stream stops polling it, so an infinite stream is
+                // not driven for values that have nothing to be delivered to.
+                Ok(value) => observer
+                    .as_mut()
+                    .is_some_and(|observer| observer.on_next(value).is_continue()),
                 // An error is terminal for an Observable, so the stream is left wherever it is.
-                Some(Err(error)) => {
+                Err(error) => {
                     if let Some(observer) = observer.take() {
-                        observer.on_termination(Termination::Error(error))
+                        observer.on_termination(Termination::Error(error));
                     }
                     false
                 }
-                None => {
-                    if let Some(observer) = observer.take() {
-                        observer.on_termination(Termination::Completed)
-                    }
-                    false
+            },
+            |observer| {
+                if let Some(observer) = observer {
+                    observer.on_termination(Termination::Completed);
                 }
-            })
+            },
+        );
+        self.scheduler.run_task(task, None)
     }
 }

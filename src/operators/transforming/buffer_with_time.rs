@@ -1,19 +1,20 @@
 //! The [`BufferWithTime`] operator.
 
+use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
+    self, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::Scheduler,
+    scheduler::{PeriodicContext, Scheduler, SchedulerTypes, Task},
+    thread_mode::{Joined, ThreadMode},
 };
 use educe::Educe;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, after a specified time interval.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
@@ -34,10 +35,10 @@ use std::time::Duration;
 ///         },
 ///     };
 ///     use std::sync::{Arc, Mutex};
-///     use std::time::Duration;
+///     use std::time::{Duration, Instant};
 ///     use tokio::time::sleep;
 ///
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
@@ -46,7 +47,7 @@ use std::time::Duration;
 ///     let subscription = BufferWithTime::new(
 ///         FromIter::new(vec![1, 2, 3]),
 ///         Duration::from_millis(5),
-///         handle.clone(),
+///         scheduler.clone(),
 ///         None,
 ///     )
 ///     .subscribe_with_callback(
@@ -69,41 +70,83 @@ use std::time::Duration;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct BufferWithTime<'or, OE, S> {
+pub struct BufferWithTime<OE, S> {
     source: OE,
     time_span: Duration,
     scheduler: S,
     delay: Option<Duration>,
-    _marker: MarkerType<&'or ()>,
 }
 
-impl<'or, OE, S> BufferWithTime<'or, OE, S> {
-    /// Creates a [`BufferWithTime`] over `source`.
+impl<OE, S> BufferWithTime<OE, S> {
+    /// Creates a [`BufferWithTime`] over `source`;
+    /// [`ObservableExt::buffer_with_time`](crate::observable::ObservableExt::buffer_with_time) is
+    /// the fluent form.
     pub fn new(source: OE, time_span: Duration, scheduler: S, delay: Option<Duration>) -> Self {
         Self {
             source,
             time_span,
             scheduler,
             delay,
-            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, T, E, OE, S> Observable<'static, Vec<T>, E> for BufferWithTime<'or, OE, S>
-where
-    T: MaybeSend + 'static,
-    E: MaybeSend + 'static,
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'static,
-    S: Scheduler + Clone + MaybeSend + 'static,
-{
-    type D = subscribe_with_context::OwningDisposal<'or>;
+/// The thread mode of a [`BufferWithTime`]: the timer's thread emits the buffers, the source's
+/// the last one.
+pub type BufferWithTimeMode<OE, S> =
+    Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
-    fn subscribe(
-        self,
-        observer: impl Observer<Vec<T>, E> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
+/// The source subscription a [`BufferWithTime`] context owns: the timer, then the source.
+pub type BufferWithTimeSources<OE, S> =
+    ChainDisposal<<S as SchedulerTypes>::D, <OE as ObservableTypes>::D>;
+
+/// The task of a [`BufferWithTime`] timer: it holds the context weakly, so that it does not keep
+/// the observer alive once the subscription is gone.
+pub type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
+    WeakSubscriptionContext<
+        BufferWithTimeMode<OE, S>,
+        Vec<T>,
+        E,
+        OR,
+        Vec<T>,
+        BufferWithTimeSources<OE, S>,
+    >,
+>;
+
+impl<T, E, OE, S> ObservableTypes for BufferWithTime<OE, S>
+where
+    OE: ObservableTypes<Item = T, Error = E>,
+    S: SchedulerTypes,
+{
+    type Item = Vec<T>;
+    type Error = E;
+    type Mode = BufferWithTimeMode<OE, S>;
+    type D = subscribe_with_context::ContextDisposal<
+        BufferWithTimeMode<OE, S>,
+        Vec<T>,
+        E,
+        Vec<T>,
+        BufferWithTimeSources<OE, S>,
+    >;
+}
+
+impl<T, E, OE, S, OR> Observable<OR> for BufferWithTime<OE, S>
+where
+    OR: Observer<Vec<T>, E>,
+    OE: Observable<
+            BufferWithTimeObserver<
+                BufferWithTimeMode<OE, S>,
+                T,
+                E,
+                OR,
+                BufferWithTimeSources<OE, S>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    S: Scheduler<BufferWithTimeTask<T, E, OR, OE, S>>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         subscribe_with_context_owning_source(observer, Vec::new(), |context| {
             let sub = self
                 .source
@@ -114,14 +157,15 @@ where
     }
 }
 
-struct BufferWithTimeObserver<T, E, OR, D: Disposable>(
-    SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>,
+pub struct BufferWithTimeObserver<M: ThreadMode, T, E, OR, D: Disposable>(
+    SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
 );
 
-impl<T, E, OR, D> Observer<T, E> for BufferWithTimeObserver<T, E, OR, D>
+impl<M, T, E, OR, D> Observer<T, E> for BufferWithTimeObserver<M, T, E, OR, D>
 where
+    M: ThreadMode,
     OR: Observer<Vec<T>, E>,
-    D: Disposable + MaybeSend + 'static,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.0.update_flow(|values| {
@@ -149,22 +193,23 @@ where
     }
 }
 
-fn setup_emit_timer<T, E, OR, D, S>(
-    context: SubscriptionContext<Vec<T>, E, OR, Vec<T>, D>,
+fn setup_emit_timer<M, T, E, OR, D, S>(
+    context: SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
     scheduler: S,
     time_span: Duration,
     delay: Option<Duration>,
 ) -> BoundDropDisposal<S::D>
 where
-    T: MaybeSend + 'static,
-    E: MaybeSend + 'static,
-    OR: Observer<Vec<T>, E> + MaybeSend + 'static,
-    D: Disposable + MaybeSend + 'static,
-    S: Scheduler + Clone + MaybeSend + 'static,
+    M: ThreadMode,
+    OR: Observer<Vec<T>, E>,
+    D: Disposable,
+    S: Scheduler<PeriodicContext<WeakSubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>>>,
 {
-    let weak_context = context.downgrade();
-    scheduler.schedule_periodically(
-        move |_| {
+    // The context owns this task through its source subscription, so the task only holds a weak
+    // reference back: a strong one would form a cycle and leak the subscription.
+    let task = Task::periodic(
+        context.downgrade(),
+        |weak_context, _| {
             let Some(context) = weak_context.upgrade() else {
                 return false;
             };
@@ -178,6 +223,8 @@ where
                 .unwrap_or(false)
         },
         time_span,
-        delay,
-    )
+        // Fixed-rate, anchored to the time of the subscription plus `delay`.
+        Some(Instant::now() + delay.unwrap_or_default()),
+    );
+    scheduler.run_task(task, delay)
 }

@@ -1,5 +1,7 @@
-//! The [`Mutable`] lock — `RefCell` in the single-threaded build, `Mutex` otherwise — and the
-//! only sanctioned way to reach through it: a callback that gets a reference and returns.
+//! The locks — `RefCell` for a [`Local`](crate::thread_mode::Local) state, `Mutex` for a
+//! [`Shared`](crate::thread_mode::Shared) one, each behind the pointer
+//! [`ThreadMode::Ptr`](crate::thread_mode::ThreadMode::Ptr) picks — and the only sanctioned way to
+//! reach through them: a callback that gets a reference and returns.
 //!
 //! # Rule 1: the guard must not outlive the operation
 //!
@@ -40,9 +42,10 @@
 //!
 //! # Examples
 //! ```rust
-//! use rx_rust::utils::mutable::{Mutable, MutableExt, MutableHelper};
+//! use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
+//! use std::sync::Mutex;
 //!
-//! let counter = Mutable::new(vec![1, 2, 3]);
+//! let counter = Mutex::new(vec![1, 2, 3]);
 //! let sum = counter.with_ref(|values| values.iter().sum::<i32>());
 //! assert_eq!(sum, 6);
 //!
@@ -54,7 +57,16 @@
 
 mod reentrancy;
 
-/// The single entry point to a [`Mutable`], for both backends.
+use std::{
+    cell::{Cell, RefCell},
+    rc::Rc,
+    sync::{
+        Arc, Mutex, PoisonError,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+
+/// The single entry point to a lock (`RefCell` or `Mutex`), for both backends.
 ///
 /// The callback gets a plain reference, never the guard, so the lock cannot be held past the
 /// callback, and whatever the callback returns lives — and is dropped — outside it. See the
@@ -69,7 +81,7 @@ pub trait MutableHelper {
     fn with_ref<R>(&self, callback: impl FnOnce(&Self::Value) -> R) -> R;
 }
 
-/// The handful of one-shot operations that cover most uses of a [`Mutable`].
+/// The handful of one-shot operations that cover most uses of a lock.
 ///
 /// Each of them takes the lock exactly once and hands every value it produces back to the caller,
 /// so the value is used — and dropped — after the lock has been released.
@@ -113,85 +125,124 @@ pub trait MutableExt: MutableHelper {
 
 impl<M: MutableHelper + ?Sized> MutableExt for M {}
 
-/// A lock-free flag: [`MutableBool`] is a `Cell<bool>` in the single-threaded build and an
-/// `AtomicBool` otherwise.
+/// A lock-free flag: a `Cell<bool>` for a [`Local`](crate::thread_mode::Local) state and an
+/// `AtomicBool` for a [`Shared`](crate::thread_mode::Shared) one, and the `Rc` / `Arc` pointing to
+/// them that [`ThreadMode::Flag`](crate::thread_mode::ThreadMode::Flag) picks.
 pub trait MutableBoolHelper {
     /// The current value.
     fn read(&self) -> bool;
     /// Sets the value.
     fn write(&self, value: bool);
-    /// Sets the value to `value` and returns whether that changed it.
-    fn change_if_not_equal(&self, value: bool) -> bool;
+    /// Sets the value to `value` and returns whether that changed it, as one atomic step for the
+    /// `AtomicBool`: of two threads setting the same value, exactly one sees `true`.
+    ///
+    /// Not `swap` / `replace`: `AtomicBool::swap` and `Cell::replace` are inherent methods, which
+    /// would win method resolution over this one.
+    fn set_if_changed(&self, value: bool) -> bool;
 }
 
-cfg_if::cfg_if! {
-    if #[cfg(feature = "single-threaded")] {
-        use std::cell::{Cell, RefCell};
+impl<T> MutableHelper for RefCell<T> {
+    type Value = T;
 
-        /// The lock: a `RefCell` in the single-threaded build, a `Mutex` otherwise. Reach through
-        /// it with [`MutableHelper`] and [`MutableExt`] only.
-        pub type Mutable<T> = RefCell<T>;
+    fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
+        let _held = reentrancy::held_lock(self);
+        callback(&mut self.borrow_mut())
+    }
+    fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
+        let _held = reentrancy::held_lock(self);
+        callback(&self.borrow())
+    }
+}
 
-        impl<T> MutableHelper for RefCell<T> {
-            type Value = T;
+impl<T> MutableHelper for Mutex<T> {
+    type Value = T;
 
-            fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
-                let _held = reentrancy::held_lock(self);
-                callback(&mut self.borrow_mut())
-            }
-            fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
-                let _held = reentrancy::held_lock(self);
-                callback(&self.borrow())
-            }
-        }
+    fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
+        let _held = reentrancy::held_lock(self);
+        callback(&mut self.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+    fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
+        let _held = reentrancy::held_lock(self);
+        callback(&self.lock().unwrap_or_else(PoisonError::into_inner))
+    }
+}
 
-        /// The flag: a `Cell<bool>` in the single-threaded build, an `AtomicBool` otherwise.
-        pub type MutableBool = Cell<bool>;
-        impl MutableBoolHelper for Cell<bool> {
-            fn read(&self) -> bool {
-                self.get()
-            }
-            fn write(&self, value: bool) {
-                self.set(value)
-            }
-            fn change_if_not_equal(&self, value: bool) -> bool {
-                let old = self.replace(value);
-                old != value
-            }
-        }
-    } else {
-        use std::sync::{Mutex, PoisonError};
-        use std::sync::atomic::{AtomicBool, Ordering};
+/// Locking the `Rc` a [`Local`](crate::thread_mode::Local) state lives behind locks the `RefCell`
+/// it points to.
+impl<T> MutableHelper for Rc<RefCell<T>> {
+    type Value = T;
 
-        /// The lock: a `Mutex` in the multi-threaded build, a `RefCell` otherwise. Reach through
-        /// it with [`MutableHelper`] and [`MutableExt`] only.
-        pub type Mutable<T> = Mutex<T>;
+    fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
+        MutableHelper::with_mut(&**self, callback)
+    }
+    fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
+        MutableHelper::with_ref(&**self, callback)
+    }
+}
 
-        impl<T> MutableHelper for Mutex<T> {
-            type Value = T;
+/// Locking the `Arc` a [`Shared`](crate::thread_mode::Shared) state lives behind locks the `Mutex`
+/// it points to.
+impl<T> MutableHelper for Arc<Mutex<T>> {
+    type Value = T;
 
-            fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
-                let _held = reentrancy::held_lock(self);
-                callback(&mut self.lock().unwrap_or_else(PoisonError::into_inner))
-            }
-            fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
-                let _held = reentrancy::held_lock(self);
-                callback(&self.lock().unwrap_or_else(PoisonError::into_inner))
-            }
-        }
+    fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
+        MutableHelper::with_mut(&**self, callback)
+    }
+    fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
+        MutableHelper::with_ref(&**self, callback)
+    }
+}
 
-        /// The flag: an `AtomicBool` in the multi-threaded build, a `Cell<bool>` otherwise.
-        pub type MutableBool = AtomicBool;
-        impl MutableBoolHelper for MutableBool {
-            fn read(&self) -> bool {
-                self.load(Ordering::SeqCst)
-            }
-            fn write(&self, value: bool) {
-                self.store(value, Ordering::SeqCst)
-            }
-            fn change_if_not_equal(&self, value: bool) -> bool {
-                self.compare_exchange(!value, value, Ordering::SeqCst, Ordering::SeqCst).is_ok()
-            }
-        }
+impl MutableBoolHelper for Cell<bool> {
+    fn read(&self) -> bool {
+        self.get()
+    }
+    fn write(&self, value: bool) {
+        self.set(value)
+    }
+    fn set_if_changed(&self, value: bool) -> bool {
+        let old = self.replace(value);
+        old != value
+    }
+}
+
+impl MutableBoolHelper for AtomicBool {
+    fn read(&self) -> bool {
+        self.load(Ordering::SeqCst)
+    }
+    fn write(&self, value: bool) {
+        self.store(value, Ordering::SeqCst)
+    }
+    fn set_if_changed(&self, value: bool) -> bool {
+        self.compare_exchange(!value, value, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+    }
+}
+
+/// The `Rc` a [`Local`](crate::thread_mode::Local) flag is shared through reads and writes the
+/// `Cell` it points to.
+impl MutableBoolHelper for Rc<Cell<bool>> {
+    fn read(&self) -> bool {
+        (**self).read()
+    }
+    fn write(&self, value: bool) {
+        (**self).write(value)
+    }
+    fn set_if_changed(&self, value: bool) -> bool {
+        (**self).set_if_changed(value)
+    }
+}
+
+/// The `Arc` a [`Shared`](crate::thread_mode::Shared) flag is shared through reads and writes the
+/// `AtomicBool` it points to.
+impl MutableBoolHelper for Arc<AtomicBool> {
+    fn read(&self) -> bool {
+        (**self).read()
+    }
+    fn write(&self, value: bool) {
+        (**self).write(value)
+    }
+    fn set_if_changed(&self, value: bool) -> bool {
+        (**self).set_if_changed(value)
     }
 }

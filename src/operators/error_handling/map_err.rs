@@ -1,11 +1,10 @@
 //! The [`MapErr`] operator, behind
 //! [`ObservableExt::map_err`](crate::observable::ObservableExt::map_err).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
-    utils::types::MarkerType,
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -43,9 +42,9 @@ pub struct MapErr<E, OE, F> {
 impl<E, OE, F> MapErr<E, OE, F> {
     /// Creates a [`MapErr`] over `source`;
     /// [`ObservableExt::map_err`](crate::observable::ObservableExt::map_err) is the fluent form.
-    pub fn new<'or, T, E1>(source: OE, callback: F) -> Self
+    pub fn new<T, E1>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnOnce(E) -> E1,
     {
         Self {
@@ -56,14 +55,24 @@ impl<E, OE, F> MapErr<E, OE, F> {
     }
 }
 
-impl<'or, T, E, E1, OE, F> Observable<'or, T, E1> for MapErr<E, OE, F>
+impl<T, E, E1, OE, F> ObservableTypes for MapErr<E, OE, F>
 where
-    OE: Observable<'or, T, E>,
-    F: FnOnce(E) -> E1 + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    F: FnOnce(E) -> E1,
 {
+    type Item = T;
+    type Error = E1;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E1> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, E1, OE, F, OR> Observable<OR> for MapErr<E, OE, F>
+where
+    OR: Observer<T, E1>,
+    OE: Observable<MapErrObserver<OR, F>, Item = T, Error = E>,
+    F: FnOnce(E) -> E1,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source.subscribe(MapErrObserver {
             observer,
             callback: self.callback,
@@ -71,7 +80,7 @@ where
     }
 }
 
-struct MapErrObserver<OR, F> {
+pub struct MapErrObserver<OR, F> {
     observer: OR,
     callback: F,
 }

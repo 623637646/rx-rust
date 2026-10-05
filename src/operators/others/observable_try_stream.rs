@@ -3,10 +3,11 @@
 //! [`ObservableExt::into_try_stream_with`](crate::observable::ObservableExt::into_try_stream_with).
 
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
-    utils::mutable::{Mutable, MutableHelper},
-    utils::types::{MaybeSend, Shared},
+    thread_mode::mutable::MutableHelper,
+    thread_mode::{Shared, ThreadMode},
+    utils::lazy_subscription::LazySubscription,
 };
 use educe::Educe;
 use futures::Stream;
@@ -18,7 +19,7 @@ use std::{
 
 #[derive(Educe)]
 #[educe(Debug)]
-struct ObservableTryStreamContext<E, B> {
+pub struct ObservableTryStreamContext<E, B> {
     buffer: B,
     waker: Option<Waker>,
     termination: Option<Termination<E>>,
@@ -61,18 +62,23 @@ struct ObservableTryStreamContext<E, B> {
 /// ```
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ObservableTryStream<'or, T, E, OE, B = Unbounded<T>>
+pub struct ObservableTryStream<T, E, OE, B = Unbounded<T>>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
-    source: Option<OE>,
-    sub: Option<Subscription<OE::D>>,
-    context: Shared<Mutable<ObservableTryStreamContext<E, B>>>,
+    #[educe(Debug(ignore))]
+    subscription: LazySubscription<OE, Subscription<OE::D>>,
+    /// Always behind the thread-safe pointer, whatever the source's mode: every synchronous source
+    /// is `Local`, and many of them are `Send`, so a pointer picked from the mode would make the
+    /// stream over them `!Send` and keep it out of a multi-threaded executor. A source that really
+    /// is bound to its thread keeps the stream `!Send` by itself.
+    #[educe(Debug(ignore))]
+    context: <Shared as ThreadMode>::Ptr<ObservableTryStreamContext<E, B>>,
 }
 
-impl<'or, T, E, OE> ObservableTryStream<'or, T, E, OE>
+impl<T, E, OE> ObservableTryStream<T, E, OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
     /// Buffers every item until it is polled; see [`Unbounded`].
     pub fn new(source: OE) -> Self {
@@ -80,9 +86,9 @@ where
     }
 }
 
-impl<'or, T, E, OE, B> ObservableTryStream<'or, T, E, OE, B>
+impl<T, E, OE, B> ObservableTryStream<T, E, OE, B>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
     B: StreamBuffer<T>,
 {
     /// Keeps the items that arrive between two polls in `buffer`, which decides what a source
@@ -91,28 +97,25 @@ where
     /// [`Bounded`] a fixed number of them.
     pub fn with_buffer(source: OE, buffer: B) -> Self {
         Self {
-            source: Some(source),
-            sub: None,
-            context: Shared::new(Mutable::new(ObservableTryStreamContext {
+            subscription: LazySubscription::new(source),
+            context: Shared::ptr(ObservableTryStreamContext {
                 buffer,
                 waker: None,
                 termination: None,
-            })),
+            }),
         }
     }
 }
 
-impl<'or, T, E, OE, B> Unpin for ObservableTryStream<'or, T, E, OE, B> where
-    OE: Observable<'or, T, E>
+impl<T, E, OE, B> Unpin for ObservableTryStream<T, E, OE, B> where
+    OE: ObservableTypes<Item = T, Error = E>
 {
 }
 
-impl<'or, T, E, OE, B> Stream for ObservableTryStream<'or, T, E, OE, B>
+impl<T, E, OE, B> Stream for ObservableTryStream<T, E, OE, B>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
-    B: StreamBuffer<T> + MaybeSend + 'or,
+    OE: Observable<ObservableTryStreamObserver<Shared, E, B>, Item = T, Error = E>,
+    B: StreamBuffer<T>,
 {
     type Item = Result<B::Item, E>;
 
@@ -120,13 +123,11 @@ where
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        if let Some(source) = self.source.take() {
-            let observer = ObservableTryStreamObserver {
-                context: self.context.clone(),
-            };
-            let sub = source.subscribe(observer);
-            self.sub = Some(sub);
-        }
+        let this = &mut *self;
+        this.subscription
+            .subscribe_once(|| ObservableTryStreamObserver {
+                context: this.context.clone(),
+            });
 
         let waker = cx.waker().clone();
         // The waker this one replaces is handed back, because dropping a `Waker` runs the
@@ -155,17 +156,17 @@ where
         if matches!(poll, Poll::Ready(None) | Poll::Ready(Some(Err(_)))) {
             // The stream is over, so the source is released now instead of whenever the stream
             // itself is dropped.
-            self.sub = None;
+            self.subscription.release();
         }
         poll
     }
 }
 
-struct ObservableTryStreamObserver<E, B> {
-    context: Shared<Mutable<ObservableTryStreamContext<E, B>>>,
+pub struct ObservableTryStreamObserver<M: ThreadMode, E, B> {
+    context: M::Ptr<ObservableTryStreamContext<E, B>>,
 }
 
-impl<T, E, B> Observer<T, E> for ObservableTryStreamObserver<E, B>
+impl<M: ThreadMode, T, E, B> Observer<T, E> for ObservableTryStreamObserver<M, E, B>
 where
     B: StreamBuffer<T>,
 {
@@ -244,7 +245,7 @@ where
 ///     }
 /// }
 ///
-/// let mut subject = PublishSubject::<_, Infallible>::new();
+/// let mut subject = PublishSubject::<_, Infallible, rx_rust::thread_mode::Local>::local();
 /// let mut stream = subject.clone().into_stream_with(Sum::default());
 /// assert_eq!(stream.next().now_or_never(), None); // subscribes
 ///

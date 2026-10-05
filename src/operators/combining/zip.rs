@@ -1,13 +1,15 @@
 //! The [`Zip`] operator, behind [`ObservableExt::zip`](crate::observable::ObservableExt::zip).
 
+use crate::disposable::chain_disposal::ChainDisposal;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -52,31 +54,61 @@ pub struct Zip<OE1, OE2> {
 impl<OE1, OE2> Zip<OE1, OE2> {
     /// Creates a [`Zip`] over `source_1` and `source_2`;
     /// [`ObservableExt::zip`](crate::observable::ObservableExt::zip) is the fluent form.
-    pub fn new<'or, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T1, E>,
-        OE2: Observable<'or, T2, E>,
+        OE1: ObservableTypes<Item = T1, Error = E>,
+        OE2: ObservableTypes<Item = T2, Error = E>,
     {
         Self { source_1, source_2 }
     }
 }
 
-impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for Zip<OE1, OE2>
+impl<T1, T2, E, OE1, OE2> ObservableTypes for Zip<OE1, OE2>
 where
-    T1: MaybeSend + 'or,
-    T2: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE1: Observable<'or, T1, E>,
-    OE1::D: MaybeSend + 'or,
-    OE2: Observable<'or, T2, E>,
-    OE2::D: MaybeSend + 'or,
+    OE1: ObservableTypes<Item = T1, Error = E>,
+    OE2: ObservableTypes<Item = T2, Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = (T1, T2);
+    type Error = E;
+    type Mode = Joined<OE1::Mode, OE2::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE1::Mode, OE2::Mode>,
+        (T1, T2),
+        E,
+        Model<T1, T2>,
+        ChainDisposal<OE2::D, OE1::D>,
+    >;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<(T1, T2), E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T1, T2, E, OE1, OE2, OR> Observable<OR> for Zip<OE1, OE2>
+where
+    OR: Observer<(T1, T2), E>,
+    OE1: Observable<
+            ZipObserver1<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                T1,
+                T2,
+                E,
+                OR,
+                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T1,
+            Error = E,
+        >,
+    OE2: Observable<
+            ZipObserver2<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                T1,
+                T2,
+                E,
+                OR,
+                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T2,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model {
             first: (VecDeque::new(), false),
             second: (VecDeque::new(), false),
@@ -89,18 +121,18 @@ where
     }
 }
 
-struct Model<T1, T2> {
+pub struct Model<T1, T2> {
     first: (VecDeque<T1>, bool),  // bool means completed
     second: (VecDeque<T2>, bool), // bool means completed
 }
 
 macro_rules! impl_zip_observer {
     ($name:ident, $input_t:ty, $this_field:ident, $other_field:ident, $make_pair:expr) => {
-        struct $name<T1, T2, E, OR, D: Disposable>(
-            SubscriptionContext<(T1, T2), E, OR, Model<T1, T2>, D>,
+        pub struct $name<M: ThreadMode, T1, T2, E, OR, D: Disposable>(
+            SubscriptionContext<M, (T1, T2), E, OR, Model<T1, T2>, D>,
         );
 
-        impl<T1, T2, E, OR, D> Observer<$input_t, E> for $name<T1, T2, E, OR, D>
+        impl<M: ThreadMode, T1, T2, E, OR, D> Observer<$input_t, E> for $name<M, T1, T2, E, OR, D>
         where
             OR: Observer<(T1, T2), E>,
             D: Disposable,

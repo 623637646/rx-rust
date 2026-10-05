@@ -1,14 +1,17 @@
 //! The [`SequenceEqual`] operator, behind
 //! [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal).
 
+use crate::disposable::chain_disposal::ChainDisposal;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
+use crate::utils::MarkerType;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::{MarkerType, MaybeSend};
 use crate::{
     disposable::Disposable,
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -55,10 +58,10 @@ pub struct SequenceEqual<T, OE1, OE2> {
 impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
     /// Creates a [`SequenceEqual`] over `source_1` and `source_2`;
     /// [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal) is the fluent form.
-    pub fn new<'or, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T, E>,
-        OE2: Observable<'or, T, E>,
+        OE1: ObservableTypes<Item = T, Error = E>,
+        OE2: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source_1,
@@ -68,21 +71,52 @@ impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
     }
 }
 
-impl<'or, T, E, OE1, OE2> Observable<'or, bool, E> for SequenceEqual<T, OE1, OE2>
+impl<T, E, OE1, OE2> ObservableTypes for SequenceEqual<T, OE1, OE2>
 where
-    T: PartialEq + MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
-    OE1::D: MaybeSend + 'or,
-    OE2: Observable<'or, T, E>,
-    OE2::D: MaybeSend + 'or,
+    T: PartialEq,
+    OE1: ObservableTypes<Item = T, Error = E>,
+    OE2: ObservableTypes<Item = T, Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = bool;
+    type Error = E;
+    type Mode = Joined<OE1::Mode, OE2::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE1::Mode, OE2::Mode>,
+        bool,
+        E,
+        Model<T>,
+        ChainDisposal<OE2::D, OE1::D>,
+    >;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<bool, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE1, OE2, OR> Observable<OR> for SequenceEqual<T, OE1, OE2>
+where
+    OR: Observer<bool, E>,
+    T: PartialEq,
+    OE1: Observable<
+            SequenceEqualObserver<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    OE2: Observable<
+            SequenceEqualObserver<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model {
             first: SourceState {
                 queue: VecDeque::new(),
@@ -109,22 +143,22 @@ where
     }
 }
 
-struct SourceState<T> {
+pub struct SourceState<T> {
     queue: VecDeque<T>,
     completed: bool,
 }
 
-struct Model<T> {
+pub struct Model<T> {
     first: SourceState<T>,
     second: SourceState<T>,
 }
 
-struct SequenceEqualObserver<T, E, OR, D: Disposable> {
-    context: SubscriptionContext<bool, E, OR, Model<T>, D>,
+pub struct SequenceEqualObserver<M: ThreadMode, T, E, OR, D: Disposable> {
+    context: SubscriptionContext<M, bool, E, OR, Model<T>, D>,
     is_first: bool,
 }
 
-impl<T, E, OR, D> Observer<T, E> for SequenceEqualObserver<T, E, OR, D>
+impl<M: ThreadMode, T, E, OR, D> Observer<T, E> for SequenceEqualObserver<M, T, E, OR, D>
 where
     OR: Observer<bool, E>,
     T: PartialEq,

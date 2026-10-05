@@ -1,10 +1,10 @@
 //! The [`Count`] operator, behind
 //! [`ObservableExt::count`](crate::observable::ObservableExt::count).
 
-use crate::utils::types::{MarkerType, MaybeSend};
+use crate::utils::MarkerType;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -46,9 +46,9 @@ pub struct Count<T, OE> {
 impl<T, OE> Count<T, OE> {
     /// Creates a [`Count`] over `source`;
     /// [`ObservableExt::count`](crate::observable::ObservableExt::count) is the fluent form.
-    pub fn new<'or, E>(source: OE) -> Self
+    pub fn new<E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source,
@@ -57,22 +57,28 @@ impl<T, OE> Count<T, OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, usize, E> for Count<T, OE>
+impl<T, E, OE> ObservableTypes for Count<T, OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = usize;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<usize, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Count<T, OE>
+where
+    OR: Observer<usize, E>,
+    OE: Observable<CountObserver<OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = CountObserver { observer, count: 0 };
         self.source.subscribe(observer)
     }
 }
 
-struct CountObserver<OR> {
+pub struct CountObserver<OR> {
     observer: OR,
     count: usize,
 }

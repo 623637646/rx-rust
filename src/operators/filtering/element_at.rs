@@ -1,10 +1,10 @@
 //! The [`ElementAt`] operator, behind
 //! [`ObservableExt::element_at`](crate::observable::ObservableExt::element_at).
 
-use crate::utils::types::MaybeSend;
+use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
@@ -51,14 +51,32 @@ impl<OE> ElementAt<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for ElementAt<OE>
+impl<T, E, OE> ObservableTypes for ElementAt<OE>
 where
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
-    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
+    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for ElementAt<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            ElementAtObserver<
+                AutoDisposeOnTerminationObserver<
+                    <OE as ObservableTypes>::Mode,
+                    OR,
+                    <OE as ObservableTypes>::D,
+                >,
+            >,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             self.source.subscribe(ElementAtObserver {
                 observer: Some(observer),
@@ -68,7 +86,7 @@ where
     }
 }
 
-struct ElementAtObserver<OR> {
+pub struct ElementAtObserver<OR> {
     observer: Option<OR>,
     index: usize,
 }

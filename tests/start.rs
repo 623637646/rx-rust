@@ -1,17 +1,18 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::observable::{Observable, ObservableExt};
 use rx_rust::operators::creating::start::Start;
-use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
-use rx_rust::utils::types::Shared;
+use rx_rust::thread_mode::mutable::MutableBoolHelper;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tests_utils::checker::Checker;
 
 #[test]
 fn test_completed() {
     let (checker, observer) = Checker::new();
-    let called = MutableBool::new(false);
+    let called = AtomicBool::new(false);
 
     // Custom operations
     let observable = Start::new(|| {
@@ -30,7 +31,7 @@ fn test_completed() {
 fn test_ref() {
     let value = 111;
     let (checker, observer) = Checker::new();
-    let called = MutableBool::new(false);
+    let called = AtomicBool::new(false);
 
     // Custom operations
     let observable = Start::new(|| {
@@ -49,7 +50,7 @@ fn test_ref() {
 fn test_mut_ref() {
     let mut value = 111;
     let (checker, observer) = Checker::new();
-    let called = MutableBool::new(false);
+    let called = AtomicBool::new(false);
 
     // Custom operations
     let observable = Start::new(|| {
@@ -74,9 +75,9 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
+    block_on(|scheduler| async move {
         let (checker, observer) = Checker::new();
-        let called = Shared::new(MutableBool::new(false));
+        let called = Arc::new(AtomicBool::new(false));
         let called_cloned = called.clone();
         // Custom operations
         let observable = Start::new(move || {
@@ -85,10 +86,9 @@ fn test_async() {
         });
 
         assert!(!called.read());
-        let _subscription = runtime
+        let _subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert!(called.read());
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
@@ -99,7 +99,7 @@ fn test_async() {
 fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
-    let called = MutableBool::new(false);
+    let called = AtomicBool::new(false);
 
     // Custom operations
     let observable = Start::new(|| {
@@ -123,7 +123,7 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::new();
-    let called = MutableBool::new(false);
+    let called = AtomicBool::new(false);
 
     // Custom operations
     let observable = Start::new(|| {

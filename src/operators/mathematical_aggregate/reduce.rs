@@ -1,12 +1,11 @@
 //! The [`Reduce`] operator, behind
 //! [`ObservableExt::reduce`](crate::observable::ObservableExt::reduce).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    utils::types::MarkerType,
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -49,9 +48,9 @@ pub struct Reduce<T, T1, OE, F> {
 impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
     /// Creates a [`Reduce`] over `source`;
     /// [`ObservableExt::reduce`](crate::observable::ObservableExt::reduce) is the fluent form.
-    pub fn new<'or, E>(source: OE, initial_value: T, callback: F) -> Self
+    pub fn new<E>(source: OE, initial_value: T, callback: F) -> Self
     where
-        OE: Observable<'or, T1, E>,
+        OE: ObservableTypes<Item = T1, Error = E>,
         F: FnMut(T, T1) -> T,
     {
         Self {
@@ -63,15 +62,24 @@ impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
     }
 }
 
-impl<'or, T, T1, E, OE, F> Observable<'or, T, E> for Reduce<T, T1, OE, F>
+impl<T, T1, E, OE, F> ObservableTypes for Reduce<T, T1, OE, F>
 where
-    T: MaybeSend + 'or,
-    OE: Observable<'or, T1, E>,
-    F: FnMut(T, T1) -> T + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T1, Error = E>,
+    F: FnMut(T, T1) -> T,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, T1, E, OE, F, OR> Observable<OR> for Reduce<T, T1, OE, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<ReduceObserver<T, OR, F>, Item = T1, Error = E>,
+    F: FnMut(T, T1) -> T,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = ReduceObserver {
             observer,
             value: Some(self.initial_value),
@@ -81,7 +89,7 @@ where
     }
 }
 
-struct ReduceObserver<T, OR, F> {
+pub struct ReduceObserver<T, OR, F> {
     observer: OR,
     /// `None` only once the callback has panicked, which takes the accumulator with it.
     value: Option<T>,

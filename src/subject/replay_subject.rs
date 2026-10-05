@@ -10,12 +10,13 @@ use crate::delegate_disposal;
 use crate::disposable::DisposableExt;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::observable::Subscription;
+use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
+use crate::thread_mode::{Local, Shared};
 use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::serialized_multicast::{Admission, MulticastDisposal, SerializedMulticast};
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -36,7 +37,7 @@ use std::collections::VecDeque;
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let subject = ReplaySubject::<i32, std::convert::Infallible>::new(Some(2));
+/// let subject = ReplaySubject::<i32, std::convert::Infallible, rx_rust::thread_mode::Local>::local(Some(2));
 /// let mut sender = subject.clone();
 /// let _ = sender.on_next(1);
 /// let _ = sender.on_next(2);
@@ -51,8 +52,10 @@ use std::collections::VecDeque;
 /// assert_eq!(seen, [2, 3]); // The last two, then the completion.
 /// ```
 #[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct ReplaySubject<'or, T, E>(SerializedMulticast<'or, T, E, Buffer<T>>);
+#[educe(Debug, Clone(bound()))]
+pub struct ReplaySubject<'or, T, E, M: ObserverMode>(
+    #[educe(Debug(ignore))] SerializedMulticast<'or, T, E, M, Buffer<T>>,
+);
 
 /// The replayed values, and how many of them are kept.
 #[derive(Educe)]
@@ -63,8 +66,10 @@ struct Buffer<T> {
     size: Option<usize>,
 }
 
-impl<T, E> ReplaySubject<'_, T, E> {
-    /// Creates a subject that keeps the last `buffer_size` values, or all of them for `None`.
+impl<T, E, M: ObserverMode> ReplaySubject<'_, T, E, M> {
+    /// Creates a subject in the mode `M`, for code that is generic over the mode, such as an operator
+    /// that creates it in the mode of its source; [`local`](Self::local) and [`shared`](Self::shared)
+    /// name the mode instead.
     pub fn new(buffer_size: Option<usize>) -> Self {
         let values = match buffer_size {
             Some(size) => VecDeque::with_capacity(size),
@@ -77,19 +82,45 @@ impl<T, E> ReplaySubject<'_, T, E> {
     }
 }
 
+impl<T, E> ReplaySubject<'_, T, E, Local> {
+    /// Creates a subject that stays on one thread.
+    pub fn local(buffer_size: Option<usize>) -> Self {
+        Self::new(buffer_size)
+    }
+}
+
+impl<T, E> ReplaySubject<'_, T, E, Shared> {
+    /// Creates a subject that can be fed and subscribed to from any thread.
+    pub fn shared(buffer_size: Option<usize>) -> Self {
+        Self::new(buffer_size)
+    }
+}
+
 delegate_disposal!(
-    Disposal<'or, T, E>,
-    OptionDisposal<MulticastDisposal<'or, T, E, Buffer<T>>>,
+    Disposal<'or, T, E, M>,
+    OptionDisposal<MulticastDisposal<'or, T, E, M, Buffer<T>>>,
+    where M: ObserverMode
 );
 
-impl<'or, T, E> Observable<'or, T, E> for ReplaySubject<'or, T, E>
+impl<'or, T, E, M: ObserverMode> ObservableTypes for ReplaySubject<'or, T, E, M>
 where
     T: Clone,
     E: Clone,
 {
-    type D = Disposal<'or, T, E>;
+    type Item = T;
+    type Error = E;
+    type Mode = M;
+    type D = Disposal<'or, T, E, M>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<'or, T, E, M, OR> Observable<OR> for ReplaySubject<'or, T, E, M>
+where
+    M: ObserverMode,
+    OR: IntoBoxedObserver<'or, T, E, M>,
+    T: Clone,
+    E: Clone,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         match self.0.subscribe_with(observer, |buffer, terminated| {
             // The buffer is the history of the subject, so it is replayed whichever way the
             // subject terminated: an error does not erase what was emitted before it.
@@ -106,7 +137,7 @@ where
     }
 }
 
-impl<T, E> Observer<T, E> for ReplaySubject<'_, T, E>
+impl<T, E, M: ObserverMode> Observer<T, E> for ReplaySubject<'_, T, E, M>
 where
     T: Clone,
     E: Clone,
@@ -157,7 +188,7 @@ impl<T> Buffer<T> {
     }
 }
 
-impl<'or, T, E> Subject<'or, T, E> for ReplaySubject<'or, T, E>
+impl<T, E, M: ObserverMode> Subject<T, E> for ReplaySubject<'_, T, E, M>
 where
     T: Clone,
     E: Clone,

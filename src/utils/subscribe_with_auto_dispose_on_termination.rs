@@ -13,14 +13,15 @@ use crate::{
     disposable::{Disposable, DisposableExt, shared_disposal::SharedDisposal},
     observable::Subscription,
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
     utils::on_panic::on_panic,
 };
 use educe::Educe;
 
 delegate_disposal!(
-    Disposal<D>,
-    SharedDisposal<Subscription<D>>,
-    where D: Disposable
+    Disposal<M, D>,
+    SharedDisposal<M, Subscription<D>>,
+    where M: ThreadMode, D: Disposable
 );
 
 /// Subscribes through `builder`, disposing the subscription it returns as soon as the observer
@@ -32,6 +33,7 @@ delegate_disposal!(
 ///     observable::{Observable, ObservableExt, Subscription},
 ///     observer::{Flow, Observer, Termination},
 ///     operators::creating::range::Range,
+///     thread_mode::Local,
 ///     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 /// };
 ///
@@ -59,19 +61,20 @@ delegate_disposal!(
 ///     |value| seen.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
-/// let subscription = subscribe_with_auto_dispose_on_termination(observer, |observer| {
+/// let subscription = subscribe_with_auto_dispose_on_termination::<Local, _, _, _>(observer, |observer| {
 ///     Range::new(1..).subscribe(FirstObserver(Some(observer)))
 /// });
 /// drop(subscription);
 /// assert_eq!(seen, [1]);
 /// ```
-pub fn subscribe_with_auto_dispose_on_termination<OR, D, F>(
+pub fn subscribe_with_auto_dispose_on_termination<M, OR, D, F>(
     observer: OR,
     builder: F,
-) -> Subscription<Disposal<D>>
+) -> Subscription<Disposal<M, D>>
 where
+    M: ThreadMode,
     D: Disposable,
-    F: FnOnce(AutoDisposeOnTerminationObserver<OR, D>) -> Subscription<D>,
+    F: FnOnce(AutoDisposeOnTerminationObserver<M, OR, D>) -> Subscription<D>,
 {
     let shared_disposal = SharedDisposal::default();
     let observer = AutoDisposeOnTerminationObserver {
@@ -95,20 +98,23 @@ pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
     }
 
     type_name_without_generics::<OR>()
-        == type_name_without_generics::<AutoDisposeOnTerminationObserver<(), ()>>()
+        == type_name_without_generics::<
+            AutoDisposeOnTerminationObserver<crate::thread_mode::Local, (), ()>,
+        >()
 }
 
 /// The observer [`subscribe_with_auto_dispose_on_termination`] hands to its builder: the
 /// downstream observer, plus the disposal of the source to run when it terminates or stops.
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct AutoDisposeOnTerminationObserver<OR, D: Disposable> {
+pub struct AutoDisposeOnTerminationObserver<M: ThreadMode, OR, D: Disposable> {
     observer: OR,
-    shared_disposal: SharedDisposal<Subscription<D>>,
+    shared_disposal: SharedDisposal<M, Subscription<D>>,
 }
 
-impl<T, E, OR, D> Observer<T, E> for AutoDisposeOnTerminationObserver<OR, D>
+impl<M, T, E, OR, D> Observer<T, E> for AutoDisposeOnTerminationObserver<M, OR, D>
 where
+    M: ThreadMode,
     OR: Observer<T, E>,
     D: Disposable,
 {

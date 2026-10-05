@@ -2,10 +2,9 @@
 //! [`ObservableExt::time_interval`](crate::observable::ObservableExt::time_interval).
 
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    utils::types::MaybeSend,
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -25,7 +24,7 @@ use std::time::{Duration, Instant};
 ///
 /// let mut intervals = Vec::new();
 /// let mut terminations = Vec::new();
-/// let mut subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let mut subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
 ///
 /// let subscription = TimeInterval::new(subject.clone()).subscribe_with_callback(
 ///     |(value, span)| intervals.push((value, span)),
@@ -58,16 +57,22 @@ impl<OE> TimeInterval<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, (T, Duration), E> for TimeInterval<OE>
+impl<T, E, OE> ObservableTypes for TimeInterval<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = (T, Duration);
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<(T, Duration), E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for TimeInterval<OE>
+where
+    OR: Observer<(T, Duration), E>,
+    OE: Observable<TimeIntervalObserver<OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = TimeIntervalObserver {
             observer,
             time_stamp: Instant::now(),
@@ -76,7 +81,7 @@ where
     }
 }
 
-struct TimeIntervalObserver<OR> {
+pub struct TimeIntervalObserver<OR> {
     observer: OR,
     time_stamp: Instant,
 }

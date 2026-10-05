@@ -1,11 +1,10 @@
 //! The [`WithErrorType`] operator, behind
 //! [`ObservableExt::with_error_type`](crate::observable::ObservableExt::with_error_type).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
-    utils::types::MarkerType,
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
@@ -51,14 +50,22 @@ impl<E, OE> WithErrorType<E, OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for WithErrorType<E, OE>
+impl<T, E, OE> ObservableTypes for WithErrorType<E, OE>
 where
-    E: 'or,
-    OE: Observable<'or, T, Infallible>,
+    OE: ObservableTypes<Item = T, Error = Infallible>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for WithErrorType<E, OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<WithErrorTypeObserver<E, OR>, Item = T, Error = Infallible>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = WithErrorTypeObserver {
             observer,
             _marker: PhantomData,
@@ -67,7 +74,7 @@ where
     }
 }
 
-struct WithErrorTypeObserver<E, OR> {
+pub struct WithErrorTypeObserver<E, OR> {
     observer: OR,
     _marker: MarkerType<E>,
 }

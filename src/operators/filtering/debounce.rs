@@ -2,14 +2,16 @@
 //! [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce).
 
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
+use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
-use crate::utils::types::{MarkerType, MaybeSend};
+use crate::utils::subscribe_with_context::{
+    self, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context,
+};
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{RecursionAction, Scheduler},
+    scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState},
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -36,13 +38,13 @@ use std::time::{Duration, Instant};
 ///     use std::time::Duration;
 ///     use tokio::time::sleep;
 ///
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
 ///
-///     let subscription = Debounce::new(Just::new(7), Duration::from_millis(5), handle.clone())
+///     let subscription = Debounce::new(Just::new(7), Duration::from_millis(5), scheduler.clone())
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
 ///             move |termination| terminations_observer
@@ -63,14 +65,13 @@ use std::time::{Duration, Instant};
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Debounce<'or, OE, S> {
+pub struct Debounce<OE, S> {
     source: OE,
     time_span: Duration,
     scheduler: S,
-    _marker: MarkerType<&'or ()>,
 }
 
-impl<'or, OE, S> Debounce<'or, OE, S> {
+impl<OE, S> Debounce<OE, S> {
     /// Creates a [`Debounce`] over `source`;
     /// [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce) is the fluent form.
     pub fn new(source: OE, time_span: Duration, scheduler: S) -> Self {
@@ -78,24 +79,41 @@ impl<'or, OE, S> Debounce<'or, OE, S> {
             source,
             time_span,
             scheduler,
-            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, T, E, OE, S> Observable<'static, T, E> for Debounce<'or, OE, S>
-where
-    T: MaybeSend + 'static,
-    E: MaybeSend + 'static,
-    OE: Observable<'or, T, E>,
-    S: Scheduler + Clone + MaybeSend + 'static,
-{
-    type D = subscribe_with_context::Disposal<'or, OE::D>;
+/// The thread mode of a [`Debounce`]: the timer's thread emits the values, the source's the
+/// terminations.
+pub type DebounceMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
-    fn subscribe(
-        self,
-        observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
+/// The context of a [`Debounce`] subscription.
+pub type DebounceContext<M, T, E, OR, S> =
+    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>;
+
+/// The task of a [`Debounce`] timer: it holds the context weakly, so that it does not keep the
+/// observer alive once the subscription is gone.
+pub type DebounceTask<M, T, E, OR, S> =
+    RecursiveContext<WeakSubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>>;
+
+impl<T, E, OE, S> ObservableTypes for Debounce<OE, S>
+where
+    OE: ObservableTypes<Item = T, Error = E>,
+    S: SchedulerTypes,
+{
+    type Item = T;
+    type Error = E;
+    type Mode = DebounceMode<OE, S>;
+    type D = subscribe_with_context::Disposal<DebounceMode<OE, S>, T, E, Model<T, S::D>, OE::D>;
+}
+
+impl<T, E, OE, S, OR> Observable<OR> for Debounce<OE, S>
+where
+    OR: Observer<T, E>,
+    OE: Observable<DebounceObserver<DebounceMode<OE, S>, T, E, OR, S>, Item = T, Error = E>,
+    S: Scheduler<DebounceTask<DebounceMode<OE, S>, T, E, OR, S>>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model::<T, S::D>::Idle;
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(DebounceObserver {
@@ -107,11 +125,8 @@ where
     }
 }
 
-/// Keeps at most one recursive scheduler task alive for each debounce burst.
-///
-/// An active model with `timer: None` covers schedulers that can execute a zero-delay task before
-/// returning its disposal.
-enum Model<T, D: Disposable> {
+/// The state of a [`Debounce`] subscription.
+pub enum Model<T, D: Disposable> {
     Idle,
     Active {
         value: T,
@@ -120,18 +135,21 @@ enum Model<T, D: Disposable> {
     },
 }
 
-struct DebounceObserver<T, E, OR, S: Scheduler> {
-    context: SubscriptionContext<T, E, OR, Model<T, S::D>>,
+pub struct DebounceObserver<M, T, E, OR, S>
+where
+    M: ThreadMode,
+    S: SchedulerTypes,
+{
+    context: DebounceContext<M, T, E, OR, S>,
     time_span: Duration,
     scheduler: S,
 }
 
-impl<T, E, OR, S: Scheduler> Observer<T, E> for DebounceObserver<T, E, OR, S>
+impl<M, T, E, OR, S> Observer<T, E> for DebounceObserver<M, T, E, OR, S>
 where
-    T: MaybeSend + 'static,
-    E: MaybeSend + 'static,
-    OR: Observer<T, E> + MaybeSend + 'static,
-    S: Scheduler + Clone + MaybeSend + 'static,
+    OR: Observer<T, E>,
+    M: ThreadMode,
+    S: Scheduler<DebounceTask<M, T, E, OR, S>>,
 {
     fn on_next(&mut self, value: T) -> Flow {
         let timer_setup = self.context.update(|model| {
@@ -164,41 +182,43 @@ where
             Err(DeliveryStopped) => return Flow::Stop,
         };
 
-        let weak_context = self.context.downgrade();
-        let disposal = self.scheduler.schedule_recursively(
-            move |_| {
-                let Some(context) = weak_context.upgrade() else {
-                    return RecursionAction::Stop;
-                };
-                context
-                    .update(|model| {
-                        let deadline = match model {
-                            Model::Idle => {
-                                return UpdateOutcome::new(RecursionAction::Stop)
-                                    .without_events()
-                                    .without_drop_outside();
-                            }
-                            Model::Active { deadline, .. } => *deadline,
-                        };
-                        if Instant::now() < deadline {
-                            return UpdateOutcome::new(RecursionAction::ContinueAt(deadline))
+        // The context owns this task through the model, so the task only holds a weak reference
+        // back: a strong one would form a cycle and leak the subscription.
+        let task = Task::recursive(self.context.downgrade(), |weak_context, _| {
+            let Some(context) = weak_context.upgrade() else {
+                return TaskState::Finished;
+            };
+            context
+                .update(|model| {
+                    let deadline = match model {
+                        Model::Idle => {
+                            return UpdateOutcome::new(TaskState::Finished)
                                 .without_events()
                                 .without_drop_outside();
                         }
+                        Model::Active { deadline, .. } => *deadline,
+                    };
+                    if Instant::now() < deadline {
+                        return UpdateOutcome::new(TaskState::SleepUntil(deadline))
+                            .without_events()
+                            .without_drop_outside();
+                    }
 
-                        match std::mem::replace(model, Model::Idle) {
-                            Model::Idle => unreachable!(),
-                            Model::Active {
-                                value,
-                                deadline: _,
-                                timer,
-                            } => UpdateOutcome::new(RecursionAction::Stop)
-                                .with_next_event(value)
-                                .with_drop_outside(timer),
-                        }
-                    })
-                    .unwrap_or(RecursionAction::Stop)
-            },
+                    match std::mem::replace(model, Model::Idle) {
+                        Model::Idle => unreachable!(),
+                        Model::Active {
+                            value,
+                            deadline: _,
+                            timer,
+                        } => UpdateOutcome::new(TaskState::Finished)
+                            .with_next_event(value)
+                            .with_drop_outside(timer),
+                    }
+                })
+                .unwrap_or(TaskState::Finished)
+        });
+        let disposal = self.scheduler.run_task(
+            task,
             Some(deadline.saturating_duration_since(Instant::now())),
         );
 

@@ -1,8 +1,8 @@
 //! The [`FromIter`] source.
 
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -41,16 +41,22 @@ impl<I> FromIter<I> {
     }
 }
 
-impl<'or, T, I> Observable<'or, T, Infallible> for FromIter<I>
+impl<T, I> ObservableTypes for FromIter<I>
 where
     I: IntoIterator<Item = T>,
 {
+    type Item = T;
+    type Error = Infallible;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, I, OR> Observable<OR> for FromIter<I>
+where
+    OR: Observer<T, Infallible>,
+    I: IntoIterator<Item = T>,
+{
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
         for value in self.0.into_iter() {
             if observer.on_next(value).is_stop() {
                 // The observer ended its own stream, so the iteration stops here instead of

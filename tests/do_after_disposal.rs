@@ -3,29 +3,31 @@ mod tests_utils;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::shared_sender::SharedSender;
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_channel::test_channel;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
-use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
-use rx_rust::utils::types::Shared;
+use rx_rust::observer::boxed_observer::SendBoxedObserver;
+use rx_rust::operators::creating::create::Create;
+use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    operators::{creating::create::Create, utility::do_after_disposal::DoAfterDisposal},
-    subject::publish_subject::PublishSubject,
+    observer::{Observer, Termination},
+    operators::utility::do_after_disposal::DoAfterDisposal,
 };
 use std::convert::Infallible;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    let disposed = Shared::new(MutableBool::new(false));
-    let called = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
+    let called = Arc::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
-    let observable = Create::new(|observer| {
+    let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         Subscription::new(CallbackDisposal::new(|| {
             disposed.write(true);
@@ -63,11 +65,11 @@ fn test_completed() {
 
 #[test]
 fn test_error() {
-    let disposed = Shared::new(MutableBool::new(false));
-    let called = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
+    let called = Arc::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
-    let observable = Create::new(|observer| {
+    let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         Subscription::new(CallbackDisposal::new(|| {
             disposed.write(true);
@@ -105,11 +107,11 @@ fn test_error() {
 
 #[test]
 fn test_unsubscribe() {
-    let disposed = Shared::new(MutableBool::new(false));
-    let called = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
+    let called = Arc::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
-    let observable = Create::new(|observer| {
+    let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         Subscription::new(CallbackDisposal::new(|| {
             disposed.write(true);
@@ -156,11 +158,11 @@ fn test_ref() {
     let value = 111;
     let error = 222;
 
-    let disposed = Shared::new(MutableBool::new(false));
-    let called = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
+    let called = Arc::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
-    let observable = Create::new(|observer| {
+    let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         Subscription::new(CallbackDisposal::new(|| {
             disposed.write(true);
@@ -213,11 +215,11 @@ fn test_mut_ref() {
     let mut value = 111;
     let mut error = 222;
 
-    let disposed = Shared::new(MutableBool::new(false));
-    let called = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
+    let called = Arc::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
-    let observable = Create::new(|observer: BoxedObserver<'_, &mut i32, &mut i32>| {
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, &mut i32, &mut i32>| {
         boxed_observer = Some(observer);
         Subscription::new(CallbackDisposal::new(|| {
             disposed.write(true);
@@ -267,14 +269,14 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
-        let disposed = Shared::new(MutableBool::new(false));
-        let called = Shared::new(MutableBool::new(false));
+    block_on(|scheduler| async move {
+        let disposed = Arc::new(AtomicBool::new(false));
+        let called = Arc::new(AtomicBool::new(false));
         let boxed_observer = SharedSender::default();
 
         let disposed_cloned = disposed.clone();
         let boxed_observer_cloned = boxed_observer.clone();
-        let observable = Create::new(move |observer| {
+        let observable = Create::shared_boxed(move |observer| {
             boxed_observer_cloned.set(observer);
             Subscription::new(CallbackDisposal::new(move || {
                 disposed_cloned.write(true);
@@ -290,43 +292,37 @@ fn test_async() {
             called_cloned.write(true);
         });
 
-        let subscription = runtime
+        let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
         assert!(!disposed.read());
         assert!(!called.read());
 
-        let boxed_observer = runtime
+        let boxed_observer = scheduler
             .spawn(async move {
                 assert!(boxed_observer.on_next(111));
                 boxed_observer
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert!(!disposed.read());
         assert!(!called.read());
 
-        runtime
-            .spawn(async move { subscription.dispose() })
-            .await
-            .unwrap();
-        runtime.sleep(DURATION_10_MS).await;
+        scheduler.spawn(async move { subscription.dispose() }).await;
+        scheduler.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert!(disposed.read());
         assert!(called.read());
 
-        runtime
+        scheduler
             .spawn(async move {
                 assert!(boxed_observer.on_termination(Termination::<Infallible>::Completed));
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
         assert!(disposed.read());
@@ -336,14 +332,14 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let disposed_1 = Shared::new(MutableBool::new(false));
-    let disposed_2 = Shared::new(MutableBool::new(false));
-    let called_1 = Shared::new(MutableBool::new(false));
-    let called_2 = Shared::new(MutableBool::new(false));
+    let disposed_1 = Arc::new(AtomicBool::new(false));
+    let disposed_2 = Arc::new(AtomicBool::new(false));
+    let called_1 = Arc::new(AtomicBool::new(false));
+    let called_2 = Arc::new(AtomicBool::new(false));
     let boxed_observer_1 = SharedSender::default();
     let boxed_observer_2 = SharedSender::default();
 
-    let observable = Create::new(|observer| {
+    let observable = Create::shared_boxed(|observer| {
         let disposed = if boxed_observer_1.is_empty() {
             boxed_observer_1.set(observer);
             disposed_1.clone()
@@ -361,7 +357,7 @@ fn test_subscribe_by_different_observer() {
     // Custom operations
     let called_1_cloned = called_1.clone();
     let called_2_cloned = called_2.clone();
-    let first_call = Shared::new(MutableBool::new(true));
+    let first_call = Arc::new(AtomicBool::new(true));
     let observable = observable.do_after_disposal(|| {
         if first_call.read() {
             first_call.write(false);
@@ -425,12 +421,12 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    let disposed = Shared::new(MutableBool::new(false));
-    let called = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
+    let called = Arc::new(AtomicBool::new(false));
     let called_cloned = called.clone();
     let mut boxed_observer = None;
 
-    let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         boxed_observer = Some(observer);
         Subscription::new(CallbackDisposal::new(|| {
             disposed.write(true);
@@ -461,12 +457,12 @@ fn test_unsub_on_next_by_take() {
 
 #[test]
 fn test_multiple_operation() {
-    let disposed = Shared::new(MutableBool::new(false));
-    let called_1 = Shared::new(MutableBool::new(false));
-    let called_2 = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
+    let called_1 = Arc::new(AtomicBool::new(false));
+    let called_2 = Arc::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
-    let observable = Create::new(|observer| {
+    let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         Subscription::new(CallbackDisposal::new(|| {
             disposed.write(true);
@@ -520,11 +516,11 @@ fn test_multiple_operation() {
 
 #[test]
 fn test_without_convenient_api() {
-    let disposed = Shared::new(MutableBool::new(false));
-    let called = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
+    let called = Arc::new(AtomicBool::new(false));
     let mut boxed_observer = None;
 
-    let observable = Create::new(|observer| {
+    let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
         Subscription::new(CallbackDisposal::new(|| {
             disposed.write(true);
@@ -577,7 +573,7 @@ fn test_lifetime_sub() {
     // let life_marker = TestStruct;
 
     {
-        let observable = Create::new(|mut observer| {
+        let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::new(CallbackDisposal::new(|| {
@@ -603,7 +599,7 @@ fn test_lifetime_or() {
     // let life_marker_2 = TestStruct;
 
     {
-        let observable = Create::new(|observer| {
+        let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
@@ -619,10 +615,9 @@ fn test_lifetime_or() {
 fn test_fn() {
     let s = TestStruct;
 
-    let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (_, observable, _) = test_channel::<'_, i32, &str>();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.do_after_disposal(|| {
         s.consume();
     });
@@ -632,7 +627,7 @@ fn test_fn() {
 
 #[test]
 fn test_clone() {
-    let observable = Create::new(|mut observer| {
+    let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
@@ -644,8 +639,8 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.do_after_disposal(|| {});
+    let (_, observable, _) = test_channel::<'_, i32, String>();
+    let observable = observable.do_after_disposal(|| {});
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -655,8 +650,8 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable = subject.do_after_disposal(|| {});
+    let (_, observable, _) = test_channel::<'_, i32, String>();
+    let observable = observable.do_after_disposal(|| {});
 
     observable.filter(|_| true);
 }

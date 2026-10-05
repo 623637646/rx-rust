@@ -1,10 +1,9 @@
 //! The [`Materialize`] operator, behind
 //! [`ObservableExt::materialize`](crate::observable::ObservableExt::materialize).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Event, Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -54,21 +53,27 @@ impl<OE> Materialize<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, Event<T, E>, Infallible> for Materialize<OE>
+impl<T, E, OE> ObservableTypes for Materialize<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = Event<T, E>;
+    type Error = Infallible;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<Event<T, E>, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Materialize<OE>
+where
+    OR: Observer<Event<T, E>, Infallible>,
+    OE: Observable<MaterializeObserver<OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.0.subscribe(MaterializeObserver(observer))
     }
 }
 
-struct MaterializeObserver<OR>(OR);
+pub struct MaterializeObserver<OR>(OR);
 
 impl<T, E, OR> Observer<T, E> for MaterializeObserver<OR>
 where

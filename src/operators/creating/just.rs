@@ -1,8 +1,8 @@
 //! The [`Just`] source.
 
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -41,13 +41,18 @@ impl<T> Just<T> {
     }
 }
 
-impl<'or, T> Observable<'or, T, Infallible> for Just<T> {
+impl<T> ObservableTypes for Just<T> {
+    type Item = T;
+    type Error = Infallible;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, OR> Observable<OR> for Just<T>
+where
+    OR: Observer<T, Infallible>,
+{
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
         if observer.on_next(self.0).is_continue() {
             observer.on_termination(Termination::Completed);
         }

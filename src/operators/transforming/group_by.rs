@@ -1,11 +1,12 @@
 //! The [`GroupBy`] operator, behind
 //! [`ObservableExt::group_by`](crate::observable::ObservableExt::group_by).
 
+use crate::observer::boxed_observer::ObserverMode;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
-    subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
-    utils::types::{MarkerType, MaybeSend},
+    subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::{
@@ -28,8 +29,9 @@ use std::{
 /// Each group is a single-consumer pipe: it can be subscribed to once, and it is serialized on its
 /// own rather than together with the outer Observable, so the items of a group keep their order
 /// among themselves, but they are not ordered against the emission of another group. Disposing the
-/// outer subscription closes the open groups, which drops their observers without notifying them
-/// and discards what they had buffered.
+/// outer subscription ends the open groups without a termination: what a group had buffered is
+/// still delivered to its subscriber, even a later one, which is then dropped without being
+/// notified.
 ///
 /// Disposing the subscription of a single group does not necessarily release its observer where it
 /// happens: the group releases it on its next item, when it ends, or when the outer subscription
@@ -97,18 +99,21 @@ use std::{
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct GroupBy<OE, F, K> {
+pub struct GroupBy<'a, OE, F, K> {
     source: OE,
     key_selector: F,
-    _marker: MarkerType<K>,
+    /// The observer of a group may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left to
+    /// an unboxed default: the group is the `Item`, which [`ObservableTypes`] names without any
+    /// observer, and its observer arrives only later, so the group boxes it.
+    _marker: MarkerType<(&'a (), K)>,
 }
 
-impl<OE, F, K> GroupBy<OE, F, K> {
+impl<OE, F, K> GroupBy<'_, OE, F, K> {
     /// Creates a [`GroupBy`] over `source`;
     /// [`ObservableExt::group_by`](crate::observable::ObservableExt::group_by) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, key_selector: F) -> Self
+    pub fn new<T, E>(source: OE, key_selector: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnMut(&T) -> K,
     {
         Self {
@@ -119,23 +124,35 @@ impl<OE, F, K> GroupBy<OE, F, K> {
     }
 }
 
-impl<'or, T, E, OE, F, K> Observable<'or, UnicastObservable<'or, T, E>, E> for GroupBy<OE, F, K>
+impl<'a, T, E, OE, F, K> ObservableTypes for GroupBy<'a, OE, F, K>
 where
-    T: MaybeSend + 'or,
-    E: Clone + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
-    F: FnMut(&T) -> K + MaybeSend + 'or,
-    K: Eq + Hash + MaybeSend + 'or,
+    <OE as ObservableTypes>::Mode: ObserverMode,
+    E: Clone,
+    OE: ObservableTypes<Item = T, Error = E>,
+    F: FnMut(&T) -> K,
+    K: Eq + Hash,
 {
+    type Item = BoxedUnicastObservable<'a, T, E, OE::Mode>;
+    type Error = E;
+    /// The groups are emitted, and fed, from wherever the source emits.
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<UnicastObservable<'or, T, E>, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
-        // The groups own their buffered items and the source is the only upstream, so this
-        // observer can own the sending ends directly: the upstream holds `&mut` to it while it
-        // delivers, which is what serializes the groups against each other.
+impl<'a, T, E, OE, F, K, OR> Observable<OR> for GroupBy<'a, OE, F, K>
+where
+    <OE as ObservableTypes>::Mode: ObserverMode,
+    OR: Observer<BoxedUnicastObservable<'a, T, E, <OE as ObservableTypes>::Mode>, E>,
+    E: Clone,
+    OE: Observable<
+            SourceObserver<'a, <OE as ObservableTypes>::Mode, T, E, OR, F, K>,
+            Item = T,
+            Error = E,
+        >,
+    F: FnMut(&T) -> K,
+    K: Eq + Hash,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source.subscribe(SourceObserver {
             observer,
             senders: HashMap::new(),
@@ -144,18 +161,17 @@ where
     }
 }
 
-struct SourceObserver<'or, T, E, OR, F, K> {
+pub struct SourceObserver<'a, M: ObserverMode, T, E, OR, F, K> {
     observer: OR,
-    /// The sending end of every group that has been opened. An ended group keeps its entry,
-    /// because the values of an ended group are discarded rather than opening a new one.
-    senders: HashMap<K, UnicastSender<'or, T, E>>,
+    senders: HashMap<K, BoxedUnicastSender<'a, T, E, M>>,
     key_selector: F,
 }
 
-impl<'or, T, E, OR, F, K> Observer<T, E> for SourceObserver<'or, T, E, OR, F, K>
+impl<'a, M, T, E, OR, F, K> Observer<T, E> for SourceObserver<'a, M, T, E, OR, F, K>
 where
+    M: ObserverMode,
     E: Clone,
-    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
     F: FnMut(&T) -> K,
     K: Eq + Hash,
 {
@@ -171,7 +187,7 @@ where
                 Flow::Continue
             }
             Entry::Vacant(entry) => {
-                let (sender, group) = unicast_subject();
+                let (sender, group) = unicast_subject::new_boxed();
                 let sender = entry.insert(sender);
                 // The group is emitted before its first value, so it can be subscribed to before
                 // that value arrives. A value sent to a group that nobody subscribed to yet waits

@@ -1,9 +1,11 @@
 //! The [`IgnoreElements`] operator, behind
 //! [`ObservableExt::ignore_elements`](crate::observable::ObservableExt::ignore_elements).
 
-use crate::utils::types::MaybeSend;
+use crate::operators::filtering::filter::FilterObserver;
 use crate::{
-    observable::Observable, observable::Subscription, observer::Observer,
+    observable::Subscription,
+    observable::{Observable, ObservableTypes},
+    observer::Observer,
     operators::filtering::filter::Filter,
 };
 use educe::Educe;
@@ -48,13 +50,22 @@ impl<OE> IgnoreElements<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for IgnoreElements<OE>
+impl<T, E, OE> ObservableTypes for IgnoreElements<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
-        Filter::new(self.source, |_| false).subscribe(observer)
+impl<T, E, OE, OR> Observable<OR> for IgnoreElements<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<FilterObserver<OR, fn(&T) -> bool>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        Filter::new(self.source, (|_| false) as fn(&T) -> bool).subscribe(observer)
     }
 }

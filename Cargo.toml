@@ -11,12 +11,12 @@ categories = ["asynchronous", "rust-patterns"]
 include = ["src/**", "Cargo.toml", "LICENSE", "README.md"]
 
 [package.metadata.docs.rs]
-# The README (crate-level docs) and the scheduler impls for Tokio are only compiled with this feature.
-features = ["tokio-scheduler"]
+# Every scheduler module is compiled only with its feature, and the README (the crate-level docs)
+# only with `tokio-scheduler`.
+all-features = true
 
 [dependencies]
 educe = "0.8" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
-cfg-if = "1"
 futures = { version = "0.3.34", optional = true } # It's optional even though most rust runtimes depend on it because users may implement their own runtimes without depending on futures.
 tokio = { version = "1", optional = true }
 async-std = { version = "1", optional = true }
@@ -27,16 +27,14 @@ async-io = { version = "2", optional = true }
 tokio = { version = "1", features = ["full"] }
 async-io = "2"
 pastey = "0.1"
+# The tests run on every scheduler, so they enable every scheduler feature of the crate itself.
+rx-rust = { path = ".", features = ["futures-scheduler", "tokio-scheduler", "async-std-scheduler", "smol-scheduler"] }
 
 [features]
 default = []
 
-# no scheduler
-single-threaded = [] # single-threaded mode without scheduler.
-
-# scheduler
-local-pool-scheduler = ["single-threaded", "futures", "dep:async-io"]
-thread-pool-scheduler = ["futures/thread-pool", "dep:async-io"]
+# schedulers, which can be combined
+futures-scheduler = ["futures/thread-pool", "dep:async-io"]
 tokio-scheduler = ["futures", "dep:tokio", "tokio/rt", "tokio/time"]
 async-std-scheduler = ["futures", "dep:async-std"]
 smol-scheduler = ["futures", "dep:smol"]

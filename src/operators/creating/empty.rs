@@ -1,8 +1,8 @@
 //! The [`Empty`] source.
 
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Observer, Termination},
 };
 use std::convert::Infallible;
@@ -31,13 +31,18 @@ use std::convert::Infallible;
 #[derive(Debug, Clone)]
 pub struct Empty;
 
-impl<'or> Observable<'or, Infallible, Infallible> for Empty {
+impl ObservableTypes for Empty {
+    type Item = Infallible;
+    type Error = Infallible;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<Infallible, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<OR> Observable<OR> for Empty
+where
+    OR: Observer<Infallible, Infallible>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         observer.on_termination(Termination::Completed);
         Subscription::default()
     }

@@ -1,14 +1,14 @@
-use crate::tests_utils::test_runtime::TestRuntime;
+use crate::tests_utils::test_scheduler::TestScheduler;
 use educe::Educe;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::utils::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::{
     disposable::Disposable,
     observer::{Flow, Observer, Termination},
-    scheduler::Scheduler,
-    utils::mutable::{Mutable, MutableHelper},
-    utils::types::{MaybeSend, Shared},
+    scheduler::SchedulerExt,
+    thread_mode::mutable::MutableHelper,
 };
+use std::sync::{Arc, Mutex};
 use {
     futures::Stream, futures::stream::StreamExt, rx_rust::observable::Subscription,
     std::convert::Infallible,
@@ -27,8 +27,8 @@ pub(crate) enum State<E> {
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub(crate) struct Checker<T, E> {
-    values: Shared<Mutable<Vec<T>>>,
-    state: Shared<Mutable<State<E>>>,
+    values: Arc<Mutex<Vec<T>>>,
+    state: Arc<Mutex<State<E>>>,
 }
 
 impl<T, E> Checker<T, E> {
@@ -46,8 +46,8 @@ impl<T, E> Checker<T, E> {
     }
 
     fn new_with_stop_after(stop_after: Option<usize>) -> (Self, CheckerObserver<T, E>) {
-        let values = Shared::new(Mutable::new(Vec::new()));
-        let state = Shared::new(Mutable::new(State::Active));
+        let values = Arc::new(Mutex::new(Vec::new()));
+        let state = Arc::new(Mutex::new(State::Active));
         (
             Self {
                 values: values.clone(),
@@ -79,22 +79,17 @@ impl<T, E> Checker<T, E> {
 #[derive(Educe)]
 #[educe(Debug)]
 pub(crate) struct CheckerObserver<T, E> {
-    values: Shared<Mutable<Vec<T>>>,
-    state: Shared<Mutable<State<E>>>,
+    values: Arc<Mutex<Vec<T>>>,
+    state: Arc<Mutex<State<E>>>,
     /// How many values this observer accepts before it answers [`Flow::Stop`], if it ever does.
     stop_after: Option<usize>,
 }
 
 impl<T, E> CheckerObserver<T, E> {
-    pub(crate) fn into_callbacks(
-        self,
-    ) -> (
-        impl FnMut(T) + MaybeSend,
-        impl FnOnce(Termination<E>) + MaybeSend,
-    )
+    pub(crate) fn into_callbacks(self) -> (impl FnMut(T) + Send, impl FnOnce(Termination<E>) + Send)
     where
-        T: MaybeSend,
-        E: MaybeSend,
+        T: Send,
+        E: Send,
     {
         let values = self.values.clone();
         (
@@ -140,18 +135,18 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
 
 impl<T> Checker<T, Infallible> {
     pub(crate) fn from_stream(
-        stream: impl Stream<Item = T> + MaybeSend + 'static,
-        runtime: TestRuntime,
-    ) -> (Self, Subscription<impl Disposable + MaybeSend + 'static>)
+        stream: impl Stream<Item = T> + Send + 'static,
+        scheduler: TestScheduler,
+    ) -> (Self, Subscription<impl Disposable + Send + 'static>)
     where
-        T: MaybeSend + 'static,
+        T: Send + 'static,
     {
-        let values = Shared::new(Mutable::new(Vec::new()));
-        let state = Shared::new(Mutable::new(State::Active));
+        let values = Arc::new(Mutex::new(Vec::new()));
+        let state = Arc::new(Mutex::new(State::Active));
 
         let values_cloned = values.clone();
         let state_cloned = state.clone();
-        let handle = runtime.spawn_future(async move {
+        let handle = scheduler.spawn_future(async move {
             let mut stream = std::pin::pin!(stream);
             while let Some(value) = stream.next().await {
                 values_cloned.with_mut(|values| values.push(value));
@@ -183,19 +178,19 @@ impl<T, E> Checker<T, E> {
     /// Like [`Checker::from_stream`], for a stream of `Result`s: an `Err` is recorded as
     /// [`State::Error`], and nothing may follow it but the end of the stream.
     pub(crate) fn from_try_stream(
-        stream: impl Stream<Item = Result<T, E>> + MaybeSend + 'static,
-        runtime: TestRuntime,
-    ) -> (Self, Subscription<impl Disposable + MaybeSend + 'static>)
+        stream: impl Stream<Item = Result<T, E>> + Send + 'static,
+        scheduler: TestScheduler,
+    ) -> (Self, Subscription<impl Disposable + Send + 'static>)
     where
-        T: MaybeSend + 'static,
-        E: MaybeSend + 'static,
+        T: Send + 'static,
+        E: Send + 'static,
     {
-        let values = Shared::new(Mutable::new(Vec::new()));
-        let state = Shared::new(Mutable::new(State::Active));
+        let values = Arc::new(Mutex::new(Vec::new()));
+        let state = Arc::new(Mutex::new(State::Active));
 
         let values_cloned = values.clone();
         let state_cloned = state.clone();
-        let handle = runtime.spawn_future(async move {
+        let handle = scheduler.spawn_future(async move {
             let mut stream = std::pin::pin!(stream);
             while let Some(item) = stream.next().await {
                 match item {

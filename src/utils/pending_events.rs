@@ -52,7 +52,7 @@ impl<T, E> EventBatch<T, E> {
 /// outside of the lock that guards this queue, because dropping a value can run arbitrary code
 /// that re-enters that lock.
 #[derive(Educe)]
-#[educe(Debug)]
+#[educe(Debug, Default)]
 pub struct PendingEvents<T, E> {
     values: VecDeque<T>,
     termination: Option<Termination<E>>,
@@ -63,14 +63,6 @@ impl<T, E> PendingEvents<T, E> {
     pub fn new() -> Self {
         Self {
             values: VecDeque::new(),
-            termination: None,
-        }
-    }
-
-    /// An empty queue with room for `capacity` values before it reallocates.
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            values: VecDeque::with_capacity(capacity),
             termination: None,
         }
     }
@@ -175,11 +167,5 @@ impl<T, E> PendingEvents<T, E> {
     /// Takes the last event, whether or not values are still queued before it.
     pub fn take_termination(&mut self) -> Option<Termination<E>> {
         self.termination.take()
-    }
-}
-
-impl<T, E> Default for PendingEvents<T, E> {
-    fn default() -> Self {
-        Self::new()
     }
 }

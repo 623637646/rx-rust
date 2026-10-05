@@ -1,14 +1,16 @@
 //! The [`CombineLatest`] operator, behind
 //! [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest).
 
+use crate::disposable::chain_disposal::ChainDisposal;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -29,8 +31,8 @@ use educe::Educe;
 /// let mut values = Vec::new();
 /// let mut terminations = Vec::new();
 ///
-/// let mut subject_1 = BehaviorSubject::<'_, i32, Infallible>::new(0);
-/// let mut subject_2 = BehaviorSubject::<'_, i32, Infallible>::new(10);
+/// let mut subject_1 = BehaviorSubject::<'_, i32, Infallible, rx_rust::thread_mode::Local>::local(0);
+/// let mut subject_2 = BehaviorSubject::<'_, i32, Infallible, rx_rust::thread_mode::Local>::local(10);
 ///
 /// let subscription =
 ///     CombineLatest::new(subject_1.clone(), subject_2.clone()).subscribe_with_callback(
@@ -57,31 +59,65 @@ pub struct CombineLatest<OE1, OE2> {
 impl<OE1, OE2> CombineLatest<OE1, OE2> {
     /// Creates a [`CombineLatest`] over `source_1` and `source_2`;
     /// [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest) is the fluent form.
-    pub fn new<'or, T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T1, E>,
-        OE2: Observable<'or, T2, E>,
+        OE1: ObservableTypes<Item = T1, Error = E>,
+        OE2: ObservableTypes<Item = T2, Error = E>,
     {
         Self { source_1, source_2 }
     }
 }
 
-impl<'or, T1, T2, E, OE1, OE2> Observable<'or, (T1, T2), E> for CombineLatest<OE1, OE2>
+impl<T1, T2, E, OE1, OE2> ObservableTypes for CombineLatest<OE1, OE2>
 where
-    T1: Clone + MaybeSend + 'or,
-    T2: Clone + MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE1: Observable<'or, T1, E>,
-    OE1::D: MaybeSend + 'or,
-    OE2: Observable<'or, T2, E>,
-    OE2::D: MaybeSend + 'or,
+    T1: Clone,
+    T2: Clone,
+    OE1: ObservableTypes<Item = T1, Error = E>,
+    OE2: ObservableTypes<Item = T2, Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = (T1, T2);
+    type Error = E;
+    type Mode = Joined<OE1::Mode, OE2::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE1::Mode, OE2::Mode>,
+        (T1, T2),
+        E,
+        Model<T1, T2>,
+        ChainDisposal<OE2::D, OE1::D>,
+    >;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<(T1, T2), E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T1, T2, E, OE1, OE2, OR> Observable<OR> for CombineLatest<OE1, OE2>
+where
+    OR: Observer<(T1, T2), E>,
+    T1: Clone,
+    T2: Clone,
+    OE1: Observable<
+            ObserverImpl1<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                T1,
+                T2,
+                E,
+                OR,
+                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T1,
+            Error = E,
+        >,
+    OE2: Observable<
+            ObserverImpl2<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                T1,
+                T2,
+                E,
+                OR,
+                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T2,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model {
             latest_1: None,
             latest_2: None,
@@ -95,7 +131,7 @@ where
     }
 }
 
-struct Model<T1, T2> {
+pub struct Model<T1, T2> {
     latest_1: Option<T1>,
     latest_2: Option<T2>,
     should_completed: bool,
@@ -103,11 +139,11 @@ struct Model<T1, T2> {
 
 macro_rules! impl_observer {
     ($name:ident, $t_self:ident, $field_self:ident, $field_other:ident, $combine:expr) => {
-        struct $name<T1, T2, E, OR, D: Disposable>(
-            SubscriptionContext<(T1, T2), E, OR, Model<T1, T2>, D>,
+        pub struct $name<M: ThreadMode, T1, T2, E, OR, D: Disposable>(
+            SubscriptionContext<M, (T1, T2), E, OR, Model<T1, T2>, D>,
         );
 
-        impl<T1, T2, E, OR, D> Observer<$t_self, E> for $name<T1, T2, E, OR, D>
+        impl<M: ThreadMode, T1, T2, E, OR, D> Observer<$t_self, E> for $name<M, T1, T2, E, OR, D>
         where
             T1: Clone,
             T2: Clone,

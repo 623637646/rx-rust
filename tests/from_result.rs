@@ -2,8 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
-use crate::tests_utils::test_runtime::block_on;
-use rx_rust::scheduler::Scheduler;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt},
@@ -67,22 +66,18 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
+    block_on(|scheduler| async move {
         let observable = FromResult::<_, Infallible>::new(Ok(111));
         let (checker, observer) = Checker::new();
 
-        let subscription = runtime
+        let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
 
-        runtime
-            .spawn(async { subscription.dispose() })
-            .await
-            .unwrap();
-        runtime.sleep(DURATION_10_MS).await;
+        scheduler.spawn(async { subscription.dispose() }).await;
+        scheduler.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Completed);
     });

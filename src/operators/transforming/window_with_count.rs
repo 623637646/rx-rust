@@ -2,14 +2,16 @@
 //! [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count).
 
 use crate::disposable::{DisposableExt, option_disposal::OptionDisposal};
-use crate::utils::types::MaybeSend;
+use crate::observer::boxed_observer::ObserverMode;
+use crate::utils::MarkerType;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
+    subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
 };
 use educe::Educe;
+use std::marker::PhantomData;
 use std::{cmp::Ordering, num::NonZeroUsize};
 
 /// Periodically subdivides items from an Observable into Observable windows, each containing a specified number of items.
@@ -83,32 +85,52 @@ use std::{cmp::Ordering, num::NonZeroUsize};
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct WindowWithCount<OE> {
+pub struct WindowWithCount<'a, OE> {
     source: OE,
     count: NonZeroUsize,
+    /// The observer of a window may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left to
+    /// an unboxed default: the window is the `Item`, which [`ObservableTypes`] names without any
+    /// observer, and its observer arrives only later, so the window boxes it.
+    _marker: MarkerType<&'a ()>,
 }
 
-impl<OE> WindowWithCount<OE> {
+impl<OE> WindowWithCount<'_, OE> {
     /// Creates a [`WindowWithCount`] over `source`;
     /// [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count) is the fluent form.
     pub fn new(source: OE, count: NonZeroUsize) -> Self {
-        Self { source, count }
+        Self {
+            source,
+            count,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, UnicastObservable<'or, T, E>, E> for WindowWithCount<OE>
+impl<'a, T, E, OE> ObservableTypes for WindowWithCount<'a, OE>
 where
-    T: MaybeSend + 'or,
-    E: Clone + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    <OE as ObservableTypes>::Mode: ObserverMode,
+    E: Clone,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = BoxedUnicastObservable<'a, T, E, OE::Mode>;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OptionDisposal<Subscription<OE::D>>;
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<UnicastObservable<'or, T, E>, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
-        let (sender, window) = unicast_subject();
+impl<'a, T, E, OE, OR> Observable<OR> for WindowWithCount<'a, OE>
+where
+    <OE as ObservableTypes>::Mode: ObserverMode,
+    OR: Observer<BoxedUnicastObservable<'a, T, E, <OE as ObservableTypes>::Mode>, E>,
+    E: Clone,
+    OE: Observable<
+            WindowWithCountObserver<'a, <OE as ObservableTypes>::Mode, T, E, OR>,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
+        let (sender, window) = unicast_subject::new_boxed();
         if observer.on_next(window).is_stop() {
             // The first window ended the stream, so the source is never subscribed to.
             return OptionDisposal::none().into_subscription();
@@ -127,17 +149,18 @@ where
     }
 }
 
-struct WindowWithCountObserver<'or, T, E, OR> {
+pub struct WindowWithCountObserver<'a, M: ObserverMode, T, E, OR> {
     observer: OR,
-    sender: UnicastSender<'or, T, E>,
+    sender: BoxedUnicastSender<'a, T, E, M>,
     count: NonZeroUsize,
     sent_count: usize,
 }
 
-impl<'or, T, E, OR> Observer<T, E> for WindowWithCountObserver<'or, T, E, OR>
+impl<'a, M, T, E, OR> Observer<T, E> for WindowWithCountObserver<'a, M, T, E, OR>
 where
+    M: ObserverMode,
     E: Clone,
-    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
 {
     fn on_next(&mut self, value: T) -> Flow {
         // The consumer of one window stops that window, not the operator: only what the observer
@@ -149,7 +172,7 @@ where
                 Flow::Continue
             }
             Ordering::Equal => {
-                let (new_sender, new_window) = unicast_subject();
+                let (new_sender, new_window) = unicast_subject::new_boxed();
                 let mut old_sender = std::mem::replace(&mut self.sender, new_sender);
                 let _ = old_sender.on_next(value);
                 old_sender.on_termination(Termination::Completed);

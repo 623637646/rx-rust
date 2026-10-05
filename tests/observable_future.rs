@@ -2,19 +2,20 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::{test_channel::test_channel, test_runtime::block_on};
+use crate::tests_utils::{test_channel::test_channel, test_scheduler::block_on};
 use futures::FutureExt;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
+use rx_rust::observer::boxed_observer::SendBoxedObserver;
+use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::from_iter::FromIter;
-use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
+use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::{
     observable::ObservableExt,
-    observer::{Observer, Termination, boxed_observer::BoxedObserver},
-    operators::{creating::create::Create, others::observable_future::ObservableFuture},
-    subject::publish_subject::PublishSubject,
+    observer::{Observer, Termination},
+    operators::others::observable_future::ObservableFuture,
 };
 use std::convert::Infallible;
 use tests_utils::test_struct::TestStruct;
@@ -79,7 +80,7 @@ fn test_unsubscribe() {
 fn test_ref() {
     block_on(|_| async move {
         let value = 111;
-        let mut subject = PublishSubject::<'_, _, Infallible>::default();
+        let mut subject = PublishSubject::<_, Infallible, _>::shared();
 
         // Custom operations
         let observable = subject.clone();
@@ -99,10 +100,11 @@ fn test_mut_ref() {
     block_on(|_| async move {
         let mut value = 111;
 
-        let observable = Create::new(|mut observer: BoxedObserver<'_, _, Infallible>| {
-            assert!(observer.on_next(&mut value).is_stop());
-            Subscription::default()
-        });
+        let observable =
+            Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, Infallible>| {
+                assert!(observer.on_next(&mut value).is_stop());
+                Subscription::default()
+            });
 
         let future = observable.into_future();
 
@@ -118,8 +120,8 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
-        let subject = PublishSubject::<'_, _, Infallible>::default();
+    block_on(|scheduler| async move {
+        let subject = PublishSubject::<_, Infallible, _>::shared();
 
         // Custom operations
         let observable = subject.clone();
@@ -127,17 +129,16 @@ fn test_async() {
 
         // The future is subscribed and driven by another task, so it is a real waker that the
         // value has to wake.
-        let handle = runtime.spawn(future);
-        runtime.sleep(DURATION_10_MS).await;
+        let handle = scheduler.spawn(future);
+        scheduler.sleep(DURATION_10_MS).await;
 
         let mut subject_cloned = subject.clone();
-        runtime
+        scheduler
             .spawn(async move {
                 assert!(subject_cloned.on_next(111).is_continue());
             })
-            .await
-            .unwrap();
-        assert_eq!(handle.await, Some(Some(111)));
+            .await;
+        assert_eq!(handle.await, Some(111));
     });
 }
 
@@ -186,7 +187,7 @@ fn test_stop_on_next() {
 #[test]
 fn test_next_on_sub() {
     block_on(|_| async move {
-        let subject = BehaviorSubject::<'_, _, Infallible>::new(111);
+        let subject = BehaviorSubject::<_, Infallible, _>::shared(111);
 
         // Custom operations
         let observable = subject.clone();
@@ -212,12 +213,13 @@ fn test_next_on_unsub() {
     block_on(|_| async move {
         // The source emits from inside its own disposal, so the value arrives while the future is
         // being dropped. It must be dropped instead of reaching anything.
-        let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
-            Subscription::new(CallbackDisposal::new(move || {
-                let mut observer = observer;
-                assert!(observer.on_next(111).is_stop());
-            }))
-        });
+        let observable =
+            Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+                Subscription::new(CallbackDisposal::new(move || {
+                    let mut observer = observer;
+                    assert!(observer.on_next(111).is_stop());
+                }))
+            });
 
         // Custom operations
         let mut future = observable.into_future();
@@ -232,11 +234,12 @@ fn test_complete_on_unsub() {
     block_on(|_| async move {
         // The source completes from inside its own disposal, so it terminates while the future is
         // being dropped. The termination must be dropped instead of reaching anything.
-        let observable = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
-            Subscription::new(CallbackDisposal::new(move || {
-                observer.on_termination(Termination::Completed);
-            }))
-        });
+        let observable =
+            Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+                Subscription::new(CallbackDisposal::new(move || {
+                    observer.on_termination(Termination::Completed);
+                }))
+            });
 
         // Custom operations
         let mut future = observable.into_future();
@@ -257,12 +260,13 @@ fn test_lifetime_sub() {
     // let life_marker = TestStruct;
 
     {
-        let observable = Create::new(|mut observer: BoxedObserver<'_, _, Infallible>| {
-            assert!(observer.on_next(111).is_stop());
-            Subscription::new(CallbackDisposal::new(|| {
-                life_marker.consume_ref();
-            }))
-        });
+        let observable =
+            Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, Infallible>| {
+                assert!(observer.on_next(111).is_stop());
+                Subscription::new(CallbackDisposal::new(|| {
+                    life_marker.consume_ref();
+                }))
+            });
         _future = observable.into_future();
     }
 }
@@ -278,11 +282,12 @@ fn test_lifetime_or() {
     // let life_marker_2 = TestStruct;
 
     {
-        let observable = Create::new(|mut observer: BoxedObserver<'_, _, Infallible>| {
-            assert!(observer.on_next(&life_marker_2).is_stop());
-            life_marker_1 = Some(observer);
-            Subscription::default()
-        });
+        let observable =
+            Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, Infallible>| {
+                assert!(observer.on_next(&life_marker_2).is_stop());
+                life_marker_1 = Some(observer);
+                Subscription::default()
+            });
         let _future = observable.into_future();
     }
 }

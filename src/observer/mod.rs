@@ -37,8 +37,9 @@
 
 pub mod boxed_observer;
 pub mod callback_observer;
+pub mod emitter;
 
-use crate::{observer::boxed_observer::BoxedObserver, utils::types::MaybeSend};
+use crate::observer::boxed_observer::{BoxedObserver, SendBoxedObserver};
 use educe::Educe;
 
 /// The last event of a stream: it either completed or failed with an error.
@@ -128,9 +129,17 @@ pub trait BoxedObserverExt<T, E>: Observer<T, E> + Sized {
     /// Erases the type of this observer.
     fn into_boxed<'or>(self) -> BoxedObserver<'or, T, E>
     where
-        Self: MaybeSend + 'or,
+        Self: 'or,
     {
         BoxedObserver::new(self)
+    }
+
+    /// Erases the type of this observer, keeping it `Send`.
+    fn into_send_boxed<'or>(self) -> SendBoxedObserver<'or, T, E>
+    where
+        Self: Send + 'or,
+    {
+        SendBoxedObserver::new(self)
     }
 }
 

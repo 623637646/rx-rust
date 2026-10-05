@@ -2,14 +2,16 @@
 //! [`ObservableExt::skip_until`](crate::observable::ObservableExt::skip_until).
 
 use crate::disposable::Disposable;
+use crate::disposable::chain_disposal::ChainDisposal;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -30,8 +32,8 @@ use educe::Educe;
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-/// let mut gate: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let mut source: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
+/// let mut gate: PublishSubject<'_, (), Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
 /// let values_observer = Arc::clone(&values);
 /// let terminations_observer = Arc::clone(&terminations);
 ///
@@ -65,27 +67,59 @@ pub struct SkipUntil<OE, OE1> {
 impl<OE, OE1> SkipUntil<OE, OE1> {
     /// Creates a [`SkipUntil`] over `source`;
     /// [`ObservableExt::skip_until`](crate::observable::ObservableExt::skip_until) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, start: OE1) -> Self
+    pub fn new<T, E>(source: OE, start: OE1) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), E>,
+        OE: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Item = (), Error = E>,
     {
         Self { source, start }
     }
 }
 
-impl<'or, T, E, OE, OE1> Observable<'or, T, E> for SkipUntil<OE, OE1>
+impl<T, E, OE, OE1> ObservableTypes for SkipUntil<OE, OE1>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), E>,
-    OE1::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    OE1: ObservableTypes<Item = (), Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = T;
+    type Error = E;
+    type Mode = Joined<OE::Mode, OE1::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE::Mode, OE1::Mode>,
+        T,
+        E,
+        Model,
+        ChainDisposal<OE::D, OE1::D>,
+    >;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OE1, OR> Observable<OR> for SkipUntil<OE, OE1>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            SkipUntilObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    OE1: Observable<
+            StartObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = (),
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model { started: false };
         subscribe_with_context_owning_source(observer, model, |context| {
             let subscription_1 = self.start.subscribe(StartObserver {
@@ -98,13 +132,15 @@ where
     }
 }
 
-struct Model {
+pub struct Model {
     started: bool,
 }
 
-struct SkipUntilObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, Model, D>);
+pub struct SkipUntilObserver<M: ThreadMode, T, E, OR, D: Disposable>(
+    SubscriptionContext<M, T, E, OR, Model, D>,
+);
 
-impl<T, E, OR, D> Observer<T, E> for SkipUntilObserver<T, E, OR, D>
+impl<M: ThreadMode, T, E, OR, D> Observer<T, E> for SkipUntilObserver<M, T, E, OR, D>
 where
     OR: Observer<T, E>,
     D: Disposable,
@@ -129,12 +165,12 @@ where
     }
 }
 
-struct StartObserver<T, E, OR, D: Disposable> {
-    context: SubscriptionContext<T, E, OR, Model, D>,
+pub struct StartObserver<M: ThreadMode, T, E, OR, D: Disposable> {
+    context: SubscriptionContext<M, T, E, OR, Model, D>,
     started: bool,
 }
 
-impl<T, E, OR, D> Observer<(), E> for StartObserver<T, E, OR, D>
+impl<M: ThreadMode, T, E, OR, D> Observer<(), E> for StartObserver<M, T, E, OR, D>
 where
     OR: Observer<T, E>,
     D: Disposable,

@@ -39,13 +39,13 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      # Clippy findings do not depend on which scheduler is compiled in, so one feature is enough.
-      - run: cargo clippy --locked --features tokio-scheduler --all-targets -- -D warnings
+      # The tests enable every scheduler feature themselves (the dev-dependency on the crate itself),
+      # so one build covers all of the code.
+      - run: cargo clippy --locked --all-targets -- -D warnings
 
   check:
-    # The scheduler features are mutually exclusive, so every combination is checked one by one
-    # instead of with `--all-features`. Same commands as the "cargo check all features" task in
-    # `.vscode/tasks.json`.
+    # The features are additive: the library is checked with each feature, none and all of them.
+    # The tests always enable every feature.
     name: check every feature
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -57,11 +57,9 @@ jobs:
       # No `--locked` here: `--no-dev-deps` rewrites Cargo.toml for the duration of the run,
       # which changes the resolved lock file.
       - name: Library, each feature and no feature
-        run: cargo hack --each-feature --no-dev-deps --exclude-all-features check --lib
-      - name: Tests, each scheduler feature
-        run: >-
-          cargo hack --locked --each-feature --exclude-all-features --exclude-no-default-features
-          --exclude-features default,single-threaded check --tests
+        run: cargo hack --each-feature --no-dev-deps check --lib
+      - name: Tests
+        run: cargo check --locked --tests
 
   msrv:
     name: MSRV (rust-version)
@@ -88,31 +86,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # Same feature docs.rs builds with (see `[package.metadata.docs.rs]`).
-      - run: cargo doc --locked --no-deps --features tokio-scheduler
-      # nextest does not run doctests, and the README examples are doctests.
-      - run: cargo test --locked --doc --features tokio-scheduler
+      # Same features docs.rs builds with (see `[package.metadata.docs.rs]`).
+      - run: cargo doc --locked --no-deps --all-features
+      # nextest does not run doctests, and the README examples are doctests. Every feature, so that
+      # the examples of every scheduler run.
+      - run: cargo test --locked --doc --all-features
 
   test:
-    name: test (${{ matrix.feature }})
+    name: test
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        feature:
-          - local-pool-scheduler
-          - thread-pool-scheduler
-          - tokio-scheduler
-          - async-std-scheduler
-          - smol-scheduler
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.feature }}
+      # One build: `block_on` runs each async test on every scheduler in turn.
       # The `ci` profile in `.config/nextest.toml` retries timing-sensitive tests and reports the
       # ones that only passed on retry as flaky, so they stay visible without failing the run.
-      - run: cargo nextest run --locked --profile ci --features ${{ matrix.feature }}
+      - run: cargo nextest run --locked --profile ci

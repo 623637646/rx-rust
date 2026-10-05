@@ -2,9 +2,8 @@
 //! [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with).
 
 use crate::disposable::{DisposableExt, option_disposal::OptionDisposal};
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::Observer,
 };
 use educe::Educe;
@@ -45,26 +44,33 @@ pub struct StartWith<OE, I> {
 impl<OE, I> StartWith<OE, I> {
     /// Creates a [`StartWith`] over `source`;
     /// [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, values: I) -> Self
+    pub fn new<T, E>(source: OE, values: I) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         I: IntoIterator<Item = T>,
     {
         Self { source, values }
     }
 }
 
-impl<'or, T, E, OE, I> Observable<'or, T, E> for StartWith<OE, I>
+impl<T, E, OE, I> ObservableTypes for StartWith<OE, I>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
     I: IntoIterator<Item = T>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OptionDisposal<Subscription<OE::D>>;
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, I, OR> Observable<OR> for StartWith<OE, I>
+where
+    OR: Observer<T, E>,
+    OE: Observable<OR, Item = T, Error = E>,
+    I: IntoIterator<Item = T>,
+{
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
         for value in self.values.into_iter() {
             if observer.on_next(value).is_stop() {
                 // The prepended values ended the stream, so the source is never subscribed to and

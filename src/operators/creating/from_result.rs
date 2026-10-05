@@ -1,8 +1,8 @@
 //! The [`FromResult`] source.
 
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -40,13 +40,18 @@ impl<T, E> FromResult<T, E> {
     }
 }
 
-impl<'or, T, E> Observable<'or, T, E> for FromResult<T, E> {
+impl<T, E> ObservableTypes for FromResult<T, E> {
+    type Item = T;
+    type Error = E;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OR> Observable<OR> for FromResult<T, E>
+where
+    OR: Observer<T, E>,
+{
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
         match self.0 {
             Ok(value) => {
                 if observer.on_next(value).is_continue() {

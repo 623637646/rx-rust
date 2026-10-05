@@ -3,18 +3,19 @@
 
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
 use crate::utils::id_generator::{Id, IdGenerator};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::utils::subscription_slot::SubscriptionSlot;
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
-    utils::types::MarkerType,
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -57,10 +58,10 @@ pub struct Switch<OE, OE1> {
 impl<OE, OE1> Switch<OE, OE1> {
     /// Creates a [`Switch`] over `source`;
     /// [`ObservableExt::switch`](crate::observable::ObservableExt::switch) is the fluent form.
-    pub fn new<'or, T, E>(source: OE) -> Self
+    pub fn new<T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, OE1, E>,
-        OE1: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = OE1, Error = E>,
+        OE1: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source,
@@ -71,10 +72,10 @@ impl<OE, OE1> Switch<OE, OE1> {
 
 impl<E, OE1, I> Switch<WithErrorType<E, FromIter<I>>, OE1> {
     /// Creates a [`Switch`] over the observables of `into_iterator`.
-    pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
+    pub fn new_from_iter<T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
-        OE1: Observable<'or, T, E>,
+        OE1: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source: WithErrorType::new(FromIter::new(into_iterator)),
@@ -83,18 +84,52 @@ impl<E, OE1, I> Switch<WithErrorType<E, FromIter<I>>, OE1> {
     }
 }
 
-impl<'or, T, E, OE, OE1> Observable<'or, T, E> for Switch<OE, OE1>
+impl<T, E, OE, OE1> ObservableTypes for Switch<OE, OE1>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE: Observable<'or, OE1, E>,
-    OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
-    OE1::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = OE1, Error = E>,
+    OE1: ObservableTypes<Item = T, Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = T;
+    type Error = E;
+    type Mode = Joined<OE::Mode, OE1::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE::Mode, OE1::Mode>,
+        T,
+        E,
+        Model<OE1::D>,
+        OE::D,
+    >;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OE1, OR> Observable<OR> for Switch<OE, OE1>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            SwitchObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                <OE1 as ObservableTypes>::D,
+                <OE as ObservableTypes>::D,
+            >,
+            Item = OE1,
+            Error = E,
+        >,
+    OE1: Observable<
+            SwitchInnerObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                <OE1 as ObservableTypes>::D,
+                <OE as ObservableTypes>::D,
+            >,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model {
             slot: SubscriptionSlot::Idle,
             is_source_completed: false,
@@ -106,7 +141,7 @@ where
     }
 }
 
-struct Model<D: Disposable> {
+pub struct Model<D: Disposable> {
     slot: SubscriptionSlot<Subscription<D>>,
     is_source_completed: bool,
     /// The current inner subscription is always the one subscribed last, so the id it was handed
@@ -116,18 +151,19 @@ struct Model<D: Disposable> {
     sub_ids: IdGenerator,
 }
 
-struct SwitchObserver<T, E, OR, ID: Disposable, SD: Disposable>(
-    SubscriptionContext<T, E, OR, Model<ID>, SD>,
+pub struct SwitchObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposable>(
+    SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
 );
 
-impl<'or, T, E, OR, OE1, SD> Observer<OE1, E> for SwitchObserver<T, E, OR, OE1::D, SD>
+impl<M: ThreadMode, T, E, OR, OE1, SD> Observer<OE1, E> for SwitchObserver<M, T, E, OR, OE1::D, SD>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
-    OE1::D: MaybeSend + 'or,
-    SD: Disposable + MaybeSend + 'or,
+    OR: Observer<T, E>,
+    OE1: Observable<
+            SwitchInnerObserver<M, T, E, OR, <OE1 as ObservableTypes>::D, SD>,
+            Item = T,
+            Error = E,
+        >,
+    SD: Disposable,
 {
     fn on_next(&mut self, value: OE1) -> Flow {
         let result = self.0.update(|model| {
@@ -165,12 +201,12 @@ where
     }
 }
 
-struct SwitchInnerObserver<T, E, OR, ID: Disposable, SD: Disposable>(
-    SubscriptionContext<T, E, OR, Model<ID>, SD>,
+pub struct SwitchInnerObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposable>(
+    SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
     Id,
 );
 
-impl<T, E, OR, ID, SD> Observer<T, E> for SwitchInnerObserver<T, E, OR, ID, SD>
+impl<M: ThreadMode, T, E, OR, ID, SD> Observer<T, E> for SwitchInnerObserver<M, T, E, OR, ID, SD>
 where
     OR: Observer<T, E>,
     ID: Disposable,

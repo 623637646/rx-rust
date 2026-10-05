@@ -1,9 +1,9 @@
 //! The [`Range`] source.
 
 use crate::operators::creating::from_iter::FromIter;
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::Observer,
 };
 use educe::Educe;
@@ -42,16 +42,22 @@ impl<I> Range<I> {
     }
 }
 
-impl<'or, T, I> Observable<'or, T, Infallible> for Range<I>
+impl<T, I> ObservableTypes for Range<I>
 where
     I: IntoIterator<Item = T>,
 {
+    type Item = T;
+    type Error = Infallible;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, I, OR> Observable<OR> for Range<I>
+where
+    OR: Observer<T, Infallible>,
+    I: IntoIterator<Item = T>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         FromIter::new(self.0).subscribe(observer)
     }
 }

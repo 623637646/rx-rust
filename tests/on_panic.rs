@@ -1,14 +1,12 @@
 mod tests_utils;
 
-use rx_rust::utils::{
-    mutable::{Mutable, MutableExt},
-    on_panic::{OnPanic, on_panic},
-    types::Shared,
-};
+use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::utils::on_panic::{OnPanic, on_panic};
+use std::sync::{Arc, Mutex};
 
 #[test]
 fn test_disarm() {
-    let seen = Shared::new(Mutable::new(None));
+    let seen = Arc::new(Mutex::new(None));
     let seen_of_action = seen.clone();
     let guard = OnPanic::new(111, move |state| {
         seen_of_action.replace_value(Some(state));
@@ -21,7 +19,7 @@ fn test_disarm() {
 
 #[test]
 fn test_dropped_without_panicking() {
-    let seen = Shared::new(Mutable::new(None));
+    let seen = Arc::new(Mutex::new(None));
     let seen_of_action = seen.clone();
 
     drop(on_panic(move || {
@@ -36,9 +34,9 @@ fn test_dropped_without_panicking() {
 fn test_panic() {
     use crate::tests_utils::panic::expect_panic_on_drop;
 
-    let seen = Shared::new(Mutable::new(None));
+    let seen = Arc::new(Mutex::new(None));
     let seen_of_action = seen.clone();
-    let token = Shared::new(Mutable::new(None));
+    let token = Arc::new(Mutex::new(None));
     let token_of_scope = token.clone();
 
     expect_panic_on_drop(|panic_on_drop| {

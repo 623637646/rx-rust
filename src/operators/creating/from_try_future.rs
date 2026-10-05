@@ -1,10 +1,9 @@
 //! The [`FromTryFuture`] source.
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Observer, Termination},
-    scheduler::Scheduler,
+    scheduler::{FutureThenContext, Scheduler, SchedulerTypes, Task},
 };
 use educe::Educe;
 
@@ -35,9 +34,9 @@ use educe::Educe;
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///
-///     let subscription = FromTryFuture::new(async { Err::<i32, _>("boom") }, handle)
+///     let subscription = FromTryFuture::new(async { Err::<i32, _>("boom") }, scheduler)
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
 ///             move |termination| terminations_observer
@@ -70,26 +69,33 @@ impl<FU, S> FromTryFuture<FU, S> {
     }
 }
 
-impl<T, E, FU, S> Observable<'static, T, E> for FromTryFuture<FU, S>
+impl<T, E, FU, S> ObservableTypes for FromTryFuture<FU, S>
 where
-    FU: Future<Output = Result<T, E>> + MaybeSend + 'static,
-    S: Scheduler,
+    FU: Future<Output = Result<T, E>>,
+    S: SchedulerTypes,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = S::Mode;
     type D = S::D;
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, E> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
-        self.scheduler.spawn_future(async {
-            match self.future.await {
+impl<T, E, FU, S, OR> Observable<OR> for FromTryFuture<FU, S>
+where
+    OR: Observer<T, E>,
+    FU: Future<Output = Result<T, E>>,
+    S: Scheduler<FutureThenContext<OR, Result<T, E>>, FU>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        let task =
+            Task::from_future_then(observer, self.future, |mut observer, result| match result {
                 Ok(value) => {
                     if observer.on_next(value).is_continue() {
                         observer.on_termination(Termination::Completed);
                     }
                 }
                 Err(error) => observer.on_termination(Termination::Error(error)),
-            }
-        })
+            });
+        self.scheduler.run_task(task, None)
     }
 }

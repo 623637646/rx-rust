@@ -1,12 +1,10 @@
 //! A cloneable slot for a disposal that is built, and maybe replaced, after the slot was handed out.
 
+use crate::thread_mode::mutable::MutableHelper;
 use crate::{
     disposable::Disposable,
-    utils::{
-        id_generator::{Id, IdGenerator},
-        mutable::{Mutable, MutableHelper},
-        types::Shared,
-    },
+    thread_mode::ThreadMode,
+    utils::id_generator::{Id, IdGenerator},
 };
 use educe::Educe;
 
@@ -41,10 +39,11 @@ struct Inner<D> {
 /// # Examples
 /// ```rust
 /// use rx_rust::disposable::{callback_disposal::CallbackDisposal, shared_disposal::SharedDisposal, Disposable};
+/// use rx_rust::thread_mode::Local;
 /// use std::cell::Cell;
 ///
 /// let disposed = Cell::new(false);
-/// let slot = SharedDisposal::default();
+/// let slot = SharedDisposal::<Local, _>::default();
 /// let handle = slot.clone();
 ///
 /// slot.replace(|| CallbackDisposal::new(|| disposed.set(true))); // Filled later, through a clone.
@@ -53,11 +52,21 @@ struct Inner<D> {
 /// handle.dispose();
 /// assert!(disposed.get());
 /// ```
+///
+/// The slot is shared between the operator and whoever disposes, so its pointer is the one the
+/// thread mode `M` picks.
 #[derive(Educe)]
-#[educe(Debug, Clone, Default)]
-pub struct SharedDisposal<D>(Shared<Mutable<Inner<D>>>);
+#[educe(Debug, Clone(bound()))]
+pub struct SharedDisposal<M: ThreadMode, D>(#[educe(Debug(ignore))] M::Ptr<Inner<D>>);
 
-impl<D> SharedDisposal<D> {
+// Written by hand rather than derived: it builds through `M::ptr`, since `M::Ptr` is not `Default`.
+impl<M: ThreadMode, D> Default for SharedDisposal<M, D> {
+    fn default() -> Self {
+        Self(M::ptr(Inner::default()))
+    }
+}
+
+impl<M: ThreadMode, D> SharedDisposal<M, D> {
     /// Disposes the held disposal, if any, then builds and stores a new one.
     ///
     /// The builder runs with the lock released, so it may subscribe to anything. If the slot is
@@ -108,7 +117,7 @@ impl<D> SharedDisposal<D> {
     }
 }
 
-impl<D> Disposable for SharedDisposal<D>
+impl<M: ThreadMode, D> Disposable for SharedDisposal<M, D>
 where
     D: Disposable,
 {

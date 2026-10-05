@@ -2,10 +2,10 @@
 //! [`ObservableExt::take_while`](crate::observable::ObservableExt::take_while).
 
 use crate::utils::subscribe_with_auto_dispose_on_termination;
+use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -46,24 +46,44 @@ pub struct TakeWhile<OE, F> {
 impl<OE, F> TakeWhile<OE, F> {
     /// Creates a [`TakeWhile`] over `source`;
     /// [`ObservableExt::take_while`](crate::observable::ObservableExt::take_while) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+    pub fn new<T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnMut(&T) -> bool,
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for TakeWhile<OE, F>
+impl<T, E, OE, F> ObservableTypes for TakeWhile<OE, F>
 where
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
-    F: FnMut(&T) -> bool + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    F: FnMut(&T) -> bool,
 {
-    type D = subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
+    type D = subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for TakeWhile<OE, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            TakeWhileObserver<
+                AutoDisposeOnTerminationObserver<
+                    <OE as ObservableTypes>::Mode,
+                    OR,
+                    <OE as ObservableTypes>::D,
+                >,
+                F,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    F: FnMut(&T) -> bool,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let observer = TakeWhileObserver {
                 observer: Some(observer),
@@ -74,7 +94,7 @@ where
     }
 }
 
-struct TakeWhileObserver<OR, F> {
+pub struct TakeWhileObserver<OR, F> {
     observer: Option<OR>,
     callback: F,
 }

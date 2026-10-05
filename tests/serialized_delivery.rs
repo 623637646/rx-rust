@@ -10,26 +10,28 @@
 mod tests_utils;
 
 use crate::tests_utils::drop_probe::{DropCallback, DropProbe};
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::mutable::MutableHelper;
+use rx_rust::observer::boxed_observer::SendBoxedObserver;
+use rx_rust::thread_mode::Shared;
+use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
-    observer::{BoxedObserverExt, Flow, Observer, Termination, boxed_observer::BoxedObserver},
+    observer::{Flow, Observer, Termination},
     utils::{
-        mutable::Mutable,
         pending_events::EventBatch,
         serialized_delivery::{
             DeliveryStopped, SerializedDelivery, UpdateOutcome, WeakSerializedDelivery,
         },
-        types::{MaybeSend, Shared},
     },
 };
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 type TestError = &'static str;
 const ERROR: TestError = "boom";
 
-type TestObserver = BoxedObserver<'static, Value, TestError>;
-type TestDelivery = SerializedDelivery<Value, TestError, TestObserver, Resources>;
-type WeakTestDelivery = WeakSerializedDelivery<Value, TestError, TestObserver, Resources>;
+type TestObserver = SendBoxedObserver<'static, Value, TestError>;
+type TestDelivery = SerializedDelivery<Shared, Value, TestError, TestObserver, Resources>;
+type WeakTestDelivery = WeakSerializedDelivery<Shared, Value, TestError, TestObserver, Resources>;
 type TestOutcome<R> = UpdateOutcome<Value, TestError, R>;
 
 // MARK: - The log the tests assert on
@@ -45,10 +47,10 @@ enum Record {
     Note(&'static str),
 }
 
-type Log = Shared<Mutable<Vec<Record>>>;
+type Log = Arc<Mutex<Vec<Record>>>;
 
 fn new_log() -> Log {
-    Shared::new(Mutable::new(Vec::new()))
+    Arc::new(Mutex::new(Vec::new()))
 }
 
 fn record(log: &Log, record: Record) {
@@ -149,11 +151,11 @@ impl Resources {
 /// The observer and the values are owned by the delivery, so they can only hold a weak handle to
 /// it, filled in once it was built.
 #[derive(Clone)]
-struct DeliveryHandle(Shared<Mutable<Option<WeakTestDelivery>>>);
+struct DeliveryHandle(Arc<Mutex<Option<WeakTestDelivery>>>);
 
 impl DeliveryHandle {
     fn new() -> Self {
-        Self(Shared::new(Mutable::new(None)))
+        Self(Arc::new(Mutex::new(None)))
     }
 
     fn of(delivery: &TestDelivery) -> Self {
@@ -304,8 +306,8 @@ impl<FN, FT> Builder<FN, FT> {
 
     fn build(self) -> TestDelivery
     where
-        FN: FnMut(&TestDelivery, i32) + MaybeSend + 'static,
-        FT: FnOnce(&TestDelivery, &Termination<TestError>) + MaybeSend + 'static,
+        FN: FnMut(&TestDelivery, i32) + Send + 'static,
+        FT: FnOnce(&TestDelivery, &Termination<TestError>) + Send + 'static,
     {
         let handle = self.handle.clone();
         let mut probe =
@@ -313,7 +315,7 @@ impl<FN, FT> Builder<FN, FT> {
         if let Some(callback) = self.on_observer_drop {
             probe.also_on_drop(callback);
         }
-        let observer: TestObserver = RecordingObserver {
+        let observer: TestObserver = SendBoxedObserver::new(RecordingObserver {
             _probe: probe,
             log: self.log.clone(),
             handle: self.handle,
@@ -321,8 +323,7 @@ impl<FN, FT> Builder<FN, FT> {
             on_termination: Some(self.on_termination),
             stop_after: self.stop_after,
             received: 0,
-        }
-        .into_boxed();
+        });
         let resources = Resources::new(self.model, &self.log);
         let delivery = SerializedDelivery::idle(observer, resources);
         handle.install(&delivery);
@@ -648,14 +649,15 @@ fn an_observer_that_stops_drops_the_values_that_are_still_queued() {
             .is_stop()
     );
 
-    // Answering `Flow::Stop` stops the delivery, exactly as stopping it by hand does.
+    // Answering `Flow::Stop` stops the delivery, exactly as stopping it by hand does: the
+    // observer, which the loop holds here, is released before what the state held.
     assert_eq!(values(&log), [1, 2]);
     assert_eq!(
         records(&log)[2..],
         [
+            Record::ObserverDropped,
             Record::Note("3 dropped"),
             Record::ResourcesDropped,
-            Record::ObserverDropped,
         ]
     );
     assert!(delivery.send(next(4)).is_stop());
@@ -671,8 +673,8 @@ fn an_observer_that_stops_is_dropped_instead_of_being_terminated() {
         records(&log),
         [
             Record::Next(1),
-            Record::ResourcesDropped,
             Record::ObserverDropped,
+            Record::ResourcesDropped,
         ],
         "an observer that ended its own stream must not be terminated on top of that"
     );
@@ -699,6 +701,128 @@ fn stop_from_on_next_suppresses_the_queued_termination() {
         ],
         "the observer must be dropped instead of being terminated"
     );
+}
+
+#[test]
+fn a_delivery_stop_leaves_the_observer_to_the_next_event() {
+    let log = new_log();
+    let builder = builder(&log);
+    let handle = builder.handle();
+    let delivery = builder
+        .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
+        .build();
+
+    // A `DeliveryStop` cannot name the observer, so it only drops what the state held.
+    delivery.stop_handle().stop();
+    assert_eq!(records(&log), [Record::ResourcesDropped]);
+
+    let rejected = Value::new(1).on_drop(note(&log, "1 dropped"));
+    assert!(delivery.send(EventBatch::Next(rejected)).is_stop());
+    // The drop of the observer re-entered the delivery, so it ran with the lock released.
+    assert_eq!(
+        records(&log),
+        [
+            Record::ResourcesDropped,
+            Record::Note("1 dropped"),
+            Record::ObserverDropped,
+            Record::Note("observer dropped"),
+        ]
+    );
+
+    assert!(delivery.send(next(2)).is_stop());
+    assert_eq!(records(&log).len(), 4, "the observer is released only once");
+}
+
+#[test]
+fn a_delivery_stop_leaves_the_observer_to_the_next_update() {
+    let log = new_log();
+    let builder = builder(&log);
+    let handle = builder.handle();
+    let delivery = builder
+        .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
+        .build();
+
+    delivery.stop_handle().stop();
+    assert_eq!(
+        delivery.update(|resources| UpdateOutcome::new(resources.model)),
+        Err(DeliveryStopped)
+    );
+    assert_eq!(
+        records(&log),
+        [
+            Record::ResourcesDropped,
+            Record::ObserverDropped,
+            Record::Note("observer dropped"),
+        ]
+    );
+}
+
+#[test]
+fn a_delivery_stop_leaves_the_observer_to_a_later_stop() {
+    let log = new_log();
+    let builder = builder(&log);
+    let handle = builder.handle();
+    let delivery = builder
+        .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
+        .build();
+
+    delivery.stop_handle().stop();
+    delivery.stop();
+    assert_eq!(
+        records(&log),
+        [
+            Record::ResourcesDropped,
+            Record::ObserverDropped,
+            Record::Note("observer dropped"),
+        ]
+    );
+
+    delivery.stop();
+    assert_eq!(records(&log).len(), 3, "the observer is released only once");
+}
+
+#[test]
+fn a_delivery_stop_leaves_the_observer_to_the_last_handle() {
+    let log = new_log();
+    let delivery = builder(&log).build();
+    let stop = delivery.stop_handle();
+
+    stop.stop();
+    assert_eq!(records(&log), [Record::ResourcesDropped]);
+
+    // The stop handle does not own the observer, so the last delivery handle releases it.
+    drop(delivery);
+    assert_eq!(
+        records(&log),
+        [Record::ResourcesDropped, Record::ObserverDropped]
+    );
+}
+
+#[test]
+fn a_delivery_stop_from_on_next_lets_the_loop_drop_the_observer() {
+    let log = new_log();
+    let delivery = builder(&log)
+        .on_next(|delivery, number| {
+            if number == 1 {
+                delivery.stop_handle().stop();
+            }
+        })
+        .build();
+
+    assert!(delivery.send(next_batch_and_completed([1, 2])).is_stop());
+    // The loop holds the observer, and drops it once it sees the stopped state.
+    assert_eq!(
+        records(&log),
+        [
+            Record::Next(1),
+            Record::ResourcesDropped,
+            Record::ObserverDropped,
+        ],
+        "the observer must be dropped instead of being terminated"
+    );
+
+    assert!(delivery.send(next(3)).is_stop());
+    assert_eq!(records(&log).len(), 3, "the observer is released only once");
 }
 
 // MARK: - Re-entrant sends
@@ -1057,7 +1181,7 @@ fn a_panic_from_on_next_stops_the_delivery() {
     use crate::tests_utils::panic::expect_panic_on_drop;
 
     let log = new_log();
-    let token = Shared::new(Mutable::new(None));
+    let token = Arc::new(Mutex::new(None));
     let token_of_observer = token.clone();
     let delivery = builder(&log)
         .on_next(move |_delivery, number| {
@@ -1092,7 +1216,7 @@ fn a_panic_from_on_termination_drops_the_resources() {
     use crate::tests_utils::panic::expect_panic_on_drop;
 
     let log = new_log();
-    let token = Shared::new(Mutable::new(None));
+    let token = Arc::new(Mutex::new(None));
     let token_of_observer = token.clone();
     let delivery = builder(&log)
         .on_termination(move |_delivery, _termination| {
@@ -1119,25 +1243,25 @@ fn a_panic_from_on_termination_drops_the_resources() {
 
 // MARK: - Concurrency
 
-#[cfg(not(feature = "single-threaded"))]
 #[test]
 fn concurrent_sends_are_delivered_one_at_a_time() {
-    use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
+    use crate::AtomicBool;
+    use rx_rust::thread_mode::mutable::MutableBoolHelper;
 
     const THREADS: i32 = 4;
     const VALUES_PER_THREAD: i32 = 25;
 
     let log = new_log();
-    let delivering = Shared::new(MutableBool::new(false));
+    let delivering = Arc::new(AtomicBool::new(false));
     let delivering_of_observer = delivering.clone();
     let delivery = builder(&log)
         .on_next(move |_delivery, _value| {
             assert!(
-                delivering_of_observer.change_if_not_equal(true),
+                delivering_of_observer.set_if_changed(true),
                 "two values must never be delivered at the same time"
             );
             std::thread::yield_now();
-            assert!(delivering_of_observer.change_if_not_equal(false));
+            assert!(delivering_of_observer.set_if_changed(false));
         })
         .build();
 

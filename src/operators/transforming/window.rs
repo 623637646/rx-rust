@@ -1,18 +1,22 @@
 //! The [`Window`] operator, behind
 //! [`ObservableExt::window`](crate::observable::ObservableExt::window).
 
+use crate::disposable::chain_disposal::ChainDisposal;
+use crate::observer::boxed_observer::ObserverMode;
+use crate::thread_mode::Joined;
+use crate::utils::MarkerType;
 use crate::{
     disposable::Disposable,
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
-    subject::unicast_subject::{UnicastObservable, UnicastSender, unicast_subject},
+    subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
     utils::{
         pending_events::EventBatch,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_owning_source},
-        types::MaybeSend,
     },
 };
 use educe::Educe;
+use std::marker::PhantomData;
 
 /// Periodically subdivides items from an Observable into Observable windows.
 ///
@@ -25,8 +29,9 @@ use educe::Educe;
 /// arrive while it has no subscriber, and dropping it without subscribing discards its items. A
 /// window is serialized on its own rather than together with the outer Observable, so the events
 /// of a window keep their order among themselves, but they are not ordered against the emission of
-/// a later window. Disposing the outer subscription drops the observer of the open window without
-/// notifying it.
+/// a later window. Disposing the outer subscription ends the open window without a termination:
+/// what it had buffered is still delivered to its subscriber, even a later one, which is then
+/// dropped without being notified.
 ///
 /// Disposing the subscription of a single window does not necessarily release its observer where
 /// it happens: the window releases it on its next item, when it ends, or when the outer
@@ -48,8 +53,8 @@ use educe::Educe;
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 /// let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-/// let mut boundary: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let mut source: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
+/// let mut boundary: PublishSubject<'_, (), Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
 /// let windows_observer = Arc::clone(&windows);
 /// let terminations_observer = Arc::clone(&terminations);
 /// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
@@ -95,38 +100,89 @@ use educe::Educe;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Window<OE, OE1> {
+pub struct Window<'a, OE, OE1> {
     source: OE,
     boundary: OE1,
+    /// The observer of a window may borrow for `'a`. Unlike the `_boxed` hooks this cannot be left to
+    /// an unboxed default: the window is the `Item`, which [`ObservableTypes`] names without any
+    /// observer, and its observer arrives only later, so the window boxes it.
+    _marker: MarkerType<&'a ()>,
 }
 
-impl<OE, OE1> Window<OE, OE1> {
+impl<OE, OE1> Window<'_, OE, OE1> {
     /// Creates a [`Window`] over `source`;
     /// [`ObservableExt::window`](crate::observable::ObservableExt::window) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, boundary: OE1) -> Self
+    pub fn new<T, E>(source: OE, boundary: OE1) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), E>,
+        OE: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Item = (), Error = E>,
     {
-        Self { source, boundary }
+        Self {
+            source,
+            boundary,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<'or, T, E, OE, OE1> Observable<'or, UnicastObservable<'or, T, E>, E> for Window<OE, OE1>
+impl<'a, T, E, OE, OE1> ObservableTypes for Window<'a, OE, OE1>
 where
-    T: MaybeSend + 'or,
-    E: Clone + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), E>,
-    OE1::D: MaybeSend + 'or,
+    Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>: ObserverMode,
+    E: Clone,
+    OE: ObservableTypes<Item = T, Error = E>,
+    OE1: ObservableTypes<Item = (), Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = BoxedUnicastObservable<'a, T, E, Joined<OE::Mode, OE1::Mode>>;
+    type Error = E;
+    type Mode = Joined<OE::Mode, OE1::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE::Mode, OE1::Mode>,
+        DelegateAction<T, E>,
+        E,
+        (),
+        ChainDisposal<OE::D, OE1::D>,
+    >;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<UnicastObservable<'or, T, E>, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<'a, T, E, OE, OE1, OR> Observable<OR> for Window<'a, OE, OE1>
+where
+    Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>: ObserverMode,
+    OR: Observer<
+            BoxedUnicastObservable<
+                'a,
+                T,
+                E,
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+            >,
+            E,
+        >,
+    E: Clone,
+    OE: Observable<
+            SourceObserver<
+                'a,
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    OE1: Observable<
+            BoundaryObserver<
+                'a,
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = (),
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = DelegateObserver {
             outer_observer: observer,
             sender: None,
@@ -145,15 +201,18 @@ where
     }
 }
 
-type WindowContext<'or, T, E, OR, D> =
-    SubscriptionContext<DelegateAction<T, E>, E, DelegateObserver<'or, T, E, OR>, (), D>;
+type WindowContext<'a, M, T, E, OR, D> =
+    SubscriptionContext<M, DelegateAction<T, E>, E, DelegateObserver<'a, M, T, E, OR>, (), D>;
 
-struct SourceObserver<'or, T, E, OR, D: Disposable>(WindowContext<'or, T, E, OR, D>);
+pub struct SourceObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
+    WindowContext<'a, M, T, E, OR, D>,
+);
 
-impl<'or, T, E, OR, D> Observer<T, E> for SourceObserver<'or, T, E, OR, D>
+impl<'a, M, T, E, OR, D> Observer<T, E> for SourceObserver<'a, M, T, E, OR, D>
 where
+    M: ObserverMode,
     E: Clone,
-    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
     D: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
@@ -167,12 +226,13 @@ where
 }
 
 /// Terminates the current window, then the outer Observable.
-fn terminate<'or, T, E, OR, D>(
-    context: WindowContext<'or, T, E, OR, D>,
+fn terminate<'a, M, T, E, OR, D>(
+    context: WindowContext<'a, M, T, E, OR, D>,
     termination: Termination<E>,
 ) where
+    M: ObserverMode,
     E: Clone,
-    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
     D: Disposable,
 {
     let _ = context.send(EventBatch::NextAndTermination(
@@ -181,12 +241,15 @@ fn terminate<'or, T, E, OR, D>(
     ));
 }
 
-struct BoundaryObserver<'or, T, E, OR, D: Disposable>(WindowContext<'or, T, E, OR, D>);
+pub struct BoundaryObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
+    WindowContext<'a, M, T, E, OR, D>,
+);
 
-impl<'or, T, E, OR, D> Observer<(), E> for BoundaryObserver<'or, T, E, OR, D>
+impl<'a, M, T, E, OR, D> Observer<(), E> for BoundaryObserver<'a, M, T, E, OR, D>
 where
+    M: ObserverMode,
     E: Clone,
-    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
     D: Disposable,
 {
     fn on_next(&mut self, _: ()) -> Flow {
@@ -207,7 +270,7 @@ where
     }
 }
 
-enum DelegateAction<T, E> {
+pub enum DelegateAction<T, E> {
     /// Sends a source value to the current window, if there is one.
     ForwardValue(T),
     /// Terminates the current window, if there is one.
@@ -218,17 +281,18 @@ enum DelegateAction<T, E> {
 
 /// Owns the state that the actions act on, so that a window is fed and emitted outside the lock of
 /// the context that serializes the source against the boundary.
-struct DelegateObserver<'or, T, E, OR> {
+pub struct DelegateObserver<'a, M: ObserverMode, T, E, OR> {
     outer_observer: OR,
     /// The sending end of the window that is currently open, which is the only place where the
     /// windows are fed from. It is `None` until the first window opens and after the last window
     /// ended.
-    sender: Option<UnicastSender<'or, T, E>>,
+    sender: Option<BoxedUnicastSender<'a, T, E, M>>,
 }
 
-impl<'or, T, E, OR> Observer<DelegateAction<T, E>, E> for DelegateObserver<'or, T, E, OR>
+impl<'a, M, T, E, OR> Observer<DelegateAction<T, E>, E> for DelegateObserver<'a, M, T, E, OR>
 where
-    OR: Observer<UnicastObservable<'or, T, E>, E>,
+    M: ObserverMode,
+    OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
 {
     fn on_next(&mut self, action: DelegateAction<T, E>) -> Flow {
         match action {
@@ -252,7 +316,7 @@ where
             }
             DelegateAction::EmitWindow => {
                 debug_assert!(self.sender.is_none());
-                let (sender, window) = unicast_subject();
+                let (sender, window) = unicast_subject::new_boxed();
                 self.sender = Some(sender);
                 self.outer_observer.on_next(window)
             }

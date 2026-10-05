@@ -1,17 +1,18 @@
 //! The [`Timeout`] operator, behind
 //! [`ObservableExt::timeout`](crate::observable::ObservableExt::timeout).
 
+use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{
     Disposable, bound_drop_disposal::BoundDropDisposal, option_disposal::OptionDisposal,
 };
-use crate::observable::{Observable, Subscription};
+use crate::observable::{Observable, ObservableTypes, Subscription};
 use crate::observer::{Flow, Observer, Termination};
-use crate::scheduler::{RecursionAction, Scheduler};
+use crate::scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState};
+use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
+    self, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::{MarkerType, MaybeSend};
 use educe::Educe;
 use std::time::{Duration, Instant};
 
@@ -44,14 +45,14 @@ pub enum Error<E> {
 ///     use std::{convert::Infallible, sync::{Arc, Mutex}};
 ///     use tokio::time::{sleep, Duration};
 ///
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
-///     let mut subject: PublishSubject<'static, i32, Infallible> = PublishSubject::default();
+///     let mut subject: PublishSubject<'static, i32, Infallible, rx_rust::thread_mode::Shared> = PublishSubject::shared();
 ///
-///     let subscription = Timeout::new(subject.clone(), Duration::from_millis(5), handle.clone())
+///     let subscription = Timeout::new(subject.clone(), Duration::from_millis(5), scheduler.clone())
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
 ///             move |termination| terminations_observer
@@ -73,14 +74,13 @@ pub enum Error<E> {
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Timeout<'or, OE, S> {
+pub struct Timeout<OE, S> {
     source: OE,
     duration: Duration,
     scheduler: S,
-    _marker: MarkerType<&'or ()>,
 }
 
-impl<'or, OE, S> Timeout<'or, OE, S> {
+impl<OE, S> Timeout<OE, S> {
     /// Creates a [`Timeout`] over `source`;
     /// [`ObservableExt::timeout`](crate::observable::ObservableExt::timeout) is the fluent form.
     pub fn new(source: OE, duration: Duration, scheduler: S) -> Self {
@@ -88,25 +88,54 @@ impl<'or, OE, S> Timeout<'or, OE, S> {
             source,
             duration,
             scheduler,
-            _marker: Default::default(),
         }
     }
 }
 
-impl<'or, T, E, OE, S> Observable<'static, T, Error<E>> for Timeout<'or, OE, S>
-where
-    T: MaybeSend + 'static,
-    E: MaybeSend + 'static,
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'static,
-    S: Scheduler + Clone + MaybeSend + 'static,
-{
-    type D = subscribe_with_context::OwningDisposal<'static>;
+/// The thread mode of a [`Timeout`]: the source's thread emits the values, the timer's the
+/// timeout.
+pub type TimeoutMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
-    fn subscribe(
-        self,
-        observer: impl Observer<T, Error<E>> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
+/// The source subscription a [`Timeout`] context owns: the timer, then the source.
+pub type TimeoutSources<OE, S> = ChainDisposal<
+    OptionDisposal<BoundDropDisposal<<S as SchedulerTypes>::D>>,
+    <OE as ObservableTypes>::D,
+>;
+
+/// The task of a [`Timeout`] timer: it holds the context weakly, so that it does not keep the
+/// observer alive once the subscription is gone.
+pub type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
+    WeakSubscriptionContext<TimeoutMode<OE, S>, T, Error<E>, OR, Model, TimeoutSources<OE, S>>,
+>;
+
+impl<T, E, OE, S> ObservableTypes for Timeout<OE, S>
+where
+    OE: ObservableTypes<Item = T, Error = E>,
+    S: SchedulerTypes,
+{
+    type Item = T;
+    type Error = Error<E>;
+    type Mode = TimeoutMode<OE, S>;
+    type D = subscribe_with_context::ContextDisposal<
+        TimeoutMode<OE, S>,
+        T,
+        Error<E>,
+        Model,
+        TimeoutSources<OE, S>,
+    >;
+}
+
+impl<T, E, OE, S, OR> Observable<OR> for Timeout<OE, S>
+where
+    OR: Observer<T, Error<E>>,
+    OE: Observable<
+            TimeoutObserver<TimeoutMode<OE, S>, T, E, OR, TimeoutSources<OE, S>>,
+            Item = T,
+            Error = E,
+        >,
+    S: Scheduler<TimeoutTask<T, E, OR, OE, S>>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model {
             deadline: Instant::now() + self.duration,
         };
@@ -121,21 +150,21 @@ where
     }
 }
 
-struct Model {
+/// The state of a [`Timeout`] subscription.
+pub struct Model {
     deadline: Instant,
 }
 
-struct TimeoutObserver<T, E, OR, D: Disposable> {
-    context: SubscriptionContext<T, Error<E>, OR, Model, D>,
+pub struct TimeoutObserver<M: ThreadMode, T, E, OR, D: Disposable> {
+    context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     duration: Duration,
 }
 
-impl<T, E, OR, D> Observer<T, E> for TimeoutObserver<T, E, OR, D>
+impl<M, T, E, OR, D> Observer<T, E> for TimeoutObserver<M, T, E, OR, D>
 where
-    T: MaybeSend + 'static,
-    E: MaybeSend + 'static,
-    OR: Observer<T, Error<E>> + MaybeSend + 'static,
-    D: Disposable + MaybeSend + 'static,
+    M: ThreadMode,
+    OR: Observer<T, Error<E>>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.context.update_flow(|model| {
@@ -156,16 +185,15 @@ where
 ///
 /// Source values only move `deadline` forward. If the task wakes at an obsolete deadline, it
 /// continues at the latest one; no scheduler task needs to be cancelled or spawned per value.
-fn setup_timer<T, E, OR, S, D>(
-    context: SubscriptionContext<T, Error<E>, OR, Model, D>,
+fn setup_timer<M, T, E, OR, S, D>(
+    context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     scheduler: &S,
 ) -> OptionDisposal<BoundDropDisposal<S::D>>
 where
-    T: MaybeSend + 'static,
-    E: MaybeSend + 'static,
-    OR: Observer<T, Error<E>> + MaybeSend + 'static,
-    S: Scheduler + Clone + MaybeSend + 'static,
-    D: Disposable + MaybeSend + 'static,
+    M: ThreadMode,
+    OR: Observer<T, Error<E>>,
+    S: Scheduler<RecursiveContext<WeakSubscriptionContext<M, T, Error<E>, OR, Model, D>>>,
+    D: Disposable,
 {
     let deadline = context.update(|model| UpdateOutcome::new(model.deadline).without_events());
     let Ok(deadline) = deadline else {
@@ -173,23 +201,25 @@ where
         return OptionDisposal::none();
     };
 
-    let weak_context = context.downgrade();
-    let timer = scheduler.schedule_recursively(
-        move |_| {
-            let Some(context) = weak_context.upgrade() else {
-                return RecursionAction::Stop;
-            };
-            context
-                .update(|model| {
-                    if Instant::now() < model.deadline {
-                        return UpdateOutcome::new(RecursionAction::ContinueAt(model.deadline))
-                            .without_events();
-                    }
-                    UpdateOutcome::new(RecursionAction::Stop)
-                        .with_termination_event(Termination::Error(Error::Timeout))
-                })
-                .unwrap_or(RecursionAction::Stop)
-        },
+    // The context owns this task through the model, so the task only holds a weak reference
+    // back: a strong one would form a cycle and leak the subscription.
+    let task = Task::recursive(context.downgrade(), |weak_context, _| {
+        let Some(context) = weak_context.upgrade() else {
+            return TaskState::Finished;
+        };
+        context
+            .update(|model| {
+                if Instant::now() < model.deadline {
+                    return UpdateOutcome::new(TaskState::SleepUntil(model.deadline))
+                        .without_events();
+                }
+                UpdateOutcome::new(TaskState::Finished)
+                    .with_termination_event(Termination::Error(Error::Timeout))
+            })
+            .unwrap_or(TaskState::Finished)
+    });
+    let timer = scheduler.run_task(
+        task,
         Some(deadline.saturating_duration_since(Instant::now())),
     );
     OptionDisposal::some(timer)

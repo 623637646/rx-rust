@@ -3,17 +3,19 @@
 
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
+use crate::utils::resubscribe::Resubscribe;
 use crate::utils::serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutcome};
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::utils::subscription_slot::SubscriptionSlot;
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
-    utils::types::MarkerType,
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::{collections::VecDeque, marker::PhantomData};
@@ -57,10 +59,10 @@ pub struct ConcatAll<OE, OE1> {
 impl<OE, OE1> ConcatAll<OE, OE1> {
     /// Creates a [`ConcatAll`] over `source`;
     /// [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all) is the fluent form.
-    pub fn new<'or, T, E>(source: OE) -> Self
+    pub fn new<T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, OE1, E>,
-        OE1: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = OE1, Error = E>,
+        OE1: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source,
@@ -71,10 +73,10 @@ impl<OE, OE1> ConcatAll<OE, OE1> {
 
 impl<E, OE1, I> ConcatAll<WithErrorType<E, FromIter<I>>, OE1> {
     /// Creates a [`ConcatAll`] over the observables of `into_iterator`.
-    pub fn new_from_iter<'or, T>(into_iterator: I) -> Self
+    pub fn new_from_iter<T>(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
-        OE1: Observable<'or, T, E>,
+        OE1: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source: WithErrorType::new(FromIter::new(into_iterator)),
@@ -83,32 +85,69 @@ impl<E, OE1, I> ConcatAll<WithErrorType<E, FromIter<I>>, OE1> {
     }
 }
 
-impl<'or, T, E, OE, OE1> Observable<'or, T, E> for ConcatAll<OE, OE1>
+impl<T, E, OE, OE1> ObservableTypes for ConcatAll<OE, OE1>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE: Observable<'or, OE1, E>,
-    OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
-    OE1::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = OE1, Error = E>,
+    OE1: ObservableTypes<Item = T, Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = T;
+    type Error = E;
+    type Mode = Joined<OE::Mode, OE1::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE::Mode, OE1::Mode>,
+        T,
+        E,
+        Model<OE1>,
+        OE::D,
+    >;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OE1, OR> Observable<OR> for ConcatAll<OE, OE1>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            SourceObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                OE1,
+                <OE as ObservableTypes>::D,
+            >,
+            Item = OE1,
+            Error = E,
+        >,
+    OE1: Observable<
+            InnerObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                OE1,
+                <OE as ObservableTypes>::D,
+            >,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model {
             pending_observables: VecDeque::new(),
             slot: SubscriptionSlot::Idle,
             is_source_completed: false,
         };
         subscribe_with_context_owning_source(observer, model, |context| {
-            self.source.subscribe(SourceObserver(context.clone()))
+            self.source.subscribe(SourceObserver {
+                context: context.clone(),
+                subscribe_inner: Resubscribe::new(),
+            })
         })
     }
 }
 
-struct Model<'or, T, E, OE1>
+pub struct Model<OE1>
 where
-    OE1: Observable<'or, T, E>,
+    OE1: ObservableTypes,
 {
     /// Values wait here while an inner is active or its subscription is still being built.
     /// An idle slot always has an empty queue.
@@ -117,24 +156,24 @@ where
     is_source_completed: bool,
 }
 
-struct SourceObserver<'or, T, E, OR, OE1, SD>(
-    SubscriptionContext<T, E, OR, Model<'or, T, E, OE1>, SD>,
-)
+pub struct SourceObserver<M: ThreadMode, T, E, OR, OE1, SD>
 where
-    OE1: Observable<'or, T, E>,
-    SD: Disposable;
+    OE1: ObservableTypes<Item = T, Error = E>,
+    SD: Disposable,
+{
+    context: SubscriptionContext<M, T, E, OR, Model<OE1>, SD>,
+    /// Subscribes an inner observable with an [`InnerObserver`].
+    subscribe_inner: Resubscribe<OE1, InnerObserver<M, T, E, OR, OE1, SD>>,
+}
 
-impl<'or, T, E, OR, OE1, SD> Observer<OE1, E> for SourceObserver<'or, T, E, OR, OE1, SD>
+impl<M: ThreadMode, T, E, OR, OE1, SD> Observer<OE1, E> for SourceObserver<M, T, E, OR, OE1, SD>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
-    OE1::D: MaybeSend + 'or,
-    SD: Disposable + MaybeSend + 'or,
+    OR: Observer<T, E>,
+    OE1: ObservableTypes<Item = T, Error = E>,
+    SD: Disposable,
 {
     fn on_next(&mut self, value: OE1) -> Flow {
-        let result = self.0.update(|model| {
+        let result = self.context.update(|model| {
             if model.slot.reserve_if_idle() {
                 UpdateOutcome::new(Some(value))
             } else {
@@ -143,10 +182,12 @@ where
             }
         });
         match result {
-            Ok(Some(observable)) => match subscribe_observables(&self.0, observable) {
-                Ok(()) => Flow::Continue,
-                Err(DeliveryStopped) => Flow::Stop,
-            },
+            Ok(Some(observable)) => {
+                match subscribe_observables(&self.context, observable, self.subscribe_inner) {
+                    Ok(()) => Flow::Continue,
+                    Err(DeliveryStopped) => Flow::Stop,
+                }
+            }
             Ok(None) => Flow::Continue,
             Err(DeliveryStopped) => Flow::Stop,
         }
@@ -155,7 +196,7 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => {
-                let _ = self.0.update(|model| {
+                let _ = self.context.update(|model| {
                     model.is_source_completed = true;
                     if model.slot.is_idle() {
                         // An idle slot has no inner subscription or queued work left.
@@ -167,45 +208,45 @@ where
                 });
             }
             error @ Termination::Error(_) => {
-                self.0.send_termination(error);
+                self.context.send_termination(error);
             }
         }
     }
 }
 
-struct InnerObserver<'or, T, E, OR, OE1, SD>(
-    SubscriptionContext<T, E, OR, Model<'or, T, E, OE1>, SD>,
-)
+pub struct InnerObserver<M: ThreadMode, T, E, OR, OE1, SD>
 where
-    OE1: Observable<'or, T, E>,
-    SD: Disposable;
+    OE1: ObservableTypes<Item = T, Error = E>,
+    SD: Disposable,
+{
+    context: SubscriptionContext<M, T, E, OR, Model<OE1>, SD>,
+    /// Subscribes the next inner observable with another inner observer.
+    subscribe_inner: Resubscribe<OE1, Self>,
+}
 
-impl<'or, T, E, OR, OE1, SD> Observer<T, E> for InnerObserver<'or, T, E, OR, OE1, SD>
+impl<M: ThreadMode, T, E, OR, OE1, SD> Observer<T, E> for InnerObserver<M, T, E, OR, OE1, SD>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
-    OE1::D: MaybeSend + 'or,
-    SD: Disposable + MaybeSend + 'or,
+    OR: Observer<T, E>,
+    OE1: ObservableTypes<Item = T, Error = E>,
+    SD: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.0.send_next(value)
+        self.context.send_next(value)
     }
 
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                let next = self.0.update(|model| {
+                let next = self.context.update(|model| {
                     let finished = model.slot.release();
                     next_step(model, finished)
                 });
                 if let Ok(Some(observable)) = next {
-                    let _ = subscribe_observables(&self.0, observable);
+                    let _ = subscribe_observables(&self.context, observable, self.subscribe_inner);
                 }
             }
             error @ Termination::Error(_) => {
-                self.0.send_termination(error);
+                self.context.send_termination(error);
             }
         }
     }
@@ -218,12 +259,12 @@ type NextStep<T, E, OE, D> =
 /// that caller advances the queue; the first leaves the slot occupied for the other to finish.
 /// This runs under the same lock as the handoff, so taking the next observable and reserving its
 /// slot cannot race a source emission. The returned subscription is dropped outside the lock.
-fn next_step<'or, T, E, OE1>(
-    model: &mut Model<'or, T, E, OE1>,
+fn next_step<T, E, OE1>(
+    model: &mut Model<OE1>,
     finished: Option<Subscription<OE1::D>>,
 ) -> NextStep<T, E, OE1, OE1::D>
 where
-    OE1: Observable<'or, T, E>,
+    OE1: ObservableTypes<Item = T, Error = E>,
 {
     let outcome = if finished.is_none() {
         UpdateOutcome::new(None).without_events()
@@ -242,20 +283,24 @@ where
 /// Subscribes to the already reserved observable, then loops over any successors that complete
 /// before their subscription is filled. An inner that stays active hands the continuation to its
 /// completion callback instead, so immediately completing chains never recurse.
-fn subscribe_observables<'or, T, E, OR, OE1, SD>(
-    context: &SubscriptionContext<T, E, OR, Model<'or, T, E, OE1>, SD>,
+fn subscribe_observables<M: ThreadMode, T, E, OR, OE1, SD>(
+    context: &SubscriptionContext<M, T, E, OR, Model<OE1>, SD>,
     mut observable: OE1,
+    subscribe_inner: Resubscribe<OE1, InnerObserver<M, T, E, OR, OE1, SD>>,
 ) -> Result<(), DeliveryStopped>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E> + MaybeSend + 'or,
-    OE1::D: MaybeSend + 'or,
-    SD: Disposable + MaybeSend + 'or,
+    OR: Observer<T, E>,
+    OE1: ObservableTypes<Item = T, Error = E>,
+    SD: Disposable,
 {
     loop {
-        let subscription = observable.subscribe(InnerObserver(context.clone()));
+        let subscription = subscribe_inner.subscribe(
+            observable,
+            InnerObserver {
+                context: context.clone(),
+                subscribe_inner,
+            },
+        );
         let next = context.update(|model| {
             let finished = model.slot.fill(subscription);
             next_step(model, finished)

@@ -1,10 +1,9 @@
 //! The [`FromFuture`] source.
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Observer, Termination},
-    scheduler::Scheduler,
+    scheduler::{FutureThenContext, Scheduler, SchedulerTypes, Task},
 };
 use educe::Educe;
 use std::convert::Infallible;
@@ -35,9 +34,9 @@ use std::convert::Infallible;
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///
-///     let subscription = FromFuture::new(async { 7 }, handle).subscribe_with_callback(
+///     let subscription = FromFuture::new(async { 7 }, scheduler).subscribe_with_callback(
 ///         move |value| values_observer.lock().unwrap().push(value),
 ///         move |termination| terminations_observer
 ///             .lock()
@@ -69,22 +68,29 @@ impl<FU, S> FromFuture<FU, S> {
     }
 }
 
-impl<T, FU, S> Observable<'static, T, Infallible> for FromFuture<FU, S>
+impl<T, FU, S> ObservableTypes for FromFuture<FU, S>
 where
-    FU: Future<Output = T> + MaybeSend + 'static,
-    S: Scheduler,
+    FU: Future<Output = T>,
+    S: SchedulerTypes,
 {
+    type Item = T;
+    type Error = Infallible;
+    type Mode = S::Mode;
     type D = S::D;
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, Infallible> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
-        self.scheduler.spawn_future(async {
-            let result = self.future.await;
-            if observer.on_next(result).is_continue() {
+impl<T, FU, S, OR> Observable<OR> for FromFuture<FU, S>
+where
+    OR: Observer<T, Infallible>,
+    FU: Future<Output = T>,
+    S: Scheduler<FutureThenContext<OR, T>, FU>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        let task = Task::from_future_then(observer, self.future, |mut observer, value| {
+            if observer.on_next(value).is_continue() {
                 observer.on_termination(Termination::Completed);
             }
-        })
+        });
+        self.scheduler.run_task(task, None)
     }
 }

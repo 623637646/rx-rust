@@ -9,12 +9,13 @@ use crate::delegate_disposal;
 use crate::disposable::DisposableExt;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::observable::Subscription;
+use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
+use crate::thread_mode::{Local, Shared};
 use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::serialized_multicast::{Admission, MulticastDisposal, SerializedMulticast};
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -33,7 +34,7 @@ use educe::Educe;
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let mut sender = BehaviorSubject::<i32, std::convert::Infallible>::new(0);
+/// let mut sender = BehaviorSubject::<i32, std::convert::Infallible, rx_rust::thread_mode::Local>::local(0);
 /// let _ = sender.on_next(1);
 /// assert_eq!(sender.value(), 1);
 ///
@@ -43,17 +44,21 @@ use educe::Educe;
 /// assert_eq!(seen, [1, 2]); // The current value first, then what follows.
 /// ```
 #[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct BehaviorSubject<'or, T, E>(SerializedMulticast<'or, T, E, T>);
+#[educe(Debug, Clone(bound()))]
+pub struct BehaviorSubject<'or, T, E, M: ObserverMode>(
+    #[educe(Debug(ignore))] SerializedMulticast<'or, T, E, M, T>,
+);
 
-impl<T, E> BehaviorSubject<'_, T, E> {
-    /// Creates a subject whose current value is `value`.
+impl<T, E, M: ObserverMode> BehaviorSubject<'_, T, E, M> {
+    /// Creates a subject in the mode `M`, for code that is generic over the mode, such as an operator
+    /// that creates it in the mode of its source; [`local`](Self::local) and [`shared`](Self::shared)
+    /// name the mode instead.
     pub fn new(value: T) -> Self {
         Self(SerializedMulticast::idle(value))
     }
 }
 
-impl<T, E> BehaviorSubject<'_, T, E>
+impl<T, E, M: ObserverMode> BehaviorSubject<'_, T, E, M>
 where
     T: Clone,
     E: Clone,
@@ -71,19 +76,45 @@ where
     }
 }
 
+impl<T, E> BehaviorSubject<'_, T, E, Local> {
+    /// Creates a subject that stays on one thread.
+    pub fn local(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<T, E> BehaviorSubject<'_, T, E, Shared> {
+    /// Creates a subject that can be fed and subscribed to from any thread.
+    pub fn shared(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
 delegate_disposal!(
-    Disposal<'or, T, E>,
-    OptionDisposal<MulticastDisposal<'or, T, E, T>>,
+    Disposal<'or, T, E, M>,
+    OptionDisposal<MulticastDisposal<'or, T, E, M, T>>,
+    where M: ObserverMode
 );
 
-impl<'or, T, E> Observable<'or, T, E> for BehaviorSubject<'or, T, E>
+impl<'or, T, E, M: ObserverMode> ObservableTypes for BehaviorSubject<'or, T, E, M>
 where
     T: Clone,
     E: Clone,
 {
-    type D = Disposal<'or, T, E>;
+    type Item = T;
+    type Error = E;
+    type Mode = M;
+    type D = Disposal<'or, T, E, M>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<'or, T, E, M, OR> Observable<OR> for BehaviorSubject<'or, T, E, M>
+where
+    M: ObserverMode,
+    OR: IntoBoxedObserver<'or, T, E, M>,
+    T: Clone,
+    E: Clone,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         match self
             .0
             .subscribe_with(observer, |value, terminated| match terminated {
@@ -99,7 +130,7 @@ where
     }
 }
 
-impl<T, E> Observer<T, E> for BehaviorSubject<'_, T, E>
+impl<T, E, M: ObserverMode> Observer<T, E> for BehaviorSubject<'_, T, E, M>
 where
     T: Clone,
     E: Clone,
@@ -128,7 +159,7 @@ where
     }
 }
 
-impl<'or, T, E> Subject<'or, T, E> for BehaviorSubject<'or, T, E>
+impl<T, E, M: ObserverMode> Subject<T, E> for BehaviorSubject<'_, T, E, M>
 where
     T: Clone,
     E: Clone,

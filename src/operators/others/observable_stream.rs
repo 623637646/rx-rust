@@ -2,10 +2,12 @@
 //! [`ObservableExt::into_stream`](crate::observable::ObservableExt::into_stream),
 //! [`ObservableExt::into_stream_with`](crate::observable::ObservableExt::into_stream_with).
 
+use crate::thread_mode::Shared;
 use crate::{
-    observable::Observable,
-    operators::others::observable_try_stream::{ObservableTryStream, StreamBuffer, Unbounded},
-    utils::types::MaybeSend,
+    observable::{Observable, ObservableTypes},
+    operators::others::observable_try_stream::{
+        ObservableTryStream, ObservableTryStreamObserver, StreamBuffer, Unbounded,
+    },
 };
 use educe::Educe;
 use futures::Stream;
@@ -36,16 +38,16 @@ use std::{convert::Infallible, task::Poll};
 /// ```
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ObservableStream<'or, T, OE, B = Unbounded<T>>
+pub struct ObservableStream<T, OE, B = Unbounded<T>>
 where
-    OE: Observable<'or, T, Infallible>,
+    OE: ObservableTypes<Item = T, Error = Infallible>,
 {
-    stream: ObservableTryStream<'or, T, Infallible, OE, B>,
+    stream: ObservableTryStream<T, Infallible, OE, B>,
 }
 
-impl<'or, T, OE> ObservableStream<'or, T, OE>
+impl<T, OE> ObservableStream<T, OE>
 where
-    OE: Observable<'or, T, Infallible>,
+    OE: ObservableTypes<Item = T, Error = Infallible>,
 {
     /// Buffers every item until it is polled; see [`Unbounded`].
     pub fn new(source: OE) -> Self {
@@ -53,9 +55,9 @@ where
     }
 }
 
-impl<'or, T, OE, B> ObservableStream<'or, T, OE, B>
+impl<T, OE, B> ObservableStream<T, OE, B>
 where
-    OE: Observable<'or, T, Infallible>,
+    OE: ObservableTypes<Item = T, Error = Infallible>,
     B: StreamBuffer<T>,
 {
     /// Keeps the items that arrive between two polls in `buffer`; see
@@ -67,16 +69,15 @@ where
     }
 }
 
-impl<'or, T, OE, B> Unpin for ObservableStream<'or, T, OE, B> where
-    OE: Observable<'or, T, Infallible>
+impl<T, OE, B> Unpin for ObservableStream<T, OE, B> where
+    OE: ObservableTypes<Item = T, Error = Infallible>
 {
 }
 
-impl<'or, T, OE, B> Stream for ObservableStream<'or, T, OE, B>
+impl<T, OE, B> Stream for ObservableStream<T, OE, B>
 where
-    T: MaybeSend + 'or,
-    OE: Observable<'or, T, Infallible>,
-    B: StreamBuffer<T> + MaybeSend + 'or,
+    OE: Observable<ObservableTryStreamObserver<Shared, Infallible, B>, Item = T, Error = Infallible>,
+    B: StreamBuffer<T>,
 {
     type Item = B::Item;
 

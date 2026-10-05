@@ -1,9 +1,8 @@
 //! The [`Min`] operator, behind [`ObservableExt::min`](crate::observable::ObservableExt::min).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -47,22 +46,32 @@ pub struct Min<OE> {
 impl<OE> Min<OE> {
     /// Creates a [`Min`] over `source`;
     /// [`ObservableExt::min`](crate::observable::ObservableExt::min) is the fluent form.
-    pub fn new<'or, T, E>(source: OE) -> Self
+    pub fn new<T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
     {
         Self { source }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Min<OE>
+impl<T, E, OE> ObservableTypes for Min<OE>
 where
-    T: PartialOrd + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    T: PartialOrd,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Min<OE>
+where
+    OR: Observer<T, E>,
+    T: PartialOrd,
+    OE: Observable<MinObserver<T, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = MinObserver {
             observer,
             min: None,
@@ -71,7 +80,7 @@ where
     }
 }
 
-struct MinObserver<T, OR> {
+pub struct MinObserver<T, OR> {
     observer: OR,
     min: Option<T>,
 }

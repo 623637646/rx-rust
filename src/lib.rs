@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 // The README is the crate-level documentation, and its examples are doctests. They use the Tokio
-// scheduler, so both only exist under that feature; docs.rs builds with it (see `Cargo.toml`).
+// scheduler, so both only exist under that feature; docs.rs builds with every feature (see
+// `Cargo.toml`).
 #![cfg_attr(feature = "tokio-scheduler", doc = include_str!("../README.md"))]
 #![cfg_attr(
     not(feature = "tokio-scheduler"),
@@ -11,23 +12,11 @@
            with the `tokio-scheduler` feature, as docs.rs does, to include it."
 )]
 
-#[cfg(all(
-    feature = "single-threaded",
-    any(
-        feature = "thread-pool-scheduler",
-        feature = "tokio-scheduler",
-        feature = "async-std-scheduler",
-        feature = "smol-scheduler"
-    )
-))]
-compile_error!(
-    "`single-threaded` and `local-pool-scheduler` are mutually exclusive with multithreaded scheduler features (`thread-pool-scheduler`, `tokio-scheduler`, `async-std-scheduler`, and `smol-scheduler`)"
-);
-
 pub mod disposable;
 pub mod observable;
 pub mod observer;
 pub mod operators;
 pub mod scheduler;
 pub mod subject;
+pub mod thread_mode;
 pub mod utils;

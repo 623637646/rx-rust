@@ -3,17 +3,18 @@ mod tests_utils;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_channel::test_channels;
+use crate::tests_utils::test_scheduler::block_on;
 use pastey::paste;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
+use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::mathematical_aggregate::average::Average;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::creating::{create::Create, just::Just},
-    subject::publish_subject::PublishSubject,
+    operators::creating::just::Just,
 };
 use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
@@ -276,60 +277,55 @@ fn test_unsubscribe() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
+    block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
         let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = observable.average();
 
-        let _subscription = runtime
+        let _subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        let mut sender = runtime
+        let mut sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(1).is_continue());
                 sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        let mut sender = runtime
+        let mut sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(2).is_continue());
                 sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        let sender = runtime
+        let sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(4).is_continue());
                 sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime
+        scheduler
             .spawn(async move {
                 sender.on_termination(Termination::<Infallible>::Completed);
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [2.3333333333333335]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -338,12 +334,11 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let mut subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (channels, observable) = test_channels::<'_, i32, &str>();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.average();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -353,32 +348,46 @@ fn test_subscribe_by_different_observer() {
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(subject.on_next(1).is_continue());
+    assert!(channels.on_next(0, 1).is_continue());
+    assert!(channels.on_next(1, 1).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(subject.on_next(2).is_continue());
+    assert!(channels.on_next(0, 2).is_continue());
+    assert!(channels.on_next(1, 2).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(subject.on_next(4).is_continue());
+    assert!(channels.on_next(0, 4).is_continue());
+    assert!(channels.on_next(1, 4).is_continue());
     assert_eq!(checker_1.values(), []);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), []);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::Completed);
+    channels.on_termination(0, Termination::Completed);
+    channels.on_termination(1, Termination::Completed);
     assert_eq!(checker_1.values(), [2.3333333333333335]);
     assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(channels.state(0), ChannelState::Completed);
     assert_eq!(checker_2.values(), [2.3333333333333335]);
     assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(channels.state(1), ChannelState::Completed);
 }
 
 #[test]
@@ -513,7 +522,7 @@ fn test_lifetime_sub() {
     // let life_marker = TestStruct;
 
     {
-        let observable = Create::new(|mut observer| {
+        let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::new(CallbackDisposal::new(|| {
@@ -539,7 +548,7 @@ fn test_lifetime_or() {
     // let life_marker_2 = TestStruct;
 
     {
-        let observable = Create::new(|mut observer| {
+        let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(111).is_continue());
             life_marker_1 = Some(observer);
             Subscription::default()
@@ -557,7 +566,7 @@ fn test_lifetime_or() {
 
 #[test]
 fn test_clone() {
-    let observable = Create::new(|mut observer| {
+    let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()

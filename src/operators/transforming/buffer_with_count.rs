@@ -1,10 +1,9 @@
 //! The [`BufferWithCount`] operator, behind
 //! [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -52,17 +51,22 @@ impl<OE> BufferWithCount<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, Vec<T>, E> for BufferWithCount<OE>
+impl<T, E, OE> ObservableTypes for BufferWithCount<OE>
 where
-    T: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = Vec<T>;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<Vec<T>, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for BufferWithCount<OE>
+where
+    OR: Observer<Vec<T>, E>,
+    OE: Observable<BufferWithCountObserver<T, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = BufferWithCountObserver {
             observer,
             values: Vec::default(),
@@ -72,7 +76,7 @@ where
     }
 }
 
-struct BufferWithCountObserver<T, OR> {
+pub struct BufferWithCountObserver<T, OR> {
     observer: OR,
     values: Vec<T>,
     count: NonZeroUsize,

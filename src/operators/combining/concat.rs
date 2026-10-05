@@ -5,9 +5,10 @@ use crate::delegate_disposal;
 use crate::disposable::{
     Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
 };
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -49,30 +50,48 @@ pub struct Concat<OE1, OE2> {
 impl<OE1, OE2> Concat<OE1, OE2> {
     /// Creates a [`Concat`] over `source_1` and `source_2`;
     /// [`ObservableExt::concat_with`](crate::observable::ObservableExt::concat_with) is the fluent form.
-    pub fn new<'or, T, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<T, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T, E>,
-        OE2: Observable<'or, T, E>,
+        OE1: ObservableTypes<Item = T, Error = E>,
+        OE2: ObservableTypes<Item = T, Error = E>,
     {
         Self { source_1, source_2 }
     }
 }
 
 delegate_disposal!(
-    Disposal<D1, D2>,
-    ChainDisposal<SharedDisposal<Subscription<D2>>, D1>,
-    where D1: Disposable, D2: Disposable
+    Disposal<M, D1, D2>,
+    ChainDisposal<SharedDisposal<M, Subscription<D2>>, D1>,
+    where M: ThreadMode, D1: Disposable, D2: Disposable
 );
 
-impl<'or, T, E, OE1, OE2> Observable<'or, T, E> for Concat<OE1, OE2>
+impl<T, E, OE1, OE2> ObservableTypes for Concat<OE1, OE2>
 where
-    OE1: Observable<'or, T, E>,
-    OE2: Observable<'or, T, E> + MaybeSend + 'or,
-    OE2::D: MaybeSend + 'or,
+    OE1: ObservableTypes<Item = T, Error = E>,
+    OE2: ObservableTypes<Item = T, Error = E>,
 {
-    type D = Disposal<OE1::D, OE2::D>;
+    type Item = T;
+    type Error = E;
+    type Mode = Joined<OE1::Mode, OE2::Mode>;
+    type D = Disposal<Joined<OE1::Mode, OE2::Mode>, OE1::D, OE2::D>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE1, OE2, OR> Observable<OR> for Concat<OE1, OE2>
+where
+    OR: Observer<T, E>,
+    OE1: Observable<
+            ConcatObserver<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                OR,
+                OE2,
+                <OE2 as ObservableTypes>::D,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    OE2: Observable<OR, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let sub_2 = SharedDisposal::default();
         let observer = ConcatObserver {
             observer,
@@ -86,16 +105,17 @@ where
     }
 }
 
-struct ConcatObserver<OR, OE2, D: Disposable> {
+pub struct ConcatObserver<M: ThreadMode, OR, OE2, D: Disposable> {
     observer: OR,
     source_2: OE2,
-    sub_2: SharedDisposal<Subscription<D>>,
+    sub_2: SharedDisposal<M, Subscription<D>>,
 }
 
-impl<'or, T, E, OR, OE2> Observer<T, E> for ConcatObserver<OR, OE2, OE2::D>
+impl<M, T, E, OR, OE2> Observer<T, E> for ConcatObserver<M, OR, OE2, OE2::D>
 where
-    OR: Observer<T, E> + MaybeSend + 'or,
-    OE2: Observable<'or, T, E>,
+    M: ThreadMode,
+    OR: Observer<T, E>,
+    OE2: Observable<OR, Item = T, Error = E>,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.observer.on_next(value)

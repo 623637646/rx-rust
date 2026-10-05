@@ -1,10 +1,9 @@
 //! The [`DoBeforeNext`] operator, behind
 //! [`ObservableExt::do_before_next`](crate::observable::ObservableExt::do_before_next).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -51,23 +50,33 @@ pub struct DoBeforeNext<OE, F> {
 impl<OE, F> DoBeforeNext<OE, F> {
     /// Creates a [`DoBeforeNext`] over `source`;
     /// [`ObservableExt::do_before_next`](crate::observable::ObservableExt::do_before_next) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+    pub fn new<T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnMut(&T),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for DoBeforeNext<OE, F>
+impl<T, E, OE, F> ObservableTypes for DoBeforeNext<OE, F>
 where
-    OE: Observable<'or, T, E>,
-    F: FnMut(&T) + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    F: FnMut(&T),
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for DoBeforeNext<OE, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<DoBeforeNextObserver<OR, F>, Item = T, Error = E>,
+    F: FnMut(&T),
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source.subscribe(DoBeforeNextObserver {
             observer,
             callback: self.callback,
@@ -75,7 +84,7 @@ where
     }
 }
 
-struct DoBeforeNextObserver<OR, F> {
+pub struct DoBeforeNextObserver<OR, F> {
     observer: OR,
     callback: F,
 }

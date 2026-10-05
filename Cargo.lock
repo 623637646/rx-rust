@@ -627,10 +627,10 @@ version = "1.0.1"
 dependencies = [
  "async-io",
  "async-std",
- "cfg-if",
  "educe",
  "futures",
  "pastey",
+ "rx-rust",
  "smol",
  "tokio",
 ]

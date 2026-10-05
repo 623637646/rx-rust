@@ -1,9 +1,7 @@
 //! An observable that is one of two types, without boxing.
 
-use super::{Observable, Subscription};
-use crate::{
-    disposable::either_disposal::EitherDisposal, observer::Observer, utils::types::MaybeSend,
-};
+use super::{Observable, ObservableTypes, Subscription};
+use crate::{disposable::either_disposal::EitherDisposal, observer::Observer, thread_mode::Joined};
 use educe::Educe;
 
 /// An observable that is one of two concrete types.
@@ -39,14 +37,25 @@ pub enum EitherObservable<A, B> {
     Right(B),
 }
 
-impl<'or, T, E, A, B> Observable<'or, T, E> for EitherObservable<A, B>
+impl<A, B> ObservableTypes for EitherObservable<A, B>
 where
-    A: Observable<'or, T, E>,
-    B: Observable<'or, T, E>,
+    A: ObservableTypes,
+    B: ObservableTypes<Item = A::Item, Error = A::Error>,
 {
+    type Item = A::Item;
+    type Error = A::Error;
+    /// Either side can be the one subscribed to, so the mode is both sides' joined.
+    type Mode = Joined<A::Mode, B::Mode>;
     type D = EitherDisposal<Subscription<A::D>, Subscription<B::D>>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<A, B, OR> Observable<OR> for EitherObservable<A, B>
+where
+    OR: Observer<A::Item, A::Error>,
+    A: Observable<OR>,
+    B: Observable<OR> + ObservableTypes<Item = A::Item, Error = A::Error>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         match self {
             Self::Left(observable) => {
                 Subscription::new(EitherDisposal::Left(observable.subscribe(observer)))

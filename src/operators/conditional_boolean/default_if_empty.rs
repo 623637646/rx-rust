@@ -1,9 +1,8 @@
 //! The [`DefaultIfEmpty`] operator, behind
 //! [`ObservableExt::default_if_empty`](crate::observable::ObservableExt::default_if_empty).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -44,9 +43,9 @@ pub struct DefaultIfEmpty<T, OE> {
 impl<T, OE> DefaultIfEmpty<T, OE> {
     /// Creates a [`DefaultIfEmpty`] over `source`;
     /// [`ObservableExt::default_if_empty`](crate::observable::ObservableExt::default_if_empty) is the fluent form.
-    pub fn new<'or, E>(source: OE, item: T) -> Self
+    pub fn new<E>(source: OE, item: T) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source,
@@ -55,14 +54,22 @@ impl<T, OE> DefaultIfEmpty<T, OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for DefaultIfEmpty<T, OE>
+impl<T, E, OE> ObservableTypes for DefaultIfEmpty<T, OE>
 where
-    OE: Observable<'or, T, E>,
-    T: MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for DefaultIfEmpty<T, OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<DefaultIfEmptyObserver<T, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = DefaultIfEmptyObserver {
             observer,
             default_value: Some(self.default_value),
@@ -71,7 +78,7 @@ where
     }
 }
 
-struct DefaultIfEmptyObserver<T, OR> {
+pub struct DefaultIfEmptyObserver<T, OR> {
     observer: OR,
     default_value: Option<T>, // None means the source's got at least one value already.
 }

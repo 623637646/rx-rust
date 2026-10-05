@@ -2,9 +2,9 @@ use educe::Educe;
 use futures::future::abortable;
 use futures::stream::AbortHandle;
 use rx_rust::disposable::Disposable;
-use rx_rust::disposable::bound_drop_disposal::BoundDropDisposal;
-use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::MaybeSend;
+use rx_rust::observable::Subscription;
+use rx_rust::scheduler::{Scheduler, SchedulerTypes, Task, drive};
+use rx_rust::thread_mode::Shared;
 use std::cell::Cell;
 use std::time::Duration;
 
@@ -36,23 +36,26 @@ impl Disposable for ThreadCheckerDisposal {
     }
 }
 
-impl Scheduler for ThreadCheckerScheduler {
+impl SchedulerTypes for ThreadCheckerScheduler {
+    type Mode = Shared;
     type D = ThreadCheckerDisposal;
+}
 
-    fn spawn_future(
-        &self,
-        future: impl Future<Output = ()> + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::D> {
+impl<TC, P> Scheduler<TC, P> for ThreadCheckerScheduler
+where
+    TC: Send + 'static,
+    P: Send + 'static,
+{
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
         let thread_name = self.name;
+        let future = drive(task, delay, |duration| async move {
+            async_io::Timer::after(duration).await;
+        });
         let (abortable, abort_handle) = abortable(future);
         std::thread::spawn(move || {
             THREAD_NAME.with(|name| name.set(Some(thread_name)));
             let _ = futures::executor::block_on(abortable);
         });
-        BoundDropDisposal::new(ThreadCheckerDisposal(abort_handle))
-    }
-
-    fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<> {
-        async_io::Timer::after(duration)
+        Subscription::new(ThreadCheckerDisposal(abort_handle))
     }
 }

@@ -2,73 +2,77 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
-use crate::tests_utils::test_runtime::block_on;
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::scheduler::Scheduler;
-use std::convert::Infallible;
-
+use crate::tests_utils::test_channel::ChannelState;
+use crate::tests_utils::test_channel::test_channel;
+use crate::tests_utils::test_channel::test_channels;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
+use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
+use rx_rust::operators::creating::create::Create;
 use rx_rust::{
     observable::ObservableExt,
     observer::{Observer, Termination},
-    operators::creating::{create::Create, just::Just},
-    subject::publish_subject::PublishSubject,
+    operators::creating::just::Just,
 };
+use std::convert::Infallible;
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    let mut subject = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
 
     let (on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(subject.on_next(111).is_continue());
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::<Infallible>::Completed);
+    sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
 fn test_error() {
-    let mut subject = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
 
     let (on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(subject.on_next(111).is_continue());
+    assert!(sender.on_next(111).is_continue());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::Error("error"));
+    sender.on_termination(Termination::Error("error"));
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
 #[test]
 fn test_unsubscribe() {
-    let mut subject = PublishSubject::default();
+    let (channels, observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -78,32 +82,43 @@ fn test_unsubscribe() {
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(subject.on_next(111).is_continue());
+    assert!(channels.on_next(0, 111).is_continue());
+    assert!(channels.on_next(1, 111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
     subscription_1.dispose();
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(channels.state(0), ChannelState::Unsubscribed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(subject.on_next(222).is_continue());
+    assert!(channels.on_next(1, 222).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(channels.state(0), ChannelState::Unsubscribed);
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::Error("error"));
+    channels.on_termination(1, Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(channels.state(0), ChannelState::Unsubscribed);
     assert_eq!(checker_2.values(), [111, 222]);
     assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Error("error"));
 }
 
 #[test]
@@ -111,24 +126,26 @@ fn test_ref() {
     let value = 111;
     let error = 222;
 
-    let mut subject = PublishSubject::default();
+    let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
 
     let (on_next, on_termination) = observer.into_callbacks();
     let _subscription = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    assert!(subject.on_next(&value).is_continue());
+    assert!(sender.on_next(&value).is_continue());
     assert_eq!(checker.values(), [&value]);
     assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::Error(&error));
+    sender.on_termination(Termination::Error(&error));
     assert_eq!(checker.values(), [&value]);
     assert_eq!(checker.state(), State::Error(&error));
+    assert_eq!(channel_checker.state(), ChannelState::Error(&error));
 }
 
 #[test]
@@ -153,61 +170,47 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
-        let subject = PublishSubject::default();
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, &i32, &str>();
         let (checker, observer) = Checker::new();
 
         // Custom operations
-        let observable = subject.clone();
 
-        let subscription = runtime
+        let subscription = scheduler
             .spawn(async move {
                 let (on_next, on_termination) = observer.into_callbacks();
                 observable.subscribe_with_callback(on_next, on_termination)
             })
-            .await
-            .unwrap();
+            .await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        let mut subject_cloned = subject.clone();
-        runtime
+        let _sender = scheduler
             .spawn(async move {
-                assert!(subject_cloned.on_next(&111).is_continue());
+                assert!(sender.on_next(&111).is_continue());
+                sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime
-            .spawn(async { subscription.dispose() })
-            .await
-            .unwrap();
-        runtime.sleep(DURATION_10_MS).await;
+        scheduler.spawn(async { subscription.dispose() }).await;
+        scheduler.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Dropped);
-
-        let subject_cloned = subject.clone();
-        runtime
-            .spawn(async move {
-                subject_cloned.on_termination(Termination::Error("error"));
-            })
-            .await
-            .unwrap();
-        assert_eq!(checker.values(), [&111]);
-        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
 }
 
 #[test]
 fn test_multiple_operation() {
-    let mut subject = PublishSubject::default();
+    let (channels, observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
 
     let (on_next, on_termination) = observer_1.into_callbacks();
     let _subscription_1 = observable
@@ -217,20 +220,28 @@ fn test_multiple_operation() {
     let _subscription_2 = observable.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(subject.on_next(111).is_continue());
+    assert!(channels.on_next(0, 111).is_continue());
+    assert!(channels.on_next(1, 111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::Error("error"));
+    channels.on_termination(0, Termination::Error("error"));
+    channels.on_termination(1, Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Error("error"));
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Error("error"));
 }
 
 #[test]
@@ -244,7 +255,7 @@ fn test_lifetime_sub() {
     // let life_marker = TestStruct;
 
     {
-        let observable = Create::new(|mut observer| {
+        let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::new(CallbackDisposal::new(|| {
@@ -267,7 +278,7 @@ fn test_lifetime_or() {
     // let life_marker_2 = TestStruct;
 
     {
-        let observable = Create::new(|observer| {
+        let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
@@ -283,10 +294,9 @@ fn test_fn() {
     let mut s1 = TestStruct;
     let s2 = TestStruct;
 
-    let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (_, observable, _) = test_channel::<'_, i32, &str>();
 
     // Custom operations
-    let observable = subject.clone();
 
     let _subscription = observable.subscribe_with_callback(
         |_| {

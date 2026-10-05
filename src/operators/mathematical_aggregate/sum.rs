@@ -1,9 +1,8 @@
 //! The [`Sum`] operator, behind [`ObservableExt::sum`](crate::observable::ObservableExt::sum).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -44,22 +43,32 @@ pub struct Sum<OE> {
 impl<OE> Sum<OE> {
     /// Creates a [`Sum`] over `source`;
     /// [`ObservableExt::sum`](crate::observable::ObservableExt::sum) is the fluent form.
-    pub fn new<'or, T, E>(source: OE) -> Self
+    pub fn new<T, E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
     {
         Self { source }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Sum<OE>
+impl<T, E, OE> ObservableTypes for Sum<OE>
 where
-    T: AddAssign + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    T: AddAssign,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Sum<OE>
+where
+    OR: Observer<T, E>,
+    T: AddAssign,
+    OE: Observable<SumObserver<T, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = SumObserver {
             observer,
             sum: None,
@@ -68,7 +77,7 @@ where
     }
 }
 
-struct SumObserver<T, OR> {
+pub struct SumObserver<T, OR> {
     observer: OR,
     sum: Option<T>,
 }

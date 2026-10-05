@@ -2,12 +2,11 @@
 //! [`ObservableExt::collect`](crate::observable::ObservableExt::collect),
 //! [`ObservableExt::to_vec`](crate::observable::ObservableExt::to_vec).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    utils::types::MarkerType,
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -55,9 +54,9 @@ pub struct Collect<C, T, OE> {
 impl<C, T, OE> Collect<C, T, OE> {
     /// Creates a [`Collect`] over `source`;
     /// [`ObservableExt::collect`](crate::observable::ObservableExt::collect) is the fluent form.
-    pub fn new<'or, E>(source: OE) -> Self
+    pub fn new<E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         C: Default + Extend<T>,
     {
         Self {
@@ -67,14 +66,24 @@ impl<C, T, OE> Collect<C, T, OE> {
     }
 }
 
-impl<'or, C, T, E, OE> Observable<'or, C, E> for Collect<C, T, OE>
+impl<C, T, E, OE> ObservableTypes for Collect<C, T, OE>
 where
-    C: Default + Extend<T> + MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    C: Default + Extend<T>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = C;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<C, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<C, T, E, OE, OR> Observable<OR> for Collect<C, T, OE>
+where
+    OR: Observer<C, E>,
+    C: Default + Extend<T>,
+    OE: Observable<CollectObserver<C, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = CollectObserver {
             observer,
             collection: C::default(),
@@ -83,7 +92,7 @@ where
     }
 }
 
-struct CollectObserver<C, OR> {
+pub struct CollectObserver<C, OR> {
     observer: OR,
     collection: C,
 }

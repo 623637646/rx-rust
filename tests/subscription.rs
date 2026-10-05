@@ -1,13 +1,14 @@
 mod tests_utils;
 
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
-use rx_rust::utils::types::Shared;
+use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{disposable::Disposable, observable::Subscription};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use tests_utils::test_struct::TestStruct;
 
 struct TestDisposal {
-    disposed: Shared<MutableBool>,
+    disposed: Arc<AtomicBool>,
 }
 
 impl Disposable for TestDisposal {
@@ -19,7 +20,7 @@ impl Disposable for TestDisposal {
 
 #[test]
 fn test_disposal_unsubscribe() {
-    let disposed = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
     let test_disposal = TestDisposal {
         disposed: disposed.clone(),
     };
@@ -31,7 +32,7 @@ fn test_disposal_unsubscribe() {
 
 #[test]
 fn test_disposal_dropped() {
-    let disposed = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
     {
         let test_disposal = TestDisposal {
             disposed: disposed.clone(),
@@ -44,7 +45,7 @@ fn test_disposal_dropped() {
 
 #[test]
 fn test_callback_unsubscribe() {
-    let disposed = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
     let disposed_clone = disposed.clone();
     let subscription = Subscription::new(CallbackDisposal::new(move || {
         assert!(!disposed_clone.read());
@@ -57,7 +58,7 @@ fn test_callback_unsubscribe() {
 
 #[test]
 fn test_callback_dropped() {
-    let disposed = Shared::new(MutableBool::new(false));
+    let disposed = Arc::new(AtomicBool::new(false));
     {
         let disposed_clone = disposed.clone();
         let _subscription = Subscription::new(CallbackDisposal::new(move || {
@@ -71,8 +72,8 @@ fn test_callback_dropped() {
 
 #[test]
 fn test_chain_disposable() {
-    let disposed_1 = Shared::new(MutableBool::new(false));
-    let disposed_2 = Shared::new(MutableBool::new(false));
+    let disposed_1 = Arc::new(AtomicBool::new(false));
+    let disposed_2 = Arc::new(AtomicBool::new(false));
     let test_disposal_1 = TestDisposal {
         disposed: disposed_1.clone(),
     };
@@ -89,8 +90,8 @@ fn test_chain_disposable() {
 
 #[test]
 fn test_chain_disposable_after_creation() {
-    let disposed_1 = Shared::new(MutableBool::new(false));
-    let disposed_2 = Shared::new(MutableBool::new(false));
+    let disposed_1 = Arc::new(AtomicBool::new(false));
+    let disposed_2 = Arc::new(AtomicBool::new(false));
     let test_disposal_1 = TestDisposal {
         disposed: disposed_1.clone(),
     };
@@ -107,8 +108,8 @@ fn test_chain_disposable_after_creation() {
 
 #[test]
 fn test_chain_subscription() {
-    let disposed_1 = Shared::new(MutableBool::new(false));
-    let disposed_2 = Shared::new(MutableBool::new(false));
+    let disposed_1 = Arc::new(AtomicBool::new(false));
+    let disposed_2 = Arc::new(AtomicBool::new(false));
     let test_disposal_1 = TestDisposal {
         disposed: disposed_1.clone(),
     };

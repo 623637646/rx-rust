@@ -1,10 +1,9 @@
 //! The [`SkipLast`] operator, behind
 //! [`ObservableExt::skip_last`](crate::observable::ObservableExt::skip_last).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -51,14 +50,22 @@ impl<OE> SkipLast<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for SkipLast<OE>
+impl<T, E, OE> ObservableTypes for SkipLast<OE>
 where
-    T: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for SkipLast<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<SkipLastObserver<T, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source.subscribe(SkipLastObserver {
             observer,
             count: self.count,
@@ -67,7 +74,7 @@ where
     }
 }
 
-struct SkipLastObserver<T, OR> {
+pub struct SkipLastObserver<T, OR> {
     observer: OR,
     count: usize,
     buffer: VecDeque<T>,

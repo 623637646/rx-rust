@@ -6,9 +6,11 @@ use crate::disposable::{
     Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
 };
 use crate::observable::Subscription;
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
+use crate::utils::resubscribe::Resubscribe;
 use crate::{
-    observable::Observable,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -59,10 +61,10 @@ pub struct Retry<OE, F> {
 impl<OE, F> Retry<OE, F> {
     /// Creates a [`Retry`] over `source`;
     /// [`ObservableExt::retry`](crate::observable::ObservableExt::retry) is the fluent form.
-    pub fn new<'or, T, E, OE1>(source: OE, callback: F) -> Self
+    pub fn new<T, E, OE1>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Item = T, Error = E>,
         F: FnMut(E) -> RetryAction<E, OE1>,
     {
         Self { source, callback }
@@ -70,26 +72,55 @@ impl<OE, F> Retry<OE, F> {
 }
 
 delegate_disposal!(
-    Disposal<D, D1>,
-    ChainDisposal<SharedDisposal<Subscription<D1>>, D>,
-    where D: Disposable, D1: Disposable
+    Disposal<M, D, D1>,
+    ChainDisposal<SharedDisposal<M, Subscription<D1>>, D>,
+    where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
-impl<'or, T, E, OE, OE1, F> Observable<'or, T, E> for Retry<OE, F>
+impl<T, E, OE, OE1, F> ObservableTypes for Retry<OE, F>
 where
-    OE: Observable<'or, T, E>,
-    OE1: Observable<'or, T, E>,
-    OE1::D: MaybeSend + 'or,
-    F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    OE1: ObservableTypes<Item = T, Error = E>,
+    F: FnMut(E) -> RetryAction<E, OE1>,
 {
-    type D = Disposal<OE::D, OE1::D>;
+    type Item = T;
+    type Error = E;
+    type Mode = Joined<OE::Mode, OE1::Mode>;
+    type D = Disposal<Joined<OE::Mode, OE1::Mode>, OE::D, OE1::D>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OE1, F, OR> Observable<OR> for Retry<OE, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            RetryObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                OR,
+                F,
+                OE1,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    OE1: Observable<
+            RetryObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                OR,
+                F,
+                OE1,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    F: FnMut(E) -> RetryAction<E, OE1>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let shared_disposal = SharedDisposal::default();
         let observer = RetryObserver {
             observer,
             callback: self.callback,
             shared_disposal: shared_disposal.clone(),
+            resubscribe: Resubscribe::new(),
         };
         self.source
             .subscribe(observer)
@@ -98,18 +129,20 @@ where
     }
 }
 
-struct RetryObserver<OR, F, D: Disposable> {
+pub struct RetryObserver<M: ThreadMode, OR, F, OE1: ObservableTypes> {
     observer: OR,
     callback: F,
-    shared_disposal: SharedDisposal<Subscription<D>>,
+    shared_disposal: SharedDisposal<M, Subscription<OE1::D>>,
+    /// Subscribes the observable the callback returned, with this observer.
+    resubscribe: Resubscribe<OE1, Self>,
 }
 
-impl<'or, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<OR, F, OE1::D>
+impl<M, T, E, OR, OE1, F> Observer<T, E> for RetryObserver<M, OR, F, OE1>
 where
-    OR: Observer<T, E> + MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
-    OE1::D: MaybeSend + 'or,
-    F: FnMut(E) -> RetryAction<E, OE1> + MaybeSend + 'or,
+    M: ThreadMode,
+    OR: Observer<T, E>,
+    OE1: ObservableTypes<Item = T, Error = E>,
+    F: FnMut(E) -> RetryAction<E, OE1>,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.observer.on_next(value)
@@ -122,9 +155,10 @@ where
                 let action = (self.callback)(error);
                 match action {
                     RetryAction::Retry(observable) => {
+                        let resubscribe = self.resubscribe;
                         self.shared_disposal
                             .clone()
-                            .replace(|| observable.subscribe(self));
+                            .replace(|| resubscribe.subscribe(observable, self));
                     }
                     RetryAction::Stop(error) => {
                         self.observer.on_termination(Termination::Error(error))

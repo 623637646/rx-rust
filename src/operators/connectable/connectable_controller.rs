@@ -6,10 +6,10 @@
 
 use super::ref_count::RefCount;
 use crate::disposable::Disposable;
+use crate::observable::ObservableTypes;
 use crate::observable::{Observable, Subscription};
 use crate::observer::Observer;
-use crate::subject::subject_observable::SubjectObservable;
-use crate::utils::types::MaybeSend;
+use crate::subject::SubjectObservable;
 use educe::Educe;
 
 /// Marker for a connectable controller that is not connected to its source.
@@ -44,7 +44,7 @@ pub struct Connected<D: Disposable>(Subscription<D>);
 /// let values_2 = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
 /// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), subject);
 /// let observable = controller.observable();
 /// let values_1_observer = Arc::clone(&values_1);
@@ -112,10 +112,10 @@ impl<OE, S> ConnectableController<OE, S, Disconnected> {
     /// FromIter::new([1_i32]).publish().connect();
     /// ```
     #[must_use = "the returned controller owns the source connection"]
-    pub fn connect<'or, T, E>(self) -> ConnectableController<OE, S, Connected<OE::D>>
+    pub fn connect<T, E>(self) -> ConnectableController<OE, S, Connected<OE::D>>
     where
-        OE: Observable<'or, T, E> + Clone,
-        S: Observer<T, E> + Clone + MaybeSend + 'or,
+        OE: Observable<S, Item = T, Error = E> + Clone,
+        S: Observer<T, E> + Clone,
     {
         let sub = self.source.clone().subscribe(self.subject.clone());
         ConnectableController {
@@ -126,9 +126,9 @@ impl<OE, S> ConnectableController<OE, S, Disconnected> {
     }
 
     /// Connects while there is at least one subscriber, and disconnects when the last one leaves.
-    pub fn ref_count<'or, T, E>(self) -> RefCount<'or, T, E, OE, S>
+    pub fn ref_count(self) -> RefCount<OE, S>
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes,
         S: Clone,
     {
         RefCount::new(self)

@@ -1,13 +1,15 @@
 //! The [`TakeUntil`] operator, behind
 //! [`ObservableExt::take_until`](crate::observable::ObservableExt::take_until).
 
+use crate::disposable::chain_disposal::ChainDisposal;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -28,8 +30,8 @@ use educe::Educe;
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let mut source: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
-/// let mut stop: PublishSubject<'_, (), Infallible> = PublishSubject::default();
+/// let mut source: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
+/// let mut stop: PublishSubject<'_, (), Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
 /// let values_observer = Arc::clone(&values);
 /// let terminations_observer = Arc::clone(&terminations);
 ///
@@ -63,27 +65,59 @@ pub struct TakeUntil<OE, OE1> {
 impl<OE, OE1> TakeUntil<OE, OE1> {
     /// Creates a [`TakeUntil`] over `source`;
     /// [`ObservableExt::take_until`](crate::observable::ObservableExt::take_until) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, stop: OE1) -> Self
+    pub fn new<T, E>(source: OE, stop: OE1) -> Self
     where
-        OE: Observable<'or, T, E>,
-        OE1: Observable<'or, (), E>,
+        OE: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Item = (), Error = E>,
     {
         Self { source, stop }
     }
 }
 
-impl<'or, T, E, OE, OE1> Observable<'or, T, E> for TakeUntil<OE, OE1>
+impl<T, E, OE, OE1> ObservableTypes for TakeUntil<OE, OE1>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
-    OE1: Observable<'or, (), E>,
-    OE1::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    OE1: ObservableTypes<Item = (), Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = T;
+    type Error = E;
+    type Mode = Joined<OE::Mode, OE1::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE::Mode, OE1::Mode>,
+        T,
+        E,
+        (),
+        ChainDisposal<OE::D, OE1::D>,
+    >;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OE1, OR> Observable<OR> for TakeUntil<OE, OE1>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            TakeUntilObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    OE1: Observable<
+            StopObserver<
+                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = (),
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         subscribe_with_context_owning_source(observer, (), |context| {
             let subscription_1 = self.stop.subscribe(StopObserver(context.clone()));
             let subscription_2 = self.source.subscribe(TakeUntilObserver(context));
@@ -92,9 +126,11 @@ where
     }
 }
 
-struct TakeUntilObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, (), D>);
+pub struct TakeUntilObserver<M: ThreadMode, T, E, OR, D: Disposable>(
+    SubscriptionContext<M, T, E, OR, (), D>,
+);
 
-impl<T, E, OR, D> Observer<T, E> for TakeUntilObserver<T, E, OR, D>
+impl<M: ThreadMode, T, E, OR, D> Observer<T, E> for TakeUntilObserver<M, T, E, OR, D>
 where
     OR: Observer<T, E>,
     D: Disposable,
@@ -108,9 +144,11 @@ where
     }
 }
 
-struct StopObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, (), D>);
+pub struct StopObserver<M: ThreadMode, T, E, OR, D: Disposable>(
+    SubscriptionContext<M, T, E, OR, (), D>,
+);
 
-impl<T, E, OR, D> Observer<(), E> for StopObserver<T, E, OR, D>
+impl<M: ThreadMode, T, E, OR, D> Observer<(), E> for StopObserver<M, T, E, OR, D>
 where
     OR: Observer<T, E>,
     D: Disposable,

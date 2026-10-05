@@ -52,6 +52,14 @@ impl<D: Disposable> BoundDropDisposal<D> {
 
     /// Converts the inner disposal with [`From`], typically into a type made by
     /// [`delegate_disposal!`](crate::delegate_disposal).
+    /// Converts the inner disposal with `f`, keeping it bound.
+    ///
+    /// Unlike [`map_into`](Self::map_into) it needs no `From`, which is what erasing the disposal
+    /// into a box takes.
+    pub fn map_inner<D1: Disposable>(self, f: impl FnOnce(D) -> D1) -> BoundDropDisposal<D1> {
+        BoundDropDisposal::new(f(self.into_inner()))
+    }
+
     pub fn map_into<D1>(self) -> BoundDropDisposal<D1>
     where
         D1: From<D> + Disposable,

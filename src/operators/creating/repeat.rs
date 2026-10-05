@@ -1,9 +1,9 @@
 //! The [`Repeat`] source.
 
 use crate::operators::creating::from_iter::FromIter;
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::Observer,
 };
 use educe::Educe;
@@ -48,16 +48,22 @@ impl<T> Repeat<T> {
     }
 }
 
-impl<'or, T> Observable<'or, T, Infallible> for Repeat<T>
+impl<T> ObservableTypes for Repeat<T>
 where
     T: Clone,
 {
+    type Item = T;
+    type Error = Infallible;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, OR> Observable<OR> for Repeat<T>
+where
+    OR: Observer<T, Infallible>,
+    T: Clone,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
     }
 }

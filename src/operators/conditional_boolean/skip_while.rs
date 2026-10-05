@@ -1,9 +1,8 @@
 //! The [`SkipWhile`] operator, behind
 //! [`ObservableExt::skip_while`](crate::observable::ObservableExt::skip_while).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -44,23 +43,33 @@ pub struct SkipWhile<OE, F> {
 impl<OE, F> SkipWhile<OE, F> {
     /// Creates a [`SkipWhile`] over `source`;
     /// [`ObservableExt::skip_while`](crate::observable::ObservableExt::skip_while) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+    pub fn new<T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnMut(&T) -> bool,
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for SkipWhile<OE, F>
+impl<T, E, OE, F> ObservableTypes for SkipWhile<OE, F>
 where
-    OE: Observable<'or, T, E>,
-    F: FnMut(&T) -> bool + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    F: FnMut(&T) -> bool,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for SkipWhile<OE, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<SkipWhileObserver<OR, F>, Item = T, Error = E>,
+    F: FnMut(&T) -> bool,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = SkipWhileObserver {
             observer,
             callback: self.callback,
@@ -70,7 +79,7 @@ where
     }
 }
 
-struct SkipWhileObserver<OR, F> {
+pub struct SkipWhileObserver<OR, F> {
     observer: OR,
     callback: F,
     skip: bool,

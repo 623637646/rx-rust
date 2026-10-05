@@ -2,10 +2,9 @@
 //! [`ObservableExt::distinct_until_changed`](crate::observable::ObservableExt::distinct_until_changed),
 //! [`ObservableExt::distinct_until_changed_with_key_selector`](crate::observable::ObservableExt::distinct_until_changed_with_key_selector).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -45,9 +44,9 @@ pub struct DistinctUntilChanged<OE, F> {
 
 impl<OE, F> DistinctUntilChanged<OE, F> {
     /// Creates a [`DistinctUntilChanged`] over `source` that compares the keys `key_selector` computes.
-    pub fn new_with_key_selector<'or, T, E, K>(source: OE, key_selector: F) -> Self
+    pub fn new_with_key_selector<T, E, K>(source: OE, key_selector: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnMut(&T) -> K,
     {
         Self {
@@ -60,10 +59,10 @@ impl<OE, F> DistinctUntilChanged<OE, F> {
 impl<T, OE> DistinctUntilChanged<OE, fn(&T) -> T> {
     /// Creates a [`DistinctUntilChanged`] over `source`;
     /// [`ObservableExt::distinct_until_changed`](crate::observable::ObservableExt::distinct_until_changed) is the fluent form.
-    pub fn new<'or, E>(source: OE) -> Self
+    pub fn new<E>(source: OE) -> Self
     where
         T: Clone,
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source,
@@ -72,15 +71,26 @@ impl<T, OE> DistinctUntilChanged<OE, fn(&T) -> T> {
     }
 }
 
-impl<'or, T, E, OE, F, K> Observable<'or, T, E> for DistinctUntilChanged<OE, F>
+impl<T, E, OE, F, K> ObservableTypes for DistinctUntilChanged<OE, F>
 where
-    OE: Observable<'or, T, E>,
-    F: FnMut(&T) -> K + MaybeSend + 'or,
-    K: Eq + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    F: FnMut(&T) -> K,
+    K: Eq,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, K, OR> Observable<OR> for DistinctUntilChanged<OE, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<DistinctUntilChangedObserver<OR, F, K>, Item = T, Error = E>,
+    F: FnMut(&T) -> K,
+    K: Eq,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = DistinctUntilChangedObserver {
             observer,
             key_selector: self.key_selector,
@@ -90,7 +100,7 @@ where
     }
 }
 
-struct DistinctUntilChangedObserver<OR, F, K> {
+pub struct DistinctUntilChangedObserver<OR, F, K> {
     observer: OR,
     key_selector: F,
     previous_key: Option<K>,

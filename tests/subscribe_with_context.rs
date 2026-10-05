@@ -1,18 +1,19 @@
 mod tests_utils;
 
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::mutable::{MutableBool, MutableBoolHelper};
+use rx_rust::observer::boxed_observer::SendBoxedObserver;
+use rx_rust::operators::creating::create::Create;
+use rx_rust::thread_mode::Shared;
+use rx_rust::thread_mode::mutable::MutableBoolHelper;
+use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use rx_rust::{
     observable::{Observable, ObservableExt, Subscription},
-    observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver},
-    operators::creating::create::Create,
-    utils::{
-        mutable::Mutable, pending_events::EventBatch,
-        subscribe_with_context::subscribe_with_context, types::Shared,
-    },
+    observer::{Flow, Observer, Termination},
+    utils::{pending_events::EventBatch, subscribe_with_context::subscribe_with_context},
 };
 use std::convert::Infallible;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 use tests_utils::{
     checker::{Checker, State},
     drop_probe::DropProbe,
@@ -23,10 +24,11 @@ use tests_utils::{
 fn delivers_batch_in_order_with_termination() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
     let mut context_out = None;
-    let _subscription = subscribe_with_context(observer, (), |context| {
-        context_out = Some(context);
-        Subscription::default()
-    });
+    let _subscription =
+        subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
+            context_out = Some(context);
+            Subscription::default()
+        });
     let context = context_out.unwrap();
 
     let _ = context.send(EventBatch::NextBatchAndTermination(
@@ -43,11 +45,11 @@ fn delivers_batch_in_order_with_termination() {
 #[test]
 fn dispose_during_batch_stops_remaining_events() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
-    let subscription_slot = Shared::new(Mutable::new(None));
+    let subscription_slot = Arc::new(Mutex::new(None));
     let dispose_slot = subscription_slot.clone();
     let mut context_out = None;
-    let subscription = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
-        subscribe_with_context(observer, (), |context| {
+    let subscription = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_out = Some(context);
             Subscription::default()
         })
@@ -77,11 +79,11 @@ fn dispose_during_batch_stops_remaining_events() {
 #[test]
 fn dispose_during_batch_suppresses_pending_termination() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
-    let subscription_slot = Shared::new(Mutable::new(None));
+    let subscription_slot = Arc::new(Mutex::new(None));
     let dispose_slot = subscription_slot.clone();
     let mut context_out = None;
-    let subscription = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
-        subscribe_with_context(observer, (), |context| {
+    let subscription = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_out = Some(context);
             Subscription::default()
         })
@@ -108,11 +110,11 @@ fn dispose_during_batch_suppresses_pending_termination() {
 #[test]
 fn reentrant_send_is_queued_after_pending_events() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
-    let context_slot = Shared::new(Mutable::new(None));
+    let context_slot = Arc::new(Mutex::new(None));
     let send_slot = context_slot.clone();
     let mut context_out = None;
-    let subscription = Create::new(|observer: BoxedObserver<'_, i32, Infallible>| {
-        subscribe_with_context(observer, (), |context| {
+    let subscription = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_slot.replace_value(Some(context.clone()));
             context_out = Some(context);
             Subscription::default()
@@ -134,19 +136,23 @@ fn reentrant_send_is_queued_after_pending_events() {
     assert_eq!(checker.state(), State::Active);
 
     drop(subscription);
-    assert_eq!(checker.state(), State::Dropped);
+    // The disposal cannot name the observer, so it cannot drop it: the observer goes with the last
+    // handle of the context, or with the next event, which the stopped context rejects.
+    assert_eq!(checker.state(), State::Active);
     let _ = context.send_next(4);
     assert_eq!(checker.values(), [1, 2, 3, 10]);
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]
 fn empty_batch_is_a_no_op() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
     let mut context_out = None;
-    let _subscription = subscribe_with_context(observer, (), |context| {
-        context_out = Some(context);
-        Subscription::default()
-    });
+    let _subscription =
+        subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
+            context_out = Some(context);
+            Subscription::default()
+        });
     let context = context_out.unwrap();
 
     let _ = context.send(EventBatch::NextBatch(vec![]));
@@ -162,15 +168,18 @@ fn empty_batch_is_a_no_op() {
 fn stopped_update_drops_callback_outside_lock() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
     let mut context_out = None;
-    let subscription = subscribe_with_context(observer, (), |context| {
-        context_out = Some(context);
-        Subscription::default()
-    });
+    let subscription =
+        subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
+            context_out = Some(context);
+            Subscription::default()
+        });
     let context = context_out.unwrap();
     drop(subscription);
-    assert_eq!(checker.state(), State::Dropped);
+    // Released with the last handle of the context or the next event, see
+    // `reentrant_send_is_queued_after_pending_events`.
+    assert_eq!(checker.state(), State::Active);
 
-    let callback_dropped = Shared::new(MutableBool::new(false));
+    let callback_dropped = Arc::new(AtomicBool::new(false));
     let callback_dropped_on_drop = callback_dropped.clone();
     let reentrant_context = context.clone();
     let probe = DropProbe::new().on_drop(Box::new(move || {
@@ -187,6 +196,7 @@ fn stopped_update_drops_callback_outside_lock() {
     assert_eq!(result, Err(DeliveryStopped));
     assert!(callback_dropped.read());
     assert_eq!(checker.values(), []);
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 // End-to-end wiring through a real upstream: the channel feeds the context the
@@ -196,14 +206,14 @@ fn stopped_update_drops_callback_outside_lock() {
 fn dispose_during_batch_unsubscribes_upstream() {
     let (mut sender, receiver, channel_checker) = test_channel::<i32, Infallible>();
     let (checker, observer) = Checker::<i32, Infallible>::new();
-    let subscription_slot = Shared::new(Mutable::new(None));
+    let subscription_slot = Arc::new(Mutex::new(None));
     let dispose_slot = subscription_slot.clone();
-    let context_slot = Shared::new(Mutable::new(None));
+    let context_slot = Arc::new(Mutex::new(None));
     let send_slot = context_slot.clone();
 
     let subscription = receiver
-        .hook_on_subscription(|source, observer: BoxedObserver<'_, i32, Infallible>| {
-            subscribe_with_context(observer, (), |context| {
+        .hook_on_subscription_boxed(|source, observer: SendBoxedObserver<'_, i32, Infallible>| {
+            subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
                 context_slot.replace_value(Some(context.clone()));
                 let weak = context.downgrade();
                 let weak_for_termination = weak.clone();

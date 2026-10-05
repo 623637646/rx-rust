@@ -1,22 +1,41 @@
-//! Running work later, or elsewhere: the [`Scheduler`] trait and its runtime adapters.
+//! Running work later, or elsewhere: the [`Scheduler`] trait and its implementations.
 //!
 //! Every time-based operator (`delay`, `debounce`, `timeout`, `interval`, …) and every operator
-//! that moves work between threads (`observe_on`, `subscribe_on`) takes a value implementing
-//! [`Scheduler`], so nothing is global and one program can drive different pipelines on different
-//! runtimes. The adapters are selected by feature flag:
+//! that moves work between threads (`observe_on`, `subscribe_on`) takes a [`Scheduler`] value, so
+//! nothing is global and one program can drive different pipelines on different runtimes. The
+//! schedulers of [`runtime`] are selected by feature flags, which can be combined:
 //!
-//! | Feature                 | Scheduler value                          | Module                  |
-//! |-------------------------|------------------------------------------|-------------------------|
-//! | `tokio-scheduler`       | `tokio::runtime::Handle`                 | [`tokio_scheduler`]     |
-//! | `async-std-scheduler`   | `async_std_scheduler::AsyncStdScheduler` | `async_std_scheduler`   |
-//! | `smol-scheduler`        | `smol_scheduler::SmolScheduler`          | `smol_scheduler`        |
-//! | `thread-pool-scheduler` | `futures::executor::ThreadPool`          | `thread_pool_scheduler` |
-//! | `local-pool-scheduler`  | `futures::executor::LocalSpawner`        | `local_pool_scheduler`  |
+//! | Feature               | Scheduler                                     | Mode     |
+//! |-----------------------|-----------------------------------------------|----------|
+//! | `tokio-scheduler`     | `runtime::tokio::TokioScheduler`              | `Shared` |
+//! | `tokio-scheduler`     | `runtime::tokio::TokioLocalScheduler`         | `Local`  |
+//! | `async-std-scheduler` | `runtime::async_std::AsyncStdScheduler`       | `Shared` |
+//! | `smol-scheduler`      | `runtime::smol::SmolScheduler`                | `Shared` |
+//! | `smol-scheduler`      | `runtime::smol::SmolLocalScheduler`           | `Local`  |
+//! | `futures-scheduler`   | `runtime::futures::ThreadPoolScheduler`       | `Shared` |
+//! | `futures-scheduler`   | `runtime::futures::LocalPoolScheduler`        | `Local`  |
 //!
-//! Each module is compiled only with its feature; these docs are built with `tokio-scheduler`.
+//! # Executor lifetime
 //!
-//! Implementing the trait for another runtime takes two methods: [`Scheduler::spawn_future`] and
-//! [`Scheduler::sleep`]; everything else is derived from them.
+//! A task can reach its own scheduler: `debounce` keeps its scheduler in its observer, and an
+//! `interval` upstream on the same scheduler holds that observer in its task. An executor that runs
+//! only while someone drives it — a `LocalSet`, a smol executor, a `LocalPool` — would then be kept
+//! alive by its own pending tasks once nobody drives it, so the schedulers of those hold it weakly,
+//! and dropping it cancels its tasks. A Tokio runtime is not kept alive by its handle either. A
+//! [`ThreadPoolScheduler`](runtime::futures::ThreadPoolScheduler) holds its pool: the pool's
+//! threads always run, so a disposed task is dropped and lets the pool go.
+//!
+//! # Tasks
+//!
+//! A scheduler runs a [`Task`]: a state, an optional pinned state (usually a future) and a `fn`
+//! handler. Unlike a closure or an `async` block, such a task has a type an operator can name in a
+//! `where` clause (`S: Scheduler<DelayTask<…>>`), which lets each scheduler state what it requires
+//! of it: `Send` for a multi-threaded one, nothing for a single-threaded one. Code that holds a
+//! concrete closure or future uses [`SchedulerExt`] instead.
+//!
+//! Implementing a scheduler takes [`SchedulerTypes`] and [`Scheduler::run_task`]. On an async
+//! executor, spawn the future [`drive`] returns; a synchronous loop drives the task itself through
+//! [`Task::split`] and [`Stepper::step`].
 //!
 //! # Examples
 //! ```rust
@@ -25,10 +44,12 @@
 //! # #[cfg(feature = "tokio-scheduler")]
 //! #[tokio::main]
 //! async fn main() {
-//!     use rx_rust::scheduler::Scheduler;
+//!     use rx_rust::scheduler::SchedulerExt;
 //!     use std::{sync::{Arc, Mutex}, time::Duration};
 //!
-//!     let scheduler = tokio::runtime::Handle::current();
+//!     use rx_rust::scheduler::runtime::tokio::TokioScheduler;
+//!
+//!     let scheduler = TokioScheduler::current();
 //!     let ran = Arc::new(Mutex::new(false));
 //!     let ran_in_task = Arc::clone(&ran);
 //!
@@ -41,219 +62,126 @@
 //!     assert!(*ran.lock().unwrap());
 //! }
 //! ```
+// The link to `ThreadPoolScheduler` above resolves only with `futures-scheduler`; docs.rs and CI
+// build the docs with every feature, and other builds leave it as text instead of failing.
+#![cfg_attr(
+    not(feature = "futures-scheduler"),
+    allow(rustdoc::broken_intra_doc_links)
+)]
 
-#[cfg(all(feature = "async-std-scheduler", not(feature = "single-threaded")))]
-pub mod async_std_scheduler;
-#[cfg(feature = "local-pool-scheduler")]
-pub mod local_pool_scheduler;
-#[cfg(all(feature = "smol-scheduler", not(feature = "single-threaded")))]
-pub mod smol_scheduler;
-#[cfg(all(feature = "thread-pool-scheduler", not(feature = "single-threaded")))]
-pub mod thread_pool_scheduler;
-#[cfg(all(feature = "tokio-scheduler", not(feature = "single-threaded")))]
-pub mod tokio_scheduler;
+pub mod runtime;
+mod task;
 
-use crate::{
-    disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
-    utils::types::MaybeSend,
-};
-use educe::Educe;
 #[cfg(feature = "futures")]
-use futures::{Stream, stream::StreamExt};
+pub use task::StreamThenContext;
+pub use task::{
+    FutureThenContext, OnceContext, PeriodicContext, RecursiveContext, Stepper, Task, TaskHandler,
+    TaskState, drive, yield_now,
+};
+
+use crate::{disposable::Disposable, observable::Subscription, thread_mode::ThreadMode};
+#[cfg(feature = "futures")]
+use futures::Stream;
 use std::{
-    pin::Pin,
-    task::{Context, Poll},
+    future::Future,
     time::{Duration, Instant},
 };
 
-/// What one step of [`Scheduler::schedule_recursively`] asks for next.
-#[derive(Educe)]
-#[educe(Debug, Clone, PartialEq, Eq)]
-pub enum RecursionAction {
-    /// Run the next step at this instant, or right away if it has passed.
-    ContinueAt(Instant),
-    /// Run the next step as soon as the executor gets around to it.
-    ContinueImmediately,
-    /// This was the last step.
-    Stop,
+/// The part of a scheduler that does not depend on the task: the thread mode its tasks run in,
+/// and the disposal that cancels one.
+///
+/// It is split from [`Scheduler`] because neither may depend on the task's type: a scheduler has
+/// one kind of handle whatever it runs, so an operator's disposal can name `S::D` without naming
+/// the task, which names the operator's observer.
+pub trait SchedulerTypes {
+    /// The thread mode of the tasks: [`Shared`](crate::thread_mode::Shared) for a scheduler that
+    /// can run them on another thread than the one that scheduled them,
+    /// [`Local`](crate::thread_mode::Local) for one that runs them on the scheduling thread.
+    type Mode: ThreadMode;
+
+    /// The disposal [`Scheduler::run_task`] returns: disposing it cancels the task.
+    ///
+    /// A task parked on its own sleep must be woken to stop. The built-in schedulers wake it, so a
+    /// disposed task and the observer it holds are dropped promptly, not when the timer fires.
+    type D: Disposable;
 }
 
-/// A future that yields to the executor exactly once before completing.
+/// Runs a [`Task`], after an optional delay, until it reports [`TaskState::Finished`].
 ///
-/// Runtime-agnostic replacement for `yield_now`: it guarantees an await point
-/// so other tasks can make progress and disposal/abort can take effect.
-/// Note that `sleep(Duration::ZERO)` is NOT a substitute — e.g. tokio's
-/// `sleep` with an already-elapsed deadline completes on the first poll
-/// without ever yielding.
-struct YieldNow(bool);
-
-impl Future for YieldNow {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<()> {
-        if self.0 {
-            Poll::Ready(())
-        } else {
-            self.0 = true;
-            cx.waker().wake_by_ref();
-            Poll::Pending
-        }
-    }
+/// The trait is generic over the task's states `TC` and `P` so that each implementation states
+/// what it requires of them: `Send + 'static` for a multi-threaded scheduler, `'static` for a
+/// single-threaded one. A trait method could not tighten its bounds per implementation.
+pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
+    /// Spawns `task`, to start after `delay`. Dropping the returned subscription cancels it.
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D>;
 }
 
-/// An executor that runs futures and tells the time.
-/// See <https://reactivex.io/documentation/scheduler.html>.
-///
-/// Everything scheduled must be `'static`, because the runtime owns it once it is spawned
-/// (<https://stackoverflow.com/a/65287449/9315497>). Only [`spawn_future`](Self::spawn_future)
-/// and [`sleep`](Self::sleep) have to be implemented.
-pub trait Scheduler {
-    /// The handle that cancels a spawned task when disposed.
-    type D: Disposable + MaybeSend + 'static;
-
-    /// Spawns `future` on the runtime, returning a handle that cancels it when dropped.
-    fn spawn_future(
-        &self,
-        future: impl Future<Output = ()> + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::D>;
-
-    /// Returns a future that completes `duration` after this call.
-    ///
-    /// Contract for implementors: the deadline is captured when `sleep` is *called*, not when the
-    /// returned future is first polled.
-    fn sleep(&self, duration: Duration) -> impl Future + MaybeSend + 'static + use<Self>;
-
-    /// Runs `task` once, after `delay` if given. Dropping the returned handle before then cancels
-    /// it.
-    fn schedule(
-        &self,
-        task: impl FnOnce() + MaybeSend + 'static,
-        delay: Option<Duration>,
-    ) -> BoundDropDisposal<Self::D> {
-        let delay = delay.map(|duration| self.sleep(duration));
-        self.spawn_future(async move {
-            if let Some(delay) = delay {
-                delay.await;
-            }
-            task()
-        })
-    }
-
-    /// Repeatedly runs `task` until it returns [`RecursionAction::Stop`].
-    ///
-    /// The loop yields to the executor between iterations (even for
-    /// `ContinueImmediately` and already-elapsed `ContinueAt` instants), so
-    /// other tasks can make progress and disposal can take effect.
-    fn schedule_recursively(
-        &self,
-        mut task: impl FnMut(usize) -> RecursionAction + MaybeSend + 'static,
-        delay: Option<Duration>,
-    ) -> BoundDropDisposal<Self::D>
+/// The closure-taking conveniences of every scheduler, built on [`Scheduler::run_task`]. A
+/// multi-threaded scheduler refuses a closure that is not `Send`.
+pub trait SchedulerExt: SchedulerTypes + Clone {
+    /// Runs `task` once, after `delay`.
+    fn schedule<F>(&self, task: F, delay: Option<Duration>) -> Subscription<Self::D>
     where
-        Self: Clone + MaybeSend + 'static,
+        F: FnOnce(),
+        Self: Scheduler<OnceContext<F>>,
     {
-        let delay = delay.map(|duration| self.sleep(duration));
-        let self_cloned = self.clone();
-        self.spawn_future(async move {
-            if let Some(delay) = delay {
-                delay.await;
-            }
-            let mut count = 0;
-            loop {
-                match task(count) {
-                    RecursionAction::ContinueAt(at) => {
-                        if let Some(delay) = at.checked_duration_since(Instant::now()) {
-                            self_cloned.sleep(delay).await;
-                        } else {
-                            // The requested instant has already passed;
-                            // still yield so the loop stays cancellable.
-                            YieldNow(false).await;
-                        }
-                    }
-                    RecursionAction::ContinueImmediately => {
-                        // Yield so other tasks can run and disposal can take effect.
-                        YieldNow(false).await;
-                    }
-                    RecursionAction::Stop => break,
-                }
-                count += 1;
-            }
-        })
+        self.run_task(Task::once(task, |task| task()), delay)
     }
 
-    /// Runs `task` at a fixed rate anchored to the time of this call
-    /// (plus `delay`), until `task` returns `false`.
-    ///
-    /// Fixed-rate semantics: if an execution overruns `period`, missed runs
-    /// are executed back-to-back to catch up — they are never skipped.
+    /// Runs `task(count)` until it returns [`TaskState::Finished`], as [`Task::recursive`] does.
+    fn schedule_recursively<F>(&self, task: F, delay: Option<Duration>) -> Subscription<Self::D>
+    where
+        F: FnMut(usize) -> TaskState,
+        Self: Scheduler<RecursiveContext<F>>,
+    {
+        self.run_task(Task::recursive(task, |task, count| task(count)), delay)
+    }
+
+    /// Runs `task(count)` every `period`, from now plus `delay`, until it returns `false`. Runs
+    /// that fall behind are caught up back to back, never skipped.
     ///
     /// # Panics
     ///
     /// Panics if `period` is zero.
-    fn schedule_periodically(
+    fn schedule_periodically<F>(
         &self,
-        mut task: impl FnMut(usize) -> bool + MaybeSend + 'static,
+        task: F,
         period: Duration,
         delay: Option<Duration>,
-    ) -> BoundDropDisposal<Self::D>
+    ) -> Subscription<Self::D>
     where
-        Self: Clone + MaybeSend + 'static,
+        F: FnMut(usize) -> bool,
+        Self: Scheduler<PeriodicContext<F>>,
     {
-        assert!(!period.is_zero(), "period must be non-zero");
-        let mut next_time = Instant::now() + delay.unwrap_or_default();
-        self.schedule_recursively(
-            move |count| {
-                let r#continue = task(count);
-                if r#continue {
-                    next_time += period;
-                    RecursionAction::ContinueAt(next_time)
-                } else {
-                    RecursionAction::Stop
-                }
-            },
+        let anchor = Instant::now() + delay.unwrap_or_default();
+        self.run_task(
+            Task::periodic(task, |task, count| task(count), period, Some(anchor)),
             delay,
         )
     }
 
-    /// Drives `stream` to completion, invoking `result_callback` with
-    /// `Some(item)` for each element and a final `None` when the stream ends.
-    ///
-    /// The callback's answer is what keeps the stream running: returning
-    /// `false` stops polling it right there, and the final `None` is then
-    /// never delivered — the stream is dropped along with the task.
-    ///
-    /// Disposal aborts the task without delivering the final `None`.
-    ///
-    /// The loop yields to the executor after each element (even when the
-    /// stream is always ready), so other tasks can make progress and
-    /// disposal can take effect.
-    #[cfg(feature = "futures")]
-    fn schedule_stream<SM>(
-        &self,
-        stream: SM,
-        mut result_callback: impl FnMut(Option<SM::Item>) -> bool + MaybeSend + 'static,
-    ) -> BoundDropDisposal<Self::D>
+    /// Drives `future` to completion.
+    fn spawn_future<FU>(&self, future: FU) -> Subscription<Self::D>
     where
-        SM: Stream + MaybeSend + 'static,
+        FU: Future<Output = ()>,
+        Self: Scheduler<FutureThenContext<(), ()>, FU>,
     {
-        self.spawn_future(async move {
-            let mut stream = std::pin::pin!(stream);
-            loop {
-                // A `while let` would keep the `Option<Item>` temporary alive
-                // across the yield below, requiring `SM::Item: Send`.
-                match stream.next().await {
-                    Some(item) => {
-                        if !result_callback(Some(item)) {
-                            return;
-                        }
-                    }
-                    None => break,
-                }
-                // Yield so other tasks can run and disposal can take effect,
-                // even when the stream is always ready.
-                YieldNow(false).await;
-            }
-            let _ = result_callback(None);
-        })
+        self.run_task(Task::from_future(future), None)
+    }
+
+    /// Drives `stream` to its end: `callback(Some(item))` for each element, then `callback(None)`.
+    ///
+    /// `callback` returning `false`, or a disposal, stops the stream right there, without the
+    /// final `None`. The task yields after each element, even when the stream is always ready.
+    #[cfg(feature = "futures")]
+    fn schedule_stream<SM, F>(&self, stream: SM, callback: F) -> Subscription<Self::D>
+    where
+        SM: Stream,
+        F: FnMut(Option<SM::Item>) -> bool,
+        Self: Scheduler<StreamThenContext<F, SM::Item>, SM>,
+    {
+        self.run_task(Task::from_stream(stream, callback), None)
     }
 }
+
+impl<S: SchedulerTypes + Clone> SchedulerExt for S {}

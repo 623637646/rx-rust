@@ -15,7 +15,7 @@
 //! | [`error_handling`] | `catch`, `map_err`, `retry` |
 //! | [`utility`] | `delay`, `timeout`, `timestamp`, `time_interval`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_*`, `do_after_*` |
 //! | [`connectable`] | `multicast`, `publish`, `publish_last`, `replay`, `share`, `share_last`, `share_replay` |
-//! | [`others`] | `into_future`, `into_try_future`, `into_stream`, `into_try_stream`, `with_item_type`, `with_error_type`, `debug`, `hook_on_*` |
+//! | [`others`] | `into_future`, `into_try_future`, `into_stream`, `into_try_stream`, `into_shared`, `with_item_type`, `with_error_type`, `debug`, `hook_on_*` |
 
 pub mod combining;
 pub mod conditional_boolean;

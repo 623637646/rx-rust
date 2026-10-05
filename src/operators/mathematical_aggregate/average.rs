@@ -1,10 +1,10 @@
 //! The [`Average`] operator, behind
 //! [`ObservableExt::average`](crate::observable::ObservableExt::average).
 
-use crate::utils::types::{MarkerType, MaybeSend};
+use crate::utils::MarkerType;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -46,9 +46,9 @@ pub struct Average<T, OE> {
 impl<T, OE> Average<T, OE> {
     /// Creates an [`Average`] over `source`;
     /// [`ObservableExt::average`](crate::observable::ObservableExt::average) is the fluent form.
-    pub fn new<'or, E>(source: OE) -> Self
+    pub fn new<E>(source: OE) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
     {
         Self {
             source,
@@ -57,7 +57,7 @@ impl<T, OE> Average<T, OE> {
     }
 }
 
-struct AverageObserver<T, OR> {
+pub struct AverageObserver<T, OR> {
     observer: OR,
     /// Accumulated in `f64`, the type of the result. Summing in the source's own type overflows
     /// for the narrow ones long before the stream ends: three `100u8` items already exceed
@@ -70,13 +70,22 @@ struct AverageObserver<T, OR> {
 macro_rules! average_observer_impl {
     ($($t:ty)*) => ($(
 
-        impl<'or, E, OE> Observable<'or, f64, E> for Average<$t, OE>
+        impl<E, OE> ObservableTypes for Average<$t, OE>
         where
-            OE: Observable<'or, $t, E>,
+            OE: ObservableTypes<Item = $t, Error = E>,
         {
+            type Item = f64;
+            type Error = E;
+            type Mode = OE::Mode;
             type D = OE::D;
+        }
 
-            fn subscribe(self, observer: impl Observer<f64, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+        impl<E, OE, OR> Observable<OR> for Average<$t, OE>
+        where
+            OR: Observer<f64, E>,
+            OE: Observable<AverageObserver<$t, OR>, Item = $t, Error = E>,
+        {
+            fn subscribe(self, observer: OR) -> Subscription<Self::D> {
                 let observer = AverageObserver {
                     observer,
                     sum: 0f64,

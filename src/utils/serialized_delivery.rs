@@ -5,6 +5,13 @@
 //! hold it across a notification, a drop, or a second lock: every transition, the delivery loop,
 //! and the rule that nothing is dropped or notified under the lock live here.
 //!
+//! The observer lives apart from the rest of the state, which is what a [`DeliveryStop`] holds:
+//! stopping a delivery from a disposal must not require naming the observer's type, since the
+//! type of a disposal cannot depend on its observer (see
+//! [`ObservableTypes`](crate::observable::ObservableTypes)). The rest of the state — the queue and
+//! the host's resources — is guarded by the delivery's lock, and the observer cell is only reached
+//! while that lock is held, so the two behave as one state.
+//!
 //! A host that must change its own data, and emit the resulting events atomically, does so through
 //! [`SerializedDelivery::update`], which runs its callback under the same lock that then queues
 //! the events. The callback describes its outcome with an [`UpdateOutcome`], the one way to hand
@@ -14,6 +21,7 @@
 //! ```rust
 //! use rx_rust::{
 //!     observer::{callback_observer::CallbackObserver, Flow, Termination},
+//!     thread_mode::Local,
 //!     utils::{pending_events::EventBatch, serialized_delivery::{SerializedDelivery, UpdateOutcome}},
 //! };
 //! use std::sync::{Arc, Mutex};
@@ -23,7 +31,7 @@
 //! let observer = CallbackObserver::new(move |value| seen_in_observer.lock().unwrap().push(value), |_| {});
 //!
 //! // The resources here are a counter the host updates under the delivery's lock.
-//! let delivery = SerializedDelivery::<i32, (), _, i32>::idle(observer, 0);
+//! let delivery = SerializedDelivery::<Local, i32, (), _, i32>::idle(observer, 0);
 //! assert_eq!(delivery.send(EventBatch::Next(1)), Flow::Continue);
 //! let count = delivery.update(|count| {
 //!     *count += 1;
@@ -34,13 +42,13 @@
 //! assert_eq!(*seen.lock().unwrap(), [1, 10]);
 //! ```
 
+use crate::thread_mode::mutable::{MutableExt, MutableHelper};
 use crate::{
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
     utils::{
-        mutable::{Mutable, MutableExt, MutableHelper},
         on_panic::on_panic,
         pending_events::{EventBatch, PendingEvents},
-        types::{Shared, WeakShared},
     },
 };
 use educe::Educe;
@@ -48,38 +56,73 @@ use educe::Educe;
 /// A shared, serialized delivery of events to one observer.
 ///
 /// `R` is whatever the host owns alongside the observer. It is dropped, outside the lock, once the
-/// delivery stops — after the terminal notification when the delivery stops by terminating.
+/// delivery stops — after the terminal notification when the delivery stops by terminating. The
+/// observer is released before it wherever the stopping code owns the observer; a stop that finds
+/// the observer held by a delivery loop elsewhere, a [`DeliveryStop`], or a callback that unwinds,
+/// drops `R` first.
+/// The pointers are the ones the thread mode `M` picks.
 #[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct SerializedDelivery<T, E, OR, R>(Shared<Mutable<State<T, E, OR, R>>>);
+#[educe(Debug, Clone(bound()))]
+pub struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
+    // Declared first so that, when the last handle goes, the observer is released before the
+    // resources, as a stop releases them.
+    #[educe(Debug(ignore))]
+    observer: M::Ptr<Option<OR>>,
+    #[educe(Debug(ignore))]
+    core: M::Ptr<Core<T, E, R>>,
+}
 
 /// A non-owning reference to a [`SerializedDelivery`].
 #[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct WeakSerializedDelivery<T, E, OR, R>(WeakShared<Mutable<State<T, E, OR, R>>>);
+#[educe(Debug, Clone(bound()))]
+pub struct WeakSerializedDelivery<M: ThreadMode, T, E, OR, R> {
+    #[educe(Debug(ignore))]
+    core: M::Weak<Core<T, E, R>>,
+    #[educe(Debug(ignore))]
+    observer: M::Weak<Option<OR>>,
+}
 
+/// Stops a [`SerializedDelivery`] without naming its observer's type: what a disposal holds.
+///
+/// Stopping drops the queued events and the resources, outside the lock, and rejects every later
+/// event. The observer is released as soon as the last handle of the delivery that can reach it is
+/// gone — typically at once, since dropping the resources disposes the sources that hold those
+/// handles — or by the next event or update that arrives, whichever comes first.
 #[derive(Educe)]
-#[educe(Debug)]
-enum State<T, E, OR, R> {
-    /// The observer is parked in the state while no delivery is running.
-    Idle { observer: OR, resources: R },
-    /// The observer is held by the delivery loop, while re-entrant events wait here.
+#[educe(Debug, Clone(bound()))]
+pub struct DeliveryStop<M: ThreadMode, T, E, R>(#[educe(Debug(ignore))] M::Ptr<Core<T, E, R>>);
+
+/// Everything a delivery holds except its observer.
+enum Core<T, E, R> {
+    /// No delivery is running, and the observer is parked in the observer cell.
+    Idle { resources: R },
+    /// The observer is held by the delivery loop and its cell is empty, while re-entrant events
+    /// wait here.
     Delivering {
         pending: PendingEvents<T, E>,
         resources: R,
     },
-    /// The observer and all resources are gone. Every later event is rejected.
+    /// The resources are gone. Every later event is rejected.
+    ///
+    /// The one state that does not say where the observer is: a [`DeliveryStop`] that stopped an
+    /// idle delivery cannot reach the cell, so the observer may still be parked there. Whoever
+    /// finds this state under the lock next takes it out.
     Stopped,
 }
 
 /// The action to perform after releasing the lock used to call `enqueue_batch`.
 enum EnqueueAction<T, E, OR> {
-    /// Start a delivery loop with the observer removed from the locked state.
+    /// Start a delivery loop with the observer taken out of its cell.
     Start { observer: OR, first_next: Option<T> },
-    /// The batch was queued for a running delivery, or was empty and needed no work.
-    Accepted,
-    /// The delivery was already stopped or a termination was already queued.
-    Rejected(EventBatch<T, E>),
+    /// The batch was queued for a running delivery, or needed no work, and answers this flow:
+    /// [`Flow::Stop`] exactly when it queued the termination.
+    Queued(Flow),
+    /// The delivery was already stopped or a termination was already queued. `observer` is the one
+    /// a [`DeliveryStop`] left parked, taken out to be dropped too.
+    Rejected {
+        events: EventBatch<T, E>,
+        observer: Option<OR>,
+    },
 }
 
 /// One transition of the delivery loop, computed while the state is locked and acted on outside
@@ -93,7 +136,7 @@ enum Step<T, E, OR, R> {
         termination: Termination<E>,
         resources: R,
     },
-    /// Nothing is queued; the observer was parked back into the state.
+    /// Nothing is queued; the observer was parked back into its cell.
     Parked,
     /// The delivery stopped; drop the observer outside the lock.
     Stopped(OR),
@@ -226,60 +269,84 @@ impl<T, E, R, DO> UpdateOutcome<T, E, R, DO, false> {
     }
 }
 
-impl<T, E, OR, R> SerializedDelivery<T, E, OR, R> {
+impl<M: ThreadMode, T, E, R> DeliveryStop<M, T, E, R> {
+    /// Stops the delivery. Stopping again is a no-op.
+    pub fn stop(&self) {
+        // `Stopped` is the only variant that owns nothing, so replacing the state with it takes
+        // the queued events and the resources out. Binding them here drops them outside the lock.
+        let _deferred_drop = self.0.replace_value(Core::Stopped);
+    }
+}
+
+impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
     /// Starts with the observer attached and parked, waiting for the first event.
     pub fn idle(observer: OR, resources: R) -> Self {
-        Self(Shared::new(Mutable::new(State::Idle {
-            observer,
-            resources,
-        })))
+        Self {
+            observer: M::ptr(Some(observer)),
+            core: M::ptr(Core::Idle { resources }),
+        }
     }
 
     /// Stops the delivery, dropping the observer without notifying it. Stopping again is a no-op.
     pub fn stop(&self) {
-        // `Stopped` is the only variant that owns nothing, so replacing the state with it takes
-        // the observer, the queued events and the resources out. Binding them here drops all of
-        // them outside the lock, avoiding a potential deadlock.
-        let _deferred_drop = self.0.replace_value(State::Stopped);
+        // The observer parked in its cell is taken under the same lock that stops the state, so it
+        // is this call that drops it, before what the state held: downstream is released before
+        // its sources are, and anything its drop emits is rejected. A loop running elsewhere
+        // holds the observer instead, leaving the cell empty, and drops it itself when it sees
+        // the stop.
+        let (parked, deferred_drop) = self.core.with_mut(|core| {
+            (
+                self.observer.take_value(),
+                std::mem::replace(core, Core::Stopped),
+            )
+        });
+        drop(parked); // Drop outside the lock to avoid potential deadlock
+        drop(deferred_drop);
     }
 
-    /// A non-owning reference, for a scheduler task that must not keep the delivery alive.
-    pub fn downgrade(&self) -> WeakSerializedDelivery<T, E, OR, R> {
-        WeakSerializedDelivery(Shared::downgrade(&self.0))
+    /// Creates the handle that stops this delivery without naming its observer.
+    pub fn stop_handle(&self) -> DeliveryStop<M, T, E, R> {
+        DeliveryStop(self.core.clone())
+    }
+
+    /// Creates a non-owning reference to this delivery.
+    pub fn downgrade(&self) -> WeakSerializedDelivery<M, T, E, OR, R> {
+        WeakSerializedDelivery {
+            core: M::downgrade(&self.core),
+            observer: M::downgrade(&self.observer),
+        }
     }
 }
 
-impl<T, E, OR, R> SerializedDelivery<T, E, OR, R>
+impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R>
 where
     OR: Observer<T, E>,
 {
-    /// Queues `events` and delivers whatever that makes deliverable.
+    /// Queues `events` and delivers whatever became deliverable because of them.
     ///
-    /// Returns whether the observer still accepts events. It is [`Flow::Stop`] once the delivery
-    /// has stopped or a termination is already queued — the events are then rejected and dropped
-    /// outside the lock — and also whenever `events` carries a termination, since nothing can be
-    /// queued after it. Values queued behind a delivery running elsewhere are reported as
-    /// [`Flow::Continue`], as [`Flow`] describes.
+    /// Returns whether the observer still accepts events. [`Flow::Stop`] means the delivery has
+    /// stopped or a termination was already queued, so the events were rejected and dropped outside
+    /// the lock; it also means `events` itself carried a termination, since nothing can be queued
+    /// after it. A value queued behind a delivery running elsewhere is reported as
+    /// [`Flow::Continue`]; see [`Flow`].
     pub fn send(&self, events: EventBatch<T, E>) -> Flow {
-        // A batch that carries a termination ends the stream whatever the delivery answers:
-        // nothing can be queued after it, and it is delivered for certain once queued.
-        let ends_stream = events.ends_stream();
-        let action = self.0.with_mut(|state| state.enqueue_batch(events));
-        let flow = self.perform(action);
-        if ends_stream { Flow::Stop } else { flow }
+        let action = self
+            .core
+            .with_mut(|core| core.enqueue_batch(events, &self.observer));
+        self.perform(action)
     }
 
     /// Updates the resources and queues the events that update produced, under one lock.
     ///
-    /// This is how a host changes what it owns, whether or not that emits anything: an update that
-    /// emits nothing simply decides no events, and then no delivery can start here.
+    /// Every change a host makes to its own data goes through here, whether it emits or not: an
+    /// update that emits nothing simply decides no events, and then no delivery starts from here.
     ///
-    /// `update` describes its outcome with an [`UpdateOutcome`]. It must not notify anyone or drop
-    /// a value that can re-enter this delivery: it runs under the lock, so hand such a value to
-    /// [`UpdateOutcome::with_drop_outside`] instead.
+    /// `update` describes its outcome with an [`UpdateOutcome`]. It must **not notify anyone or
+    /// drop anything that can re-enter this delivery** — it runs under the lock; hand such values
+    /// to [`UpdateOutcome::with_drop_outside`] instead.
     ///
-    /// Returns [`DeliveryStopped`], without running `update`, once the delivery has stopped.
-    /// `update` and everything it captured are then dropped outside the lock.
+    /// If the delivery has stopped, `update` does not run, [`DeliveryStopped`] is returned, and
+    /// `update` is dropped, with everything it captured, outside the lock.
     pub fn update<Out, DO, const EVENTS_DECIDED: bool>(
         &self,
         update: impl FnOnce(&mut R) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
@@ -287,11 +354,11 @@ where
         self.update_with_flow(update).map(|(result, _)| result)
     }
 
-    /// [`Self::update`], reporting as well whether the observer still accepts events.
+    /// [`update`](Self::update), also reporting whether the observer still accepts events.
     ///
-    /// The flow is what delivering the queued events answered, or [`Flow::Continue`] when the
-    /// update queued none. A stopped delivery answers [`DeliveryStopped`] rather than a flow, so a
-    /// host that only needs the flow maps that error to [`Flow::Stop`].
+    /// The flow is what delivering the queued events answered, and [`Flow::Continue`] when the
+    /// update queued none. A delivery that has already stopped answers [`DeliveryStopped`] instead
+    /// of a flow, which a host that only cares about the flow maps to [`Flow::Stop`].
     pub fn update_with_flow<Out, DO, const EVENTS_DECIDED: bool>(
         &self,
         update: impl FnOnce(&mut R) -> UpdateOutcome<T, E, Out, DO, EVENTS_DECIDED>,
@@ -299,95 +366,104 @@ where
         // Keep `update` out of the closure so that, when the delivery has stopped, its captures
         // are dropped only after the lock is released.
         let mut update = Some(update);
-        let (action, drop_outside, result) = self
-            .0
-            .with_mut(|state| {
-                let resources = state.resources_mut()?;
-                let update = update.take().expect("the update runs at most once");
-                let UpdateOutcome {
-                    events,
-                    drop_outside,
-                    result,
-                } = update(resources);
-                let action =
-                    events.map(|events| (events.ends_stream(), state.enqueue_batch(events)));
-                Some((action, drop_outside, result))
-            })
-            .ok_or(DeliveryStopped)?;
-        let flow = match action {
-            // As in `send`, a termination ends the stream whatever the delivery answers.
-            Some((true, action)) => {
-                let _ = self.perform(action);
-                Flow::Stop
+        let outcome = self.core.with_mut(|core| {
+            let Some(resources) = core.resources_mut() else {
+                // Stopped, so a `DeliveryStop` may have left the observer parked.
+                return Err(self.observer.take_value());
+            };
+            let update = update.take().expect("the update runs at most once");
+            let UpdateOutcome {
+                events,
+                drop_outside,
+                result,
+            } = update(resources);
+            let action = match events {
+                Some(events) => core.enqueue_batch(events, &self.observer),
+                None => EnqueueAction::Queued(Flow::Continue),
+            };
+            Ok((action, drop_outside, result))
+        });
+        let (action, drop_outside, result) = match outcome {
+            Ok(outcome) => outcome,
+            Err(parked) => {
+                drop(update); // Drop outside the lock
+                drop(parked);
+                return Err(DeliveryStopped);
             }
-            Some((false, action)) => self.perform(action),
-            None => Flow::Continue,
         };
+        let flow = self.perform(action);
         drop(drop_outside); // Drop after the delivery, outside the lock
         Ok((result, flow))
     }
 
-    /// Performs, with the lock released, what `enqueue_batch` deferred to outside it.
+    /// Carries out, with the lock released, what `enqueue_batch` decided under it.
+    ///
+    /// A batch that carries a termination answers [`Flow::Stop`] on every path: a delivery it
+    /// starts ends by terminating, one it is queued behind answers `Queued(Flow::Stop)`, and a
+    /// rejection is a stop.
     fn perform(&self, action: EnqueueAction<T, E, OR>) -> Flow {
         match action {
             EnqueueAction::Start {
                 observer,
                 first_next,
             } => self.deliver(observer, first_next),
-            EnqueueAction::Accepted => Flow::Continue,
-            EnqueueAction::Rejected(events) => {
+            EnqueueAction::Queued(flow) => flow,
+            EnqueueAction::Rejected { events, observer } => {
                 drop(events); // Drop outside the lock to avoid potential deadlock
+                drop(observer);
                 Flow::Stop
             }
         }
     }
 
-    /// Delivers `first_next` and then the queued events, one at a time.
+    /// Delivers `next`, then every queued event, one at a time.
     ///
-    /// The lock is reacquired between two events, so an event that arrives during a delivery is
-    /// delivered in arrival order, and a stop takes effect immediately — including between two
-    /// values of one `EventBatch::NextBatch`: the loop then drops the observer instead of
-    /// delivering to it.
+    /// The lock is taken again between two events, so events arriving during the delivery are
+    /// delivered in arrival order, and a stop takes effect immediately — even between two values
+    /// of an `EventBatch::NextBatch`: the loop drops the observer instead of feeding it further.
     ///
-    /// Every observer callback runs outside the lock. If one unwinds, the delivery is stopped, so
-    /// a caught panic cannot leave it stuck in its delivering state — and locking from the guard is
-    /// safe on the panicking thread for that same reason.
+    /// Every observer callback runs outside the lock. An `on_next` that unwinds stops the delivery,
+    /// so a caught panic does not leave it stuck in the delivering state — and taking the lock
+    /// from the guard is safe on the panicking thread for that very reason. `on_termination` needs
+    /// no guard: the state is already stopped when it runs, and the unwind drops the resources.
     ///
-    /// Returns [`Flow::Stop`] once this delivery is over — because the observer stopped, because
-    /// it was terminated, or because the delivery had already been stopped — and
-    /// [`Flow::Continue`] when the observer was parked back, waiting for the next event.
-    fn deliver(&self, mut observer: OR, first_next: Option<T>) -> Flow {
-        if let Some(value) = first_next {
-            let guard = on_panic(|| self.stop());
-            let flow = observer.on_next(value);
-            drop(guard);
-            if flow.is_stop() {
-                return self.stop_with(observer);
-            }
-        }
-
+    /// Returns [`Flow::Stop`] when this delivery ended — the observer stopped, it was terminated,
+    /// or the delivery had stopped already — and [`Flow::Continue`] when the observer was parked
+    /// back for the next event.
+    fn deliver(&self, mut observer: OR, mut next: Option<T>) -> Flow {
         loop {
-            match self.0.with_mut(|state| state.next_step(observer)) {
+            if let Some(value) = next.take() {
+                let guard = on_panic(|| self.stop());
+                let flow = observer.on_next(value);
+                drop(guard);
+                if flow.is_stop() {
+                    // It has ended its own stream or been disposed, so it is released like a
+                    // disposed observer instead of being terminated. The loop holds it, so its
+                    // cell is empty; it is dropped as `stop` drops it, after the state is stopped
+                    // and before what the state held.
+                    let deferred_drop = self.core.replace_value(Core::Stopped);
+                    drop(observer); // Drop outside the lock to avoid potential deadlock
+                    drop(deferred_drop);
+                    return Flow::Stop;
+                }
+            }
+
+            match self
+                .core
+                .with_mut(|core| core.next_step(observer, &self.observer))
+            {
                 Step::Next(next_observer, value) => {
                     observer = next_observer;
-                    let guard = on_panic(|| self.stop());
-                    let flow = observer.on_next(value);
-                    drop(guard);
-                    if flow.is_stop() {
-                        return self.stop_with(observer);
-                    }
+                    next = Some(value);
                 }
                 Step::Terminate {
                     observer,
                     termination,
                     resources,
                 } => {
-                    let guard = on_panic(|| self.stop());
                     observer.on_termination(termination);
-                    drop(guard);
                     // The resources outlive the terminal notification, so a host can dispose its
-                    // source only after its downstream was told the stream ended. Unwinding from
-                    // the callback drops them too.
+                    // source only after its downstream was told the stream ended.
                     drop(resources);
                     return Flow::Stop;
                 }
@@ -399,42 +475,58 @@ where
             }
         }
     }
+}
 
-    /// Stops the delivery because `observer`, which the loop still holds, accepts nothing more.
-    ///
-    /// The observer is not terminated: [`Flow::Stop`] says it has already ended its own stream or
-    /// been disposed, so it is released like a disposed one. The state is stopped first, so that
-    /// anything its drop sends is rejected rather than queued for a delivery that is over.
-    fn stop_with(&self, observer: OR) -> Flow {
-        self.stop();
-        drop(observer); // Drop outside the lock to avoid potential deadlock
-        Flow::Stop
+impl<M: ThreadMode, T, E, OR, R> WeakSerializedDelivery<M, T, E, OR, R> {
+    /// Returns the delivery, or `None` once every strong reference to it is gone.
+    pub fn upgrade(&self) -> Option<SerializedDelivery<M, T, E, OR, R>> {
+        // The observer first: only a `SerializedDelivery` holds it, and releases it before its
+        // core, so once it is upgraded the core is too. Upgrading the core first could leave this
+        // call holding its last strong pointer when the observer is gone, and drop the resources
+        // here.
+        let observer = M::upgrade(&self.observer)?;
+        Some(SerializedDelivery {
+            core: M::upgrade(&self.core)?,
+            observer,
+        })
     }
 }
 
-impl<T, E, OR, R> WeakSerializedDelivery<T, E, OR, R> {
-    /// The delivery, or `None` once every owning reference to it is gone.
-    pub fn upgrade(&self) -> Option<SerializedDelivery<T, E, OR, R>> {
-        self.0.upgrade().map(SerializedDelivery)
-    }
-}
-
-impl<T, E, OR, R> State<T, E, OR, R> {
+impl<T, E, R> Core<T, E, R> {
     fn resources_mut(&mut self) -> Option<&mut R> {
         match self {
-            Self::Idle { resources, .. } | Self::Delivering { resources, .. } => Some(resources),
+            Self::Idle { resources } | Self::Delivering { resources, .. } => Some(resources),
             Self::Stopped => None,
         }
     }
 
-    fn enqueue_batch(&mut self, events: EventBatch<T, E>) -> EnqueueAction<T, E, OR> {
+    /// Queues `events`, taking the observer out of `observer_cell` — whose lock nests inside this
+    /// one, and only ever in this order — when a delivery has to start.
+    fn enqueue_batch<OR, P>(
+        &mut self,
+        events: EventBatch<T, E>,
+        observer_cell: &P,
+    ) -> EnqueueAction<T, E, OR>
+    where
+        P: MutableHelper<Value = Option<OR>>,
+    {
         match self {
             // The delivery loop holds the observer and picks these events up on its own.
+            // Nothing could be queued after a termination, so a queue that accepted the batch and
+            // is now terminated got its termination from this very batch.
             Self::Delivering { pending, .. } => match pending.push_batch(events) {
-                Some(rejected) => EnqueueAction::Rejected(rejected),
-                None => EnqueueAction::Accepted,
+                Some(events) => EnqueueAction::Rejected {
+                    events,
+                    observer: None,
+                },
+                None if pending.is_terminated() => EnqueueAction::Queued(Flow::Stop),
+                None => EnqueueAction::Queued(Flow::Continue),
             },
-            Self::Stopped => EnqueueAction::Rejected(events),
+            // A `DeliveryStop` may have left the observer parked.
+            Self::Stopped => EnqueueAction::Rejected {
+                events,
+                observer: observer_cell.take_value(),
+            },
             Self::Idle { .. } => {
                 // The queue is built from the batch instead of being pushed to and popped from:
                 // a fresh queue rejects nothing, and the first value is delivered directly, so it
@@ -442,17 +534,15 @@ impl<T, E, OR, R> State<T, E, OR, R> {
                 let (first_next, pending) = PendingEvents::from_batch(events);
                 if first_next.is_none() && pending.is_empty() {
                     // An empty `NextBatch` is a no-op, consistent with the delivering state.
-                    return EnqueueAction::Accepted;
+                    return EnqueueAction::Queued(Flow::Continue);
                 }
 
                 // The batch is known to need a delivery only now, so the observer is taken out of
-                // the state only now. It is put back into `Delivering` right below, so nothing the
-                // state owned is dropped under the lock.
-                let Self::Idle {
-                    observer,
-                    resources,
-                } = std::mem::replace(self, Self::Stopped)
-                else {
+                // its cell only now. Nothing the state owned is dropped under the lock.
+                let observer = observer_cell
+                    .take_value()
+                    .expect("an idle delivery has its observer parked");
+                let Self::Idle { resources } = std::mem::replace(self, Self::Stopped) else {
                     unreachable!()
                 };
                 *self = Self::Delivering { pending, resources };
@@ -466,7 +556,10 @@ impl<T, E, OR, R> State<T, E, OR, R> {
 
     /// Returns the next step of a running delivery loop, moving to `Stopped` and handing the
     /// resources back to the caller before a terminal event.
-    fn next_step(&mut self, observer: OR) -> Step<T, E, OR, R> {
+    fn next_step<OR, P>(&mut self, observer: OR, observer_cell: &P) -> Step<T, E, OR, R>
+    where
+        P: MutableHelper<Value = Option<OR>>,
+    {
         match self {
             Self::Delivering { pending, .. } => {
                 if let Some(value) = pending.pop_next() {
@@ -474,7 +567,7 @@ impl<T, E, OR, R> State<T, E, OR, R> {
                 }
             }
             Self::Stopped => return Step::Stopped(observer),
-            // The observer is out of the state only while a delivery is running.
+            // The observer is out of its cell only while a delivery is running.
             Self::Idle { .. } => unreachable!("a delivery loop only runs in the delivering state"),
         }
 
@@ -499,10 +592,11 @@ impl<T, E, OR, R> State<T, E, OR, R> {
                 }
             }
             None => {
-                *self = Self::Idle {
-                    observer,
-                    resources,
-                };
+                // The observer goes back into its cell before the state turns idle, under this
+                // lock, so whoever finds the state idle finds the observer parked.
+                let previous = observer_cell.replace_value(Some(observer));
+                debug_assert!(previous.is_none(), "a running delivery owns the observer");
+                *self = Self::Idle { resources };
                 Step::Parked
             }
         }

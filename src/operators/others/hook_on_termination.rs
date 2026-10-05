@@ -1,10 +1,11 @@
 //! The [`HookOnTermination`] operator, behind
 //! [`ObservableExt::hook_on_termination`](crate::observable::ObservableExt::hook_on_termination).
 
-use crate::utils::types::MaybeSend;
+use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
+use crate::observer::emitter::Emitter;
 use crate::{
-    observable::{Observable, Subscription},
-    observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver},
+    observable::{Observable, ObservableTypes, Subscription},
+    observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
 
@@ -40,44 +41,111 @@ use educe::Educe;
 /// assert_eq!(values, vec![1]);
 /// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
+///
+/// # `new` or `new_boxed`
+///
+/// As with [`Create`](crate::operators::creating::create::Create), a closure's parameter is one
+/// concrete type. [`new`](HookOnTermination::new) hands the callback an [`Emitter`], the
+/// downstream observer unboxed, so the operator subscribes that one observer type only.
+/// [`new_boxed`](HookOnTermination::new_boxed) makes a `HookOnTermination<.., true>`, whose
+/// callback gets the boxed observer of the source's mode, so it subscribes any observer, at the
+/// cost of one allocation per subscription. Both are this one type: `BOXED` only picks the [`Observable`]
+/// impl, and the lifetime the boxed observer may borrow for is not a parameter.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct HookOnTermination<OE, F> {
+pub struct HookOnTermination<OE, F, const BOXED: bool = false> {
     source: OE,
     callback: F,
 }
 
 impl<OE, F> HookOnTermination<OE, F> {
-    /// Creates a [`HookOnTermination`] over `source`;
-    /// [`ObservableExt::hook_on_termination`](crate::observable::ObservableExt::hook_on_termination) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+    /// Creates a [`HookOnTermination`] over `source` whose callback gets the unboxed downstream
+    /// observer;
+    /// [`ObservableExt::hook_on_termination`](crate::observable::ObservableExt::hook_on_termination)
+    /// is the fluent form. `OR` is not stored: it only gives the callback its expected signature.
+    pub fn new<OR>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
-        F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>),
+        OE: ObservableTypes,
+        OR: Observer<OE::Item, OE::Error>,
+        F: FnOnce(Emitter<OR, OE::Mode>, Termination<OE::Error>),
     {
         Self { source, callback }
     }
+
+    /// Like [`new`](HookOnTermination::new), but the callback gets the boxed observer of the
+    /// source's mode, so the operator subscribes any observer;
+    /// [`ObservableExt::hook_on_termination_boxed`](crate::observable::ObservableExt::hook_on_termination_boxed)
+    /// is the fluent form.
+    pub fn new_boxed<'a>(source: OE, callback: F) -> HookOnTermination<OE, F, true>
+    where
+        OE: ObservableTypes,
+        OE::Mode: ObserverMode,
+        F: FnOnce(
+            <OE::Mode as ObserverMode>::BoxedObserver<'a, OE::Item, OE::Error>,
+            Termination<OE::Error>,
+        ),
+    {
+        HookOnTermination { source, callback }
+    }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for HookOnTermination<OE, F>
-where
-    T: 'or,
-    E: 'or,
-    OE: Observable<'or, T, E>,
-    F: FnOnce(BoxedObserver<'or, T, E>, Termination<E>) + MaybeSend + 'or,
+impl<OE: ObservableTypes, F, const BOXED: bool> ObservableTypes
+    for HookOnTermination<OE, F, BOXED>
 {
+    type Item = OE::Item;
+    type Error = OE::Error;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for HookOnTermination<OE, F, false>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            HookOnTerminationObserver<Emitter<OR, <OE as ObservableTypes>::Mode>, F>,
+            Item = T,
+            Error = E,
+        >,
+    F: FnOnce(Emitter<OR, <OE as ObservableTypes>::Mode>, Termination<E>),
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = HookOnTerminationObserver {
-            observer: BoxedObserver::new(observer),
+            observer: Emitter::new(observer),
             callback: self.callback,
         };
         self.source.subscribe(observer)
     }
 }
 
-struct HookOnTerminationObserver<OR, F> {
+impl<'a, T, E, OE, F, OR> Observable<OR> for HookOnTermination<OE, F, true>
+where
+    <OE as ObservableTypes>::Mode: ObserverMode,
+    OR: IntoBoxedObserver<'a, T, E, <OE as ObservableTypes>::Mode>,
+    OE: Observable<
+            HookOnTerminationObserver<
+                <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<'a, T, E>,
+                F,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    F: FnOnce(
+        <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<'a, T, E>,
+        Termination<E>,
+    ),
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        let observer = HookOnTerminationObserver {
+            observer: <<OE as ObservableTypes>::Mode as ObserverMode>::boxed(observer),
+            callback: self.callback,
+        };
+        self.source.subscribe(observer)
+    }
+}
+
+/// The observer [`HookOnTermination`] subscribes its source with: it forwards the values, and hands
+/// the termination to the callback along with the downstream observer.
+pub struct HookOnTerminationObserver<OR, F> {
     observer: OR,
     callback: F,
 }

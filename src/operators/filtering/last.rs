@@ -1,8 +1,10 @@
 //! The [`Last`] operator, behind [`ObservableExt::last`](crate::observable::ObservableExt::last).
 
-use crate::utils::types::MaybeSend;
+use crate::operators::filtering::take_last::TakeLastObserver;
 use crate::{
-    observable::Observable, observable::Subscription, observer::Observer,
+    observable::Subscription,
+    observable::{Observable, ObservableTypes},
+    observer::Observer,
     operators::filtering::take_last::TakeLast,
 };
 use educe::Educe;
@@ -47,14 +49,22 @@ impl<OE> Last<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Last<OE>
+impl<T, E, OE> ObservableTypes for Last<OE>
 where
-    T: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Last<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<TakeLastObserver<T, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         TakeLast::new(self.source, 1).subscribe(observer)
     }
 }

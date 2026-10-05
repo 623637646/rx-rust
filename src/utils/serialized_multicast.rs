@@ -39,17 +39,26 @@
 //! the delivery is idle, since the action is then applied on the subscribing thread, but a
 //! subscription made while a delivery is running is served by that delivery instead.
 //!
+//! # A panicking observer
+//!
+//! An observer that unwinds out of a notification stops the delivery, as it stops any
+//! [`SerializedDelivery`], and that kills the multicast: the other observers are released without
+//! being notified, and the termination goes with the resources. From then on the multicast
+//! rejects every event, reports no termination, and drops a new observer without notifying it —
+//! there is no termination left to give it.
+//!
 //! # Examples
 //! ```rust
 //! use rx_rust::{
 //!     disposable::Disposable,
 //!     observer::{callback_observer::CallbackObserver, Flow, Termination},
+//!     thread_mode::Local,
 //!     utils::{pending_events::EventBatch, serialized_multicast::SerializedMulticast},
 //! };
 //! use std::sync::{Arc, Mutex};
 //!
 //! let seen = Arc::new(Mutex::new(Vec::new()));
-//! let multicast = SerializedMulticast::<i32, (), ()>::idle(());
+//! let multicast = SerializedMulticast::<i32, (), Local, ()>::idle(());
 //!
 //! let seen_by_first = Arc::clone(&seen);
 //! let first = multicast
@@ -70,26 +79,29 @@
 //! ```
 
 use crate::disposable::Disposable;
-use crate::observer::{Flow, Observer, Termination, boxed_observer::BoxedObserver};
+use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
+use crate::observer::{Flow, Observer, Termination};
+use crate::thread_mode::mutable::MutableBoolHelper;
 use crate::utils::id_generator::{Id, IdGenerator};
-use crate::utils::mutable::{MutableBool, MutableBoolHelper};
 use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome};
-use crate::utils::types::{MaybeSend, Shared};
 use educe::Educe;
 
 /// A shared, serialized delivery of events to many observers, guarding the host's state with it.
 ///
 /// `R` is whatever the host owns besides the observers: the current value of a behavior subject,
-/// the buffer of a replay subject, `()` when it owns nothing.
+/// the buffer of a replay subject, `()` when it owns nothing. `M` is the thread mode, which picks
+/// the pointers and the boxes the observers are stored in.
 #[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct SerializedMulticast<'or, T, E, R = ()>(Delivery<'or, T, E, R>);
+#[educe(Debug, Clone(bound()))]
+pub struct SerializedMulticast<'or, T, E, M: ObserverMode, R = ()>(
+    #[educe(Debug(ignore))] Delivery<'or, T, E, M, R>,
+);
 
 /// Serializes every action against every value, and guards the whole state as its resources. Its
 /// termination is never sent: see the module documentation.
-type Delivery<'or, T, E, R> =
-    SerializedDelivery<Action<'or, T, E>, E, Subscribers<'or, T, E>, Resources<E, R>>;
+type Delivery<'or, T, E, M, R> =
+    SerializedDelivery<M, Action<'or, T, E, M>, E, Subscribers<'or, T, E, M>, Resources<E, R>>;
 
 /// Everything the multicast owns besides its observers, guarded by the delivery's lock.
 #[derive(Educe)]
@@ -125,7 +137,7 @@ enum Admitted<T, E> {
     Terminated(Vec<T>, Termination<E>),
 }
 
-impl<'or, T, E, R> SerializedMulticast<'or, T, E, R> {
+impl<'or, T, E, M: ObserverMode, R> SerializedMulticast<'or, T, E, M, R> {
     /// Starts with no observer, no termination, and the host's state parked in the resources.
     pub fn idle(host: R) -> Self {
         Self(SerializedDelivery::idle(
@@ -141,18 +153,16 @@ impl<'or, T, E, R> SerializedMulticast<'or, T, E, R> {
     }
 }
 
-impl<'or, T, E, R> SerializedMulticast<'or, T, E, R>
+impl<'or, T, E, M: ObserverMode, R> SerializedMulticast<'or, T, E, M, R>
 where
     T: Clone,
     E: Clone,
 {
     /// The termination, once one has been queued.
     ///
-    /// The resources are gone once the delivery stopped, which only an observer's panic does: the
-    /// multicast is then dead, and reports no termination.
+    /// A multicast killed by a panicking observer reports none: see the module documentation.
     pub fn terminated(&self) -> Option<Termination<E>> {
-        self.0
-            .update(|resources| UpdateOutcome::new(resources.termination.clone()))
+        self.read(|_, termination| termination.cloned())
             .unwrap_or(None)
     }
 
@@ -232,8 +242,8 @@ where
     /// Subscribes `observer`, replaying nothing and terminating it at once when already terminated.
     pub fn subscribe(
         self,
-        observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Option<MulticastDisposal<'or, T, E, R>> {
+        observer: impl IntoBoxedObserver<'or, T, E, M>,
+    ) -> Option<MulticastDisposal<'or, T, E, M, R>> {
         self.subscribe_with(observer, |_, terminated| match terminated {
             Some(termination) => Admission::Terminated(Vec::new(), termination.clone()),
             None => Admission::Join(Vec::new()),
@@ -247,13 +257,14 @@ where
     /// documentation. `admit` runs under the lock and must not notify anyone.
     ///
     /// Returns the disposal of the subscription, or [`None`] when the observer did not join: it
-    /// has then already been notified, outside the lock.
+    /// has then already been notified, outside the lock — unless the multicast was killed by a
+    /// panicking observer, in which case it is dropped without being notified.
     pub fn subscribe_with(
         self,
-        observer: impl Observer<T, E> + MaybeSend + 'or,
+        observer: impl IntoBoxedObserver<'or, T, E, M>,
         admit: impl FnOnce(&mut R, Option<&Termination<E>>) -> Admission<T, E>,
-    ) -> Option<MulticastDisposal<'or, T, E, R>> {
-        let disposed = Shared::new(MutableBool::new(false));
+    ) -> Option<MulticastDisposal<'or, T, E, M, R>> {
+        let disposed = M::Flag::default();
         // The observer travels with its entry, and stays here when there is no entry to join.
         let mut observer = Some(observer);
         let admitted = self.0.update(|resources| {
@@ -266,9 +277,7 @@ where
                     let entry = Entry {
                         id,
                         is_disposed: disposed.clone(),
-                        observer: BoxedObserver::new(
-                            observer.take().expect("the update runs at most once"),
-                        ),
+                        observer: M::boxed(observer.take().expect("the update runs at most once")),
                     };
                     UpdateOutcome::new(Admitted::Added(id))
                         .with_next_event(Action::Add { entry, replay })
@@ -300,8 +309,7 @@ where
             Err(DeliveryStopped) => {
                 // The delivery only stops once an observer panicked, which kills the multicast:
                 // the termination went with the resources, so this observer is dropped here
-                // instead, outside the lock.
-                debug_assert!(false, "the multicast is dead because an observer panicked");
+                // instead, outside the lock. See the module documentation.
                 None
             }
         }
@@ -309,10 +317,10 @@ where
 }
 
 /// Translates the host's events into actions, recording the termination as it is queued.
-fn into_actions<'or, T, E>(
+fn into_actions<'or, T, E, M: ObserverMode>(
     events: EventBatch<T, E>,
     termination: &mut Option<Termination<E>>,
-) -> EventBatch<Action<'or, T, E>, E>
+) -> EventBatch<Action<'or, T, E, M>, E>
 where
     E: Clone,
 {
@@ -344,26 +352,22 @@ where
 }
 
 /// One subscribed observer.
-#[derive(Educe)]
-#[educe(Debug)]
-struct Entry<'or, T, E> {
+struct Entry<'or, T, E, M: ObserverMode> {
     /// Identifies the entry before it has been added, so a subscription can be disposed while its
     /// `Action::Add` is still queued.
     id: Id,
     /// Written by the disposal, read before every notification.
-    is_disposed: Shared<MutableBool>,
-    observer: BoxedObserver<'or, T, E>,
+    is_disposed: M::Flag,
+    observer: M::BoxedObserver<'or, T, E>,
 }
 
 /// Everything that reaches the observers, serialized by the delivery and applied outside its lock.
-#[derive(Educe)]
-#[educe(Debug)]
-enum Action<'or, T, E> {
+enum Action<'or, T, E, M: ObserverMode> {
     /// Sends a value to every entry that is still subscribed.
     Forward(T),
     /// Replays `replay` to the entry's observer, then adds the entry.
     Add {
-        entry: Entry<'or, T, E>,
+        entry: Entry<'or, T, E, M>,
         replay: Vec<T>,
     },
     /// Removes the entry with this id, releasing its observer.
@@ -374,20 +378,18 @@ enum Action<'or, T, E> {
 }
 
 /// Owns the observers, so that they are fed outside the lock that serializes the actions.
-#[derive(Educe)]
-#[educe(Debug)]
-struct Subscribers<'or, T, E> {
+struct Subscribers<'or, T, E, M: ObserverMode> {
     /// Sorted by id, which is handed out in subscription order: notifications follow that order,
     /// and an id is found by binary search.
-    entries: Vec<Entry<'or, T, E>>,
+    entries: Vec<Entry<'or, T, E, M>>,
 }
 
-impl<'or, T, E> Observer<Action<'or, T, E>, E> for Subscribers<'or, T, E>
+impl<'or, T, E, M: ObserverMode> Observer<Action<'or, T, E, M>, E> for Subscribers<'or, T, E, M>
 where
     T: Clone,
     E: Clone,
 {
-    fn on_next(&mut self, action: Action<'or, T, E>) -> Flow {
+    fn on_next(&mut self, action: Action<'or, T, E, M>) -> Flow {
         match action {
             Action::Forward(value) => self.forward(value),
             Action::Add { entry, replay } => self.add(entry, replay),
@@ -407,7 +409,7 @@ where
     }
 }
 
-impl<'or, T, E> Subscribers<'or, T, E>
+impl<'or, T, E, M: ObserverMode> Subscribers<'or, T, E, M>
 where
     T: Clone,
     E: Clone,
@@ -425,7 +427,7 @@ where
         });
     }
 
-    fn add(&mut self, mut entry: Entry<'or, T, E>, replay: Vec<T>) {
+    fn add(&mut self, mut entry: Entry<'or, T, E, M>, replay: Vec<T>) {
         // The replay is delivered here, where it is serialized with everything else: the values
         // the host snapshotted are exactly the ones queued before this action.
         for value in replay {
@@ -453,7 +455,8 @@ where
     }
 
     fn terminate(&mut self, termination: Termination<E>) {
-        // Nothing is queued behind the termination, so emptying the entries here is final.
+        // Nothing but `Action::Prune`s can be queued behind the termination, and those find no
+        // entry left, so emptying the entries here is final.
         for entry in std::mem::take(&mut self.entries) {
             if entry.is_disposed.read() {
                 continue; // Unsubscribed, possibly during this very dispatch.
@@ -464,13 +467,13 @@ where
 }
 
 /// Unsubscribes one observer from a [`SerializedMulticast`].
-pub struct MulticastDisposal<'or, T, E, R> {
-    delivery: Delivery<'or, T, E, R>,
-    disposed: Shared<MutableBool>,
+pub struct MulticastDisposal<'or, T, E, M: ObserverMode, R> {
+    delivery: Delivery<'or, T, E, M, R>,
+    disposed: M::Flag,
     id: Id,
 }
 
-impl<T, E, R> Disposable for MulticastDisposal<'_, T, E, R>
+impl<T, E, M: ObserverMode, R> Disposable for MulticastDisposal<'_, T, E, M, R>
 where
     T: Clone,
     E: Clone,

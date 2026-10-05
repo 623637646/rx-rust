@@ -2,24 +2,23 @@ mod tests_utils;
 
 use crate::tests_utils::checker::State;
 use crate::tests_utils::drop_probe::DropProbe;
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Flow, Observer, Termination};
 use rx_rust::subject::Subject;
 use rx_rust::subject::async_subject::AsyncSubject;
-use rx_rust::utils::mutable::Mutable;
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::mutable::MutableHelper;
-use rx_rust::utils::types::Shared;
+use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::MutableHelper;
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
 
 #[test]
 fn test_completed() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -70,7 +69,7 @@ fn test_completed() {
 
 #[test]
 fn test_error() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -130,7 +129,7 @@ fn test_error() {
 
 #[test]
 fn test_unsubscribe() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -183,7 +182,7 @@ fn test_ref() {
     let value_1 = 111;
     let value_2 = 222;
 
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -214,39 +213,36 @@ fn test_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
-        let subject = AsyncSubject::default();
+    block_on(|scheduler| async move {
+        let subject = AsyncSubject::shared();
         let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
 
-        let _subscription = runtime
+        let _subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert!(subject.terminated().is_none());
 
         let mut subject_cloned = subject.clone();
-        runtime
+        scheduler
             .spawn(async move {
                 assert!(subject_cloned.on_next(&111).is_continue());
             })
-            .await
-            .unwrap();
+            .await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert!(subject.terminated().is_none());
 
         let subject_cloned = subject.clone();
-        runtime
+        scheduler
             .spawn(async move {
                 subject_cloned.on_termination(Termination::<Infallible>::Completed);
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [&111]);
         assert_eq!(checker.state(), State::Completed);
         assert!(matches!(subject.terminated(), Some(Termination::Completed)));
@@ -255,7 +251,7 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -300,7 +296,7 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -340,7 +336,7 @@ fn test_unsub_on_next_by_take() {
 
 #[test]
 fn test_complete_on_next() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -380,7 +376,7 @@ fn test_complete_on_next() {
 
 #[test]
 fn test_error_on_next() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -415,7 +411,7 @@ fn test_error_on_next() {
 
 #[test]
 fn test_unsub_on_next() {
-    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -427,7 +423,7 @@ fn test_unsub_on_next() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_next
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -442,7 +438,7 @@ fn test_unsub_on_next() {
     ));
 
     // unsubscribe after on_next
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -485,7 +481,7 @@ fn test_unsub_on_next() {
 
 #[test]
 fn test_sub_on_next() {
-    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -495,8 +491,8 @@ fn test_sub_on_next() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -555,7 +551,7 @@ fn test_sub_on_next() {
 
 #[test]
 fn test_next_on_next() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -598,7 +594,7 @@ fn test_next_on_next() {
 
 #[test]
 fn test_unsub_on_completed() {
-    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -610,7 +606,7 @@ fn test_unsub_on_completed() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -625,7 +621,7 @@ fn test_unsub_on_completed() {
     ));
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -667,7 +663,7 @@ fn test_unsub_on_completed() {
 
 #[test]
 fn test_sub_on_completed() {
-    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -677,8 +673,8 @@ fn test_sub_on_completed() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -738,7 +734,7 @@ fn test_sub_on_completed() {
 
 #[test]
 fn test_unsub_on_error() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -750,7 +746,7 @@ fn test_unsub_on_error() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -765,7 +761,7 @@ fn test_unsub_on_error() {
     ));
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -810,7 +806,7 @@ fn test_unsub_on_error() {
 
 #[test]
 fn test_sub_on_error() {
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -820,8 +816,8 @@ fn test_sub_on_error() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -891,9 +887,9 @@ fn test_next_on_replayed_next() {
     // `on_termination` reads the value and forwards it *before* it records the termination, so a
     // re-entrant `on_next` still passes the `terminated()` check and overwrites the value that
     // late subscribers are replayed.
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
-    let terminated_while_replaying = Shared::new(Mutable::new(Vec::new()));
+    let terminated_while_replaying = Arc::new(Mutex::new(Vec::new()));
 
     // Custom operations
     let observable = subject.clone();
@@ -934,7 +930,7 @@ fn test_complete_on_replayed_next() {
     // The re-entrant termination reads the value and forwards it a second time, because forwarding
     // the value and recording the termination are two steps: an `AsyncSubject` emits its value
     // once.
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -966,7 +962,7 @@ fn test_sub_on_replayed_next() {
     // arrives at a terminated subject and must be replayed the value too. `test_sub_on_next`
     // asserts what happens instead today: the termination alone reaches it, because the
     // termination is recorded only after the value has been forwarded.
-    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -974,7 +970,7 @@ fn test_sub_on_replayed_next() {
     let observable = subject.clone();
 
     let mut observer_2 = Some(observer_2);
-    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
     let subscription_2_cloned = subscription_2.clone();
     let observable_cloned = observable.clone();
     let _subscription = observable.clone().subscribe_with_callback(
@@ -1001,7 +997,7 @@ fn test_sub_on_replayed_next() {
 fn test_next_on_sub() {
     // Replaying the value to a late subscriber runs its callback: the subject has terminated long
     // ago, so a value sent from there is dropped and the replayed value stays what it was.
-    let mut subject = AsyncSubject::default();
+    let mut subject = AsyncSubject::shared();
     assert!(subject.on_next(111).is_continue());
     subject
         .clone()
@@ -1028,7 +1024,7 @@ fn test_next_on_sub() {
 
 #[test]
 fn test_next_on_unsub() {
-    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     assert!(subject.on_next(111).is_continue());
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -1071,7 +1067,7 @@ fn test_next_on_unsub() {
 
 #[test]
 fn test_complete_on_unsub() {
-    let subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     let mut subject_seed = subject.clone();
     assert!(subject_seed.on_next(111).is_continue());
     let (checker_1, observer_1) = Checker::new();
@@ -1111,7 +1107,7 @@ fn test_complete_on_unsub() {
 
 #[test]
 fn test_error_on_unsub() {
-    let subject: AsyncSubject<'_, _, &str> = AsyncSubject::default();
+    let subject: AsyncSubject<'_, _, &str, _> = AsyncSubject::shared();
     let mut subject_seed = subject.clone();
     assert!(subject_seed.on_next(111).is_continue());
     let (checker_1, observer_1) = Checker::new();
@@ -1151,7 +1147,7 @@ fn test_error_on_unsub() {
 
 #[test]
 fn test_sub_on_sub() {
-    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     assert!(subject.on_next(111).is_continue());
     subject.clone().on_termination(Termination::Completed);
     let (checker_1, observer_1) = Checker::new();
@@ -1164,7 +1160,7 @@ fn test_sub_on_sub() {
     // replayed, which runs while its own subscription is still in progress.
     let observable_cloned = observable.clone();
     let mut observer_2 = Some(observer_2);
-    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
     let subscription_2_cloned = subscription_2.clone();
     let (mut next_1, termination_1) = observer_1.into_callbacks();
 
@@ -1187,7 +1183,7 @@ fn test_sub_on_sub() {
 
 #[test]
 fn test_sub_on_unsub() {
-    let mut subject: AsyncSubject<'_, _, Infallible> = AsyncSubject::default();
+    let mut subject: AsyncSubject<'_, _, Infallible, _> = AsyncSubject::shared();
     assert!(subject.on_next(111).is_continue());
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -1199,7 +1195,7 @@ fn test_sub_on_unsub() {
     // The second observer subscribes the third one while it is being released, so that
     // subscription runs from inside the unsubscription.
     let observable_cloned = observable.clone();
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
     let subscription_3_cloned = subscription_3.clone();
     let probe = DropProbe::new().on_drop(Box::new(move || {
         subscription_3_cloned.replace_value(Some(observable_cloned.subscribe(observer_3)));
@@ -1237,7 +1233,6 @@ fn test_sub_on_unsub() {
     assert_eq!(checker_3.state(), State::Completed);
 }
 
-#[cfg(not(feature = "single-threaded"))]
 #[test]
 fn test_race_condition() {
     // `subscribe` reads `terminated()` under the delivery's lock and the value under the subject's
@@ -1250,7 +1245,7 @@ fn test_race_condition() {
     const ROUNDS: usize = 20;
 
     for _ in 0..200 {
-        let mut subject: AsyncSubject<'static, i32, Infallible> = AsyncSubject::default();
+        let mut subject: AsyncSubject<'static, i32, Infallible, _> = AsyncSubject::shared();
         assert!(subject.on_next(111).is_continue());
         let barrier = Arc::new(Barrier::new(SUBSCRIBERS + 1));
 
@@ -1302,21 +1297,21 @@ fn test_lifetime_or_sub() {
     {
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(observer.on_next(Some(&life_marker)).is_continue());
-        let subject = AsyncSubject::default();
+        let subject = AsyncSubject::shared();
         _subscription = subject.subscribe(observer);
     }
 }
 
 #[test]
 fn test_clone() {
-    let observable = AsyncSubject::<'_, TestStruct, TestStruct>::default();
+    let observable = AsyncSubject::<TestStruct, TestStruct, _>::shared();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject: AsyncSubject<'_, i32, String> = AsyncSubject::default();
+    let subject: AsyncSubject<'_, i32, String, _> = AsyncSubject::shared();
     let observable = subject;
 
     let observable = observable.filter(|_| true);
@@ -1327,7 +1322,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: AsyncSubject<'_, i32, String> = AsyncSubject::default();
+    let subject: AsyncSubject<'_, i32, String, _> = AsyncSubject::shared();
     let observable = subject;
 
     observable.filter(|_| true);

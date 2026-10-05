@@ -1,10 +1,9 @@
 //! The [`FromStream`] source.
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
-    observer::{Flow, Observer, Termination},
-    scheduler::Scheduler,
+    observable::{Observable, ObservableTypes, Subscription},
+    observer::{Observer, Termination},
+    scheduler::{Scheduler, SchedulerTypes, StreamThenContext, Task},
 };
 use educe::Educe;
 use futures::Stream;
@@ -29,14 +28,14 @@ use std::convert::Infallible;
 ///     use std::sync::{Arc, Mutex};
 ///     use tokio::time::{sleep, Duration};
 ///
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
 ///     let stream = stream::iter([10, 20]);
 ///
-///     let subscription = FromStream::new(stream, handle).subscribe_with_callback(
+///     let subscription = FromStream::new(stream, scheduler).subscribe_with_callback(
 ///         move |value| values_observer.lock().unwrap().push(value),
 ///         move |termination| terminations_observer
 ///             .lock()
@@ -68,39 +67,33 @@ impl<SM, S> FromStream<SM, S> {
     }
 }
 
-impl<T, SM, S> Observable<'static, T, Infallible> for FromStream<SM, S>
+impl<T, SM, S> ObservableTypes for FromStream<SM, S>
 where
-    SM: Stream<Item = T> + MaybeSend + 'static,
-    S: Scheduler,
+    SM: Stream<Item = T>,
+    S: SchedulerTypes,
 {
+    type Item = T;
+    type Error = Infallible;
+    type Mode = S::Mode;
     type D = S::D;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<T, Infallible> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
-        let mut observer = Some(observer);
-        self.scheduler
-            .schedule_stream(self.stream, move |result| match result {
-                Some(value) => {
-                    let flow = match observer.as_mut() {
-                        Some(observer) => observer.on_next(value),
-                        None => Flow::Stop,
-                    };
-                    if flow.is_stop() {
-                        // The observer ended its own stream: release it here and tell the
-                        // scheduler to stop polling the stream, so an infinite one is not driven
-                        // for values that have nothing to be delivered to.
-                        drop(observer.take());
-                    }
-                    flow.is_continue()
-                }
-                None => {
-                    if let Some(observer) = observer.take() {
-                        observer.on_termination(Termination::Completed)
-                    }
-                    false
-                }
-            })
+impl<T, SM, S, OR> Observable<OR> for FromStream<SM, S>
+where
+    OR: Observer<T, Infallible>,
+    SM: Stream<Item = T>,
+    S: Scheduler<StreamThenContext<OR, T>, SM>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        let task = Task::from_stream_then(
+            observer,
+            self.stream,
+            // The observer ending its own stream stops polling it, so an infinite stream is not
+            // driven for values that have nothing to be delivered to; the task then drops the
+            // observer, like a disposed one.
+            |observer, value| observer.on_next(value).is_continue(),
+            |observer| observer.on_termination(Termination::Completed),
+        );
+        self.scheduler.run_task(task, None)
     }
 }

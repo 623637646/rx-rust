@@ -1,9 +1,8 @@
 //! The [`Skip`] operator, behind [`ObservableExt::skip`](crate::observable::ObservableExt::skip).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -49,13 +48,22 @@ impl<OE> Skip<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Skip<OE>
+impl<T, E, OE> ObservableTypes for Skip<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Skip<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<SkipObserver<OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source.subscribe(SkipObserver {
             observer,
             count: self.count,
@@ -63,7 +71,7 @@ where
     }
 }
 
-struct SkipObserver<OR> {
+pub struct SkipObserver<OR> {
     observer: OR,
     count: usize,
 }

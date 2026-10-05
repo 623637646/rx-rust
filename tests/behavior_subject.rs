@@ -3,25 +3,23 @@ mod tests_utils;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::drop_probe::DropProbe;
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Flow, Observer, Termination};
-use rx_rust::scheduler::Scheduler;
 use rx_rust::subject::Subject;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
-use rx_rust::utils::mutable::Mutable;
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::mutable::MutableHelper;
-use rx_rust::utils::types::Shared;
+use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::MutableHelper;
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::checker::Checker;
 use tests_utils::test_struct::TestStruct;
 
 #[test]
 fn test_completed() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -72,7 +70,7 @@ fn test_completed() {
 
 #[test]
 fn test_error() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -132,7 +130,7 @@ fn test_error() {
 
 #[test]
 fn test_unsubscribe() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -192,7 +190,7 @@ fn test_ref() {
     let value_2 = 111;
     let error = 222;
 
-    let mut subject = BehaviorSubject::new(&value_1);
+    let mut subject = BehaviorSubject::shared(&value_1);
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -222,51 +220,45 @@ fn test_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
-        let subject = BehaviorSubject::new(&-1);
+    block_on(|scheduler| async move {
+        let subject = BehaviorSubject::shared(&-1);
         let (checker, observer) = Checker::new();
 
         // Custom operations
         let observable = subject.clone();
 
-        let subscription = runtime
+        let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [&-1]);
         assert_eq!(checker.state(), State::Active);
         assert!(subject.terminated().is_none());
         assert_eq!(subject.value(), &-1);
 
         let mut subject_cloned = subject.clone();
-        runtime
+        scheduler
             .spawn(async move {
                 assert!(subject_cloned.on_next(&111).is_continue());
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [&-1, &111]);
         assert_eq!(checker.state(), State::Active);
         assert!(subject.terminated().is_none());
         assert_eq!(subject.value(), &111);
 
-        runtime
-            .spawn(async { subscription.dispose() })
-            .await
-            .unwrap();
-        runtime.sleep(DURATION_10_MS).await;
+        scheduler.spawn(async { subscription.dispose() }).await;
+        scheduler.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [&-1, &111]);
         assert_eq!(checker.state(), State::Dropped);
         assert!(subject.terminated().is_none());
         assert_eq!(subject.value(), &111);
 
         let subject_cloned = subject.clone();
-        runtime
+        scheduler
             .spawn(async move {
                 subject_cloned.on_termination(Termination::Error("error"));
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [&-1, &111]);
         assert_eq!(checker.state(), State::Dropped);
         assert!(matches!(
@@ -279,7 +271,7 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -321,7 +313,7 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    let subject = BehaviorSubject::new(-1);
+    let subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -344,7 +336,7 @@ fn test_unsub_on_next_by_take() {
 
 #[test]
 fn test_complete_on_next() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -382,7 +374,7 @@ fn test_complete_on_next() {
 
 #[test]
 fn test_error_on_next() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -427,7 +419,7 @@ fn test_error_on_next() {
 
 #[test]
 fn test_unsub_on_next() {
-    let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(-1);
+    let mut subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(-1);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -439,7 +431,7 @@ fn test_unsub_on_next() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_next
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -454,7 +446,7 @@ fn test_unsub_on_next() {
     ));
 
     // unsubscribe after on_next
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -490,7 +482,7 @@ fn test_unsub_on_next() {
 
 #[test]
 fn test_sub_on_next() {
-    let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(-1);
+    let mut subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(-1);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -500,8 +492,8 @@ fn test_sub_on_next() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -553,7 +545,7 @@ fn test_sub_on_next() {
 
 #[test]
 fn test_next_on_next() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker, observer) = Checker::new();
 
     // Custom operations
@@ -600,7 +592,7 @@ fn test_next_on_next() {
 
 #[test]
 fn test_unsub_on_completed() {
-    let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(-1);
+    let mut subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(-1);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -612,7 +604,7 @@ fn test_unsub_on_completed() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -627,7 +619,7 @@ fn test_unsub_on_completed() {
     ));
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -672,7 +664,7 @@ fn test_unsub_on_completed() {
 
 #[test]
 fn test_sub_on_completed() {
-    let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(-1);
+    let mut subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(-1);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -682,8 +674,8 @@ fn test_sub_on_completed() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -734,7 +726,7 @@ fn test_sub_on_completed() {
 
 #[test]
 fn test_unsub_on_error() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -746,7 +738,7 @@ fn test_unsub_on_error() {
     let _subscription = Some(observable.clone().subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -761,7 +753,7 @@ fn test_unsub_on_error() {
     ));
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable
@@ -809,7 +801,7 @@ fn test_unsub_on_error() {
 
 #[test]
 fn test_sub_on_error() {
-    let mut subject = BehaviorSubject::new(-1);
+    let mut subject = BehaviorSubject::shared(-1);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -819,8 +811,8 @@ fn test_sub_on_error() {
 
     let mut observer_2 = Some(observer_2);
     let mut observer_3 = Some(observer_3);
-    let subscription_2 = Shared::new(Mutable::new(None));
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
 
     let subscription_2_cloned = subscription_2.clone();
     let subscription_3_cloned = subscription_3.clone();
@@ -881,7 +873,7 @@ fn test_next_on_sub() {
     // `subscribe` reads the value under one lock and joins the subject under the other, and the
     // callback of that first value runs in between: the `222` it sends is forwarded before the
     // observer is admitted, so the observer keeps a value that is no longer the subject's.
-    let subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(111);
+    let subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(111);
     let (checker_1, observer_1) = Checker::new();
 
     // Custom operations
@@ -889,7 +881,7 @@ fn test_next_on_sub() {
 
     let _subscription = observable.clone().subscribe(observer_1);
     let mut subject_cloned = subject.clone();
-    let values = Shared::new(Mutable::new(Vec::new()));
+    let values = Arc::new(Mutex::new(Vec::new()));
     let values_cloned = values.clone();
     let _subscription = observable.subscribe_with_callback(
         move |value| {
@@ -911,7 +903,7 @@ fn test_next_on_sub() {
 
 #[test]
 fn test_next_on_unsub() {
-    let subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(111);
+    let subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(111);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -950,7 +942,7 @@ fn test_next_on_unsub() {
 
 #[test]
 fn test_complete_on_unsub() {
-    let subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(111);
+    let subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(111);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -988,7 +980,7 @@ fn test_complete_on_unsub() {
 
 #[test]
 fn test_error_on_unsub() {
-    let subject: BehaviorSubject<'_, _, &str> = BehaviorSubject::new(111);
+    let subject: BehaviorSubject<'_, _, &str, _> = BehaviorSubject::shared(111);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -1026,7 +1018,7 @@ fn test_error_on_unsub() {
 
 #[test]
 fn test_sub_on_sub() {
-    let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(111);
+    let mut subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(111);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
@@ -1037,7 +1029,7 @@ fn test_sub_on_sub() {
     // replayed, which runs while its own subscription is still in progress.
     let observable_cloned = observable.clone();
     let mut observer_2 = Some(observer_2);
-    let subscription_2 = Shared::new(Mutable::new(None));
+    let subscription_2 = Arc::new(Mutex::new(None));
     let subscription_2_cloned = subscription_2.clone();
     let (mut next_1, termination_1) = observer_1.into_callbacks();
 
@@ -1066,7 +1058,7 @@ fn test_sub_on_sub() {
 
 #[test]
 fn test_sub_on_unsub() {
-    let mut subject: BehaviorSubject<'_, _, Infallible> = BehaviorSubject::new(111);
+    let mut subject: BehaviorSubject<'_, _, Infallible, _> = BehaviorSubject::shared(111);
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
@@ -1077,7 +1069,7 @@ fn test_sub_on_unsub() {
     // The second observer subscribes the third one while it is being released, so that
     // subscription runs from inside the unsubscription.
     let observable_cloned = observable.clone();
-    let subscription_3 = Shared::new(Mutable::new(None));
+    let subscription_3 = Arc::new(Mutex::new(None));
     let subscription_3_cloned = subscription_3.clone();
     let probe = DropProbe::new().on_drop(Box::new(move || {
         subscription_3_cloned.replace_value(Some(observable_cloned.subscribe(observer_3)));
@@ -1115,7 +1107,6 @@ fn test_sub_on_unsub() {
     assert_eq!(checker_3.state(), State::Active);
 }
 
-#[cfg(not(feature = "single-threaded"))]
 #[test]
 fn test_race_condition() {
     // Same window as `test_next_on_sub`, walked into by another thread: a value that lands between
@@ -1128,7 +1119,8 @@ fn test_race_condition() {
     const ROUNDS: usize = 20;
 
     for _ in 0..200 {
-        let mut subject: BehaviorSubject<'static, i32, Infallible> = BehaviorSubject::new(111);
+        let mut subject: BehaviorSubject<'static, i32, Infallible, _> =
+            BehaviorSubject::shared(111);
         let barrier = Arc::new(Barrier::new(SUBSCRIBERS + 1));
 
         let handles: Vec<_> = (0..SUBSCRIBERS)
@@ -1170,7 +1162,6 @@ fn test_race_condition() {
     }
 }
 
-#[cfg(not(feature = "single-threaded"))]
 #[test]
 fn test_race_condition_between_next() {
     // Storing the value and forwarding it are two steps under two locks, so two threads can store
@@ -1181,7 +1172,7 @@ fn test_race_condition_between_next() {
     const SENDERS: usize = 16;
 
     for _ in 0..500 {
-        let subject: BehaviorSubject<'static, i32, Infallible> = BehaviorSubject::new(0);
+        let subject: BehaviorSubject<'static, i32, Infallible, _> = BehaviorSubject::shared(0);
         let (checker, observer) = Checker::new();
         let _subscription = subject.clone().subscribe(observer);
         let barrier = Arc::new(Barrier::new(SENDERS));
@@ -1222,21 +1213,21 @@ fn test_lifetime_or_sub() {
     {
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(observer.on_next(Some(&life_marker)).is_continue());
-        let subject = BehaviorSubject::new(None);
+        let subject = BehaviorSubject::shared(None);
         _subscription = subject.subscribe(observer);
     }
 }
 
 #[test]
 fn test_clone() {
-    let observable = BehaviorSubject::<'_, _, TestStruct>::new(TestStruct);
+    let observable = BehaviorSubject::<_, TestStruct, _>::shared(TestStruct);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject: BehaviorSubject<'_, i32, String> = BehaviorSubject::new(-1);
+    let subject: BehaviorSubject<'_, i32, String, _> = BehaviorSubject::shared(-1);
     let observable = subject;
 
     let observable = observable.filter(|_| true);
@@ -1247,7 +1238,7 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: BehaviorSubject<'_, i32, String> = BehaviorSubject::new(-1);
+    let subject: BehaviorSubject<'_, i32, String, _> = BehaviorSubject::shared(-1);
     let observable = subject;
 
     observable.filter(|_| true);

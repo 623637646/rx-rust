@@ -2,10 +2,10 @@
 //! [`ObservableExt::debug`](crate::observable::ObservableExt::debug),
 //! [`ObservableExt::debug_default_print`](crate::observable::ObservableExt::debug_default_print).
 
-use crate::utils::types::{MarkerType, MaybeSend};
+use crate::utils::MarkerType;
 use crate::{
     disposable::Disposable,
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -101,15 +101,26 @@ impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
     }
 }
 
-impl<'or, T, E, OE, C, F> Observable<'or, T, E> for Debug<OE, C, F>
+impl<T, E, OE, C, F> ObservableTypes for Debug<OE, C, F>
 where
-    OE: Observable<'or, T, E>,
-    C: Clone + MaybeSend + 'or,
-    F: Fn(C, DebugEvent<'_, T, E>) + Clone + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    C: Clone,
+    F: Fn(C, DebugEvent<'_, T, E>) + Clone,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = DebugDisposal<Subscription<OE::D>, C, F, T, E>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, C, F, OR> Observable<OR> for Debug<OE, C, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<DebugObserver<OR, C, F>, Item = T, Error = E>,
+    C: Clone,
+    F: Fn(C, DebugEvent<'_, T, E>) + Clone,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         (self.callback)(self.context.clone(), DebugEvent::Subscribed);
         let observer = DebugObserver {
             observer,
@@ -146,7 +157,7 @@ where
     }
 }
 
-struct DebugObserver<OR, C, F> {
+pub struct DebugObserver<OR, C, F> {
     observer: OR,
     context: C,
     callback: F,

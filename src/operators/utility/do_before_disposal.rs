@@ -1,11 +1,10 @@
 //! The [`DoBeforeDisposal`] operator, behind
 //! [`ObservableExt::do_before_disposal`](crate::observable::ObservableExt::do_before_disposal).
 
-use crate::utils::types::MaybeSend;
 use crate::{
     disposable::{callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal},
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::Observer,
 };
 use educe::Educe;
@@ -47,25 +46,33 @@ pub struct DoBeforeDisposal<OE, F> {
 impl<OE, F> DoBeforeDisposal<OE, F> {
     /// Creates a [`DoBeforeDisposal`] over `source`;
     /// [`ObservableExt::do_before_disposal`](crate::observable::ObservableExt::do_before_disposal) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+    pub fn new<T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnOnce(),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for DoBeforeDisposal<OE, F>
+impl<T, E, OE, F> ObservableTypes for DoBeforeDisposal<OE, F>
 where
-    T: 'or,
-    E: 'or,
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
     F: FnOnce(),
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = ChainDisposal<CallbackDisposal<F>, OE::D>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for DoBeforeDisposal<OE, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<OR, Item = T, Error = E>,
+    F: FnOnce(),
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source
             .subscribe(observer)
             .preceded_by(CallbackDisposal::new(self.callback))

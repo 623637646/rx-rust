@@ -6,10 +6,9 @@ use rx_rust::disposable::Disposable;
 use rx_rust::observable::Observable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Flow, Observer, Termination};
-use rx_rust::utils::mutable::Mutable;
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::types::Shared;
+use rx_rust::thread_mode::mutable::MutableExt;
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::checker::Checker;
 use tests_utils::test_channel::test_channel;
 
@@ -26,7 +25,7 @@ fn test_unsub_on_next() {
     let _subscription = Some(observable_1.subscribe(observer_1));
 
     // unsubscribe before on_next
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable_2
@@ -40,7 +39,7 @@ fn test_unsub_on_next() {
     ));
 
     // unsubscribe after on_next
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable_3
@@ -91,7 +90,7 @@ fn test_unsub_on_completed() {
     let _subscription = Some(observable_1.subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable_2
@@ -105,7 +104,7 @@ fn test_unsub_on_completed() {
     ));
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable_3
@@ -168,7 +167,7 @@ fn test_unsub_on_error() {
     let _subscription = Some(observable_1.subscribe(observer_1));
 
     // unsubscribe before on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable_2
@@ -182,7 +181,7 @@ fn test_unsub_on_error() {
     ));
 
     // unsubscribe after on_termination
-    let sub = Shared::new(Mutable::new(None));
+    let sub = Arc::new(Mutex::new(None));
     let sub_cloned = sub.clone();
     sub.replace_value(Some(
         observable_3

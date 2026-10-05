@@ -16,26 +16,45 @@
 //! which is why it owns its source:
 //! ```rust
 //! use rx_rust::{
-//!     observable::{Observable, ObservableExt, Subscription},
+//!     observable::{Observable, ObservableExt, ObservableTypes, Subscription},
 //!     observer::{Flow, Observer, Termination},
 //!     operators::creating::range::Range,
+//!     thread_mode::ThreadMode,
 //!     utils::{
 //!         serialized_delivery::UpdateOutcome,
 //!         subscribe_with_context::{self, subscribe_with_context_owning_source, SubscriptionContext},
-//!         types::MaybeSend,
 //!     },
 //!     disposable::Disposable,
 //! };
 //!
 //! struct TotalUntil<OE> { source: OE, limit: i32 }
 //!
-//! impl<'or, E: MaybeSend + 'or, OE: Observable<'or, i32, E>> Observable<'or, i32, E> for TotalUntil<OE>
-//! where
-//!     OE::D: MaybeSend + 'or,
-//! {
-//!     type D = subscribe_with_context::OwningDisposal<'or>;
+//! // Nothing here depends on the observer: the disposal names the mode, the events, the model and
+//! // the source's disposal, never the observer's type.
+//! impl<E, OE: ObservableTypes<Item = i32, Error = E>> ObservableTypes for TotalUntil<OE> {
+//!     type Item = i32;
+//!     type Error = E;
+//!     type Mode = OE::Mode;
+//!     type D = subscribe_with_context::ContextDisposal<OE::Mode, i32, E, i32, OE::D>;
+//! }
 //!
-//!     fn subscribe(self, observer: impl Observer<i32, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+//! // The source is subscribed with the operator's own observer, which is named here. A disposal
+//! // written inside the bound of `OE` is spelled out in full.
+//! impl<E, OE, OR> Observable<OR> for TotalUntil<OE>
+//! where
+//!     OR: Observer<i32, E>,
+//!     OE: Observable<
+//!             TotalObserver<
+//!                 <OE as ObservableTypes>::Mode,
+//!                 OR,
+//!                 E,
+//!                 <OE as ObservableTypes>::D,
+//!             >,
+//!             Item = i32,
+//!             Error = E,
+//!         >,
+//! {
+//!     fn subscribe(self, observer: OR) -> Subscription<Self::D> {
 //!         let limit = self.limit;
 //!         subscribe_with_context_owning_source(observer, 0, |context| {
 //!             self.source.subscribe(TotalObserver { context, limit })
@@ -43,9 +62,14 @@
 //!     }
 //! }
 //!
-//! struct TotalObserver<OR, E, D: Disposable> { context: SubscriptionContext<i32, E, OR, i32, D>, limit: i32 }
+//! struct TotalObserver<M: ThreadMode, OR, E, D: Disposable> {
+//!     context: SubscriptionContext<M, i32, E, OR, i32, D>,
+//!     limit: i32,
+//! }
 //!
-//! impl<OR: Observer<i32, E>, E, D: Disposable> Observer<i32, E> for TotalObserver<OR, E, D> {
+//! impl<M: ThreadMode, OR: Observer<i32, E>, E, D: Disposable> Observer<i32, E>
+//!     for TotalObserver<M, OR, E, D>
+//! {
 //!     fn on_next(&mut self, value: i32) -> Flow {
 //!         // The model is read and written, and the events queued, under one lock.
 //!         self.context.update_flow(|total| {
@@ -68,19 +92,18 @@
 //! assert_eq!(seen, [1, 3, 6]);
 //! ```
 
+use crate::thread_mode::mutable::MutableExt;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, DisposableExt, boxed_disposal::BoxedDisposal, chain_disposal::ChainDisposal,
-    },
+    disposable::{Disposable, DisposableExt, chain_disposal::ChainDisposal},
     observable::Subscription,
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
     utils::{
         pending_events::EventBatch,
-        serialized_delivery::{SerializedDelivery, WeakSerializedDelivery},
+        serialized_delivery::{DeliveryStop, SerializedDelivery, WeakSerializedDelivery},
         subscribe_with_auto_dispose_on_termination::is_auto_dispose_on_termination_observer,
-        types::MaybeSend,
     },
 };
 use educe::Educe;
@@ -88,14 +111,34 @@ use educe::Educe;
 // The disposal of a context that does not own its source subscription: stopping the context,
 // followed by the caller's own subscription. Returned by `subscribe_with_context`.
 delegate_disposal!(
-    Disposal<'or_sub, D>,
-    ChainDisposal<BoxedDisposal<'or_sub>, D>,
-    where D: Disposable
+    Disposal<M, T, E, MD, D>,
+    ChainDisposal<ContextDisposal<M, T, E, MD, ()>, D>,
+    where M: ThreadMode, D: Disposable
 );
 
-/// The type-erased disposal of a context that owns its source subscription. Returned by
-/// [`subscribe_with_context_owning_source`].
-pub type OwningDisposal<'or_sub> = BoxedDisposal<'or_sub>;
+/// Stops a context: its model and the source subscription it owns are dropped, outside the lock,
+/// and every later event is rejected.
+///
+/// Returned by [`subscribe_with_context_owning_source`], where `D` is the disposal of the source
+/// subscription the context owns. [`subscribe_with_context`] uses it with `D = ()`, chained before
+/// the caller's own subscription.
+///
+/// Its type names the thread mode, the events, the model and the source's disposal, but not the
+/// observer — the disposal of an observable must not depend on its observer (see
+/// [`ObservableTypes`](crate::observable::ObservableTypes)). The observer is released when the
+/// sources that hold the context let go of it, which the disposal of the model and the sources
+/// makes them do.
+#[derive(Educe)]
+#[educe(Debug)]
+pub struct ContextDisposal<M: ThreadMode, T, E, MD, D: Disposable>(
+    #[educe(Debug(ignore))] DeliveryStop<M, T, E, ContextResources<MD, D>>,
+);
+
+impl<M: ThreadMode, T, E, MD, D: Disposable> Disposable for ContextDisposal<M, T, E, MD, D> {
+    fn dispose(self) {
+        self.0.stop();
+    }
+}
 
 /// Creates a subscription backed by a shared, serialized context containing the downstream
 /// observer and a mutable model.
@@ -110,26 +153,25 @@ pub type OwningDisposal<'or_sub> = BoxedDisposal<'or_sub>;
 /// When the context can instead terminate while the source is still active — from a notifier, from
 /// a scheduler task, or from another source of a multi-source operator — use
 /// [`subscribe_with_context_owning_source`] so that the source is disposed on termination.
-pub fn subscribe_with_context<'or_sub, T, E, OR, D, M, F>(
+///
+/// `M` is the thread mode the context's pointers are picked for: the mode of the operator.
+pub fn subscribe_with_context<M, T, E, OR, D, MD, F>(
     observer: OR,
-    model: M,
+    model: MD,
     builder: F,
-) -> Subscription<Disposal<'or_sub, D>>
+) -> Subscription<Disposal<M, T, E, MD, D>>
 where
-    T: MaybeSend + 'or_sub,
-    E: MaybeSend + 'or_sub,
-    OR: MaybeSend + 'or_sub,
+    M: ThreadMode,
     D: Disposable,
-    M: MaybeSend + 'or_sub,
-    F: FnOnce(SubscriptionContext<T, E, OR, M>) -> Subscription<D>,
+    F: FnOnce(SubscriptionContext<M, T, E, OR, MD>) -> Subscription<D>,
 {
     debug_assert_observer_compatibility::<OR>();
     // This context does not own its source subscription, so its own `D` is `()`: the caller's
     // subscription, of the unrelated type `D`, is chained below instead.
-    let context = SubscriptionContext::<T, E, OR, M, ()>::new(observer, model);
+    let context = SubscriptionContext::<M, T, E, OR, MD, ()>::new(observer, model);
     let disposal = context.disposal();
     let subscription = builder(context);
-    subscription.preceded_by(disposal.into_boxed()).map_into()
+    subscription.preceded_by(disposal).map_into()
 }
 
 /// Creates a context subscription whose source subscription is owned by the context.
@@ -138,25 +180,22 @@ where
 /// terminates, including when termination occurs synchronously while `builder` is running.
 ///
 /// Use this whenever the context can terminate while the source is still active — from a notifier,
-/// from a scheduler task, or from another source of a multi-source operator. Owning the source
-/// costs `D: MaybeSend + 'or_sub` and erases the disposal into [`OwningDisposal`], so when
-/// the context can only terminate from inside the source's own `on_termination` prefer
-/// [`subscribe_with_context`], which keeps `D` concrete.
-pub fn subscribe_with_context_owning_source<'or_sub, T, E, OR, D, M, F>(
+/// from a scheduler task, or from another source of a multi-source operator. When the context can
+/// only terminate from inside the source's own `on_termination`, [`subscribe_with_context`] is
+/// enough.
+pub fn subscribe_with_context_owning_source<M, T, E, OR, D, MD, F>(
     observer: OR,
-    model: M,
+    model: MD,
     builder: F,
-) -> Subscription<OwningDisposal<'or_sub>>
+) -> Subscription<ContextDisposal<M, T, E, MD, D>>
 where
-    T: MaybeSend + 'or_sub,
-    E: MaybeSend + 'or_sub,
-    OR: Observer<T, E> + MaybeSend + 'or_sub,
-    D: Disposable + MaybeSend + 'or_sub,
-    M: MaybeSend + 'or_sub,
-    F: FnOnce(SubscriptionContext<T, E, OR, M, D>) -> Subscription<D>,
+    M: ThreadMode,
+    OR: Observer<T, E>,
+    D: Disposable,
+    F: FnOnce(SubscriptionContext<M, T, E, OR, MD, D>) -> Subscription<D>,
 {
     debug_assert_observer_compatibility::<OR>();
-    let context = SubscriptionContext::<T, E, OR, M, D>::new(observer, model);
+    let context = SubscriptionContext::<M, T, E, OR, MD, D>::new(observer, model);
     let disposal = context.disposal();
     let subscription = builder(context.clone());
     let previous_subscription = context.install_source_subscription(subscription);
@@ -164,7 +203,7 @@ where
         !matches!(previous_subscription, Ok(Some(_))),
         "the source subscription is installed only once"
     );
-    disposal.into_boxed().into_subscription()
+    disposal.into_subscription()
 }
 
 /// What a context owns besides its observer and its queued events.
@@ -172,35 +211,35 @@ where
 /// These are dropped together, outside the lock, once the context stops. When the context stops by
 /// terminating, that happens after the observer was notified, so the source is disposed only after
 /// downstream was told the stream ended.
-#[derive(Educe)]
-#[educe(Debug)]
-struct ContextResources<M, D: Disposable> {
-    model: M,
+pub struct ContextResources<MD, D: Disposable> {
+    model: MD,
     /// `None` when the context does not own its source subscription — `D` is then `()` — or
     /// while the builder of an owned source subscription is still running.
     source_subscription: Option<Subscription<D>>,
 }
 
-type ContextDelivery<T, E, OR, M, D> = SerializedDelivery<T, E, OR, ContextResources<M, D>>;
-type WeakContextDelivery<T, E, OR, M, D> = WeakSerializedDelivery<T, E, OR, ContextResources<M, D>>;
+type ContextDelivery<M, T, E, OR, MD, D> = SerializedDelivery<M, T, E, OR, ContextResources<MD, D>>;
+type WeakContextDelivery<M, T, E, OR, MD, D> =
+    WeakSerializedDelivery<M, T, E, OR, ContextResources<MD, D>>;
 
 /// The shared state of an operator: its model and its downstream observer, behind one lock.
 ///
 /// Handed to the builder of [`subscribe_with_context`] / [`subscribe_with_context_owning_source`],
 /// cloned into each of the operator's observers, and driven through [`update`](Self::update),
 /// [`update_flow`](Self::update_flow), [`send_next`](Self::send_next) and
-/// [`send_termination`](Self::send_termination). `D` is the disposal of the source subscription
-/// the context owns, and `()` when it owns none. See the [module documentation](self) for an
-/// example.
+/// [`send_termination`](Self::send_termination). `M` is the thread mode, `MD` the model, and `D`
+/// the disposal of the source subscription the context owns, `()` when it owns none. See the
+/// [module documentation](self) for an example.
 #[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct SubscriptionContext<T, E, OR, M, D: Disposable = ()> {
-    delivery: ContextDelivery<T, E, OR, M, D>,
+#[educe(Debug, Clone(bound()))]
+pub struct SubscriptionContext<M: ThreadMode, T, E, OR, MD, D: Disposable = ()> {
+    #[educe(Debug(ignore))]
+    delivery: ContextDelivery<M, T, E, OR, MD, D>,
 }
 
-impl<T, E, OR, M, D: Disposable> SubscriptionContext<T, E, OR, M, D> {
+impl<M: ThreadMode, T, E, OR, MD, D: Disposable> SubscriptionContext<M, T, E, OR, MD, D> {
     /// Creates a context holding `observer` and `model`, owning no source subscription yet.
-    fn new(observer: OR, model: M) -> Self {
+    fn new(observer: OR, model: MD) -> Self {
         Self {
             delivery: SerializedDelivery::idle(
                 observer,
@@ -213,22 +252,21 @@ impl<T, E, OR, M, D: Disposable> SubscriptionContext<T, E, OR, M, D> {
     }
 
     /// Creates the disposal that stops this context.
-    fn disposal(&self) -> SubscriptionContextDisposal<T, E, OR, M, D> {
-        SubscriptionContextDisposal {
-            delivery: self.delivery.clone(),
-        }
+    fn disposal(&self) -> ContextDisposal<M, T, E, MD, D> {
+        ContextDisposal(self.delivery.stop_handle())
     }
 
     /// Creates a non-owning reference to this context.
-    pub fn downgrade(&self) -> WeakSubscriptionContext<T, E, OR, M, D> {
+    pub fn downgrade(&self) -> WeakSubscriptionContext<M, T, E, OR, MD, D> {
         WeakSubscriptionContext {
             delivery: self.delivery.downgrade(),
         }
     }
 }
 
-impl<T, E, OR, M, D> SubscriptionContext<T, E, OR, M, D>
+impl<M, T, E, OR, MD, D> SubscriptionContext<M, T, E, OR, MD, D>
 where
+    M: ThreadMode,
     OR: Observer<T, E>,
     D: Disposable,
 {
@@ -242,7 +280,7 @@ where
     /// is returned.
     pub fn update<R, DO, const EVENTS_DECIDED: bool>(
         &self,
-        callback: impl FnOnce(&mut M) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
+        callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
     ) -> Result<R, DeliveryStopped> {
         self.delivery
             .update(|resources| callback(&mut resources.model))
@@ -254,7 +292,7 @@ where
     /// when the context has stopped, so an operator observer can return it directly.
     pub fn update_flow<DO, const EVENTS_DECIDED: bool>(
         &self,
-        callback: impl FnOnce(&mut M) -> UpdateOutcome<T, E, (), DO, EVENTS_DECIDED>,
+        callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, (), DO, EVENTS_DECIDED>,
     ) -> Flow {
         match self
             .delivery
@@ -303,30 +341,88 @@ where
     }
 }
 
-struct SubscriptionContextDisposal<T, E, OR, M, D: Disposable> {
-    delivery: ContextDelivery<T, E, OR, M, D>,
+/// A non-owning reference to a [`SubscriptionContext`]: what a scheduler task holds, so that the
+/// task does not keep the observer alive once the subscription is gone.
+pub struct WeakSubscriptionContext<M: ThreadMode, T, E, OR, MD, D: Disposable = ()> {
+    delivery: WeakContextDelivery<M, T, E, OR, MD, D>,
 }
 
-impl<T, E, OR, M, D: Disposable> Disposable for SubscriptionContextDisposal<T, E, OR, M, D> {
-    /// Stops the context, so that every later event is dropped.
-    fn dispose(self) {
-        self.delivery.stop();
+impl<M: ThreadMode, T, E, OR, MD, D: Disposable> Clone
+    for WeakSubscriptionContext<M, T, E, OR, MD, D>
+{
+    fn clone(&self) -> Self {
+        Self {
+            delivery: self.delivery.clone(),
+        }
     }
 }
 
-/// A non-owning reference to a [`SubscriptionContext`].
-#[derive(Educe)]
-#[educe(Debug, Clone)]
-pub struct WeakSubscriptionContext<T, E, OR, M, D: Disposable = ()> {
-    delivery: WeakContextDelivery<T, E, OR, M, D>,
-}
-
-impl<T, E, OR, M, D: Disposable> WeakSubscriptionContext<T, E, OR, M, D> {
+impl<M: ThreadMode, T, E, OR, MD, D: Disposable> WeakSubscriptionContext<M, T, E, OR, MD, D> {
     /// Returns the context, or `None` once every strong reference to it is gone.
-    pub fn upgrade(&self) -> Option<SubscriptionContext<T, E, OR, M, D>> {
+    pub fn upgrade(&self) -> Option<SubscriptionContext<M, T, E, OR, MD, D>> {
         self.delivery
             .upgrade()
             .map(|delivery| SubscriptionContext { delivery })
+    }
+}
+
+/// A handle on a context, weak until it is promoted: what a scheduler task of an operator holds.
+///
+/// The task holds the context weakly, so that it does not keep the observer alive once the
+/// subscription is disposed while the source is still active: the source releases its handle on
+/// the context then, and the observer goes with it, synchronously. Once the source has
+/// terminated, though, the task may be the only one left with work to do — a `delay` still has
+/// values to deliver — so the operator calls [`promote`](Self::promote), and the context then
+/// lives as long as the last clone of the handle does.
+///
+/// Every clone shares the promotion. Reaching the context never takes a lock: the strong handle
+/// is only there to keep it alive, and is never read.
+pub struct PromotableWeakContext<M: ThreadMode, T, E, OR, MD, D: Disposable = ()> {
+    weak: WeakSubscriptionContext<M, T, E, OR, MD, D>,
+    /// Written once by `promote`, shared by every clone, and never read.
+    promoted: PromotedContext<M, T, E, OR, MD, D>,
+}
+
+type PromotedContext<M, T, E, OR, MD, D> =
+    <M as ThreadMode>::Ptr<Option<SubscriptionContext<M, T, E, OR, MD, D>>>;
+
+impl<M: ThreadMode, T, E, OR, MD, D: Disposable> Clone
+    for PromotableWeakContext<M, T, E, OR, MD, D>
+{
+    fn clone(&self) -> Self {
+        Self {
+            weak: self.weak.clone(),
+            promoted: self.promoted.clone(),
+        }
+    }
+}
+
+impl<M: ThreadMode, T, E, OR, MD, D: Disposable> PromotableWeakContext<M, T, E, OR, MD, D> {
+    /// Creates a weak handle on `context`.
+    pub fn new(context: &SubscriptionContext<M, T, E, OR, MD, D>) -> Self {
+        Self {
+            weak: context.downgrade(),
+            promoted: M::ptr(None),
+        }
+    }
+
+    /// Returns the context, or `None` once it is gone.
+    pub fn upgrade(&self) -> Option<SubscriptionContext<M, T, E, OR, MD, D>> {
+        self.weak.upgrade()
+    }
+
+    /// Keeps the context alive for as long as any clone of this handle lives.
+    ///
+    /// Called when the source terminates, while the caller still holds the context. Does nothing
+    /// once the context is gone: the subscription was disposed. No cycle is formed: the context
+    /// holds the tasks' handles, which cancel them, but not the tasks themselves, which their
+    /// runtime owns.
+    pub fn promote(&self) {
+        let Some(context) = self.weak.upgrade() else {
+            return;
+        };
+        let previous = self.promoted.replace_value(Some(context));
+        debug_assert!(previous.is_none(), "a context is promoted only once");
     }
 }
 

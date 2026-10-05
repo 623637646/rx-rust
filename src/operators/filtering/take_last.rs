@@ -1,10 +1,9 @@
 //! The [`TakeLast`] operator, behind
 //! [`ObservableExt::take_last`](crate::observable::ObservableExt::take_last).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -51,14 +50,22 @@ impl<OE> TakeLast<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for TakeLast<OE>
+impl<T, E, OE> ObservableTypes for TakeLast<OE>
 where
-    T: MaybeSend + 'or,
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for TakeLast<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<TakeLastObserver<T, OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source.subscribe(TakeLastObserver {
             observer,
             buffer: VecDeque::default(),
@@ -67,7 +74,7 @@ where
     }
 }
 
-struct TakeLastObserver<T, OR> {
+pub struct TakeLastObserver<T, OR> {
     observer: OR,
     buffer: VecDeque<T>,
     count: usize,

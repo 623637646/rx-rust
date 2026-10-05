@@ -2,9 +2,8 @@
 //! [`ObservableExt::throttle`](crate::observable::ObservableExt::throttle).
 
 use crate::observable::Subscription;
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -78,13 +77,22 @@ impl<OE> Throttle<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Throttle<OE>
+impl<T, E, OE> ObservableTypes for Throttle<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Throttle<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<ThrottleObserver<OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source.subscribe(ThrottleObserver {
             observer,
             time_span: self.time_span,
@@ -93,7 +101,7 @@ where
     }
 }
 
-struct ThrottleObserver<OR> {
+pub struct ThrottleObserver<OR> {
     observer: OR,
     time_span: Duration,
     last_emit: Option<Instant>,

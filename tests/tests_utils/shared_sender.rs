@@ -10,26 +10,25 @@
 //! still live apart from one that is gone.
 
 use educe::Educe;
-use rx_rust::utils::mutable::MutableExt;
-use rx_rust::utils::mutable::MutableHelper;
+use rx_rust::thread_mode::Shared;
+use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     observer::{Observer, Termination},
-    utils::{
-        mutable::Mutable, pending_events::EventBatch, serialized_delivery::SerializedDelivery,
-        types::Shared,
-    },
+    utils::{pending_events::EventBatch, serialized_delivery::SerializedDelivery},
 };
+use std::sync::{Arc, Mutex};
 
-type Delivery<T, E, OR> = SerializedDelivery<T, E, OR, ()>;
+type Delivery<T, E, OR> = SerializedDelivery<Shared, T, E, OR, ()>;
 
 /// A shared, initially empty handle sending through at most one observer.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub(crate) struct SharedSender<T, E, OR>(Shared<Mutable<Option<Delivery<T, E, OR>>>>);
+pub(crate) struct SharedSender<T, E, OR>(Arc<Mutex<Option<Delivery<T, E, OR>>>>);
 
 impl<T, E, OR> Default for SharedSender<T, E, OR> {
     fn default() -> Self {
-        Self(Shared::new(Mutable::new(None)))
+        Self(Arc::new(Mutex::new(None)))
     }
 }
 
@@ -40,7 +39,7 @@ where
     /// Starts with `observer` already parked here, for a stream whose observer the test owns
     /// before the code under test runs.
     pub(crate) fn new(observer: OR) -> Self {
-        Self(Shared::new(Mutable::new(Some(SerializedDelivery::idle(
+        Self(Arc::new(Mutex::new(Some(SerializedDelivery::idle(
             observer,
             (),
         )))))

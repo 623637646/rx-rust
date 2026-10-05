@@ -1,9 +1,10 @@
-//! Conversions to futures and streams, type adapters, and debugging hooks.
+//! Conversions to futures and streams, type and mode adapters, and debugging hooks.
 
 pub mod debug;
 pub mod hook_on_next;
 pub mod hook_on_subscription;
 pub mod hook_on_termination;
+pub mod into_shared;
 pub mod observable_future;
 #[cfg(feature = "futures")]
 pub mod observable_stream;

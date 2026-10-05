@@ -1,8 +1,8 @@
 //! The [`Throw`] source.
 
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -40,13 +40,18 @@ impl<E> Throw<E> {
     }
 }
 
-impl<'or, E> Observable<'or, Infallible, E> for Throw<E> {
+impl<E> ObservableTypes for Throw<E> {
+    type Item = Infallible;
+    type Error = E;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<Infallible, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<E, OR> Observable<OR> for Throw<E>
+where
+    OR: Observer<Infallible, E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         observer.on_termination(Termination::Error(self.0));
         Subscription::default()
     }

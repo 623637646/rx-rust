@@ -1,8 +1,11 @@
 //! The [`DoAfterSubscription`] operator, behind
 //! [`ObservableExt::do_after_subscription`](crate::observable::ObservableExt::do_after_subscription).
 
-use crate::utils::types::MaybeSend;
-use crate::{observable::Observable, observable::Subscription, observer::Observer};
+use crate::{
+    observable::Subscription,
+    observable::{Observable, ObservableTypes},
+    observer::Observer,
+};
 use educe::Educe;
 
 /// Invokes a callback when the Observable is subscribed to, after the subscription has been established.
@@ -39,25 +42,33 @@ pub struct DoAfterSubscription<OE, F> {
 impl<OE, F> DoAfterSubscription<OE, F> {
     /// Creates a [`DoAfterSubscription`] over `source`;
     /// [`ObservableExt::do_after_subscription`](crate::observable::ObservableExt::do_after_subscription) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+    pub fn new<T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnOnce(),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for DoAfterSubscription<OE, F>
+impl<T, E, OE, F> ObservableTypes for DoAfterSubscription<OE, F>
 where
-    T: 'or,
-    E: 'or,
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
     F: FnOnce(),
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for DoAfterSubscription<OE, F>
+where
+    OR: Observer<T, E>,
+    OE: Observable<OR, Item = T, Error = E>,
+    F: FnOnce(),
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let subscription = self.source.subscribe(observer);
         (self.callback)();
         subscription

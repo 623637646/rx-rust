@@ -1,16 +1,16 @@
 mod tests_utils;
 
+use rx_rust::thread_mode::Shared;
+use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
     disposable::callback_disposal::CallbackDisposal,
     observable::Subscription,
     observer::{Flow, Observer, Termination},
-    utils::{
-        mutable::{MutableBool, MutableBoolHelper},
-        subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
-        types::Shared,
-    },
+    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use std::convert::Infallible;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex};
 
 /// An observer running `callback` from inside its `on_termination`.
 struct HookOnTerminationObserver<F: FnOnce()>(F);
@@ -27,16 +27,18 @@ impl<F: FnOnce()> Observer<i32, Infallible> for HookOnTerminationObserver<F> {
 
 #[test]
 fn test_completed() {
-    let is_disposed = Shared::new(MutableBool::default());
+    let is_disposed = Arc::new(AtomicBool::default());
     let is_disposed_of_source = is_disposed.clone();
     let mut observer_slot = None;
-    let _subscription =
-        subscribe_with_auto_dispose_on_termination(HookOnTerminationObserver(|| {}), |observer| {
+    let _subscription = subscribe_with_auto_dispose_on_termination::<Shared, _, _, _>(
+        HookOnTerminationObserver(|| {}),
+        |observer| {
             observer_slot = Some(observer);
             Subscription::new(CallbackDisposal::new(move || {
                 is_disposed_of_source.write(true);
             }))
-        });
+        },
+    );
     assert!(!is_disposed.read());
 
     observer_slot
@@ -52,14 +54,14 @@ fn test_completed() {
 #[test]
 fn test_panicking_on_termination_disposes_the_source() {
     use crate::tests_utils::panic::expect_panic_on_drop;
-    use rx_rust::utils::mutable::{Mutable, MutableExt};
+    use rx_rust::thread_mode::mutable::MutableExt;
 
-    let is_disposed = Shared::new(MutableBool::default());
+    let is_disposed = Arc::new(AtomicBool::default());
     let is_disposed_of_source = is_disposed.clone();
-    let token = Shared::new(Mutable::new(None));
+    let token = Arc::new(Mutex::new(None));
     let token_of_observer = token.clone();
     let mut observer_slot = None;
-    let _subscription = subscribe_with_auto_dispose_on_termination(
+    let _subscription = subscribe_with_auto_dispose_on_termination::<Shared, _, _, _>(
         HookOnTerminationObserver(move || {
             // Dropping the token panics, which unwinds out of this termination.
             drop(token_of_observer.take_value());

@@ -1,8 +1,7 @@
 mod tests_utils;
 
-use rx_rust::disposable::{
-    Disposable, boxed_disposal::BoxedDisposal, callback_disposal::CallbackDisposal,
-};
+use rx_rust::disposable::boxed_disposal::SendBoxedDisposal;
+use rx_rust::disposable::{Disposable, callback_disposal::CallbackDisposal};
 use tests_utils::test_struct::TestStruct;
 
 #[test]
@@ -21,7 +20,7 @@ fn test_boxed_disposal() {
     let disposal = CallbackDisposal::new(|| {
         called = true;
     });
-    let disposal = BoxedDisposal::new(disposal);
+    let disposal = SendBoxedDisposal::new(disposal);
     disposal.dispose();
     assert!(called);
 }
@@ -40,6 +39,6 @@ fn test_lifetime_boxed() {
         let callback_disposal = CallbackDisposal::new(|| {
             life_marker.consume_ref();
         });
-        _disposal = BoxedDisposal::new(callback_disposal);
+        _disposal = SendBoxedDisposal::new(callback_disposal);
     }
 }

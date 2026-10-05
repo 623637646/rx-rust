@@ -43,11 +43,12 @@ pub mod shared_disposal;
 pub use crate::delegate_disposal;
 use crate::{
     disposable::{
-        boxed_disposal::BoxedDisposal, chain_disposal::ChainDisposal,
-        either_disposal::EitherDisposal, option_disposal::OptionDisposal,
+        boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
+        chain_disposal::ChainDisposal,
+        either_disposal::EitherDisposal,
+        option_disposal::OptionDisposal,
     },
     observable::Subscription,
-    utils::types::MaybeSend,
 };
 
 /// A resource that is released exactly once, by consuming it.
@@ -64,9 +65,17 @@ pub trait DisposableExt: Disposable + Sized {
     /// Erases the type of this disposal.
     fn into_boxed<'dis>(self) -> BoxedDisposal<'dis>
     where
-        Self: MaybeSend + 'dis,
+        Self: 'dis,
     {
         BoxedDisposal::new(self)
+    }
+
+    /// Erases the type of this disposal, keeping it `Send`.
+    fn into_send_boxed<'dis>(self) -> SendBoxedDisposal<'dis>
+    where
+        Self: Send + 'dis,
+    {
+        SendBoxedDisposal::new(self)
     }
 
     /// Converts this disposal into a subscription whose inner disposal is

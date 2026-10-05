@@ -2,10 +2,9 @@
 //! [`ObservableExt::timestamp`](crate::observable::ObservableExt::timestamp).
 
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    utils::types::MaybeSend,
 };
 use educe::Educe;
 use std::time::Instant;
@@ -25,7 +24,7 @@ use std::time::Instant;
 ///
 /// let mut timestamped = Vec::new();
 /// let mut terminations = Vec::new();
-/// let mut subject: PublishSubject<'_, i32, Infallible> = PublishSubject::default();
+/// let mut subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
 /// let start = Instant::now();
 ///
 /// let subscription = Timestamp::new(subject.clone()).subscribe_with_callback(
@@ -60,22 +59,28 @@ impl<OE> Timestamp<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, (T, Instant), E> for Timestamp<OE>
+impl<T, E, OE> ObservableTypes for Timestamp<OE>
 where
-    OE: Observable<'or, T, E>,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
+    type Item = (T, Instant);
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<(T, Instant), E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Timestamp<OE>
+where
+    OR: Observer<(T, Instant), E>,
+    OE: Observable<TimestampObserver<OR>, Item = T, Error = E>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let observer = TimestampObserver { observer };
         self.source.subscribe(observer)
     }
 }
 
-struct TimestampObserver<OR> {
+pub struct TimestampObserver<OR> {
     observer: OR,
 }
 

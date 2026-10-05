@@ -1,10 +1,9 @@
 //! The [`Timer`] source.
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Observer, Termination},
-    scheduler::Scheduler,
+    scheduler::{OnceContext, Scheduler, SchedulerTypes, Task},
 };
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
@@ -28,13 +27,13 @@ use std::{convert::Infallible, time::Duration};
 ///     use std::time::Duration;
 ///     use tokio::time::sleep;
 ///
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
 ///
-///     let subscription = Timer::new("tick", Duration::from_millis(5), handle)
+///     let subscription = Timer::new("tick", Duration::from_millis(5), scheduler)
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
 ///             move |termination| terminations_observer
@@ -72,24 +71,27 @@ impl<T, S> Timer<T, S> {
     }
 }
 
-impl<T, S> Observable<'static, T, Infallible> for Timer<T, S>
+impl<T, S> ObservableTypes for Timer<T, S>
 where
-    T: MaybeSend + 'static,
-    S: Scheduler,
+    S: SchedulerTypes,
 {
+    type Item = T;
+    type Error = Infallible;
+    type Mode = S::Mode;
     type D = S::D;
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<T, Infallible> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
-        self.scheduler.schedule(
-            || {
-                if observer.on_next(self.value).is_continue() {
-                    observer.on_termination(Termination::Completed);
-                }
-            },
-            Some(self.delay),
-        )
+impl<T, S, OR> Observable<OR> for Timer<T, S>
+where
+    OR: Observer<T, Infallible>,
+    S: Scheduler<OnceContext<(OR, T)>>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        let task = Task::once((observer, self.value), |(mut observer, value)| {
+            if observer.on_next(value).is_continue() {
+                observer.on_termination(Termination::Completed);
+            }
+        });
+        self.scheduler.run_task(task, Some(self.delay))
     }
 }

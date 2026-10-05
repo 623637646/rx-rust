@@ -2,9 +2,9 @@
 
 use crate::operators::creating::defer::Defer;
 use crate::operators::creating::just::Just;
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::Observer,
 };
 use educe::Educe;
@@ -46,16 +46,22 @@ impl<F> Start<F> {
     }
 }
 
-impl<'or, T, F> Observable<'or, T, Infallible> for Start<F>
+impl<T, F> ObservableTypes for Start<F>
 where
     F: FnOnce() -> T,
 {
+    type Item = T;
+    type Error = Infallible;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<T, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, F, OR> Observable<OR> for Start<F>
+where
+    OR: Observer<T, Infallible>,
+    F: FnOnce() -> T,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         Defer::new(|| Just::new(self.0())).subscribe(observer)
     }
 }

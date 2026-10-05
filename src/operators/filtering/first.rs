@@ -1,9 +1,12 @@
 //! The [`First`] operator, behind
 //! [`ObservableExt::first`](crate::observable::ObservableExt::first).
 
-use crate::utils::types::MaybeSend;
+use crate::operators::filtering::element_at::ElementAtObserver;
+use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::{
-    observable::Observable, observable::Subscription, observer::Observer,
+    observable::Subscription,
+    observable::{Observable, ObservableTypes},
+    observer::Observer,
     operators::filtering::element_at::ElementAt,
 };
 use educe::Educe;
@@ -48,14 +51,32 @@ impl<OE> First<OE> {
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, T, E> for First<OE>
+impl<T, E, OE> ObservableTypes for First<OE>
 where
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
-    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
+    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for First<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            ElementAtObserver<
+                AutoDisposeOnTerminationObserver<
+                    <OE as ObservableTypes>::Mode,
+                    OR,
+                    <OE as ObservableTypes>::D,
+                >,
+            >,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         // Or `self.source.take(1).subscribe(observer)`
         ElementAt::new(self.source, 0).subscribe(observer)
     }

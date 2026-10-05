@@ -1,10 +1,9 @@
 //! The [`DoAfterTermination`] operator, behind
 //! [`ObservableExt::do_after_termination`](crate::observable::ObservableExt::do_after_termination).
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::Observable,
     observable::Subscription,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -55,25 +54,35 @@ pub struct DoAfterTermination<OE, F> {
 impl<OE, F> DoAfterTermination<OE, F> {
     /// Creates a [`DoAfterTermination`] over `source`;
     /// [`ObservableExt::do_after_termination`](crate::observable::ObservableExt::do_after_termination) is the fluent form.
-    pub fn new<'or, T, E>(source: OE, callback: F) -> Self
+    pub fn new<T, E>(source: OE, callback: F) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
         F: FnOnce(Termination<E>),
     {
         Self { source, callback }
     }
 }
 
-impl<'or, T, E, OE, F> Observable<'or, T, E> for DoAfterTermination<OE, F>
+impl<T, E, OE, F> ObservableTypes for DoAfterTermination<OE, F>
 where
-    T: 'or,
-    E: Clone + 'or,
-    OE: Observable<'or, T, E>,
-    F: FnOnce(Termination<E>) + MaybeSend + 'or,
+    E: Clone,
+    OE: ObservableTypes<Item = T, Error = E>,
+    F: FnOnce(Termination<E>),
 {
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
     type D = OE::D;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, F, OR> Observable<OR> for DoAfterTermination<OE, F>
+where
+    OR: Observer<T, E>,
+    E: Clone,
+    OE: Observable<DoAfterTerminationObserver<OR, F>, Item = T, Error = E>,
+    F: FnOnce(Termination<E>),
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         self.source.subscribe(DoAfterTerminationObserver {
             observer,
             callback: self.callback,
@@ -81,7 +90,7 @@ where
     }
 }
 
-struct DoAfterTerminationObserver<OR, F> {
+pub struct DoAfterTerminationObserver<OR, F> {
     observer: OR,
     callback: F,
 }

@@ -1,9 +1,10 @@
 //! The [`ObservableFuture`] adapter, behind
 //! [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future).
 
+use crate::thread_mode::Shared;
 use crate::{
-    observable::Observable, operators::others::observable_try_future::ObservableTryFuture,
-    utils::types::MaybeSend,
+    observable::{Observable, ObservableTypes},
+    operators::others::observable_try_future::{ObservableTryFuture, ObservableTryFutureObserver},
 };
 use educe::Educe;
 use std::{convert::Infallible, task::Poll};
@@ -36,16 +37,17 @@ use std::{convert::Infallible, task::Poll};
 /// ```
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ObservableFuture<'or, T, OE>
+pub struct ObservableFuture<OE>
 where
-    OE: Observable<'or, T, Infallible>,
+    OE: ObservableTypes<Error = Infallible>,
 {
-    future: ObservableTryFuture<'or, T, Infallible, OE>,
+    #[educe(Debug(ignore))]
+    future: ObservableTryFuture<OE>,
 }
 
-impl<'or, T, OE> ObservableFuture<'or, T, OE>
+impl<OE> ObservableFuture<OE>
 where
-    OE: Observable<'or, T, Infallible>,
+    OE: ObservableTypes<Error = Infallible>,
 {
     /// Creates an [`ObservableFuture`] over `source`;
     /// [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future) is the fluent form.
@@ -56,12 +58,11 @@ where
     }
 }
 
-impl<'or, T, OE> Unpin for ObservableFuture<'or, T, OE> where OE: Observable<'or, T, Infallible> {}
+impl<OE> Unpin for ObservableFuture<OE> where OE: ObservableTypes<Error = Infallible> {}
 
-impl<'or, T, OE> Future for ObservableFuture<'or, T, OE>
+impl<T, OE> Future for ObservableFuture<OE>
 where
-    T: MaybeSend + 'or,
-    OE: Observable<'or, T, Infallible>,
+    OE: Observable<ObservableTryFutureObserver<Shared, T, Infallible>, Item = T, Error = Infallible>,
 {
     type Output = Option<T>;
 

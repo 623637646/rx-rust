@@ -1,108 +1,164 @@
 //! A single-consumer pipe between an [`Observer`] and an [`Observable`].
 //!
-//! Unlike the multicast subjects, a unicast subject serves exactly one observer, which is what
-//! lets it buffer the events that arrive before the subscription instead of dropping them, and
-//! lets it move each value to that observer instead of cloning it.
+//! Unlike the multicast subjects, a unicast subject serves exactly one observer, so it can buffer
+//! the events that arrive before the subscription instead of dropping them, and move each value to
+//! the observer instead of cloning it.
 //!
 //! The two ends are separate values: [`UnicastSender`] is the [`Observer`] and
-//! [`UnicastObservable`] is the [`Observable`]. Neither is [`Clone`], so the type system, rather
-//! than a runtime check, is what guarantees that the pipe is fed by one sender and consumed by one
-//! observer. That is also why a unicast subject does not implement the [`Subject`] trait, whose
-//! implementors are both an [`Observable`] and an [`Observer`] at the same time, and why it cannot
-//! be used to multicast a source through [`ObservableExt::multicast`].
+//! [`UnicastObservable`] is the [`Observable`]. Neither is [`Clone`], so the type system guarantees
+//! one sender and one observer. That is also why it does not implement the [`Subject`] trait and
+//! cannot be used with [`ObservableExt::multicast`].
+//!
+//! # Flavors
+//!
+//! The pipe exists before its observer subscribes, so its type has to name that observer:
+//!
+//! | | The observer `OR` itself | A boxed observer |
+//! |---|---|---|
+//! | Single-threaded | [`local`] | [`local_boxed`] |
+//! | Thread-safe | [`shared`] | [`shared_boxed`] |
+//! | The mode `M` of the context | [`new`] | [`new_boxed`] |
+//!
+//! - [`local`] / [`shared`] hold the observer unboxed: subscribing allocates nothing and every
+//!   event is a static call. The [`UnicastObservable`] subscribes exactly one observer type `OR`,
+//!   usually inferred from the [`subscribe`](Observable::subscribe) call.
+//! - [`local_boxed`] / [`shared_boxed`] hold the boxed observer of the mode, and their
+//!   [`BoxedUnicastObservable`] subscribes any observer. Use them when the observable's type has to
+//!   be written out (stored, returned, emitted as an item as `window` and `group_by` do), or for an
+//!   observer that holds its own sender, whose type would otherwise contain itself.
+//!
+//! The thread-safe flavors keep the pipe behind an `Arc<Mutex<_>>`. [`shared_boxed`] subscribes
+//! only `Send` observers; the sender of [`shared`] is `Send` when the observer is. [`new`] and
+//! [`new_boxed`] take the mode as a parameter.
+//!
+//! # Behavior
+//!
+//! Values sent before the subscription are buffered and replayed on subscription, followed by the
+//! termination if there was one. Once the observer is gone - its subscription disposed, or the
+//! [`UnicastObservable`] dropped without subscribing - later events are dropped.
+//!
+//! Dropping the sender without terminating it ends the stream without a termination: the observer
+//! still receives every value sent before, whenever it subscribes, and is then dropped silently.
+//!
+//! # Releasing the observer
+//!
+//! Disposing only raises a flag, which does not name the observer's type: that is what lets an
+//! observer, or an operator such as `take`, hold the subscription of its own pipe. The observer
+//! itself is held by the sender's side (in the pipe until the first event after the subscription,
+//! then in the sender itself, which lets it deliver without a lock), and is released at the first
+//! of:
+//!
+//! - the end of the notification the disposal happened in, the usual case;
+//! - the next event the sender sends, which is dropped too;
+//! - the drop of the sender.
+//!
+//! So an observer disposed outside of its own notification stays alive until the producer sends
+//! again or goes away. [`UnicastSender::is_closed`] turns true at once, so a producer that may go
+//! quiet can drop its sender to release the observer.
+//!
+//! An observer that holds its own sender forms a cycle - observer → sender → observer - that the
+//! disposal does not break. Such an observer must drop the sender itself, when its `on_next`
+//! answers [`Flow::Stop`] and when its subscription is disposed; otherwise both leak.
+//!
+//! # Examples
+//! ```rust
+//! use rx_rust::{
+//!     observable::ObservableExt,
+//!     observer::{Observer, Termination},
+//!     subject::unicast_subject,
+//! };
+//! use std::{
+//!     convert::Infallible,
+//!     sync::{Arc, Mutex},
+//! };
+//!
+//! let (mut sender, observable) = unicast_subject::shared::<i32, Infallible, _>();
+//!
+//! // The values sent before the subscription are buffered instead of being dropped.
+//! let _ = sender.on_next(111);
+//! let _ = sender.on_next(222);
+//!
+//! let values = Arc::new(Mutex::new(Vec::new()));
+//! let values_observer = Arc::clone(&values);
+//! let subscription = observable.subscribe_with_callback(
+//!     move |value| values_observer.lock().unwrap().push(value),
+//!     |_| {},
+//! );
+//! assert_eq!(&*values.lock().unwrap(), &[111, 222]);
+//!
+//! let _ = sender.on_next(333);
+//! assert_eq!(&*values.lock().unwrap(), &[111, 222, 333]);
+//!
+//! sender.on_termination(Termination::Completed);
+//! drop(subscription);
+//! ```
 //!
 //! [`Subject`]: crate::subject::Subject
 //! [`ObservableExt::multicast`]: crate::observable::ObservableExt::multicast
 
+use crate::thread_mode::mutable::{MutableBoolHelper, MutableHelper};
 use crate::{
     disposable::Disposable,
-    observable::{Observable, Subscription},
-    observer::{Event, Flow, Observer, Termination, boxed_observer::BoxedObserver},
-    utils::{
-        mutable::{Mutable, MutableBool, MutableBoolHelper, MutableExt, MutableHelper},
-        on_panic::on_panic,
-        pending_events::PendingEvents,
-        types::{MaybeSend, Shared},
-    },
+    observable::{Observable, ObservableTypes, Subscription},
+    observer::boxed_observer::{IntoBoxedObserver, ObserverMode},
+    observer::{Event, Flow, Observer, Termination},
+    thread_mode::{Local, Shared, ThreadMode},
+    utils::{on_panic::on_panic, pending_events::PendingEvents},
 };
 use educe::Educe;
 
-/// Creates a unicast subject, giving back its sending and its observable end.
-///
-/// Values sent before the subscription are buffered and replayed to the observer when it
-/// subscribes, followed by the termination if the sender already terminated. Once the observer is
-/// gone, by disposing its subscription or by dropping the [`UnicastObservable`] without
-/// subscribing, later events are dropped.
-///
-/// # Releasing the observer
-///
-/// Disposing the subscription does not necessarily drop the observer where it happens: between two
-/// events the sender holds it, which is what lets it deliver a value without taking a lock, and
-/// only the sender can let go of it. It does so at the first of these:
-///
-/// - the end of the notification the disposal happened in, which is the usual case, because a
-///   consumer that stops a stream normally does it from inside the notification of a value;
-/// - the next event the sender sends, which is dropped along with the observer;
-/// - the drop of the sender.
-///
-/// So an observer whose subscription is disposed between two events, by a consumer that is not the
-/// one being notified, stays alive until the producer sends again or goes away. A producer that
-/// might go quiet for a long time can use [`UnicastSender::is_disposed`], which is true as soon as
-/// the disposal happens, to drop its sender and release the observer with it.
-///
-/// # Examples
-/// ```rust
-/// use rx_rust::{
-///     observable::ObservableExt,
-///     observer::{Observer, Termination},
-///     subject::unicast_subject::unicast_subject,
-/// };
-/// use std::{
-///     convert::Infallible,
-///     sync::{Arc, Mutex},
-/// };
-///
-/// let (mut sender, observable) = unicast_subject::<i32, Infallible>();
-///
-/// // The values sent before the subscription are buffered instead of being dropped.
-/// sender.on_next(111);
-/// sender.on_next(222);
-///
-/// let values = Arc::new(Mutex::new(Vec::new()));
-/// let values_observer = Arc::clone(&values);
-/// let subscription = observable.subscribe_with_callback(
-///     move |value| values_observer.lock().unwrap().push(value),
-///     |_| {},
-/// );
-/// assert_eq!(&*values.lock().unwrap(), &[111, 222]);
-///
-/// sender.on_next(333);
-/// assert_eq!(&*values.lock().unwrap(), &[111, 222, 333]);
-///
-/// sender.on_termination(Termination::Completed);
-/// drop(subscription);
-/// ```
-pub fn unicast_subject<'or, T, E>() -> (UnicastSender<'or, T, E>, UnicastObservable<'or, T, E>) {
-    new_pair(PendingEvents::new())
+/// The sending end of a [`BoxedUnicastObservable`]: a [`UnicastSender`] holding the boxed observer
+/// of its mode.
+pub type BoxedUnicastSender<'or, T, E, M> =
+    UnicastSender<T, E, M, <M as ObserverMode>::BoxedObserver<'or, T, E>>;
+
+/// Creates a single-threaded unicast subject that holds its observer `OR` unboxed. See the
+/// [module documentation](self).
+#[allow(clippy::type_complexity)]
+pub fn local<T, E, OR>() -> (
+    UnicastSender<T, E, Local, OR>,
+    UnicastObservable<T, E, Local, OR>,
+) {
+    new()
 }
 
-/// Creates a unicast subject whose buffer is pre-allocated for `capacity` values.
-///
-/// The capacity is only a hint: the buffer still grows as needed. See [`unicast_subject`] for the
-/// behavior of the returned pair.
-pub fn unicast_subject_with_capacity<'or, T, E>(
-    capacity: usize,
-) -> (UnicastSender<'or, T, E>, UnicastObservable<'or, T, E>) {
-    new_pair(PendingEvents::with_capacity(capacity))
+/// Creates a thread-safe unicast subject that holds its observer `OR` unboxed. See the
+/// [module documentation](self).
+#[allow(clippy::type_complexity)]
+pub fn shared<T, E, OR>() -> (
+    UnicastSender<T, E, Shared, OR>,
+    UnicastObservable<T, E, Shared, OR>,
+) {
+    new()
 }
 
-fn new_pair<'or, T, E>(
-    pending: PendingEvents<T, E>,
-) -> (UnicastSender<'or, T, E>, UnicastObservable<'or, T, E>) {
-    let pipe = Shared::new(Pipe {
-        is_disposed: MutableBool::new(false),
-        state: Mutable::new(State::Pending(pending)),
-    });
+/// Creates a single-threaded unicast subject that subscribes any observer, boxing it. See the
+/// [module documentation](self).
+pub fn local_boxed<'or, T, E>() -> (
+    BoxedUnicastSender<'or, T, E, Local>,
+    BoxedUnicastObservable<'or, T, E, Local>,
+) {
+    new_boxed()
+}
+
+/// Creates a thread-safe unicast subject that subscribes any `Send` observer, boxing it. See the
+/// [module documentation](self).
+pub fn shared_boxed<'or, T, E>() -> (
+    BoxedUnicastSender<'or, T, E, Shared>,
+    BoxedUnicastObservable<'or, T, E, Shared>,
+) {
+    new_boxed()
+}
+
+/// Creates a unicast subject of the mode `M` that holds its observer `OR` unboxed. See the
+/// [module documentation](self).
+#[allow(clippy::type_complexity)]
+pub fn new<T, E, M: ThreadMode, OR>() -> (UnicastSender<T, E, M, OR>, UnicastObservable<T, E, M, OR>)
+{
+    let pipe = Pipe {
+        is_closed: M::Flag::default(),
+        state: M::ptr(State::Pending(PendingEvents::new())),
+    };
     (
         UnicastSender {
             pipe: pipe.clone(),
@@ -112,339 +168,313 @@ fn new_pair<'or, T, E>(
     )
 }
 
-#[derive(Educe)]
-#[educe(Debug)]
-enum State<'or, T, E> {
-    /// The observer is not held here, so the events that arrive wait in the queue: before the
-    /// subscription, and while the buffered events are being replayed outside the lock.
-    Pending(PendingEvents<T, E>),
-    /// The observer has subscribed and is idle, waiting for the sender to pick it up.
-    Attached(BoxedObserver<'or, T, E>),
-    /// The sender holds the observer and delivers to it on its own, so nothing waits here: the
-    /// sender is the only one that queues events, and it has nothing left to queue them for.
-    Held,
-    /// The observer is gone, either because it was terminated or because the subscription was
-    /// disposed. Every later event is dropped.
-    Closed,
+/// Creates a unicast subject of the mode `M` that subscribes any observer, boxing it. See the
+/// [module documentation](self).
+pub fn new_boxed<'or, T, E, M: ObserverMode>() -> (
+    BoxedUnicastSender<'or, T, E, M>,
+    BoxedUnicastObservable<'or, T, E, M>,
+) {
+    let (sender, observable) = new();
+    (sender, BoxedUnicastObservable(observable))
 }
 
-/// The pipe itself, which its sending and its observable end share.
-#[derive(Educe)]
-#[educe(Debug)]
-struct Pipe<'or, T, E> {
-    /// Whether the observer went away, which is the one thing the sender still has to learn from
-    /// here once it holds the observer itself. Reading it takes no lock, which is what lets the
-    /// sender check it before and after every event it delivers on its own.
-    ///
-    /// This is not a copy of [`State::Closed`], and only [`close`] raises it: it says that the
-    /// observer was taken away from the pipe, not that the pipe is over. Terminating the pipe and
-    /// dropping the sender close the state without touching it, because the sender is gone by then
-    /// and the sender is its only reader. An observer that answers [`Flow::Stop`] is taken away
-    /// too, so the sender closes the pipe there, which raises this as any other disposal does.
-    is_disposed: MutableBool,
-    state: Mutable<State<'or, T, E>>,
-}
-
-type SharedPipe<'or, T, E> = Shared<Pipe<'or, T, E>>;
-
-/// The sending end of a unicast subject. See [`unicast_subject`].
+/// The state of the pipe, behind its one lock. Together with [`Pipe::is_closed`]:
 ///
-/// Dropping the sender without terminating it closes the pipe, which drops the observer without
-/// notifying it: no event can reach it anymore, because the sender was the only way in, but a
-/// producer that gave up halfway has not completed anything either. That is also what releases an
-/// observer whose subscription was disposed while the sender was idle, as [`unicast_subject`]
-/// describes.
+/// | The observer is | The state | The flag |
+/// |---|---|---|
+/// | not subscribed yet, or being replayed to | [`State::Pending`] | down |
+/// | parked, waiting for the sender | [`State::Attached`] | down, or raised by a disposal |
+/// | held by the sender | [`State::Vacant`] | down, or raised by a disposal |
+/// | released | [`State::Vacant`] | raised |
+///
+/// A disposal only raises the flag, and the sender drops what it left behind. Every other closing
+/// empties the state too, except while the sender holds the observer: then nothing else touches
+/// the state, so the sender closes the pipe by raising the flag alone, without the lock.
+enum State<T, E, OR> {
+    /// The events waiting for the subscription or for the running replay. A dropped sender leaves
+    /// them here, to be delivered when the observable end is subscribed to.
+    Pending(PendingEvents<T, E>),
+    /// The observer, parked by the replay.
+    Attached(OR),
+    /// The sender holds the observer, or the pipe is closed.
+    Vacant,
+}
+
+/// The pipe, shared by the sending and the observable end.
 #[derive(Educe)]
-#[educe(Debug)]
-pub struct UnicastSender<'or, T, E> {
-    pipe: SharedPipe<'or, T, E>,
-    /// The observer, held here instead of in the shared state so that sending an event takes no
-    /// lock at all: the sender is the only producer of the pipe, so nothing else has to reach the
-    /// observer while it is idle.
-    ///
-    /// It is taken out of [`State::Attached`] by the first event that finds it parked there, and
-    /// stays here until the pipe ends. The state of the pipe is [`State::Held`] meanwhile, which
-    /// carries nothing: nothing can be queued behind an observer that only the sender feeds.
-    ///
-    /// The price is that [`close`] cannot drop the observer anymore, because the observer is not
-    /// in the state it closes. The sender drops it instead, as soon as it sees
-    /// [`Pipe::is_disposed`], and at the latest when the sender itself is dropped.
-    observer: Option<BoxedObserver<'or, T, E>>,
+#[educe(Clone(bound()))]
+struct Pipe<T, E, M: ThreadMode, OR> {
+    /// Never lowered, and read without a lock, which is what lets the sender check it around every
+    /// event it delivers. See [`State`].
+    is_closed: M::Flag,
+    state: M::Ptr<State<T, E, OR>>,
 }
 
-impl<T, E> Drop for UnicastSender<'_, T, E> {
+impl<T, E, M: ThreadMode, OR> Pipe<T, E, M, OR> {
+    /// Closes `state` under its lock, returning what it held, to be dropped after the lock.
+    fn close_state(&self, state: &mut State<T, E, OR>) -> State<T, E, OR> {
+        self.is_closed.write(true);
+        std::mem::replace(state, State::Vacant)
+    }
+
+    fn close(&self) {
+        let previous_state = self.state.with_mut(|state| self.close_state(state));
+        drop(previous_state); // Drop outside the lock
+    }
+}
+
+/// The sending end of a unicast subject.
+///
+/// Dropping it without terminating it ends the stream without a termination. See the
+/// [module documentation](self).
+pub struct UnicastSender<T, E, M: ThreadMode, OR> {
+    pipe: Pipe<T, E, M, OR>,
+    /// The observer, from the first event that picks it up from [`State::Attached`] until the pipe
+    /// ends. Holding it here is what lets an event be delivered without the lock.
+    observer: Option<OR>,
+}
+
+impl<T, E, M: ThreadMode, OR> Drop for UnicastSender<T, E, M, OR> {
     fn drop(&mut self) {
-        // The pipe is over, so the observer held here is dropped without being notified, like the
-        // one the state below holds.
-        let observer = self.observer.take();
-        // Terminating the pipe consumes the sender, so this also runs right after the last event
-        // was queued. That event still has to reach the observer, whether it is waiting in the
-        // queue for a late subscriber or for the delivery that is running.
+        if let Some(observer) = self.observer.take() {
+            // Held here, so the state is vacant: raising the flag closes the pipe.
+            self.pipe.is_closed.write(true);
+            drop(observer);
+            return;
+        }
+        // A pending queue stays for the replay to deliver, ending with the termination queued last
+        // if any (terminating consumes the sender, so this also runs right after it). Any other
+        // state is closed.
         let previous_state = self.pipe.state.with_mut(|current| match current {
-            State::Pending(pending) if pending.is_terminated() => None,
-            state => Some(std::mem::replace(state, State::Closed)),
+            State::Pending(_) => None,
+            state => Some(self.pipe.close_state(state)),
         });
-        drop(observer); // Drop outside the lock to avoid potential deadlock
-        drop(previous_state); // Drop outside the lock to avoid potential deadlock
+        drop(previous_state); // Drop outside the lock
     }
 }
 
-impl<T, E> UnicastSender<'_, T, E> {
-    /// Returns whether the observer is gone, which happens when its subscription is disposed or
-    /// when the [`UnicastObservable`] is dropped without being subscribed to.
+/// What became of an event sent while the sender does not hold the observer.
+enum Unheld<V> {
+    /// It waits in the queue.
+    Queued,
+    /// The pipe is closed, so it was dropped.
+    Discarded,
+    /// The sender picked the observer up from [`State::Attached`]; the payload is still to deliver.
+    Taken(V),
+}
+
+impl<T, E, M: ThreadMode, OR> UnicastSender<T, E, M, OR> {
+    /// Returns whether every later event is dropped: the subscription was disposed, the observer
+    /// answered [`Flow::Stop`] or panicked, or the [`UnicastObservable`] was dropped without being
+    /// subscribed to.
     ///
-    /// Every later event is dropped, so a producer can use this to stop producing.
-    pub fn is_disposed(&self) -> bool {
-        // This is exactly what the flag says, and reading it takes no lock. The state would say
-        // the same, because the only other way to close it consumes the sender.
-        self.pipe.is_disposed.read()
+    /// It turns true at once, while the observer may stay alive until the sender releases it, as
+    /// the [module documentation](self#releasing-the-observer) describes.
+    pub fn is_closed(&self) -> bool {
+        self.pipe.is_closed.read()
+    }
+
+    /// Sends the event that `payload` makes while the sender does not hold the observer. On
+    /// [`Unheld::Taken`], the sender holds it from now on.
+    fn send_unheld<V>(&mut self, payload: V, into_event: fn(V) -> Event<T, E>) -> Unheld<V> {
+        // What is not delivered is handed back, to be dropped after the lock.
+        let (unheld, observer, rejected, discarded) =
+            self.pipe.state.with_mut(|current| match current {
+                // Terminating consumes the sender, so nothing arrives after the termination.
+                State::Pending(pending) => {
+                    let rejected = pending.push(into_event(payload));
+                    (Unheld::Queued, None, rejected, None)
+                }
+                State::Attached(_) if !self.pipe.is_closed.read() => {
+                    let State::Attached(observer) = std::mem::replace(current, State::Vacant)
+                    else {
+                        unreachable!()
+                    };
+                    (Unheld::Taken(payload), Some(observer), None, None)
+                }
+                // Disposed while parked, or closed: see `State`.
+                State::Attached(_) | State::Vacant => {
+                    let closed = self.pipe.close_state(current);
+                    (Unheld::Discarded, None, None, Some((payload, closed)))
+                }
+            });
+        // Asserted after the lock, which a failing assertion would otherwise poison.
+        debug_assert!(rejected.is_none());
+        drop((rejected, discarded)); // Drop outside the lock
+        if observer.is_some() {
+            self.observer = observer;
+        }
+        unheld
     }
 }
 
-impl<T, E> Observer<T, E> for UnicastSender<'_, T, E> {
+impl<T, E, M: ThreadMode, OR: Observer<T, E>> Observer<T, E> for UnicastSender<T, E, M, OR> {
     fn on_next(&mut self, value: T) -> Flow {
         if self.observer.is_some() {
             return self.send_held(value);
         }
-        // Whatever the value ends up as when it is not delivered - rejected by the queue or
-        // dropped by a closed pipe - is handed back, to be dropped once the lock is released.
-        let (delivery, rejected, discarded) = self.pipe.state.with_mut(|current| match current {
-            State::Pending(pending) => {
-                // Terminating consumes the sender, so no value can arrive after the termination.
-                (None, pending.push(Event::Next(value)), None)
-            }
-            state @ State::Attached(_) => {
-                let State::Attached(observer) = std::mem::replace(state, State::Held) else {
-                    unreachable!()
-                };
-                (Some((observer, value)), None, None)
-            }
-            // The sender takes the fast path above while it holds the observer, so it never looks
-            // at a state it is itself the subject of.
-            State::Held => unreachable!(),
-            State::Closed => (None, None, Some(value)),
-        });
-        // Asserted with the lock released: a failing assertion would otherwise unwind while
-        // holding it, which poisons it for every later event.
-        debug_assert!(rejected.is_none());
-        // A discarded value is one the closed pipe had nowhere to deliver to, and so is every
-        // later one: that is the answer, and it needs no second look at the flag.
-        let flow = if discarded.is_some() {
-            Flow::Stop
-        } else {
-            Flow::Continue
-        };
-        drop((rejected, discarded)); // Drop outside the lock to avoid potential deadlock
-        if let Some((observer, value)) = delivery {
-            // The observer stays here from now on, so this is the last event that has to look for
-            // it in the state of the pipe.
-            self.observer = Some(observer);
-            return self.send_held(value);
+        match self.send_unheld(value, Event::Next) {
+            Unheld::Queued => Flow::Continue,
+            Unheld::Discarded => Flow::Stop,
+            Unheld::Taken(value) => self.send_held(value),
         }
-        flow
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        if let Some(observer) = self.observer.take() {
-            // The observer is held here, so the state only has to be closed, and the drop of the
-            // sender that runs right after this has nothing left to close or to hand over. It is
-            // [`State::Held`], unless a disposal closed it while the observer was held here.
-            let previous_state = self.pipe.state.replace_value(State::Closed);
-            let is_disposed = matches!(previous_state, State::Closed);
-            drop(previous_state); // Drop outside the lock to avoid potential deadlock
-            if is_disposed {
-                // The subscription was disposed while the observer was held here, so nothing is
-                // notified anymore: the observer is only dropped, as `close` could not.
-                drop(observer);
-                drop(termination);
-            } else {
-                observer.on_termination(termination); // Notify outside the lock
+        let termination = if self.observer.is_some() {
+            termination
+        } else {
+            match self.send_unheld(termination, Event::Termination) {
+                Unheld::Taken(termination) => termination,
+                Unheld::Queued | Unheld::Discarded => return,
             }
-            return;
-        }
-        // Like in `on_next`, a termination that is not delivered is handed back to be dropped
-        // once the lock is released.
-        let (delivery, rejected, discarded) = self.pipe.state.with_mut(|current| match current {
-            State::Pending(pending) => {
-                // Terminating consumes the sender, so it cannot be terminated twice.
-                (None, pending.push(Event::Termination(termination)), None)
-            }
-            state @ State::Attached(_) => {
-                let State::Attached(observer) = std::mem::replace(state, State::Closed) else {
-                    unreachable!()
-                };
-                (Some((observer, termination)), None, None)
-            }
-            // Terminating while the sender holds the observer is the fast path above.
-            State::Held => unreachable!(),
-            State::Closed => (None, None, Some(termination)),
-        });
-        // Asserted with the lock released: a failing assertion would otherwise unwind while
-        // holding it, which poisons it for every later event.
-        debug_assert!(rejected.is_none());
-        drop((rejected, discarded)); // Drop outside the lock to avoid potential deadlock
-        if let Some((observer, termination)) = delivery {
+        };
+        let observer = self.observer.take().expect("the sender holds the observer");
+        // The drop of the sender, right after this, closes the pipe.
+        if self.pipe.is_closed.read() {
+            drop(observer);
+            drop(termination);
+        } else {
             observer.on_termination(termination); // Notify outside the lock
         }
     }
 }
 
-impl<T, E> UnicastSender<'_, T, E> {
-    /// Sends `value` to the observer held by the sender, without taking the lock.
+impl<T, E, M: ThreadMode, OR: Observer<T, E>> UnicastSender<T, E, M, OR> {
+    /// Sends `value` to the observer held by the sender, without the lock.
     ///
-    /// The flag is what tells the sender that the observer went away while it was held here, so it
-    /// is read before the notification, to drop the value instead of delivering it. It is read
-    /// after the notification too: an observer that answered [`Flow::Continue`] can still have
-    /// been disposed by that very notification, which the flag reports and the answer cannot.
-    /// Nothing else is needed: the state cannot change under a pipe whose only producer is the
-    /// caller.
+    /// The flag is read before the notification, to skip an observer that is gone, and after it,
+    /// since disposing from inside the notification is how a consumer usually stops: the observer
+    /// is then released at once instead of at the next event.
     fn send_held(&mut self, value: T) -> Flow {
-        debug_assert!(self.observer.is_some());
-        if self.pipe.is_disposed.read() {
-            let observer = self.observer.take();
-            // The state is closed already, and no lock is held here anyway, so both are simply
-            // dropped where they are.
-            drop(observer);
-            drop(value);
-            return Flow::Stop;
+        if !self.pipe.is_closed.read() {
+            let observer = self
+                .observer
+                .as_mut()
+                .expect("the sender holds the observer");
+            // A panicking observer closes the pipe, as it does during the replay; the sender then
+            // drops it at the next event or on its own drop.
+            let close_on_panic = on_panic(|| self.pipe.is_closed.write(true));
+            let flow = observer.on_next(value); // Notify without the lock
+            drop(close_on_panic);
+            if flow.is_continue() && !self.pipe.is_closed.read() {
+                return Flow::Continue;
+            }
         }
-        let mut flow = Flow::Continue;
-        if let Some(observer) = &mut self.observer {
-            flow = observer.on_next(value); // Notify without taking the lock
-        }
-        // Disposing from inside that notification is how a consumer usually stops a stream, so the
-        // flag is read once more to release the observer right away instead of at the next event.
-        if flow.is_stop() || self.pipe.is_disposed.read() {
-            let observer = self.observer.take();
-            // An observer that ended its own stream leaves the pipe with nothing to deliver to,
-            // which is what a disposal leaves it with too: closing it keeps the state and the flag
-            // in step with the observer the sender has just let go of, so that the next event
-            // takes the closed path instead of looking for an observer that is gone.
-            close(&self.pipe);
-            drop(observer); // Drop outside the lock to avoid potential deadlock
-            return Flow::Stop;
-        }
-        Flow::Continue
+        // The state is vacant, so raising the flag closes the pipe. An undelivered value is dropped
+        // after the observer.
+        self.pipe.is_closed.write(true);
+        drop(self.observer.take());
+        Flow::Stop
     }
 }
 
-/// The observable end of a unicast subject. See [`unicast_subject`].
+/// The observable end of a unicast subject, which subscribes exactly the observer `OR`. See the
+/// [module documentation](self).
 ///
 /// [`Observable::subscribe`] consumes it, so the pipe cannot be subscribed to twice.
-#[derive(Educe)]
-#[educe(Debug)]
-pub struct UnicastObservable<'or, T, E>(Option<SharedPipe<'or, T, E>>);
+pub struct UnicastObservable<T, E, M: ThreadMode, OR>(Option<Pipe<T, E, M, OR>>);
 
-impl<T, E> Drop for UnicastObservable<'_, T, E> {
+impl<T, E, M: ThreadMode, OR> Drop for UnicastObservable<T, E, M, OR> {
     fn drop(&mut self) {
-        // `None` when it has been subscribed to, which moves the shared state into the disposal.
+        // `None` once subscribed to.
         if let Some(pipe) = self.0.take() {
-            close(&pipe);
+            pipe.close();
         }
     }
 }
 
-impl<'or, T, E> Observable<'or, T, E> for UnicastObservable<'or, T, E> {
-    type D = Disposal<'or, T, E>;
+impl<T, E, M: ThreadMode, OR> ObservableTypes for UnicastObservable<T, E, M, OR> {
+    type Item = T;
+    type Error = E;
+    /// The events come from wherever the sender is fed, which is what `M` says.
+    type Mode = M;
+    type D = Disposal<M>;
+}
 
-    fn subscribe(
-        mut self,
-        observer: impl Observer<T, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, M, OR> Observable<OR> for UnicastObservable<T, E, M, OR>
+where
+    M: ThreadMode,
+    OR: Observer<T, E>,
+{
+    fn subscribe(mut self, observer: OR) -> Subscription<Self::D> {
         let pipe = self
             .0
             .take()
-            .expect("the shared state is taken by either subscribing or dropping");
-        // The replay takes the pipe as it finds it: it parks the observer when nothing waits, it
-        // replays what does, and it drops the observer when the sender is already gone. Asking the
-        // state about that beforehand would only be one more lock for the answer it takes anyway.
-        // The observer is parked into `State::Attached`, from where the next event the sender
-        // sends picks it up for good, unless the replay ends the pipe with a buffered termination.
-        let is_live = deliver(&pipe, BoxedObserver::new(observer));
-        // A pipe that is over stays over, so the subscription has nothing left to dispose of and
-        // does not have to keep the pipe alive until the consumer drops it.
-        Subscription::new(Disposal(is_live.then_some(pipe)))
+            .expect("the pipe is taken by either subscribing or dropping");
+        deliver(&pipe, observer);
+        Subscription::new(Disposal(pipe.is_closed))
     }
 }
 
-/// The disposal of a [`UnicastObservable`] subscription.
+/// The observable end of a boxed unicast subject, which subscribes any observer by boxing it. See
+/// the [module documentation](self).
 ///
-/// It holds no pipe when the pipe was already over by the end of the subscription, which is the
-/// only thing there is to know about it: a pipe that is over cannot be disposed of anymore, and a
-/// pipe that is not cannot become so on its own. Holding nothing releases the pipe right away
-/// instead of when the subscription is dropped, and costs nothing to carry: a [`Shared`] is a
-/// pointer, so wrapping it in an [`Option`] does not make it any bigger.
-#[derive(Educe)]
-#[educe(Debug)]
-pub struct Disposal<'or, T, E>(Option<SharedPipe<'or, T, E>>);
+/// [`Observable::subscribe`] consumes it, so the pipe cannot be subscribed to twice.
+pub struct BoxedUnicastObservable<'or, T, E, M: ObserverMode>(
+    UnicastObservable<T, E, M, M::BoxedObserver<'or, T, E>>,
+);
 
-impl<T, E> Disposable for Disposal<'_, T, E> {
+impl<'or, T, E, M: ObserverMode> ObservableTypes for BoxedUnicastObservable<'or, T, E, M> {
+    type Item = T;
+    type Error = E;
+    /// The events come from wherever the sender is fed, which is what `M` says.
+    type Mode = M;
+    type D = Disposal<M>;
+}
+
+impl<'or, T, E, M, OR> Observable<OR> for BoxedUnicastObservable<'or, T, E, M>
+where
+    M: ObserverMode,
+    OR: IntoBoxedObserver<'or, T, E, M>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        self.0.subscribe(M::boxed(observer))
+    }
+}
+
+/// The disposal of a [`UnicastObservable`] or [`BoxedUnicastObservable`] subscription.
+///
+/// It only raises the flag that closes the pipe; see the
+/// [module documentation](self#releasing-the-observer) for when the observer is released.
+pub struct Disposal<M: ThreadMode>(M::Flag);
+
+impl<M: ThreadMode> Disposable for Disposal<M> {
     fn dispose(self) {
-        if let Some(pipe) = self.0 {
-            close(&pipe);
-        }
+        self.0.write(true);
     }
 }
 
-/// Closes the pipe, so that every later event is dropped.
-///
-/// The observer is dropped here when the state holds it. When the sender holds it instead, only
-/// the flag below can reach the sender: the observer is then dropped by the sender, on its next
-/// event or when it is dropped itself.
-fn close<T, E>(pipe: &SharedPipe<'_, T, E>) {
-    // Raised before the state is replaced, so that the sender never delivers an event to an
-    // observer that the state has already given up on, and raised under the lock, so that a sender
-    // that read it cannot find the state still [`State::Held`]: it reads the flag without the lock,
-    // then drops the observer it holds and goes back to the state for its next event, and that
-    // takes the lock, which this holds until the state is closed.
-    let previous_state = pipe.state.with_mut(|state| {
-        pipe.is_disposed.write(true);
-        std::mem::replace(state, State::Closed)
-    });
-    drop(previous_state); // Drop outside the lock to avoid potential deadlock
-}
-
-enum Step<'or, T, E> {
-    /// One more value to deliver.
-    Next(BoxedObserver<'or, T, E>, T),
-    /// The last event of the pipe.
-    Terminate(BoxedObserver<'or, T, E>, Termination<E>),
-    /// Nothing left to deliver: the observer is parked in [`State::Attached`].
+enum Step<T, E, OR> {
+    Next(OR, T),
+    Terminate(OR, Termination<E>),
+    /// Nothing left: the observer is parked in [`State::Attached`].
     Park,
-    /// The pipe is over, either before the observer subscribed or by a disposal that happened
-    /// while delivering, so the observer is handed back to be dropped outside the lock.
-    Close(BoxedObserver<'or, T, E>),
 }
 
-/// Delivers the events waiting in [`State::Pending`] to `observer`, one at a time.
+/// Replays the events waiting in [`State::Pending`] to `observer`, one at a time, then parks it.
 ///
-/// This is the replay of the events that were buffered before the subscription, and it is the
-/// whole of what subscribing does: an empty queue simply parks the observer, and a pipe that is
-/// over drops it, so the caller has nothing to check beforehand. The lock is reacquired between
-/// two events, so an event that the sender adds while replaying is delivered in arrival order, and
-/// a disposal takes effect immediately: the loop then drops the observer instead of delivering to
-/// it. The delivery ends by parking the observer into [`State::Attached`], by terminating it, or
-/// by dropping it.
+/// The lock is retaken for every event, so events the sender adds meanwhile keep their order. No
+/// disposal can happen during the replay, since the subscription is handed out afterwards: the
+/// observer stops it by answering [`Flow::Stop`] instead.
 ///
-/// Returns whether the observer was parked, which is the only ending that leaves the pipe alive:
-/// the other two are the pipe being over, which it stays.
-fn deliver<'or, T, E>(
-    pipe: &SharedPipe<'or, T, E>,
-    mut observer: BoxedObserver<'or, T, E>,
-) -> bool {
+/// If the sender is already gone without a termination, the parked observer is dropped silently
+/// with the last pipe, once the caller lets go of it.
+fn deliver<T, E, M: ThreadMode, OR: Observer<T, E>>(pipe: &Pipe<T, E, M, OR>, mut observer: OR) {
     loop {
-        let step = pipe.state.with_mut(|current| {
-            let pending = match &mut *current {
-                State::Pending(pending) => pending,
-                State::Closed => return Step::Close(observer),
-                // This replay holds the observer until it parks it below, so neither the state nor
-                // the sender can be holding it at the same time.
-                State::Attached(_) | State::Held => unreachable!(),
+        // No disposal exists yet, and the sender closes the pipe only once it holds the observer.
+        // Asserted outside the lock, which a failing assertion would otherwise poison.
+        debug_assert!(!pipe.is_closed.read(), "the replay runs on an open pipe");
+        let step: Step<T, E, OR> = pipe.state.with_mut(|current| {
+            // The replay holds the observer, so neither the state nor the sender can.
+            let State::Pending(pending) = &mut *current else {
+                unreachable!()
             };
             match pending.pop() {
                 Some(Event::Next(value)) => Step::Next(observer, value),
                 Some(Event::Termination(termination)) => {
-                    *current = State::Closed;
+                    // The termination comes last, so the queue dropped here is empty.
+                    drop(pipe.close_state(current));
                     Step::Terminate(observer, termination)
                 }
                 None => {
@@ -456,33 +486,23 @@ fn deliver<'or, T, E>(
         match step {
             Step::Next(next_observer, value) => {
                 observer = next_observer;
-                // This replay holds the observer on the stack, so a panicking notification unwinds
-                // it away while the state is still `State::Pending`: without the guard, the events
-                // the sender keeps sending would pile up in a queue that nobody drains anymore.
-                // The observer is notified outside the lock, so closing from the guard is safe on
-                // the panicking thread.
-                let close_on_panic = on_panic(|| close(pipe));
+                // A panic unwinds the observer away while the state is still pending, so close
+                // the pipe instead of letting events pile up for a replay that never resumes.
+                let close_on_panic = on_panic(|| pipe.close());
                 let flow = observer.on_next(value); // Notify outside the lock
                 drop(close_on_panic);
                 if flow.is_stop() {
-                    // The replayed value ended the stream downstream, so the pipe is over: the
-                    // observer is dropped without being terminated, like a disposed one.
-                    close(pipe);
-                    drop(observer); // Drop outside the lock to avoid potential deadlock
-                    return false;
+                    pipe.close();
+                    drop(observer); // Drop outside the lock
+                    return;
                 }
             }
             Step::Terminate(next_observer, termination) => {
-                // The state was closed under the lock before this step, so a panicking termination
-                // leaves the pipe over already and needs no guard.
-                next_observer.on_termination(termination); // Notify outside the lock
-                return false;
+                // The pipe is closed already, so a panic here needs no guard.
+                Observer::<T, E>::on_termination(next_observer, termination); // Notify outside the lock
+                return;
             }
-            Step::Park => return true,
-            Step::Close(next_observer) => {
-                drop(next_observer); // Drop outside the lock to avoid potential deadlock
-                return false;
-            }
+            Step::Park => return,
         }
     }
 }

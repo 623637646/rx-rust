@@ -1,14 +1,16 @@
 //! The [`Merge`] operator, behind
 //! [`ObservableExt::merge_with`](crate::observable::ObservableExt::merge_with).
 
+use crate::disposable::chain_disposal::ChainDisposal;
+use crate::thread_mode::Joined;
+use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
     self, SubscriptionContext, subscribe_with_context_owning_source,
 };
-use crate::utils::types::MaybeSend;
 use crate::{
     disposable::Disposable,
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -52,27 +54,59 @@ pub struct Merge<OE1, OE2> {
 impl<OE1, OE2> Merge<OE1, OE2> {
     /// Creates a [`Merge`] over `source_1` and `source_2`;
     /// [`ObservableExt::merge_with`](crate::observable::ObservableExt::merge_with) is the fluent form.
-    pub fn new<'or, T, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<T, E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: Observable<'or, T, E>,
-        OE2: Observable<'or, T, E>,
+        OE1: ObservableTypes<Item = T, Error = E>,
+        OE2: ObservableTypes<Item = T, Error = E>,
     {
         Self { source_1, source_2 }
     }
 }
 
-impl<'or, T, E, OE1, OE2> Observable<'or, T, E> for Merge<OE1, OE2>
+impl<T, E, OE1, OE2> ObservableTypes for Merge<OE1, OE2>
 where
-    T: MaybeSend + 'or,
-    E: MaybeSend + 'or,
-    OE1: Observable<'or, T, E>,
-    OE1::D: MaybeSend + 'or,
-    OE2: Observable<'or, T, E>,
-    OE2::D: MaybeSend + 'or,
+    OE1: ObservableTypes<Item = T, Error = E>,
+    OE2: ObservableTypes<Item = T, Error = E>,
 {
-    type D = subscribe_with_context::OwningDisposal<'or>;
+    type Item = T;
+    type Error = E;
+    type Mode = Joined<OE1::Mode, OE2::Mode>;
+    type D = subscribe_with_context::ContextDisposal<
+        Joined<OE1::Mode, OE2::Mode>,
+        T,
+        E,
+        Model,
+        ChainDisposal<OE2::D, OE1::D>,
+    >;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE1, OE2, OR> Observable<OR> for Merge<OE1, OE2>
+where
+    OR: Observer<T, E>,
+    OE1: Observable<
+            MergeObserver<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    OE2: Observable<
+            MergeObserver<
+                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
+                T,
+                E,
+                OR,
+                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+            >,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         let model = Model {
             one_is_completed: false,
         };
@@ -84,13 +118,15 @@ where
     }
 }
 
-struct Model {
+pub struct Model {
     one_is_completed: bool,
 }
 
-struct MergeObserver<T, E, OR, D: Disposable>(SubscriptionContext<T, E, OR, Model, D>);
+pub struct MergeObserver<M: ThreadMode, T, E, OR, D: Disposable>(
+    SubscriptionContext<M, T, E, OR, Model, D>,
+);
 
-impl<T, E, OR, D> Observer<T, E> for MergeObserver<T, E, OR, D>
+impl<M: ThreadMode, T, E, OR, D> Observer<T, E> for MergeObserver<M, T, E, OR, D>
 where
     OR: Observer<T, E>,
     D: Disposable,

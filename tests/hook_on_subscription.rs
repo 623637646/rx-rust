@@ -3,19 +3,19 @@ mod tests_utils;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
 use crate::tests_utils::test_channel::ChannelState;
-use crate::tests_utils::test_runtime::block_on;
+use crate::tests_utils::test_channel::test_channels;
+use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
-use rx_rust::scheduler::Scheduler;
-use rx_rust::utils::types::Shared;
+use rx_rust::operators::creating::create::Create;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
-    operators::{creating::create::Create, others::hook_on_subscription::HookOnSubscription},
-    subject::publish_subject::PublishSubject,
+    operators::others::hook_on_subscription::HookOnSubscription,
 };
 use std::convert::Infallible;
+use std::sync::Arc;
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -186,7 +186,7 @@ fn test_mut_ref() {
 
 #[test]
 fn test_async() {
-    block_on(|runtime| async move {
+    block_on(|scheduler| async move {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
@@ -201,31 +201,26 @@ fn test_async() {
             }))
         });
 
-        let subscription = runtime
+        let subscription = scheduler
             .spawn(async { observable.subscribe(observer) })
-            .await
-            .unwrap();
+            .await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         // The sender is kept alive: dropping it would close the channel and drop the observer.
-        let _sender = runtime
+        let _sender = scheduler
             .spawn(async move {
                 assert!(sender.on_next(111).is_continue());
                 sender
             })
-            .await
-            .unwrap();
+            .await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        runtime
-            .spawn(async { subscription.dispose() })
-            .await
-            .unwrap();
-        runtime.sleep(DURATION_10_MS).await;
+        scheduler.spawn(async { subscription.dispose() }).await;
+        scheduler.sleep(DURATION_10_MS).await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -234,14 +229,13 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    let mut subject = PublishSubject::default();
+    let (channels, observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
     // Custom operations
-    let observable = subject.clone();
-    let observable =
-        observable.hook_on_subscription(move |observable, observer| observable.subscribe(observer));
+    let observable = observable
+        .hook_on_subscription_boxed(move |observable, observer| observable.subscribe(observer));
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -251,27 +245,35 @@ fn test_subscribe_by_different_observer() {
     let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
     assert!(checker_1.values().is_empty());
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert!(checker_2.values().is_empty());
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    assert!(subject.on_next(111).is_continue());
+    assert!(channels.on_next(0, 111).is_continue());
+    assert!(channels.on_next(1, 111).is_continue());
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-    subject.on_termination(Termination::Error("error"));
+    channels.on_termination(0, Termination::Error("error"));
+    channels.on_termination(1, Termination::Error("error"));
     assert_eq!(checker_1.values(), [111]);
     assert_eq!(checker_1.state(), State::Error("error"));
+    assert_eq!(channels.state(0), ChannelState::Error("error"));
     assert_eq!(checker_2.values(), [111]);
     assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Error("error"));
 }
 
 #[test]
 fn test_unsub_on_next_by_take() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
-    let channel_checker = Shared::new(channel_checker);
+    let channel_checker = Arc::new(channel_checker);
 
     // Custom operations
     let observable = observable
@@ -380,7 +382,7 @@ fn test_lifetime_sub() {
     // let life_marker = TestStruct;
 
     {
-        let observable = Create::new(|mut observer| {
+        let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
             Subscription::new(CallbackDisposal::new(|| {
@@ -407,7 +409,7 @@ fn test_lifetime_or() {
     // let life_marker_2 = TestStruct;
 
     {
-        let observable = Create::new(|observer| {
+        let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
@@ -424,10 +426,9 @@ fn test_lifetime_or() {
 fn test_fn() {
     let s = TestStruct;
 
-    let subject: PublishSubject<'_, i32, &str> = PublishSubject::default();
+    let (_, observable, _) = test_channel::<'_, i32, &str>();
 
     // Custom operations
-    let observable = subject.clone();
     let observable = observable.hook_on_subscription(|observable, observer| {
         s.consume();
         observable.subscribe(observer)
@@ -438,22 +439,22 @@ fn test_fn() {
 
 #[test]
 fn test_clone() {
-    let observable = Create::new(|mut observer| {
+    let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let observable =
-        observable.hook_on_subscription(|observable, observer| observable.subscribe(observer));
+    let observable = observable
+        .hook_on_subscription_boxed(|observable, observer| observable.subscribe(observer));
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
+    let (_, observable, _) = test_channel::<'_, i32, String>();
     let observable =
-        subject.hook_on_subscription(|observable, observer| observable.subscribe(observer));
+        observable.hook_on_subscription(|observable, observer| observable.subscribe(observer));
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -463,9 +464,9 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     // Custom operations
-    let subject: PublishSubject<'_, i32, String> = PublishSubject::default();
-    let observable =
-        subject.hook_on_subscription(|observable, observer| observable.subscribe(observer));
+    let (_, observable, _) = test_channel::<'_, i32, String>();
+    let observable = observable
+        .hook_on_subscription_boxed(|observable, observer| observable.subscribe(observer));
 
     observable.filter(|_| true);
 }

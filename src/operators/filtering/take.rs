@@ -4,10 +4,11 @@ use crate::delegate_disposal;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::disposable::{Disposable, DisposableExt};
 use crate::observable::Subscription;
+use crate::thread_mode::ThreadMode;
 use crate::utils::subscribe_with_auto_dispose_on_termination;
-use crate::utils::types::MaybeSend;
+use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::{
-    observable::Observable,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
@@ -55,19 +56,37 @@ impl<OE> Take<OE> {
 }
 
 delegate_disposal!(
-    Disposal<D>,
-    OptionDisposal<Subscription<subscribe_with_auto_dispose_on_termination::Disposal<D>>>,
-    where D: Disposable
+    Disposal<M, D>,
+    OptionDisposal<Subscription<subscribe_with_auto_dispose_on_termination::Disposal<M, D>>>,
+    where M: ThreadMode, D: Disposable
 );
 
-impl<'or, T, E, OE> Observable<'or, T, E> for Take<OE>
+impl<T, E, OE> ObservableTypes for Take<OE>
 where
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
 {
-    type D = Disposal<OE::D>;
+    type Item = T;
+    type Error = E;
+    type Mode = OE::Mode;
+    type D = Disposal<OE::Mode, OE::D>;
+}
 
-    fn subscribe(self, observer: impl Observer<T, E> + MaybeSend + 'or) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Take<OE>
+where
+    OR: Observer<T, E>,
+    OE: Observable<
+            TakeObserver<
+                AutoDisposeOnTerminationObserver<
+                    <OE as ObservableTypes>::Mode,
+                    OR,
+                    <OE as ObservableTypes>::D,
+                >,
+            >,
+            Item = T,
+            Error = E,
+        >,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
             OptionDisposal::none().into_subscription()
@@ -84,7 +103,7 @@ where
     }
 }
 
-struct TakeObserver<OR> {
+pub struct TakeObserver<OR> {
     observer: Option<OR>,
     count: usize,
 }

@@ -27,24 +27,22 @@ Add the crate with the scheduler feature for the runtime you use:
 rx-rust = { version = "1.0", features = ["tokio-scheduler"] }
 ```
 
-Pick exactly one of the scheduler features below; `tokio-scheduler` is the most common choice. The
-time-based operators (`delay`, `debounce`, `timeout`, `Interval`, `Timer`, …) take a scheduler
-argument, and only compile when a scheduler feature is enabled.
+Enable the scheduler feature for your runtime; `tokio-scheduler` is the most common choice, and the
+features can be combined. The time-based operators (`delay`, `debounce`, `timeout`, `Interval`,
+`Timer`, …) take a scheduler argument: one of these, or your own implementation of `Scheduler`.
 
 ### Feature flags
 
 Feature                  | Description                                                                                    | Pulls in
 ------------------------ | ---------------------------------------------------------------------------------------------- | --------
-`tokio-scheduler`        | Schedule on a Tokio runtime. The scheduler is a `tokio::runtime::Handle`.                       | `futures`, `tokio/rt`, `tokio/time`
-`async-std-scheduler`    | Schedule on async-std. The scheduler is `AsyncStdScheduler`.                                   | `futures`, `async-std`
-`smol-scheduler`         | Schedule on smol. The scheduler is `SmolScheduler`.                                            | `futures`, `smol`
-`thread-pool-scheduler`  | Schedule on a `futures::executor::ThreadPool`.                                                 | `futures/thread-pool`, `async-io`
-`local-pool-scheduler`   | Schedule on a `futures::executor::LocalPool`, through its `LocalSpawner`. The only scheduler for the single-threaded build. | `single-threaded`, `futures`, `async-io`
-`single-threaded`        | Single-threaded build, no scheduler: shared state is `Rc` instead of `Arc`, and nothing needs to be `Send` or `Sync`. | –
+`tokio-scheduler`        | Schedule on Tokio. The schedulers are `TokioScheduler` and `TokioLocalScheduler`.               | `futures`, `tokio/rt`, `tokio/time`
+`async-std-scheduler`    | Schedule on async-std. The scheduler is `AsyncStdScheduler`; async-std has no `Local` one.      | `futures`, `async-std`
+`smol-scheduler`         | Schedule on smol. The schedulers are `SmolScheduler` and `SmolLocalScheduler`.                 | `futures`, `smol`
+`futures-scheduler`      | Schedule on the executors of `futures`. The schedulers are `ThreadPoolScheduler` and `LocalPoolScheduler`. | `futures/thread-pool`, `async-io`
 `futures`                | Enabled by every scheduler feature. Gates the `Stream` bridges: `FromStream`, `FromTryStream`, `into_stream`, `into_try_stream`. | `futures`
 
-`single-threaded` (and so `local-pool-scheduler`) is mutually exclusive with `thread-pool-scheduler`,
-`tokio-scheduler`, `async-std-scheduler` and `smol-scheduler`; enabling both is a compile error.
+Whether a pipeline is single- or multi-threaded is not a build setting but part of its type — see
+[Thread modes](#thread-modes) — so one build can mix both.
 
 ## Quick start
 
@@ -74,7 +72,7 @@ async fn main() {
     use std::time::Duration;
     use tokio::time::sleep;
 
-    let scheduler = tokio::runtime::Handle::current();
+    let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
     let subscription = Interval::new(Duration::from_millis(10), scheduler, None)
         .subscribe_with_callback(|tick| println!("tick {tick}"), |_| {});
 
@@ -85,10 +83,26 @@ async fn main() {
 
 ## Core concepts
 
-`Observable<'or, T, E>` is a source of `T` items that ends with a `Termination<E>`: either
-`Completed` or `Error(E)`. A source that cannot fail uses `E = Infallible`, and some conversions
-(`into_future`, `into_stream`) are only available for those. `'or` is the lifetime an observer may
-borrow for; `'static` for anything that goes through a scheduler.
+An observable is a source of `Item`s that ends with a `Termination<Error>`: either `Completed` or
+`Error(E)`. A source that cannot fail uses `Error = Infallible`, and some conversions
+(`into_future`, `into_stream`) are only available for those. What an observable produces is
+described once, by `ObservableTypes`:
+
+```rust,ignore
+pub trait ObservableTypes {
+    type Item;
+    type Error;
+    type Mode: ThreadMode;   // Local or Shared, see below
+    type D: Disposable;      // what `subscribe` returns, independent of the observer
+}
+
+pub trait Observable<OR>: ObservableTypes {
+    fn subscribe(self, observer: OR) -> Subscription<Self::D>;
+}
+```
+
+`Observable` is generic over the observer `OR`, so an operator is monomorphized for the observer it
+is given and needs no boxing; the disposal it returns never names that observer.
 
 An `Observer<T, E>` has two methods:
 
@@ -145,11 +159,10 @@ program can drive different pipelines on different runtimes:
 
 Feature                  | Scheduler value
 ------------------------ | ---------------
-`tokio-scheduler`        | `tokio::runtime::Handle::current()`, or a handle from a `Runtime` you own
-`async-std-scheduler`    | `rx_rust::scheduler::async_std_scheduler::AsyncStdScheduler`
-`smol-scheduler`         | `rx_rust::scheduler::smol_scheduler::SmolScheduler`
-`thread-pool-scheduler`  | `futures::executor::ThreadPool::new()?`
-`local-pool-scheduler`   | `futures::executor::LocalPool::new().spawner()`
+`tokio-scheduler`        | `rx_rust::scheduler::runtime::tokio::TokioScheduler::current()`, or `from_handle(runtime.handle().clone())` for a `Runtime` you own; `TokioLocalScheduler::ambient()` for the running `LocalSet`, or `from_local_set(&local_set)` for a given one (`Local` mode)
+`async-std-scheduler`    | `rx_rust::scheduler::runtime::async_std::AsyncStdScheduler`
+`smol-scheduler`         | `rx_rust::scheduler::runtime::smol::SmolScheduler::global()`, or `from_executor(&executor)` for an `Executor` you own; `SmolLocalScheduler::from_executor(&executor)` for a `LocalExecutor` (`Local` mode)
+`futures-scheduler`      | `rx_rust::scheduler::runtime::futures::ThreadPoolScheduler::from_pool(pool)` for a `ThreadPool`; `LocalPoolScheduler::from_spawner(pool.spawner())` for a `LocalPool` (`Local` mode)
 
 ```rust
 #[tokio::main]
@@ -158,7 +171,7 @@ async fn main() {
     use rx_rust::{observable::ObservableExt, operators::creating::from_iter::FromIter};
     use std::time::Duration;
 
-    let scheduler = tokio::runtime::Handle::current();
+    let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
     let values = FromIter::new(vec![1, 2, 3])
         .delay(Duration::from_millis(5), scheduler)
         .into_stream()
@@ -192,9 +205,9 @@ async fn main() {
         format!("user-{id}")
     }
 
-    let handle = tokio::runtime::Handle::current();
+    let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
     let names = Range::new(1..=3)
-        .concat_map(move |id| FromFuture::new(fetch_name(id), handle.clone()))
+        .concat_map(move |id| FromFuture::new(fetch_name(id), scheduler.clone()))
         .into_stream()
         .collect::<Vec<_>>()
         .await;
@@ -254,7 +267,7 @@ use rx_rust::{
 };
 use std::convert::Infallible;
 
-let mut subject = PublishSubject::<_, Infallible>::new();
+let mut subject = PublishSubject::<_, Infallible, rx_rust::thread_mode::Local>::local();
 let mut stream = subject.clone().into_stream_with(Latest::new());
 assert_eq!(stream.next().now_or_never(), None); // the first poll subscribes
 
@@ -284,6 +297,22 @@ exactly a `Maybe`, and with `collect()` in front, a `Single`. Keeping one-shot r
 also keeps this crate's operator set a single one: every operator works on `Observable`, and none
 needs a second implementation for `Single`.
 
+## Thread modes
+
+Every observable declares a `Mode`: `thread_mode::Local` or `thread_mode::Shared`. A `Local` pipeline
+keeps its shared state in `Rc<RefCell<_>>` and needs nothing to be `Send`; a `Shared` one uses
+`Arc<Mutex<_>>` and can be driven from several threads. Sources pick their mode (`Create::local` /
+`Create::shared` and their `_boxed` variants, `PublishSubject::local()` / `PublishSubject::shared()`, …; plain values such as
+`Just` or `FromIter` are `Local`), an operator with several sources is `Shared` as soon as one of them
+is, and a scheduler fixes the mode of what runs on it: `Local` for the single-threaded schedulers
+(`TokioLocalScheduler`, `SmolLocalScheduler`, `LocalPoolScheduler`), `Shared` for the others. `Send` is only asked for where a value really crosses threads.
+
+Erasing the type is explicit and says what it keeps: `into_boxed` / `into_cloneable_boxed` for a
+single thread, `into_send_boxed` / `into_send_cloneable_boxed` for values that must be `Send`.
+The erased type keeps the mode, so a `Local` source such as `Just` that must sit next to `Shared`
+ones, or a chain of `Local` sources that must go into a `Send` box, is declared `Shared` first with
+`into_shared()`.
+
 ## Subjects
 
 A subject is both an `Observer` and an `Observable`: push into one end, subscribe to the other.
@@ -308,7 +337,7 @@ use rx_rust::{
 
 let mut seen = Vec::new();
 
-let subject = PublishSubject::<i32, std::convert::Infallible>::new();
+let subject = PublishSubject::<i32, std::convert::Infallible, rx_rust::thread_mode::Local>::local();
 let mut sender = subject.clone();
 let subscription = subject.subscribe_with_callback(|value| seen.push(value), |_| {});
 
@@ -341,7 +370,7 @@ Mathematical and aggregate  | `count`, `sum`, `average`, `min`, `max`, `reduce`,
 Error handling              | `catch`, `map_err`, `retry`
 Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
 Connectable                 | `multicast`, `publish`, `publish_last`, `replay`, `share`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
-Conversion                  | `into_future`, `into_try_future`, `into_stream`, `into_stream_with`, `into_try_stream`, `into_try_stream_with`, `into_boxed`, `into_cloneable_boxed`, `with_item_type`, `with_error_type`
+Conversion                  | `into_future`, `into_try_future`, `into_stream`, `into_stream_with`, `into_try_stream`, `into_try_stream_with`, `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
 Debugging                   | `debug`, `debug_default_print`, `hook_on_subscription`, `hook_on_next`, `hook_on_termination`
 
 ## Project layout
@@ -353,8 +382,11 @@ Debugging                   | `debug`, `debug_default_print`, `hook_on_subscript
 - `src/operators` – One operator per file, grouped by category to mirror ReactiveX terminology.
 - `src/subject` – The subjects.
 - `src/scheduler` – The `Scheduler` trait and its adapters for the supported runtimes.
-- `src/utils` – Shared machinery: the lock wrapper, the `Rc`/`Arc` and `Send`/`Sync` abstraction
-  behind the single-threaded build, serialized delivery.
+- `src/thread_mode` – `ThreadMode`, `Local` and `Shared`, and the pointers, locks and flags each
+  mode uses (`thread_mode::mutable`). The boxed observer each mode uses is `ObserverMode`, in
+  `src/observer/boxed_observer.rs`.
+- `src/utils` – Shared machinery: serialized delivery, the subscription context most stateful
+  operators are written with.
 - `tests/` – One integration test file per operator, using the same checklist of cases for each;
   great as executable documentation.
 

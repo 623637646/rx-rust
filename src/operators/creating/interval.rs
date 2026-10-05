@@ -1,13 +1,15 @@
 //! The [`Interval`] source.
 
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::Observer,
-    scheduler::Scheduler,
+    scheduler::{PeriodicContext, Scheduler, SchedulerTypes, Task},
 };
 use educe::Educe;
-use std::{convert::Infallible, time::Duration};
+use std::{
+    convert::Infallible,
+    time::{Duration, Instant},
+};
 
 /// Creates an Observable that emits a sequence of integers spaced by a given time interval.
 /// See <https://reactivex.io/documentation/operators/interval.html>
@@ -28,12 +30,12 @@ use std::{convert::Infallible, time::Duration};
 ///     use std::time::Duration;
 ///     use tokio::time::sleep;
 ///
-///     let handle = tokio::runtime::Handle::current();
+///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
-///     let subscription = Interval::new(Duration::from_millis(1), handle, None)
+///     let subscription = Interval::new(Duration::from_millis(1), scheduler, None)
 ///         .take(3)
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
@@ -72,22 +74,31 @@ impl<S> Interval<S> {
     }
 }
 
-impl<S> Observable<'static, usize, Infallible> for Interval<S>
+impl<S> ObservableTypes for Interval<S>
 where
-    S: Scheduler + Clone + MaybeSend + 'static,
+    S: SchedulerTypes,
 {
+    type Item = usize;
+    type Error = Infallible;
+    type Mode = S::Mode;
     type D = S::D;
+}
 
-    fn subscribe(
-        self,
-        mut observer: impl Observer<usize, Infallible> + MaybeSend + 'static,
-    ) -> Subscription<Self::D> {
-        self.scheduler.schedule_periodically(
-            // The callback's answer is what keeps the schedule running, so an observer that
-            // stopped ends it: nothing is completed, since an interval never completes anyway.
-            move |count| observer.on_next(count).is_continue(),
+impl<S, OR> Observable<OR> for Interval<S>
+where
+    OR: Observer<usize, Infallible>,
+    S: Scheduler<PeriodicContext<OR>>,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+        let task = Task::periodic(
+            observer,
+            // The answer is what keeps the schedule running, so an observer that stopped ends it:
+            // nothing is completed, since an interval never completes anyway.
+            |observer, count| observer.on_next(count).is_continue(),
             self.period,
-            self.delay,
-        )
+            // Fixed-rate, anchored to the time of the subscription plus the delay.
+            Some(Instant::now() + self.delay.unwrap_or_default()),
+        );
+        self.scheduler.run_task(task, self.delay)
     }
 }

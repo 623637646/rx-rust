@@ -2,10 +2,10 @@
 //! [`ObservableExt::contains`](crate::observable::ObservableExt::contains).
 
 use crate::utils::subscribe_with_auto_dispose_on_termination;
+use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
-use crate::utils::types::MaybeSend;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -46,26 +46,43 @@ pub struct Contains<T, OE> {
 impl<T, OE> Contains<T, OE> {
     /// Creates a [`Contains`] over `source`;
     /// [`ObservableExt::contains`](crate::observable::ObservableExt::contains) is the fluent form.
-    pub fn new<'or, E>(source: OE, item: T) -> Self
+    pub fn new<E>(source: OE, item: T) -> Self
     where
-        OE: Observable<'or, T, E>,
+        OE: ObservableTypes<Item = T, Error = E>,
     {
         Self { source, item }
     }
 }
 
-impl<'or, T, E, OE> Observable<'or, bool, E> for Contains<T, OE>
+impl<T, E, OE> ObservableTypes for Contains<T, OE>
 where
-    OE: Observable<'or, T, E>,
-    OE::D: MaybeSend + 'or,
-    T: PartialEq + MaybeSend + 'or,
+    OE: ObservableTypes<Item = T, Error = E>,
+    T: PartialEq,
 {
-    type D = subscribe_with_auto_dispose_on_termination::Disposal<OE::D>;
+    type Item = bool;
+    type Error = E;
+    type Mode = OE::Mode;
+    type D = subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>;
+}
 
-    fn subscribe(
-        self,
-        observer: impl Observer<bool, E> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<T, E, OE, OR> Observable<OR> for Contains<T, OE>
+where
+    OR: Observer<bool, E>,
+    OE: Observable<
+            ContainsObserver<
+                T,
+                AutoDisposeOnTerminationObserver<
+                    <OE as ObservableTypes>::Mode,
+                    OR,
+                    <OE as ObservableTypes>::D,
+                >,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    T: PartialEq,
+{
+    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let observer = ContainsObserver {
                 observer: Some(observer),
@@ -76,7 +93,7 @@ where
     }
 }
 
-struct ContainsObserver<T, OR> {
+pub struct ContainsObserver<T, OR> {
     observer: Option<OR>,
     item: T,
 }

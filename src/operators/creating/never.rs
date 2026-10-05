@@ -1,8 +1,8 @@
 //! The [`Never`] source.
 
-use crate::utils::types::MaybeSend;
+use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, Subscription},
+    observable::{Observable, ObservableTypes, Subscription},
     observer::Observer,
 };
 use std::convert::Infallible;
@@ -26,13 +26,18 @@ use std::convert::Infallible;
 #[derive(Debug, Clone)]
 pub struct Never;
 
-impl<'or> Observable<'or, Infallible, Infallible> for Never {
+impl ObservableTypes for Never {
+    type Item = Infallible;
+    type Error = Infallible;
+    type Mode = Local;
     type D = ();
+}
 
-    fn subscribe(
-        self,
-        _: impl Observer<Infallible, Infallible> + MaybeSend + 'or,
-    ) -> Subscription<Self::D> {
+impl<OR> Observable<OR> for Never
+where
+    OR: Observer<Infallible, Infallible>,
+{
+    fn subscribe(self, _: OR) -> Subscription<Self::D> {
         Subscription::default()
     }
 }
