@@ -141,6 +141,12 @@ cargo tarpaulin --out Html
   that re-subscribes with itself (`retry`, `concat_all`) carries a `utils::resubscribe::Resubscribe`
   created where the operator is subscribed, instead of bounding its own `Observer` impl. See
   `docs/decisions/0002-observable-types-and-thread-mode.md`.
+- **The disposal `D`** is one of three: the source's or scheduler's passed through (`OE::D`), a
+  `utils` helper's named disposal used as it is when its parameters are only the operator's own
+  (`subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>`), or a `Disposal` of
+  the operator's own module. Anything else — a combination of combinators, or a type naming the
+  operator's model or another of its private types — is named by `delegate_disposal!`, and the
+  types inside stay private (`grep -rn "type D = " src` should show nothing else).
 - Keep `pub` surface minimal; add `Clone`/`Send`/`Sync`/`'static` bounds only where actually needed.
 - **Derives** on a generic type go through `#[derive(Educe)]`, not `#[derive(...)]` (which bounds
   every type parameter) and not hand-written impls. A field that cannot or should not be printed
