@@ -17,7 +17,7 @@ use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{
-        creating::{empty::Empty, throw::Throw},
+        creating::{empty::Empty, never::Never, throw::Throw},
         utility::timeout::{self, Timeout},
     },
 };
@@ -139,6 +139,29 @@ fn test_timeout_0_duration() {
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
 }
+
+/// `Never` drops its observer as soon as it is subscribed: a source that will never send anything
+/// times out like one that merely falls silent. See decision 0004.
+#[test]
+fn test_timeout_never() {
+    block_on(|scheduler| async move {
+        let (checker, observer) = Checker::new();
+
+        let observable = Never.timeout(DURATION_100_MS, scheduler.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        scheduler.sleep(DURATION_100_MS - DURATION_30_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+
+        scheduler.sleep(DURATION_30_MS * 2).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
+    });
+}
 #[test]
 fn test_unsubscribe() {
     block_on(|scheduler| async move {
@@ -164,7 +187,8 @@ fn test_unsubscribe() {
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
         subscription.dispose();
-        scheduler.sleep(DURATION_3_MS).await;
+        // The timer task still holds the context, but the source dropped its own handle as it was
+        // disposed, which released the observer.
         assert_eq!(checker.values(), [111, 222]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -492,6 +516,66 @@ fn test_unsub_after_error() {
             State::Error(timeout::Error::SourceError("error"))
         );
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    });
+}
+
+/// The source goes away without a termination: it has fallen silent for good, which is what a
+/// timeout is there to report, so the timer still fires and fails the stream.
+/// See decision 0004: a source that drops its observer without a termination only stops sending;
+/// what the operator has already accepted runs its course.
+#[test]
+fn test_abandon_after_next() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.timeout(DURATION_100_MS, scheduler.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS - DURATION_30_MS).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_30_MS * 2).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    });
+}
+
+/// Disposing after the source went away still cancels the timer: no timeout is reported.
+#[test]
+fn test_unsub_after_abandon() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.timeout(DURATION_100_MS, scheduler.clone());
+
+        let subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        subscription.dispose();
+        scheduler.sleep(DURATION_10_MS).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
     });
 }
 

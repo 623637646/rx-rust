@@ -1857,6 +1857,88 @@ fn test_unsub_after_error() {
     });
 }
 
+/// The source goes away without a termination: the buffers are cut by time, not by the source, so
+/// the open one is still emitted at its tick and the ticks go on, with empty buffers, until the
+/// subscription is disposed.
+/// See decision 0004: a source that drops its observer without a termination only stops sending;
+/// what the operator has already accepted runs its course.
+#[test]
+fn test_abandon_after_next() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.buffer_with_time_or_count(
+            NonZeroUsize::new(100).unwrap(),
+            DURATION_100_MS,
+            scheduler.clone(),
+            Some(DURATION_100_MS),
+        );
+
+        let subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
+        assert_eq!(checker.values(), [vec![111]]);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS).await;
+        assert_eq!(checker.values(), [vec![111], vec![]]);
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        subscription.dispose();
+        scheduler.sleep(DURATION_10_MS).await;
+        assert_eq!(checker.values(), [vec![111], vec![]]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS).await;
+        assert_eq!(checker.values(), [vec![111], vec![]]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    });
+}
+
+/// Disposing after the source went away cancels the ticks: the open buffer is never emitted.
+#[test]
+fn test_unsub_after_abandon() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.buffer_with_time_or_count(
+            NonZeroUsize::new(100).unwrap(),
+            DURATION_100_MS,
+            scheduler.clone(),
+            Some(DURATION_100_MS),
+        );
+
+        let subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        subscription.dispose();
+        scheduler.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    });
+}
+
 #[test]
 fn test_next_on_sub() {
     block_on(|scheduler| async move {

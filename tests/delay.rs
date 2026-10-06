@@ -692,7 +692,8 @@ fn test_unsub_after_next() {
 
         assert!(sender.on_next(111).is_continue());
         subscription.dispose();
-        scheduler.sleep(DURATION_10_MS).await;
+        // The timer task still holds the context, but the source dropped its own handle as it was
+        // disposed, which released the observer.
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
@@ -769,6 +770,66 @@ fn test_unsub_after_error() {
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    });
+}
+
+/// The source goes away without a termination while a value is still delayed: the value is
+/// delivered on time all the same, and the observer is then dropped, never terminated.
+/// See decision 0004: a source that drops its observer without a termination only stops sending;
+/// what the operator has already accepted runs its course.
+#[test]
+fn test_abandon_after_next() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.delay(DURATION_100_MS, scheduler.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS - DURATION_30_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_30_MS * 2).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    });
+}
+
+/// Disposing after the source went away still cancels the value it left delayed.
+#[test]
+fn test_unsub_after_abandon() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.delay(DURATION_100_MS, scheduler.clone());
+
+        let subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        subscription.dispose();
+        scheduler.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
     });
 }
 

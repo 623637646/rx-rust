@@ -621,10 +621,76 @@ fn test_unsub_after_next() {
 
         assert!(sender.on_next(111).is_continue());
         subscription.dispose();
-        scheduler.sleep(DURATION_10_MS).await;
+        // The timer task still holds the context, but the disposal releases the observer itself.
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+
+        scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    });
+}
+
+/// The source goes away without a termination while a value is pending: unlike a completion, which
+/// flushes it at once, the source only fell silent, so the value is emitted when the quiet period
+/// ends, and the observer is then dropped, never terminated.
+#[test]
+fn test_abandon_after_next() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.debounce(DURATION_100_MS, scheduler.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS - DURATION_30_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_30_MS * 2).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    });
+}
+
+/// Disposing after the source went away still cancels the value it left pending. The timer task
+/// alone holds the context then, so the observer is released when the runtime drops the cancelled
+/// task, as it is when the subscription is disposed after the source terminated.
+#[test]
+fn test_unsub_after_abandon() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.debounce(DURATION_100_MS, scheduler.clone());
+
+        let subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        subscription.dispose();
+        scheduler.sleep(DURATION_10_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
     });
 }
 

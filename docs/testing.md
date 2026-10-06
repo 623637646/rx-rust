@@ -86,6 +86,13 @@ Some scheduler-based operators have no `test_next_on_sub` (e.g. `from_future`).
 6. `test_unsub_after_error`
 7. `test_order_with_continuous_next`
 8. `test_completed_no_delay` (if applicable: the operator takes an optional delay)
+9. `test_abandon_after_next` — the source drops its observer without a termination
+   (`sender.abandon()`) while the operator still has work of its own: queued or delayed values, a
+   pending debounce, a timer. That work runs its course, and the observer is dropped, never
+   terminated, once nothing more can come. See
+   [decision 0004](decisions/0004-a-source-that-drops-its-observer.md).
+10. `test_unsub_after_abandon` — the same, then the subscription is disposed before that work ran:
+    the disposal cancels it, and nothing is delivered.
 
 ## Compile checks
 

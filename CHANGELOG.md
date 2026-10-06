@@ -77,10 +77,26 @@ All notable changes to this project are documented here. The format follows
   dropped panics.
 - **Breaking:** `publish`, `replay`, `share`, … multicast through a subject of the source's mode;
   `share*` require `Item: Clone` and `Error: Clone`.
-- After a dispose, a context-based operator releases its observer when the last handle to the
-  context goes, which is in practice before `dispose` returns; nothing is delivered after the
-  dispose either way. `delay` and `observe_on` keep delivering the values already scheduled when
-  their source terminates.
+- After a dispose, a context-based operator releases its observer as the source drops its handle on
+  the context, which is in practice before `dispose` returns, even while a scheduler task still
+  holds another; nothing is delivered after the dispose either way. `delay` and `observe_on` keep
+  delivering the values already scheduled when their source terminates.
+- A source that drops its observer without a termination has stopped sending; it no longer
+  disposes the subscription. The work the operator already accepted runs its course, and the
+  downstream observer is then dropped, never terminated: `observe_on` and `delay` deliver the
+  values they hold, `debounce` emits its pending value when the quiet period ends, `timeout` fails
+  with `Error::Timeout` (so does `Never.timeout(…)`, which never fired before), and
+  `buffer_with_time` / `buffer_with_time_or_count` keep cutting buffers until the subscription is
+  disposed. Before, all of that was dropped, and what reached the observer depended on timing. See
+  `docs/decisions/0004-a-source-that-drops-its-observer.md`.
+- **Breaking:** `utils::subscribe_with_context::WeakSubscriptionContext`,
+  `SubscriptionContext::downgrade`, `utils::serialized_delivery::WeakSerializedDelivery` and
+  `SerializedDelivery::downgrade` are removed. A scheduler task holds a clone of the context, which
+  no longer keeps a disposed observer alive: a handle dropped after a disposal releases it. Nothing
+  else in the crate needed a weak handle; a reference cycle through a delivery is broken when it
+  stops, as the one through a source subscription always was.
+- A `Scheduler` should drop a disposed task promptly, since the task may hold an operator's context
+  and with it the downstream observer; see `SchedulerTypes::Disposal`. The built-in schedulers do.
 
 ## [1.0.1] - 2026-09-14
 

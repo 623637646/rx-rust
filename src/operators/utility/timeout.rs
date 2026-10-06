@@ -12,7 +12,7 @@ use crate::scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskSt
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context_owning_source,
+    self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -108,10 +108,12 @@ type TimeoutSources<OE, S> = ChainDisposal<
     <OE as ObservableTypes>::Disposal,
 >;
 
-/// The task of a [`Timeout`] timer: it holds the context weakly, so that it does not keep the
-/// observer alive once the subscription is gone.
+/// The task of a [`Timeout`] timer. It holds the context strongly, so that a source that lets go of
+/// its observer without a termination still times out. A disposal still releases the observer at
+/// once: disposing the source makes it drop its own handle, and a handle dropped once the context
+/// has stopped releases the observer.
 type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
-    WeakSubscriptionContext<TimeoutMode<OE, S>, T, Error<E>, OR, Model, TimeoutSources<OE, S>>,
+    SubscriptionContext<TimeoutMode<OE, S>, T, Error<E>, OR, Model, TimeoutSources<OE, S>>,
 >;
 
 delegate_disposal!(
@@ -199,7 +201,7 @@ fn setup_timer<M, T, E, OR, S, D>(
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,
-    S: Scheduler<RecursiveContext<WeakSubscriptionContext<M, T, Error<E>, OR, Model, D>>>,
+    S: Scheduler<RecursiveContext<SubscriptionContext<M, T, Error<E>, OR, Model, D>>>,
     D: Disposable,
 {
     let deadline = context.update(|model| UpdateOutcome::new(model.deadline).without_events());
@@ -208,12 +210,10 @@ where
         return OptionDisposal::none();
     };
 
-    // The context owns this task through the model, so the task only holds a weak reference
-    // back: a strong one would form a cycle and leak the subscription.
-    let task = Task::recursive(context.downgrade(), |weak_context, _| {
-        let Some(context) = weak_context.upgrade() else {
-            return TaskState::Finished;
-        };
+    // The context owns only the task's disposal, never the task, which its runtime owns: holding
+    // the context strongly forms no cycle. Stopping the context disposes the timer, which cancels
+    // the task.
+    let task = Task::recursive(context, |context, _| {
         context
             .update(|model| {
                 if Instant::now() < model.deadline {

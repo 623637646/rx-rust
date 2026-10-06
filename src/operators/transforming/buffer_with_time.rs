@@ -5,7 +5,7 @@ use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context_owning_source,
+    self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::{
     observable::Subscription,
@@ -105,10 +105,13 @@ type BufferWithTimeMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as Sch
 type BufferWithTimeSources<OE, S> =
     ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
 
-/// The task of a [`BufferWithTime`] timer: it holds the context weakly, so that it does not keep
-/// the observer alive once the subscription is gone.
+/// The task of a [`BufferWithTime`] timer. It holds the context strongly, so that the buffers keep
+/// being cut after the source has let go of its observer without a termination, until the
+/// subscription is disposed. A disposal still releases the observer at once: disposing the source
+/// makes it drop its own handle, and a handle dropped once the context has stopped releases the
+/// observer.
 type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
-    WeakSubscriptionContext<
+    SubscriptionContext<
         BufferWithTimeMode<OE, S>,
         Vec<T>,
         E,
@@ -209,16 +212,14 @@ where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
     D: Disposable,
-    S: Scheduler<PeriodicContext<WeakSubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>>>,
+    S: Scheduler<PeriodicContext<SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>>>,
 {
-    // The context owns this task through its source subscription, so the task only holds a weak
-    // reference back: a strong one would form a cycle and leak the subscription.
+    // The context owns only the task's disposal, through its source subscription, never the task,
+    // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
+    // disposes its source subscription, which cancels the task.
     let task = Task::periodic(
-        context.downgrade(),
-        |weak_context, _| {
-            let Some(context) = weak_context.upgrade() else {
-                return false;
-            };
+        context,
+        |context, _| {
             context
                 .update(|values| {
                     UpdateOutcome::new(true).with_next_event(std::mem::replace(

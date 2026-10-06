@@ -85,9 +85,10 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
 4. **The context helpers keep their contract.** A dispose stops the context before it returns, and
    nothing is delivered after it. The observer is released when the last handle to the context
    goes, which the source releases as it is disposed, so in practice still before `dispose`
-   returns. A scheduled task that must deliver after its source has terminated (`delay`,
-   `observe_on`) holds a `PromotableWeakContext` instead of a weak handle: the operator promotes it
-   when its source terminates, so the pending values are not lost.
+   returns. A scheduled task holds the context strongly, so that the work already accepted is not
+   lost when the source lets go of its observer; the handle the source drops as it is disposed then
+   releases the observer anyway, since a handle dropped once the context has stopped takes it out of
+   its cell. See [0004](0004-a-source-that-drops-its-observer.md).
 5. **The thread mode is an associated type.** Each source picks its mode (`Create::local` /
    `Create::shared`, `PublishSubject::local()` / `shared()`; value sources such as `Just` are
    `Local`); an operator over several sources takes `Joined<A, B>`; a scheduler operator takes the

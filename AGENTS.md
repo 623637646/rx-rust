@@ -126,9 +126,12 @@ cargo tarpaulin --out Html
   `subscribe_with_context` when the operator can only terminate from inside the source's own
   `on_termination`; `subscribe_with_context_owning_source` when it can terminate while the
   source is still active (notifier, scheduler task, another source);
-  `subscribe_with_auto_dispose_on_termination` for the simple case. A scheduled task that must
-  still deliver after the source has terminated holds a `PromotableWeakContext`, which the
-  operator promotes on termination, rather than a plain weak context.
+  `subscribe_with_auto_dispose_on_termination` for the simple case. A scheduler task holds a clone
+  of the context, like the observer given to the source: when the source lets go of the observer —
+  a termination, or a drop that only means it sends nothing more (decision 0004) — the task finishes
+  the work already accepted. That forms no cycle, since the context holds only the task's disposal,
+  and a disposal still releases the downstream observer at once, through the handle the source
+  drops as it is disposed.
 - **Implementing an observable** takes two impls: `ObservableTypes` with the associated `Item`,
   `Error`, `Mode` and `Disposal` — which must not mention the observer — and `Observable<OR>`,
   whose bounds name the observer the source is subscribed with
@@ -185,7 +188,9 @@ sources with `test_channel()` plus a `Checker` observer, asserting on `checker.v
 
 Pick the source by what the test needs from it, not by habit:
 
-- One subscription, driven step by step by the test — the default: `test_channel()`.
+- One subscription, driven step by step by the test — the default: `test_channel()`. Its sender
+  ends the channel with `on_termination`, or with `abandon()`, which drops the observer without a
+  termination (`test_abandon_after_next`, decision 0004).
 - One observable subscribed several times (several observers, `retry`, `repeat`, a connectable):
   `test_channels()`, one channel per subscription, addressed by its index.
 - A source that must emit while it is being subscribed to, then keep going: a `test_channel()`

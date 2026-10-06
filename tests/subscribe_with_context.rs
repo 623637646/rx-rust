@@ -200,8 +200,8 @@ fn stopped_update_drops_callback_outside_lock() {
 }
 
 // End-to-end wiring through a real upstream: the channel feeds the context the
-// way real operators do (forwarding via a `WeakSubscriptionContext` to avoid a strong
-// reference cycle). Disposing mid-batch must also unsubscribe the upstream.
+// way real operators do, through a clone of it held by the source's observer.
+// Disposing mid-batch must also unsubscribe the upstream.
 #[test]
 fn dispose_during_batch_unsubscribes_upstream() {
     let (mut sender, receiver, channel_checker) = test_channel::<i32, Infallible>();
@@ -215,19 +215,10 @@ fn dispose_during_batch_unsubscribes_upstream() {
         .hook_on_subscription_boxed(|source, observer: SendBoxedObserver<'_, i32, Infallible>| {
             subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
                 context_slot.replace_value(Some(context.clone()));
-                let weak = context.downgrade();
-                let weak_for_termination = weak.clone();
+                let context_for_termination = context.clone();
                 source.subscribe_with_callback(
-                    move |value| {
-                        if let Some(context) = weak.upgrade() {
-                            let _ = context.send_next(value);
-                        }
-                    },
-                    move |termination| {
-                        if let Some(context) = weak_for_termination.upgrade() {
-                            context.send_termination(termination);
-                        }
-                    },
+                    move |value| context.send_next(value),
+                    move |termination| context_for_termination.send_termination(termination),
                 )
             })
         })

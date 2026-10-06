@@ -19,9 +19,7 @@ use rx_rust::{
     observer::{Flow, Observer, Termination},
     utils::{
         pending_events::EventBatch,
-        serialized_delivery::{
-            DeliveryStopped, SerializedDelivery, UpdateOutcome, WeakSerializedDelivery,
-        },
+        serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome},
     },
 };
 use std::sync::atomic::AtomicBool;
@@ -32,7 +30,6 @@ const ERROR: TestError = "boom";
 
 type TestObserver = SendBoxedObserver<'static, Value, TestError>;
 type TestDelivery = SerializedDelivery<Shared, Value, TestError, TestObserver, Resources>;
-type WeakTestDelivery = WeakSerializedDelivery<Shared, Value, TestError, TestObserver, Resources>;
 type TestOutcome<R> = UpdateOutcome<Value, TestError, R>;
 
 // MARK: - The log the tests assert on
@@ -147,12 +144,16 @@ impl Resources {
 
 // MARK: - Reaching the delivery from what it owns
 
-/// A handle a test can hand to a callback before the delivery it points at exists.
+/// A handle a test can hand to a callback before the delivery it points at exists, filled in once
+/// it was built.
 ///
-/// The observer and the values are owned by the delivery, so they can only hold a weak handle to
-/// it, filled in once it was built.
+/// It holds the delivery strongly. Held by the observer, or by a value or the resources, it forms
+/// a cycle through the delivery that owns them, which is broken when the delivery lets go of what
+/// holds it: a stop, a termination, a rejected or delivered value — or, for the observer's, by
+/// [`BuiltDelivery`] when the test lets go of the delivery. The observer holds one only when the
+/// test asks for it, through a hook or [`Builder::handle`].
 #[derive(Clone)]
-struct DeliveryHandle(Arc<Mutex<Option<WeakTestDelivery>>>);
+struct DeliveryHandle(Arc<Mutex<Option<TestDelivery>>>);
 
 impl DeliveryHandle {
     fn new() -> Self {
@@ -166,15 +167,23 @@ impl DeliveryHandle {
     }
 
     fn install(&self, delivery: &TestDelivery) {
-        self.0.replace_value(Some(delivery.downgrade()));
+        let previous = self.0.replace_value(Some(delivery.clone()));
+        assert!(previous.is_none(), "a handle is installed once");
     }
 
     fn get(&self) -> TestDelivery {
-        self.0
-            .clone_value()
+        self.try_get()
             .expect("the delivery is installed before anything can reach it")
-            .upgrade()
-            .expect("the tests keep a handle while their callbacks run")
+    }
+
+    fn try_get(&self) -> Option<TestDelivery> {
+        self.0.clone_value()
+    }
+
+    /// Lets the delivery go, which breaks the cycle through whatever owns this handle.
+    fn release(&self) {
+        let delivery = self.0.take_value();
+        drop(delivery); // Drop outside the lock
     }
 }
 
@@ -206,8 +215,9 @@ where
     fn on_next(&mut self, value: Value) -> Flow {
         let number = value.number;
         record(&self.log, Record::Next(number));
-        let delivery = self.handle.get();
-        (self.on_next)(&delivery, number);
+        if let Some(delivery) = self.handle.try_get() {
+            (self.on_next)(&delivery, number);
+        }
         self.received += 1;
         match self.stop_after {
             Some(stop_after) if self.received >= stop_after => Flow::Stop,
@@ -217,12 +227,13 @@ where
 
     fn on_termination(mut self, termination: Termination<TestError>) {
         record(&self.log, Record::Termination(termination.clone()));
-        let delivery = self.handle.get();
         let hook = self
             .on_termination
             .take()
             .expect("an observer is terminated at most once");
-        hook(&delivery, &termination);
+        if let Some(delivery) = self.handle.try_get() {
+            hook(&delivery, &termination);
+        }
         // `self` is dropped here, which records the drop of the observer after its termination.
     }
 }
@@ -235,6 +246,7 @@ fn builder(log: &Log) -> Builder<NoNextHook, NoTerminationHook> {
     Builder {
         log: log.clone(),
         handle: DeliveryHandle::new(),
+        reaches_delivery: false,
         model: 0,
         on_next: |_delivery, _number| {},
         on_termination: |_delivery, _termination| {},
@@ -246,6 +258,9 @@ fn builder(log: &Log) -> Builder<NoNextHook, NoTerminationHook> {
 struct Builder<FN, FT> {
     log: Log,
     handle: DeliveryHandle,
+    /// Whether the observer gets the handle: only when a hook, or a callback made from
+    /// [`Self::handle`], has to reach the delivery.
+    reaches_delivery: bool,
     model: i32,
     on_next: FN,
     on_termination: FT,
@@ -255,7 +270,8 @@ struct Builder<FN, FT> {
 
 impl<FN, FT> Builder<FN, FT> {
     /// The handle of the delivery to be built, for a callback that has to be made before it.
-    fn handle(&self) -> DeliveryHandle {
+    fn handle(&mut self) -> DeliveryHandle {
+        self.reaches_delivery = true;
         self.handle.clone()
     }
 
@@ -271,6 +287,7 @@ impl<FN, FT> Builder<FN, FT> {
         Builder {
             log: self.log,
             handle: self.handle,
+            reaches_delivery: true,
             model: self.model,
             on_next,
             on_termination: self.on_termination,
@@ -292,6 +309,7 @@ impl<FN, FT> Builder<FN, FT> {
         Builder {
             log: self.log,
             handle: self.handle,
+            reaches_delivery: true,
             model: self.model,
             on_next: self.on_next,
             on_termination,
@@ -305,7 +323,7 @@ impl<FN, FT> Builder<FN, FT> {
         self
     }
 
-    fn build(self) -> TestDelivery
+    fn build(self) -> BuiltDelivery
     where
         FN: FnMut(&TestDelivery, i32) + Send + 'static,
         FT: FnOnce(&TestDelivery, &Termination<TestError>) + Send + 'static,
@@ -327,8 +345,35 @@ impl<FN, FT> Builder<FN, FT> {
         });
         let resources = Resources::new(self.model, &self.log);
         let delivery = SerializedDelivery::idle(observer, resources);
-        handle.install(&delivery);
-        delivery
+        if self.reaches_delivery {
+            handle.install(&delivery);
+        }
+        BuiltDelivery { delivery, handle }
+    }
+}
+
+/// The handle a test gets from [`Builder::build`]: a [`TestDelivery`] that, when it goes, lets go
+/// of the one the observer holds too.
+///
+/// That breaks the cycle through the observer when the test lets go of the delivery, whether or
+/// not anything stopped it, so that a test needs no [`DeliveryHandle::release`] of its own, and the
+/// observer is still dropped with the last handle the test holds.
+struct BuiltDelivery {
+    delivery: TestDelivery,
+    handle: DeliveryHandle,
+}
+
+impl std::ops::Deref for BuiltDelivery {
+    type Target = TestDelivery;
+
+    fn deref(&self) -> &TestDelivery {
+        &self.delivery
+    }
+}
+
+impl Drop for BuiltDelivery {
+    fn drop(&mut self) {
+        self.handle.release();
     }
 }
 
@@ -575,7 +620,7 @@ fn stop_drops_the_observer_without_notifying_it_and_is_idempotent() {
 #[test]
 fn stop_drops_the_observer_and_the_resources_outside_the_lock() {
     let log = new_log();
-    let builder = builder(&log);
+    let mut builder = builder(&log);
     let handle = builder.handle();
     let delivery = builder
         .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
@@ -707,7 +752,7 @@ fn stop_from_on_next_suppresses_the_queued_termination() {
 #[test]
 fn a_delivery_stop_leaves_the_observer_to_the_next_event() {
     let log = new_log();
-    let builder = builder(&log);
+    let mut builder = builder(&log);
     let handle = builder.handle();
     let delivery = builder
         .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
@@ -737,7 +782,7 @@ fn a_delivery_stop_leaves_the_observer_to_the_next_event() {
 #[test]
 fn a_delivery_stop_leaves_the_observer_to_the_next_update() {
     let log = new_log();
-    let builder = builder(&log);
+    let mut builder = builder(&log);
     let handle = builder.handle();
     let delivery = builder
         .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
@@ -761,7 +806,7 @@ fn a_delivery_stop_leaves_the_observer_to_the_next_update() {
 #[test]
 fn a_delivery_stop_leaves_the_observer_to_a_later_stop() {
     let log = new_log();
-    let builder = builder(&log);
+    let mut builder = builder(&log);
     let handle = builder.handle();
     let delivery = builder
         .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
@@ -797,6 +842,56 @@ fn a_delivery_stop_leaves_the_observer_to_the_last_handle() {
         records(&log),
         [Record::ResourcesDropped, Record::ObserverDropped]
     );
+}
+
+#[test]
+fn a_delivery_stop_leaves_the_observer_to_the_first_handle_dropped() {
+    let log = new_log();
+    let mut builder = builder(&log);
+    let handle = builder.handle();
+    let delivery = builder
+        .on_observer_drop(note_and_reenter(&handle, &log, "observer dropped"))
+        .build();
+    let clone = delivery.clone();
+
+    delivery.stop_handle().stop();
+    assert_eq!(records(&log), [Record::ResourcesDropped]);
+
+    // As a source drops its handle when it is disposed, while a scheduler task still holds
+    // another: the first handle dropped after the stop releases the observer.
+    drop(clone);
+    // The drop of the observer re-entered the delivery, and dropped the handle it reached it
+    // with, so it ran with the lock released.
+    assert_eq!(
+        records(&log),
+        [
+            Record::ResourcesDropped,
+            Record::ObserverDropped,
+            Record::Note("observer dropped"),
+        ]
+    );
+
+    drop(delivery);
+    assert_eq!(records(&log).len(), 3, "the observer is released only once");
+}
+
+#[test]
+fn a_handle_dropped_under_its_own_lock_takes_no_lock() {
+    let log = new_log();
+    let delivery = builder(&log).build();
+    let clone = delivery.clone();
+
+    // The update runs under the delivery's lock. Debug builds panic when a thread takes a lock it
+    // already holds, so this passes only if dropping a handle of a delivery that no
+    // `DeliveryStop` has stopped takes no lock.
+    assert_eq!(
+        delivery.update(move |_| {
+            drop(clone);
+            UpdateOutcome::empty()
+        }),
+        Ok(())
+    );
+    assert_eq!(records(&log), []);
 }
 
 #[test]
@@ -1138,24 +1233,6 @@ fn a_clone_shares_one_delivery() {
     delivery.stop();
     assert!(clone.send(next(2)).is_stop());
     assert_eq!(values(&log), [1]);
-}
-
-#[test]
-fn a_weak_handle_upgrades_while_a_strong_one_is_alive() {
-    let log = new_log();
-    let delivery = builder(&log).build();
-    let weak = delivery.downgrade();
-
-    assert!(weak.upgrade().is_some());
-
-    // Stopping does not free the shared state: the handles stay valid and reject every event.
-    delivery.stop();
-    let upgraded = weak.upgrade().expect("a stopped delivery is still there");
-    assert!(upgraded.send(next(1)).is_stop());
-
-    drop(upgraded);
-    drop(delivery);
-    assert!(weak.upgrade().is_none());
 }
 
 #[test]

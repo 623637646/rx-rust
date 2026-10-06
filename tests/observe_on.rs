@@ -994,8 +994,11 @@ fn test_unsub_after_next() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         assert!(sender.on_next(111).is_continue());
-        // Disposed while 111 is still queued: the task must not deliver it.
+        // Disposed while 111 is still queued: the task must not deliver it. The queued task holds
+        // the context, but the source dropped its own handle as it was disposed, which released
+        // the observer before the task ran.
         subscription.dispose();
+        assert_eq!(checker.state(), State::Dropped);
         thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(call_history.load(Ordering::SeqCst), 0b11000011);
@@ -1129,6 +1132,59 @@ fn test_unsub_after_error() {
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(call_history.load(Ordering::SeqCst), 0b11000011);
         assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    });
+}
+
+/// The source goes away without a termination while values are still queued: they are delivered
+/// all the same, and the observer is then dropped, never terminated.
+/// See decision 0004: a source that drops its observer without a termination only stops sending;
+/// what the operator has already accepted runs its course.
+#[test]
+fn test_abandon_after_next() {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.observe_on(thread_1.clone());
+
+        let _subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        assert!(sender.on_next(222).is_continue());
+        sender.abandon();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        thread_1.run_until_stalled().await;
+        assert_eq!(checker.values(), [111, 222]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    });
+}
+
+/// Disposing after the source went away still cancels what it left queued.
+#[test]
+fn test_unsub_after_abandon() {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+
+        let observable = observable.observe_on(thread_1.clone());
+
+        let subscription = observable.subscribe(observer);
+        assert!(sender.on_next(111).is_continue());
+        sender.abandon();
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Active);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+
+        subscription.dispose();
+        thread_1.run_until_stalled().await;
+        assert!(checker.values().is_empty());
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Abandoned);
     });
 }
 

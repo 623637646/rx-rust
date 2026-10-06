@@ -73,6 +73,8 @@ enum Channel<'or, T, E> {
     Subscribed(Delivery<'or, T, E>),
     Completed,
     Error(E),
+    /// The sender dropped the observer without a termination: see [`SenderObserver::abandon`].
+    Abandoned,
     Unsubscribed,
 }
 
@@ -86,6 +88,7 @@ where
             Channel::Subscribed(_) => ChannelState::Subscribed,
             Channel::Completed => ChannelState::Completed,
             Channel::Error(error) => ChannelState::Error(error.clone()),
+            Channel::Abandoned => ChannelState::Abandoned,
             Channel::Unsubscribed => ChannelState::Unsubscribed,
         }
     }
@@ -109,6 +112,7 @@ where
             Channel::Initialized
             | Channel::Completed
             | Channel::Error(_)
+            | Channel::Abandoned
             | Channel::Unsubscribed => None,
         });
         // Panic outside the lock, which leaves it usable, and drops the value outside it too.
@@ -144,6 +148,30 @@ where
     }
 }
 
+impl<T, E> SenderObserver<'_, T, E> {
+    /// Drops the observer without terminating it: the source goes away and will send nothing more,
+    /// as a source does when its producer is gone, a subject whose last handle is dropped, or a
+    /// thread that unwinds. The channel is then [`ChannelState::Abandoned`], and disposing the
+    /// subscription afterwards leaves it so, as it leaves a terminated channel.
+    pub(crate) fn abandon(self) {
+        let outcome =
+            self.channel
+                .with_mut(|channel| match mem::replace(channel, Channel::Abandoned) {
+                    Channel::Subscribed(delivery) => Ok(delivery),
+                    // Puts the state back, and hands the refused one out to be dropped outside the
+                    // lock.
+                    previous => Err(mem::replace(channel, previous)),
+                });
+        // Panic outside the lock, which leaves it usable.
+        let Ok(delivery) = outcome else {
+            panic!("the channel is abandoned only while it is subscribed to");
+        };
+        // The observer is dropped outside the lock, unless a value is being delivered to it: the
+        // delivery drops it as soon as it looks for its next event.
+        delivery.stop();
+    }
+}
+
 pub(crate) struct ReceiverObservable<'or, T, E> {
     channel: SharedChannel<'or, T, E>,
 }
@@ -174,6 +202,7 @@ where
             Channel::Subscribed(_)
             | Channel::Completed
             | Channel::Error(_)
+            | Channel::Abandoned
             | Channel::Unsubscribed => false,
         });
         // Panic outside the lock, which leaves it usable.
@@ -197,7 +226,7 @@ impl<T, E> Disposable for ReceiverObservableDisposal<'_, T, E> {
             match mem::replace(channel, Channel::Unsubscribed) {
                 Channel::Subscribed(delivery) => Ok(Some(delivery)),
                 // The channel ended on its own, which already released the delivery.
-                previous @ (Channel::Completed | Channel::Error(_)) => {
+                previous @ (Channel::Completed | Channel::Error(_) | Channel::Abandoned) => {
                     *channel = previous;
                     Ok(None)
                 }
@@ -230,6 +259,7 @@ pub(crate) enum ChannelState<E> {
     Subscribed,
     Completed,
     Error(E),
+    Abandoned,
     Unsubscribed,
 }
 

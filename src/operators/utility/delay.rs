@@ -7,9 +7,7 @@ use crate::scheduler::{RecursiveContext, SchedulerTypes, Task};
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
-use crate::utils::subscribe_with_context::{
-    self, PromotableWeakContext, SubscriptionContext, subscribe_with_context,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::{
     observable::Subscription,
@@ -107,10 +105,11 @@ type DelayMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTyp
 type DelayContext<M, T, E, OR, S> =
     SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>;
 
-/// The task of a [`Delay`] timer: it holds the context weakly until the source terminates, so that
-/// it does not keep the observer alive once the subscription is gone.
-type DelayTask<M, T, E, OR, S> =
-    RecursiveContext<PromotableWeakContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>>;
+/// The task of a [`Delay`] timer. It holds the context strongly, so that the values already delayed
+/// are delivered after the source has let go of its observer, terminated or not. A disposal still
+/// releases the observer at once: the source drops its own handle as it is disposed, and a handle
+/// dropped once the context has stopped releases the observer.
+type DelayTask<M, T, E, OR, S> = RecursiveContext<DelayContext<M, T, E, OR, S>>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -143,7 +142,6 @@ where
         };
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(DelayObserver {
-                weak_context: PromotableWeakContext::new(&context),
                 context,
                 delay: self.delay,
                 scheduler: self.scheduler,
@@ -181,9 +179,6 @@ where
     S: SchedulerTypes,
 {
     context: DelayContext<M, T, E, OR, S>,
-    /// The timer's handle on the context, promoted once the source has completed, with values
-    /// still waiting.
-    weak_context: PromotableWeakContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>,
     delay: Duration,
     scheduler: S,
 }
@@ -223,12 +218,10 @@ where
             Err(DeliveryStopped) => return Flow::Stop,
         };
 
-        // The task holds the context weakly until the source terminates, so that disposing the
-        // subscription while the source is active releases the observer at once.
-        let task = Task::recursive(self.weak_context.clone(), |weak_context, _| {
-            let Some(context) = weak_context.upgrade() else {
-                return TaskState::Finished;
-            };
+        // The model holds only the task's disposal, never the task, which its runtime owns: holding
+        // the context strongly forms no cycle. Stopping the context drops the model, which cancels
+        // the task.
+        let task = Task::recursive(self.context.clone(), |context, _| {
             context
                 .update(|model| {
                     let now = Instant::now();
@@ -296,9 +289,6 @@ where
             // The completion is the last event, so what the context answers is of no use here.
             Termination::Completed => {
                 let _ = self.queue_event(None);
-                // The source lets go of this observer now, and so of its handle on the context,
-                // while the timer still has the completion, and maybe values, to deliver.
-                self.weak_context.promote();
             }
             // An error is not delayed: it terminates the subscription right away, which drops the
             // values that are still waiting along with the timer.

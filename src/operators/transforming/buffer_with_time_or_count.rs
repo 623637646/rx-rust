@@ -6,7 +6,7 @@ use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::observable::Subscription;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context_owning_source,
+    self, SubscriptionContext, subscribe_with_context_owning_source,
 };
 use crate::{
     observable::{Observable, ObservableTypes},
@@ -119,7 +119,7 @@ type BufferWithTimeOrCountSources<OE, S> =
 /// The task of a [`BufferWithTimeOrCount`] timer.
 type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
     EmitTimer<
-        WeakSubscriptionContext<
+        SubscriptionContext<
             BufferWithTimeOrCountMode<OE, S>,
             Vec<T>,
             E,
@@ -236,10 +236,14 @@ where
     }
 }
 
-/// The state of a [`BufferWithTimeOrCount`] timer: the context, held weakly so that the task does
-/// not keep the observer alive once the subscription is gone, and the schedule.
-struct EmitTimer<W> {
-    weak_context: W,
+/// The state of a [`BufferWithTimeOrCount`] timer: the context and the schedule.
+///
+/// The context is held strongly, so that the buffers keep being cut after the source has let go of
+/// its observer without a termination, until the subscription is disposed. A disposal still
+/// releases the observer at once: disposing the source makes it drop its own handle, and a handle
+/// dropped once the context has stopped releases the observer.
+struct EmitTimer<C> {
+    context: C,
     next_time: Instant,
     time_span: Duration,
     count: NonZeroUsize,
@@ -264,24 +268,23 @@ where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
     D: Disposable,
-    S: Scheduler<
-        RecursiveContext<EmitTimer<WeakSubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>>>,
-    >,
+    S: Scheduler<RecursiveContext<EmitTimer<SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>>>>,
 {
     assert!(!time_span.is_zero(), "time_span must be non-zero");
+    // The context owns only the task's disposal, through its source subscription, never the task,
+    // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
+    // disposes its source subscription, which cancels the task.
     let timer = EmitTimer {
-        weak_context: context.downgrade(),
+        context,
         next_time: Instant::now() + delay.unwrap_or_default(),
         time_span,
         count,
     };
     let task = Task::recursive(timer, |timer, _| {
-        let Some(context) = timer.weak_context.upgrade() else {
-            return TaskState::Finished;
-        };
         let (time_span, count) = (timer.time_span, timer.count);
         let next_time = &mut timer.next_time;
-        context
+        timer
+            .context
             .update(|model| {
                 if let Some(last_sending_time_from_counting) =
                     model.last_sending_time_from_counting.take()

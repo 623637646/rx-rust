@@ -5,9 +5,7 @@ use crate::delegate_disposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, WeakSubscriptionContext, subscribe_with_context,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     observable::Subscription,
     observable::{Observable, ObservableTypes},
@@ -93,11 +91,11 @@ type DebounceMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as Scheduler
 type DebounceContext<M, T, E, OR, S> =
     SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>;
 
-/// The task of a [`Debounce`] timer: it holds the context weakly, so that it does not keep the
-/// observer alive once the subscription is gone.
-type DebounceTask<M, T, E, OR, S> = RecursiveContext<
-    WeakSubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>,
->;
+/// The task of a [`Debounce`] timer. It holds the context strongly, so that a pending value is
+/// still emitted after the source dropped its observer. A disposal still releases the observer at
+/// once: the source drops its own handle as it is disposed, and a handle dropped once the context
+/// has stopped releases the observer (see `SerializedDelivery`).
+type DebounceTask<M, T, E, OR, S> = RecursiveContext<DebounceContext<M, T, E, OR, S>>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -192,12 +190,10 @@ where
             Err(DeliveryStopped) => return Flow::Stop,
         };
 
-        // The context owns this task through the model, so the task only holds a weak reference
-        // back: a strong one would form a cycle and leak the subscription.
-        let task = Task::recursive(self.context.downgrade(), |weak_context, _| {
-            let Some(context) = weak_context.upgrade() else {
-                return TaskState::Finished;
-            };
+        // The model holds only the task's disposal, never the task, which its runtime owns: holding
+        // the context strongly forms no cycle. Stopping the context drops the model, which cancels
+        // the task.
+        let task = Task::recursive(self.context.clone(), |context, _| {
             context
                 .update(|model| {
                     let deadline = match model {

@@ -42,7 +42,7 @@
 //! assert_eq!(*seen.lock().unwrap(), [1, 10]);
 //! ```
 
-use crate::thread_mode::mutable::{MutableExt, MutableHelper};
+use crate::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use crate::{
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
@@ -71,27 +71,28 @@ pub struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
     observer: M::Ptr<Option<OR>>,
     #[educe(Debug(ignore))]
     core: M::Ptr<Core<T, E, R>>,
-}
-
-/// A non-owning reference to a [`SerializedDelivery`].
-#[derive(Educe)]
-#[educe(Debug, Clone(bound()))]
-pub struct WeakSerializedDelivery<M: ThreadMode, T, E, OR, R> {
+    /// Set by a [`DeliveryStop`], the one stop that cannot reach the observer and may leave it
+    /// parked: only then does the `Drop` of a handle have something to release, so the drop of a
+    /// handle takes no lock before it.
     #[educe(Debug(ignore))]
-    core: M::Weak<Core<T, E, R>>,
-    #[educe(Debug(ignore))]
-    observer: M::Weak<Option<OR>>,
+    stopped_by_handle: M::Flag,
 }
 
 /// Stops a [`SerializedDelivery`] without naming its observer's type: what a disposal holds.
 ///
 /// Stopping drops the queued events and the resources, outside the lock, and rejects every later
-/// event. The observer is released as soon as the last handle of the delivery that can reach it is
-/// gone — typically at once, since dropping the resources disposes the sources that hold those
-/// handles — or by the next event or update that arrives, whichever comes first.
+/// event. The observer is released by the first handle of the delivery that is dropped afterwards —
+/// typically at once, since dropping the resources disposes the sources that hold those handles,
+/// and even while another handle, such as a scheduler task's, lives on — or by the next event or
+/// update that arrives, whichever comes first.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
-pub struct DeliveryStop<M: ThreadMode, T, E, R>(#[educe(Debug(ignore))] M::Ptr<Core<T, E, R>>);
+pub struct DeliveryStop<M: ThreadMode, T, E, R> {
+    #[educe(Debug(ignore))]
+    core: M::Ptr<Core<T, E, R>>,
+    #[educe(Debug(ignore))]
+    stopped_by_handle: M::Flag,
+}
 
 /// Everything a delivery holds except its observer.
 enum Core<T, E, R> {
@@ -107,7 +108,8 @@ enum Core<T, E, R> {
     ///
     /// The one state that does not say where the observer is: a [`DeliveryStop`] that stopped an
     /// idle delivery cannot reach the cell, so the observer may still be parked there. Whoever
-    /// finds this state under the lock next takes it out.
+    /// finds this state under the lock next takes it out — an event, an update, or a handle being
+    /// dropped.
     Stopped,
 }
 
@@ -275,7 +277,12 @@ impl<M: ThreadMode, T, E, R> DeliveryStop<M, T, E, R> {
     pub fn stop(&self) {
         // `Stopped` is the only variant that owns nothing, so replacing the state with it takes
         // the queued events and the resources out. Binding them here drops them outside the lock.
-        let _deferred_drop = self.0.replace_value(Core::Stopped);
+        // The flag is set under the lock, so a handle that reads it and then locks finds the state
+        // stopped.
+        let _deferred_drop = self.core.with_mut(|core| {
+            self.stopped_by_handle.write(true);
+            std::mem::replace(core, Core::Stopped)
+        });
     }
 }
 
@@ -285,6 +292,7 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
         Self {
             observer: M::ptr(Some(observer)),
             core: M::ptr(Core::Idle { resources }),
+            stopped_by_handle: M::Flag::default(),
         }
     }
 
@@ -307,14 +315,9 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
 
     /// Creates the handle that stops this delivery without naming its observer.
     pub fn stop_handle(&self) -> DeliveryStop<M, T, E, R> {
-        DeliveryStop(self.core.clone())
-    }
-
-    /// Creates a non-owning reference to this delivery.
-    pub fn downgrade(&self) -> WeakSerializedDelivery<M, T, E, OR, R> {
-        WeakSerializedDelivery {
-            core: M::downgrade(&self.core),
-            observer: M::downgrade(&self.observer),
+        DeliveryStop {
+            core: self.core.clone(),
+            stopped_by_handle: self.stopped_by_handle.clone(),
         }
     }
 }
@@ -478,18 +481,28 @@ where
     }
 }
 
-impl<M: ThreadMode, T, E, OR, R> WeakSerializedDelivery<M, T, E, OR, R> {
-    /// Returns the delivery, or `None` once every strong reference to it is gone.
-    pub fn upgrade(&self) -> Option<SerializedDelivery<M, T, E, OR, R>> {
-        // The observer first: only a `SerializedDelivery` holds it, and releases it before its
-        // core, so once it is upgraded the core is too. Upgrading the core first could leave this
-        // call holding its last strong pointer when the observer is gone, and drop the resources
-        // here.
-        let observer = M::upgrade(&self.observer)?;
-        Some(SerializedDelivery {
-            core: M::upgrade(&self.core)?,
-            observer,
-        })
+impl<M: ThreadMode, T, E, OR, R> Drop for SerializedDelivery<M, T, E, OR, R> {
+    /// Releases an observer that a [`DeliveryStop`] left parked.
+    ///
+    /// A host whose handles are all held by its sources gets this anyway, from the last one. One
+    /// that a scheduler task also holds gets it from the first handle dropped after the stop: the
+    /// handle of the source, as the source is disposed, so the observer is released before
+    /// `dispose` returns rather than when the runtime gets round to dropping the cancelled task.
+    ///
+    /// Only a [`DeliveryStop`] leaves the observer parked in a stopped delivery, so until one has
+    /// stopped it, which its flag says without a lock, there is nothing to release and no lock is
+    /// taken. A handle can therefore be dropped anywhere, even under the delivery's own lock, as
+    /// before this release existed: after the stop, nothing runs under that lock that could drop
+    /// one.
+    fn drop(&mut self) {
+        if !self.stopped_by_handle.read() {
+            return;
+        }
+        let parked = self.core.with_mut(|core| match core {
+            Core::Stopped => self.observer.take_value(),
+            Core::Idle { .. } | Core::Delivering { .. } => None,
+        });
+        drop(parked); // Drop outside the lock to avoid potential deadlock
     }
 }
 

@@ -93,7 +93,6 @@
 //! assert_eq!(seen, [1, 3, 6]);
 //! ```
 
-use crate::thread_mode::mutable::MutableExt;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     delegate_disposal,
@@ -103,7 +102,7 @@ use crate::{
     thread_mode::ThreadMode,
     utils::{
         pending_events::EventBatch,
-        serialized_delivery::{DeliveryStop, SerializedDelivery, WeakSerializedDelivery},
+        serialized_delivery::{DeliveryStop, SerializedDelivery},
         subscribe_with_auto_dispose_on_termination::is_auto_dispose_on_termination_observer,
     },
 };
@@ -220,8 +219,6 @@ struct ContextResources<MD, D: Disposable> {
 }
 
 type ContextDelivery<M, T, E, OR, MD, D> = SerializedDelivery<M, T, E, OR, ContextResources<MD, D>>;
-type WeakContextDelivery<M, T, E, OR, MD, D> =
-    WeakSerializedDelivery<M, T, E, OR, ContextResources<MD, D>>;
 
 /// The shared state of an operator: its model and its downstream observer, behind one lock.
 ///
@@ -231,6 +228,13 @@ type WeakContextDelivery<M, T, E, OR, MD, D> =
 /// [`send_termination`](Self::send_termination). `M` is the thread mode, `MD` the model, and `D`
 /// the disposal of the source subscription the context owns, `()` when it owns none. See the
 /// [module documentation](self) for an example.
+///
+/// A scheduler task of the operator holds a clone too, so that the work the operator has accepted
+/// runs its course even after the source has let go of its observer without a termination. That
+/// forms no cycle as long as the context holds only the task's disposal, never the task, which its
+/// runtime owns. Nor does it delay the release of the observer by a disposal: the source drops its
+/// own clone as it is disposed, and a clone dropped once the context has stopped releases the
+/// observer, whoever else still holds one.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
 pub struct SubscriptionContext<M: ThreadMode, T, E, OR, MD, D: Disposable = ()> {
@@ -255,13 +259,6 @@ impl<M: ThreadMode, T, E, OR, MD, D: Disposable> SubscriptionContext<M, T, E, OR
     /// Creates the disposal that stops this context.
     fn disposal(&self) -> ContextDisposal<M, T, E, MD, D> {
         ContextDisposal(self.delivery.stop_handle())
-    }
-
-    /// Creates a non-owning reference to this context.
-    pub fn downgrade(&self) -> WeakSubscriptionContext<M, T, E, OR, MD, D> {
-        WeakSubscriptionContext {
-            delivery: self.delivery.downgrade(),
-        }
     }
 }
 
@@ -340,91 +337,6 @@ where
     /// or that the stream is over: `events` carried a termination, or delivering them ended it.
     pub fn send(&self, events: EventBatch<T, E>) -> Flow {
         self.delivery.send(events)
-    }
-}
-
-/// A non-owning reference to a [`SubscriptionContext`]: what a scheduler task holds, so that the
-/// task does not keep the observer alive once the subscription is gone.
-pub struct WeakSubscriptionContext<M: ThreadMode, T, E, OR, MD, D: Disposable = ()> {
-    delivery: WeakContextDelivery<M, T, E, OR, MD, D>,
-}
-
-impl<M: ThreadMode, T, E, OR, MD, D: Disposable> Clone
-    for WeakSubscriptionContext<M, T, E, OR, MD, D>
-{
-    fn clone(&self) -> Self {
-        Self {
-            delivery: self.delivery.clone(),
-        }
-    }
-}
-
-impl<M: ThreadMode, T, E, OR, MD, D: Disposable> WeakSubscriptionContext<M, T, E, OR, MD, D> {
-    /// Returns the context, or `None` once every strong reference to it is gone.
-    pub fn upgrade(&self) -> Option<SubscriptionContext<M, T, E, OR, MD, D>> {
-        self.delivery
-            .upgrade()
-            .map(|delivery| SubscriptionContext { delivery })
-    }
-}
-
-/// A handle on a context, weak until it is promoted: what a scheduler task of an operator holds.
-///
-/// The task holds the context weakly, so that it does not keep the observer alive once the
-/// subscription is disposed while the source is still active: the source releases its handle on
-/// the context then, and the observer goes with it, synchronously. Once the source has
-/// terminated, though, the task may be the only one left with work to do — a `delay` still has
-/// values to deliver — so the operator calls [`promote`](Self::promote), and the context then
-/// lives as long as the last clone of the handle does.
-///
-/// Every clone shares the promotion. Reaching the context never takes a lock: the strong handle
-/// is only there to keep it alive, and is never read.
-pub struct PromotableWeakContext<M: ThreadMode, T, E, OR, MD, D: Disposable = ()> {
-    weak: WeakSubscriptionContext<M, T, E, OR, MD, D>,
-    /// Written once by `promote`, shared by every clone, and never read.
-    promoted: PromotedContext<M, T, E, OR, MD, D>,
-}
-
-type PromotedContext<M, T, E, OR, MD, D> =
-    <M as ThreadMode>::Ptr<Option<SubscriptionContext<M, T, E, OR, MD, D>>>;
-
-impl<M: ThreadMode, T, E, OR, MD, D: Disposable> Clone
-    for PromotableWeakContext<M, T, E, OR, MD, D>
-{
-    fn clone(&self) -> Self {
-        Self {
-            weak: self.weak.clone(),
-            promoted: self.promoted.clone(),
-        }
-    }
-}
-
-impl<M: ThreadMode, T, E, OR, MD, D: Disposable> PromotableWeakContext<M, T, E, OR, MD, D> {
-    /// Creates a weak handle on `context`.
-    pub fn new(context: &SubscriptionContext<M, T, E, OR, MD, D>) -> Self {
-        Self {
-            weak: context.downgrade(),
-            promoted: M::ptr(None),
-        }
-    }
-
-    /// Returns the context, or `None` once it is gone.
-    pub fn upgrade(&self) -> Option<SubscriptionContext<M, T, E, OR, MD, D>> {
-        self.weak.upgrade()
-    }
-
-    /// Keeps the context alive for as long as any clone of this handle lives.
-    ///
-    /// Called when the source terminates, while the caller still holds the context. Does nothing
-    /// once the context is gone: the subscription was disposed. No cycle is formed: the context
-    /// holds the tasks' handles, which cancel them, but not the tasks themselves, which their
-    /// runtime owns.
-    pub fn promote(&self) {
-        let Some(context) = self.weak.upgrade() else {
-            return;
-        };
-        let previous = self.promoted.replace_value(Some(context));
-        debug_assert!(previous.is_none(), "a context is promoted only once");
     }
 }
 
