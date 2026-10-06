@@ -211,7 +211,7 @@ where
 /// These are dropped together, outside the lock, once the context stops. When the context stops by
 /// terminating, that happens after the observer was notified, so the source is disposed only after
 /// downstream was told the stream ended.
-pub struct ContextResources<MD, D: Disposable> {
+struct ContextResources<MD, D: Disposable> {
     model: MD,
     /// `None` when the context does not own its source subscription — `D` is then `()` — or
     /// while the builder of an owned source subscription is still running.

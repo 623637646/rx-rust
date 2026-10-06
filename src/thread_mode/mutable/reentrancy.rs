@@ -18,13 +18,13 @@ mod enabled {
     }
 
     /// The address and the size of a lock.
-    pub type LockId = (usize, usize);
+    pub(super) type LockId = (usize, usize);
 
     /// Marks the lock `id` as held for as long as this guard lives.
-    pub struct HeldLock(LockId);
+    pub(crate) struct HeldLock(LockId);
 
     impl HeldLock {
-        pub fn enter(id: LockId) -> Self {
+        pub(super) fn enter(id: LockId) -> Self {
             // The check runs outside the borrow so that the assertion below cannot unwind while
             // `HELD` is borrowed, which would make every `HeldLock::drop` on the way out panic in
             // turn.
