@@ -45,14 +45,14 @@ impl<T> ObservableTypes for Just<T> {
     type Item = T;
     type Error = Infallible;
     type Mode = Local;
-    type D = ();
+    type Disposal = ();
 }
 
 impl<T, OR> Observable<OR> for Just<T>
 where
     OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
         if observer.on_next(self.0).is_continue() {
             observer.on_termination(Termination::Completed);
         }

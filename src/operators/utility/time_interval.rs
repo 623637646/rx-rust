@@ -66,7 +66,7 @@ where
     type Item = (T, Duration);
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, OR> Observable<OR> for TimeInterval<OE>
@@ -74,7 +74,7 @@ where
     OR: Observer<(T, Duration), E>,
     OE: Observable<TimeIntervalObserver<OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = TimeIntervalObserver {
             observer,
             time_stamp: Instant::now(),

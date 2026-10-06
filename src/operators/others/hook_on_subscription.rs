@@ -118,7 +118,7 @@ where
     type Error = OE::Error;
     type Mode = OE::Mode;
     /// Whatever the callback returns.
-    type D = D;
+    type Disposal = D;
 }
 
 impl<OE, F, D, OR> Observable<OR> for HookOnSubscription<OE, F, D, false>
@@ -128,7 +128,7 @@ where
     D: Disposable,
     F: FnOnce(OE, Emitter<OR, <OE as ObservableTypes>::Mode>) -> Subscription<D>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         (self.callback)(self.source, Emitter::new(observer))
     }
 }
@@ -153,7 +153,7 @@ where
         >,
     ) -> Subscription<D>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         (self.callback)(
             self.source,
             <<OE as ObservableTypes>::Mode as ObserverMode>::boxed(observer),

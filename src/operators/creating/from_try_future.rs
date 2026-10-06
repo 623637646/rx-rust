@@ -77,7 +77,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = S::Mode;
-    type D = S::D;
+    type Disposal = S::Disposal;
 }
 
 impl<T, E, FU, S, OR> Observable<OR> for FromTryFuture<FU, S>
@@ -86,7 +86,7 @@ where
     FU: Future<Output = Result<T, E>>,
     S: Scheduler<FutureThenContext<OR, Result<T, E>>, FU>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let task =
             Task::from_future_then(observer, self.future, |mut observer, result| match result {
                 Ok(value) => {

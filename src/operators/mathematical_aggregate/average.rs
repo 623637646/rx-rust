@@ -77,7 +77,7 @@ macro_rules! average_observer_impl {
             type Item = f64;
             type Error = E;
             type Mode = OE::Mode;
-            type D = OE::D;
+            type Disposal = OE::Disposal;
         }
 
         impl<E, OE, OR> Observable<OR> for Average<$t, OE>
@@ -85,7 +85,7 @@ macro_rules! average_observer_impl {
             OR: Observer<f64, E>,
             OE: Observable<AverageObserver<$t, OR>, Item = $t, Error = E>,
         {
-            fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+            fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
                 let observer = AverageObserver {
                     observer,
                     sum: 0f64,

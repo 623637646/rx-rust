@@ -48,7 +48,7 @@ where
     type Item = T;
     type Error = Infallible;
     type Mode = Local;
-    type D = ();
+    type Disposal = ();
 }
 
 impl<T, I, OR> Observable<OR> for FromIter<I>
@@ -56,7 +56,7 @@ where
     OR: Observer<T, Infallible>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
         for value in self.0.into_iter() {
             if observer.on_next(value).is_stop() {
                 // The observer stopped: stop iterating, which is the only way to end an infinite

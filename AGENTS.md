@@ -130,7 +130,7 @@ cargo tarpaulin --out Html
   still deliver after the source has terminated holds a `PromotableWeakContext`, which the
   operator promotes on termination, rather than a plain weak context.
 - **Implementing an observable** takes two impls: `ObservableTypes` with the associated `Item`,
-  `Error`, `Mode` and disposal `D` — which must not mention the observer — and `Observable<OR>`,
+  `Error`, `Mode` and `Disposal` — which must not mention the observer — and `Observable<OR>`,
   whose bounds name the observer the source is subscribed with
   (`OE: Observable<MapObserver<OR, F>, Item = T0>`). That observer type is `pub`, its fields are
   not: the non-boxed `create`, `hook_on_subscription` and `hook_on_termination` hand the
@@ -140,18 +140,19 @@ cargo tarpaulin --out Html
   mode aliases — stays private: privacy does not check those where-clauses. `Mode` is the source's, `Joined<A, B>` for several sources, or the scheduler's. Ask for
   `OR: IntoBoxedObserver<'a, T, E, M>` only where the observer is boxed (a subject, `create`, a
   hook), box it with `M::boxed(observer)`, and bound a generic mode there by `M: ObserverMode`.
-  Inside the bounds of the impl being written, project qualified — `<OE as ObservableTypes>::D`,
-  `<OE as ObservableTypes>::Mode` — not `OE::D` (the shorthand is a cycle error there). An observer
-  that re-subscribes with itself (`retry`, `concat_all`) carries a `utils::resubscribe::Resubscribe`
-  created where the operator is subscribed, instead of bounding its own `Observer` impl. See
+  Inside the bounds of the impl being written, project qualified —
+  `<OE as ObservableTypes>::Disposal`, `<OE as ObservableTypes>::Mode` — not `OE::Disposal` (the
+  shorthand is a cycle error there). An observer that re-subscribes with itself (`retry`,
+  `concat_all`) carries a `utils::resubscribe::Resubscribe` created where the operator is
+  subscribed, instead of bounding its own `Observer` impl. See
   `docs/decisions/0002-observable-types-and-thread-mode.md`.
-- **The disposal `D`** is one of three: one passed through — the source's or scheduler's
-  (`OE::D`), or that of the operator it is built on (`switch_map` takes `switch::Disposal`) — a
-  `utils` helper's named disposal used as it is when its parameters are only the operator's own
-  (`subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>`), or a `Disposal` of
-  the operator's own module. Anything else — a combination of combinators, or a type naming the
+- **The `Disposal`** is one of three: one passed through — the source's or scheduler's
+  (`OE::Disposal`), or that of the operator it is built on (`switch_map` takes `switch::Disposal`)
+  — a `utils` helper's named disposal used as it is when its parameters are only the operator's
+  own (`subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::Disposal>`), or a
+  `Disposal` of the operator's own module. Anything else — a combination of combinators, or a type naming the
   operator's model or another of its private types — is named by `delegate_disposal!`, and the
-  types inside stay private. `grep -rn "type D = " src/operators` lists them all.
+  types inside stay private. `grep -rn "type Disposal = " src/operators` lists them all.
 - Keep `pub` surface minimal; add `Clone`/`Send`/`Sync`/`'static` bounds only where actually needed.
 - **Derives** on a generic type go through `#[derive(Educe)]`, not `#[derive(...)]` (which bounds
   every type parameter) and not hand-written impls. A field that cannot or should not be printed

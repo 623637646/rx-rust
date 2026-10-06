@@ -134,7 +134,7 @@ pub trait ObservableTypes {
     /// needs shared state picks its pointer from it. See [`thread_mode`](crate::thread_mode).
     type Mode: ThreadMode;
     /// The disposal of a subscription to this observable.
-    type D: Disposable;
+    type Disposal: Disposable;
 }
 
 /// A source of [`Item`](ObservableTypes::Item)s that ends with a
@@ -167,7 +167,7 @@ where
     /// Subscribes `observer`, which receives the events from now on, consuming the observable.
     ///
     /// The returned [`Subscription`] unsubscribes when dropped.
-    fn subscribe(self, observer: OR) -> Subscription<Self::D>;
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal>;
 }
 
 /// The operators, as methods on every [`Observable`].
@@ -568,7 +568,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
                     <Self as ObservableTypes>::Error,
                 >,
             > + 'oe,
-        Self::D: 'sub,
+        Self::Disposal: 'sub,
     {
         BoxedObservable::new(self)
     }
@@ -586,7 +586,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
                 >,
             > + Send
             + 'oe,
-        Self::D: Send + 'sub,
+        Self::Disposal: Send + 'sub,
     {
         SendBoxedObservable::new(self)
     }
@@ -599,7 +599,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     where
         OR: Observer<Self::Item, Self::Error>,
         Self: Observable<OR> + 'oe,
-        Self::D: 'sub,
+        Self::Disposal: 'sub,
     {
         BoxedObservableFor::new(self)
     }
@@ -611,7 +611,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     where
         OR: Observer<Self::Item, Self::Error>,
         Self: Observable<OR> + Send + 'oe,
-        Self::D: Send + 'sub,
+        Self::Disposal: Send + 'sub,
     {
         SendBoxedObservableFor::new(self)
     }
@@ -629,7 +629,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
                 >,
             > + Clone
             + 'oe,
-        Self::D: 'sub,
+        Self::Disposal: 'sub,
     {
         CloneableBoxedObservable::new(self)
     }
@@ -650,7 +650,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
             + Send
             + Sync
             + 'oe,
-        Self::D: Send + 'sub,
+        Self::Disposal: Send + 'sub,
     {
         SendCloneableBoxedObservable::new(self)
     }
@@ -662,7 +662,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     where
         OR: Observer<Self::Item, Self::Error>,
         Self: Observable<OR> + Clone + 'oe,
-        Self::D: 'sub,
+        Self::Disposal: 'sub,
     {
         CloneableBoxedObservableFor::new(self)
     }
@@ -675,7 +675,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     where
         OR: Observer<Self::Item, Self::Error>,
         Self: Observable<OR> + Clone + Send + Sync + 'oe,
-        Self::D: Send + 'sub,
+        Self::Disposal: Send + 'sub,
     {
         SendCloneableBoxedObservableFor::new(self)
     }
@@ -1018,7 +1018,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         self,
         on_next: FN,
         on_termination: FT,
-    ) -> Subscription<Self::D>
+    ) -> Subscription<Self::Disposal>
     where
         Self: Observable<CallbackObserver<FN, FT>>,
         FN: FnMut(Self::Item) -> R,

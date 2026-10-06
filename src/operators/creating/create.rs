@@ -240,7 +240,7 @@ impl<T, E, D: Disposable, F, M: ThreadMode, const BOXED: bool> ObservableTypes
     type Error = E;
     type Mode = M;
     /// Whatever the builder returns.
-    type D = D;
+    type Disposal = D;
 }
 
 impl<T, E, D, F, M, OR> Observable<OR> for Create<T, E, D, F, M, false>
@@ -250,7 +250,7 @@ where
     OR: Observer<T, E>,
     F: FnOnce(Emitter<OR, M>) -> Subscription<D>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         (self.builder)(Emitter::new(observer))
     }
 }
@@ -262,7 +262,7 @@ where
     OR: IntoBoxedObserver<'a, T, E, M>,
     F: FnOnce(M::BoxedObserver<'a, T, E>) -> Subscription<D>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         (self.builder)(M::boxed(observer))
     }
 }

@@ -30,14 +30,14 @@ impl ObservableTypes for Never {
     type Item = Infallible;
     type Error = Infallible;
     type Mode = Local;
-    type D = ();
+    type Disposal = ();
 }
 
 impl<OR> Observable<OR> for Never
 where
     OR: Observer<Infallible, Infallible>,
 {
-    fn subscribe(self, _: OR) -> Subscription<Self::D> {
+    fn subscribe(self, _: OR) -> Subscription<Self::Disposal> {
         Subscription::default()
     }
 }

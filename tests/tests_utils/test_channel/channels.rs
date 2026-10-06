@@ -99,14 +99,14 @@ impl<'or, T, E> ObservableTypes for ChannelsObservable<'or, T, E> {
     type Item = T;
     type Error = E;
     type Mode = Shared;
-    type D = ReceiverObservableDisposal<'or, T, E>;
+    type Disposal = ReceiverObservableDisposal<'or, T, E>;
 }
 
 impl<'or, T, E, OR> Observable<OR> for ChannelsObservable<'or, T, E>
 where
     OR: IntoBoxedObserver<'or, T, E, Shared>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let channel = new_channel();
         // Registered before the subscription, so that a value sent from inside it already finds
         // the channel.

@@ -63,7 +63,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = Disposal<OE::Mode, OE::D>;
+    type Disposal = Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, I, OR> Observable<OR> for Amb<I>
@@ -71,12 +71,12 @@ where
     OR: Observer<T, E>,
     I: IntoIterator<Item = OE>,
     OE: Observable<
-            AmbObserver<<OE as ObservableTypes>::Mode, <OE as ObservableTypes>::D, OR>,
+            AmbObserver<<OE as ObservableTypes>::Mode, <OE as ObservableTypes>::Disposal, OR>,
             Item = T,
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let sources = self.sources.into_iter();
         let minimum_source_count = sources.size_hint().0;
         let observer = OE::Mode::ptr(Some(observer));

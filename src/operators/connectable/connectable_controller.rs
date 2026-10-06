@@ -114,7 +114,7 @@ impl<OE, S> ConnectableController<OE, S, Disconnected> {
     /// FromIter::new([1_i32]).publish().connect();
     /// ```
     #[must_use = "the returned controller owns the source connection"]
-    pub fn connect<T, E>(self) -> ConnectableController<OE, S, Connected<OE::D>>
+    pub fn connect<T, E>(self) -> ConnectableController<OE, S, Connected<OE::Disposal>>
     where
         OE: Observable<S, Item = T, Error = E> + Clone,
         S: Observer<T, E> + Clone,

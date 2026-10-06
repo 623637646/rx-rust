@@ -53,7 +53,7 @@ impl<T: Clone, E: Clone> Record<T, E> {
 
 /// Subscribes `observable` with callbacks that hold `Rc`s, so that neither they nor the observer
 /// they make are `Send`.
-fn record<T, E, OE>(observable: OE) -> (Record<T, E>, Subscription<OE::D>)
+fn record<T, E, OE>(observable: OE) -> (Record<T, E>, Subscription<OE::Disposal>)
 where
     T: 'static,
     E: 'static,

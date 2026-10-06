@@ -87,7 +87,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = Disposal<Joined<OE::Mode, OE1::Mode>, OE::D, OE1::D>;
+    type Disposal = Disposal<Joined<OE::Mode, OE1::Mode>, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E, OE, OE1, F, OR> Observable<OR> for Retry<OE, F>
@@ -115,7 +115,7 @@ where
         >,
     F: FnMut(E) -> RetryAction<E, OE1>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let shared_disposal = SharedDisposal::default();
         let observer = RetryObserver {
             observer,
@@ -133,7 +133,7 @@ where
 pub struct RetryObserver<M: ThreadMode, OR, F, OE1: ObservableTypes> {
     observer: OR,
     callback: F,
-    shared_disposal: SharedDisposal<M, Subscription<OE1::D>>,
+    shared_disposal: SharedDisposal<M, Subscription<OE1::Disposal>>,
     /// Subscribes the observable the callback returned, with this observer.
     resubscribe: Resubscribe<OE1, Self>,
 }

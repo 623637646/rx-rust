@@ -123,7 +123,7 @@ where
     type Item = BoxedUnicastObservable<'a, T, E, OE::Mode>;
     type Error = E;
     type Mode = OE::Mode;
-    type D = Disposal<OE::D>;
+    type Disposal = Disposal<OE::Disposal>;
 }
 
 impl<'a, T, E, OE, OR> Observable<OR> for WindowWithCount<'a, OE>
@@ -137,7 +137,7 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
         let (sender, window) = unicast_subject::new_boxed();
         if observer.on_next(window).is_stop() {
             // The first window ended the stream, so the source is never subscribed to.

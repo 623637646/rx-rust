@@ -98,8 +98,9 @@ where
 /// The shared state of a [`RefCount`], behind the pointer the source's thread mode picks: it is
 /// reached from wherever subscribers subscribe and dispose, which is where the subject the source
 /// feeds is reached from too.
-type StatePtr<OE, S> =
-    <<OE as ObservableTypes>::Mode as ThreadMode>::Ptr<State<OE, S, <OE as ObservableTypes>::D>>;
+type StatePtr<OE, S> = <<OE as ObservableTypes>::Mode as ThreadMode>::Ptr<
+    State<OE, S, <OE as ObservableTypes>::Disposal>,
+>;
 
 impl<OE, S> RefCount<OE, S>
 where
@@ -118,7 +119,7 @@ where
 
 delegate_disposal!(
     Disposal<OE, S>,
-    ChainDisposal<S::D, RefCountDisposal<OE, S>>,
+    ChainDisposal<S::Disposal, RefCountDisposal<OE, S>>,
     where OE: ObservableTypes,
         S: ObservableTypes
 );
@@ -132,7 +133,7 @@ where
     type Error = E;
     /// The subscribers are the subject's, so the mode is the subject's.
     type Mode = S::Mode;
-    type D = Disposal<OE, S>;
+    type Disposal = Disposal<OE, S>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for RefCount<OE, S>
@@ -141,7 +142,7 @@ where
     OE: Observable<S, Item = T, Error = E> + Clone,
     S: Subject<T, E> + Observable<OR> + Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let controller = self.state.with_mut(|current| match &mut *current {
             state @ State::Disconnected { .. } => {
                 let State::Disconnected { controller } =
@@ -275,7 +276,7 @@ where
     OE: ObservableTypes,
 {
     Connect(ConnectableController<OE, S, Disconnected>),
-    Disconnect(ConnectableController<OE, S, Connected<OE::D>>),
+    Disconnect(ConnectableController<OE, S, Connected<OE::Disposal>>),
 }
 
 fn handle_connecting_or_disconnecting<T, E, OE, S>(

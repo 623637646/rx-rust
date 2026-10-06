@@ -105,12 +105,12 @@ type DelayMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTyp
 
 /// The context of a [`Delay`] subscription.
 type DelayContext<M, T, E, OR, S> =
-    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>;
+    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>;
 
 /// The task of a [`Delay`] timer: it holds the context weakly until the source terminates, so that
 /// it does not keep the observer alive once the subscription is gone.
 type DelayTask<M, T, E, OR, S> =
-    RecursiveContext<PromotableWeakContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>>;
+    RecursiveContext<PromotableWeakContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -126,7 +126,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = DelayMode<OE, S>;
-    type D = Disposal<DelayMode<OE, S>, T, E, S::D, OE::D>;
+    type Disposal = Disposal<DelayMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for Delay<OE, S>
@@ -135,8 +135,8 @@ where
     OE: Observable<DelayObserver<DelayMode<OE, S>, T, E, OR, S>, Item = T, Error = E>,
     S: Scheduler<DelayTask<DelayMode<OE, S>, T, E, OR, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
-        let model = Model::<T, S::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+        let model = Model::<T, S::Disposal> {
             values: VecDeque::new(),
             completion: None,
             timer: SubscriptionSlot::Idle,
@@ -183,7 +183,7 @@ where
     context: DelayContext<M, T, E, OR, S>,
     /// The timer's handle on the context, promoted once the source has completed, with values
     /// still waiting.
-    weak_context: PromotableWeakContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>,
+    weak_context: PromotableWeakContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>,
     delay: Duration,
     scheduler: S,
 }

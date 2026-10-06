@@ -94,7 +94,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::D, OE1::D>;
+    type Disposal = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for Sample<OE, OE1>
@@ -106,7 +106,10 @@ where
                 T,
                 E,
                 OR,
-                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+                ChainDisposal<
+                    <OE as ObservableTypes>::Disposal,
+                    <OE1 as ObservableTypes>::Disposal,
+                >,
             >,
             Item = T,
             Error = E,
@@ -117,13 +120,16 @@ where
                 T,
                 E,
                 OR,
-                ChainDisposal<<OE as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+                ChainDisposal<
+                    <OE as ObservableTypes>::Disposal,
+                    <OE1 as ObservableTypes>::Disposal,
+                >,
             >,
             Item = (),
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model { last_value: None };
         subscribe_with_context_owning_source(observer, model, |context| {
             let sample_observer = SampleObserver(context.clone());

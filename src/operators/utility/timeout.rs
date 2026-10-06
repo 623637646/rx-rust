@@ -104,8 +104,8 @@ type TimeoutMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerT
 
 /// The source subscription a [`Timeout`] context owns: the timer, then the source.
 type TimeoutSources<OE, S> = ChainDisposal<
-    OptionDisposal<BoundDropDisposal<<S as SchedulerTypes>::D>>,
-    <OE as ObservableTypes>::D,
+    OptionDisposal<BoundDropDisposal<<S as SchedulerTypes>::Disposal>>,
+    <OE as ObservableTypes>::Disposal,
 >;
 
 /// The task of a [`Timeout`] timer: it holds the context weakly, so that it does not keep the
@@ -128,7 +128,7 @@ where
     type Item = T;
     type Error = Error<E>;
     type Mode = TimeoutMode<OE, S>;
-    type D = Disposal<TimeoutMode<OE, S>, T, E, S::D, OE::D>;
+    type Disposal = Disposal<TimeoutMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for Timeout<OE, S>
@@ -141,7 +141,7 @@ where
         >,
     S: Scheduler<TimeoutTask<T, E, OR, OE, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model {
             deadline: Instant::now() + self.duration,
         };
@@ -195,7 +195,7 @@ where
 fn setup_timer<M, T, E, OR, S, D>(
     context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     scheduler: &S,
-) -> OptionDisposal<BoundDropDisposal<S::D>>
+) -> OptionDisposal<BoundDropDisposal<S::Disposal>>
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,

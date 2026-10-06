@@ -51,7 +51,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for Defer<F>
@@ -60,7 +60,7 @@ where
     F: FnOnce() -> OE,
     OE: Observable<OR, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observable = self.0();
         observable.subscribe(observer)
     }

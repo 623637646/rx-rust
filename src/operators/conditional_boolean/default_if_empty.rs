@@ -62,7 +62,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, OR> Observable<OR> for DefaultIfEmpty<T, OE>
@@ -70,7 +70,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<DefaultIfEmptyObserver<T, OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = DefaultIfEmptyObserver {
             observer,
             default_value: Some(self.default_value),

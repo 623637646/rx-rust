@@ -102,7 +102,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::D, OE1>;
+    type Disposal = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::Disposal, OE1>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for ConcatAll<OE, OE1>
@@ -115,7 +115,7 @@ where
                 E,
                 OR,
                 OE1,
-                <OE as ObservableTypes>::D,
+                <OE as ObservableTypes>::Disposal,
             >,
             Item = OE1,
             Error = E,
@@ -127,13 +127,13 @@ where
                 E,
                 OR,
                 OE1,
-                <OE as ObservableTypes>::D,
+                <OE as ObservableTypes>::Disposal,
             >,
             Item = T,
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model {
             pending_observables: VecDeque::new(),
             slot: SubscriptionSlot::Idle,
@@ -156,7 +156,7 @@ where
     /// Values wait here while an inner is active or its subscription is still being built.
     /// An idle slot always has an empty queue.
     pending_observables: VecDeque<OE1>,
-    slot: SubscriptionSlot<Subscription<OE1::D>>,
+    slot: SubscriptionSlot<Subscription<OE1::Disposal>>,
     is_source_completed: bool,
 }
 
@@ -265,8 +265,8 @@ type NextStep<T, E, OE, D> =
 /// slot cannot race a source emission. The returned subscription is dropped outside the lock.
 fn next_step<T, E, OE1>(
     model: &mut Model<OE1>,
-    finished: Option<Subscription<OE1::D>>,
-) -> NextStep<T, E, OE1, OE1::D>
+    finished: Option<Subscription<OE1::Disposal>>,
+) -> NextStep<T, E, OE1, OE1::Disposal>
 where
     OE1: ObservableTypes<Item = T, Error = E>,
 {

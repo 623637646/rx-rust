@@ -62,7 +62,7 @@ where
     type Item = Event<T, E>;
     type Error = Infallible;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, OR> Observable<OR> for Materialize<OE>
@@ -70,7 +70,7 @@ where
     OR: Observer<Event<T, E>, Infallible>,
     OE: Observable<MaterializeObserver<OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.0.subscribe(MaterializeObserver(observer))
     }
 }

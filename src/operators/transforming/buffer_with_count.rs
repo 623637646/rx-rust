@@ -60,7 +60,7 @@ where
     type Item = Vec<T>;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, OR> Observable<OR> for BufferWithCount<OE>
@@ -68,7 +68,7 @@ where
     OR: Observer<Vec<T>, E>,
     OE: Observable<BufferWithCountObserver<T, OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = BufferWithCountObserver {
             observer,
             values: Vec::default(),

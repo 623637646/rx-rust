@@ -53,7 +53,7 @@ where
     type Item = T;
     type Error = Infallible;
     type Mode = Local;
-    type D = ();
+    type Disposal = ();
 }
 
 impl<T, F, OR> Observable<OR> for Start<F>
@@ -61,7 +61,7 @@ where
     OR: Observer<T, Infallible>,
     F: FnOnce() -> T,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         Defer::new(|| Just::new(self.0())).subscribe(observer)
     }
 }

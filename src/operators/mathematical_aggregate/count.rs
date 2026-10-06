@@ -64,7 +64,7 @@ where
     type Item = usize;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, OR> Observable<OR> for Count<T, OE>
@@ -72,7 +72,7 @@ where
     OR: Observer<usize, E>,
     OE: Observable<CountObserver<OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = CountObserver { observer, count: 0 };
         self.source.subscribe(observer)
     }

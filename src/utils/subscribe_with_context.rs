@@ -35,7 +35,8 @@
 //!     type Item = i32;
 //!     type Error = E;
 //!     type Mode = OE::Mode;
-//!     type D = subscribe_with_context::ContextDisposal<OE::Mode, i32, E, i32, OE::D>;
+//!     type Disposal =
+//!         subscribe_with_context::ContextDisposal<OE::Mode, i32, E, i32, OE::Disposal>;
 //! }
 //!
 //! // The source is subscribed with the operator's own observer, which is named here. A disposal
@@ -48,13 +49,13 @@
 //!                 <OE as ObservableTypes>::Mode,
 //!                 OR,
 //!                 E,
-//!                 <OE as ObservableTypes>::D,
+//!                 <OE as ObservableTypes>::Disposal,
 //!             >,
 //!             Item = i32,
 //!             Error = E,
 //!         >,
 //! {
-//!     fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+//!     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
 //!         let limit = self.limit;
 //!         subscribe_with_context_owning_source(observer, 0, |context| {
 //!             self.source.subscribe(TotalObserver { context, limit })

@@ -83,7 +83,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, F, K, OR> Observable<OR> for DistinctUntilChanged<OE, F>
@@ -93,7 +93,7 @@ where
     F: FnMut(&T) -> K,
     K: Eq,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = DistinctUntilChangedObserver {
             observer,
             key_selector: self.key_selector,

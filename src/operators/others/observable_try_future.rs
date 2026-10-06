@@ -58,7 +58,7 @@ where
     OE: ObservableTypes,
 {
     #[educe(Debug(ignore))]
-    subscription: LazySubscription<OE, Subscription<OE::D>>,
+    subscription: LazySubscription<OE, Subscription<OE::Disposal>>,
     #[educe(Debug(ignore))]
     context: ContextPtr<OE>,
 }

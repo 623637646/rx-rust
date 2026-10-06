@@ -82,7 +82,7 @@ impl TokioScheduler {
 
 impl SchedulerTypes for TokioScheduler {
     type Mode = Shared;
-    type D = TokioDisposal;
+    type Disposal = TokioDisposal;
 }
 
 impl<TC, P> Scheduler<TC, P> for TokioScheduler
@@ -90,7 +90,7 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let future = drive(task, delay, tokio::time::sleep);
         Subscription::new(TokioDisposal(self.handle.spawn(future)))
     }
@@ -177,7 +177,7 @@ impl TokioLocalScheduler {
 
 impl SchedulerTypes for TokioLocalScheduler {
     type Mode = Local;
-    type D = TokioDisposal;
+    type Disposal = TokioDisposal;
 }
 
 impl<TC, P> Scheduler<TC, P> for TokioLocalScheduler
@@ -185,7 +185,7 @@ where
     TC: 'static,
     P: 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let future = drive(task, delay, tokio::time::sleep);
         let handle = match &self.target {
             LocalTarget::Ambient => tokio::task::spawn_local(future),

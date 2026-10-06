@@ -256,7 +256,7 @@ impl TestScheduler {
 
 impl SchedulerTypes for TestScheduler {
     type Mode = Shared;
-    type D = SendBoxedDisposal<'static>;
+    type Disposal = SendBoxedDisposal<'static>;
 }
 
 impl<TC, P> Scheduler<TC, P> for TestScheduler
@@ -264,7 +264,7 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         fn erase<D: Disposable + Send + 'static>(
             subscription: Subscription<D>,
         ) -> Subscription<SendBoxedDisposal<'static>> {

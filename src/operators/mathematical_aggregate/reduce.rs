@@ -71,7 +71,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, T1, E, OE, F, OR> Observable<OR> for Reduce<T, T1, OE, F>
@@ -80,7 +80,7 @@ where
     OE: Observable<ReduceObserver<T, OR, F>, Item = T1, Error = E>,
     F: FnMut(T, T1) -> T,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = ReduceObserver {
             observer,
             value: Some(self.initial_value),

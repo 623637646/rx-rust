@@ -84,7 +84,7 @@ where
     type Item = usize;
     type Error = Infallible;
     type Mode = S::Mode;
-    type D = S::D;
+    type Disposal = S::Disposal;
 }
 
 impl<S, OR> Observable<OR> for Interval<S>
@@ -92,7 +92,7 @@ where
     OR: Observer<usize, Infallible>,
     S: Scheduler<PeriodicContext<OR>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let task = Task::periodic(
             observer,
             // The answer is what keeps the schedule running, so an observer that stopped ends it:

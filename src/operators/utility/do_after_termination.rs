@@ -74,7 +74,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for DoAfterTermination<OE, F>
@@ -84,7 +84,7 @@ where
     OE: Observable<DoAfterTerminationObserver<OR, F>, Item = T, Error = E>,
     F: FnOnce(Termination<E>),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.source.subscribe(DoAfterTerminationObserver {
             observer,
             callback: self.callback,

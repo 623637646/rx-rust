@@ -89,7 +89,7 @@ type SubscribeOnMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as Schedu
 
 /// The slot the task puts the source's subscription into once it has subscribed.
 type UpstreamSlot<OE, S> =
-    SharedDisposal<SubscribeOnMode<OE, S>, Subscription<<OE as ObservableTypes>::D>>;
+    SharedDisposal<SubscribeOnMode<OE, S>, Subscription<<OE as ObservableTypes>::Disposal>>;
 
 /// The task of a [`SubscribeOn`]: the source, the observer, and where to put the subscription.
 type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;
@@ -103,7 +103,7 @@ where
     type Error = E;
     type Mode = SubscribeOnMode<OE, S>;
     /// First the task that subscribes, then the subscription it made.
-    type D = Disposal<SubscribeOnMode<OE, S>, S::D, OE::D>;
+    type Disposal = Disposal<SubscribeOnMode<OE, S>, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for SubscribeOn<OE, S>
@@ -112,7 +112,7 @@ where
     OE: Observable<OR, Item = T, Error = E>,
     S: Scheduler<SubscribeOnTask<OE, OR, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         // The subscription happens later, and the disposal may come first: the slot then hands
         // the subscription back to be disposed at once.
         let upstream_slot = UpstreamSlot::<OE, S>::default();

@@ -94,7 +94,7 @@ impl<OE: ObservableTypes, F, const BOXED: bool> ObservableTypes
     type Item = OE::Item;
     type Error = OE::Error;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for HookOnTermination<OE, F, false>
@@ -107,7 +107,7 @@ where
         >,
     F: FnOnce(Emitter<OR, <OE as ObservableTypes>::Mode>, Termination<E>),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = HookOnTerminationObserver {
             observer: Emitter::new(observer),
             callback: self.callback,
@@ -133,7 +133,7 @@ where
         Termination<E>,
     ),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = HookOnTerminationObserver {
             observer: <<OE as ObservableTypes>::Mode as ObserverMode>::boxed(observer),
             callback: self.callback,

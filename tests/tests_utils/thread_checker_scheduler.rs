@@ -38,7 +38,7 @@ impl Disposable for ThreadCheckerDisposal {
 
 impl SchedulerTypes for ThreadCheckerScheduler {
     type Mode = Shared;
-    type D = ThreadCheckerDisposal;
+    type Disposal = ThreadCheckerDisposal;
 }
 
 impl<TC, P> Scheduler<TC, P> for ThreadCheckerScheduler
@@ -46,7 +46,7 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let thread_name = self.name;
         let future = drive(task, delay, |duration| async move {
             async_io::Timer::after(duration).await;

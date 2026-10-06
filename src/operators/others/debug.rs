@@ -112,7 +112,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = Disposal<OE::D, C, F, T, E>;
+    type Disposal = Disposal<OE::Disposal, C, F, T, E>;
 }
 
 impl<T, E, OE, C, F, OR> Observable<OR> for Debug<OE, C, F>
@@ -122,7 +122,7 @@ where
     C: Clone,
     F: Fn(C, DebugEvent<'_, T, E>) + Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         (self.callback)(self.context.clone(), DebugEvent::Subscribed);
         let observer = DebugObserver {
             observer,

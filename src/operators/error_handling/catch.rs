@@ -82,7 +82,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = Disposal<Joined<OE::Mode, OE1::Mode>, OE::D, OE1::D>;
+    type Disposal = Disposal<Joined<OE::Mode, OE1::Mode>, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E0, E, OE, OE1, F, OR> Observable<OR> for Catch<E0, OE, F>
@@ -94,7 +94,7 @@ where
                 E,
                 OR,
                 F,
-                <OE1 as ObservableTypes>::D,
+                <OE1 as ObservableTypes>::Disposal,
             >,
             Item = T,
             Error = E0,
@@ -102,7 +102,7 @@ where
     OE1: Observable<OR, Item = T, Error = E>,
     F: FnOnce(E0) -> OE1,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let shared_disposal = SharedDisposal::default();
         let observer = CatchObserver {
             observer,
@@ -124,7 +124,7 @@ pub struct CatchObserver<M: ThreadMode, E, OR, F, D: Disposable> {
     _marker: MarkerType<E>,
 }
 
-impl<M, T, E0, E, OR, OE1, F> Observer<T, E0> for CatchObserver<M, E, OR, F, OE1::D>
+impl<M, T, E0, E, OR, OE1, F> Observer<T, E0> for CatchObserver<M, E, OR, F, OE1::Disposal>
 where
     M: ThreadMode,
     OR: Observer<T, E>,

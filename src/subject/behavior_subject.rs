@@ -104,7 +104,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = M;
-    type D = Disposal<'or, T, E, M>;
+    type Disposal = Disposal<'or, T, E, M>;
 }
 
 impl<'or, T, E, M, OR> Observable<OR> for BehaviorSubject<'or, T, E, M>
@@ -114,7 +114,7 @@ where
     T: Clone,
     E: Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         match self
             .0
             .subscribe_with(observer, |value, terminated| match terminated {

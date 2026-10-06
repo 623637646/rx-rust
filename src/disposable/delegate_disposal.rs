@@ -3,18 +3,18 @@
 /// Defines a named disposal type wrapping an inner one, to which it delegates
 /// [`Disposable::dispose`].
 ///
-/// An operator's `type D` is one of three:
+/// An operator's `type Disposal` is one of three:
 ///
-/// - one passed through: the disposal of its source or scheduler (`OE::D`, `S::D`), or that of
-///   the operator it is built on;
+/// - one passed through: the disposal of its source or scheduler (`OE::Disposal`,
+///   `S::Disposal`), or that of the operator it is built on;
 /// - the named disposal of a [`utils`](crate::utils) helper, used as it is, when its parameters
 ///   are only the operator's own (`subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode,
-///   OE::D>`);
+///   OE::Disposal>`);
 /// - a `Disposal` of the operator's own module.
 ///
 /// Anything else — a combination such as `ChainDisposal<SharedDisposal<Subscription<D2>>, D1>`,
 /// or a type naming one of the operator's private types, such as its model — gets its `Disposal`
-/// from this macro. The public `type D` then shows neither how the disposal is built nor the
+/// from this macro. The public `type Disposal` then shows neither how the disposal is built nor the
 /// types inside it, which stay private: the field of the generated type is private, and an
 /// associated type cannot name a private type itself.
 ///

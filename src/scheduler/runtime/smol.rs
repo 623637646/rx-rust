@@ -85,7 +85,7 @@ async fn sleep(duration: Duration) {
 
 impl SchedulerTypes for SmolScheduler {
     type Mode = Shared;
-    type D = SmolDisposal;
+    type Disposal = SmolDisposal;
 }
 
 impl<TC, P> Scheduler<TC, P> for SmolScheduler
@@ -93,7 +93,7 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let future = drive(task, delay, sleep);
         let task = match &self.target {
             SharedTarget::Global => smol::spawn(future),
@@ -160,7 +160,7 @@ impl SmolLocalScheduler {
 
 impl SchedulerTypes for SmolLocalScheduler {
     type Mode = Local;
-    type D = SmolDisposal;
+    type Disposal = SmolDisposal;
 }
 
 impl<TC, P> Scheduler<TC, P> for SmolLocalScheduler
@@ -168,7 +168,7 @@ where
     TC: 'static,
     P: 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let executor = self
             .executor
             .upgrade()

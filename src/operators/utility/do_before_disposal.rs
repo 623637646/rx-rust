@@ -72,7 +72,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = Disposal<OE::D, F>;
+    type Disposal = Disposal<OE::Disposal, F>;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for DoBeforeDisposal<OE, F>
@@ -81,7 +81,7 @@ where
     OE: Observable<OR, Item = T, Error = E>,
     F: FnOnce(),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.source
             .subscribe(observer)
             .preceded_by(CallbackDisposal::new(self.callback))

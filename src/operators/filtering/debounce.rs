@@ -91,12 +91,13 @@ type DebounceMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as Scheduler
 
 /// The context of a [`Debounce`] subscription.
 type DebounceContext<M, T, E, OR, S> =
-    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>;
+    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>;
 
 /// The task of a [`Debounce`] timer: it holds the context weakly, so that it does not keep the
 /// observer alive once the subscription is gone.
-type DebounceTask<M, T, E, OR, S> =
-    RecursiveContext<WeakSubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::D>>>;
+type DebounceTask<M, T, E, OR, S> = RecursiveContext<
+    WeakSubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>,
+>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -112,7 +113,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = DebounceMode<OE, S>;
-    type D = Disposal<DebounceMode<OE, S>, T, E, S::D, OE::D>;
+    type Disposal = Disposal<DebounceMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for Debounce<OE, S>
@@ -121,8 +122,8 @@ where
     OE: Observable<DebounceObserver<DebounceMode<OE, S>, T, E, OR, S>, Item = T, Error = E>,
     S: Scheduler<DebounceTask<DebounceMode<OE, S>, T, E, OR, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
-        let model = Model::<T, S::D>::Idle;
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+        let model = Model::<T, S::Disposal>::Idle;
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(DebounceObserver {
                 context,

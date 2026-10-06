@@ -59,7 +59,7 @@ where
     type Item = OE::Item;
     type Error = OE::Error;
     type Mode = Shared;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<OE, OR> Observable<OR> for IntoShared<OE>
@@ -67,7 +67,7 @@ where
     OR: Observer<OE::Item, OE::Error>,
     OE: Observable<OR>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.source.subscribe(observer)
     }
 }

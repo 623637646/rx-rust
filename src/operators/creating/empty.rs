@@ -35,14 +35,14 @@ impl ObservableTypes for Empty {
     type Item = Infallible;
     type Error = Infallible;
     type Mode = Local;
-    type D = ();
+    type Disposal = ();
 }
 
 impl<OR> Observable<OR> for Empty
 where
     OR: Observer<Infallible, Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         observer.on_termination(Termination::Completed);
         Subscription::default()
     }

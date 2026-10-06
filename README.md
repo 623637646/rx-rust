@@ -92,12 +92,12 @@ described once, by `ObservableTypes`:
 pub trait ObservableTypes {
     type Item;
     type Error;
-    type Mode: ThreadMode;   // Local or Shared, see below
-    type D: Disposable;      // what `subscribe` returns, independent of the observer
+    type Mode: ThreadMode;      // Local or Shared, see below
+    type Disposal: Disposable;  // what `subscribe` returns, independent of the observer
 }
 
 pub trait Observable<OR>: ObservableTypes {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D>;
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal>;
 }
 ```
 

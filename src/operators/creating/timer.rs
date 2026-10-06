@@ -78,7 +78,7 @@ where
     type Item = T;
     type Error = Infallible;
     type Mode = S::Mode;
-    type D = S::D;
+    type Disposal = S::Disposal;
 }
 
 impl<T, S, OR> Observable<OR> for Timer<T, S>
@@ -86,7 +86,7 @@ where
     OR: Observer<T, Infallible>,
     S: Scheduler<OnceContext<(OR, T)>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let task = Task::once((observer, self.value), |(mut observer, value)| {
             if observer.on_next(value).is_continue() {
                 observer.on_termination(Termination::Completed);

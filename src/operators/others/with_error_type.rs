@@ -58,7 +58,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, OR> Observable<OR> for WithErrorType<E, OE>
@@ -66,7 +66,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<WithErrorTypeObserver<E, OR>, Item = T, Error = Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = WithErrorTypeObserver {
             observer,
             _marker: PhantomData,

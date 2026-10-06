@@ -100,7 +100,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
-    type D = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::D, OE1::D>;
+    type Disposal = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for Switch<OE, OE1>
@@ -112,8 +112,8 @@ where
                 T,
                 E,
                 OR,
-                <OE1 as ObservableTypes>::D,
-                <OE as ObservableTypes>::D,
+                <OE1 as ObservableTypes>::Disposal,
+                <OE as ObservableTypes>::Disposal,
             >,
             Item = OE1,
             Error = E,
@@ -124,14 +124,14 @@ where
                 T,
                 E,
                 OR,
-                <OE1 as ObservableTypes>::D,
-                <OE as ObservableTypes>::D,
+                <OE1 as ObservableTypes>::Disposal,
+                <OE as ObservableTypes>::Disposal,
             >,
             Item = T,
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model {
             slot: SubscriptionSlot::Idle,
             is_source_completed: false,
@@ -158,11 +158,12 @@ pub struct SwitchObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposabl
     SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
 );
 
-impl<M: ThreadMode, T, E, OR, OE1, SD> Observer<OE1, E> for SwitchObserver<M, T, E, OR, OE1::D, SD>
+impl<M: ThreadMode, T, E, OR, OE1, SD> Observer<OE1, E>
+    for SwitchObserver<M, T, E, OR, OE1::Disposal, SD>
 where
     OR: Observer<T, E>,
     OE1: Observable<
-            SwitchInnerObserver<M, T, E, OR, <OE1 as ObservableTypes>::D, SD>,
+            SwitchInnerObserver<M, T, E, OR, <OE1 as ObservableTypes>::Disposal, SD>,
             Item = T,
             Error = E,
         >,

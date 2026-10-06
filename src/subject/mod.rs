@@ -106,7 +106,7 @@ where
     type Item = S::Item;
     type Error = S::Error;
     type Mode = S::Mode;
-    type D = S::D;
+    type Disposal = S::Disposal;
 }
 
 impl<S, OR> Observable<OR> for SubjectObservable<S>
@@ -114,7 +114,7 @@ where
     OR: Observer<S::Item, S::Error>,
     S: Observable<OR>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.0.subscribe(observer)
     }
 }

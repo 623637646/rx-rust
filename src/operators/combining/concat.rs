@@ -75,7 +75,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = Joined<OE1::Mode, OE2::Mode>;
-    type D = Disposal<Joined<OE1::Mode, OE2::Mode>, OE1::D, OE2::D>;
+    type Disposal = Disposal<Joined<OE1::Mode, OE2::Mode>, OE1::Disposal, OE2::Disposal>;
 }
 
 impl<T, E, OE1, OE2, OR> Observable<OR> for Concat<OE1, OE2>
@@ -86,14 +86,14 @@ where
                 Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
                 OR,
                 OE2,
-                <OE2 as ObservableTypes>::D,
+                <OE2 as ObservableTypes>::Disposal,
             >,
             Item = T,
             Error = E,
         >,
     OE2: Observable<OR, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let sub_2 = SharedDisposal::default();
         let observer = ConcatObserver {
             observer,
@@ -113,7 +113,7 @@ pub struct ConcatObserver<M: ThreadMode, OR, OE2, D: Disposable> {
     sub_2: SharedDisposal<M, Subscription<D>>,
 }
 
-impl<M, T, E, OR, OE2> Observer<T, E> for ConcatObserver<M, OR, OE2, OE2::D>
+impl<M, T, E, OR, OE2> Observer<T, E> for ConcatObserver<M, OR, OE2, OE2::Disposal>
 where
     M: ThreadMode,
     OR: Observer<T, E>,

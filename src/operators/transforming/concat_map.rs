@@ -81,11 +81,11 @@ where
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
     /// The disposal of the [`ConcatAll`] this operator is built on.
-    type D = crate::operators::combining::concat_all::Disposal<
+    type Disposal = crate::operators::combining::concat_all::Disposal<
         Joined<OE::Mode, OE1::Mode>,
         T,
         E,
-        OE::D,
+        OE::Disposal,
         OE1,
     >;
 }
@@ -101,7 +101,7 @@ where
                     E,
                     OR,
                     OE1,
-                    <OE as ObservableTypes>::D,
+                    <OE as ObservableTypes>::Disposal,
                 >,
                 F,
             >,
@@ -115,14 +115,14 @@ where
                 E,
                 OR,
                 OE1,
-                <OE as ObservableTypes>::D,
+                <OE as ObservableTypes>::Disposal,
             >,
             Item = T,
             Error = E,
         >,
     F: FnMut(T0) -> OE1,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observable = Map::new(self.source, self.callback);
         let observable = ConcatAll::new(observable);
         observable.subscribe(observer)

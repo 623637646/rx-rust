@@ -74,7 +74,7 @@ where
     type Item = C;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<C, T, E, OE, OR> Observable<OR> for Collect<C, T, OE>
@@ -83,7 +83,7 @@ where
     C: Default + Extend<T>,
     OE: Observable<CollectObserver<C, OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = CollectObserver {
             observer,
             collection: C::default(),

@@ -79,7 +79,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = S::Mode;
-    type D = S::D;
+    type Disposal = S::Disposal;
 }
 
 impl<T, E, SM, S, OR> Observable<OR> for FromTryStream<SM, S>
@@ -88,7 +88,7 @@ where
     SM: Stream<Item = Result<T, E>>,
     S: Scheduler<StreamThenContext<Option<OR>, Result<T, E>>, SM>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let task = Task::from_stream_then(
             Some(observer),
             self.stream,

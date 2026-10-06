@@ -69,7 +69,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for DoBeforeNext<OE, F>
@@ -78,7 +78,7 @@ where
     OE: Observable<DoBeforeNextObserver<OR, F>, Item = T, Error = E>,
     F: FnMut(&T),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.source.subscribe(DoBeforeNextObserver {
             observer,
             callback: self.callback,

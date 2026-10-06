@@ -89,12 +89,13 @@ type ObserveOnContextMode<OE, S> =
 
 /// The context of an [`ObserveOn`] subscription.
 type ObserveOnContext<M, T, E, OR, S> =
-    SubscriptionContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::D>>;
+    SubscriptionContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::Disposal>>;
 
 /// The task of an [`ObserveOn`]: it holds the context weakly until the source terminates, so
 /// that it does not keep the observer alive once the subscription is gone.
-type ObserveOnTask<M, T, E, OR, S> =
-    RecursiveContext<PromotableWeakContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::D>>>;
+type ObserveOnTask<M, T, E, OR, S> = RecursiveContext<
+    PromotableWeakContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::Disposal>>,
+>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -111,7 +112,7 @@ where
     type Error = E;
     /// Every event is delivered by the scheduler's task, so the mode is the scheduler's.
     type Mode = S::Mode;
-    type D = Disposal<ObserveOnContextMode<OE, S>, T, E, S::D, OE::D>;
+    type Disposal = Disposal<ObserveOnContextMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for ObserveOn<OE, S>
@@ -120,8 +121,8 @@ where
     OE: Observable<ObserveOnObserver<ObserveOnContextMode<OE, S>, T, E, OR, S>, Item = T, Error = E>,
     S: Scheduler<ObserveOnTask<ObserveOnContextMode<OE, S>, T, E, OR, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
-        let model = Model::<T, E, S::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+        let model = Model::<T, E, S::Disposal> {
             values: Vec::new(),
             termination: None,
             task: SubscriptionSlot::Idle,
@@ -155,7 +156,7 @@ where
     context: ObserveOnContext<M, T, E, OR, S>,
     /// The task's handle on the context, promoted once the source has terminated, with events
     /// still waiting.
-    weak_context: PromotableWeakContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::D>>,
+    weak_context: PromotableWeakContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::Disposal>>,
     scheduler: S,
 }
 

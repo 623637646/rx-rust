@@ -79,7 +79,7 @@ where
     type Item = (T1, T2);
     type Error = E;
     type Mode = Joined<OE1::Mode, OE2::Mode>;
-    type D = Disposal<Joined<OE1::Mode, OE2::Mode>, T1, T2, E, OE1::D, OE2::D>;
+    type Disposal = Disposal<Joined<OE1::Mode, OE2::Mode>, T1, T2, E, OE1::Disposal, OE2::Disposal>;
 }
 
 impl<T1, T2, E, OE1, OE2, OR> Observable<OR> for Zip<OE1, OE2>
@@ -92,7 +92,10 @@ where
                 T2,
                 E,
                 OR,
-                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+                ChainDisposal<
+                    <OE2 as ObservableTypes>::Disposal,
+                    <OE1 as ObservableTypes>::Disposal,
+                >,
             >,
             Item = T1,
             Error = E,
@@ -104,13 +107,16 @@ where
                 T2,
                 E,
                 OR,
-                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+                ChainDisposal<
+                    <OE2 as ObservableTypes>::Disposal,
+                    <OE1 as ObservableTypes>::Disposal,
+                >,
             >,
             Item = T2,
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model {
             first: (VecDeque::new(), false),
             second: (VecDeque::new(), false),

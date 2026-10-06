@@ -389,7 +389,7 @@ impl<T, E, M: ThreadMode, OR> ObservableTypes for UnicastObservable<T, E, M, OR>
     type Error = E;
     /// The events come from wherever the sender is fed, which is what `M` says.
     type Mode = M;
-    type D = Disposal<M>;
+    type Disposal = Disposal<M>;
 }
 
 impl<T, E, M, OR> Observable<OR> for UnicastObservable<T, E, M, OR>
@@ -397,7 +397,7 @@ where
     M: ThreadMode,
     OR: Observer<T, E>,
 {
-    fn subscribe(mut self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(mut self, observer: OR) -> Subscription<Self::Disposal> {
         let pipe = self
             .0
             .take()
@@ -420,7 +420,7 @@ impl<'or, T, E, M: ObserverMode> ObservableTypes for BoxedUnicastObservable<'or,
     type Error = E;
     /// The events come from wherever the sender is fed, which is what `M` says.
     type Mode = M;
-    type D = Disposal<M>;
+    type Disposal = Disposal<M>;
 }
 
 impl<'or, T, E, M, OR> Observable<OR> for BoxedUnicastObservable<'or, T, E, M>
@@ -428,7 +428,7 @@ where
     M: ObserverMode,
     OR: IntoBoxedObserver<'or, T, E, M>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.0.subscribe(M::boxed(observer))
     }
 }

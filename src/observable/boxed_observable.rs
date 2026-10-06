@@ -84,7 +84,7 @@ macro_rules! boxed_observable {
                 OR: Observer<T, E>,
                 OE: Observable<OR> + ObservableTypes<Item = T, Error = E, Mode = M>
                     $(+ $source_bound)* + 'oe,
-                OE::D: 'sub $(+ $send)?,
+                OE::Disposal: 'sub $(+ $send)?,
             {
                 Self {
                     subscribe: $pointer::new(move |observer| {
@@ -100,7 +100,7 @@ macro_rules! boxed_observable {
             type Item = T;
             type Error = E;
             type Mode = M;
-            type D = $disposal<'sub>;
+            type Disposal = $disposal<'sub>;
         }
 
         impl<T, E, M: ThreadMode, OR> Observable<OR> for $observable_for<'_, '_, T, E, M, OR>
@@ -108,7 +108,7 @@ macro_rules! boxed_observable {
             OR: Observer<T, E>,
         {
             #[inline]
-            fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+            fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
                 (self.subscribe)(observer)
             }
         }
@@ -127,7 +127,7 @@ macro_rules! boxed_observable {
                 OE: Observable<$observer<'or, T, E>>
                     + ObservableTypes<Item = T, Error = E, Mode = M>
                     $(+ $source_bound)* + 'oe,
-                OE::D: 'sub $(+ $send)?,
+                OE::Disposal: 'sub $(+ $send)?,
             {
                 Self($observable_for::new(observable))
             }
@@ -137,7 +137,7 @@ macro_rules! boxed_observable {
             type Item = T;
             type Error = E;
             type Mode = M;
-            type D = $disposal<'sub>;
+            type Disposal = $disposal<'sub>;
         }
 
         impl<'or, T, E, M: ThreadMode, OR> Observable<OR> for $observable<'or, '_, '_, T, E, M>
@@ -145,7 +145,7 @@ macro_rules! boxed_observable {
             OR: Observer<T, E> $(+ $send)? + 'or,
         {
             #[inline]
-            fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+            fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
                 self.0.subscribe($observer::new(observer))
             }
         }

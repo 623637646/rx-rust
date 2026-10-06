@@ -89,7 +89,7 @@ where
     type Item = bool;
     type Error = E;
     type Mode = Joined<OE1::Mode, OE2::Mode>;
-    type D = Disposal<Joined<OE1::Mode, OE2::Mode>, T, E, OE1::D, OE2::D>;
+    type Disposal = Disposal<Joined<OE1::Mode, OE2::Mode>, T, E, OE1::Disposal, OE2::Disposal>;
 }
 
 impl<T, E, OE1, OE2, OR> Observable<OR> for SequenceEqual<T, OE1, OE2>
@@ -102,7 +102,10 @@ where
                 T,
                 E,
                 OR,
-                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+                ChainDisposal<
+                    <OE2 as ObservableTypes>::Disposal,
+                    <OE1 as ObservableTypes>::Disposal,
+                >,
             >,
             Item = T,
             Error = E,
@@ -113,13 +116,16 @@ where
                 T,
                 E,
                 OR,
-                ChainDisposal<<OE2 as ObservableTypes>::D, <OE1 as ObservableTypes>::D>,
+                ChainDisposal<
+                    <OE2 as ObservableTypes>::Disposal,
+                    <OE1 as ObservableTypes>::Disposal,
+                >,
             >,
             Item = T,
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model {
             first: SourceState {
                 queue: VecDeque::new(),

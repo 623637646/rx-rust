@@ -69,7 +69,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = Disposal<OE::D>;
+    type Disposal = Disposal<OE::Disposal>;
 }
 
 impl<T, E, OE, I, OR> Observable<OR> for StartWith<OE, I>
@@ -78,7 +78,7 @@ where
     OE: Observable<OR, Item = T, Error = E>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
         for value in self.values.into_iter() {
             if observer.on_next(value).is_stop() {
                 // The prepended values ended the stream, so the source is never subscribed to and

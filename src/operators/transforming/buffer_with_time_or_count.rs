@@ -114,7 +114,7 @@ type BufferWithTimeOrCountMode<OE, S> =
 
 /// The source subscription a [`BufferWithTimeOrCount`] context owns: the timer, then the source.
 type BufferWithTimeOrCountSources<OE, S> =
-    ChainDisposal<<S as SchedulerTypes>::D, <OE as ObservableTypes>::D>;
+    ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
 
 /// The task of a [`BufferWithTimeOrCount`] timer.
 type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
@@ -144,7 +144,7 @@ where
     type Item = Vec<T>;
     type Error = E;
     type Mode = BufferWithTimeOrCountMode<OE, S>;
-    type D = Disposal<BufferWithTimeOrCountMode<OE, S>, T, E, S::D, OE::D>;
+    type Disposal = Disposal<BufferWithTimeOrCountMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for BufferWithTimeOrCount<OE, S>
@@ -163,7 +163,7 @@ where
         >,
     S: Scheduler<BufferWithTimeOrCountTask<T, E, OR, OE, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model::<T> {
             values: Vec::with_capacity(self.count.get()),
             last_sending_time_from_counting: None,
@@ -259,7 +259,7 @@ fn setup_emit_timer<M, T, E, OR, D, S>(
     delay: Option<Duration>,
     time_span: Duration,
     count: NonZeroUsize,
-) -> BoundDropDisposal<S::D>
+) -> BoundDropDisposal<S::Disposal>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,

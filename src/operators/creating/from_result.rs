@@ -44,14 +44,14 @@ impl<T, E> ObservableTypes for FromResult<T, E> {
     type Item = T;
     type Error = E;
     type Mode = Local;
-    type D = ();
+    type Disposal = ();
 }
 
 impl<T, E, OR> Observable<OR> for FromResult<T, E>
 where
     OR: Observer<T, E>,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
         match self.0 {
             Ok(value) => {
                 if observer.on_next(value).is_continue() {

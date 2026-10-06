@@ -39,9 +39,9 @@ use crate::{
 /// Where a future or stream adapter stands with its source: the source it has not subscribed to
 /// yet, the subscription it holds, or nothing once it has released it.
 ///
-/// The subscription is the parameter `S`, always `Subscription<OE::D>`, rather than spelled in the
-/// variant: there, the drop check asks the disposal type to outlive the adapter before
-/// normalizing it, so the projection `OE::D` drags along every borrow of the source, and an
+/// The subscription is the parameter `S`, always `Subscription<OE::Disposal>`, rather than spelled in
+/// the variant: there, the drop check asks the disposal type to outlive the adapter before
+/// normalizing it, so the projection `OE::Disposal` drags along every borrow of the source, and an
 /// adapter over a source that borrows a local would hold that borrow until the adapter is
 /// dropped (`test_mut_ref` of the stream tests).
 pub enum LazySubscription<OE, S> {
@@ -53,7 +53,7 @@ pub enum LazySubscription<OE, S> {
     Released,
 }
 
-impl<OE> LazySubscription<OE, Subscription<OE::D>>
+impl<OE> LazySubscription<OE, Subscription<OE::Disposal>>
 where
     OE: ObservableTypes,
 {

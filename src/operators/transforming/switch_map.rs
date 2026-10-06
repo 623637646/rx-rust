@@ -81,12 +81,12 @@ where
     type Error = E;
     type Mode = Joined<OE::Mode, OE1::Mode>;
     /// The disposal of the [`Switch`] this operator is built on.
-    type D = crate::operators::combining::switch::Disposal<
+    type Disposal = crate::operators::combining::switch::Disposal<
         Joined<OE::Mode, OE1::Mode>,
         T,
         E,
-        OE::D,
-        OE1::D,
+        OE::Disposal,
+        OE1::Disposal,
     >;
 }
 
@@ -100,8 +100,8 @@ where
                     T,
                     E,
                     OR,
-                    <OE1 as ObservableTypes>::D,
-                    <OE as ObservableTypes>::D,
+                    <OE1 as ObservableTypes>::Disposal,
+                    <OE as ObservableTypes>::Disposal,
                 >,
                 F,
             >,
@@ -114,15 +114,15 @@ where
                 T,
                 E,
                 OR,
-                <OE1 as ObservableTypes>::D,
-                <OE as ObservableTypes>::D,
+                <OE1 as ObservableTypes>::Disposal,
+                <OE as ObservableTypes>::Disposal,
             >,
             Item = T,
             Error = E,
         >,
     F: FnMut(T0) -> OE1,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observable = Map::new(self.source, self.callback);
         let observable = Switch::new(observable);
         observable.subscribe(observer)

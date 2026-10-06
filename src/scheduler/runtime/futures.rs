@@ -58,7 +58,7 @@ impl ThreadPoolScheduler {
 
 impl SchedulerTypes for ThreadPoolScheduler {
     type Mode = Shared;
-    type D = FuturesDisposal;
+    type Disposal = FuturesDisposal;
 }
 
 /// # Panics
@@ -69,7 +69,7 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let handle = self
             .pool
             .spawn_with_handle(drive(task, delay, sleep))
@@ -121,7 +121,7 @@ impl LocalPoolScheduler {
 
 impl SchedulerTypes for LocalPoolScheduler {
     type Mode = Local;
-    type D = FuturesDisposal;
+    type Disposal = FuturesDisposal;
 }
 
 /// # Panics
@@ -132,7 +132,7 @@ where
     TC: 'static,
     P: 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let handle = self
             .spawner
             .spawn_local_with_handle(drive(task, delay, sleep))

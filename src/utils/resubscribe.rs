@@ -36,7 +36,7 @@ use educe::Educe;
 #[derive(Educe)]
 #[educe(Debug, Clone, Copy)]
 pub struct Resubscribe<OE: ObservableTypes, OR>(
-    #[educe(Debug(ignore))] fn(OE, OR) -> Subscription<OE::D>,
+    #[educe(Debug(ignore))] fn(OE, OR) -> Subscription<OE::Disposal>,
 );
 
 impl<OE: ObservableTypes, OR> Resubscribe<OE, OR> {
@@ -50,7 +50,7 @@ impl<OE: ObservableTypes, OR> Resubscribe<OE, OR> {
     }
 
     /// Subscribes `observable` with `observer`.
-    pub fn subscribe(self, observable: OE, observer: OR) -> Subscription<OE::D> {
+    pub fn subscribe(self, observable: OE, observer: OR) -> Subscription<OE::Disposal> {
         (self.0)(observable, observer)
     }
 }

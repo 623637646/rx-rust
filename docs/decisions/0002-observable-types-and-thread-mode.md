@@ -30,12 +30,12 @@ unless it moved into the type system.
 pub trait ObservableTypes {
     type Item;
     type Error;
-    type Mode: ThreadMode;   // Local or Shared
-    type D: Disposable;      // never names the observer
+    type Mode: ThreadMode;      // Local or Shared
+    type Disposal: Disposable;  // never names the observer
 }
 
 pub trait Observable<OR>: ObservableTypes {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D>;
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal>;
 }
 
 pub trait ThreadMode: 'static {                     // sealed; Local / Shared are never instantiated
@@ -57,9 +57,9 @@ pub trait ObserverMode: ThreadMode + Sized {
     fn boxed<'a, T, E, OR: IntoBoxedObserver<'a, T, E, Self>>(o: OR) -> Self::BoxedObserver<'a, T, E>;
 }
 
-pub trait SchedulerTypes { type Mode: ThreadMode; type D: Disposable; }
+pub trait SchedulerTypes { type Mode: ThreadMode; type Disposal: Disposable; }
 pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D>;
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal>;
 }
 ```
 
@@ -158,8 +158,8 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    same. An observer that subscribes with a *different* observer type (`switch`, `merge_all`,
    `catch`, `concat`) needs nothing special.
 2. **A bound that mentions a projection writes it qualified.** In
-   `OE: Observable<X<<OE as ObservableTypes>::D>>` the shorthand `OE::D` would need the bounds of
-   `OE` while they are being computed (`E0391`); the same holds for `<OE as ObservableTypes>::Mode`,
+   `OE: Observable<X<<OE as ObservableTypes>::Disposal>>` the shorthand `OE::Disposal` would need
+   the bounds of `OE` while they are being computed (`E0391`); the same holds for `<OE as ObservableTypes>::Mode`,
    and across parameters: `merge`'s two bounds each mention the other's disposal.
 3. **A stream or future adapter (`into_stream`, `into_future`) keeps its state in `Shared` pointers
    whatever the source's mode**, because the executor that polls it may require `Send`. Every

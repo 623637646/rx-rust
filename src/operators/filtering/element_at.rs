@@ -62,7 +62,8 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>;
+    type Disposal =
+        crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, OR> Observable<OR> for ElementAt<OE>
@@ -73,14 +74,14 @@ where
                 AutoDisposeOnTerminationObserver<
                     <OE as ObservableTypes>::Mode,
                     OR,
-                    <OE as ObservableTypes>::D,
+                    <OE as ObservableTypes>::Disposal,
                 >,
             >,
             Item = T,
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             self.source.subscribe(ElementAtObserver {
                 observer: Some(observer),

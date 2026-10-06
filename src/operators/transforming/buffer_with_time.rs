@@ -103,7 +103,7 @@ type BufferWithTimeMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as Sch
 
 /// The source subscription a [`BufferWithTime`] context owns: the timer, then the source.
 type BufferWithTimeSources<OE, S> =
-    ChainDisposal<<S as SchedulerTypes>::D, <OE as ObservableTypes>::D>;
+    ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
 
 /// The task of a [`BufferWithTime`] timer: it holds the context weakly, so that it does not keep
 /// the observer alive once the subscription is gone.
@@ -132,7 +132,7 @@ where
     type Item = Vec<T>;
     type Error = E;
     type Mode = BufferWithTimeMode<OE, S>;
-    type D = Disposal<BufferWithTimeMode<OE, S>, T, E, S::D, OE::D>;
+    type Disposal = Disposal<BufferWithTimeMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for BufferWithTime<OE, S>
@@ -151,7 +151,7 @@ where
         >,
     S: Scheduler<BufferWithTimeTask<T, E, OR, OE, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         subscribe_with_context_owning_source(observer, Vec::new(), |context| {
             let sub = self
                 .source
@@ -204,7 +204,7 @@ fn setup_emit_timer<M, T, E, OR, D, S>(
     scheduler: S,
     time_span: Duration,
     delay: Option<Duration>,
-) -> BoundDropDisposal<S::D>
+) -> BoundDropDisposal<S::Disposal>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,

@@ -67,7 +67,7 @@ where
     OE: ObservableTypes<Item = T, Error = E>,
 {
     #[educe(Debug(ignore))]
-    subscription: LazySubscription<OE, Subscription<OE::D>>,
+    subscription: LazySubscription<OE, Subscription<OE::Disposal>>,
     /// Always behind the thread-safe pointer, whatever the source's mode: every synchronous source
     /// is `Local`, and many of them are `Send`, so a pointer picked from the mode would make the
     /// stream over them `!Send` and keep it out of a multi-threaded executor. A source that really

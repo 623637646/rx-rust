@@ -137,7 +137,7 @@ where
     type Error = E;
     /// The groups are emitted, and fed, from wherever the source emits.
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<'a, T, E, OE, F, K, OR> Observable<OR> for GroupBy<'a, OE, F, K>
@@ -153,7 +153,7 @@ where
     F: FnMut(&T) -> K,
     K: Eq + Hash,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.source.subscribe(SourceObserver {
             observer,
             senders: HashMap::new(),

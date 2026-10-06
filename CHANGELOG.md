@@ -22,7 +22,7 @@ All notable changes to this project are documented here. The format follows
 - The derived `Debug` of erased types, subjects and internal handles prints the type's name only,
   instead of `std::any::type_name` with its path and type arguments.
 - **Breaking:** `Observable<'or, T, E>` is split into `ObservableTypes`, with the associated types
-  `Item`, `Error`, `Mode` and the disposal `D`, and `Observable<OR>`, whose `subscribe` takes the
+  `Item`, `Error`, `Mode` and `Disposal`, and `Observable<OR>`, whose `subscribe` takes the
   observer type as a trait parameter. There is no `'or` lifetime anymore, and the disposal never
   names the observer. A custom observable implements both traits and names, in its bounds, the
   observer it subscribes its source with. See
@@ -35,10 +35,10 @@ All notable changes to this project are documented here. The format follows
 - **Breaking:** the `single-threaded` feature and `utils::types` (`Shared`, `Mutable`, `MaybeSend`,
   `MaybeSync`) are removed. All features are additive: the scheduler features can be enabled
   together, and `local-pool-scheduler` no longer excludes the others.
-- **Breaking:** `Scheduler` is now `Scheduler<TC, P>` over `SchedulerTypes { Mode, D }` and runs a
-  nameable `Task` (a context, an optional future or stream, and a `fn` handler); the closure-based
-  `schedule`, `schedule_periodically`, `spawn_future`, … moved to `SchedulerExt`, which every
-  scheduler implements.
+- **Breaking:** `Scheduler` is now `Scheduler<TC, P>` over `SchedulerTypes { Mode, Disposal }` and
+  runs a nameable `Task` (a context, an optional future or stream, and a `fn` handler); the
+  closure-based `schedule`, `schedule_periodically`, `spawn_future`, … moved to `SchedulerExt`,
+  which every scheduler implements.
 - **Breaking:** type erasure is explicit: `into_boxed` / `into_cloneable_boxed` erase without
   `Send`, `into_send_boxed` / `into_send_cloneable_boxed` (and `SendBoxedObserver`,
   `SendBoxedDisposal`) keep it, and `into_boxed_for` / `into_send_boxed_for` fix the observer type.

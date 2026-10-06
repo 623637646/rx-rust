@@ -67,7 +67,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T0, T, E, OE, F, OR> Observable<OR> for Map<T0, OE, F>
@@ -76,7 +76,7 @@ where
     OE: Observable<MapObserver<OR, F>, Item = T0, Error = E>,
     F: FnMut(T0) -> T,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let observer = MapObserver {
             observer,
             callback: self.callback,

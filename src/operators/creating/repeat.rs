@@ -55,7 +55,7 @@ where
     type Item = T;
     type Error = Infallible;
     type Mode = Local;
-    type D = ();
+    type Disposal = ();
 }
 
 impl<T, OR> Observable<OR> for Repeat<T>
@@ -63,7 +63,7 @@ where
     OR: Observer<T, Infallible>,
     T: Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
     }
 }

@@ -59,7 +59,7 @@ where
     type Error = A::Error;
     /// Either side can be the one subscribed to, so the mode is both sides' joined.
     type Mode = Joined<A::Mode, B::Mode>;
-    type D = Disposal<A::D, B::D>;
+    type Disposal = Disposal<A::Disposal, B::Disposal>;
 }
 
 impl<A, B, OR> Observable<OR> for EitherObservable<A, B>
@@ -68,7 +68,7 @@ where
     A: Observable<OR>,
     B: Observable<OR> + ObservableTypes<Item = A::Item, Error = A::Error>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         match self {
             Self::Left(observable) => {
                 Subscription::new(EitherDisposal::Left(observable.subscribe(observer)).into())

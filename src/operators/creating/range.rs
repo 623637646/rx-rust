@@ -49,7 +49,7 @@ where
     type Item = T;
     type Error = Infallible;
     type Mode = Local;
-    type D = ();
+    type Disposal = ();
 }
 
 impl<T, I, OR> Observable<OR> for Range<I>
@@ -57,7 +57,7 @@ where
     OR: Observer<T, Infallible>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         FromIter::new(self.0).subscribe(observer)
     }
 }

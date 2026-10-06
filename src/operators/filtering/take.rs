@@ -68,7 +68,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = Disposal<OE::Mode, OE::D>;
+    type Disposal = Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, OR> Observable<OR> for Take<OE>
@@ -79,14 +79,14 @@ where
                 AutoDisposeOnTerminationObserver<
                     <OE as ObservableTypes>::Mode,
                     OR,
-                    <OE as ObservableTypes>::D,
+                    <OE as ObservableTypes>::Disposal,
                 >,
             >,
             Item = T,
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
             OptionDisposal::none().into_subscription()

@@ -77,7 +77,7 @@ where
     type Item = T;
     type Error = Infallible;
     type Mode = S::Mode;
-    type D = S::D;
+    type Disposal = S::Disposal;
 }
 
 impl<T, FU, S, OR> Observable<OR> for FromFuture<FU, S>
@@ -86,7 +86,7 @@ where
     FU: Future<Output = T>,
     S: Scheduler<FutureThenContext<OR, T>, FU>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let task = Task::from_future_then(observer, self.future, |mut observer, value| {
             if observer.on_next(value).is_continue() {
                 observer.on_termination(Termination::Completed);

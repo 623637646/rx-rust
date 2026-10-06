@@ -72,7 +72,7 @@ where
     type Item = bool;
     type Error = E;
     type Mode = OE::Mode;
-    type D = subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::D>;
+    type Disposal = subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::Disposal>;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for All<T, OE, F>
@@ -83,7 +83,7 @@ where
                 AutoDisposeOnTerminationObserver<
                     <OE as ObservableTypes>::Mode,
                     OR,
-                    <OE as ObservableTypes>::D,
+                    <OE as ObservableTypes>::Disposal,
                 >,
                 F,
             >,
@@ -92,7 +92,7 @@ where
         >,
     F: FnMut(T) -> bool,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let observer = AllObserver {
                 observer: Some(observer),

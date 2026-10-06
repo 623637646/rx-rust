@@ -61,7 +61,7 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type D = OE::D;
+    type Disposal = OE::Disposal;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for DoAfterSubscription<OE, F>
@@ -70,7 +70,7 @@ where
     OE: Observable<OR, Item = T, Error = E>,
     F: FnOnce(),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::D> {
+    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let subscription = self.source.subscribe(observer);
         (self.callback)();
         subscription

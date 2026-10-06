@@ -41,7 +41,7 @@ pub struct AsyncStdScheduler;
 
 impl SchedulerTypes for AsyncStdScheduler {
     type Mode = Shared;
-    type D = AsyncStdDisposal;
+    type Disposal = AsyncStdDisposal;
 }
 
 impl<TC, P> Scheduler<TC, P> for AsyncStdScheduler
@@ -49,7 +49,7 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::D> {
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         // `JoinHandle::cancel` is async and dropping the handle only detaches the task, so the
         // task is made abortable: aborting wakes it, and it ends at its next poll.
         let (future, abort_handle) = abortable(drive(task, delay, async_std::task::sleep));
