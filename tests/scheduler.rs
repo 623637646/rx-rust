@@ -6,8 +6,8 @@ use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::test_scheduler::block_on;
 use futures::StreamExt;
 use rx_rust::disposable::Disposable;
-use rx_rust::scheduler::SchedulerExt;
-use rx_rust::scheduler::TaskState;
+use rx_rust::scheduler::{Scheduler, SchedulerExt, Task, TaskState};
+use std::task::Poll;
 use std::time::{Duration, Instant};
 
 const RECURSION_EXECUTION_TIMES: usize = 200;
@@ -58,6 +58,29 @@ fn test_schedule_with_abort() {
         assert!(rx.await.is_err());
         let elapsed_time = start_time.elapsed();
         assert!(elapsed_time < DURATION_30_MS);
+    });
+}
+
+// A task disposed while it sleeps between two steps is dropped at once, with its context, rather
+// than when its sleep would have ended: every runtime wakes a task it aborts.
+#[test]
+fn test_schedule_with_abort_while_sleeping() {
+    block_on(|scheduler| async move {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let task = Task::new(tx, |tx, _, _| {
+            let _ = tx.unbounded_send(());
+            Poll::Ready(TaskState::SleepUntil(
+                Instant::now() + Duration::from_secs(1),
+            ))
+        });
+        let disposal = scheduler.run_task(task, None);
+        // The first step has run: the task now sleeps.
+        assert!(rx.next().await.is_some());
+        let start_time = Instant::now();
+        disposal.dispose();
+        // Dropping the task drops `tx`, which closes the channel.
+        assert!(rx.next().await.is_none());
+        assert!(start_time.elapsed() < DURATION_100_MS);
     });
 }
 
