@@ -208,6 +208,16 @@ through `MutableHelper` / `MutableBoolHelper`, and bound closures with `Send`. T
 threads need no gate. A
 test that needs the `Local` mode itself goes in `tests/local_mode.rs`.
 
+A test that checks which thread a callback runs on uses `ThreadCheckerScheduler`
+(`tests/tests_utils/thread_checker_scheduler.rs`). It does not run a task by itself: `run_task`
+only queues it, and the test calls `thread_1.run_until_stalled().await` (the handle it kept) to run
+the queued work on that named thread and wait for it — never a `sleep`. The test, not the OS,
+decides the interleaving, so assert one exact outcome per step, never "either this or that"; a
+panic on that thread fails the test from `run_until_stalled`. Real concurrency between the source's
+thread and the delivering one is the job of the `test_race_condition*` tests: a
+`ThreadPoolScheduler`, many rounds, assertions on invariants only (order, exactly once, nothing
+after a `Stop`), and a wait on a channel with a timeout rather than a sleep.
+
 `docs/testing.md` holds the canonical checklist of case names (`test_completed`, `test_error`,
 `test_unsubscribe`, `test_ref`, `test_async`, the hot-observable `test_*_on_next` family, the
 lock-related `test_*_on_sub` family, the scheduler-related `test_*_after_next` family, …). When

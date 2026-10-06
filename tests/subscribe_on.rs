@@ -29,7 +29,8 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
 fn test_completed() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -75,10 +76,10 @@ fn test_completed() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -114,7 +115,8 @@ fn test_completed() {
 
 #[test]
 fn test_error() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -160,10 +162,10 @@ fn test_error() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -199,7 +201,8 @@ fn test_error() {
 
 #[test]
 fn test_unsubscribe() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -245,10 +248,10 @@ fn test_unsubscribe() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -271,6 +274,7 @@ fn test_unsubscribe() {
 #[test]
 fn test_async() {
     block_on(|scheduler| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -316,12 +320,12 @@ fn test_async() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
             .await;
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -371,7 +375,8 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (channels, observable) = test_channels();
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
@@ -419,14 +424,14 @@ fn test_subscribe_by_different_observer() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
         let observable_1 = observable;
         let observable_2 = observable_1.clone();
 
         let subscription_1 = observable_1.subscribe(observer_1);
         let (on_next, on_termination) = observer_2.into_callbacks();
         let subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker_1.values().is_empty());
         assert_eq!(checker_1.state(), State::Active);
         assert_eq!(channels.state(0), ChannelState::Subscribed);
@@ -483,7 +488,8 @@ fn test_subscribe_by_different_observer() {
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -529,11 +535,11 @@ fn test_unsub_on_next_by_take() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"))
+            .subscribe_on(thread_1.clone())
             .take(1);
 
         let _subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -549,7 +555,9 @@ fn test_unsub_on_next_by_take() {
 
 #[test]
 fn test_multiple_operation() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
+        let thread_2 = ThreadCheckerScheduler::new("thread_2");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history_a = Arc::new(AtomicUsize::new(0));
@@ -604,7 +612,7 @@ fn test_multiple_operation() {
                 call_history_a_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"))
+            .subscribe_on(thread_1.clone())
             .do_before_subscription(move || {
                 call_history_b_1.fetch_or(1 << 0, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), Some("thread_2"));
@@ -637,10 +645,12 @@ fn test_multiple_operation() {
                 call_history_b_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_2"));
+            .subscribe_on(thread_2.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        // The outer `subscribe_on` subscribes the inner one, which then subscribes the source.
+        thread_2.run_until_stalled().await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -681,7 +691,8 @@ fn test_multiple_operation() {
 
 #[test]
 fn test_without_convenient_api() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -728,11 +739,11 @@ fn test_without_convenient_api() {
                     call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                     assert_eq!(get_thread_name(), None);
                 }),
-            ThreadCheckerScheduler::new("thread_1"),
+            thread_1.clone(),
         );
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -768,7 +779,8 @@ fn test_without_convenient_api() {
 
 #[test]
 fn test_complete_after_next() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -814,10 +826,10 @@ fn test_complete_after_next() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -840,7 +852,8 @@ fn test_complete_after_next() {
 
 #[test]
 fn test_error_after_next() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -886,10 +899,10 @@ fn test_error_after_next() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -912,7 +925,8 @@ fn test_error_after_next() {
 
 #[test]
 fn test_unsub_after_next() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -958,10 +972,10 @@ fn test_unsub_after_next() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -978,7 +992,8 @@ fn test_unsub_after_next() {
 
 #[test]
 fn test_unsub_after_completed() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -1024,10 +1039,10 @@ fn test_unsub_after_completed() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1044,7 +1059,8 @@ fn test_unsub_after_completed() {
 
 #[test]
 fn test_unsub_after_error() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -1090,10 +1106,10 @@ fn test_unsub_after_error() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1110,7 +1126,8 @@ fn test_unsub_after_error() {
 
 #[test]
 fn test_order_with_continuous_next() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
@@ -1156,10 +1173,10 @@ fn test_order_with_continuous_next() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let _subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1179,7 +1196,8 @@ fn test_order_with_continuous_next() {
 
 #[test]
 fn test_next_on_sub() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (sender, source, _) = test_channel();
         let source = source.start_with([111]);
         let (checker, observer) = Checker::new();
@@ -1226,10 +1244,10 @@ fn test_next_on_sub() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00001111);
@@ -1248,7 +1266,8 @@ fn test_next_on_sub() {
 
 #[test]
 fn test_complete_on_sub() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
         let call_history_1 = call_history.clone();
@@ -1293,10 +1312,10 @@ fn test_complete_on_sub() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00110011);
@@ -1310,7 +1329,8 @@ fn test_complete_on_sub() {
 
 #[test]
 fn test_error_on_sub() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
         let (checker, observer) = Checker::new();
         let call_history = Arc::new(AtomicUsize::new(0));
         let call_history_1 = call_history.clone();
@@ -1355,10 +1375,10 @@ fn test_error_on_sub() {
                 call_history_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_1"));
+            .subscribe_on(thread_1.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_1.run_until_stalled().await;
         assert_eq!(checker.values(), []);
         assert_eq!(checker.state(), State::Error("error"));
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00110011);
@@ -1459,7 +1479,11 @@ fn test_error_on_unsub() {
 
 #[test]
 fn test_observe_on_with_subscribe_on() {
-    block_on(|scheduler| async move {
+    block_on(|_| async move {
+        let thread_o_1 = ThreadCheckerScheduler::new("thread_o_1");
+        let thread_o_2 = ThreadCheckerScheduler::new("thread_o_2");
+        let thread_s_1 = ThreadCheckerScheduler::new("thread_s_1");
+        let thread_s_2 = ThreadCheckerScheduler::new("thread_s_2");
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
         let call_history_a = Arc::new(AtomicUsize::new(0));
@@ -1482,7 +1506,7 @@ fn test_observe_on_with_subscribe_on() {
         let call_history_b_8 = call_history_b.clone();
 
         let observable = observable
-            .observe_on(ThreadCheckerScheduler::new("thread_o_1"))
+            .observe_on(thread_o_1.clone())
             .do_before_subscription(move || {
                 call_history_a_1.fetch_or(1 << 0, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), Some("thread_s_1"));
@@ -1515,8 +1539,8 @@ fn test_observe_on_with_subscribe_on() {
                 call_history_a_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .observe_on(ThreadCheckerScheduler::new("thread_o_2"))
-            .subscribe_on(ThreadCheckerScheduler::new("thread_s_1"))
+            .observe_on(thread_o_2.clone())
+            .subscribe_on(thread_s_1.clone())
             .do_before_subscription(move || {
                 call_history_b_1.fetch_or(1 << 0, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), Some("thread_s_2"));
@@ -1549,10 +1573,12 @@ fn test_observe_on_with_subscribe_on() {
                 call_history_b_8.fetch_or(1 << 7, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), None);
             })
-            .subscribe_on(ThreadCheckerScheduler::new("thread_s_2"));
+            .subscribe_on(thread_s_2.clone());
 
         let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
+        // The outer `subscribe_on` subscribes the inner one, which then subscribes the source.
+        thread_s_2.run_until_stalled().await;
+        thread_s_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1560,7 +1586,8 @@ fn test_observe_on_with_subscribe_on() {
         assert_eq!(call_history_b.load(Ordering::SeqCst), 0b00000011);
 
         assert!(sender.on_next(111).is_continue());
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_o_1.run_until_stalled().await;
+        thread_o_2.run_until_stalled().await;
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1569,7 +1596,8 @@ fn test_observe_on_with_subscribe_on() {
 
         assert!(sender.on_next(222).is_continue());
         assert!(sender.on_next(333).is_continue());
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_o_1.run_until_stalled().await;
+        thread_o_2.run_until_stalled().await;
         assert_eq!(checker.values(), [111, 222, 333]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
@@ -1578,7 +1606,8 @@ fn test_observe_on_with_subscribe_on() {
 
         assert!(sender.on_next(444).is_continue());
         sender.on_termination(Termination::<Infallible>::Completed);
-        scheduler.sleep(DURATION_10_MS).await;
+        thread_o_1.run_until_stalled().await;
+        thread_o_2.run_until_stalled().await;
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
