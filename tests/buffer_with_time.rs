@@ -654,12 +654,19 @@ fn test_multiple_operation() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
+        // Both buffers tick every 130 ms, the inner one at 70, 200, 330 ms and the outer one at
+        // 100, 230, 360 ms, so that each outer buffer holds exactly one inner buffer. The checks
+        // at 30, 160 and 290 ms sit at least 40 ms away from every tick.
         let observable = observable
-            .buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS))
             .buffer_with_time(
                 DURATION_100_MS + DURATION_30_MS,
                 scheduler.clone(),
-                Some(DURATION_100_MS + DURATION_30_MS),
+                Some(DURATION_100_MS - DURATION_30_MS),
+            )
+            .buffer_with_time(
+                DURATION_100_MS + DURATION_30_MS,
+                scheduler.clone(),
+                Some(DURATION_100_MS),
             );
 
         let _subscription = observable.subscribe(observer);

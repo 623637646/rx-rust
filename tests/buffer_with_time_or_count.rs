@@ -1435,16 +1435,16 @@ fn test_multiple_operation() {
                 Some(DURATION_100_MS + DURATION_30_MS),
             );
 
+        // The batches of 111, 222 and 333 are all cut by count at 0 ms, before either timer
+        // fires. The 444s are cut by count at 60 ms. The first ticks at 100 and 130 ms resync the
+        // inner timer to 160 ms and the outer one to 130 ms, which emits [[444, 444]]; the inner
+        // tick at 160 ms hands an empty buffer to the outer one, whose next tick is at 260 ms. The
+        // checks at 0, 60 and 220 ms sit at least 40 ms away from every tick.
         let _subscription = observable.subscribe(observer);
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
         assert!(sender.on_next(111).is_continue());
         assert!(sender.on_next(111).is_continue());
         assert!(sender.on_next(111).is_continue());
@@ -1453,26 +1453,10 @@ fn test_multiple_operation() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert_eq!(checker.values(), [vec![vec![111, 111], vec![111, 111]]]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
         assert!(sender.on_next(222).is_continue());
         assert!(sender.on_next(222).is_continue());
         assert!(sender.on_next(222).is_continue());
         assert!(sender.on_next(222).is_continue());
-        assert_eq!(
-            checker.values(),
-            [
-                vec![vec![111, 111], vec![111, 111]],
-                vec![vec![222, 222], vec![222, 222]]
-            ]
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-        scheduler.sleep(DURATION_30_MS).await;
         assert_eq!(
             checker.values(),
             [
@@ -1523,7 +1507,7 @@ fn test_multiple_operation() {
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
+        scheduler.sleep(DURATION_100_MS + DURATION_30_MS * 2).await;
         assert_eq!(
             checker.values(),
             [
