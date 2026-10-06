@@ -48,6 +48,22 @@ use tokio::{
 ///     assert_eq!(values, [1, 2, 3]);
 /// }
 /// ```
+///
+/// The observer is handed to a task that may run on another thread, so an observer holding an
+/// `Rc` is refused at compile time; [`TokioLocalScheduler`] takes it:
+///
+/// ```compile_fail
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::just::Just,
+///     scheduler::runtime::tokio::TokioScheduler,
+/// };
+/// use std::{cell::RefCell, rc::Rc, time::Duration};
+///
+/// let values = Rc::new(RefCell::new(Vec::new()));
+/// let _subscription = Just::new(1)
+///     .delay(Duration::from_millis(5), TokioScheduler::current())
+///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
+/// ```
 #[derive(Debug, Clone)]
 pub struct TokioScheduler {
     handle: Handle,

@@ -557,6 +557,34 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Erases the observable's concrete type. See [`boxed_observable`] for the flavors; the
     /// lifetimes bound the observer (`'or`), the disposal (`'sub`) and the observable itself
     /// (`'oe`).
+    ///
+    /// The erased observable keeps what it borrows, so it can borrow from the stack, and it cannot
+    /// outlive what it borrows:
+    ///
+    /// ```rust
+    /// use rx_rust::{observable::ObservableExt, operators::creating::just::Just};
+    ///
+    /// let offset = 41;
+    /// let mut result = 0;
+    /// let source = Just::new(1).map(|value| value + offset).into_boxed();
+    /// source.subscribe_with_callback(|value| result = value, |_| {});
+    /// assert_eq!(result, 42);
+    /// ```
+    ///
+    /// ```compile_fail
+    /// use rx_rust::{
+    ///     observable::{ObservableExt, boxed_observable::BoxedObservable},
+    ///     operators::creating::just::Just,
+    ///     thread_mode::Local,
+    /// };
+    /// use std::convert::Infallible;
+    ///
+    /// fn dangling() -> BoxedObservable<'static, 'static, 'static, i32, Infallible, Local> {
+    ///     let offset = 41;
+    ///     let offset = &offset;
+    ///     Just::new(1).map(move |value| value + *offset).into_boxed()
+    /// }
+    /// ```
     fn into_boxed<'or, 'sub, 'oe>(
         self,
     ) -> BoxedObservable<'or, 'sub, 'oe, Self::Item, Self::Error, Self::Mode>
@@ -574,6 +602,20 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Erases the observable's concrete type, keeping it `Send`.
+    ///
+    /// Its observer is boxed as a [`SendBoxedObserver`], so it must be `Send` whatever the
+    /// source's mode, even for a `Local` source that [`into_boxed`](Self::into_boxed) would let
+    /// take an `Rc`:
+    ///
+    /// ```compile_fail
+    /// use rx_rust::{observable::ObservableExt, operators::creating::just::Just};
+    /// use std::{cell::RefCell, rc::Rc};
+    ///
+    /// let values = Rc::new(RefCell::new(Vec::new()));
+    /// let _subscription = Just::new(1)
+    ///     .into_send_boxed()
+    ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
+    /// ```
     fn into_send_boxed<'or, 'sub, 'oe>(
         self,
     ) -> SendBoxedObservable<'or, 'sub, 'oe, Self::Item, Self::Error, Self::Mode>

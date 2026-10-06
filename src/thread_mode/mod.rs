@@ -43,7 +43,33 @@ mod sealed {
 /// A mode is a type-level tag: it is never instantiated, and `PhantomData<M>` is `Send` exactly
 /// when events of `M` may cross threads.
 ///
-/// The trait is sealed: the two modes are the only ones.
+/// The trait is sealed: the two modes are the only ones. Even a mode that only forwards to
+/// [`Local`] cannot be added:
+///
+/// ```compile_fail
+/// use rx_rust::thread_mode::{Local, ThreadMode};
+///
+/// struct Custom;
+///
+/// impl ThreadMode for Custom {
+///     type Ptr<T> = <Local as ThreadMode>::Ptr<T>;
+///     type Weak<T> = <Local as ThreadMode>::Weak<T>;
+///     type Flag = <Local as ThreadMode>::Flag;
+///     type Or<M: ThreadMode> = M;
+///
+///     fn ptr<T>(value: T) -> Self::Ptr<T> {
+///         Local::ptr(value)
+///     }
+///
+///     fn downgrade<T>(ptr: &Self::Ptr<T>) -> Self::Weak<T> {
+///         Local::downgrade(ptr)
+///     }
+///
+///     fn upgrade<T>(weak: &Self::Weak<T>) -> Option<Self::Ptr<T>> {
+///         Local::upgrade(weak)
+///     }
+/// }
+/// ```
 pub trait ThreadMode: sealed::Mode + 'static {
     /// The shared, lockable state: `Rc<RefCell<T>>` or `Arc<Mutex<T>>`. Clones share the state.
     /// Reach through it with [`MutableHelper`]; create it with [`ptr`](ThreadMode::ptr).

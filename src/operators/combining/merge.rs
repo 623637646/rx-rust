@@ -45,6 +45,37 @@ use educe::Educe;
 /// assert_eq!(values, vec![1, 3, 2, 4]);
 /// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
+///
+/// The mode is the two sources' joined ([`Joined`]): a merge of
+/// `Local` sources keeps its state in an `Rc` and takes an observer holding one,
+///
+/// ```rust
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::just::Just,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{cell::RefCell, convert::Infallible, rc::Rc};
+///
+/// let values = Rc::new(RefCell::new(Vec::new()));
+/// let _subscription = Just::new(1)
+///     .merge_with(PublishSubject::<_, Infallible, _>::local())
+///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
+/// ```
+///
+/// while a `Shared` source makes the whole merge `Shared`, and its observer must be `Send`:
+///
+/// ```compile_fail
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::just::Just,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{cell::RefCell, convert::Infallible, rc::Rc};
+///
+/// let values = Rc::new(RefCell::new(Vec::new()));
+/// let _subscription = Just::new(1)
+///     .merge_with(PublishSubject::<_, Infallible, _>::shared())
+///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Merge<OE1, OE2> {

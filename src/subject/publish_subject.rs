@@ -46,7 +46,37 @@ use educe::Educe;
 ///
 /// The thread mode is declared when it is created: [`local`](Self::local) for a subject that is fed
 /// and subscribed to on one thread, [`shared`](Self::shared) for one that crosses threads, whose
-/// observers must then be `Send`.
+/// observers must then be `Send`. A local subject takes an observer holding an `Rc`:
+///
+/// ```rust
+/// use rx_rust::{observable::ObservableExt, subject::publish_subject::PublishSubject};
+/// use std::{cell::RefCell, rc::Rc};
+///
+/// let values = Rc::new(RefCell::new(Vec::new()));
+/// let _subscription = PublishSubject::<i32, (), _>::local()
+///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
+/// ```
+///
+/// A shared one refuses it:
+///
+/// ```compile_fail
+/// use rx_rust::{observable::ObservableExt, subject::publish_subject::PublishSubject};
+/// use std::{cell::RefCell, rc::Rc};
+///
+/// let values = Rc::new(RefCell::new(Vec::new()));
+/// let _subscription = PublishSubject::<i32, (), _>::shared()
+///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
+/// ```
+///
+/// And a local subject cannot be sent to another thread:
+///
+/// ```compile_fail
+/// use rx_rust::subject::publish_subject::PublishSubject;
+///
+/// fn require_send<T: Send>(_: T) {}
+///
+/// require_send(PublishSubject::<i32, (), _>::local());
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
 pub struct PublishSubject<'or, T, E, M: ObserverMode>(
