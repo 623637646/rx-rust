@@ -1,13 +1,24 @@
 mod tests_utils;
 
+use crate::main_loop::MainLoop;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
+use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_scheduler::block_on;
 use futures::StreamExt;
 use rx_rust::disposable::Disposable;
+use rx_rust::observable::ObservableExt;
+use rx_rust::observer::{Observer, Termination};
+use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::{Scheduler, SchedulerExt, Task, TaskState};
+use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
+use std::convert::Infallible;
+use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, Mutex, mpsc};
 use std::task::Poll;
+use std::thread;
 use std::time::{Duration, Instant};
 
 const RECURSION_EXECUTION_TIMES: usize = 200;
@@ -589,4 +600,342 @@ fn test_tokio_current_takes_the_runtime_it_is_built_in() {
 #[should_panic(expected = "must be called from the context of a Tokio 1.x runtime")]
 fn test_tokio_current_panics_outside_of_a_runtime() {
     let _ = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
+}
+
+/// A scheduler written the way a UI or game loop would write one: no async executor, only a loop
+/// on its own thread that drives each task step by step through `Task::split` and
+/// `Stepper::step`.
+mod main_loop {
+    use rx_rust::{
+        disposable::Disposable,
+        observable::Subscription,
+        scheduler::{Scheduler, SchedulerTypes, Task, TaskState},
+        thread_mode::Shared,
+    };
+    use std::{
+        collections::{HashMap, VecDeque},
+        pin::Pin,
+        sync::{
+            Arc,
+            atomic::{AtomicU64, Ordering},
+            mpsc,
+        },
+        task::{Context, Poll, Wake, Waker},
+        thread::{self, JoinHandle, ThreadId},
+        time::{Duration, Instant},
+    };
+
+    /// A task with its pinned state boxed and its type erased: calling it steps it once.
+    type Job = Box<dyn FnMut(&mut Context<'_>) -> Poll<TaskState> + Send>;
+
+    enum Message {
+        /// Queue a task, to be stepped first once `Instant` is reached.
+        Run(u64, Job, Instant),
+        /// The waker of a pending task was woken.
+        Wake(u64),
+        /// The task was disposed: drop it, wherever it is waiting.
+        Cancel(u64),
+        Quit,
+    }
+
+    /// Where a job waits for its next step.
+    enum Wait {
+        /// In the ready queue.
+        Ready,
+        /// Until this instant.
+        Until(Instant),
+        /// For its waker.
+        Waker,
+    }
+
+    /// The handle of a [`MainLoop`]: `Clone + Send`, so any thread can queue tasks on the loop.
+    #[derive(Clone)]
+    pub(super) struct MainLoopScheduler {
+        sender: mpsc::Sender<Message>,
+        next_id: Arc<AtomicU64>,
+    }
+
+    /// The loop thread a [`MainLoopScheduler`] queues its tasks on.
+    pub(super) struct MainLoop {
+        sender: mpsc::Sender<Message>,
+        thread: JoinHandle<()>,
+    }
+
+    impl MainLoop {
+        /// Starts the loop on a thread of its own.
+        pub(super) fn start() -> (Self, MainLoopScheduler) {
+            let (sender, receiver) = mpsc::channel();
+            let loop_sender = sender.clone();
+            let thread = thread::spawn(move || run(&receiver, &loop_sender));
+            let scheduler = MainLoopScheduler {
+                sender: sender.clone(),
+                next_id: Arc::default(),
+            };
+            (Self { sender, thread }, scheduler)
+        }
+
+        /// The id of the loop thread, where every task runs.
+        pub(super) fn thread_id(&self) -> ThreadId {
+            self.thread.thread().id()
+        }
+
+        /// Stops the loop, dropping the tasks it still holds, and waits for its thread to end.
+        pub(super) fn quit(self) {
+            self.sender.send(Message::Quit).unwrap();
+            self.thread.join().unwrap();
+        }
+    }
+
+    fn run(receiver: &mpsc::Receiver<Message>, sender: &mpsc::Sender<Message>) {
+        let mut jobs: HashMap<u64, (Job, Wait)> = HashMap::new();
+        let mut ready: VecDeque<u64> = VecDeque::new();
+        loop {
+            // Move the sleepers whose instant has come to the ready queue.
+            let now = Instant::now();
+            for (id, (_, wait)) in &mut jobs {
+                if matches!(wait, Wait::Until(at) if *at <= now) {
+                    *wait = Wait::Ready;
+                    ready.push_back(*id);
+                }
+            }
+
+            // Step one ready task, if any; otherwise block until a message or the next sleeper is due.
+            let message = if let Some(id) = ready.pop_front() {
+                if let Some((job, wait)) = jobs.get_mut(&id) {
+                    let waker = Waker::from(Arc::new(JobWaker {
+                        id,
+                        sender: sender.clone(),
+                    }));
+                    match job(&mut Context::from_waker(&waker)) {
+                        Poll::Pending => *wait = Wait::Waker,
+                        Poll::Ready(TaskState::Finished) => drop(jobs.remove(&id)),
+                        Poll::Ready(TaskState::Yield) => {
+                            *wait = Wait::Ready;
+                            ready.push_back(id);
+                        }
+                        Poll::Ready(TaskState::SleepUntil(at)) => *wait = Wait::Until(at),
+                    }
+                }
+                match receiver.try_recv() {
+                    Ok(message) => message,
+                    Err(_) => continue,
+                }
+            } else {
+                let next_due = jobs
+                    .values()
+                    .filter_map(|(_, wait)| match wait {
+                        Wait::Until(at) => Some(*at),
+                        Wait::Ready | Wait::Waker => None,
+                    })
+                    .min();
+                match next_due {
+                    Some(at) => {
+                        match receiver.recv_timeout(at.saturating_duration_since(Instant::now())) {
+                            Ok(message) => message,
+                            Err(_) => continue,
+                        }
+                    }
+                    None => receiver.recv().unwrap(),
+                }
+            };
+
+            match message {
+                Message::Run(id, job, at) => {
+                    jobs.insert(id, (job, Wait::Until(at)));
+                }
+                Message::Wake(id) => {
+                    // A wake may arrive for a task that is already ready, sleeping or gone: only a task
+                    // waiting for its waker moves.
+                    if let Some((_, wait @ Wait::Waker)) = jobs.get_mut(&id) {
+                        *wait = Wait::Ready;
+                        ready.push_back(id);
+                    }
+                }
+                Message::Cancel(id) => drop(jobs.remove(&id)),
+                Message::Quit => return,
+            }
+        }
+    }
+
+    struct JobWaker {
+        id: u64,
+        sender: mpsc::Sender<Message>,
+    }
+
+    impl Wake for JobWaker {
+        fn wake(self: Arc<Self>) {
+            // The loop may be gone already, which leaves nothing to wake.
+            let _ = self.sender.send(Message::Wake(self.id));
+        }
+    }
+
+    /// Disposes a task queued on a [`MainLoop`]: the loop drops it at once, even while it sleeps or
+    /// waits for its waker.
+    pub(super) struct MainLoopDisposal {
+        id: u64,
+        sender: mpsc::Sender<Message>,
+    }
+
+    impl Disposable for MainLoopDisposal {
+        fn dispose(self) {
+            let _ = self.sender.send(Message::Cancel(self.id));
+        }
+    }
+
+    impl SchedulerTypes for MainLoopScheduler {
+        type Mode = Shared;
+        type Disposal = MainLoopDisposal;
+    }
+
+    impl<TC, P> Scheduler<TC, P> for MainLoopScheduler
+    where
+        TC: Send + 'static,
+        P: Send + 'static,
+    {
+        fn run_task(
+            &self,
+            task: Task<TC, P>,
+            delay: Option<Duration>,
+        ) -> Subscription<Self::Disposal> {
+            let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+            let (mut stepper, pinned) = task.split();
+            let mut pinned: Pin<Box<P>> = Box::pin(pinned);
+            let job: Job = Box::new(move |cx| stepper.step(pinned.as_mut(), cx));
+            let at = Instant::now() + delay.unwrap_or_default();
+            // A loop that has quit drops the task with the message.
+            let _ = self.sender.send(Message::Run(id, job, at));
+            Subscription::new(MainLoopDisposal {
+                id,
+                sender: self.sender.clone(),
+            })
+        }
+    }
+}
+
+/// How long a `MainLoop` test waits for an event: far beyond what it takes, it only turns a hang
+/// into a failure.
+const MAIN_LOOP_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[test]
+fn test_main_loop_delivers_on_its_thread() {
+    let (main_loop, scheduler) = MainLoop::start();
+    let main_thread = main_loop.thread_id();
+    let values = Arc::new(Mutex::new(Vec::new()));
+    let values_observer = values.clone();
+    let (termination_tx, termination_rx) = mpsc::channel();
+    let mut subject = PublishSubject::<i32, Infallible, _>::shared();
+    let subscription = subject
+        .clone()
+        .observe_on(scheduler)
+        .subscribe_with_callback(
+            move |value| {
+                values_observer.with_mut(|values| values.push((value, thread::current().id())))
+            },
+            move |termination| {
+                termination_tx
+                    .send((termination, thread::current().id()))
+                    .unwrap()
+            },
+        );
+
+    // Emitted from a thread of its own, received on the loop's.
+    thread::spawn(move || {
+        for value in 1..=3 {
+            assert!(subject.on_next(value).is_continue());
+        }
+        subject.on_termination(Termination::Completed);
+    })
+    .join()
+    .unwrap();
+
+    let termination = termination_rx.recv_timeout(MAIN_LOOP_TIMEOUT).unwrap();
+    assert_eq!(termination, (Termination::Completed, main_thread));
+    assert_eq!(
+        values.clone_value(),
+        [(1, main_thread), (2, main_thread), (3, main_thread)]
+    );
+    drop(subscription);
+    main_loop.quit();
+}
+
+// `delay` hands the loop a task with a delay, and then sleeps between its steps.
+#[test]
+fn test_main_loop_runs_a_delayed_task() {
+    let (main_loop, scheduler) = MainLoop::start();
+    let main_thread = main_loop.thread_id();
+    let (event_tx, event_rx) = mpsc::channel();
+    let termination_tx = event_tx.clone();
+    let start_time = Instant::now();
+    let subscription = Just::new(1)
+        .delay(DURATION_30_MS, scheduler)
+        .subscribe_with_callback(
+            move |value| {
+                event_tx
+                    .send((Some(value), thread::current().id()))
+                    .unwrap()
+            },
+            move |_| termination_tx.send((None, thread::current().id())).unwrap(),
+        );
+
+    assert_eq!(
+        event_rx.recv_timeout(MAIN_LOOP_TIMEOUT).unwrap(),
+        (Some(1), main_thread)
+    );
+    assert!(start_time.elapsed() >= DURATION_30_MS);
+    assert_eq!(
+        event_rx.recv_timeout(MAIN_LOOP_TIMEOUT).unwrap(),
+        (None, main_thread)
+    );
+    drop(subscription);
+    main_loop.quit();
+}
+
+// A pending task is stepped again once another thread wakes it.
+#[test]
+fn test_main_loop_steps_a_task_woken_from_another_thread() {
+    let (main_loop, scheduler) = MainLoop::start();
+    let main_thread = main_loop.thread_id();
+    let (wake_tx, wake_rx) = futures::channel::oneshot::channel::<()>();
+    let (done_tx, done_rx) = mpsc::channel();
+    let subscription = scheduler.spawn_future(async move {
+        wake_rx.await.unwrap();
+        done_tx.send(thread::current().id()).unwrap();
+    });
+
+    thread::spawn(move || {
+        thread::sleep(DURATION_10_MS);
+        wake_tx.send(()).unwrap();
+    })
+    .join()
+    .unwrap();
+
+    assert_eq!(
+        done_rx.recv_timeout(MAIN_LOOP_TIMEOUT).unwrap(),
+        main_thread
+    );
+    drop(subscription);
+    main_loop.quit();
+}
+
+// A task disposed before its delay ends never runs, and the loop drops it at once rather than
+// when it would have been due.
+#[test]
+fn test_main_loop_disposes_a_queued_task() {
+    let (main_loop, scheduler) = MainLoop::start();
+    let (dropped_tx, dropped_rx) = mpsc::channel();
+    let probe = DropProbe::new().on_drop(Box::new(move || dropped_tx.send(()).unwrap()));
+    let ran = Arc::new(AtomicBool::new(false));
+    let ran_task = ran.clone();
+    let disposal = scheduler.schedule(
+        move || {
+            drop(probe);
+            ran_task.write(true);
+        },
+        Some(Duration::from_secs(1)),
+    );
+
+    disposal.dispose();
+    assert!(dropped_rx.recv_timeout(DURATION_100_MS).is_ok());
+    assert!(!ran.read());
+    main_loop.quit();
 }
