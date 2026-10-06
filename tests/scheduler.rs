@@ -563,7 +563,7 @@ fn test_tokio_current_takes_the_runtime_it_is_built_in() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "must be called from the context of a Tokio 1.x runtime")]
 fn test_tokio_current_panics_outside_of_a_runtime() {
     let _ = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 }

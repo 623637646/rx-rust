@@ -1321,6 +1321,7 @@ fn a_subscriber_that_arrives_while_the_termination_is_queued_is_terminated_at_on
 /// An observer that panics kills the subject: the other observers are released without being
 /// notified, the subject reports no termination and rejects every event, and an observer that
 /// subscribes afterwards is dropped without being notified.
+#[cfg(panic = "unwind")]
 #[test]
 fn a_panicking_observer_kills_the_subject() {
     let mut subject: PublishSubject<'_, i32, &'static str, _> = PublishSubject::shared();
