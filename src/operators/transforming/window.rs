@@ -13,7 +13,7 @@ use crate::{
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
     utils::{
         pending_events::EventBatch,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_owning_source},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
     },
 };
 use educe::Educe;
@@ -128,7 +128,7 @@ impl<OE, OE1> Window<'_, OE, OE1> {
 
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
-    subscribe_with_context::ContextDisposal<M, DelegateAction<T, E>, E, (), ChainDisposal<D, D1>>,
+    subscribe_with_context::Disposal<M, DelegateAction<T, E>, E, (), ChainDisposal<D, D1>>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -196,7 +196,7 @@ where
         };
         // The windows own their buffered items, so the context needs no model of its own: it only
         // serializes the actions below and owns the source and boundary subscriptions.
-        subscribe_with_context_owning_source(observer, (), |context| {
+        subscribe_with_context(observer, (), |context| {
             // The first window is opened before subscribing, so that a synchronous source has a
             // window to deliver its values to. An observer that stops on that first window stops
             // the context, which disposes the subscriptions below as soon as they are installed.

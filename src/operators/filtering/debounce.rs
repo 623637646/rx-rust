@@ -88,14 +88,14 @@ impl<OE, S> Debounce<OE, S> {
 type DebounceMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The context of a [`Debounce`] subscription.
-type DebounceContext<M, T, E, OR, S> =
-    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>;
+type DebounceContext<M, T, E, OR, S, D> =
+    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>, D>;
 
 /// The task of a [`Debounce`] timer. It holds the context strongly, so that a pending value is
 /// still emitted after the source dropped its observer. A disposal still releases the observer at
 /// once: the source drops its own handle as it is disposed, and a handle dropped once the context
 /// has stopped releases the observer (see `SerializedDelivery`).
-type DebounceTask<M, T, E, OR, S> = RecursiveContext<DebounceContext<M, T, E, OR, S>>;
+type DebounceTask<M, T, E, OR, S, D> = RecursiveContext<DebounceContext<M, T, E, OR, S, D>>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -117,8 +117,12 @@ where
 impl<T, E, OE, S, OR> Observable<OR> for Debounce<OE, S>
 where
     OR: Observer<T, E>,
-    OE: Observable<DebounceObserver<DebounceMode<OE, S>, T, E, OR, S>, Item = T, Error = E>,
-    S: Scheduler<DebounceTask<DebounceMode<OE, S>, T, E, OR, S>>,
+    OE: Observable<
+            DebounceObserver<DebounceMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
+            Item = T,
+            Error = E,
+        >,
+    S: Scheduler<DebounceTask<DebounceMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>>,
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model::<T, S::Disposal>::Idle;
@@ -143,21 +147,23 @@ enum Model<T, D: Disposable> {
     },
 }
 
-pub struct DebounceObserver<M, T, E, OR, S>
+pub struct DebounceObserver<M, T, E, OR, S, D>
 where
+    D: Disposable,
     M: ThreadMode,
     S: SchedulerTypes,
 {
-    context: DebounceContext<M, T, E, OR, S>,
+    context: DebounceContext<M, T, E, OR, S, D>,
     time_span: Duration,
     scheduler: S,
 }
 
-impl<M, T, E, OR, S> Observer<T, E> for DebounceObserver<M, T, E, OR, S>
+impl<M, T, E, OR, S, D> Observer<T, E> for DebounceObserver<M, T, E, OR, S, D>
 where
+    D: Disposable,
     OR: Observer<T, E>,
     M: ThreadMode,
-    S: Scheduler<DebounceTask<M, T, E, OR, S>>,
+    S: Scheduler<DebounceTask<M, T, E, OR, S, D>>,
 {
     fn on_next(&mut self, value: T) -> Flow {
         let timer_setup = self.context.update(|model| {

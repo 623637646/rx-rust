@@ -6,9 +6,7 @@ use crate::disposable::chain_disposal::ChainDisposal;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::Disposable,
     observable::Subscription,
@@ -108,7 +106,7 @@ impl<OE, OE1> Buffer<OE, OE1> {
 
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
-    subscribe_with_context::ContextDisposal<M, Vec<T>, E, Vec<T>, ChainDisposal<D, D1>>,
+    subscribe_with_context::Disposal<M, Vec<T>, E, Vec<T>, ChainDisposal<D, D1>>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -156,7 +154,7 @@ where
         >,
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
-        subscribe_with_context_owning_source(observer, Vec::new(), |context| {
+        subscribe_with_context(observer, Vec::new(), |context| {
             let subscription_1 = self.boundary.subscribe(BoundaryObserver(context.clone()));
             let subscription_2 = self.source.subscribe(BufferObserver(context));
             subscription_1.preceded_by_bound(subscription_2)

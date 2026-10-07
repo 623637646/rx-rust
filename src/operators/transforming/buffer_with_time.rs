@@ -4,9 +4,7 @@ use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     observable::Subscription,
     observable::{Observable, ObservableTypes},
@@ -123,7 +121,7 @@ type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::ContextDisposal<M, Vec<T>, E, Vec<T>, ChainDisposal<SD, D>>,
+    subscribe_with_context::Disposal<M, Vec<T>, E, Vec<T>, ChainDisposal<SD, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -155,7 +153,7 @@ where
     S: Scheduler<BufferWithTimeTask<T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
-        subscribe_with_context_owning_source(observer, Vec::new(), |context| {
+        subscribe_with_context(observer, Vec::new(), |context| {
             let sub = self
                 .source
                 .subscribe(BufferWithTimeObserver(context.clone()));

@@ -506,6 +506,27 @@ fn test_unsub_on_next_by_take() {
     });
 }
 
+/// Downstream ends its own stream on the timer's thread: the source is disposed there and then,
+/// not left subscribed until it sends again.
+#[test]
+fn test_stop_on_next() {
+    block_on(|scheduler| async move {
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::stopping_after(1);
+
+        let _subscription = observable
+            .delay(DURATION_100_MS, scheduler.clone())
+            .subscribe(observer);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+        assert!(sender.on_next(111).is_continue());
+        scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    });
+}
+
 #[test]
 fn test_multiple_operation() {
     block_on(|scheduler| async move {
@@ -1014,36 +1035,6 @@ fn test_error_on_unsub() {
         scheduler.sleep(DURATION_100_MS + DURATION_30_MS).await;
         assert!(checker.values().is_empty());
         assert_eq!(checker.state(), State::Dropped);
-    });
-}
-
-#[test]
-fn test_lifetime_sub() {
-    block_on(|scheduler| async move {
-        // OK
-        let life_marker = TestStruct;
-        let _subscription;
-
-        // Error
-        // let _subscription;
-        // let life_marker = TestStruct;
-
-        {
-            let observable = Create::shared_boxed(|mut observer| {
-                assert!(observer.on_next(1).is_continue());
-                observer.on_termination(Termination::<String>::Completed);
-                Subscription::new(CallbackDisposal::new(|| {
-                    life_marker.consume_ref();
-                }))
-            });
-
-            let observable = observable.delay(DURATION_100_MS, scheduler.clone());
-
-            let (_, observer) = Checker::new();
-            _subscription = observable.subscribe(observer);
-        }
-
-        scheduler.sleep(DURATION_30_MS * 2).await;
     });
 }
 

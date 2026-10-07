@@ -11,9 +11,7 @@ use crate::observer::{Flow, Observer, Termination};
 use crate::scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState};
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use educe::Educe;
 use std::time::{Duration, Instant};
 
@@ -118,7 +116,7 @@ type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::ContextDisposal<M, T, Error<E>, Model, ChainDisposal<OptionDisposal<BoundDropDisposal<SD>>, D>>,
+    subscribe_with_context::Disposal<M, T, Error<E>, Model, ChainDisposal<OptionDisposal<BoundDropDisposal<SD>>, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -147,7 +145,7 @@ where
         let model = Model {
             deadline: Instant::now() + self.duration,
         };
-        subscribe_with_context_owning_source(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             let source_subscription = self.source.subscribe(TimeoutObserver {
                 context: context.clone(),
                 duration: self.duration,

@@ -6,8 +6,8 @@
 //! including when that happens synchronously while the source is still being subscribed to.
 //!
 //! An operator with shared state uses
-//! [`subscribe_with_context`](crate::utils::subscribe_with_context) instead, whose owning form
-//! covers the same case.
+//! [`subscribe_with_context`](crate::utils::subscribe_with_context) instead, whose context owns
+//! the source subscription and covers the same case.
 
 use crate::{
     delegate_disposal,

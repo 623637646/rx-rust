@@ -5,9 +5,7 @@ use crate::disposable::chain_disposal::ChainDisposal;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::Disposable,
     observable::{Observable, ObservableTypes, Subscription},
@@ -67,7 +65,7 @@ impl<OE1, OE2> Zip<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<M, T1, T2, E, D1, D2>,
-    subscribe_with_context::ContextDisposal<M, (T1, T2), E, Model<T1, T2>, ChainDisposal<D2, D1>>,
+    subscribe_with_context::Disposal<M, (T1, T2), E, Model<T1, T2>, ChainDisposal<D2, D1>>,
     where M: ThreadMode, D1: Disposable, D2: Disposable
 );
 
@@ -121,7 +119,7 @@ where
             first: (VecDeque::new(), false),
             second: (VecDeque::new(), false),
         };
-        subscribe_with_context_owning_source(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             let subscription_1 = self.source_1.subscribe(ZipObserver1(context.clone()));
             let subscription_2 = self.source_2.subscribe(ZipObserver2(context));
             subscription_1.preceded_by_bound(subscription_2)

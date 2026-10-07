@@ -550,6 +550,26 @@ fn test_unsub_on_next_by_take() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b11001111);
     });
 }
+/// Downstream ends its own stream on the scheduler's thread: the source is disposed there and then,
+/// not left subscribed until it sends again.
+#[test]
+fn test_stop_on_next() {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerScheduler::new("thread_1");
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::stopping_after(1);
+
+        let _subscription = observable.observe_on(thread_1.clone()).subscribe(observer);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+        assert!(sender.on_next(111).is_continue());
+        assert!(sender.on_next(222).is_continue());
+        thread_1.run_until_stalled().await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    });
+}
 
 /// Values queued before the scheduler task runs are delivered as one batch. Disposing partway
 /// through that batch must stop it: the values behind the disposal are never observed.
@@ -604,6 +624,8 @@ fn test_multiple_operation() {
         let call_history_a_2 = call_history_a.clone();
         let call_history_a_3 = call_history_a.clone();
         let call_history_a_4 = call_history_a.clone();
+        let call_history_a_5 = call_history_a.clone();
+        let call_history_a_6 = call_history_a.clone();
         let call_history_b = Arc::new(AtomicUsize::new(0));
         let call_history_b_1 = call_history_b.clone();
         let call_history_b_2 = call_history_b.clone();
@@ -636,13 +658,15 @@ fn test_multiple_operation() {
                 call_history_a_4.fetch_or(1 << 5, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), Some("thread_1"));
             })
-            .do_before_disposal(|| {
-                call_history_a.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
+            // The second `observe_on` disposes its source once it has delivered the completion,
+            // on the thread it delivers on.
+            .do_before_disposal(move || {
+                call_history_a_5.fetch_or(1 << 6, Ordering::SeqCst);
+                assert_eq!(get_thread_name(), Some("thread_2"));
             })
-            .do_after_disposal(|| {
-                call_history_a.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
+            .do_after_disposal(move || {
+                call_history_a_6.fetch_or(1 << 7, Ordering::SeqCst);
+                assert_eq!(get_thread_name(), Some("thread_2"));
             })
             .observe_on(thread_2.clone())
             .do_before_subscription(|| {
@@ -711,7 +735,7 @@ fn test_multiple_operation() {
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(call_history_a.load(Ordering::SeqCst), 0b00111111);
+        assert_eq!(call_history_a.load(Ordering::SeqCst), 0b11111111);
         assert_eq!(call_history_b.load(Ordering::SeqCst), 0b00111111);
 
         subscription.dispose();
@@ -1652,13 +1676,15 @@ fn test_observe_on_with_subscribe_on() {
                 call_history_a_6.fetch_or(1 << 5, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), Some("thread_o_1"));
             })
+            // The second `observe_on` disposes its source once it has delivered the completion,
+            // on the thread it delivers on.
             .do_before_disposal(move || {
                 call_history_a_7.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
+                assert_eq!(get_thread_name(), Some("thread_o_2"));
             })
             .do_after_disposal(move || {
                 call_history_a_8.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
+                assert_eq!(get_thread_name(), Some("thread_o_2"));
             })
             .observe_on(thread_o_2.clone())
             .subscribe_on(thread_s_1.clone())
@@ -1732,7 +1758,7 @@ fn test_observe_on_with_subscribe_on() {
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(call_history_a.load(Ordering::SeqCst), 0b00111111);
+        assert_eq!(call_history_a.load(Ordering::SeqCst), 0b11111111);
         assert_eq!(call_history_b.load(Ordering::SeqCst), 0b00111111);
 
         subscription.dispose();
@@ -1741,34 +1767,6 @@ fn test_observe_on_with_subscribe_on() {
         assert_eq!(channel_checker.state(), ChannelState::Completed);
         assert_eq!(call_history_a.load(Ordering::SeqCst), 0b11111111);
         assert_eq!(call_history_b.load(Ordering::SeqCst), 0b11111111);
-    });
-}
-
-#[test]
-fn test_lifetime_sub() {
-    block_on(|_| async move {
-        // OK
-        let life_marker = TestStruct;
-        let _subscription;
-
-        // Error
-        // let _subscription;
-        // let life_marker = TestStruct;
-
-        {
-            let observable = Create::shared_boxed(|mut observer| {
-                assert!(observer.on_next(1).is_continue());
-                observer.on_termination(Termination::<String>::Completed);
-                Subscription::new(CallbackDisposal::new(|| {
-                    life_marker.consume_ref();
-                }))
-            });
-
-            let observable = observable.observe_on(ThreadCheckerScheduler::new("thread_1"));
-
-            let (_, observer) = Checker::new();
-            _subscription = observable.subscribe(observer);
-        }
     });
 }
 

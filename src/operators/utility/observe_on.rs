@@ -114,14 +114,14 @@ type ObserveOnContextMode<OE, S> =
     Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The context of an [`ObserveOn`] subscription.
-type ObserveOnContext<M, T, E, OR, S> =
-    SubscriptionContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::Disposal>>;
+type ObserveOnContext<M, T, E, OR, S, D> =
+    SubscriptionContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::Disposal>, D>;
 
 /// The task of an [`ObserveOn`]. It holds the context strongly, so that the events already queued
 /// are delivered after the source has let go of its observer, terminated or not. A disposal still
 /// releases the observer at once: the source drops its own handle as it is disposed, and a handle
 /// dropped once the context has stopped releases the observer.
-type ObserveOnTask<M, T, E, OR, S> = RecursiveContext<ObserveOnContext<M, T, E, OR, S>>;
+type ObserveOnTask<M, T, E, OR, S, D> = RecursiveContext<ObserveOnContext<M, T, E, OR, S, D>>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -144,8 +144,21 @@ where
 impl<T, E, OE, S, OR> Observable<OR> for ObserveOn<OE, S>
 where
     OR: Observer<T, E>,
-    OE: Observable<ObserveOnObserver<ObserveOnContextMode<OE, S>, T, E, OR, S>, Item = T, Error = E>,
-    S: Scheduler<ObserveOnTask<ObserveOnContextMode<OE, S>, T, E, OR, S>>,
+    OE: Observable<
+            ObserveOnObserver<
+                ObserveOnContextMode<OE, S>,
+                T,
+                E,
+                OR,
+                S,
+                <OE as ObservableTypes>::Disposal,
+            >,
+            Item = T,
+            Error = E,
+        >,
+    S: Scheduler<
+        ObserveOnTask<ObserveOnContextMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
+    >,
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model::<T, E, S::Disposal> {
@@ -173,17 +186,19 @@ struct Model<T, E, D: Disposable> {
     task: SubscriptionSlot<BoundDropDisposal<D>>,
 }
 
-pub struct ObserveOnObserver<M, T, E, OR, S>
+pub struct ObserveOnObserver<M, T, E, OR, S, D>
 where
+    D: Disposable,
     M: ThreadMode,
     S: SchedulerTypes,
 {
-    context: ObserveOnContext<M, T, E, OR, S>,
+    context: ObserveOnContext<M, T, E, OR, S, D>,
     scheduler: S,
 }
 
-impl<M, T, E, OR, S> ObserveOnObserver<M, T, E, OR, S>
+impl<M, T, E, OR, S, D> ObserveOnObserver<M, T, E, OR, S, D>
 where
+    D: Disposable,
     M: ThreadMode,
     S: SchedulerTypes,
 {
@@ -199,7 +214,7 @@ where
     fn queue_event(&self, event: Event<T, E>) -> Flow
     where
         OR: Observer<T, E>,
-        S: Scheduler<ObserveOnTask<M, T, E, OR, S>>,
+        S: Scheduler<ObserveOnTask<M, T, E, OR, S, D>>,
     {
         let task_setup = self.context.update(|model| {
             match event {
@@ -270,11 +285,12 @@ where
     }
 }
 
-impl<M, T, E, OR, S> Observer<T, E> for ObserveOnObserver<M, T, E, OR, S>
+impl<M, T, E, OR, S, D> Observer<T, E> for ObserveOnObserver<M, T, E, OR, S, D>
 where
+    D: Disposable,
     OR: Observer<T, E>,
     M: ThreadMode,
-    S: Scheduler<ObserveOnTask<M, T, E, OR, S>>,
+    S: Scheduler<ObserveOnTask<M, T, E, OR, S, D>>,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.queue_event(Event::Next(value))

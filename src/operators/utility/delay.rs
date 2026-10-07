@@ -102,14 +102,14 @@ impl<OE, S> Delay<OE, S> {
 type DelayMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
 
 /// The context of a [`Delay`] subscription.
-type DelayContext<M, T, E, OR, S> =
-    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>>;
+type DelayContext<M, T, E, OR, S, D> =
+    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>, D>;
 
 /// The task of a [`Delay`] timer. It holds the context strongly, so that the values already delayed
 /// are delivered after the source has let go of its observer, terminated or not. A disposal still
 /// releases the observer at once: the source drops its own handle as it is disposed, and a handle
 /// dropped once the context has stopped releases the observer.
-type DelayTask<M, T, E, OR, S> = RecursiveContext<DelayContext<M, T, E, OR, S>>;
+type DelayTask<M, T, E, OR, S, D> = RecursiveContext<DelayContext<M, T, E, OR, S, D>>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
@@ -131,8 +131,12 @@ where
 impl<T, E, OE, S, OR> Observable<OR> for Delay<OE, S>
 where
     OR: Observer<T, E>,
-    OE: Observable<DelayObserver<DelayMode<OE, S>, T, E, OR, S>, Item = T, Error = E>,
-    S: Scheduler<DelayTask<DelayMode<OE, S>, T, E, OR, S>>,
+    OE: Observable<
+            DelayObserver<DelayMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
+            Item = T,
+            Error = E,
+        >,
+    S: Scheduler<DelayTask<DelayMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>>,
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model::<T, S::Disposal> {
@@ -173,18 +177,20 @@ impl<T, D: Disposable> Model<T, D> {
     }
 }
 
-pub struct DelayObserver<M, T, E, OR, S>
+pub struct DelayObserver<M, T, E, OR, S, D>
 where
+    D: Disposable,
     M: ThreadMode,
     S: SchedulerTypes,
 {
-    context: DelayContext<M, T, E, OR, S>,
+    context: DelayContext<M, T, E, OR, S, D>,
     delay: Duration,
     scheduler: S,
 }
 
-impl<M, T, E, OR, S> DelayObserver<M, T, E, OR, S>
+impl<M, T, E, OR, S, D> DelayObserver<M, T, E, OR, S, D>
 where
+    D: Disposable,
     OR: Observer<T, E>,
     M: ThreadMode,
     S: SchedulerTypes,
@@ -198,7 +204,7 @@ where
     // the bounds of an impl on a public type may not.
     fn queue_event(&self, value: Option<T>) -> Flow
     where
-        S: Scheduler<DelayTask<M, T, E, OR, S>>,
+        S: Scheduler<DelayTask<M, T, E, OR, S, D>>,
     {
         let timer_setup = self.context.update(|model| {
             let deadline = Instant::now() + self.delay;
@@ -274,11 +280,12 @@ where
     }
 }
 
-impl<M, T, E, OR, S> Observer<T, E> for DelayObserver<M, T, E, OR, S>
+impl<M, T, E, OR, S, D> Observer<T, E> for DelayObserver<M, T, E, OR, S, D>
 where
+    D: Disposable,
     OR: Observer<T, E>,
     M: ThreadMode,
-    S: Scheduler<DelayTask<M, T, E, OR, S>>,
+    S: Scheduler<DelayTask<M, T, E, OR, S, D>>,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.queue_event(Some(value))

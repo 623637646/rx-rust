@@ -6,9 +6,7 @@ use crate::disposable::chain_disposal::ChainDisposal;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::Disposable,
     observable::Subscription,
@@ -82,7 +80,7 @@ impl<OE, OE1> Sample<OE, OE1> {
 
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
-    subscribe_with_context::ContextDisposal<M, T, E, Model<T>, ChainDisposal<D, D1>>,
+    subscribe_with_context::Disposal<M, T, E, Model<T>, ChainDisposal<D, D1>>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -131,7 +129,7 @@ where
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model { last_value: None };
-        subscribe_with_context_owning_source(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             let sample_observer = SampleObserver(context.clone());
             let sampler_observer = SamplerObserver(context);
             let subscription_1 = self.sampler.subscribe(sampler_observer);

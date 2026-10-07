@@ -8,9 +8,7 @@ use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::id_generator::{Id, IdGenerator};
 use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::{
     observable::{Observable, ObservableTypes, Subscription},
@@ -88,7 +86,7 @@ impl<E, OE1, I> Switch<WithErrorType<E, FromIter<I>>, OE1> {
 
 delegate_disposal!(
     Disposal<M, T, E, D, D1>,
-    subscribe_with_context::ContextDisposal<M, T, E, Model<D1>, D>,
+    subscribe_with_context::Disposal<M, T, E, Model<D1>, D>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -137,7 +135,7 @@ where
             is_source_completed: false,
             sub_ids: IdGenerator::default(),
         };
-        subscribe_with_context_owning_source(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             self.source.subscribe(SwitchObserver(context))
         })
         .map_into()

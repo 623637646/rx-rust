@@ -5,9 +5,7 @@ use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
 use crate::observable::Subscription;
 use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
@@ -132,7 +130,7 @@ type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::ContextDisposal<M, Vec<T>, E, Model<T>, ChainDisposal<SD, D>>,
+    subscribe_with_context::Disposal<M, Vec<T>, E, Model<T>, ChainDisposal<SD, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -168,7 +166,7 @@ where
             values: Vec::with_capacity(self.count.get()),
             last_sending_time_from_counting: None,
         };
-        subscribe_with_context_owning_source(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             let buffer_observer = BufferWithTimeOrCountObserver {
                 context: context.clone(),
                 count: self.count,

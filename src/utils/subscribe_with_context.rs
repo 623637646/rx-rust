@@ -7,13 +7,13 @@
 //! operator with several sources, a notifier or a scheduler task correct without any locking of
 //! its own.
 //!
-//! Two entry points differ in who owns the source subscription — see each for when to use it:
-//! [`subscribe_with_context`] chains it after the context, [`subscribe_with_context_owning_source`]
-//! puts it inside, so that the context disposes it when it terminates on its own.
+//! The context owns the source subscription, so that it disposes the source as soon as it stops,
+//! whatever stopped it: a disposal, a termination — from the source, a notifier, a scheduler task
+//! or another source — or a downstream that answered [`Flow::Stop`].
 //!
 //! # Examples
-//! An operator that emits the running total and completes on its own once it exceeds a limit —
-//! which is why it owns its source:
+//! An operator that emits the running total and completes on its own once it exceeds a limit,
+//! which disposes its source:
 //! ```rust
 //! use rx_rust::{
 //!     observable::{Observable, ObservableExt, ObservableTypes, Subscription},
@@ -22,7 +22,7 @@
 //!     thread_mode::ThreadMode,
 //!     utils::{
 //!         serialized_delivery::UpdateOutcome,
-//!         subscribe_with_context::{self, subscribe_with_context_owning_source, SubscriptionContext},
+//!         subscribe_with_context::{self, subscribe_with_context, SubscriptionContext},
 //!     },
 //!     disposable::Disposable,
 //! };
@@ -35,8 +35,7 @@
 //!     type Item = i32;
 //!     type Error = E;
 //!     type Mode = OE::Mode;
-//!     type Disposal =
-//!         subscribe_with_context::ContextDisposal<OE::Mode, i32, E, i32, OE::Disposal>;
+//!     type Disposal = subscribe_with_context::Disposal<OE::Mode, i32, E, i32, OE::Disposal>;
 //! }
 //!
 //! // The source is subscribed with the operator's own observer, which is named here. A disposal
@@ -57,7 +56,7 @@
 //! {
 //!     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
 //!         let limit = self.limit;
-//!         subscribe_with_context_owning_source(observer, 0, |context| {
+//!         subscribe_with_context(observer, 0, |context| {
 //!             self.source.subscribe(TotalObserver { context, limit })
 //!         })
 //!     }
@@ -95,8 +94,7 @@
 
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
-    delegate_disposal,
-    disposable::{Disposable, DisposableExt, chain_disposal::ChainDisposal},
+    disposable::{Disposable, DisposableExt},
     observable::Subscription,
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
@@ -108,20 +106,11 @@ use crate::{
 };
 use educe::Educe;
 
-delegate_disposal!(
-    /// The disposal of a context that does not own its source subscription: stopping the context,
-    /// followed by the caller's own subscription. Returned by [`subscribe_with_context`].
-    Disposal<M, T, E, MD, D>,
-    ChainDisposal<ContextDisposal<M, T, E, MD, ()>, D>,
-    where M: ThreadMode, D: Disposable
-);
-
 /// Stops a context: its model and the source subscription it owns are dropped, outside the lock,
 /// and every later event is rejected.
 ///
-/// Returned by [`subscribe_with_context_owning_source`], where `D` is the disposal of the source
-/// subscription the context owns. [`subscribe_with_context`] uses it with `D = ()`, chained before
-/// the caller's own subscription.
+/// Returned by [`subscribe_with_context`], where `D` is the disposal of the source subscription the
+/// context owns.
 ///
 /// Its type names the thread mode, the events, the model and the source's disposal, but not the
 /// observer — the disposal of an observable must not depend on its observer (see
@@ -130,11 +119,11 @@ delegate_disposal!(
 /// makes them do.
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct ContextDisposal<M: ThreadMode, T, E, MD, D: Disposable>(
+pub struct Disposal<M: ThreadMode, T, E, MD, D: Disposable>(
     #[educe(Debug(ignore))] DeliveryStop<M, T, E, ContextResources<MD, D>>,
 );
 
-impl<M: ThreadMode, T, E, MD, D: Disposable> Disposable for ContextDisposal<M, T, E, MD, D> {
+impl<M: ThreadMode, T, E, MD, D: Disposable> Disposable for Disposal<M, T, E, MD, D> {
     fn dispose(self) {
         self.0.stop();
     }
@@ -143,16 +132,11 @@ impl<M: ThreadMode, T, E, MD, D: Disposable> Disposable for ContextDisposal<M, T
 /// Creates a subscription backed by a shared, serialized context containing the downstream
 /// observer and a mutable model.
 ///
-/// The context does not own the source subscription: the caller's subscription is chained after
-/// the context's disposal, so the source is disposed only once downstream drops the returned
-/// subscription. Use this when the context can only terminate from inside the source's own
-/// `on_termination` — directly, or in a continuation of it, such as a scheduler task that delivers
-/// a termination the source had already parked in the model. The source is then finished by the
-/// time the context terminates, so owning it would buy nothing.
-///
-/// When the context can instead terminate while the source is still active — from a notifier, from
-/// a scheduler task, or from another source of a multi-source operator — use
-/// [`subscribe_with_context_owning_source`] so that the source is disposed on termination.
+/// `builder` subscribes the sources with observers holding clones of the context, and returns
+/// their subscription, which the context then owns: it is disposed once the context stops — by a
+/// disposal, by a termination, or because downstream answered [`Flow::Stop`] — including when
+/// that happens synchronously while `builder` is running. So the source is not left running once
+/// the operator has ended its stream, whichever thread ended it.
 ///
 /// `M` is the thread mode the context's pointers are picked for: the mode of the operator.
 pub fn subscribe_with_context<M, T, E, OR, D, MD, F>(
@@ -160,34 +144,6 @@ pub fn subscribe_with_context<M, T, E, OR, D, MD, F>(
     model: MD,
     builder: F,
 ) -> Subscription<Disposal<M, T, E, MD, D>>
-where
-    M: ThreadMode,
-    D: Disposable,
-    F: FnOnce(SubscriptionContext<M, T, E, OR, MD>) -> Subscription<D>,
-{
-    debug_assert_observer_compatibility::<OR>();
-    // This context does not own its source subscription, so its own `D` is `()`: the caller's
-    // subscription, of the unrelated type `D`, is chained below instead.
-    let context = SubscriptionContext::<M, T, E, OR, MD, ()>::new(observer, model);
-    let disposal = context.disposal();
-    let subscription = builder(context);
-    subscription.preceded_by(disposal).map_into()
-}
-
-/// Creates a context subscription whose source subscription is owned by the context.
-///
-/// Owning the source subscription lets the context dispose it automatically when the observer
-/// terminates, including when termination occurs synchronously while `builder` is running.
-///
-/// Use this whenever the context can terminate while the source is still active — from a notifier,
-/// from a scheduler task, or from another source of a multi-source operator. When the context can
-/// only terminate from inside the source's own `on_termination`, [`subscribe_with_context`] is
-/// enough.
-pub fn subscribe_with_context_owning_source<M, T, E, OR, D, MD, F>(
-    observer: OR,
-    model: MD,
-    builder: F,
-) -> Subscription<ContextDisposal<M, T, E, MD, D>>
 where
     M: ThreadMode,
     OR: Observer<T, E>,
@@ -213,8 +169,7 @@ where
 /// downstream was told the stream ended.
 struct ContextResources<MD, D: Disposable> {
     model: MD,
-    /// `None` when the context does not own its source subscription — `D` is then `()` — or
-    /// while the builder of an owned source subscription is still running.
+    /// `None` while the builder is still running.
     source_subscription: Option<Subscription<D>>,
 }
 
@@ -222,11 +177,10 @@ type ContextDelivery<M, T, E, OR, MD, D> = SerializedDelivery<M, T, E, OR, Conte
 
 /// The shared state of an operator: its model and its downstream observer, behind one lock.
 ///
-/// Handed to the builder of [`subscribe_with_context`] / [`subscribe_with_context_owning_source`],
-/// cloned into each of the operator's observers, and driven through [`update`](Self::update),
+/// Handed to the builder of [`subscribe_with_context`], cloned into each of the operator's observers, and driven through [`update`](Self::update),
 /// [`update_flow`](Self::update_flow), [`send_next`](Self::send_next) and
 /// [`send_termination`](Self::send_termination). `M` is the thread mode, `MD` the model, and `D`
-/// the disposal of the source subscription the context owns, `()` when it owns none. See the
+/// the disposal of the source subscription the context owns. See the
 /// [module documentation](self) for an example.
 ///
 /// A scheduler task of the operator holds a clone too, so that the work the operator has accepted
@@ -237,7 +191,7 @@ type ContextDelivery<M, T, E, OR, MD, D> = SerializedDelivery<M, T, E, OR, Conte
 /// observer, whoever else still holds one.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
-pub struct SubscriptionContext<M: ThreadMode, T, E, OR, MD, D: Disposable = ()> {
+pub struct SubscriptionContext<M: ThreadMode, T, E, OR, MD, D: Disposable> {
     #[educe(Debug(ignore))]
     delivery: ContextDelivery<M, T, E, OR, MD, D>,
 }
@@ -257,8 +211,8 @@ impl<M: ThreadMode, T, E, OR, MD, D: Disposable> SubscriptionContext<M, T, E, OR
     }
 
     /// Creates the disposal that stops this context.
-    fn disposal(&self) -> ContextDisposal<M, T, E, MD, D> {
-        ContextDisposal(self.delivery.stop_handle())
+    fn disposal(&self) -> Disposal<M, T, E, MD, D> {
+        Disposal(self.delivery.stop_handle())
     }
 }
 
@@ -344,6 +298,6 @@ fn debug_assert_observer_compatibility<OR>() {
     debug_assert!(
         !is_auto_dispose_on_termination_observer::<OR>(),
         "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. \
-         Using subscribe_with_context_owning_source handles \"auto dispose on termination\"."
+         subscribe_with_context handles \"auto dispose on termination\" itself."
     );
 }

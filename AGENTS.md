@@ -123,9 +123,8 @@ cargo tarpaulin --out Html
   lock it already holds. See the module docs in `src/thread_mode/mutable.rs`. The tests call those
   methods directly too.
 - **Subscription helpers**: prefer the existing helpers over hand-rolled state:
-  `subscribe_with_context` when the operator can only terminate from inside the source's own
-  `on_termination`; `subscribe_with_context_owning_source` when it can terminate while the
-  source is still active (notifier, scheduler task, another source);
+  `subscribe_with_context` for an operator with shared state — its context owns the source
+  subscription and disposes it as soon as it stops, on whichever thread stops it (decision 0005);
   `subscribe_with_auto_dispose_on_termination` for the simple case. A scheduler task holds a clone
   of the context, like the observer given to the source: when the source lets go of the observer —
   a termination, or a drop that only means it sends nothing more (decision 0004) — the task finishes

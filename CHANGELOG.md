@@ -97,6 +97,15 @@ All notable changes to this project are documented here. The format follows
   stops, as the one through a source subscription always was.
 - A `Scheduler` should drop a disposed task promptly, since the task may hold an operator's context
   and with it the downstream observer; see `SchedulerTypes::Disposal`. The built-in schedulers do.
+- **Breaking:** `utils::subscribe_with_context` has one entry point: the context always owns the
+  source subscription and disposes it as soon as it stops. `subscribe_with_context_owning_source`
+  is renamed `subscribe_with_context`, which replaces the non-owning one, and `ContextDisposal` is
+  renamed `Disposal`, which replaces the old chained one; `SubscriptionContext` has no default for
+  its source disposal any more. `observe_on`, `delay` and `debounce` now dispose their source when
+  downstream answers `Flow::Stop` from their scheduler task, instead of when the source next sends
+  — and so on that task's thread, as after delivering a termination. In exchange, their source's
+  disposal must be `Send + 'static` where the scheduler's tasks must be, as `timeout`'s already
+  was. See `docs/decisions/0005-the-context-owns-its-source.md`.
 
 ## [1.0.1] - 2026-09-14
 

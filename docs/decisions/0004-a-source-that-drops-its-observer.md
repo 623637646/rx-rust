@@ -113,9 +113,8 @@ handle shares:
   handle learns that a `DeliveryStop` stopped it from a flag the stop sets, read without the lock:
   dropping a handle of a context no `DeliveryStop` has stopped takes no lock at all, so it stays
   as safe as before anywhere, under the context's own lock included, and costs nothing on the
-  common path. The same
-  happens for a context that owns its source subscription (`timeout`, the two buffers): stopping it
-  disposes the source, which drops its handle.
+  common path. Stopping the context is what disposes the source, since the context owns the
+  source subscription (decision 0005).
 - A `Flow::Stop` stops the context from inside the delivery loop, which holds the observer and
   drops it itself, as before.
 - A disposal after the source has already let go of its observer — after `abandon`, or after a

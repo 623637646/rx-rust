@@ -7,9 +7,7 @@ use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::MarkerType;
 use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{
-    self, SubscriptionContext, subscribe_with_context_owning_source,
-};
+use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::Disposable,
     observable::{Observable, ObservableTypes, Subscription},
@@ -76,7 +74,7 @@ impl<T, OE1, OE2> SequenceEqual<T, OE1, OE2> {
 
 delegate_disposal!(
     Disposal<M, T, E, D1, D2>,
-    subscribe_with_context::ContextDisposal<M, bool, E, Model<T>, ChainDisposal<D2, D1>>,
+    subscribe_with_context::Disposal<M, bool, E, Model<T>, ChainDisposal<D2, D1>>,
     where M: ThreadMode, D1: Disposable, D2: Disposable
 );
 
@@ -136,7 +134,7 @@ where
                 completed: false,
             },
         };
-        subscribe_with_context_owning_source(observer, model, |context| {
+        subscribe_with_context(observer, model, |context| {
             let observer_1 = SequenceEqualObserver {
                 context: context.clone(),
                 is_first: true,
