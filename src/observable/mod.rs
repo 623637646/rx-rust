@@ -585,6 +585,22 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///     Just::new(1).map(move |value| value + *offset).into_boxed()
     /// }
     /// ```
+    ///
+    /// Owning what it uses instead, it can be returned:
+    ///
+    /// ```rust
+    /// use rx_rust::{
+    ///     observable::{ObservableExt, boxed_observable::BoxedObservable},
+    ///     operators::creating::just::Just,
+    ///     thread_mode::Local,
+    /// };
+    /// use std::convert::Infallible;
+    ///
+    /// fn owned() -> BoxedObservable<'static, 'static, 'static, i32, Infallible, Local> {
+    ///     let offset = 41;
+    ///     Just::new(1).map(move |value| value + offset).into_boxed()
+    /// }
+    /// ```
     fn into_boxed<'or, 'sub, 'oe>(
         self,
     ) -> BoxedObservable<'or, 'sub, 'oe, Self::Item, Self::Error, Self::Mode>
@@ -614,6 +630,16 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// let values = Rc::new(RefCell::new(Vec::new()));
     /// let _subscription = Just::new(1)
     ///     .into_send_boxed()
+    ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
+    /// ```
+    ///
+    /// ```rust
+    /// use rx_rust::{observable::ObservableExt, operators::creating::just::Just};
+    /// use std::{cell::RefCell, rc::Rc};
+    ///
+    /// let values = Rc::new(RefCell::new(Vec::new()));
+    /// let _subscription = Just::new(1)
+    ///     .into_boxed()
     ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
     /// ```
     fn into_send_boxed<'or, 'sub, 'oe>(

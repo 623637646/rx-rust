@@ -5,6 +5,9 @@
 //! included (see `tests_utils::test_scheduler`), so this file is what checks that the `Local` mode
 //! keeps its promise: nothing it is given needs to be `Send`. Most of that is checked by compiling
 //! it; each test also asserts the basic outcome. One representative per kind of operator.
+//!
+//! The reverse promise, that what the `Local` mode picks is not `Send`, so that a `Local` pipeline
+//! cannot cross threads, is checked by compiling too: see "What is not `Send`" below.
 
 mod tests_utils;
 
@@ -12,7 +15,12 @@ use futures::executor::LocalPool;
 use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableExt, ObservableTypes, Subscription},
-    observer::{Observer, Termination, callback_observer::CallbackObserver},
+    observer::{
+        Observer, Termination,
+        boxed_observer::{ObserverMode, SendBoxedObserver},
+        callback_observer::CallbackObserver,
+        emitter::Emitter,
+    },
     operators::{
         combining::{combine_latest::CombineLatest, merge::Merge},
         creating::{create::Create, from_iter::FromIter},
@@ -20,7 +28,9 @@ use rx_rust::{
     scheduler::{
         SchedulerExt,
         runtime::{
-            futures::LocalPoolScheduler, smol::SmolLocalScheduler, tokio::TokioLocalScheduler,
+            futures::{LocalPoolScheduler, ThreadPoolScheduler},
+            smol::{SmolLocalScheduler, SmolScheduler},
+            tokio::{TokioLocalScheduler, TokioScheduler},
         },
     },
     subject::{
@@ -28,7 +38,7 @@ use rx_rust::{
         publish_subject::PublishSubject, replay_subject::ReplaySubject,
     },
     thread_mode::{
-        Local,
+        Local, Shared, ThreadMode,
         mutable::{MutableExt, MutableHelper},
     },
 };
@@ -289,6 +299,64 @@ fn test_switch() {
     assert_eq!(record.values(), rcs([1, 3]));
     assert_eq!(record.termination(), Some(Termination::Completed));
 }
+
+// MARK: - What is not `Send`
+
+// Checked when this file compiles, with no test function: each `Local` type below must not be
+// `Send`, and its `Shared` twin must be. A typo or a renamed type fails the build, so unlike a
+// `compile_fail` doctest these cannot pass for the wrong reason.
+
+/// Implemented once for every type and once more for a `Send` one, so that naming `item` without
+/// the parameter is ambiguous, which does not compile, exactly when the type is `Send`.
+trait AmbiguousIfSend<A> {
+    fn item() {}
+}
+
+impl<T: ?Sized> AmbiguousIfSend<()> for T {}
+
+impl<T: ?Sized + Send> AmbiguousIfSend<u8> for T {}
+
+/// Compiles only if `$ty` is not `Send`.
+macro_rules! assert_not_send {
+    ($ty:ty) => {
+        const _: fn() = || {
+            let _ = <$ty as AmbiguousIfSend<_>>::item;
+        };
+    };
+}
+
+/// Compiles only if `$ty` is `Send`.
+macro_rules! assert_send {
+    ($ty:ty) => {
+        const _: fn() = || {
+            fn send<T: Send>() {}
+            send::<$ty>();
+        };
+    };
+}
+
+assert_not_send!(Local);
+assert_send!(Shared);
+
+assert_not_send!(<Local as ThreadMode>::Ptr<i32>);
+assert_send!(<Shared as ThreadMode>::Ptr<i32>);
+
+assert_not_send!(<Local as ObserverMode>::BoxedObserver<'static, i32, ()>);
+assert_send!(<Shared as ObserverMode>::BoxedObserver<'static, i32, ()>);
+
+// What `Create::local` hands its builder: not `Send` even around a `Send` observer.
+assert_not_send!(Emitter<SendBoxedObserver<'static, i32, ()>, Local>);
+assert_send!(Emitter<SendBoxedObserver<'static, i32, ()>, Shared>);
+
+assert_not_send!(PublishSubject<'static, i32, (), Local>);
+assert_send!(PublishSubject<'static, i32, (), Shared>);
+
+assert_not_send!(LocalPoolScheduler);
+assert_send!(ThreadPoolScheduler);
+assert_not_send!(TokioLocalScheduler);
+assert_send!(TokioScheduler);
+assert_not_send!(SmolLocalScheduler);
+assert_send!(SmolScheduler);
 
 // MARK: - On the single-threaded schedulers
 

@@ -104,3 +104,7 @@ Some scheduler-based operators have no `test_next_on_sub` (e.g. `from_future`).
 3. `test_clone`
 4. `test_type_inference_with_subscribe`
 5. `test_type_inference_without_subscribe`
+
+A guarantee that some code must *not* compile is a `compile_fail` doctest on the item that makes it,
+next to a twin that compiles and differs in one place; "not `Send`" is also asserted in
+`tests/local_mode.rs`. See [decision 0003](decisions/0003-test-infrastructure.md).

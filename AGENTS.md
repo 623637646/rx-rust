@@ -213,6 +213,10 @@ through `MutableHelper` / `MutableBoolHelper`, and bound closures with `Send`. T
 threads need no gate. A
 test that needs the `Local` mode itself goes in `tests/local_mode.rs`.
 
+What must not compile is a `compile_fail` doctest on the item, next to a twin that compiles and
+differs in one place, since a `compile_fail` passes on any error; a `Local` type that must not be
+`Send` also gets `assert_not_send!` in `tests/local_mode.rs`. No `trybuild` (decision 0003).
+
 A test that checks which thread a callback runs on uses `ThreadCheckerScheduler`
 (`tests/tests_utils/thread_checker_scheduler.rs`). It does not run a task by itself: `run_task`
 only queues it, and the test calls `thread_1.run_until_stalled().await` (the handle it kept) to run

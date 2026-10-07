@@ -1,6 +1,7 @@
 # 0003: The test infrastructure
 
-Two decisions about how time and threads are handled in the test suite: one adopted, one deferred.
+Three decisions about the test suite: how it handles threads (adopted), what must not compile
+(adopted, with `trybuild` rejected for now), and time (deferred).
 
 ## One test build, `Shared`, on every scheduler
 
@@ -76,6 +77,65 @@ cover that instead:
 
 A change to the bounds of an operator, or to the shared state of one, should run
 `tests/local_mode.rs` as well as the operator's own file.
+
+## What must not compile
+
+Status: adopted. `trybuild` rejected for now.
+
+### The problem
+
+The design rejects at compile time what would race or dangle: a `Shared` subject or scheduler takes
+no `Rc`, a `Local` pipeline cannot cross threads, an erased observable cannot outlive what it
+borrows, `ThreadMode` is sealed. A loosened bound keeps every ordinary test green, so each of these
+needs a check that fails when the code starts to compile.
+
+A `compile_fail` doctest is the obvious tool, and it has one flaw: it passes on *any* compile error.
+A typo, an import gone stale or a renamed API keeps it green while it no longer checks anything.
+`compile_fail,E0277` does not help: rustdoc checks the error code on nightly only, and most of
+these are E0277 anyway.
+
+### Decision
+
+- **A `compile_fail` doctest sits on the item that makes the guarantee, next to a twin that
+  compiles and differs from it in one place** (`shared()` / `local()`, `TokioScheduler` /
+  `TokioLocalScheduler`, `Rc` / `Arc`, `into_send_boxed` / `into_boxed`). The twin proves the rest
+  of the example is current, so the one difference is the reason it fails. A twin that cannot run
+  outside a runtime is `no_run`: it is still compiled. The examples also tell users what is
+  refused and what to write instead, which is why they stay in the docs.
+- **The only example without a twin is the sealing of `ThreadMode`**, since no mode can be added
+  outside the crate. It implements every item of the trait, so that the sealing is its only error,
+  and a comment above it says it must follow the trait.
+- **"Not `Send`" is also asserted in `tests/local_mode.rs`**, as constant items checked when the
+  file compiles: `assert_not_send!` for what the `Local` mode picks (the mode, its pointer, its
+  boxed observer, `Emitter<_, Local>`, a local subject, the single-threaded schedulers) and
+  `assert_send!` for each `Shared` twin. `assert_not_send!` is the ambiguity trick of the
+  `static_assertions` crate, written out in a few lines rather than added as a dependency. It
+  cannot pass for a wrong reason: a typo fails the build.
+
+### Why not `trybuild`
+
+`trybuild` compiles each case of `tests/ui/` on its own and compares the output with a `.stderr`
+snapshot, so it pins *why* a case fails, which a doctest cannot. Against that:
+
+- The snapshots follow the compiler's wording, which changes between releases: they would have to
+  be checked on one pinned toolchain, not on the MSRV and stable both, and regenerated
+  (`TRYBUILD=overwrite`) on each upgrade.
+- It is one more dev-dependency and a slow target of its own, each case a separate crate.
+- With the twins above, the only case left without a guard is the sealing, one example.
+
+**The `test_lifetime_*` tests are no reason to adopt it either.** About two hundred of them
+(`test_lifetime_sub`, `_or`, `_or_sub`, …, see `docs/testing.md`) each keep the order that must not
+compile as a comment under `// Error`, unchecked. `trybuild` could check them, but what they would
+pin is the borrow checker's, not the library's: the crate forbids `unsafe`, so the reversed order
+can only start to compile when the subscription or observer no longer borrows the value, or no
+longer has drop glue that may use it, which is sound either way, and the second would be caught by
+the disposal tests. The library's own promise is the other half, that an operator does not demand
+`'static`, and that half already compiles in the suite. Two hundred borrow-checker snapshots would
+be the costliest part of a `trybuild` target and the least useful.
+
+Reconsider when a guarantee with no possible twin is added, or when the wording of an error becomes
+part of the design (a `#[diagnostic::on_unimplemented]` message, or `Emitter`'s promise that the
+error names `Emitter<_, Local>`): only a snapshot pins that.
 
 ## A virtual-time scheduler
 

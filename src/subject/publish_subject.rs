@@ -68,7 +68,7 @@ use educe::Educe;
 ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
 /// ```
 ///
-/// And a local subject cannot be sent to another thread:
+/// And a local subject cannot be sent to another thread,
 ///
 /// ```compile_fail
 /// use rx_rust::subject::publish_subject::PublishSubject;
@@ -76,6 +76,16 @@ use educe::Educe;
 /// fn require_send<T: Send>(_: T) {}
 ///
 /// require_send(PublishSubject::<i32, (), _>::local());
+/// ```
+///
+/// while a shared one can:
+///
+/// ```rust
+/// use rx_rust::subject::publish_subject::PublishSubject;
+///
+/// fn require_send<T: Send>(_: T) {}
+///
+/// require_send(PublishSubject::<i32, (), _>::shared());
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]

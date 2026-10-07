@@ -89,7 +89,7 @@ use std::marker::PhantomData;
 /// assert_eq!(values, [10, 1]);
 /// ```
 ///
-/// The unboxed form subscribes one observer type only:
+/// The unboxed form subscribes one observer type only,
 ///
 /// ```compile_fail
 /// use rx_rust::{
@@ -101,6 +101,24 @@ use std::marker::PhantomData;
 /// let source = Create::local(|mut emitter| {
 ///     let _ = emitter.on_next(1);
 ///     emitter.on_termination(Termination::<()>::Completed);
+///     Subscription::default()
+/// });
+/// source.clone().map(|value: i32| value + 1).subscribe_with_callback(|_| {}, |_| {});
+/// source.subscribe_with_callback(|_| {}, |_| {}); // A different observer type.
+/// ```
+///
+/// while the boxed form subscribes both:
+///
+/// ```rust
+/// use rx_rust::{
+///     observable::{ObservableExt, Subscription},
+///     observer::{Observer, Termination},
+///     operators::creating::create::Create,
+/// };
+///
+/// let source = Create::local_boxed(|mut observer| {
+///     let _ = observer.on_next(1);
+///     observer.on_termination(Termination::<()>::Completed);
 ///     Subscription::default()
 /// });
 /// source.clone().map(|value: i32| value + 1).subscribe_with_callback(|_| {}, |_| {});
@@ -126,9 +144,12 @@ use std::marker::PhantomData;
 ///
 /// let _subscription = Create::local(|mut emitter| {
 ///     std::thread::spawn(move || {
-///         let _ = emitter.on_next(1);
-///         emitter.on_termination(Termination::<()>::Completed);
-///     });
+///         if emitter.on_next(1).is_continue() {
+///             emitter.on_termination(Termination::<()>::Completed);
+///         }
+///     })
+///     .join()
+///     .unwrap();
 ///     Subscription::default()
 /// })
 /// .subscribe_with_callback(|_: i32| {}, |_| {});

@@ -74,7 +74,7 @@ boxed_observer!(
 boxed_observer!(
     /// A [`BoxedObserver`] that is also `Send`, for state that crosses threads.
     ///
-    /// Boxing does not hide what the observer holds: one that is not `Send` is refused.
+    /// Boxing does not hide what the observer holds: one that is not `Send` is refused,
     ///
     /// ```compile_fail
     /// use rx_rust::observer::{
@@ -83,6 +83,21 @@ boxed_observer!(
     /// use std::rc::Rc;
     ///
     /// let offset = Rc::new(1);
+    /// let _observer = SendBoxedObserver::<i32, ()>::new(CallbackObserver::new(
+    ///     move |value: i32| println!("{}", value + *offset),
+    ///     |_: Termination<()>| {},
+    /// ));
+    /// ```
+    ///
+    /// while the same observer holding an `Arc` is taken:
+    ///
+    /// ```rust
+    /// use rx_rust::observer::{
+    ///     Termination, boxed_observer::SendBoxedObserver, callback_observer::CallbackObserver,
+    /// };
+    /// use std::sync::Arc;
+    ///
+    /// let offset = Arc::new(1);
     /// let _observer = SendBoxedObserver::<i32, ()>::new(CallbackObserver::new(
     ///     move |value: i32| println!("{}", value + *offset),
     ///     |_: Termination<()>| {},

@@ -113,6 +113,18 @@ impl<OE, S> ConnectableController<OE, S, Disconnected> {
     ///
     /// FromIter::new([1_i32]).publish().connect();
     /// ```
+    ///
+    /// Keep it for as long as the connection should last:
+    ///
+    /// ```rust
+    /// #![deny(unused_must_use)]
+    /// use rx_rust::{
+    ///     observable::ObservableExt,
+    ///     operators::creating::from_iter::FromIter,
+    /// };
+    ///
+    /// let _controller = FromIter::new([1_i32]).publish().connect();
+    /// ```
     #[must_use = "the returned controller owns the source connection"]
     pub fn connect<T, E>(self) -> ConnectableController<OE, S, Connected<OE::Disposal>>
     where
