@@ -96,7 +96,8 @@ All notable changes to this project are documented here. The format follows
   else in the crate needed a weak handle; a reference cycle through a delivery is broken when it
   stops, as the one through a source subscription always was.
 - A `Scheduler` should drop a disposed task promptly, since the task may hold an operator's context
-  and with it the downstream observer; see `SchedulerTypes::Disposal`. The built-in schedulers do.
+  and with it the downstream observer, and its disposal must be a handle to the task that does not
+  keep the task's state alive; see `SchedulerTypes::Disposal`. The built-in schedulers do both.
 - **Breaking:** `utils::subscribe_with_context` has one entry point: the context always owns the
   source subscription and disposes it as soon as it stops. `subscribe_with_context_owning_source`
   is renamed `subscribe_with_context`, which replaces the non-owning one, and `ContextDisposal` is

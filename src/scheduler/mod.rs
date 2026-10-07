@@ -108,9 +108,11 @@ pub trait SchedulerTypes {
     /// must therefore be woken to stop: the built-in schedulers wake it, so a disposed task and
     /// the observer it holds are dropped promptly, not when the timer fires.
     ///
-    /// The disposal may own the task. The task then lives as long as the disposal does, which the
-    /// operator drops when the task finishes or when the subscription stops, so no state outlives
-    /// the subscription.
+    /// The disposal is a handle to the task, never its owner: the task's state must be dropped once
+    /// the task finishes or is cancelled, whether or not its disposal is still alive. An operator
+    /// keeps the disposal in the context the task holds, so a disposal that kept the task alive
+    /// would keep that context, and the downstream observer, alive with it until the subscription
+    /// stops. The disposals of the built-in schedulers are handles to their runtime's task.
     type Disposal: Disposable;
 }
 

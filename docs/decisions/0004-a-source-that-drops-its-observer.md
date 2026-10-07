@@ -125,7 +125,8 @@ handle shares:
 
 No cycle is formed: the context holds the disposals of its tasks, which cancel them, never the tasks
 themselves, which their runtime owns. A scheduler whose disposal owned its task would form one,
-broken only when the context stops.
+broken only when the context stops, so `SchedulerTypes::Disposal` requires the disposal to be a
+handle to the task, never its owner.
 
 ### Rejected
 
