@@ -109,13 +109,12 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    `spawn_future`, …) for code that does not need to be generic over the mode.
 
    Every runtime with a local executor gets a `Local` scheduler next to its `Shared` one
-   (`TokioLocalScheduler`, `SmolLocalScheduler`, `LocalPoolScheduler`; not async-std, whose
-   `spawn_local` is unstable). Every scheduler is a type of the crate wrapping the runtime's handle
-   (`TokioScheduler` a `Handle`, `ThreadPoolScheduler` a `ThreadPool`), rather than the handle
-   itself, so that its documentation, its disposal and its behavior stay ours. A scheduler either
-   uses the executor of the calling context (Tokio's current `LocalSet`, smol's global executor,
-   async-std's) or names one (`from_local_set`, `from_executor`, `from_spawner`). Unlike the
-   prototype, an executor that runs only while it is driven is held **weakly**: a task can reach
+   (`TokioLocalScheduler`, `SmolLocalScheduler`, `LocalPoolScheduler`). Every scheduler is a type
+   of the crate wrapping the runtime's handle (`TokioScheduler` a `Handle`, `ThreadPoolScheduler` a
+   `ThreadPool`), rather than the handle itself, so that its documentation, its disposal and its
+   behavior stay ours. A scheduler either uses the executor of the calling context (Tokio's current
+   `LocalSet`, smol's global executor) or names one (`from_local_set`, `from_executor`,
+   `from_spawner`). Unlike the prototype, an executor that runs only while it is driven is held **weakly**: a task can reach
    its scheduler through a downstream observer, and the executor holds its tasks, so a strong
    handle is a cycle that keeps an executor nobody drives — and its tasks — alive forever. A
    `ThreadPool` is held strongly: its threads always run, so a disposed task is dropped and breaks

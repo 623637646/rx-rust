@@ -9,7 +9,6 @@
 //! |-----------------------|-----------------------------------------------|----------|
 //! | `tokio-scheduler`     | `runtime::tokio::TokioScheduler`              | `Shared` |
 //! | `tokio-scheduler`     | `runtime::tokio::TokioLocalScheduler`         | `Local`  |
-//! | `async-std-scheduler` | `runtime::async_std::AsyncStdScheduler`       | `Shared` |
 //! | `smol-scheduler`      | `runtime::smol::SmolScheduler`                | `Shared` |
 //! | `smol-scheduler`      | `runtime::smol::SmolLocalScheduler`           | `Local`  |
 //! | `futures-scheduler`   | `runtime::futures::ThreadPoolScheduler`       | `Shared` |

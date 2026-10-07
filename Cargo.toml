@@ -19,7 +19,6 @@ all-features = true
 educe = "0.8" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
 futures = { version = "0.3.34", optional = true } # It's optional even though most rust runtimes depend on it because users may implement their own runtimes without depending on futures.
 tokio = { version = "1", optional = true }
-async-std = { version = "1", optional = true }
 smol = { version = "2", optional = true }
 async-io = { version = "2", optional = true }
 
@@ -28,7 +27,7 @@ tokio = { version = "1", features = ["full"] }
 async-io = "2"
 pastey = "0.1"
 # The tests run on every scheduler, so they enable every scheduler feature of the crate itself.
-rx-rust = { path = ".", features = ["futures-scheduler", "tokio-scheduler", "async-std-scheduler", "smol-scheduler"] }
+rx-rust = { path = ".", features = ["futures-scheduler", "tokio-scheduler", "smol-scheduler"] }
 
 [features]
 default = []
@@ -36,5 +35,4 @@ default = []
 # schedulers, which can be combined
 futures-scheduler = ["futures/thread-pool", "dep:async-io"]
 tokio-scheduler = ["futures", "dep:tokio", "tokio/rt", "tokio/time"]
-async-std-scheduler = ["futures", "dep:async-std"]
 smol-scheduler = ["futures", "dep:smol"]

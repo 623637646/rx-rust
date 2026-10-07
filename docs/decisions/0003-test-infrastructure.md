@@ -24,8 +24,8 @@ until it was given a scheduler feature.
 ### Decision
 
 - **One `block_on`**, in `tests/tests_utils/test_scheduler.rs`, runs the body once on each of the
-  seven schedulers of the crate: `tokio`, `tokio-local`, `async-std`, `smol`, `smol-local`,
-  `thread-pool`, `local-pool`. The body gets a `TestScheduler`, one enum with a variant per
+  six schedulers of the crate: `tokio`, `tokio-local`, `smol`, `smol-local`, `thread-pool`,
+  `local-pool`. The body gets a `TestScheduler`, one enum with a variant per
   scheduler.
 - **`TestScheduler` is `Shared` for every variant**, the single-threaded ones included. That is
   sound: declaring `Shared` only makes the operators downstream pick the thread-safe pointers.

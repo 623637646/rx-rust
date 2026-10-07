@@ -11,8 +11,8 @@ programs by chaining observables and operators in a declarative style, inspired 
 [ReactiveX](https://reactivex.io/).
 
 - 100+ operators, one per file, grouped the way reactivex.io groups them.
-- `#![forbid(unsafe_code)]`, no required runtime dependency: the async runtime (Tokio, async-std,
-  smol, or the `futures` executors) is selected by a feature flag.
+- `#![forbid(unsafe_code)]`, no required runtime dependency: the async runtime (Tokio, smol, or
+  the `futures` executors) is selected by a feature flag.
 - A built-in stop signal: an observer that has seen enough returns `Flow::Stop`, and the source
   stops pushing, even a synchronous one that is still inside `subscribe`.
 - Crosses into `async` freely: a `Future` or a `Stream` becomes an observable, and an observable
@@ -36,7 +36,6 @@ features can be combined. The time-based operators (`delay`, `debounce`, `timeou
 Feature                  | Description                                                                                    | Pulls in
 ------------------------ | ---------------------------------------------------------------------------------------------- | --------
 `tokio-scheduler`        | Schedule on Tokio. The schedulers are `TokioScheduler` and `TokioLocalScheduler`.               | `futures`, `tokio/rt`, `tokio/time`
-`async-std-scheduler`    | Schedule on async-std. The scheduler is `AsyncStdScheduler`; async-std has no `Local` one.      | `futures`, `async-std`
 `smol-scheduler`         | Schedule on smol. The schedulers are `SmolScheduler` and `SmolLocalScheduler`.                 | `futures`, `smol`
 `futures-scheduler`      | Schedule on the executors of `futures`. The schedulers are `ThreadPoolScheduler` and `LocalPoolScheduler`. | `futures/thread-pool`, `async-io`
 `futures`                | Enabled by every scheduler feature. Gates the `Stream` bridges: `FromStream`, `FromTryStream`, `into_stream`, `into_try_stream`. | `futures`
@@ -161,7 +160,6 @@ program can drive different pipelines on different runtimes:
 Feature                  | Scheduler value
 ------------------------ | ---------------
 `tokio-scheduler`        | `rx_rust::scheduler::runtime::tokio::TokioScheduler::current()`, or `from_handle(runtime.handle().clone())` for a `Runtime` you own; `TokioLocalScheduler::ambient()` for the running `LocalSet`, or `from_local_set(&local_set)` for a given one (`Local` mode)
-`async-std-scheduler`    | `rx_rust::scheduler::runtime::async_std::AsyncStdScheduler`
 `smol-scheduler`         | `rx_rust::scheduler::runtime::smol::SmolScheduler::global()`, or `from_executor(&executor)` for an `Executor` you own; `SmolLocalScheduler::from_executor(&executor)` for a `LocalExecutor` (`Local` mode)
 `futures-scheduler`      | `rx_rust::scheduler::runtime::futures::ThreadPoolScheduler::from_pool(pool)` for a `ThreadPool`; `LocalPoolScheduler::from_spawner(pool.spawner())` for a `LocalPool` (`Local` mode)
 

@@ -7,8 +7,8 @@ use std::{
 };
 
 /// Runs `task` after `delay` on an async executor: a scheduler spawns the future it returns, as
-/// every built-in one does. `sleep` is the runtime's timer (tokio's `time::sleep`, async-std's
-/// `task::sleep`, …).
+/// every built-in one does. `sleep` is the runtime's timer (tokio's `time::sleep`, smol's
+/// `Timer::after`, …).
 ///
 /// Between two steps the task yields through [`yield_now`], also for a [`TaskState::SleepUntil`]
 /// whose instant has passed (tokio's `Sleep` would be ready at once, without yielding). A scheduler

@@ -24,7 +24,6 @@ use rx_rust::{
     scheduler::{
         Scheduler, SchedulerExt, SchedulerTypes, Task, TaskState,
         runtime::{
-            async_std::AsyncStdScheduler,
             futures::{LocalPoolScheduler, ThreadPoolScheduler},
             smol::{SmolLocalScheduler, SmolScheduler},
             tokio::{TokioLocalScheduler, TokioScheduler},
@@ -45,7 +44,6 @@ use std::{
 enum SchedulerKind {
     Tokio,
     TokioLocal,
-    AsyncStd,
     Smol,
     SmolLocal,
     ThreadPool,
@@ -54,10 +52,9 @@ enum SchedulerKind {
 
 impl SchedulerKind {
     /// Every kind, in the order [`block_on`] runs them.
-    const ALL: [Self; 7] = [
+    const ALL: [Self; 6] = [
         Self::Tokio,
         Self::TokioLocal,
-        Self::AsyncStd,
         Self::Smol,
         Self::SmolLocal,
         Self::ThreadPool,
@@ -69,7 +66,6 @@ impl SchedulerKind {
         match self {
             Self::Tokio => "tokio",
             Self::TokioLocal => "tokio-local",
-            Self::AsyncStd => "async-std",
             Self::Smol => "smol",
             Self::SmolLocal => "smol-local",
             Self::ThreadPool => "thread-pool",
@@ -104,9 +100,6 @@ impl SchedulerKind {
                     TokioLocalScheduler::from_local_set(&local_set),
                 ));
                 runtime.block_on(local_set.run_until(body(TestScheduler::Local)));
-            }
-            Self::AsyncStd => {
-                async_std::task::block_on(body(TestScheduler::AsyncStd(AsyncStdScheduler)));
             }
             Self::Smol => {
                 smol::block_on(body(TestScheduler::Smol(SmolScheduler::global())));
@@ -146,7 +139,6 @@ impl SchedulerKind {
 #[derive(Debug, Clone)]
 pub(crate) enum TestScheduler {
     Tokio(TokioScheduler),
-    AsyncStd(AsyncStdScheduler),
     Smol(SmolScheduler),
     ThreadPool(ThreadPoolScheduler),
     /// Whichever single-threaded scheduler [`block_on`] made current on this thread.
@@ -272,7 +264,6 @@ where
         }
         match self {
             Self::Tokio(scheduler) => erase(scheduler.run_task(task, delay)),
-            Self::AsyncStd(scheduler) => erase(scheduler.run_task(task, delay)),
             Self::Smol(scheduler) => erase(scheduler.run_task(task, delay)),
             Self::ThreadPool(scheduler) => erase(scheduler.run_task(task, delay)),
             Self::Local => match current_local() {

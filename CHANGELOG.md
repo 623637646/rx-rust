@@ -59,8 +59,7 @@ All notable changes to this project are documented here. The format follows
   `Default`) is the former value, and `SmolScheduler::from_executor(&executor)` runs on an
   `Executor` of your own.
 - **Breaking:** the scheduler implementations moved under `scheduler::runtime`, one module per
-  runtime: `scheduler::tokio_scheduler` is `scheduler::runtime::tokio`, and likewise `smol` and
-  `async_std`. The `thread-pool-scheduler` and `local-pool-scheduler` features are merged into
+  runtime: `scheduler::tokio_scheduler` is `scheduler::runtime::tokio`, and likewise `smol`. The `thread-pool-scheduler` and `local-pool-scheduler` features are merged into
   `futures-scheduler`, whose executors are wrapped like the others:
   `ThreadPoolScheduler::from_pool(pool)` and `LocalPoolScheduler::from_spawner(spawner)` instead of
   `ThreadPool` and `LocalSpawner` themselves.
@@ -71,8 +70,7 @@ All notable changes to this project are documented here. The format follows
 - New single-threaded (`Local`) schedulers, whose tasks need not be `Send`:
   `TokioLocalScheduler` — `ambient()` for the `LocalSet` the calling thread runs,
   `from_local_set(&local_set)` for a given one, which also accepts tasks before it runs —,
-  and `SmolLocalScheduler::from_executor(&executor)` over a `LocalExecutor`. async-std has none:
-  its `spawn_local` needs its `unstable` feature. A scheduler built from an executor holds it
+  and `SmolLocalScheduler::from_executor(&executor)` over a `LocalExecutor`. A scheduler built from an executor holds it
   weakly, so a pending task does not keep its executor alive; running a task after the executor is
   dropped panics.
 - **Breaking:** `publish`, `replay`, `share`, … multicast through a subject of the source's mode;
@@ -107,6 +105,12 @@ All notable changes to this project are documented here. The format follows
   — and so on that task's thread, as after delivering a termination. In exchange, their source's
   disposal must be `Send + 'static` where the scheduler's tasks must be, as `timeout`'s already
   was. See `docs/decisions/0005-the-context-owns-its-source.md`.
+
+### Removed
+
+- **Breaking:** the `async-std-scheduler` feature and `AsyncStdScheduler`. async-std is
+  discontinued upstream, which points to smol instead: use `smol-scheduler` and
+  `SmolScheduler::global()`.
 
 ## [1.0.1] - 2026-09-14
 

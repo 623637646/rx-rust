@@ -44,7 +44,7 @@ Rules of thumb:
 - Do not re-run a test that already passed unless the code under it changed.
 - `cargo nextest run` also takes the `--test` filters above, and fails tests that leak; prefer it
   over `cargo test` when a test may hang.
-- `RX_TEST_SCHEDULERS=tokio` (see below) runs a test on one scheduler instead of seven, which is
+- `RX_TEST_SCHEDULERS=tokio` (see below) runs a test on one scheduler instead of six, which is
   enough while iterating on code that is not scheduler specific.
 
 ## Features
@@ -54,9 +54,9 @@ every scheduler feature, so `cargo test` builds them all. The features only matt
 (`cargo check --lib --features …`, `cargo hack --each-feature --no-dev-deps check --lib`).
 
 `block_on` in `tests/tests_utils/test_scheduler.rs` runs the test body once on every scheduler of
-the crate, in this order: `tokio`, `tokio-local` (`TokioLocalScheduler` on a `LocalSet`),
-`async-std`, `smol`, `smol-local`, `thread-pool`, `local-pool`. The body is an `Fn` that gets a
-`TestScheduler`, called once per scheduler. A failing run prints
+the crate, in this order: `tokio`, `tokio-local` (`TokioLocalScheduler` on a `LocalSet`), `smol`,
+`smol-local`, `thread-pool`, `local-pool`. The body is an `Fn` that gets a `TestScheduler`, called
+once per scheduler. A failing run prints
 `the test panicked on the <name> scheduler`; `RX_TEST_SCHEDULERS=smol,local-pool` (comma-separated
 names from that list) restricts the loop to some of them.
 
