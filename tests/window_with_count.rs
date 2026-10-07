@@ -2058,7 +2058,7 @@ fn test_lifetime_sub() {
 
     // Error
     // let _subscription;
-    // let life_marker_1 = TestStruct;
+    // let life_marker = TestStruct;
 
     {
         let observable = Create::shared_boxed(|mut observer| {

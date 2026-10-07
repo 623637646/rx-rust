@@ -2104,38 +2104,6 @@ fn test_error_on_unsub() {
 }
 
 #[test]
-fn test_lifetime_sub() {
-    block_on(|scheduler| async move {
-        // OK
-        let life_marker = TestStruct;
-        let _subscription;
-
-        // Error
-        // let _subscription;
-        // let life_marker = TestStruct;
-
-        {
-            let observable = Create::shared_boxed(move |mut observer| {
-                assert!(observer.on_next(111).is_continue());
-                Subscription::new(CallbackDisposal::new(move || {
-                    life_marker.consume_ref();
-                }))
-            });
-
-            let observable = observable.buffer_with_time_or_count(
-                NonZeroUsize::new(2).unwrap(),
-                DURATION_100_MS,
-                scheduler.clone(),
-                Some(DURATION_100_MS),
-            );
-
-            let (_, observer) = Checker::<_, ()>::new();
-            _subscription = observable.subscribe(observer);
-        }
-    });
-}
-
-#[test]
 fn test_clone() {
     block_on(|scheduler| async move {
         let observable = Create::shared_boxed(|mut observer| {

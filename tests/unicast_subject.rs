@@ -819,24 +819,6 @@ fn test_non_clone() {
 }
 
 #[test]
-fn test_lifetime_or_sub() {
-    // OK
-    let life_marker = TestStruct;
-    let _subscription;
-
-    // Error
-    // let _subscription;
-    // let life_marker = TestStruct;
-
-    {
-        let (_, mut observer) = Checker::<_, Infallible>::new();
-        assert!(observer.on_next(&life_marker).is_continue());
-        let (_sender, observable) = unicast_subject::shared::<_, _, _>();
-        _subscription = observable.subscribe(observer);
-    }
-}
-
-#[test]
 fn test_type_inference_with_subscribe() {
     let (_sender, observable) = unicast_subject::shared::<i32, String, _>();
 

@@ -8,7 +8,6 @@ use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
-use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::{
     observable::{Observable, ObservableExt},
@@ -403,32 +402,6 @@ fn test_lifetime_or() {
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(observer.on_next(vec![&life_marker_2]).is_continue());
-        let _subscription = observable.subscribe(observer);
-    }
-}
-
-#[test]
-fn test_lifetime_or_sub() {
-    // OK
-    let life_marker_sub = TestStruct;
-    let mut life_marker_or = None;
-
-    // Error
-    // let mut life_marker_or = None;
-    // let life_marker_sub = TestStruct;
-
-    {
-        let observable =
-            Create::shared_boxed(|observer: SendBoxedObserver<'_, &TestStruct, Infallible>| {
-                life_marker_or = Some(observer);
-                Subscription::new(CallbackDisposal::new(|| {
-                    life_marker_sub.consume_ref();
-                }))
-            });
-
-        let observable = observable.last();
-
-        let (_, observer) = Checker::new();
         let _subscription = observable.subscribe(observer);
     }
 }

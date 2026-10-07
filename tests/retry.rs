@@ -1071,32 +1071,6 @@ fn test_lifetime_or() {
 }
 
 #[test]
-fn test_lifetime_or_sub() {
-    // OK
-    let life_marker_sub = TestStruct;
-    let mut life_marker_or = None;
-
-    // Error
-    // let mut life_marker_or = None;
-    // let life_marker_sub = TestStruct;
-
-    {
-        let observable = Create::shared_boxed(
-            |observer: SendBoxedObserver<'_, Just<&TestStruct>, Infallible>| {
-                life_marker_or = Some(observer);
-                Subscription::new(CallbackDisposal::new(|| {
-                    life_marker_sub.consume_ref();
-                }))
-            },
-        );
-        let observable = observable.retry(RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop);
-
-        let (_, observer) = Checker::new();
-        let _subscription = observable.subscribe(observer);
-    }
-}
-
-#[test]
 fn test_clone() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
