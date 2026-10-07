@@ -55,6 +55,35 @@ use std::convert::Infallible;
 ///     );
 /// }
 /// ```
+///
+/// The future is polled by a task of `scheduler`, so with a `Shared` scheduler it must be `Send`:
+/// one that holds an `Rc` is refused at compile time,
+///
+/// ```compile_fail
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::from_future::FromFuture,
+///     scheduler::runtime::tokio::TokioScheduler,
+/// };
+/// use std::{rc::Rc, sync::Arc};
+///
+/// let value = Rc::new(7);
+/// let _subscription = FromFuture::new(async move { *value }, TokioScheduler::current())
+///     .subscribe_with_callback(|_| {}, |_| {});
+/// ```
+///
+/// and one that holds an `Arc` is taken:
+///
+/// ```no_run
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::from_future::FromFuture,
+///     scheduler::runtime::tokio::TokioScheduler,
+/// };
+/// use std::{rc::Rc, sync::Arc};
+///
+/// let value = Arc::new(7);
+/// let _subscription = FromFuture::new(async move { *value }, TokioScheduler::current())
+///     .subscribe_with_callback(|_| {}, |_| {});
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct FromFuture<FU, S> {

@@ -57,6 +57,55 @@ use educe::Educe;
 ///     );
 /// }
 /// ```
+///
+/// The whole source is subscribed from a task of `scheduler`, together with the schedulers its
+/// own operators hold. A `Local` one among them is bound to the thread it was made on, so moving
+/// the subscription to a `Shared` scheduler is refused at compile time:
+///
+/// ```compile_fail
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::just::Just,
+///     scheduler::runtime::tokio::{TokioLocalScheduler, TokioScheduler},
+/// };
+/// use std::time::Duration;
+///
+/// let _subscription = Just::new(1)
+///     .delay(Duration::from_millis(5), TokioLocalScheduler::ambient())
+///     .subscribe_on(TokioScheduler::current())
+///     .subscribe_with_callback(|_| {}, |_| {});
+/// ```
+///
+/// A `Shared` one moves with it:
+///
+/// ```no_run
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::just::Just,
+///     scheduler::runtime::tokio::{TokioLocalScheduler, TokioScheduler},
+/// };
+/// use std::time::Duration;
+///
+/// let _subscription = Just::new(1)
+///     .delay(Duration::from_millis(5), TokioScheduler::current())
+///     .subscribe_on(TokioScheduler::current())
+///     .subscribe_with_callback(|_| {}, |_| {});
+/// ```
+///
+/// The events then come from `scheduler`'s thread even when the source emits synchronously, so the
+/// mode of a `SubscribeOn` joins the source's and the scheduler's. Merged with a source that emits
+/// on the subscribing thread, it therefore makes the merge `Shared`, whose state both threads
+/// reach:
+///
+/// ```no_run
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::just::Just,
+///     scheduler::runtime::tokio::TokioScheduler,
+/// };
+///
+/// let _subscription = Just::new(1)
+///     .subscribe_on(TokioScheduler::current())
+///     .merge_with(Just::new(2))
+///     .subscribe_with_callback(|_| {}, |_| {});
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct SubscribeOn<OE, S> {

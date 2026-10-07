@@ -64,6 +64,34 @@ use educe::Educe;
 ///     );
 /// }
 /// ```
+///
+/// The source is subscribed with an observer that holds `scheduler`, and calls it from wherever
+/// the source emits. A `Local` scheduler is bound to its thread, so a source that emits from a
+/// task on another thread is refused at compile time:
+///
+/// ```compile_fail
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::from_future::FromFuture,
+///     scheduler::runtime::tokio::{TokioLocalScheduler, TokioScheduler},
+/// };
+///
+/// let _subscription = FromFuture::new(async { 1 }, TokioScheduler::current())
+///     .observe_on(TokioLocalScheduler::ambient())
+///     .subscribe_with_callback(|_| {}, |_| {});
+/// ```
+///
+/// A `Shared` scheduler can be reached from there:
+///
+/// ```no_run
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::from_future::FromFuture,
+///     scheduler::runtime::tokio::{TokioLocalScheduler, TokioScheduler},
+/// };
+///
+/// let _subscription = FromFuture::new(async { 1 }, TokioScheduler::current())
+///     .observe_on(TokioScheduler::current())
+///     .subscribe_with_callback(|_| {}, |_| {});
+/// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ObserveOn<OE, S> {
