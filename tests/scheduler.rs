@@ -306,6 +306,52 @@ fn test_schedule_periodically_with_delay() {
     });
 }
 
+/// The rate is fixed: the calls a slow call made late run back to back once it returns, none is
+/// skipped, and the calls after them are back on the schedule set when the task was scheduled.
+#[test]
+fn test_schedule_periodically_catches_up_after_an_overrun() {
+    block_on(|scheduler| async move {
+        // Three and a half periods: the calls due at 10, 20 and 30 ms are all late once it ends.
+        let overrun = Duration::from_millis(35);
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let mut tx = Some(tx);
+        let start_instant = Instant::now();
+        let disposal = scheduler.schedule_periodically(
+            move |index| {
+                if index == 6 {
+                    tx.take().unwrap();
+                    return false;
+                }
+                tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
+                if index == 0 {
+                    thread::sleep(overrun);
+                }
+                true
+            },
+            DURATION_10_MS,
+            None,
+        );
+        let mut calls = Vec::new();
+        while let Some(call_instant) = rx.next().await {
+            calls.push(call_instant - start_instant);
+        }
+        assert_eq!(calls.len(), 6);
+        for (index, call) in calls.iter().enumerate() {
+            // Never early: every call keeps its slot on the schedule.
+            assert!(*call >= index as u32 * DURATION_10_MS, "calls: {calls:?}");
+        }
+        // The late calls run as soon as the slow one returns, not a period apart.
+        assert!(calls[1] >= overrun, "calls: {calls:?}");
+        assert!(calls[3] - calls[1] < DURATION_10_MS, "calls: {calls:?}");
+        // The next one is due at 40 ms, as if no call had been late.
+        assert!(
+            calls[4] < 4 * DURATION_10_MS + DURATION_30_MS,
+            "calls: {calls:?}"
+        );
+        disposal.dispose();
+    });
+}
+
 #[test]
 #[should_panic(expected = "period must be non-zero")]
 fn test_schedule_periodically_rejects_zero_period() {
