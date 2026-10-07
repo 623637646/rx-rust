@@ -1531,13 +1531,15 @@ fn test_observe_on_with_subscribe_on() {
                 call_history_a_6.fetch_or(1 << 5, Ordering::SeqCst);
                 assert_eq!(get_thread_name(), Some("thread_o_1"));
             })
+            // The second `observe_on` disposes its source once it has delivered the completion,
+            // on the thread it delivers on.
             .do_before_disposal(move || {
                 call_history_a_7.fetch_or(1 << 6, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
+                assert_eq!(get_thread_name(), Some("thread_o_2"));
             })
             .do_after_disposal(move || {
                 call_history_a_8.fetch_or(1 << 7, Ordering::SeqCst);
-                assert_eq!(get_thread_name(), None);
+                assert_eq!(get_thread_name(), Some("thread_o_2"));
             })
             .observe_on(thread_o_2.clone())
             .subscribe_on(thread_s_1.clone())
@@ -1611,7 +1613,7 @@ fn test_observe_on_with_subscribe_on() {
         assert_eq!(checker.values(), [111, 222, 333, 444]);
         assert_eq!(checker.state(), State::Completed);
         assert_eq!(channel_checker.state(), ChannelState::Completed);
-        assert_eq!(call_history_a.load(Ordering::SeqCst), 0b00111111);
+        assert_eq!(call_history_a.load(Ordering::SeqCst), 0b11111111);
         assert_eq!(call_history_b.load(Ordering::SeqCst), 0b00111111);
 
         subscription.dispose();
