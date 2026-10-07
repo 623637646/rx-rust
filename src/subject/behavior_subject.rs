@@ -136,19 +136,22 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) -> Flow {
+        // The copy kept as the current value is made before the lock is taken: cloning runs
+        // arbitrary code, which may emit to this very subject.
+        let kept = value.clone();
         self.0
             .update(|current, terminated| {
                 if terminated.is_some() {
                     return UpdateOutcome::new(Flow::Stop)
-                        .with_drop_outside(Some(value))
+                        .with_drop_outside((Some(value), kept))
                         .without_events();
                 }
                 // Replacing the current value and forwarding it are one step, so the value a
                 // subscriber is given always matches the values it then receives. The replaced
                 // value is dropped outside the lock: dropping it can run arbitrary code.
-                let previous = std::mem::replace(current, value.clone());
+                let previous = std::mem::replace(current, kept);
                 UpdateOutcome::new(Flow::Continue)
-                    .with_drop_outside(Some(previous))
+                    .with_drop_outside((None, previous))
                     .with_next_event(value)
             })
             .unwrap_or(Flow::Stop)

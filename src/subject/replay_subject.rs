@@ -143,19 +143,22 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) -> Flow {
+        // The copy kept in the buffer is made before the lock is taken: cloning runs arbitrary
+        // code, which may emit to this very subject.
+        let kept = value.clone();
         self.0
             .update(|buffer, terminated| {
                 if terminated.is_some() {
                     return UpdateOutcome::new(Flow::Stop)
-                        .with_drop_outside(Some(value))
+                        .with_drop_outside((Some(value), Some(kept)))
                         .without_events();
                 }
                 // Buffering the value and forwarding it are one step, so the buffer a subscriber
                 // is replayed always matches the values it then receives. The evicted value is
                 // dropped outside the lock: dropping it can run arbitrary code.
-                let evicted = buffer.push(value.clone());
+                let evicted = buffer.push(kept);
                 UpdateOutcome::new(Flow::Continue)
-                    .with_drop_outside(evicted)
+                    .with_drop_outside((None, evicted))
                     .with_next_event(value)
             })
             .unwrap_or(Flow::Stop)

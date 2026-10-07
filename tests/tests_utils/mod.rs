@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 pub(crate) mod checker;
+pub(crate) mod clone_probe;
 pub(crate) mod drop_probe;
 #[cfg(panic = "unwind")]
 pub(crate) mod panic;

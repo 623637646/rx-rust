@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::checker::State;
+use crate::tests_utils::clone_probe::CloneProbe;
 use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
@@ -1014,6 +1015,35 @@ fn test_next_on_next() {
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Completed);
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
+}
+
+/// The copy kept in the buffer is cloned before the subject's lock is taken, so a `Clone` may emit
+/// to the subject: the value it emits is delivered and buffered first, and the value being cloned
+/// follows it, in the same order for a later subscriber.
+#[test]
+fn test_next_on_clone() {
+    let mut subject = ReplaySubject::shared(None);
+    let values_1 = Arc::new(Mutex::new(Vec::new()));
+    let values_1_cloned = values_1.clone();
+    let _subscription_1 = subject.clone().subscribe_with_callback(
+        move |probe: CloneProbe| values_1_cloned.with_mut(|values| values.push(probe.value())),
+        |_: Termination<Infallible>| {},
+    );
+
+    let mut subject_cloned = subject.clone();
+    let probe = CloneProbe::new(1).on_clone(Box::new(move || {
+        assert!(subject_cloned.on_next(CloneProbe::new(2)).is_continue());
+    }));
+    assert!(subject.on_next(probe).is_continue());
+    assert_eq!(values_1.clone_value(), [2, 1]);
+
+    let values_2 = Arc::new(Mutex::new(Vec::new()));
+    let values_2_cloned = values_2.clone();
+    let _subscription_2 = subject.clone().subscribe_with_callback(
+        move |probe: CloneProbe| values_2_cloned.with_mut(|values| values.push(probe.value())),
+        |_| {},
+    );
+    assert_eq!(values_2.clone_value(), [2, 1]);
 }
 
 #[test]

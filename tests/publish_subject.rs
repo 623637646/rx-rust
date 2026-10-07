@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::clone_probe::CloneProbe;
 use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
@@ -624,6 +625,26 @@ fn test_next_on_next() {
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Completed);
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
+}
+
+/// The value is cloned for each observer outside the subject's lock, as it is forwarded, so a
+/// `Clone` may emit to the subject: the value it emits is queued behind the one being forwarded.
+#[test]
+fn test_next_on_clone() {
+    let mut subject = PublishSubject::shared();
+    let values = Arc::new(Mutex::new(Vec::new()));
+    let values_cloned = values.clone();
+    let _subscription = subject.clone().subscribe_with_callback(
+        move |probe: CloneProbe| values_cloned.with_mut(|values| values.push(probe.value())),
+        |_: Termination<Infallible>| {},
+    );
+
+    let mut subject_cloned = subject.clone();
+    let probe = CloneProbe::new(1).on_clone(Box::new(move || {
+        assert!(subject_cloned.on_next(CloneProbe::new(2)).is_continue());
+    }));
+    assert!(subject.on_next(probe).is_continue());
+    assert_eq!(values.clone_value(), [1, 2]);
 }
 
 #[test]
@@ -1343,4 +1364,31 @@ fn a_panicking_observer_kills_the_subject() {
     let _subscription = subject.clone().subscribe(late_observer);
     assert!(late_checker.values().is_empty());
     assert_eq!(late_checker.state(), State::Dropped);
+}
+
+/// A value whose `Clone` panics while it is forwarded kills the subject, as a panicking observer
+/// does: the value is cloned for each observer by the delivery, outside the subject's lock.
+#[cfg(panic = "unwind")]
+#[test]
+fn a_panicking_clone_kills_the_subject() {
+    let mut subject: PublishSubject<'_, CloneProbe, &'static str, _> = PublishSubject::shared();
+    let values = Arc::new(Mutex::new(Vec::new()));
+    let values_cloned = values.clone();
+    let terminations = Arc::new(Mutex::new(Vec::new()));
+    let terminations_cloned = terminations.clone();
+    let _subscription = subject.clone().subscribe_with_callback(
+        move |probe: CloneProbe| values_cloned.with_mut(|values| values.push(probe.value())),
+        move |termination| terminations_cloned.with_mut(|values| values.push(termination)),
+    );
+
+    let probe = CloneProbe::new(111).on_clone(Box::new(|| panic!("the clone panics")));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| subject.on_next(probe)));
+    assert!(result.is_err());
+    assert!(values.with_ref(Vec::is_empty));
+    assert!(terminations.with_ref(Vec::is_empty));
+    assert!(subject.terminated().is_none());
+    assert!(subject.on_next(CloneProbe::new(222)).is_stop());
+    subject.on_termination(Termination::Completed);
+    assert!(values.with_ref(Vec::is_empty));
+    assert!(terminations.with_ref(Vec::is_empty));
 }

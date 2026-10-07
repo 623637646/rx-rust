@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::clone_probe::CloneProbe;
 use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
@@ -576,6 +577,53 @@ fn test_next_on_next() {
     assert_eq!(checker.state(), State::Completed);
     assert!(matches!(subject.terminated(), Some(Termination::Completed)));
     assert_eq!(subject.value(), 0);
+}
+
+/// The copy kept as the current value is cloned before the subject's lock is taken, so a `Clone`
+/// may emit to the subject: the value it emits is delivered first, and the value being cloned
+/// follows it and becomes the current value.
+#[test]
+fn test_next_on_clone() {
+    let mut subject = BehaviorSubject::shared(CloneProbe::new(0));
+    let values = Arc::new(Mutex::new(Vec::new()));
+    let values_cloned = values.clone();
+    let _subscription = subject.clone().subscribe_with_callback(
+        move |probe: CloneProbe| values_cloned.with_mut(|values| values.push(probe.value())),
+        |_: Termination<Infallible>| {},
+    );
+    assert_eq!(values.clone_value(), [0]);
+
+    let mut subject_cloned = subject.clone();
+    let probe = CloneProbe::new(1).on_clone(Box::new(move || {
+        assert!(subject_cloned.on_next(CloneProbe::new(2)).is_continue());
+    }));
+    assert!(subject.on_next(probe).is_continue());
+    assert_eq!(values.clone_value(), [0, 2, 1]);
+    assert_eq!(subject.value().value(), 1);
+}
+
+/// A value whose `Clone` panics is refused before the subject's lock is taken: the panic reaches
+/// the sender, and the subject is left as it was, still forwarding.
+#[cfg(panic = "unwind")]
+#[test]
+fn a_panicking_clone_leaves_the_subject_as_it_was() {
+    let mut subject = BehaviorSubject::shared(CloneProbe::new(0));
+    let values = Arc::new(Mutex::new(Vec::new()));
+    let values_cloned = values.clone();
+    let _subscription = subject.clone().subscribe_with_callback(
+        move |probe: CloneProbe| values_cloned.with_mut(|values| values.push(probe.value())),
+        |_: Termination<Infallible>| {},
+    );
+
+    let probe = CloneProbe::new(1).on_clone(Box::new(|| panic!("the clone panics")));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| subject.on_next(probe)));
+    assert!(result.is_err());
+    assert_eq!(values.clone_value(), [0]);
+    assert_eq!(subject.value().value(), 0);
+
+    assert!(subject.on_next(CloneProbe::new(2)).is_continue());
+    assert_eq!(values.clone_value(), [0, 2]);
+    assert_eq!(subject.value().value(), 2);
 }
 
 #[test]
