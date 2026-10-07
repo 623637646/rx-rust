@@ -114,9 +114,10 @@ use educe::Educe;
 ///
 /// Its type names the thread mode, the events, the model and the source's disposal, but not the
 /// observer — the disposal of an observable must not depend on its observer (see
-/// [`ObservableTypes`](crate::observable::ObservableTypes)). The observer is released when the
-/// sources that hold the context let go of it, which the disposal of the model and the sources
-/// makes them do.
+/// [`ObservableTypes`](crate::observable::ObservableTypes)). So it cannot release the observer
+/// itself: the first clone of the context dropped after the stop does — typically the source's,
+/// as the source subscription is disposed, even while a scheduler task still holds another. See
+/// [`DeliveryStop`].
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct Disposal<M: ThreadMode, T, E, MD, D: Disposable>(
@@ -154,11 +155,14 @@ where
     let context = SubscriptionContext::<M, T, E, OR, MD, D>::new(observer, model);
     let disposal = context.disposal();
     let subscription = builder(context.clone());
-    let previous_subscription = context.install_source_subscription(subscription);
-    debug_assert!(
-        !matches!(previous_subscription, Ok(Some(_))),
-        "the source subscription is installed only once"
-    );
+    // The context owns the source subscription from here on. The field is private and set only
+    // here, so it is still `None` and nothing is dropped under the lock. A context that already
+    // stopped while `builder` ran does not run this update: it drops `subscription`, which
+    // disposes the source, outside the lock.
+    let _ = context.delivery.update(|resources| {
+        resources.source_subscription = Some(subscription);
+        UpdateOutcome::new(())
+    });
     disposal.into_subscription()
 }
 
@@ -254,20 +258,6 @@ where
             Ok(((), flow)) => flow,
             Err(DeliveryStopped) => Flow::Stop,
         }
-    }
-
-    /// Gives the context the source subscription it owns, to be disposed once the context stops.
-    ///
-    /// The subscription it replaces — none, unless it is installed twice — is handed back so that
-    /// it is dropped outside the lock. Once the context has stopped, `subscription` is not
-    /// installed but disposed, outside the lock, and [`DeliveryStopped`] is returned.
-    fn install_source_subscription(
-        &self,
-        subscription: Subscription<D>,
-    ) -> Result<Option<Subscription<D>>, DeliveryStopped> {
-        self.delivery.update(|resources| {
-            UpdateOutcome::new(resources.source_subscription.replace(subscription))
-        })
     }
 
     /// Sends `value` downstream. Returns the flow of the delivery, as [`Self::send`] does.
