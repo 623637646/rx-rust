@@ -1,7 +1,7 @@
 use super::{Task, TaskState};
 use crate::scheduler::SchedulerTypes;
 use std::{
-    future::{Future, poll_fn},
+    future::{Future, pending, poll_fn},
     pin::{Pin, pin},
     task::{Context, Poll},
     time::Duration,
@@ -11,6 +11,10 @@ use std::{
 /// every built-in one does, passing itself as `scheduler`. `sleep` is the runtime's timer (tokio's
 /// `time::sleep`, smol's `Timer::after`, …), which must run on the clock of `scheduler`'s
 /// [`now`](SchedulerTypes::now).
+///
+/// A `delay` too long for an [`Instant`](std::time::Instant) to represent never ends: the task
+/// waits, without a timer, until it is disposed, whatever `sleep` would make of that duration
+/// (tokio's wakes after some thirty years).
 ///
 /// Every step gets `scheduler.now()`, and a [`TaskState::SleepUntil`] is measured against it.
 /// Between two steps the task yields through [`yield_now`], also for a `SleepUntil` whose instant
@@ -29,6 +33,9 @@ pub async fn drive<TC, P, S, SF>(
     let (mut stepper, pinned) = task.split();
     let mut pinned = pin!(pinned);
     if let Some(delay) = delay {
+        if scheduler.now().checked_add(delay).is_none() {
+            return pending().await;
+        }
         sleep(delay).await;
     }
     loop {

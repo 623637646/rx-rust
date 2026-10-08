@@ -1,5 +1,7 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_1_MS;
+use crate::tests_utils::DURATION_1_YEAR;
 use crate::tests_utils::DURATION_3_MS;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
@@ -22,7 +24,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::transforming::buffer_with_time_or_count::BufferWithTimeOrCount,
 };
-use std::{convert::Infallible, num::NonZeroUsize};
+use std::{convert::Infallible, num::NonZeroUsize, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -138,6 +140,213 @@ fn test_completed_time_last_not_empty() {
     assert_eq!(checker.values(), [vec![], vec![111], vec![222, 333]]);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+/// A delay too long for an `Instant` to represent never ends: buffers are emitted by count only,
+/// the task waits until the subscription ends.
+#[test]
+fn test_delay_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.buffer_with_time_or_count(
+        NonZeroUsize::new(2).unwrap(),
+        DURATION_100_MS,
+        scheduler.clone(),
+        Some(Duration::MAX),
+    );
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(time.pending_tasks(), 1);
+
+    assert!(sender.on_next(222).is_continue());
+    assert!(sender.on_next(333).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert_eq!(checker.values(), [vec![111, 222]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [vec![111, 222], vec![333]]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// A time span too long for an `Instant` to represent: the first tick emits, the next one is out of
+/// range, so the timer finishes, and buffers are emitted by count and by the completion only.
+#[test]
+fn test_time_span_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.buffer_with_time_or_count(
+        NonZeroUsize::new(2).unwrap(),
+        Duration::MAX,
+        scheduler.clone(),
+        None,
+    );
+
+    let _subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
+    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(time.pending_tasks(), 0);
+
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
+    assert!(sender.on_next(333).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert_eq!(checker.values(), [vec![], vec![111, 222]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [vec![], vec![111, 222], vec![333]]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+/// The same as `buffer_with_time`: with the timer finished, the observer is released once the
+/// source has dropped its own, since nothing more can come (decision 0004).
+#[test]
+fn test_time_span_too_long_abandon_after_next() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.buffer_with_time_or_count(
+        NonZeroUsize::new(2).unwrap(),
+        Duration::MAX,
+        scheduler.clone(),
+        None,
+    );
+
+    let _subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(time.pending_tasks(), 0);
+
+    sender.abandon();
+    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+}
+
+/// A count flush before the first tick: the tick resyncs to a time span after it, which is out of
+/// range, so the timer finishes without emitting.
+#[test]
+fn test_time_span_too_long_after_count() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.buffer_with_time_or_count(
+        NonZeroUsize::new(2).unwrap(),
+        Duration::MAX,
+        scheduler.clone(),
+        Some(DURATION_10_MS),
+    );
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
+    assert_eq!(checker.values(), [vec![111, 222]]);
+    assert_eq!(time.pending_tasks(), 1);
+
+    time.advance_by(DURATION_10_MS);
+    assert_eq!(checker.values(), [vec![111, 222]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(time.pending_tasks(), 0);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [vec![111, 222]]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+/// A bundle full during `delay`, longer than `time_span`, does not bring the first timed bundle
+/// forward, and the ticks it would have resynced to, all past by then, are not caught up: the
+/// first timed bundle comes after `delay`, alone, and the timer restarts from it.
+#[test]
+fn test_full_bundle_during_delay() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.buffer_with_time_or_count(
+        NonZeroUsize::new(2).unwrap(),
+        DURATION_100_MS,
+        scheduler.clone(),
+        Some(DURATION_100_MS * 10),
+    );
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
+    assert!(sender.on_next(333).is_continue());
+    assert_eq!(checker.values(), [vec![111, 222]]);
+
+    time.advance_by(DURATION_100_MS * 10 - DURATION_1_MS);
+    assert_eq!(checker.values(), [vec![111, 222]]);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker.values(), [vec![111, 222], vec![333]]);
+
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert_eq!(checker.values(), [vec![111, 222], vec![333]]);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker.values(), [vec![111, 222], vec![333], vec![]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+}
+
+/// A bundle full less than `time_span` before `delay` ends restarts the timer: the first timed
+/// bundle comes `time_span` after it, past the end of `delay`.
+#[test]
+fn test_full_bundle_near_end_of_delay() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.buffer_with_time_or_count(
+        NonZeroUsize::new(2).unwrap(),
+        DURATION_100_MS,
+        scheduler.clone(),
+        Some(DURATION_100_MS),
+    );
+
+    let _subscription = observable.subscribe(observer);
+    time.advance_by(DURATION_100_MS - DURATION_30_MS);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
+    assert!(sender.on_next(333).is_continue());
+    assert_eq!(checker.values(), [vec![111, 222]]);
+
+    time.advance_by(DURATION_30_MS);
+    assert_eq!(checker.values(), [vec![111, 222]]);
+
+    time.advance_by(DURATION_100_MS - DURATION_30_MS - DURATION_1_MS);
+    assert_eq!(checker.values(), [vec![111, 222]]);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker.values(), [vec![111, 222], vec![333]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 }
 
 #[test]

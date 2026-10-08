@@ -22,6 +22,9 @@ impl<C> Task<PeriodicContext<C>> {
     /// the time of the first step is the anchor. A step that overruns the period is followed by the missed ones back to back,
     /// never skipped, each after a yield point.
     ///
+    /// A step due later than an [`Instant`] can represent never comes: the task finishes after the
+    /// step before it, and drops `state`, as it does when `step` returns `false`.
+    ///
     /// # Panics
     ///
     /// Panics if `period` is zero.
@@ -46,8 +49,14 @@ impl<C> Task<PeriodicContext<C>> {
                     return Poll::Ready(TaskState::Finished);
                 }
                 context.count += 1;
-                *next_time += context.period;
-                Poll::Ready(TaskState::SleepUntil(*next_time))
+                match next_time.checked_add(context.period) {
+                    Some(at) => {
+                        *next_time = at;
+                        Poll::Ready(TaskState::SleepUntil(at))
+                    }
+                    // The next step never comes, nor does any after it: nothing is left to do.
+                    None => Poll::Ready(TaskState::Finished),
+                }
             },
         )
     }

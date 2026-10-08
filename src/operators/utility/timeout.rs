@@ -33,6 +33,8 @@ pub enum Error<E> {
 /// `duration` of the item before it; the source's own error is wrapped in
 /// [`Error::SourceError`].
 ///
+/// A `duration` too long for an [`Instant`] to represent never elapses: the timeout never fires.
+///
 /// # Examples
 /// ```rust
 /// # #[cfg(not(feature = "tokio-scheduler"))]
@@ -143,7 +145,7 @@ where
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model {
-            deadline: self.scheduler.now() + self.duration,
+            deadline: self.scheduler.now().checked_add(self.duration),
         };
         subscribe_with_context(observer, model, |context| {
             let source_subscription = self.source.subscribe(TimeoutObserver {
@@ -160,7 +162,10 @@ where
 
 /// The state of a [`Timeout`] subscription.
 struct Model {
-    deadline: Instant,
+    /// When the timeout fires, or `None` when that is too far out for an [`Instant`] to
+    /// represent: the timeout then never fires. The clock only moves forward, so a deadline that
+    /// is `None` stays so.
+    deadline: Option<Instant>,
 }
 
 pub struct TimeoutObserver<M: ThreadMode, T, E, OR, D: Disposable, S> {
@@ -177,7 +182,7 @@ where
     S: SchedulerTypes,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        let deadline = self.scheduler.now() + self.duration;
+        let deadline = self.scheduler.now().checked_add(self.duration);
         self.context.update_flow(|model| {
             model.deadline = deadline;
             UpdateOutcome::empty().with_next_event(value)
@@ -207,8 +212,9 @@ where
     D: Disposable,
 {
     let deadline = context.update(|model| UpdateOutcome::new(model.deadline).without_events());
-    let Ok(deadline) = deadline else {
-        // The source terminated synchronously while it was being subscribed.
+    // `Err`: the source terminated synchronously while it was being subscribed. `Ok(None)`: the
+    // timeout never fires, so no timer is needed.
+    let Ok(Some(deadline)) = deadline else {
         return OptionDisposal::none();
     };
 
@@ -217,13 +223,14 @@ where
     // the task.
     let task = Task::recursive(context, |context, _, now| {
         context
-            .update(|model| {
-                if now < model.deadline {
-                    return UpdateOutcome::new(TaskState::SleepUntil(model.deadline))
-                        .without_events();
+            .update(|model| match model.deadline {
+                Some(deadline) if now < deadline => {
+                    UpdateOutcome::new(TaskState::SleepUntil(deadline)).without_events()
                 }
-                UpdateOutcome::new(TaskState::Finished)
-                    .with_termination_event(Termination::Error(Error::Timeout))
+                Some(_) => UpdateOutcome::new(TaskState::Finished)
+                    .with_termination_event(Termination::Error(Error::Timeout)),
+                // A value moved the deadline out of range: the timeout never fires anymore.
+                None => UpdateOutcome::new(TaskState::Finished).without_events(),
             })
             .unwrap_or(TaskState::Finished)
     });

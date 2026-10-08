@@ -19,6 +19,9 @@ use std::time::{Duration, Instant};
 /// another source emission.
 /// See <https://reactivex.io/documentation/operators/debounce.html>
 ///
+/// A `time_span` too long for an [`Instant`] to represent never passes: an item is emitted only
+/// by the completion, which emits the last one.
+///
 /// # Examples
 /// ```rust
 /// # #[cfg(not(feature = "tokio-scheduler"))]
@@ -142,7 +145,10 @@ enum Model<T, D: Disposable> {
     Idle,
     Active {
         value: T,
-        deadline: Instant,
+        /// When `value` is emitted, or `None` when that is too far out for an [`Instant`] to
+        /// represent: it then waits for the completion. The clock only moves forward, so a later
+        /// value's deadline is `None` too.
+        deadline: Option<Instant>,
         timer: Option<BoundDropDisposal<D>>,
     },
 }
@@ -166,7 +172,7 @@ where
     S: Scheduler<DebounceTask<M, T, E, OR, S, D>>,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        let deadline = self.scheduler.now() + self.time_span;
+        let deadline = self.scheduler.now().checked_add(self.time_span);
         let timer_setup = self.context.update(|model| {
             let (timer_setup, previous_value) = match model {
                 Model::Idle => {
@@ -175,7 +181,7 @@ where
                         deadline,
                         timer: None,
                     };
-                    (Some(deadline), None)
+                    (deadline, None)
                 }
                 Model::Active {
                     value: current_value,
@@ -191,7 +197,8 @@ where
         });
         let deadline = match timer_setup {
             Ok(Some(deadline)) => deadline,
-            // The value replaced the pending one, whose timer is still running.
+            // The value replaced the pending one, whose timer is still running, or it never comes
+            // due and needs no timer.
             Ok(None) => return Flow::Continue,
             Err(DeliveryStopped) => return Flow::Stop,
         };
@@ -209,6 +216,13 @@ where
                                 .without_drop_outside();
                         }
                         Model::Active { deadline, .. } => *deadline,
+                    };
+                    let Some(deadline) = deadline else {
+                        // A value with no deadline replaced the one this timer was for: it waits
+                        // for the completion, and the timer has nothing left to do.
+                        return UpdateOutcome::new(TaskState::Finished)
+                            .without_events()
+                            .without_drop_outside();
                     };
                     if now < deadline {
                         return UpdateOutcome::new(TaskState::SleepUntil(deadline))

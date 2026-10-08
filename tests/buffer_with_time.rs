@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_1_YEAR;
 use crate::tests_utils::DURATION_3_MS;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
@@ -24,9 +25,9 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::transforming::buffer_with_time::BufferWithTime,
 };
-use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -258,6 +259,62 @@ fn test_completed_small_delay() {
     );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+/// A delay too long for an `Instant` to represent never ends: no buffer is emitted by time, and
+/// the completion emits the last one.
+#[test]
+fn test_delay_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+
+    let observable =
+        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(Duration::MAX));
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(time.pending_tasks(), 1);
+
+    sender.on_termination(Termination::<Infallible>::Completed);
+    assert_eq!(checker.values(), [vec![111]]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// A time span too long for an `Instant` to represent: the first buffer is emitted at once, the
+/// second never by time, so the timer finishes. Once the source has dropped its observer, nothing
+/// more can come, and the observer is released without a termination (decision 0004).
+#[test]
+fn test_time_span_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.buffer_with_time(Duration::MAX, scheduler.clone(), None);
+
+    let _subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
+    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(time.pending_tasks(), 0);
+
+    assert!(sender.on_next(111).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    sender.abandon();
+    assert_eq!(checker.values(), [vec![]]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
 }
 
 #[test]

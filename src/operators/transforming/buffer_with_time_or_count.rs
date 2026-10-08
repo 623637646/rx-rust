@@ -20,7 +20,11 @@ use std::{num::NonZeroUsize, time::Duration};
 /// the bundle reaches `count` items or every `time_span`, whichever happens first.
 ///
 /// The timer first fires after `delay` (at once for `None`). A bundle emitted because it is full
-/// restarts the timer, so the next timed bundle comes `time_span` after it.
+/// restarts the timer, so the next timed bundle comes `time_span` after it, but never before
+/// `delay` has passed: a full bundle during `delay` does not bring the first timed one forward.
+///
+/// A time too far out for an `Instant` to represent never comes: with a `delay` or a `time_span`
+/// that long, bundles are emitted by count and by the completion only.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples
@@ -114,17 +118,22 @@ type BufferWithTimeOrCountMode<OE, S> =
 type BufferWithTimeOrCountSources<OE, S> =
     ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
 
-/// The task of a [`BufferWithTimeOrCount`] timer.
+/// The context of a [`BufferWithTimeOrCount`] subscription.
+type BufferWithTimeOrCountContext<M, T, E, OR, D> =
+    SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>;
+
+/// The task of a [`BufferWithTimeOrCount`] timer. It holds the context strongly, so that the
+/// buffers keep being cut after the source has let go of its observer without a termination, until
+/// the subscription is disposed. A disposal still releases the observer at once: disposing the
+/// source makes it drop its own handle, and a handle dropped once the context has stopped releases
+/// the observer.
 type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
-    EmitTimer<
-        SubscriptionContext<
-            BufferWithTimeOrCountMode<OE, S>,
-            Vec<T>,
-            E,
-            OR,
-            Model<T>,
-            BufferWithTimeOrCountSources<OE, S>,
-        >,
+    BufferWithTimeOrCountContext<
+        BufferWithTimeOrCountMode<OE, S>,
+        T,
+        E,
+        OR,
+        BufferWithTimeOrCountSources<OE, S>,
     >,
 >;
 
@@ -163,38 +172,51 @@ where
     S: Scheduler<BufferWithTimeOrCountTask<T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+        assert!(!self.time_span.is_zero(), "time_span must be non-zero");
         let model = Model::<T> {
             values: Vec::with_capacity(self.count.get()),
-            last_sending_time_from_counting: None,
+            deadline: self
+                .scheduler
+                .now()
+                .checked_add(self.delay.unwrap_or_default()),
+            time_span: self.time_span,
+            count: self.count,
         };
         subscribe_with_context(observer, model, |context| {
             let buffer_observer = BufferWithTimeOrCountObserver {
                 context: context.clone(),
-                count: self.count,
                 scheduler: self.scheduler.clone(),
             };
             let sub = self.source.subscribe(buffer_observer);
-            let disposal = setup_emit_timer(
-                context,
-                self.scheduler,
-                self.delay,
-                self.time_span,
-                self.count,
-            );
+            let disposal = setup_emit_timer(context, self.scheduler, self.delay);
             sub.preceded_by_bound(disposal)
         })
         .map_into()
     }
 }
 
+/// The state of a [`BufferWithTimeOrCount`] subscription.
 struct Model<T> {
     values: Vec<T>,
-    last_sending_time_from_counting: Option<Instant>,
+    /// When the next timed bundle is due: `delay` after the subscription, then `time_span` after
+    /// the one before, or after a full bundle if that is later. `None` when that is too far out for
+    /// an [`Instant`] to represent: it never comes, nor does any later one, since the clock only
+    /// moves forward, and the bundles are emitted by count and by the completion only.
+    deadline: Option<Instant>,
+    /// Fixed; here for the timer task, whose handler is a plain `fn`.
+    time_span: Duration,
+    count: NonZeroUsize,
+}
+
+impl<T> Model<T> {
+    /// Takes the bundle out, leaving an empty one of the same capacity.
+    fn take_bundle(&mut self) -> Vec<T> {
+        std::mem::replace(&mut self.values, Vec::with_capacity(self.count.get()))
+    }
 }
 
 pub struct BufferWithTimeOrCountObserver<M: ThreadMode, T, E, OR, D: Disposable, S> {
-    context: SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>,
-    count: NonZeroUsize,
+    context: BufferWithTimeOrCountContext<M, T, E, OR, D>,
     scheduler: S,
 }
 
@@ -208,14 +230,18 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         self.context.update_flow(|model| {
             model.values.push(value);
-            if model.values.len() >= self.count.get() {
-                model.last_sending_time_from_counting = Some(self.scheduler.now());
-                let values =
-                    std::mem::replace(&mut model.values, Vec::with_capacity(self.count.get()));
-                UpdateOutcome::empty().with_next_event(values)
-            } else {
-                UpdateOutcome::empty().without_events()
+            if model.values.len() < model.count.get() {
+                return UpdateOutcome::empty().without_events();
             }
+            // A full bundle restarts the timer: the next timed bundle comes `time_span` after it,
+            // but never before the one already due, so that the first still waits for `delay`.
+            // Either out of range means never.
+            let restarted = self.scheduler.now().checked_add(model.time_span);
+            model.deadline = model
+                .deadline
+                .zip(restarted)
+                .map(|(due, restarted)| due.max(restarted));
+            UpdateOutcome::empty().with_next_event(model.take_bundle())
         })
     }
 
@@ -238,70 +264,43 @@ where
     }
 }
 
-/// The state of a [`BufferWithTimeOrCount`] timer: the context and the schedule.
+/// Drives the timed bundles with one long-lived recursive scheduler task, as `timeout` does.
 ///
-/// The context is held strongly, so that the buffers keep being cut after the source has let go of
-/// its observer without a termination, until the subscription is disposed. A disposal still
-/// releases the observer at once: disposing the source makes it drop its own handle, and a handle
-/// dropped once the context has stopped releases the observer.
-struct EmitTimer<C> {
-    context: C,
-    next_time: Instant,
-    time_span: Duration,
-    count: NonZeroUsize,
-}
-
-/// Drives the periodic flush with a single, long-lived recursive scheduling loop.
-///
-/// A count-triggered flush (see `BufferWithTimeOrCountObserver::on_next`) doesn't spawn or
-/// tear down a task: it just records `last_sending_time_from_counting`, and the next tick of
-/// this same loop resyncs its own deadline to `time_span` after that flush instead of emitting.
-/// This avoids spawning a fresh scheduler task (and aborting the previous one) on every count
-/// flush, and it sidesteps `Duration` subtraction entirely, so a tick that fires late can never
+/// A full bundle only moves `deadline` (see `BufferWithTimeOrCountObserver::on_next`): if the task
+/// wakes at an obsolete deadline, it sleeps on to the current one. No scheduler task is spawned or
+/// cancelled per full bundle, and no `Duration` is subtracted, so a tick that fires late can never
 /// panic on underflow.
 fn setup_emit_timer<M, T, E, OR, D, S>(
-    context: SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>,
+    context: BufferWithTimeOrCountContext<M, T, E, OR, D>,
     scheduler: S,
     delay: Option<Duration>,
-    time_span: Duration,
-    count: NonZeroUsize,
 ) -> BoundDropDisposal<S::Disposal>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
     D: Disposable,
-    S: Scheduler<RecursiveContext<EmitTimer<SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>>>>,
+    S: Scheduler<RecursiveContext<BufferWithTimeOrCountContext<M, T, E, OR, D>>>,
 {
-    assert!(!time_span.is_zero(), "time_span must be non-zero");
     // The context owns only the task's disposal, through its source subscription, never the task,
     // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
     // disposes its source subscription, which cancels the task.
-    let timer = EmitTimer {
-        context,
-        next_time: scheduler.now() + delay.unwrap_or_default(),
-        time_span,
-        count,
-    };
-    let task = Task::recursive(timer, |timer, _, _| {
-        let (time_span, count) = (timer.time_span, timer.count);
-        let next_time = &mut timer.next_time;
-        timer
-            .context
-            .update(|model| {
-                if let Some(last_sending_time_from_counting) =
-                    model.last_sending_time_from_counting.take()
-                {
-                    // Already flushed by count since the last tick; resync to
-                    // `time_span` after that flush instead of emitting an empty batch.
-                    *next_time = last_sending_time_from_counting + time_span;
-                    UpdateOutcome::new(TaskState::SleepUntil(*next_time)).without_events()
-                } else {
-                    let values =
-                        std::mem::replace(&mut model.values, Vec::with_capacity(count.get()));
-                    // Fixed-rate: anchor the next tick to the schedule, not to `now`.
-                    *next_time += time_span;
-                    UpdateOutcome::new(TaskState::SleepUntil(*next_time)).with_next_event(values)
+    let task = Task::recursive(context, |context, _, now| {
+        context
+            .update(|model| match model.deadline {
+                Some(deadline) if now < deadline => {
+                    UpdateOutcome::new(TaskState::SleepUntil(deadline)).without_events()
                 }
+                Some(deadline) => {
+                    // Fixed-rate: the next deadline is counted from this one, not from `now`, so
+                    // that a late tick does not push the next ones back.
+                    model.deadline = deadline.checked_add(model.time_span);
+                    let state = model
+                        .deadline
+                        .map_or(TaskState::Finished, TaskState::SleepUntil);
+                    UpdateOutcome::new(state).with_next_event(model.take_bundle())
+                }
+                // A full bundle moved the deadline out of range: no timed bundle is left.
+                None => UpdateOutcome::new(TaskState::Finished).without_events(),
             })
             .unwrap_or(TaskState::Finished)
     });

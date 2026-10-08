@@ -9,6 +9,7 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{DURATION_1_YEAR, longest_duration_from};
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
@@ -23,7 +24,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::{creating::never::Never, filtering::debounce::Debounce},
 };
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -144,6 +145,63 @@ fn test_error() {
     assert_eq!(checker.values(), [111, 333]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+}
+
+/// A time span too long for an `Instant` to represent never passes: no timer is started, and only
+/// the completion emits, the last value.
+#[test]
+fn test_time_span_too_long_never_passes() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.debounce(Duration::MAX, scheduler.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(time.pending_tasks(), 0);
+
+    sender.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [222]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+/// The first value is due at the last instant the clock can represent; the value a millisecond
+/// later replaces it and is out of range. The timer wakes at the first deadline and finishes
+/// without emitting.
+#[test]
+fn test_time_span_out_of_range_after_next() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+    let time_span = longest_duration_from(time.now());
+
+    let observable = observable.debounce(time_span, scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(time.pending_tasks(), 1);
+
+    time.advance_by(DURATION_1_MS);
+    assert!(sender.on_next(222).is_continue());
+    time.advance_by(time_span - DURATION_1_MS);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(time.pending_tasks(), 0);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]

@@ -10,6 +10,7 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channel;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::{DURATION_1_YEAR, longest_duration_from};
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observable::Subscription;
@@ -23,7 +24,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::{creating::never::Never, utility::delay::Delay},
 };
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -210,6 +211,90 @@ fn test_error() {
     assert_eq!(checker.values(), [111, 222, 333]);
     assert_eq!(checker.state(), State::Error("error"));
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+}
+
+/// A delay too long for an `Instant` to represent never ends: the values and the completion never
+/// come due, and no timer waits for them. Once the source has completed, nothing is left to
+/// deliver, so the observer is released without a termination, as after `abandon` (decision 0004).
+#[test]
+fn test_delay_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.delay(Duration::MAX, scheduler.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(time.pending_tasks(), 0);
+
+    sender.on_termination(Termination::Completed);
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// Disposing the subscription releases the observer, and leaves no task behind.
+#[test]
+fn test_delay_too_long_unsub_after_next() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.delay(Duration::MAX, scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// The first value is due at the last instant the clock can represent; the value and the
+/// completion a millisecond later are out of range. The first still comes due, the others never:
+/// once it is delivered, nothing is left, and the observer is released.
+#[test]
+fn test_delay_out_of_range_after_next() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+    let delay = longest_duration_from(time.now());
+
+    let observable = observable.delay(delay, scheduler.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    time.advance_by(DURATION_1_MS);
+    assert!(sender.on_next(222).is_continue());
+    sender.on_termination(Termination::Completed);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(time.pending_tasks(), 1);
+
+    time.advance_by(delay - DURATION_1_MS * 2);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]
@@ -984,6 +1069,33 @@ fn test_next_on_unsub() {
     time.advance_by(DURATION_100_MS + DURATION_30_MS);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Dropped);
+}
+
+/// The same with a delay too long for an `Instant` to represent: the value is never queued, but the
+/// stopped context still answers `Stop`, as it does for a delay in range.
+#[test]
+fn test_delay_too_long_next_on_unsub() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (checker, observer) = Checker::new();
+
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        Subscription::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            assert!(observer.on_next(111).is_stop());
+        }))
+    });
+
+    let observable = observable.delay(Duration::MAX, scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]

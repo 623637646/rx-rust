@@ -21,6 +21,10 @@ use std::time::Duration;
 /// The first bundle is emitted after `delay` — at once, and so empty, for `None` — and every
 /// following one `time_span` later, at a fixed rate, empty or not. On completion the pending
 /// bundle is emitted before the completion.
+///
+/// A time too far out for an `Instant` to represent never comes: with a `delay` that long, no
+/// bundle is emitted by time, with a `time_span` that long only the first one is. What is gathered
+/// after that is emitted by the completion.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples
@@ -228,8 +232,9 @@ where
                 .unwrap_or(false)
         },
         time_span,
-        // Fixed-rate, anchored to the time of the subscription plus `delay`.
-        Some(scheduler.now() + delay.unwrap_or_default()),
+        // Fixed-rate, anchored to the time of the subscription plus `delay`. A delay too long for
+        // an `Instant` never ends: the first step never comes, so it needs no anchor.
+        scheduler.now().checked_add(delay.unwrap_or_default()),
     );
     scheduler.run_task(task, delay)
 }

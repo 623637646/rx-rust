@@ -1,6 +1,7 @@
 mod tests_utils;
 
 use crate::tests_utils::DURATION_1_MS;
+use crate::tests_utils::DURATION_1_YEAR;
 use crate::tests_utils::DURATION_3_MS;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
@@ -92,6 +93,53 @@ fn test_completed_with_delay() {
     time.advance_by(DURATION_100_MS);
     assert_eq!(checker.values(), [0, 1, 2]);
     assert_eq!(checker.state(), State::Dropped);
+}
+
+/// A delay too long for an `Instant` to represent never ends: the first value never comes, and the
+/// task waits until it is disposed.
+#[test]
+fn test_delay_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(Duration::MAX));
+    let (checker, observer) = Checker::new();
+
+    let subscription = observable.subscribe(observer);
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(time.pending_tasks(), 1);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// A period too long for an `Instant` to represent: the second value never comes, so the task
+/// finishes after the first one and drops the observer without a termination, as `Never` does
+/// (decision 0004).
+#[test]
+fn test_period_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let observable = Interval::new(Duration::MAX, scheduler.clone(), None);
+    let (checker, observer) = Checker::new();
+
+    let subscription = observable.subscribe(observer);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(time.pending_tasks(), 1);
+
+    time.advance_by(Duration::ZERO);
+    assert_eq!(checker.values(), [0]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(time.pending_tasks(), 0);
+
+    time.advance_by(DURATION_1_YEAR);
+    subscription.dispose();
+    assert_eq!(checker.values(), [0]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]

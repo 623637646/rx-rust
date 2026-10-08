@@ -745,6 +745,60 @@ fn test_delay_too_long_never_comes_due() {
 }
 
 #[test]
+fn test_periodic_delay_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let runs = Arc::new(Mutex::new(0));
+    let runs_task = runs.clone();
+
+    let disposal = time.scheduler().schedule_periodically(
+        move |_| {
+            runs_task.with_mut(|runs| *runs += 1);
+            true
+        },
+        DURATION_10_MS,
+        Some(Duration::MAX),
+    );
+    time.advance_by(Duration::from_secs(60 * 60 * 24 * 365));
+    assert_eq!(runs.clone_value(), 0);
+    assert_eq!(time.pending_tasks(), 1);
+
+    disposal.dispose();
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// The second run would be due later than an `Instant` can represent: it never comes, so the task
+/// finishes after the first one and drops its closure.
+#[test]
+fn test_periodic_period_too_long_finishes() {
+    let time = VirtualTime::new();
+    let drops = DropCount::new();
+    let probe = drops.probe();
+    let runs = Arc::new(Mutex::new(0));
+    let runs_task = runs.clone();
+
+    let disposal = time.scheduler().schedule_periodically(
+        move |_| {
+            let _probe = &probe;
+            runs_task.with_mut(|runs| *runs += 1);
+            true
+        },
+        Duration::MAX,
+        None,
+    );
+    assert_eq!(time.pending_tasks(), 1);
+
+    time.advance_by(Duration::ZERO);
+    assert_eq!(runs.clone_value(), 1);
+    assert_eq!(time.pending_tasks(), 0);
+    assert_eq!(drops.get(), 1);
+
+    time.advance_by(Duration::from_secs(60 * 60 * 24 * 365));
+    disposal.dispose();
+    assert_eq!(runs.clone_value(), 1);
+    assert_eq!(drops.get(), 1);
+}
+
+#[test]
 fn test_advance_too_far_panics_and_keeps_the_clock() {
     let time = VirtualTime::new();
     let start = time.now();

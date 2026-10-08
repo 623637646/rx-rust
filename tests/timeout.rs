@@ -2,6 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_1_MS;
 use crate::tests_utils::test_channel::test_channels;
+use crate::tests_utils::{DURATION_1_YEAR, longest_duration_from};
 use crate::tests_utils::{
     DURATION_3_MS, DURATION_10_MS, DURATION_30_MS, DURATION_100_MS,
     checker::{Checker, State},
@@ -166,6 +167,71 @@ fn test_timeout_never() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Error(timeout::Error::Timeout));
 }
+/// A duration too long for an `Instant` to represent never elapses: no timer is started, and the
+/// subscription stays active until it is disposed.
+#[test]
+fn test_duration_too_long_never_fires() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.timeout(Duration::MAX, scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    assert_eq!(time.pending_tasks(), 0);
+
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    assert!(sender.on_next(111).is_continue());
+    time.advance_by(DURATION_1_YEAR);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(time.pending_tasks(), 0);
+
+    subscription.dispose();
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// The first deadline is the last instant the clock can represent; a value a millisecond later
+/// moves it out of range. The timer still wakes at the old deadline, and finishes without firing.
+#[test]
+fn test_next_moves_deadline_out_of_range() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+    let duration = longest_duration_from(time.now());
+
+    let observable = observable.timeout(duration, scheduler.clone());
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(time.pending_tasks(), 1);
+
+    time.advance_by(DURATION_1_MS);
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
+    time.advance_by(duration - DURATION_1_MS);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(time.pending_tasks(), 0);
+
+    sender.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
 #[test]
 fn test_unsubscribe() {
     let time = VirtualTime::new();

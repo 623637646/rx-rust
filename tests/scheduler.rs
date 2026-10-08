@@ -11,13 +11,15 @@ use rx_rust::disposable::Disposable;
 use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::operators::creating::just::Just;
-use rx_rust::scheduler::{Scheduler, SchedulerExt, Task, TaskState};
+use rx_rust::scheduler::virtual_time::VirtualTime;
+use rx_rust::scheduler::{Scheduler, SchedulerExt, Task, TaskState, drive};
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use std::convert::Infallible;
+use std::pin::pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, mpsc};
-use std::task::Poll;
+use std::task::{Context, Poll, Waker};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -358,6 +360,34 @@ fn test_schedule_periodically_rejects_zero_period() {
     block_on(|scheduler| async move {
         let _disposal = scheduler.schedule_periodically(|_| false, Duration::ZERO, None);
     });
+}
+
+/// A delay too long for an `Instant` to represent never ends, whatever the runtime's timer makes of
+/// it: `drive` never calls `sleep` with it (tokio's would wake after some thirty years), nor steps
+/// the task.
+#[test]
+fn test_drive_delay_too_long_never_ends() {
+    let time = VirtualTime::new();
+    let slept = Arc::new(AtomicBool::new(false));
+    let ran = Arc::new(AtomicBool::new(false));
+    let slept_sleep = slept.clone();
+    let ran_task = ran.clone();
+    let task = Task::once(move || ran_task.write(true), |task| task());
+
+    let mut future = pin!(drive(
+        task,
+        Some(Duration::MAX),
+        time.scheduler(),
+        move |_| {
+            slept_sleep.write(true);
+            std::future::ready(())
+        },
+    ));
+    let mut cx = Context::from_waker(Waker::noop());
+    assert!(future.as_mut().poll(&mut cx).is_pending());
+    assert!(future.as_mut().poll(&mut cx).is_pending());
+    assert!(!slept.read());
+    assert!(!ran.read());
 }
 
 #[test]

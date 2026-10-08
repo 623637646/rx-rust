@@ -14,6 +14,10 @@ use std::{convert::Infallible, time::Duration};
 /// `0` is emitted after `delay` — at once for `None`, unlike ReactiveX, which waits one period
 /// first — and every following count one `period` later, at a fixed rate. It never completes.
 ///
+/// A time too far out for an `Instant` to represent never comes. A `delay` that long: nothing is
+/// emitted until the subscription is disposed. A `period` that long: `0` is emitted, then the
+/// observer is dropped without a termination, as [`Never`](super::never::Never) drops it.
+///
 /// # Examples
 /// ```rust
 /// # #[cfg(not(feature = "tokio-scheduler"))]
@@ -96,8 +100,11 @@ where
             // nothing is completed, since an interval never completes anyway.
             |observer, count| observer.on_next(count).is_continue(),
             self.period,
-            // Fixed-rate, anchored to the time of the subscription plus the delay.
-            Some(self.scheduler.now() + self.delay.unwrap_or_default()),
+            // Fixed-rate, anchored to the time of the subscription plus the delay. A delay too long
+            // for an `Instant` never ends: the first step never comes, so it needs no anchor.
+            self.scheduler
+                .now()
+                .checked_add(self.delay.unwrap_or_default()),
         );
         self.scheduler.run_task(task, self.delay)
     }

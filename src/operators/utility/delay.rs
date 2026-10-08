@@ -27,6 +27,9 @@ use std::{
 /// The completion is delayed like the values, but an error is not: it is delivered at once, and
 /// the values still waiting are dropped.
 ///
+/// A `delay` too long for an [`Instant`] to represent never ends: the values and the completion
+/// never come due, and are dropped as they arrive. An error still comes at once.
+///
 /// # Examples
 /// ```rust
 /// # #[cfg(not(feature = "tokio-scheduler"))]
@@ -206,7 +209,15 @@ where
     where
         S: Scheduler<DelayTask<M, T, E, OR, S, D>>,
     {
-        let deadline = self.scheduler.now() + self.delay;
+        let Some(deadline) = self.scheduler.now().checked_add(self.delay) else {
+            // The event never comes due, and neither does any later one, since the clock only
+            // moves forward: there is nothing to queue, and the values already queued keep their
+            // timer. The context still answers, so that a stopped one says `Stop` as it does for
+            // an event in range; the event is dropped here, outside its lock.
+            return self
+                .context
+                .update_flow(|_| UpdateOutcome::empty().without_events());
+        };
         let timer_setup = self.context.update(|model| {
             match value {
                 Some(value) => model.values.push_back((deadline, value)),

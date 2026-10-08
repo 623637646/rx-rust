@@ -143,6 +143,9 @@ pub trait SchedulerTypes {
 /// single-threaded one. A trait method could not tighten its bounds per implementation.
 pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
     /// Spawns `task`, to start after `delay`. Dropping the returned subscription cancels it.
+    ///
+    /// A `delay` too long for an [`Instant`] to represent never ends: the task is never stepped,
+    /// and is kept until it is disposed. [`drive`] does that for the schedulers built on it.
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal>;
 }
 
@@ -192,9 +195,11 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
         F: FnMut(usize) -> bool,
         Self: Scheduler<PeriodicContext<F>>,
     {
-        let anchor = self.now() + delay.unwrap_or_default();
+        // An anchor out of range is a delay that never ends: the first run never comes, so it
+        // needs no anchor.
+        let anchor = self.now().checked_add(delay.unwrap_or_default());
         self.run_task(
-            Task::periodic(task, |task, count| task(count), period, Some(anchor)),
+            Task::periodic(task, |task, count| task(count), period, anchor),
             delay,
         )
     }
