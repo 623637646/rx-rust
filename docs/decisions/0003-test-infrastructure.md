@@ -1,7 +1,8 @@
 # 0003: The test infrastructure
 
 Three decisions about the test suite: how it handles threads (adopted), what must not compile
-(adopted, with `trybuild` rejected for now), and time (deferred).
+(adopted, with `trybuild` rejected for now), and time (adopted: a virtual-time scheduler, with the
+time taken from the scheduler).
 
 ## One test build, `Shared`, on every scheduler
 
@@ -139,138 +140,88 @@ error names `Emitter<_, Local>`): only a snapshot pins that.
 
 ## A virtual-time scheduler
 
-Status: deferred — designed but not implemented. This records where the design got to, what is
-hard about it and what it would cost, so that a later attempt starts from here. The name
-`TestScheduler` belongs to the test helper above, so this one needs another, such as
-`VirtualTimeScheduler`.
+Status: adopted. The time comes from the scheduler; a thread-local clock was designed first and
+rejected (see History).
 
-### Motivation
+### Before
 
-Every time-based test sleeps for real. The usual shape is to sleep
-`DURATION_100_MS - DURATION_30_MS`, check that nothing happened yet, then sleep `DURATION_30_MS * 2`
-and check that it did. The margins are there because a real sleep may oversleep. The tests are slow,
-the margins hide off-by-a-few-ms bugs, and they still flake: the `ci` profile of
-`.config/nextest.toml` retries every test twice for that reason.
+Every time-based test slept for real: sleep `DURATION_100_MS - DURATION_30_MS`, check that nothing
+happened, then sleep `DURATION_30_MS * 2` and check that it did. The margins were there because a
+real sleep may oversleep. The tests were slow, the margins hid off-by-a-few-ms bugs, and they still
+flaked: the `ci` profile of `.config/nextest.toml` retries every test twice for that reason.
 
-A virtual-time scheduler (RxJava's `TestScheduler`, RxJS's `VirtualTimeScheduler`) would make
-`sleep(d)` exact and free:
+### Decision
 
-- `run_task(task, delay)` only queues the task, due at `now + delay`.
-- `advance_by(d)` / `advance_to(at)` move a virtual clock to each due time in turn and run the tasks
-  due there, synchronously, on the calling thread.
-- A test then asserts on exact boundaries — nothing after `advance_by(99ms)`, the value after one
-  more `advance_by(1ms)` — and takes no real time.
+- **The time comes from the scheduler.** `SchedulerTypes::now(&self) -> Instant` is a default
+  method (the system clock), so a custom scheduler is not broken by it. Outside a task an operator
+  reads `scheduler.now()` — at subscription, on an event. Inside a task the handler gets the time of
+  the step as an argument: `TaskHandler` and `Stepper::step` take a `now: Instant`, and so do the
+  steps of `Task::recursive` and the closure of `schedule_recursively`. A `TaskState::SleepUntil` is
+  an instant on that clock. `Task::periodic` without an anchor anchors on its first step's `now`.
+- **`drive` takes the scheduler** (`drive(task, delay, scheduler, sleep)`), steps with
+  `scheduler.now()` and measures a `SleepUntil` against it. What is left to the implementer is that
+  `sleep` runs on the same clock.
+- **`throttle`, `timestamp` and `time_interval` take a scheduler**, for its clock only: they
+  schedule nothing. A breaking change, made with the others of 2.0.
+- **`scheduler::virtual_time`**, always compiled, no feature:
+  - `VirtualTime` owns the clock and the queued tasks; the test holds it and calls `advance_by(d)`,
+    `now()` and `pending_tasks()`. `advance_by(Duration::ZERO)` runs what is due now.
+  - `VirtualTimeScheduler` is the handle the operators get, `Shared`, `Send + Sync`. It holds the
+    `VirtualTime` weakly: a task often holds its own scheduler (an `interval` upstream of a
+    `debounce`), and a strong handle would form a cycle through the queue. Dropping the
+    `VirtualTime` drops the queued tasks.
+  - `run_task` only queues, a task without delay too. `advance_by` runs, on the calling thread, each
+    task due by the target in order of due time, then of queueing, after setting the clock to the
+    instant it was due, so that each step of an `interval` advanced by ten periods sees its own
+    time. A task queued meanwhile and due by the target runs in the same call.
+  - A task that returns `Pending` waits for its waker, and runs at the next `advance_by`.
+  - Panics: `advance_by` from inside a task or from two threads at once; a scheduler used after its
+    `VirtualTime` is gone; and a task that asks 10 000 times in a row to sleep until an instant that
+    has passed. That last one would otherwise hang: a real clock moves while such a task waits, the
+    virtual one moves only between due tasks. It is what an off-by-one deadline check (`<` for
+    `<=`) does, and a test then fails at once instead of hanging. A `Yield` has no such limit, since
+    a stream task yields after every element.
+- **The time-based tests run on it**, synchronously, without `block_on`, and assert on exact
+  boundaries: nothing after `advance_by(DURATION_100_MS - DURATION_1_MS)`, the event after
+  `advance_by(DURATION_1_MS)`. Changing the `<=` of `delay`, `debounce`, `timeout` or `throttle` to
+  `<` fails 4 to 13 tests of the operator's file. `test_async` stays on the real schedulers, as the
+  case about them. The scheduler's own tests are `tests/virtual_time_scheduler.rs`.
+- **CI** fails on an `Instant::now` in `src/` outside `scheduler/mod.rs` (the default `now`) and
+  `scheduler/virtual_time.rs` (the origin of a virtual clock).
+- **The `ci` profile keeps its retries**: `test_async`, the `test_race_condition*` tests and
+  `tests/scheduler.rs` still run on real time.
 
-### The scheduler itself (the easy part)
+### Compared with other Rx libraries
 
-It drives tasks with `Task::split` / `Stepper::step`, not with `drive`.
+- RxJava's `TestScheduler` (`advanceTimeBy`, `triggerActions`) and Rx.NET's (`AdvanceBy`, `Start`)
+  are the same design: the clock is the scheduler's, every time-based operator takes one, and the
+  test advances it synchronously. Rx.NET adds a recording observer (each event with its virtual
+  time, asserted as one timeline), and RxJS marble tests (`'-a--b-|'`). Neither is adopted: the
+  suite asserts step by step with `Checker`, and a virtual clock fits that as it is.
+- RxJS's `run()` mode swaps the default time source globally, the thread-local design of the
+  History below; Tokio's `time::pause` is per runtime and only for Tokio.
 
-- **Queue:** a `BinaryHeap` of `(due, sequence, id)` plus a map `id -> slot`. Entries for cancelled
-  tasks are skipped when they come up.
-- **Loop:** under the lock, pop the earliest entry with `due <= target`, set the clock to `due` and
-  take the task out. Release the lock, then step it. Take the lock again and act on the answer:
-  - `Finished`: drop the task, outside the lock.
-  - `Yield`, or `SleepUntil(at)` with `at <= now`: requeue at `now` with a new sequence number, so
-    the other tasks due now get their turn.
-  - `SleepUntil(at)`: requeue at `at`.
-  - `Pending`: park the task. Its waker, a `std::task::Wake`, pushes the id onto a woken list,
-    which the next loop requeues at `now`.
+### History: a thread-local clock (designed, rejected)
 
-  After the loop, set the clock to `target`.
-- **Disposal:** holds a weak handle and the id. Disposing takes a queued or parked task out and
-  drops it outside the lock; a task that is running is marked cancelled, so it is not requeued.
-- **Edge cases:** `advance` called from inside a task panics; `advance_to` an instant in the past
-  panics; a task that yields forever hangs `advance`, as it would spin on a real executor.
+The first design kept `Instant` out of the scheduler API: a `scheduler::now()` behind a
+`test-scheduler` feature, reading a thread-local virtual clock registered by the virtual-time
+scheduler and falling back to `Instant::now()`. The operators would only have swapped
+`Instant::now()` for `now()`. Alternatives considered then were a `Clock` enum from a default method
+(rejected as too much plumbing), an associated type `SchedulerTypes::Clock` (breaks every custom
+scheduler: stable Rust has no associated type defaults), and a process-wide clock (the tests of a
+binary run on parallel threads under `cargo test`).
 
-### Difficulty 1: the operators read the clock themselves
+It was rejected for what the thread-local cost elsewhere:
 
-A scheduler only decides when a task runs. The operators compute and compare their deadlines with
-`Instant::now()`, so virtual sleeps alone break them. The calls are in these files:
+- The time depended on which thread asked, not on the pipeline's scheduler. A timestamp taken on a
+  thread without the clock — a test pushing from another thread, an `observe_on(tokio)` — was a
+  real `Instant`, a few milliseconds from the virtual ones: a silent error.
+- Excluding that meant a `Local`-only, `!Send` virtual scheduler, which the `Shared` helpers
+  (`test_channel()`, `SendBoxedObserver`) cannot hold: the tests would have needed `Local` twins of
+  the helpers.
+- Production and tests would have read the clock through different code, behind a feature.
 
-- Deadlines and anchors, at subscription or in `on_next`: `utility/delay.rs`,
-  `filtering/debounce.rs`, `utility/timeout.rs`, `creating/interval.rs`,
-  `transforming/buffer_with_time.rs`, `transforming/buffer_with_time_or_count.rs`.
-- Inside the `fn` task handlers, which cannot reach the scheduler: `delay`, `debounce`, `timeout`.
-- Timestamps, with no scheduler parameter at all: `filtering/throttle.rs`, `utility/timestamp.rs`,
-  `utility/time_interval.rs`.
-- In `scheduler/`: the anchor of `SchedulerExt::schedule_periodically`, and `Task::periodic`'s
-  fallback when no anchor is given.
-
-The alternatives considered:
-
-1. **A `Clock` value, from a default method `SchedulerTypes::clock()`.** `Clock` would be an enum,
-   `System | Virtual(Arc<…>)`, so the change is not breaking. It is explicit and correct across
-   threads. But every task context that compares times has to carry the clock, which changes the
-   task type aliases (`DelayTask`, …). And `throttle` / `timestamp` / `time_interval` need new APIs,
-   such as `throttle_with_clock(span, clock)`. Rejected as too much plumbing.
-2. **An associated type `SchedulerTypes::Clock`.** It breaks every custom scheduler, since stable
-   Rust has no defaults for associated types. Rejected.
-3. **A process-wide virtual clock.** `cargo test` runs the tests of a binary on parallel threads,
-   which would advance each other's clock; it is safe only under nextest's process per test.
-   Rejected.
-4. **Chosen: `rx_rust::scheduler::now()`, behind a `test-scheduler` feature.**
-   - It reads a thread-local virtual clock, registered by the virtual-time scheduler the thread
-     created, and falls back to `Instant::now()` when there is none.
-   - Without the feature it compiles to `Instant::now()`, so production pays nothing.
-   - The operators only swap `Instant::now()` for `now()`; no signature or type changes.
-   - `throttle` / `timestamp` / `time_interval` get virtual time for free.
-   - The thread-local holds a `Weak`, so the registration ends with the last clone, wherever it is
-     dropped. A second live virtual-time scheduler on the same thread panics.
-   - `drive` must keep `Instant::now()`: it sleeps in real time, for the real schedulers.
-
-### Difficulty 2: timestamps taken on two threads
-
-With a thread-local clock, a value that takes a timestamp on one thread and another on a different
-thread mixes virtual and real `Instant`s. That happens when a test pushes events from another
-thread, or when the virtual-time scheduler is combined with a real one (`observe_on(tokio)`). The
-error is silent: the virtual origin starts at the real `Instant::now()`, so the two clocks differ by
-only a few milliseconds at first.
-
-Considered:
-- Carrying the clock with the object, which is alternative 1 again.
-- Making the mix loud at run time: put the virtual origin a day ahead, and panic when a task is run
-  or the clock is advanced from another thread.
-
-**Conclusion: the virtual-time scheduler has only the `Local` mode.**
-- It holds `Rc<RefCell<_>>` and `Rc<Cell<Instant>>`, so it is `!Send`.
-- Every observer, context and disposal that holds it is `!Send` too, so moving such a pipeline to
-  another thread does not compile.
-- The cross-thread case is then excluded at compile time, and the implementation is simpler: one
-  type, no `+ Send` task box, no atomics.
-- Tests that are about a real scheduler (`test_async`, `tests/scheduler.rs`, `observe_on`,
-  `subscribe_on`, `from_future`, `from_stream`, …) keep running on the real schedulers.
-
-A `Shared` variant was the earlier plan. Its clock has to be `Send + Sync` (`Arc` plus an
-`AtomicU64` offset), because a `Shared` subject boxes the observer holding the scheduler into a
-`SendBoxedObserver`. Even so, it never reads the clock from another thread meaningfully.
-
-### Difficulty 3: the test helpers are `Shared`
-
-`test_channel()` and the other helpers in `tests/tests_utils/` build in the `Shared` mode, which is
-the whole suite's (see above), and box the downstream observer into a `SendBoxedObserver`. A
-`delay` observer holding a `!Send` virtual-time scheduler then does not compile. The virtual-time
-tests therefore need `Local` helpers, along the lines of `tests/local_mode.rs`: make `test_channel`
-generic over the mode, or add `Local` twins of the helpers they use. (A second option, gating the
-virtual-time tests on a `Local` build, went away with the one-build suite.)
-
-### Cost
-
-- **Library:** the new scheduler, `scheduler::now()`, and swapping `Instant::now()` for it in nine
-  operator files plus `schedule_periodically` and `Task::periodic`. Document the limits: one
-  thread; do not mix with a real scheduler.
-- **Feature wiring:**
-  - `test-scheduler = []` in `Cargo.toml`, and in the features of the crate's dev-dependency on
-    itself, so that `cargo test` keeps needing no `--features`.
-  - CI: the `cargo hack --each-feature --no-dev-deps check --lib` step covers the new feature by
-    itself and proves the library builds without it.
-- **Tests:**
-  - A new test file covering exact boundaries, ordering, disposal, periodic rate, `Pending` and
-    waking, the panics, and the fallback to the system clock.
-  - Migrating `delay`, `debounce`, `timeout`, `interval`, `timer`, `buffer_with_time`,
-    `buffer_with_time_or_count`, `sample` (the `Interval` sampler cases), `throttle`, `timestamp`
-    and `time_interval`, about 9.4k lines.
-  - Each test drops `block_on`, uses `advance_by` with exact boundaries, and keeps its name and
-    other assertions. `test_async` stays on the real runtimes.
-  - The `Local` helpers of Difficulty 3.
-- **Docs:** `docs/testing.md` (timing cases use the virtual-time scheduler), `AGENTS.md`, and this
-  record updated to adopted.
+Taking the time from the scheduler removes all three: the clock goes with the scheduler, so the
+virtual one can be `Shared` and work with the existing helpers, with no feature. The plumbing that
+was feared stayed small: the operators already hold their scheduler, and a handler gets `now` from
+its step.

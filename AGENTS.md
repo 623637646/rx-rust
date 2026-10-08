@@ -101,7 +101,8 @@ cargo tarpaulin --out Html
   `mod.rs` the task and its `Stepper`, `drive.rs` the async driver (`drive`, `yield_now`), and one
   file per constructor with the state type it names (`once.rs`, `periodic.rs`, …); `runtime/` the
   implementations, one module per runtime and feature, with
-  its `Shared` and `Local` scheduler side by side.
+  its `Shared` and `Local` scheduler side by side; `virtual_time.rs` the scheduler on a virtual
+  clock that tests move forward (`VirtualTime`, always compiled).
 - `src/utils/` — shared machinery: `serialized_delivery`, `serialized_multicast`,
   `subscribe_with_context`, `pending_events`. Public modules are for users writing their own
   operators; a module shared inside the crate only is `pub(crate) mod`.
@@ -165,6 +166,14 @@ cargo tarpaulin --out Html
   name a mode pointer or a private type, set it explicitly, `Clone(bound())` or
   `Clone(bound(S: Clone))`, so that the public impl does not list it. Write an impl by hand only
   when it is not structural, e.g. a `Default` that calls a constructor.
+- **Time comes from the scheduler**, never from `Instant::now()`: an operator reads
+  `SchedulerTypes::now()` at subscription or on an event, and a task handler uses the `now` its step
+  is given (`Task::recursive`'s third argument, `schedule_recursively`'s second). An operator that
+  measures time without scheduling anything (`throttle`, `timestamp`, `time_interval`) still takes a
+  scheduler, for its clock. That is what lets `VirtualTime` drive every operator; CI fails on an
+  `Instant::now` in `src/` outside `scheduler/mod.rs` and `scheduler/virtual_time.rs`. Read the
+  clock outside a context lock when the value is needed anyway (`let deadline =
+  self.scheduler.now() + span;` before `update`).
 - Public items get doc comments; operators link to their reactivex.io page.
 - `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce
   parallel representations.
@@ -215,6 +224,13 @@ test that needs the `Local` mode itself goes in `tests/local_mode.rs`.
 What must not compile is a `compile_fail` doctest on the item, next to a twin that compiles and
 differs in one place, since a `compile_fail` passes on any error; a `Local` type that must not be
 `Send` also gets `assert_not_send!` in `tests/local_mode.rs`. No `trybuild` (decision 0003).
+
+A time-based test runs on a virtual clock, not on real sleeps: `let time = VirtualTime::new();`,
+`time.scheduler()` for the operator, `time.advance_by(d)` to move the clock, synchronously and
+without `block_on`. Assert on exact boundaries (`DURATION_100_MS - DURATION_1_MS`, then
+`DURATION_1_MS`), not with a margin. Only `test_async` stays on the real schedulers. A task that
+keeps asking to sleep until an instant that has passed makes `advance_by` panic after 10 000 steps
+(an off-by-one `<` where `<=` was meant), rather than hang. See `docs/testing.md`.
 
 A test that checks which thread a callback runs on uses `ThreadCheckerScheduler`
 (`tests/tests_utils/thread_checker_scheduler.rs`). It does not run a task by itself: `run_task`
