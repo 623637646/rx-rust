@@ -72,7 +72,7 @@ where
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let handle = self
             .pool
-            .spawn_with_handle(drive(task, delay, sleep))
+            .spawn_with_handle(drive(task, delay, self.clone(), sleep))
             .expect("failed to spawn future");
         Subscription::new(FuturesDisposal(handle))
     }
@@ -135,7 +135,7 @@ where
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
         let handle = self
             .spawner
-            .spawn_local_with_handle(drive(task, delay, sleep))
+            .spawn_local_with_handle(drive(task, delay, self.clone(), sleep))
             .expect("failed to spawn future");
         Subscription::new(FuturesDisposal(handle))
     }

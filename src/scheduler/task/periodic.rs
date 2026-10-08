@@ -18,8 +18,8 @@ impl<C> Task<PeriodicContext<C>> {
     /// Calls `step(&mut state, count)` — `count` starting at 0 — at a fixed rate, until it returns
     /// `false`.
     ///
-    /// The n-th step is due at `anchor + n * period`; without an anchor, the first step's time is
-    /// the anchor. A step that overruns the period is followed by the missed ones back to back,
+    /// The n-th step is due at `anchor + n * period`, on the scheduler's clock; without an anchor,
+    /// the time of the first step is the anchor. A step that overruns the period is followed by the missed ones back to back,
     /// never skipped, each after a yield point.
     ///
     /// # Panics
@@ -40,8 +40,8 @@ impl<C> Task<PeriodicContext<C>> {
                 next_time: anchor,
                 count: 0,
             },
-            |context, _, _| {
-                let next_time = context.next_time.get_or_insert_with(Instant::now);
+            |context, _, _, now| {
+                let next_time = context.next_time.get_or_insert(now);
                 if !(context.step)(&mut context.state, context.count) {
                     return Poll::Ready(TaskState::Finished);
                 }

@@ -1,24 +1,29 @@
 use super::{Task, TaskState};
+use crate::scheduler::SchedulerTypes;
 use std::{
     future::{Future, poll_fn},
     pin::{Pin, pin},
     task::{Context, Poll},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 /// Runs `task` after `delay` on an async executor: a scheduler spawns the future it returns, as
-/// every built-in one does. `sleep` is the runtime's timer (tokio's `time::sleep`, smol's
-/// `Timer::after`, …).
+/// every built-in one does, passing itself as `scheduler`. `sleep` is the runtime's timer (tokio's
+/// `time::sleep`, smol's `Timer::after`, …), which must run on the clock of `scheduler`'s
+/// [`now`](SchedulerTypes::now).
 ///
-/// Between two steps the task yields through [`yield_now`], also for a [`TaskState::SleepUntil`]
-/// whose instant has passed (tokio's `Sleep` would be ready at once, without yielding). A scheduler
-/// that wants another kind of yield drives the task itself through [`Task::split`] and
+/// Every step gets `scheduler.now()`, and a [`TaskState::SleepUntil`] is measured against it.
+/// Between two steps the task yields through [`yield_now`], also for a `SleepUntil` whose instant
+/// has passed (tokio's `Sleep` would be ready at once, without yielding). A scheduler that wants
+/// another kind of yield drives the task itself through [`Task::split`] and
 /// [`Stepper::step`](super::Stepper::step).
-pub async fn drive<TC, P, SF>(
+pub async fn drive<TC, P, S, SF>(
     task: Task<TC, P>,
     delay: Option<Duration>,
+    scheduler: S,
     sleep: impl Fn(Duration) -> SF,
 ) where
+    S: SchedulerTypes,
     SF: Future<Output = ()>,
 {
     let (mut stepper, pinned) = task.split();
@@ -27,10 +32,10 @@ pub async fn drive<TC, P, SF>(
         sleep(delay).await;
     }
     loop {
-        match poll_fn(|cx| stepper.step(pinned.as_mut(), cx)).await {
+        match poll_fn(|cx| stepper.step(pinned.as_mut(), cx, scheduler.now())).await {
             TaskState::Finished => break,
             TaskState::Yield => yield_now().await,
-            TaskState::SleepUntil(at) => match at.checked_duration_since(Instant::now()) {
+            TaskState::SleepUntil(at) => match at.checked_duration_since(scheduler.now()) {
                 Some(delay) if !delay.is_zero() => sleep(delay).await,
                 _ => yield_now().await,
             },

@@ -34,7 +34,7 @@ where
                 on_end,
             },
             stream,
-            |context, stream, cx| {
+            |context, stream, cx, _| {
                 stream.poll_next(cx).map(|item| match item {
                     Some(item) => {
                         let state = context

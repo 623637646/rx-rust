@@ -1145,18 +1145,18 @@ pub trait ObservableExt: ObservableTypes + Sized {
         TakeWhile::new(self, callback)
     }
 
-    /// Throttles emissions to at most one item per `time_span`.
+    /// Throttles emissions to at most one item per `time_span`, on the clock of `scheduler`.
     ///
-    /// Leading-edge and scheduler-free: the cooldown is decided by comparing item arrival times,
-    /// so no timer is spawned.
-    fn throttle(self, time_span: Duration) -> Throttle<Self> {
-        Throttle::new(self, time_span)
+    /// Leading-edge: the cooldown is decided by comparing item arrival times, so no timer is
+    /// spawned; the scheduler only gives the time.
+    fn throttle<S>(self, time_span: Duration, scheduler: S) -> Throttle<Self, S> {
+        Throttle::new(self, time_span, scheduler)
     }
 
     /// Pairs each item with the time elapsed since the previous one, or since the subscription for
-    /// the first.
-    fn time_interval(self) -> TimeInterval<Self> {
-        TimeInterval::new(self)
+    /// the first, on the clock of `scheduler`.
+    fn time_interval<S>(self, scheduler: S) -> TimeInterval<Self, S> {
+        TimeInterval::new(self, scheduler)
     }
 
     /// Errors if the next item, or the first since the subscription, does not arrive within
@@ -1165,9 +1165,10 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Timeout::new(self, duration, scheduler)
     }
 
-    /// Pairs each item with the [`Instant`](std::time::Instant) it arrived at.
-    fn timestamp(self) -> Timestamp<Self> {
-        Timestamp::new(self)
+    /// Pairs each item with the [`Instant`](std::time::Instant) it arrived at, on the clock of
+    /// `scheduler`.
+    fn timestamp<S>(self, scheduler: S) -> Timestamp<Self, S> {
+        Timestamp::new(self, scheduler)
     }
 
     /// Gathers all the items into a `Vec` and emits it when the source completes. This is

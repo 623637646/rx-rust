@@ -155,6 +155,7 @@ where
                 E,
                 OR,
                 BufferWithTimeOrCountSources<OE, S>,
+                S,
             >,
             Item = T,
             Error = E,
@@ -170,6 +171,7 @@ where
             let buffer_observer = BufferWithTimeOrCountObserver {
                 context: context.clone(),
                 count: self.count,
+                scheduler: self.scheduler.clone(),
             };
             let sub = self.source.subscribe(buffer_observer);
             let disposal = setup_emit_timer(
@@ -190,22 +192,24 @@ struct Model<T> {
     last_sending_time_from_counting: Option<Instant>,
 }
 
-pub struct BufferWithTimeOrCountObserver<M: ThreadMode, T, E, OR, D: Disposable> {
+pub struct BufferWithTimeOrCountObserver<M: ThreadMode, T, E, OR, D: Disposable, S> {
     context: SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>,
     count: NonZeroUsize,
+    scheduler: S,
 }
 
-impl<M, T, E, OR, D> Observer<T, E> for BufferWithTimeOrCountObserver<M, T, E, OR, D>
+impl<M, T, E, OR, D, S> Observer<T, E> for BufferWithTimeOrCountObserver<M, T, E, OR, D, S>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
     D: Disposable,
+    S: SchedulerTypes,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.context.update_flow(|model| {
             model.values.push(value);
             if model.values.len() >= self.count.get() {
-                model.last_sending_time_from_counting = Some(Instant::now());
+                model.last_sending_time_from_counting = Some(self.scheduler.now());
                 let values =
                     std::mem::replace(&mut model.values, Vec::with_capacity(self.count.get()));
                 UpdateOutcome::empty().with_next_event(values)
@@ -274,11 +278,11 @@ where
     // disposes its source subscription, which cancels the task.
     let timer = EmitTimer {
         context,
-        next_time: Instant::now() + delay.unwrap_or_default(),
+        next_time: scheduler.now() + delay.unwrap_or_default(),
         time_span,
         count,
     };
-    let task = Task::recursive(timer, |timer, _| {
+    let task = Task::recursive(timer, |timer, _, _| {
         let (time_span, count) = (timer.time_span, timer.count);
         let next_time = &mut timer.next_time;
         timer

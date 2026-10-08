@@ -235,7 +235,7 @@ where
         // The model holds only the task's disposal, never the task, which its runtime owns: holding
         // the context strongly forms no cycle. Stopping the context drops the model, which cancels
         // the task.
-        let task = Task::recursive(self.context.clone(), |context, _| {
+        let task = Task::recursive(self.context.clone(), |context, _, _| {
             context
                 .update(|model| {
                     let termination = model.termination.take();

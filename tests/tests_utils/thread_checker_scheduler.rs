@@ -113,7 +113,7 @@ where
     P: Send + 'static,
 {
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
-        let future = drive(task, delay, |duration| async move {
+        let future = drive(task, delay, self.clone(), |duration| async move {
             async_io::Timer::after(duration).await;
         });
         let (abortable, abort_handle) = abortable(future);

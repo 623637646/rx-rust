@@ -206,8 +206,8 @@ where
     where
         S: Scheduler<DelayTask<M, T, E, OR, S, D>>,
     {
+        let deadline = self.scheduler.now() + self.delay;
         let timer_setup = self.context.update(|model| {
-            let deadline = Instant::now() + self.delay;
             match value {
                 Some(value) => model.values.push_back((deadline, value)),
                 None => model.completion = Some(deadline),
@@ -227,10 +227,9 @@ where
         // The model holds only the task's disposal, never the task, which its runtime owns: holding
         // the context strongly forms no cycle. Stopping the context drops the model, which cancels
         // the task.
-        let task = Task::recursive(self.context.clone(), |context, _| {
+        let task = Task::recursive(self.context.clone(), |context, _, now| {
             context
                 .update(|model| {
-                    let now = Instant::now();
                     // The deadlines are ascending, so one binary search splits the queue into
                     // the due values and the ones that keep waiting.
                     let due = model
@@ -267,7 +266,7 @@ where
         });
         let disposal = self.scheduler.run_task(
             task,
-            Some(deadline.saturating_duration_since(Instant::now())),
+            Some(deadline.saturating_duration_since(self.scheduler.now())),
         );
 
         // A zero delay can fire the timer before this runs, and that firing can end the stream:

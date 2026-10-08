@@ -122,7 +122,7 @@ where
     P: Send + 'static,
 {
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
-        let future = drive(task, delay, tokio::time::sleep);
+        let future = drive(task, delay, self.clone(), tokio::time::sleep);
         Subscription::new(TokioDisposal(self.handle.spawn(future)))
     }
 }
@@ -217,7 +217,7 @@ where
     P: 'static,
 {
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
-        let future = drive(task, delay, tokio::time::sleep);
+        let future = drive(task, delay, self.clone(), tokio::time::sleep);
         let handle = match &self.target {
             LocalTarget::Ambient => tokio::task::spawn_local(future),
             LocalTarget::Handle(local_set) => local_set

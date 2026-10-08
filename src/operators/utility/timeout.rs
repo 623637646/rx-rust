@@ -135,7 +135,7 @@ impl<T, E, OE, S, OR> Observable<OR> for Timeout<OE, S>
 where
     OR: Observer<T, Error<E>>,
     OE: Observable<
-            TimeoutObserver<TimeoutMode<OE, S>, T, E, OR, TimeoutSources<OE, S>>,
+            TimeoutObserver<TimeoutMode<OE, S>, T, E, OR, TimeoutSources<OE, S>, S>,
             Item = T,
             Error = E,
         >,
@@ -143,12 +143,13 @@ where
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         let model = Model {
-            deadline: Instant::now() + self.duration,
+            deadline: self.scheduler.now() + self.duration,
         };
         subscribe_with_context(observer, model, |context| {
             let source_subscription = self.source.subscribe(TimeoutObserver {
                 context: context.clone(),
                 duration: self.duration,
+                scheduler: self.scheduler.clone(),
             });
             let timer = setup_timer(context, &self.scheduler);
             source_subscription.preceded_by(timer)
@@ -162,20 +163,23 @@ struct Model {
     deadline: Instant,
 }
 
-pub struct TimeoutObserver<M: ThreadMode, T, E, OR, D: Disposable> {
+pub struct TimeoutObserver<M: ThreadMode, T, E, OR, D: Disposable, S> {
     context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     duration: Duration,
+    scheduler: S,
 }
 
-impl<M, T, E, OR, D> Observer<T, E> for TimeoutObserver<M, T, E, OR, D>
+impl<M, T, E, OR, D, S> Observer<T, E> for TimeoutObserver<M, T, E, OR, D, S>
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,
     D: Disposable,
+    S: SchedulerTypes,
 {
     fn on_next(&mut self, value: T) -> Flow {
+        let deadline = self.scheduler.now() + self.duration;
         self.context.update_flow(|model| {
-            model.deadline = Instant::now() + self.duration;
+            model.deadline = deadline;
             UpdateOutcome::empty().with_next_event(value)
         })
     }
@@ -211,10 +215,10 @@ where
     // The context owns only the task's disposal, never the task, which its runtime owns: holding
     // the context strongly forms no cycle. Stopping the context disposes the timer, which cancels
     // the task.
-    let task = Task::recursive(context, |context, _| {
+    let task = Task::recursive(context, |context, _, now| {
         context
             .update(|model| {
-                if Instant::now() < model.deadline {
+                if now < model.deadline {
                     return UpdateOutcome::new(TaskState::SleepUntil(model.deadline))
                         .without_events();
                 }
@@ -225,7 +229,7 @@ where
     });
     let timer = scheduler.run_task(
         task,
-        Some(deadline.saturating_duration_since(Instant::now())),
+        Some(deadline.saturating_duration_since(scheduler.now())),
     );
     OptionDisposal::some(timer)
 }

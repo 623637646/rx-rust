@@ -28,6 +28,17 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --all --check
+      # Time comes from the scheduler (`SchedulerTypes::now`, or the `now` a task step gets), so that
+      # a virtual-time scheduler drives every operator. Only the system clock's default `now` and
+      # the origin of a virtual clock read it directly; comments and doc examples are skipped.
+      - name: No system clock outside the scheduler
+        run: |
+          if grep -rn 'Instant::now' src \
+            | grep -vE '^[^:]+:[0-9]+:\s*//' \
+            | grep -vE '^src/scheduler/(mod|virtual_time)\.rs:'; then
+            echo "Read the time from the scheduler instead of Instant::now()" >&2
+            exit 1
+          fi
 
   clippy:
     name: clippy

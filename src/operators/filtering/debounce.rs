@@ -166,8 +166,8 @@ where
     S: Scheduler<DebounceTask<M, T, E, OR, S, D>>,
 {
     fn on_next(&mut self, value: T) -> Flow {
+        let deadline = self.scheduler.now() + self.time_span;
         let timer_setup = self.context.update(|model| {
-            let deadline = Instant::now() + self.time_span;
             let (timer_setup, previous_value) = match model {
                 Model::Idle => {
                     *model = Model::Active {
@@ -199,7 +199,7 @@ where
         // The model holds only the task's disposal, never the task, which its runtime owns: holding
         // the context strongly forms no cycle. Stopping the context drops the model, which cancels
         // the task.
-        let task = Task::recursive(self.context.clone(), |context, _| {
+        let task = Task::recursive(self.context.clone(), |context, _, now| {
             context
                 .update(|model| {
                     let deadline = match model {
@@ -210,7 +210,7 @@ where
                         }
                         Model::Active { deadline, .. } => *deadline,
                     };
-                    if Instant::now() < deadline {
+                    if now < deadline {
                         return UpdateOutcome::new(TaskState::SleepUntil(deadline))
                             .without_events()
                             .without_drop_outside();
@@ -231,7 +231,7 @@ where
         });
         let disposal = self.scheduler.run_task(
             task,
-            Some(deadline.saturating_duration_since(Instant::now())),
+            Some(deadline.saturating_duration_since(self.scheduler.now())),
         );
 
         let mut disposal = Some(disposal);

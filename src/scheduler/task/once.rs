@@ -15,7 +15,7 @@ impl<C> Task<OnceContext<C>> {
                 state: Some(state),
                 run,
             },
-            |context, _, _| {
+            |context, _, _, _| {
                 if let Some(state) = context.state.take() {
                     (context.run)(state);
                 }

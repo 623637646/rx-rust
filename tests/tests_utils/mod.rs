@@ -12,6 +12,7 @@ pub(crate) mod thread_checker_scheduler;
 
 use std::time::Duration;
 
+pub(crate) const DURATION_1_MS: Duration = Duration::from_millis(1);
 pub(crate) const DURATION_3_MS: Duration = Duration::from_millis(3);
 pub(crate) const DURATION_10_MS: Duration = Duration::from_millis(10);
 pub(crate) const DURATION_30_MS: Duration = Duration::from_millis(30);

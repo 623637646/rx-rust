@@ -35,7 +35,7 @@ use std::{
     cell::RefCell,
     panic::{self, AssertUnwindSafe},
     rc::Rc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 /// Which scheduler a [`TestScheduler`] is, known before its executor exists: [`block_on`] picks the
@@ -222,12 +222,12 @@ impl TestScheduler {
     /// Resolves after `duration`, timed by a task of the scheduler, so on the clock its other
     /// tasks use. The deadline is taken when this is called, not when the future is first polled.
     pub(crate) fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
-        let deadline = Instant::now() + duration;
+        let deadline = self.now() + duration;
         let (sender, receiver) = oneshot::channel();
         let mut sender = Some(sender);
         let timer = self.schedule_recursively(
-            move |_| {
-                if Instant::now() < deadline {
+            move |_, now| {
+                if now < deadline {
                     return TaskState::SleepUntil(deadline);
                 }
                 if let Some(sender) = sender.take() {

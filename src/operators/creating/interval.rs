@@ -6,10 +6,7 @@ use crate::{
     scheduler::{PeriodicContext, Scheduler, SchedulerTypes, Task},
 };
 use educe::Educe;
-use std::{
-    convert::Infallible,
-    time::{Duration, Instant},
-};
+use std::{convert::Infallible, time::Duration};
 
 /// Creates an Observable that emits a sequence of integers spaced by a given time interval.
 /// See <https://reactivex.io/documentation/operators/interval.html>
@@ -100,7 +97,7 @@ where
             |observer, count| observer.on_next(count).is_continue(),
             self.period,
             // Fixed-rate, anchored to the time of the subscription plus the delay.
-            Some(Instant::now() + self.delay.unwrap_or_default()),
+            Some(self.scheduler.now() + self.delay.unwrap_or_default()),
         );
         self.scheduler.run_task(task, self.delay)
     }

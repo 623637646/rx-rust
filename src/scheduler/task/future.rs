@@ -22,7 +22,7 @@ where
                 on_ready,
             },
             future,
-            |context, future, cx| {
+            |context, future, cx, _| {
                 future.poll(cx).map(|output| {
                     let state = context
                         .state

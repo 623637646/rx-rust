@@ -13,7 +13,10 @@
 //! | `smol-scheduler`      | `runtime::smol::SmolLocalScheduler`           | `Local`  |
 //! | `futures-scheduler`   | `runtime::futures::ThreadPoolScheduler`       | `Shared` |
 //! | `futures-scheduler`   | `runtime::futures::LocalPoolScheduler`        | `Local`  |
+//! | (always)              | [`virtual_time::VirtualTimeScheduler`]        | `Shared` |
 //!
+//! [`VirtualTimeScheduler`](virtual_time::VirtualTimeScheduler) runs on a virtual clock that a
+//! test moves forward, for exact and instant time-based tests.
 //! # Executor lifetime
 //!
 //! A task can reach its own scheduler: `debounce` keeps its scheduler in its observer, and an
@@ -35,6 +38,13 @@
 //! Implementing a scheduler takes [`SchedulerTypes`] and [`Scheduler::run_task`]. On an async
 //! executor, spawn the future [`drive`] returns; a synchronous loop drives the task itself through
 //! [`Task::split`] and [`Stepper::step`].
+//!
+//! # Time
+//!
+//! Time comes from the scheduler, never from `Instant::now()`: an operator reads
+//! [`SchedulerTypes::now`] at subscription or on an event, and a task gets the time of each step
+//! from the scheduler that runs it. A scheduler with a clock of its own therefore drives every
+//! deadline and timestamp of the operators it is given.
 //!
 //! # Examples
 //! ```rust
@@ -70,6 +80,7 @@
 
 pub mod runtime;
 mod task;
+pub mod virtual_time;
 
 #[cfg(feature = "futures")]
 pub use task::StreamThenContext;
@@ -113,6 +124,16 @@ pub trait SchedulerTypes {
     /// would keep that context, and the downstream observer, alive with it until the subscription
     /// stops. The disposals of the built-in schedulers are handles to their runtime's task.
     type Disposal: Disposable;
+
+    /// The current time on the scheduler's clock: the system's for the built-in schedulers.
+    ///
+    /// Every operator that measures time reads it here, at subscription or on an event, and a
+    /// task gets it as the `now` of each step, so that a scheduler with a clock of its own — a
+    /// virtual one in tests — drives the deadlines and timestamps of the operators it is given.
+    /// A [`TaskState::SleepUntil`] is an instant on this clock.
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
 }
 
 /// Runs a [`Task`], after an optional delay, until it reports [`TaskState::Finished`].
@@ -137,17 +158,22 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
         self.run_task(Task::once(task, |task| task()), delay)
     }
 
-    /// Runs `task(count)` until it returns [`TaskState::Finished`], as [`Task::recursive`] does.
+    /// Runs `task(count, now)` until it returns [`TaskState::Finished`], as [`Task::recursive`]
+    /// does. `now` is the time of the step on the scheduler's clock, the one a
+    /// [`TaskState::SleepUntil`] is measured on.
     fn schedule_recursively<F>(
         &self,
         task: F,
         delay: Option<Duration>,
     ) -> Subscription<Self::Disposal>
     where
-        F: FnMut(usize) -> TaskState,
+        F: FnMut(usize, Instant) -> TaskState,
         Self: Scheduler<RecursiveContext<F>>,
     {
-        self.run_task(Task::recursive(task, |task, count| task(count)), delay)
+        self.run_task(
+            Task::recursive(task, |task, count, now| task(count, now)),
+            delay,
+        )
     }
 
     /// Runs `task(count)` every `period`, from now plus `delay`, until it returns `false`. Runs
@@ -166,7 +192,7 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
         F: FnMut(usize) -> bool,
         Self: Scheduler<PeriodicContext<F>>,
     {
-        let anchor = Instant::now() + delay.unwrap_or_default();
+        let anchor = self.now() + delay.unwrap_or_default();
         self.run_task(
             Task::periodic(task, |task, count| task(count), period, Some(anchor)),
             delay,

@@ -13,7 +13,7 @@ use crate::{
     thread_mode::{Joined, ThreadMode},
 };
 use educe::Educe;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`,
 /// every `time_span`.
@@ -229,7 +229,7 @@ where
         },
         time_span,
         // Fixed-rate, anchored to the time of the subscription plus `delay`.
-        Some(Instant::now() + delay.unwrap_or_default()),
+        Some(scheduler.now() + delay.unwrap_or_default()),
     );
     scheduler.run_task(task, delay)
 }

@@ -5,6 +5,7 @@ use crate::observable::Subscription;
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    scheduler::SchedulerTypes,
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -13,71 +14,59 @@ use std::time::{Duration, Instant};
 /// span.
 /// See <https://reactivex.io/documentation/operators/sample.html> (`throttleFirst`).
 ///
-/// This is a purely synchronous, leading-edge throttle: it compares the arrival time of each item
-/// against the last emission and needs no scheduler, so there is no timer to spawn, cancel, or
-/// drift.
+/// This is a synchronous, leading-edge throttle: it compares the arrival time of each item, on the
+/// clock of `scheduler` ([`SchedulerTypes::now`]), against the last emission. It runs nothing on
+/// the scheduler, so there is no timer to spawn, cancel, or drift.
 ///
 /// # Examples
 /// ```rust
-/// # #[cfg(not(feature = "tokio-scheduler"))]
-/// # fn main() {}
-/// # #[cfg(feature = "tokio-scheduler")]
-/// #[tokio::main]
-/// async fn main() {
-///     use rx_rust::{
-///         observable::ObservableExt,
-///         observer::Termination,
-///         operators::{
-///             creating::from_iter::FromIter,
-///             filtering::throttle::Throttle,
-///         },
-///     };
-///     use std::sync::{Arc, Mutex};
-///     use std::time::Duration;
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::{Observer, Termination},
+///     operators::filtering::throttle::Throttle,
+///     scheduler::virtual_time::VirtualTime,
+///     subject::publish_subject::PublishSubject,
+/// };
+/// use std::{convert::Infallible, time::Duration};
 ///
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let terminations = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///     let terminations_observer = Arc::clone(&terminations);
+/// let time = VirtualTime::new();
+/// let mut values = Vec::new();
+/// let mut subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> =
+///     PublishSubject::local();
 ///
-///     let subscription = Throttle::new(
-///         FromIter::new(vec![1, 2, 3]),
-///         Duration::from_millis(5),
-///     )
-///     .subscribe_with_callback(
-///         move |value| values_observer.lock().unwrap().push(value),
-///         move |termination| terminations_observer
-///             .lock()
-///             .unwrap()
-///             .push(termination),
-///     );
+/// let subscription = Throttle::new(subject.clone(), Duration::from_millis(5), time.scheduler())
+///     .subscribe_with_callback(|value| values.push(value), |_| {});
 ///
-///     drop(subscription);
+/// subject.on_next(1);
+/// subject.on_next(2); // within 5 ms of `1`: dropped
+/// time.advance_by(Duration::from_millis(5));
+/// subject.on_next(3);
+/// subject.on_termination(Termination::Completed);
+/// drop(subscription);
 ///
-///     // 1, 2 and 3 arrive back-to-back, so only the leading `1` passes.
-///     assert_eq!(&*values.lock().unwrap(), &[1]);
-///     assert_eq!(
-///         &*terminations.lock().unwrap(),
-///         &[Termination::Completed]
-///     );
-/// }
+/// assert_eq!(values, [1, 3]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Throttle<OE> {
+pub struct Throttle<OE, S> {
     source: OE,
     time_span: Duration,
+    scheduler: S,
 }
 
-impl<OE> Throttle<OE> {
-    /// Creates a [`Throttle`] over `source`;
+impl<OE, S> Throttle<OE, S> {
+    /// Creates a [`Throttle`] over `source`, timed by the clock of `scheduler`;
     /// [`ObservableExt::throttle`](crate::observable::ObservableExt::throttle) is the fluent form.
-    pub fn new(source: OE, time_span: Duration) -> Self {
-        Self { source, time_span }
+    pub fn new(source: OE, time_span: Duration, scheduler: S) -> Self {
+        Self {
+            source,
+            time_span,
+            scheduler,
+        }
     }
 }
 
-impl<T, E, OE> ObservableTypes for Throttle<OE>
+impl<T, E, OE, S> ObservableTypes for Throttle<OE, S>
 where
     OE: ObservableTypes<Item = T, Error = E>,
 {
@@ -87,32 +76,36 @@ where
     type Disposal = OE::Disposal;
 }
 
-impl<T, E, OE, OR> Observable<OR> for Throttle<OE>
+impl<T, E, OE, S, OR> Observable<OR> for Throttle<OE, S>
 where
     OR: Observer<T, E>,
-    OE: Observable<ThrottleObserver<OR>, Item = T, Error = E>,
+    OE: Observable<ThrottleObserver<OR, S>, Item = T, Error = E>,
+    S: SchedulerTypes,
 {
     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
         self.source.subscribe(ThrottleObserver {
             observer,
             time_span: self.time_span,
+            scheduler: self.scheduler,
             last_emit: None,
         })
     }
 }
 
-pub struct ThrottleObserver<OR> {
+pub struct ThrottleObserver<OR, S> {
     observer: OR,
     time_span: Duration,
+    scheduler: S,
     last_emit: Option<Instant>,
 }
 
-impl<T, E, OR> Observer<T, E> for ThrottleObserver<OR>
+impl<T, E, OR, S> Observer<T, E> for ThrottleObserver<OR, S>
 where
     OR: Observer<T, E>,
+    S: SchedulerTypes,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        let now = Instant::now();
+        let now = self.scheduler.now();
         let should_emit = match self.last_emit {
             None => true,
             Some(last) => now.duration_since(last) >= self.time_span,

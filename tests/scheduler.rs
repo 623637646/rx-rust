@@ -78,7 +78,7 @@ fn test_schedule_with_abort() {
 fn test_schedule_with_abort_while_sleeping() {
     block_on(|scheduler| async move {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
-        let task = Task::new(tx, |tx, _, _| {
+        let task = Task::new(tx, |tx, _, _, _| {
             let _ = tx.unbounded_send(());
             Poll::Ready(TaskState::SleepUntil(
                 Instant::now() + Duration::from_secs(1),
@@ -117,7 +117,7 @@ fn test_schedule_recursively_without_delay() {
         let first = Instant::now();
         let start_instant = Instant::now();
         let disposal = scheduler.schedule_recursively(
-            move |index| {
+            move |index, _| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
                     TaskState::Finished
@@ -148,7 +148,7 @@ fn test_schedule_recursively_with_delay() {
         let first = Instant::now() + DURATION_10_MS;
         let start_instant = Instant::now();
         let disposal = scheduler.schedule_recursively(
-            move |index| {
+            move |index, _| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
                     TaskState::Finished
@@ -180,7 +180,7 @@ fn test_schedule_recursively_small_delay() {
         let small = DURATION_10_MS;
         let first = Instant::now() + small;
         let disposal = scheduler.schedule_recursively(
-            move |index| {
+            move |index, _| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
                     TaskState::Finished
@@ -208,7 +208,7 @@ fn test_schedule_recursively_continue_immediately_yields_and_disposes() {
     block_on(|scheduler| async move {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let disposal = scheduler.schedule_recursively(
-            move |index| {
+            move |index, _| {
                 // The receiver may be gone after disposal races; ignore errors.
                 let _ = tx.unbounded_send(index);
                 TaskState::Yield
@@ -231,7 +231,7 @@ fn test_schedule_recursively_continue_at_past_instant_yields_and_disposes() {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let past = Instant::now();
         let disposal = scheduler.schedule_recursively(
-            move |index| {
+            move |index, _| {
                 let _ = tx.unbounded_send(index);
                 // Always in the past by the time it is evaluated.
                 TaskState::SleepUntil(past)
@@ -846,7 +846,7 @@ mod main_loop {
             let id = self.next_id.fetch_add(1, Ordering::Relaxed);
             let (mut stepper, pinned) = task.split();
             let mut pinned: Pin<Box<P>> = Box::pin(pinned);
-            let job: Job = Box::new(move |cx| stepper.step(pinned.as_mut(), cx));
+            let job: Job = Box::new(move |cx| stepper.step(pinned.as_mut(), cx, Instant::now()));
             let at = Instant::now() + delay.unwrap_or_default();
             // A loop that has quit drops the task with the message.
             let _ = self.sender.send(Message::Run(id, job, at));

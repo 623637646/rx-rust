@@ -94,7 +94,7 @@ where
     P: Send + 'static,
 {
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
-        let future = drive(task, delay, sleep);
+        let future = drive(task, delay, self.clone(), sleep);
         let task = match &self.target {
             SharedTarget::Global => smol::spawn(future),
             SharedTarget::Handle(executor) => executor
@@ -173,7 +173,12 @@ where
             .executor
             .upgrade()
             .expect("the executor of the SmolLocalScheduler has been dropped");
-        Subscription::new(SmolDisposal(executor.spawn(drive(task, delay, sleep))))
+        Subscription::new(SmolDisposal(executor.spawn(drive(
+            task,
+            delay,
+            self.clone(),
+            sleep,
+        ))))
     }
 }
 

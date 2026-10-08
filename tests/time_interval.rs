@@ -10,6 +10,7 @@ use crate::tests_utils::{
 };
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::operators::creating::create::Create;
+use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::{
     disposable::Disposable,
     observable::Subscription,
@@ -19,7 +20,16 @@ use rx_rust::{
 };
 use std::{convert::Infallible, fmt::Debug, ops::Sub, time::Duration};
 
+/// On the virtual clock the times are exact.
 fn check_values<T: PartialEq + Debug>(values: Vec<(T, Duration)>, expected: Vec<(T, Duration)>) {
+    assert_eq!(values, expected);
+}
+
+/// On a real clock (`test_async`) the times are only close.
+fn check_values_within<T: PartialEq + Debug>(
+    values: Vec<(T, Duration)>,
+    expected: Vec<(T, Duration)>,
+) {
     assert_eq!(values.len(), expected.len());
     for i in 0..values.len() {
         let value = &values[i];
@@ -32,284 +42,284 @@ fn check_values<T: PartialEq + Debug>(values: Vec<(T, Duration)>, expected: Vec<
 
 #[test]
 fn test_completed() {
-    block_on(|scheduler| async move {
-        let (mut sender, observable, channel_checker) = test_channel();
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
 
-        let observable = observable.time_interval();
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = observable.time_interval(scheduler.clone());
+    time.advance_by(DURATION_30_MS);
 
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(111).is_continue());
-        check_values(checker.values(), vec![(111, Duration::ZERO)]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(111).is_continue());
+    check_values(checker.values(), vec![(111, Duration::ZERO)]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(222).is_continue());
-        check_values(
-            checker.values(),
-            vec![(111, Duration::ZERO), (222, Duration::ZERO)],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(222).is_continue());
+    check_values(
+        checker.values(),
+        vec![(111, Duration::ZERO), (222, Duration::ZERO)],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(sender.on_next(333).is_continue());
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    time.advance_by(DURATION_30_MS);
+    assert!(sender.on_next(333).is_continue());
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        sender.on_termination(Termination::<Infallible>::Completed);
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-    });
+    time.advance_by(DURATION_30_MS);
+    sender.on_termination(Termination::<Infallible>::Completed);
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
 fn test_error() {
-    block_on(|scheduler| async move {
-        let (mut sender, observable, channel_checker) = test_channel();
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
 
-        let observable = observable.time_interval();
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = observable.time_interval(scheduler.clone());
+    time.advance_by(DURATION_30_MS);
 
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(111).is_continue());
-        check_values(checker.values(), vec![(111, Duration::ZERO)]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(111).is_continue());
+    check_values(checker.values(), vec![(111, Duration::ZERO)]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(222).is_continue());
-        check_values(
-            checker.values(),
-            vec![(111, Duration::ZERO), (222, Duration::ZERO)],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(222).is_continue());
+    check_values(
+        checker.values(),
+        vec![(111, Duration::ZERO), (222, Duration::ZERO)],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(sender.on_next(333).is_continue());
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    time.advance_by(DURATION_30_MS);
+    assert!(sender.on_next(333).is_continue());
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        sender.on_termination(Termination::Error("error"));
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Error("error"));
-        assert_eq!(channel_checker.state(), ChannelState::Error("error"));
-    });
+    time.advance_by(DURATION_30_MS);
+    sender.on_termination(Termination::Error("error"));
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
 #[test]
 fn test_unsubscribe() {
-    block_on(|scheduler| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
 
-        let observable = observable.time_interval();
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = observable.time_interval(scheduler.clone());
+    time.advance_by(DURATION_30_MS);
 
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(111).is_continue());
-        check_values(checker.values(), vec![(111, Duration::ZERO)]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(111).is_continue());
+    check_values(checker.values(), vec![(111, Duration::ZERO)]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(222).is_continue());
-        check_values(
-            checker.values(),
-            vec![(111, Duration::ZERO), (222, Duration::ZERO)],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(222).is_continue());
+    check_values(
+        checker.values(),
+        vec![(111, Duration::ZERO), (222, Duration::ZERO)],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(sender.on_next(333).is_continue());
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    time.advance_by(DURATION_30_MS);
+    assert!(sender.on_next(333).is_continue());
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        subscription.dispose();
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Dropped);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-    });
+    time.advance_by(DURATION_30_MS);
+    subscription.dispose();
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
 fn test_ref() {
-    block_on(|scheduler| async move {
-        let value_1 = 111;
-        let value_2 = 222;
-        let value_3 = 333;
-        let error = "error";
-        let (mut sender, observable, channel_checker) = test_channel();
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let value_1 = 111;
+    let value_2 = 222;
+    let value_3 = 333;
+    let error = "error";
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
 
-        let observable = observable.time_interval();
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = observable.time_interval(scheduler.clone());
+    time.advance_by(DURATION_30_MS);
 
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(&value_1).is_continue());
-        check_values(checker.values(), vec![(&value_1, Duration::ZERO)]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(&value_1).is_continue());
+    check_values(checker.values(), vec![(&value_1, Duration::ZERO)]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(&value_2).is_continue());
-        check_values(
-            checker.values(),
-            vec![(&value_1, Duration::ZERO), (&value_2, Duration::ZERO)],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(&value_2).is_continue());
+    check_values(
+        checker.values(),
+        vec![(&value_1, Duration::ZERO), (&value_2, Duration::ZERO)],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(sender.on_next(&value_3).is_continue());
-        check_values(
-            checker.values(),
-            vec![
-                (&value_1, Duration::ZERO),
-                (&value_2, Duration::ZERO),
-                (&value_3, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    time.advance_by(DURATION_30_MS);
+    assert!(sender.on_next(&value_3).is_continue());
+    check_values(
+        checker.values(),
+        vec![
+            (&value_1, Duration::ZERO),
+            (&value_2, Duration::ZERO),
+            (&value_3, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        sender.on_termination(Termination::Error(&error));
-        check_values(
-            checker.values(),
-            vec![
-                (&value_1, Duration::ZERO),
-                (&value_2, Duration::ZERO),
-                (&value_3, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Error(&error));
-        assert_eq!(channel_checker.state(), ChannelState::Error(&error));
-    });
+    time.advance_by(DURATION_30_MS);
+    sender.on_termination(Termination::Error(&error));
+    check_values(
+        checker.values(),
+        vec![
+            (&value_1, Duration::ZERO),
+            (&value_2, Duration::ZERO),
+            (&value_3, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Error(&error));
+    assert_eq!(channel_checker.state(), ChannelState::Error(&error));
 }
 
 #[test]
 fn test_mut_ref() {
-    block_on(|scheduler| async move {
-        let mut value_1 = 111;
-        let mut value_2 = 222;
-        let mut value_3 = 333;
-        let (mut sender, observable, channel_checker) = test_channel::<'_, &mut i32, _>();
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let mut value_1 = 111;
+    let mut value_2 = 222;
+    let mut value_3 = 333;
+    let (mut sender, observable, channel_checker) = test_channel::<'_, &mut i32, _>();
+    let (checker, observer) = Checker::new();
 
-        let observable = observable.time_interval();
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = observable.time_interval(scheduler.clone());
+    time.advance_by(DURATION_30_MS);
 
-        let _subscription = observable.map(|v| (*v.0 * 2, v.1)).subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    let _subscription = observable.map(|v| (*v.0 * 2, v.1)).subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(&mut value_1).is_continue());
-        check_values(checker.values(), vec![(222, Duration::ZERO)]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(&mut value_1).is_continue());
+    check_values(checker.values(), vec![(222, Duration::ZERO)]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(&mut value_2).is_continue());
-        check_values(
-            checker.values(),
-            vec![(222, Duration::ZERO), (444, Duration::ZERO)],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(&mut value_2).is_continue());
+    check_values(
+        checker.values(),
+        vec![(222, Duration::ZERO), (444, Duration::ZERO)],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(sender.on_next(&mut value_3).is_continue());
-        check_values(
-            checker.values(),
-            vec![
-                (222, Duration::ZERO),
-                (444, Duration::ZERO),
-                (666, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    time.advance_by(DURATION_30_MS);
+    assert!(sender.on_next(&mut value_3).is_continue());
+    check_values(
+        checker.values(),
+        vec![
+            (222, Duration::ZERO),
+            (444, Duration::ZERO),
+            (666, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        sender.on_termination(Termination::<Infallible>::Completed);
-        check_values(
-            checker.values(),
-            vec![
-                (222, Duration::ZERO),
-                (444, Duration::ZERO),
-                (666, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-    });
+    time.advance_by(DURATION_30_MS);
+    sender.on_termination(Termination::<Infallible>::Completed);
+    check_values(
+        checker.values(),
+        vec![
+            (222, Duration::ZERO),
+            (444, Duration::ZERO),
+            (666, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
@@ -318,7 +328,7 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        let observable = observable.time_interval();
+        let observable = observable.time_interval(scheduler.clone());
         scheduler.sleep(DURATION_30_MS).await;
 
         let _subscription = scheduler
@@ -334,7 +344,7 @@ fn test_async() {
                 sender
             })
             .await;
-        check_values(checker.values(), vec![(111, Duration::ZERO)]);
+        check_values_within(checker.values(), vec![(111, Duration::ZERO)]);
         assert_eq!(checker.state(), State::Active);
         assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
@@ -344,7 +354,7 @@ fn test_async() {
                 sender
             })
             .await;
-        check_values(
+        check_values_within(
             checker.values(),
             vec![(111, Duration::ZERO), (222, Duration::ZERO)],
         );
@@ -358,7 +368,7 @@ fn test_async() {
                 sender
             })
             .await;
-        check_values(
+        check_values_within(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
@@ -375,7 +385,7 @@ fn test_async() {
                 sender.on_termination(Termination::<Infallible>::Completed);
             })
             .await;
-        check_values(
+        check_values_within(
             checker.values(),
             vec![
                 (111, Duration::ZERO),
@@ -390,250 +400,253 @@ fn test_async() {
 
 #[test]
 fn test_subscribe_by_different_observer() {
-    block_on(|scheduler| async move {
-        let (channels, observable) = test_channels();
-        let (checker_1, observer_1) = Checker::new();
-        let (checker_2, observer_2) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (channels, observable) = test_channels();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
 
-        let observable = observable.time_interval();
-        let observable_1 = observable;
-        let observable_2 = observable_1.clone();
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = observable.time_interval(scheduler.clone());
+    let observable_1 = observable;
+    let observable_2 = observable_1.clone();
+    time.advance_by(DURATION_30_MS);
 
-        let _subscription_1 = observable_1.subscribe(observer_1);
-        let (on_next, on_termination) = observer_2.into_callbacks();
-        let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
-        assert!(checker_1.values().is_empty());
-        assert_eq!(checker_1.state(), State::Active);
-        assert_eq!(channels.state(0), ChannelState::Subscribed);
-        assert!(checker_2.values().is_empty());
-        assert_eq!(checker_2.state(), State::Active);
-        assert_eq!(channels.state(1), ChannelState::Subscribed);
+    let _subscription_1 = observable_1.subscribe(observer_1);
+    let (on_next, on_termination) = observer_2.into_callbacks();
+    let _subscription_2 = observable_2.subscribe_with_callback(on_next, on_termination);
+    assert!(checker_1.values().is_empty());
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-        assert!(channels.on_next(0, 111).is_continue());
-        assert!(channels.on_next(1, 111).is_continue());
-        check_values(checker_1.values(), vec![(111, Duration::ZERO)]);
-        assert_eq!(checker_1.state(), State::Active);
-        assert_eq!(channels.state(0), ChannelState::Subscribed);
-        check_values(checker_2.values(), vec![(111, Duration::ZERO)]);
-        assert_eq!(checker_2.state(), State::Active);
-        assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert!(channels.on_next(0, 111).is_continue());
+    assert!(channels.on_next(1, 111).is_continue());
+    check_values(checker_1.values(), vec![(111, Duration::ZERO)]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    check_values(checker_2.values(), vec![(111, Duration::ZERO)]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-        assert!(channels.on_next(0, 222).is_continue());
-        assert!(channels.on_next(1, 222).is_continue());
-        check_values(
-            checker_1.values(),
-            vec![(111, Duration::ZERO), (222, Duration::ZERO)],
-        );
-        assert_eq!(checker_1.state(), State::Active);
-        assert_eq!(channels.state(0), ChannelState::Subscribed);
-        check_values(
-            checker_2.values(),
-            vec![(111, Duration::ZERO), (222, Duration::ZERO)],
-        );
-        assert_eq!(checker_2.state(), State::Active);
-        assert_eq!(channels.state(1), ChannelState::Subscribed);
+    assert!(channels.on_next(0, 222).is_continue());
+    assert!(channels.on_next(1, 222).is_continue());
+    check_values(
+        checker_1.values(),
+        vec![(111, Duration::ZERO), (222, Duration::ZERO)],
+    );
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    check_values(
+        checker_2.values(),
+        vec![(111, Duration::ZERO), (222, Duration::ZERO)],
+    );
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(channels.on_next(0, 333).is_continue());
-        assert!(channels.on_next(1, 333).is_continue());
-        check_values(
-            checker_1.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker_1.state(), State::Active);
-        assert_eq!(channels.state(0), ChannelState::Subscribed);
-        check_values(
-            checker_2.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker_2.state(), State::Active);
-        assert_eq!(channels.state(1), ChannelState::Subscribed);
+    time.advance_by(DURATION_30_MS);
+    assert!(channels.on_next(0, 333).is_continue());
+    assert!(channels.on_next(1, 333).is_continue());
+    check_values(
+        checker_1.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    check_values(
+        checker_2.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        channels.on_termination(0, Termination::<Infallible>::Completed);
-        channels.on_termination(1, Termination::<Infallible>::Completed);
-        check_values(
-            checker_1.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker_1.state(), State::Completed);
-        assert_eq!(channels.state(0), ChannelState::Completed);
-        check_values(
-            checker_2.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker_2.state(), State::Completed);
-        assert_eq!(channels.state(1), ChannelState::Completed);
-    });
+    time.advance_by(DURATION_30_MS);
+    channels.on_termination(0, Termination::<Infallible>::Completed);
+    channels.on_termination(1, Termination::<Infallible>::Completed);
+    check_values(
+        checker_1.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(channels.state(0), ChannelState::Completed);
+    check_values(
+        checker_2.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(channels.state(1), ChannelState::Completed);
 }
 
 #[test]
 fn test_unsub_on_next_by_take() {
-    block_on(|scheduler| async move {
-        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
 
-        let observable = observable.time_interval().take(1);
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = observable.time_interval(scheduler.clone()).take(1);
+    time.advance_by(DURATION_30_MS);
 
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(sender.on_next(111).is_stop());
-        check_values(checker.values(), vec![(111, DURATION_30_MS)]);
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-    });
+    time.advance_by(DURATION_30_MS);
+    assert!(sender.on_next(111).is_stop());
+    check_values(checker.values(), vec![(111, DURATION_30_MS)]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
 }
 
 #[test]
 fn test_multiple_operation() {
-    block_on(|scheduler| async move {
-        let (mut sender, observable, channel_checker) = test_channel();
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
 
-        let observable = observable.time_interval().time_interval();
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = observable
+        .time_interval(scheduler.clone())
+        .time_interval(scheduler.clone());
+    time.advance_by(DURATION_30_MS);
 
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        fn check_values<T: PartialEq + Debug>(
-            values: Vec<((T, Duration), Duration)>,
-            expected: Vec<(T, Duration)>,
-        ) {
-            assert_eq!(values.len(), expected.len());
-            for i in 0..values.len() {
-                let value = &values[i];
-                let expected = &expected[i];
-                assert_eq!(value.0.0, expected.0);
-                let diff = value.0.1.max(expected.1).sub(value.0.1.min(expected.1));
-                assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
-                let diff = value.1.max(expected.1).sub(value.1.min(expected.1));
-                assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
-            }
+    fn check_values<T: PartialEq + Debug>(
+        values: Vec<((T, Duration), Duration)>,
+        expected: Vec<(T, Duration)>,
+    ) {
+        assert_eq!(values.len(), expected.len());
+        for i in 0..values.len() {
+            let value = &values[i];
+            let expected = &expected[i];
+            assert_eq!(value.0.0, expected.0);
+            let diff = value.0.1.max(expected.1).sub(value.0.1.min(expected.1));
+            assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
+            let diff = value.1.max(expected.1).sub(value.1.min(expected.1));
+            assert!(diff < DURATION_30_MS, "{value:?} != {expected:?}",);
         }
+    }
 
-        assert!(sender.on_next(111).is_continue());
-        check_values(checker.values(), vec![(111, Duration::ZERO)]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(111).is_continue());
+    check_values(checker.values(), vec![(111, Duration::ZERO)]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(222).is_continue());
-        check_values(
-            checker.values(),
-            vec![(111, Duration::ZERO), (222, Duration::ZERO)],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(222).is_continue());
+    check_values(
+        checker.values(),
+        vec![(111, Duration::ZERO), (222, Duration::ZERO)],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(sender.on_next(333).is_continue());
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    time.advance_by(DURATION_30_MS);
+    assert!(sender.on_next(333).is_continue());
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        sender.on_termination(Termination::<Infallible>::Completed);
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-    });
+    time.advance_by(DURATION_30_MS);
+    sender.on_termination(Termination::<Infallible>::Completed);
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
 fn test_without_convenient_api() {
-    block_on(|scheduler| async move {
-        let (mut sender, observable, channel_checker) = test_channel();
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (mut sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
 
-        let observable = TimeInterval::new(observable);
-        scheduler.sleep(DURATION_30_MS).await;
+    let observable = TimeInterval::new(observable, scheduler.clone());
+    time.advance_by(DURATION_30_MS);
 
-        let _subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(111).is_continue());
-        check_values(checker.values(), vec![(111, Duration::ZERO)]);
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(111).is_continue());
+    check_values(checker.values(), vec![(111, Duration::ZERO)]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        assert!(sender.on_next(222).is_continue());
-        check_values(
-            checker.values(),
-            vec![(111, Duration::ZERO), (222, Duration::ZERO)],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert!(sender.on_next(222).is_continue());
+    check_values(
+        checker.values(),
+        vec![(111, Duration::ZERO), (222, Duration::ZERO)],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        assert!(sender.on_next(333).is_continue());
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Active);
-        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    time.advance_by(DURATION_30_MS);
+    assert!(sender.on_next(333).is_continue());
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
-        scheduler.sleep(DURATION_30_MS).await;
-        sender.on_termination(Termination::<Infallible>::Completed);
-        check_values(
-            checker.values(),
-            vec![
-                (111, Duration::ZERO),
-                (222, Duration::ZERO),
-                (333, DURATION_30_MS),
-            ],
-        );
-        assert_eq!(checker.state(), State::Completed);
-        assert_eq!(channel_checker.state(), ChannelState::Completed);
-    });
+    time.advance_by(DURATION_30_MS);
+    sender.on_termination(Termination::<Infallible>::Completed);
+    check_values(
+        checker.values(),
+        vec![
+            (111, Duration::ZERO),
+            (222, Duration::ZERO),
+            (333, DURATION_30_MS),
+        ],
+    );
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 #[test]
 fn test_lifetime_sub() {
+    let time = VirtualTime::new();
     // OK
     let life_marker = TestStruct;
     let _subscription;
@@ -651,7 +664,7 @@ fn test_lifetime_sub() {
             }))
         });
 
-        let observable = observable.time_interval();
+        let observable = observable.time_interval(time.scheduler());
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -660,6 +673,7 @@ fn test_lifetime_sub() {
 
 #[test]
 fn test_lifetime_or() {
+    let time = VirtualTime::new();
     // OK
     let life_marker_2 = TestStruct;
     let mut life_marker_1 = None;
@@ -673,7 +687,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             Subscription::default()
         });
-        let observable = observable.time_interval();
+        let observable = observable.time_interval(time.scheduler());
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(
@@ -687,27 +701,30 @@ fn test_lifetime_or() {
 
 #[test]
 fn test_clone() {
+    let time = VirtualTime::new();
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let observable = observable.time_interval();
+    let observable = observable.time_interval(time.scheduler());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
+    let time = VirtualTime::new();
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
-    let observable = observable.time_interval();
+    let observable = observable.time_interval(time.scheduler());
     let (_, observer) = Checker::new();
     let _ = observable.subscribe(observer);
 }
 
 #[test]
 fn test_type_inference_without_subscribe() {
+    let time = VirtualTime::new();
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
-    observable.time_interval();
+    observable.time_interval(time.scheduler());
 }
