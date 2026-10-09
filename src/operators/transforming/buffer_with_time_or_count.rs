@@ -19,12 +19,16 @@ use std::{num::NonZeroUsize, time::Duration};
 /// Gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, either when
 /// the bundle reaches `count` items or every `time_span`, whichever happens first.
 ///
-/// The timer first fires after `delay` (at once for `None`). A bundle emitted because it is full
-/// restarts the timer, so the next timed bundle comes `time_span` after it, but never before
-/// `delay` has passed: a full bundle during `delay` does not bring the first timed one forward.
+/// The timer first fires one `time_span` after the subscription, as ReactiveX does. A bundle
+/// emitted because it is full restarts the timer, so the next timed bundle comes `time_span` after
+/// it.
 ///
-/// A time too far out for an `Instant` to represent never comes: with a `delay` or a `time_span`
-/// that long, bundles are emitted by count and by the completion only.
+/// A time too far out for an `Instant` to represent never comes: with a `time_span` that long,
+/// bundles are emitted by count and by the completion only.
+///
+/// # Panics
+///
+/// Subscribing panics if `time_span` is zero.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples
@@ -60,7 +64,6 @@ use std::{num::NonZeroUsize, time::Duration};
 ///         NonZeroUsize::new(2).unwrap(),
 ///         Duration::from_millis(10),
 ///         scheduler.clone(),
-///         None,
 ///     )
 ///     .subscribe_with_callback(
 ///         move |value| values_observer.lock().unwrap().push(value),
@@ -87,24 +90,16 @@ pub struct BufferWithTimeOrCount<OE, S> {
     count: NonZeroUsize,
     time_span: Duration,
     scheduler: S,
-    delay: Option<Duration>,
 }
 
 impl<OE, S> BufferWithTimeOrCount<OE, S> {
     /// Creates a [`BufferWithTimeOrCount`] over `source`.
-    pub fn new(
-        source: OE,
-        count: NonZeroUsize,
-        time_span: Duration,
-        scheduler: S,
-        delay: Option<Duration>,
-    ) -> Self {
+    pub fn new(source: OE, count: NonZeroUsize, time_span: Duration, scheduler: S) -> Self {
         Self {
             source,
             count,
             time_span,
             scheduler,
-            delay,
         }
     }
 }
@@ -175,10 +170,7 @@ where
         assert!(!self.time_span.is_zero(), "time_span must be non-zero");
         let model = Model::<T> {
             values: Vec::with_capacity(self.count.get()),
-            deadline: self
-                .scheduler
-                .now()
-                .checked_add(self.delay.unwrap_or_default()),
+            deadline: self.scheduler.now().checked_add(self.time_span),
             time_span: self.time_span,
             count: self.count,
         };
@@ -188,7 +180,7 @@ where
                 scheduler: self.scheduler.clone(),
             };
             let sub = self.source.subscribe(buffer_observer);
-            let disposal = setup_emit_timer(context, self.scheduler, self.delay);
+            let disposal = setup_emit_timer(context, self.scheduler, self.time_span);
             sub.preceded_by_bound(disposal)
         })
         .map_into()
@@ -198,10 +190,10 @@ where
 /// The state of a [`BufferWithTimeOrCount`] subscription.
 struct Model<T> {
     values: Vec<T>,
-    /// When the next timed bundle is due: `delay` after the subscription, then `time_span` after
-    /// the one before, or after a full bundle if that is later. `None` when that is too far out for
-    /// an [`Instant`] to represent: it never comes, nor does any later one, since the clock only
-    /// moves forward, and the bundles are emitted by count and by the completion only.
+    /// When the next timed bundle is due: `time_span` after the subscription, then after the
+    /// bundle before, timed or full. `None` when that is too far out for an [`Instant`] to
+    /// represent: it never comes, nor does any later one, since the clock only moves forward, and
+    /// the bundles are emitted by count and by the completion only.
     deadline: Option<Instant>,
     /// Fixed; here for the timer task, whose handler is a plain `fn`.
     time_span: Duration,
@@ -234,13 +226,9 @@ where
                 return UpdateOutcome::empty().without_events();
             }
             // A full bundle restarts the timer: the next timed bundle comes `time_span` after it,
-            // but never before the one already due, so that the first still waits for `delay`.
-            // Either out of range means never.
-            let restarted = self.scheduler.now().checked_add(model.time_span);
-            model.deadline = model
-                .deadline
-                .zip(restarted)
-                .map(|(due, restarted)| due.max(restarted));
+            // which is never before the one already due, itself at most `time_span` after the
+            // last tick. Out of range means never, as it already did for the deadline due.
+            model.deadline = self.scheduler.now().checked_add(model.time_span);
             UpdateOutcome::empty().with_next_event(model.take_bundle())
         })
     }
@@ -273,7 +261,7 @@ where
 fn setup_emit_timer<M, T, E, OR, D, S>(
     context: BufferWithTimeOrCountContext<M, T, E, OR, D>,
     scheduler: S,
-    delay: Option<Duration>,
+    time_span: Duration,
 ) -> BoundDropDisposal<S::Disposal>
 where
     M: ThreadMode,
@@ -304,5 +292,5 @@ where
             })
             .unwrap_or(TaskState::Finished)
     });
-    scheduler.run_task(task, delay)
+    scheduler.run_task(task, Some(time_span))
 }

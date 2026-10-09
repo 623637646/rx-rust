@@ -22,7 +22,7 @@ use rx_rust::{
     observer::{Observer, Termination},
     operators::{creating::interval::Interval, filtering::sample::Sample},
 };
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -185,7 +185,7 @@ fn test_completed_with_interval() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (mut sender, observable, channel_checker) = test_channel();
-    let sampler = Interval::new(DURATION_100_MS, scheduler.clone(), None);
+    let sampler = Interval::with_initial_delay(Duration::ZERO, DURATION_100_MS, scheduler.clone());
     let (checker, observer) = Checker::new();
 
     let observable = observable.sample(sampler.map(|_| ()));

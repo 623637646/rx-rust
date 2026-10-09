@@ -72,7 +72,7 @@ async fn main() {
     use tokio::time::sleep;
 
     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
-    let subscription = Interval::new(Duration::from_millis(10), scheduler, None)
+    let subscription = Interval::new(Duration::from_millis(10), scheduler)
         .subscribe_with_callback(|tick| println!("tick {tick}"), |_| {});
 
     sleep(Duration::from_millis(35)).await;
@@ -209,8 +209,7 @@ use std::{
 let time = VirtualTime::new();
 let values = Arc::new(Mutex::new(Vec::new()));
 let values_observer = Arc::clone(&values);
-let minute = Duration::from_secs(60);
-let _subscription = Interval::new(minute, time.scheduler(), Some(minute))
+let _subscription = Interval::new(Duration::from_secs(60), time.scheduler())
     .take(3)
     .subscribe_with_callback(move |value| values_observer.lock().unwrap().push(value), |_| {});
 

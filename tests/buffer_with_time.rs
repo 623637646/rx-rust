@@ -1,7 +1,7 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_1_MS;
 use crate::tests_utils::DURATION_1_YEAR;
-use crate::tests_utils::DURATION_3_MS;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
@@ -37,8 +37,7 @@ fn test_completed_last_empty() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -93,8 +92,7 @@ fn test_completed_last_not_empty() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -137,141 +135,16 @@ fn test_completed_last_not_empty() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
+/// A time span too long for an `Instant` to represent never ends: no buffer is emitted by time,
+/// and the completion emits the last one.
 #[test]
-fn test_completed_no_delay() {
+fn test_time_span_too_long_never_comes_due() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), None);
-
-    let _subscription = observable.subscribe(observer);
-    time.advance_by(DURATION_3_MS);
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_30_MS);
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [vec![], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(
-        checker.values(),
-        [vec![], vec![], vec![111], vec![222, 333]]
-    );
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(
-        checker.values(),
-        [vec![], vec![], vec![111], vec![222, 333]]
-    );
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
-}
-
-#[test]
-fn test_completed_small_delay() {
-    let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_10_MS));
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_30_MS);
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [vec![], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(
-        checker.values(),
-        [vec![], vec![], vec![111], vec![222, 333]]
-    );
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(
-        checker.values(),
-        [vec![], vec![], vec![111], vec![222, 333]]
-    );
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
-}
-
-/// A delay too long for an `Instant` to represent never ends: no buffer is emitted by time, and
-/// the completion emits the last one.
-#[test]
-fn test_delay_too_long_never_comes_due() {
-    let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(Duration::MAX));
+    let observable = observable.buffer_with_time(Duration::MAX, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(sender.on_next(111).is_continue());
@@ -288,33 +161,30 @@ fn test_delay_too_long_never_comes_due() {
     assert_eq!(time.pending_tasks(), 0);
 }
 
-/// A time span too long for an `Instant` to represent: the first buffer is emitted at once, the
-/// second never by time, so the timer finishes. Once the source has dropped its observer, nothing
-/// more can come, and the observer is released without a termination (decision 0004).
+/// A timer that never comes due still holds the observer, as a timer that ticks does: the source
+/// dropping its observer releases nothing, the disposal does (decision 0004).
 #[test]
-fn test_time_span_too_long_never_comes_due() {
+fn test_time_span_too_long_abandon_after_next() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.buffer_with_time(Duration::MAX, scheduler.clone(), None);
+    let observable = observable.buffer_with_time(Duration::MAX, scheduler.clone());
 
-    let _subscription = observable.subscribe(observer);
-    time.advance_by(Duration::ZERO);
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(time.pending_tasks(), 0);
-
+    let subscription = observable.subscribe(observer);
     assert!(sender.on_next(111).is_continue());
-    time.advance_by(DURATION_1_YEAR);
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
     sender.abandon();
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Dropped);
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    assert_eq!(time.pending_tasks(), 1);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]
@@ -324,8 +194,7 @@ fn test_error_last_empty() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -380,8 +249,7 @@ fn test_error_last_not_empty() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -432,8 +300,7 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -528,8 +395,7 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
         let (checker, observer) = Checker::new();
 
-        let observable =
-            observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+        let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
         let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
@@ -604,8 +470,7 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -688,7 +553,7 @@ fn test_unsub_on_next_by_take() {
     let (checker, observer) = Checker::new();
 
     let observable = observable
-        .buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS))
+        .buffer_with_time(DURATION_100_MS, scheduler.clone())
         .take(1);
 
     let _subscription = observable.subscribe(observer);
@@ -714,60 +579,37 @@ fn test_multiple_operation() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    // Both buffers tick every 130 ms, the inner one at 70, 200, 330 ms and the outer one at
-    // 100, 230, 360 ms, so that each outer buffer holds exactly one inner buffer. The checks
-    // at 30, 160 and 290 ms sit at least 40 ms away from every tick.
+    // The inner buffer ticks at 100, 200, 300 ms and the outer one at 250 ms, never together.
     let observable = observable
-        .buffer_with_time(
-            DURATION_100_MS + DURATION_30_MS,
-            scheduler.clone(),
-            Some(DURATION_100_MS - DURATION_30_MS),
-        )
-        .buffer_with_time(
-            DURATION_100_MS + DURATION_30_MS,
-            scheduler.clone(),
-            Some(DURATION_100_MS),
-        );
+        .buffer_with_time(DURATION_100_MS, scheduler.clone())
+        .buffer_with_time(DURATION_100_MS * 2 + DURATION_100_MS / 2, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_30_MS);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS + DURATION_30_MS);
-    assert_eq!(checker.values(), [vec![vec![]]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
     assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker.values(), [vec![vec![]]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS + DURATION_30_MS);
-    assert_eq!(checker.values(), [vec![vec![]], vec![vec![111]]]);
+    time.advance_by(DURATION_100_MS);
+    assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker.values(), [vec![vec![]], vec![vec![111]]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
     assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker.values(), [vec![vec![]], vec![vec![111]]]);
+    time.advance_by(DURATION_100_MS);
+    assert!(checker.values().is_empty());
+
+    time.advance_by(DURATION_100_MS / 2 - DURATION_1_MS);
+    assert!(checker.values().is_empty());
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker.values(), [vec![vec![111], vec![222, 333]]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
+    time.advance_by(DURATION_100_MS / 2);
+    assert!(sender.on_next(444).is_continue());
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(
         checker.values(),
-        [vec![vec![]], vec![vec![111]], vec![vec![222, 333]]]
+        [vec![vec![111], vec![222, 333]], vec![vec![], vec![444]]]
     );
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
@@ -780,12 +622,7 @@ fn test_without_convenient_api() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = BufferWithTime::new(
-        observable,
-        DURATION_100_MS,
-        scheduler.clone(),
-        Some(DURATION_100_MS),
-    );
+    let observable = BufferWithTime::new(observable, DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -835,8 +672,7 @@ fn test_complete_after_next() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -857,8 +693,7 @@ fn test_error_after_next() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -879,8 +714,7 @@ fn test_unsub_after_next() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -902,8 +736,7 @@ fn test_unsub_after_completed() {
     let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -924,8 +757,7 @@ fn test_unsub_after_error() {
     let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -951,8 +783,7 @@ fn test_abandon_after_next() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(sender.on_next(111).is_continue());
@@ -991,8 +822,7 @@ fn test_unsub_after_abandon() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(sender.on_next(111).is_continue());
@@ -1022,14 +852,14 @@ fn test_next_on_sub() {
     let (checker, observer) = Checker::new();
 
     let observable = source;
-    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), None);
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
-    time.advance_by(DURATION_3_MS);
-    assert_eq!(checker.values(), [vec![111]]);
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    time.advance_by(DURATION_30_MS);
+    time.advance_by(DURATION_1_MS);
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Active);
 
@@ -1044,8 +874,7 @@ fn test_complete_on_sub() {
     let scheduler = time.scheduler();
     let (checker, observer) = Checker::new();
 
-    let observable =
-        Empty.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = Empty.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1068,7 +897,7 @@ fn test_sync_completion_disposes_chain_while_subscription_is_retained() {
     let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
 
     let retained_subscription = source
-        .buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS))
+        .buffer_with_time(DURATION_100_MS, scheduler.clone())
         .subscribe(observer);
 
     assert_eq!(checker.values(), [vec![111]]);
@@ -1090,7 +919,7 @@ fn test_async_completion_disposes_chain_while_subscription_is_retained() {
     let (checker, observer) = Checker::<Vec<i32>, Infallible>::new();
 
     let retained_subscription = source
-        .buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS))
+        .buffer_with_time(DURATION_100_MS, scheduler.clone())
         .subscribe(observer);
 
     assert!(!source_disposed.read());
@@ -1110,11 +939,7 @@ fn test_error_on_sub() {
     let scheduler = time.scheduler();
     let (checker, observer) = Checker::new();
 
-    let observable = Throw::new("error").buffer_with_time(
-        DURATION_100_MS,
-        scheduler.clone(),
-        Some(DURATION_100_MS),
-    );
+    let observable = Throw::new("error").buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1136,10 +961,7 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
-    // the disposal below with an empty buffer.
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1165,10 +987,7 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
-    // the disposal below with an empty buffer.
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1194,10 +1013,7 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
-    // the disposal below with an empty buffer.
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1218,8 +1034,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         Subscription::default()
     });
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -1228,8 +1043,7 @@ fn test_type_inference_with_subscribe() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -1241,8 +1055,7 @@ fn test_type_inference_without_subscribe() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let observable =
-        observable.buffer_with_time(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = observable.buffer_with_time(DURATION_100_MS, scheduler.clone());
 
     observable.filter(|_| true);
 }

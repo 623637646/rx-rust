@@ -96,7 +96,8 @@ as leaky on macOS. Shorten its durations (`DURATION_100_MS / 2`, …) rather tha
 5. `test_unsub_after_completed`
 6. `test_unsub_after_error`
 7. `test_order_with_continuous_next`
-8. `test_completed_no_delay` (if applicable: the operator takes an optional delay)
+8. `test_completed_zero_initial_delay` (if applicable: the operator takes an initial delay, which
+   `Duration::ZERO` makes start at once)
 9. `test_abandon_after_next` — the source drops its observer without a termination
    (`sender.abandon()`) while the operator still has work of its own: queued or delayed values, a
    pending debounce, a timer. That work runs its course, and the observer is dropped, never

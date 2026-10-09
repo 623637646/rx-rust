@@ -18,13 +18,16 @@ use std::time::Duration;
 /// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`,
 /// every `time_span`.
 ///
-/// The first bundle is emitted after `delay` — at once, and so empty, for `None` — and every
-/// following one `time_span` later, at a fixed rate, empty or not. On completion the pending
+/// The first bundle is emitted one `time_span` after the subscription, as ReactiveX does, and
+/// every following one `time_span` later, at a fixed rate, empty or not. On completion the pending
 /// bundle is emitted before the completion.
 ///
-/// A time too far out for an `Instant` to represent never comes: with a `delay` that long, no
-/// bundle is emitted by time, with a `time_span` that long only the first one is. What is gathered
-/// after that is emitted by the completion.
+/// A time too far out for an `Instant` to represent never comes: with a `time_span` that long, no
+/// bundle is emitted by time, and what is gathered is emitted by the completion.
+///
+/// # Panics
+///
+/// Subscribing panics if `time_span` is zero.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples
@@ -56,7 +59,6 @@ use std::time::Duration;
 ///         FromIter::new(vec![1, 2, 3]),
 ///         Duration::from_millis(5),
 ///         scheduler.clone(),
-///         None,
 ///     )
 ///     .subscribe_with_callback(
 ///         move |value| values_observer.lock().unwrap().push(value),
@@ -82,19 +84,17 @@ pub struct BufferWithTime<OE, S> {
     source: OE,
     time_span: Duration,
     scheduler: S,
-    delay: Option<Duration>,
 }
 
 impl<OE, S> BufferWithTime<OE, S> {
     /// Creates a [`BufferWithTime`] over `source`;
     /// [`ObservableExt::buffer_with_time`](crate::observable::ObservableExt::buffer_with_time) is
     /// the fluent form.
-    pub fn new(source: OE, time_span: Duration, scheduler: S, delay: Option<Duration>) -> Self {
+    pub fn new(source: OE, time_span: Duration, scheduler: S) -> Self {
         Self {
             source,
             time_span,
             scheduler,
-            delay,
         }
     }
 }
@@ -161,7 +161,7 @@ where
             let sub = self
                 .source
                 .subscribe(BufferWithTimeObserver(context.clone()));
-            let disposal = setup_emit_timer(context, self.scheduler, self.time_span, self.delay);
+            let disposal = setup_emit_timer(context, self.scheduler, self.time_span);
             sub.preceded_by_bound(disposal)
         })
         .map_into()
@@ -208,7 +208,6 @@ fn setup_emit_timer<M, T, E, OR, D, S>(
     context: SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
     scheduler: S,
     time_span: Duration,
-    delay: Option<Duration>,
 ) -> BoundDropDisposal<S::Disposal>
 where
     M: ThreadMode,
@@ -232,9 +231,9 @@ where
                 .unwrap_or(false)
         },
         time_span,
-        // Fixed-rate, anchored to the time of the subscription plus `delay`. A delay too long for
-        // an `Instant` never ends: the first step never comes, so it needs no anchor.
-        scheduler.now().checked_add(delay.unwrap_or_default()),
+        // Fixed-rate, anchored to the time of the subscription plus `time_span`. A span too long
+        // for an `Instant` never ends: the first step never comes, so it needs no anchor.
+        scheduler.now().checked_add(time_span),
     );
-    scheduler.run_task(task, delay)
+    scheduler.run_task(task, Some(time_span))
 }

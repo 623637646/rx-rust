@@ -549,16 +549,17 @@ fn test_with_operators() {
 
     let values_observer = values.clone();
     let start = time.now();
-    let _subscription = Interval::new(DURATION_10_MS, scheduler.clone(), None)
-        .take(3)
-        .delay(DURATION_100_MS, scheduler.clone())
-        .timestamp(scheduler.clone())
-        .subscribe_with_callback(
-            move |(value, at): (usize, Instant)| {
-                values_observer.with_mut(|values| values.push((value, at - start)));
-            },
-            |_| {},
-        );
+    let _subscription =
+        Interval::with_initial_delay(Duration::ZERO, DURATION_10_MS, scheduler.clone())
+            .take(3)
+            .delay(DURATION_100_MS, scheduler.clone())
+            .timestamp(scheduler.clone())
+            .subscribe_with_callback(
+                move |(value, at): (usize, Instant)| {
+                    values_observer.with_mut(|values| values.push((value, at - start)));
+                },
+                |_| {},
+            );
 
     // Emitted at 0, 10 and 20 ms, each delayed by 100 ms.
     time.advance_by(DURATION_100_MS - DURATION_1_MS);

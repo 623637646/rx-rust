@@ -20,6 +20,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** `Interval` emits its first value one period after the subscription, as ReactiveX
+  does, instead of at once. `Interval::new(period, scheduler)` replaces
+  `Interval::new(period, scheduler, delay)`, and `Interval::with_initial_delay(initial_delay,
+  period, scheduler)` takes an initial delay of its own. The former behavior is
+  `Interval::with_initial_delay(Duration::ZERO, period, scheduler)` for `None`, and
+  `with_initial_delay(delay, period, scheduler)` for `Some(delay)`. The old three-argument call no
+  longer compiles, so no caller changes timing silently.
+- **Breaking:** `buffer_with_time` and `buffer_with_time_or_count` (and `BufferWithTime::new`,
+  `BufferWithTimeOrCount::new`) lose their `delay: Option<Duration>` argument and time their first
+  bundle one `time_span` after the subscription, as ReactiveX does. With `None`, the first bundle
+  used to be emitted at once, and so empty.
 - **Breaking:** `throttle`, `timestamp` and `time_interval` take a scheduler, for its clock:
   `.throttle(span, scheduler)`, `.timestamp(scheduler)`, `.time_interval(scheduler)`. They
   schedule nothing; the bound is `SchedulerTypes`.

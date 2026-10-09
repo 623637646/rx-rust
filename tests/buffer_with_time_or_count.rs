@@ -2,7 +2,6 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_1_MS;
 use crate::tests_utils::DURATION_1_YEAR;
-use crate::tests_utils::DURATION_3_MS;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
@@ -38,7 +37,6 @@ fn test_completed_time_last_empty() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -98,7 +96,6 @@ fn test_completed_time_last_not_empty() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -142,10 +139,10 @@ fn test_completed_time_last_not_empty() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
-/// A delay too long for an `Instant` to represent never ends: buffers are emitted by count only,
-/// the task waits until the subscription ends.
+/// A time span too long for an `Instant` to represent never ends: buffers are emitted by count and
+/// by the completion only, and the task waits until the subscription ends.
 #[test]
-fn test_delay_too_long_never_comes_due() {
+fn test_time_span_too_long_never_comes_due() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (mut sender, observable, channel_checker) = test_channel();
@@ -153,9 +150,8 @@ fn test_delay_too_long_never_comes_due() {
 
     let observable = observable.buffer_with_time_or_count(
         NonZeroUsize::new(2).unwrap(),
-        DURATION_100_MS,
+        Duration::MAX,
         scheduler.clone(),
-        Some(Duration::MAX),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -170,6 +166,7 @@ fn test_delay_too_long_never_comes_due() {
     assert_eq!(checker.values(), [vec![111, 222]]);
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    assert_eq!(time.pending_tasks(), 1);
 
     sender.on_termination(Termination::<Infallible>::Completed);
     assert_eq!(checker.values(), [vec![111, 222], vec![333]]);
@@ -178,43 +175,8 @@ fn test_delay_too_long_never_comes_due() {
     assert_eq!(time.pending_tasks(), 0);
 }
 
-/// A time span too long for an `Instant` to represent: the first tick emits, the next one is out of
-/// range, so the timer finishes, and buffers are emitted by count and by the completion only.
-#[test]
-fn test_time_span_too_long_never_comes_due() {
-    let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    let observable = observable.buffer_with_time_or_count(
-        NonZeroUsize::new(2).unwrap(),
-        Duration::MAX,
-        scheduler.clone(),
-        None,
-    );
-
-    let _subscription = observable.subscribe(observer);
-    time.advance_by(Duration::ZERO);
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(time.pending_tasks(), 0);
-
-    assert!(sender.on_next(111).is_continue());
-    assert!(sender.on_next(222).is_continue());
-    assert!(sender.on_next(333).is_continue());
-    time.advance_by(DURATION_1_YEAR);
-    assert_eq!(checker.values(), [vec![], vec![111, 222]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [vec![], vec![111, 222], vec![333]]);
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
-}
-
-/// The same as `buffer_with_time`: with the timer finished, the observer is released once the
-/// source has dropped its own, since nothing more can come (decision 0004).
+/// The same as `buffer_with_time`: a timer that never comes due still holds the observer, so the
+/// source dropping its observer releases nothing, the disposal does (decision 0004).
 #[test]
 fn test_time_span_too_long_abandon_after_next() {
     let time = VirtualTime::new();
@@ -226,61 +188,27 @@ fn test_time_span_too_long_abandon_after_next() {
         NonZeroUsize::new(2).unwrap(),
         Duration::MAX,
         scheduler.clone(),
-        None,
     );
 
-    let _subscription = observable.subscribe(observer);
-    time.advance_by(Duration::ZERO);
+    let subscription = observable.subscribe(observer);
     assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(time.pending_tasks(), 0);
-
     sender.abandon();
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Dropped);
+    time.advance_by(DURATION_1_YEAR);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Abandoned);
-}
-
-/// A count flush before the first tick: the tick resyncs to a time span after it, which is out of
-/// range, so the timer finishes without emitting.
-#[test]
-fn test_time_span_too_long_after_count() {
-    let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    let observable = observable.buffer_with_time_or_count(
-        NonZeroUsize::new(2).unwrap(),
-        Duration::MAX,
-        scheduler.clone(),
-        Some(DURATION_10_MS),
-    );
-
-    let _subscription = observable.subscribe(observer);
-    assert!(sender.on_next(111).is_continue());
-    assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker.values(), [vec![111, 222]]);
     assert_eq!(time.pending_tasks(), 1);
 
-    time.advance_by(DURATION_10_MS);
-    assert_eq!(checker.values(), [vec![111, 222]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
     assert_eq!(time.pending_tasks(), 0);
-
-    sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [vec![111, 222]]);
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
-/// A bundle full during `delay`, longer than `time_span`, does not bring the first timed bundle
-/// forward, and the ticks it would have resynced to, all past by then, are not caught up: the
-/// first timed bundle comes after `delay`, alone, and the timer restarts from it.
+/// A full bundle restarts the timer: the first timed bundle comes `time_span` after it, not
+/// `time_span` after the subscription.
 #[test]
-fn test_full_bundle_during_delay() {
+fn test_full_bundle_restarts_timer() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
@@ -290,44 +218,6 @@ fn test_full_bundle_during_delay() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS * 10),
-    );
-
-    let _subscription = observable.subscribe(observer);
-    assert!(sender.on_next(111).is_continue());
-    assert!(sender.on_next(222).is_continue());
-    assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker.values(), [vec![111, 222]]);
-
-    time.advance_by(DURATION_100_MS * 10 - DURATION_1_MS);
-    assert_eq!(checker.values(), [vec![111, 222]]);
-
-    time.advance_by(DURATION_1_MS);
-    assert_eq!(checker.values(), [vec![111, 222], vec![333]]);
-
-    time.advance_by(DURATION_100_MS - DURATION_1_MS);
-    assert_eq!(checker.values(), [vec![111, 222], vec![333]]);
-
-    time.advance_by(DURATION_1_MS);
-    assert_eq!(checker.values(), [vec![111, 222], vec![333], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-}
-
-/// A bundle full less than `time_span` before `delay` ends restarts the timer: the first timed
-/// bundle comes `time_span` after it, past the end of `delay`.
-#[test]
-fn test_full_bundle_near_end_of_delay() {
-    let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
-    let (checker, observer) = Checker::new();
-
-    let observable = observable.buffer_with_time_or_count(
-        NonZeroUsize::new(2).unwrap(),
-        DURATION_100_MS,
-        scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -350,134 +240,6 @@ fn test_full_bundle_near_end_of_delay() {
 }
 
 #[test]
-fn test_completed_no_delay() {
-    let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    let observable = observable.buffer_with_time_or_count(
-        NonZeroUsize::new(100).unwrap(),
-        DURATION_100_MS,
-        scheduler.clone(),
-        None,
-    );
-
-    let _subscription = observable.subscribe(observer);
-    time.advance_by(DURATION_30_MS);
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [vec![], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(
-        checker.values(),
-        [vec![], vec![], vec![111], vec![222, 333]]
-    );
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(
-        checker.values(),
-        [vec![], vec![], vec![111], vec![222, 333]]
-    );
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
-}
-
-#[test]
-fn test_completed_time_small_delay() {
-    let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let (mut sender, observable, channel_checker) = test_channel();
-    let (checker, observer) = Checker::new();
-
-    let observable = observable.buffer_with_time_or_count(
-        NonZeroUsize::new(100).unwrap(),
-        DURATION_100_MS,
-        scheduler.clone(),
-        Some(DURATION_10_MS),
-    );
-
-    let _subscription = observable.subscribe(observer);
-    assert!(checker.values().is_empty());
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_30_MS);
-    assert_eq!(checker.values(), [vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [vec![], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(111).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(222).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    assert!(sender.on_next(333).is_continue());
-    assert_eq!(checker.values(), [vec![], vec![], vec![111]]);
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(
-        checker.values(),
-        [vec![], vec![], vec![111], vec![222, 333]]
-    );
-    assert_eq!(checker.state(), State::Active);
-    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-
-    sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(
-        checker.values(),
-        [vec![], vec![], vec![111], vec![222, 333]]
-    );
-    assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Completed);
-}
-
-#[test]
 fn test_completed_count_last_empty() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
@@ -488,7 +250,6 @@ fn test_completed_count_last_empty() {
         NonZeroUsize::new(3).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -543,7 +304,6 @@ fn test_completed_count_last_not_empty() {
         NonZeroUsize::new(3).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -593,7 +353,6 @@ fn test_completed_time_and_count() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -766,7 +525,6 @@ fn test_error_time_and_count() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -939,7 +697,6 @@ fn test_unsubscribe() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -1167,7 +924,6 @@ fn test_async() {
             NonZeroUsize::new(2).unwrap(),
             DURATION_100_MS / 2,
             scheduler.clone(),
-            Some(DURATION_100_MS / 2),
         );
 
         let subscription = scheduler
@@ -1376,7 +1132,6 @@ fn test_subscribe_by_different_observer() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
@@ -1606,7 +1361,6 @@ fn test_unsub_on_next_by_take() {
             NonZeroUsize::new(100).unwrap(),
             DURATION_100_MS,
             scheduler.clone(),
-            Some(DURATION_100_MS),
         )
         .take(1);
 
@@ -1638,13 +1392,11 @@ fn test_multiple_operation() {
             NonZeroUsize::new(2).unwrap(),
             DURATION_100_MS,
             scheduler.clone(),
-            Some(DURATION_100_MS),
         )
         .buffer_with_time_or_count(
             NonZeroUsize::new(2).unwrap(),
             DURATION_100_MS + DURATION_30_MS,
             scheduler.clone(),
-            Some(DURATION_100_MS + DURATION_30_MS),
         );
 
     // The batches of 111, 222 and 333 are all cut by count at 0 ms, before either timer
@@ -1776,7 +1528,6 @@ fn test_without_convenient_api() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -1948,7 +1699,6 @@ fn test_complete_after_next() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -1974,7 +1724,6 @@ fn test_error_after_next() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -2000,7 +1749,6 @@ fn test_unsub_after_next() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let subscription = observable.subscribe(observer);
@@ -2027,7 +1775,6 @@ fn test_unsub_after_completed() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let subscription = observable.subscribe(observer);
@@ -2053,7 +1800,6 @@ fn test_unsub_after_error() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let subscription = observable.subscribe(observer);
@@ -2084,7 +1830,6 @@ fn test_abandon_after_next() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let subscription = observable.subscribe(observer);
@@ -2128,7 +1873,6 @@ fn test_unsub_after_abandon() {
         NonZeroUsize::new(100).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let subscription = observable.subscribe(observer);
@@ -2163,11 +1907,14 @@ fn test_next_on_sub() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        None,
     );
 
     let _subscription = observable.subscribe(observer);
-    time.advance_by(DURATION_3_MS);
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    time.advance_by(DURATION_1_MS);
     assert_eq!(checker.values(), [vec![111]]);
     assert_eq!(checker.state(), State::Active);
 
@@ -2186,7 +1933,6 @@ fn test_complete_on_sub() {
         NonZeroUsize::new(1).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -2204,7 +1950,6 @@ fn test_error_on_sub() {
         NonZeroUsize::new(1).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let _subscription = observable.subscribe(observer);
@@ -2227,13 +1972,10 @@ fn test_next_on_unsub() {
         }))
     });
 
-    // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
-    // the disposal below with an empty buffer.
     let observable = observable.buffer_with_time_or_count(
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let subscription = observable.subscribe(observer);
@@ -2260,13 +2002,10 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
-    // the disposal below with an empty buffer.
     let observable = observable.buffer_with_time_or_count(
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let subscription = observable.subscribe(observer);
@@ -2293,13 +2032,10 @@ fn test_error_on_unsub() {
         }))
     });
 
-    // Delayed: with no delay the first tick fires at once, on a worker thread, and would race
-    // the disposal below with an empty buffer.
     let observable = observable.buffer_with_time_or_count(
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let subscription = observable.subscribe(observer);
@@ -2325,7 +2061,6 @@ fn test_clone() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
@@ -2339,7 +2074,6 @@ fn test_type_inference_with_subscribe() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     let observable = observable.filter(|_| true);
@@ -2356,7 +2090,6 @@ fn test_type_inference_without_subscribe() {
         NonZeroUsize::new(2).unwrap(),
         DURATION_100_MS,
         scheduler.clone(),
-        Some(DURATION_100_MS),
     );
 
     observable.filter(|_| true);

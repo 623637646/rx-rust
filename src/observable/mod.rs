@@ -214,27 +214,21 @@ pub trait ObservableExt: ObservableTypes + Sized {
         BufferWithCount::new(self, count)
     }
 
-    /// Collects items into a buffer emitted every `time_span`, the first after `delay` (at once for
-    /// `None`), on the provided scheduler.
-    fn buffer_with_time<S>(
-        self,
-        time_span: Duration,
-        scheduler: S,
-        delay: Option<Duration>,
-    ) -> BufferWithTime<Self, S> {
-        BufferWithTime::new(self, time_span, scheduler, delay)
+    /// Collects items into a buffer emitted every `time_span`, the first one `time_span` after the
+    /// subscription, on the provided scheduler.
+    fn buffer_with_time<S>(self, time_span: Duration, scheduler: S) -> BufferWithTime<Self, S> {
+        BufferWithTime::new(self, time_span, scheduler)
     }
 
     /// Collects items into buffers emitted when they reach `count` items or every `time_span`,
-    /// whichever comes first; the timer first fires after `delay` (at once for `None`).
+    /// whichever comes first; the timer first fires one `time_span` after the subscription.
     fn buffer_with_time_or_count<S>(
         self,
         count: NonZeroUsize,
         time_span: Duration,
         scheduler: S,
-        delay: Option<Duration>,
     ) -> BufferWithTimeOrCount<Self, S> {
-        BufferWithTimeOrCount::new(self, count, time_span, scheduler, delay)
+        BufferWithTimeOrCount::new(self, count, time_span, scheduler)
     }
 
     /// Recovers from errors by switching to another observable yielded by the callback.

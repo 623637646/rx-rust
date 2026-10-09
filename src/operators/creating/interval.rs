@@ -11,12 +11,22 @@ use std::{convert::Infallible, time::Duration};
 /// Creates an Observable that emits a sequence of integers spaced by a given time interval.
 /// See <https://reactivex.io/documentation/operators/interval.html>
 ///
-/// `0` is emitted after `delay` — at once for `None`, unlike ReactiveX, which waits one period
-/// first — and every following count one `period` later, at a fixed rate. It never completes.
+/// [`new`](Self::new) emits `0` one `period` after the subscription, as ReactiveX does, and
+/// [`with_initial_delay`](Self::with_initial_delay) after a delay of its own, `Duration::ZERO` to
+/// start at once. Every following count comes one `period` later, at a fixed rate. It never
+/// completes.
 ///
-/// A time too far out for an `Instant` to represent never comes. A `delay` that long: nothing is
-/// emitted until the subscription is disposed. A `period` that long: `0` is emitted, then the
-/// observer is dropped without a termination, as [`Never`](super::never::Never) drops it.
+/// "At once" is as soon as the scheduler runs the task, not inside `subscribe`: on a
+/// [`VirtualTime`](crate::scheduler::virtual_time::VirtualTime), the
+/// `advance_by(Duration::ZERO)` that follows.
+///
+/// A time too far out for an `Instant` to represent never comes. An initial delay that long:
+/// nothing is emitted until the subscription is disposed. A `period` that long: `0` is emitted,
+/// then the observer is dropped without a termination, as [`Never`](super::never::Never) drops it.
+///
+/// # Panics
+///
+/// Subscribing panics if `period` is zero.
 ///
 /// # Examples
 /// ```rust
@@ -39,7 +49,7 @@ use std::{convert::Infallible, time::Duration};
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
-///     let subscription = Interval::new(Duration::from_millis(1), scheduler, None)
+///     let subscription = Interval::new(Duration::from_millis(1), scheduler)
 ///         .take(3)
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
@@ -62,18 +72,24 @@ use std::{convert::Infallible, time::Duration};
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct Interval<S> {
+    initial_delay: Duration,
     period: Duration,
     scheduler: S,
-    delay: Option<Duration>,
 }
 
 impl<S> Interval<S> {
-    /// Creates an [`Interval`] that emits every `period`, starting after `delay`.
-    pub fn new(period: Duration, scheduler: S, delay: Option<Duration>) -> Self {
+    /// Creates an [`Interval`] that emits `0` after one `period`, then every `period`.
+    pub fn new(period: Duration, scheduler: S) -> Self {
+        Self::with_initial_delay(period, period, scheduler)
+    }
+
+    /// Creates an [`Interval`] that emits `0` after `initial_delay`, then every `period`.
+    /// `Duration::ZERO` starts at once.
+    pub fn with_initial_delay(initial_delay: Duration, period: Duration, scheduler: S) -> Self {
         Self {
+            initial_delay,
             period,
             scheduler,
-            delay,
         }
     }
 }
@@ -100,12 +116,12 @@ where
             // nothing is completed, since an interval never completes anyway.
             |observer, count| observer.on_next(count).is_continue(),
             self.period,
-            // Fixed-rate, anchored to the time of the subscription plus the delay. A delay too long
-            // for an `Instant` never ends: the first step never comes, so it needs no anchor.
-            self.scheduler
-                .now()
-                .checked_add(self.delay.unwrap_or_default()),
+            // Fixed-rate, anchored to the time of the subscription plus the initial delay. A delay
+            // too long for an `Instant` never ends: the first step never comes, so it needs no
+            // anchor.
+            self.scheduler.now().checked_add(self.initial_delay),
         );
-        self.scheduler.run_task(task, self.delay)
+        let delay = (!self.initial_delay.is_zero()).then_some(self.initial_delay);
+        self.scheduler.run_task(task, delay)
     }
 }

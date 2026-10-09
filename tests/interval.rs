@@ -21,10 +21,11 @@ use std::time::Duration;
 use tests_utils::checker::Checker;
 
 #[test]
-fn test_completed_no_delay() {
+fn test_completed_zero_initial_delay() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), None);
+    let observable =
+        Interval::with_initial_delay(Duration::ZERO, DURATION_100_MS, scheduler.clone());
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
@@ -54,14 +55,16 @@ fn test_completed_no_delay() {
     assert_eq!(checker.state(), State::Dropped);
 }
 
+/// The first value comes one period after the subscription, as in ReactiveX.
 #[test]
-fn test_completed_with_delay() {
+fn test_completed() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone());
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
@@ -69,11 +72,14 @@ fn test_completed_with_delay() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
 
-    time.advance_by(DURATION_100_MS);
+    time.advance_by(DURATION_1_MS);
     assert_eq!(checker.values(), [0]);
     assert_eq!(checker.state(), State::Active);
 
-    time.advance_by(DURATION_100_MS);
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert_eq!(checker.values(), [0]);
+
+    time.advance_by(DURATION_1_MS);
     assert_eq!(checker.values(), [0, 1]);
     assert_eq!(checker.state(), State::Active);
 
@@ -89,19 +95,41 @@ fn test_completed_with_delay() {
     time.advance_by(DURATION_100_MS);
     assert_eq!(checker.values(), [0, 1, 2]);
     assert_eq!(checker.state(), State::Dropped);
-
-    time.advance_by(DURATION_100_MS);
-    assert_eq!(checker.values(), [0, 1, 2]);
-    assert_eq!(checker.state(), State::Dropped);
 }
 
-/// A delay too long for an `Instant` to represent never ends: the first value never comes, and the
-/// task waits until it is disposed.
+/// An initial delay other than the period: the first value comes after it, the next ones a period
+/// apart from there.
 #[test]
-fn test_delay_too_long_never_comes_due() {
+fn test_completed_with_initial_delay() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(Duration::MAX));
+    let observable =
+        Interval::with_initial_delay(DURATION_30_MS, DURATION_100_MS, scheduler.clone());
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.subscribe(observer);
+    time.advance_by(DURATION_30_MS - DURATION_1_MS);
+    assert!(checker.values().is_empty());
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker.values(), [0]);
+
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert_eq!(checker.values(), [0]);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker.values(), [0, 1]);
+    assert_eq!(checker.state(), State::Active);
+}
+
+/// An initial delay too long for an `Instant` to represent never ends: the first value never comes,
+/// and the task waits until it is disposed.
+#[test]
+fn test_initial_delay_too_long_never_comes_due() {
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let observable =
+        Interval::with_initial_delay(Duration::MAX, DURATION_100_MS, scheduler.clone());
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
@@ -123,7 +151,7 @@ fn test_delay_too_long_never_comes_due() {
 fn test_period_too_long_never_comes_due() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::new(Duration::MAX, scheduler.clone(), None);
+    let observable = Interval::with_initial_delay(Duration::ZERO, Duration::MAX, scheduler.clone());
     let (checker, observer) = Checker::new();
 
     let subscription = observable.subscribe(observer);
@@ -149,7 +177,7 @@ fn test_unsubscribe() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -208,11 +236,7 @@ fn test_unsubscribe() {
 fn test_async() {
     block_on(|scheduler| async move {
         // Half the durations of the other tests: this one runs on real time, on every scheduler.
-        let observable = Interval::new(
-            DURATION_100_MS / 2,
-            scheduler.clone(),
-            Some(DURATION_100_MS / 2),
-        );
+        let observable = Interval::new(DURATION_100_MS / 2, scheduler.clone());
         let (checker, observer) = Checker::new();
 
         let subscription = scheduler
@@ -259,7 +283,7 @@ fn test_subscribe_by_different_observer() {
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -322,8 +346,7 @@ fn test_subscribe_by_different_observer() {
 fn test_unsub_on_next_by_take() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable =
-        Interval::new(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS)).take(1);
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone()).take(1);
     let (checker, observer) = Checker::new();
 
     let _subscription = observable.subscribe(observer);
@@ -343,7 +366,7 @@ fn test_unsub_on_next_by_take() {
 fn test_unsub_after_next() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone());
     let (checker, observer) = Checker::new();
 
     let subscription = Arc::new(Mutex::new(None));
@@ -379,7 +402,7 @@ fn test_unsub_after_next() {
 fn test_clone() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone());
     _ = observable.clone();
 }
 
@@ -387,7 +410,7 @@ fn test_clone() {
 fn test_type_inference_with_subscribe() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone());
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -398,7 +421,7 @@ fn test_type_inference_with_subscribe() {
 fn test_type_inference_without_subscribe() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
-    let observable = Interval::new(DURATION_100_MS, scheduler.clone(), Some(DURATION_100_MS));
+    let observable = Interval::new(DURATION_100_MS, scheduler.clone());
 
     observable.filter(|_| true);
 }
