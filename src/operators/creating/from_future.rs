@@ -1,7 +1,8 @@
 //! The [`FromFuture`] source.
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
     scheduler::{FutureThenContext, Scheduler, SchedulerTypes, Task},
 };
@@ -115,7 +116,7 @@ where
     FU: Future<Output = T>,
     S: Scheduler<FutureThenContext<OR, T>, FU>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let task = Task::from_future_then(observer, self.future, |mut observer, value| {
             if observer.on_next(value).is_continue() {
                 observer.on_termination(Termination::Completed);

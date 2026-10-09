@@ -2,10 +2,10 @@
 //! [`ObservableExt::catch`](crate::observable::ObservableExt::catch).
 
 use crate::delegate_disposal;
+use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::disposable::{
     Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
 };
-use crate::observable::Subscription;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::{
@@ -69,7 +69,7 @@ impl<E0, OE, F> Catch<E0, OE, F> {
 
 delegate_disposal!(
     Disposal<M, D, D1>,
-    ChainDisposal<SharedDisposal<M, Subscription<D1>>, D>,
+    ChainDisposal<SharedDisposal<M, DisposeOnDrop<D1>>, D>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -102,7 +102,7 @@ where
     OE1: Observable<OR, Item = T, Error = E>,
     F: FnOnce(E0) -> OE1,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let shared_disposal = SharedDisposal::default();
         let observer = CatchObserver {
             observer,
@@ -120,7 +120,7 @@ where
 pub struct CatchObserver<M: ThreadMode, E, OR, F, D: Disposable> {
     observer: OR,
     callback: F,
-    shared_disposal: SharedDisposal<M, Subscription<D>>,
+    shared_disposal: SharedDisposal<M, DisposeOnDrop<D>>,
     _marker: MarkerType<E>,
 }
 

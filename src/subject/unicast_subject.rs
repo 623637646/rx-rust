@@ -98,10 +98,12 @@
 
 use crate::thread_mode::mutable::{MutableBoolHelper, MutableHelper};
 use crate::{
-    disposable::Disposable,
-    observable::{Observable, ObservableTypes, Subscription},
-    observer::boxed_observer::{IntoBoxedObserver, ObserverMode},
-    observer::{Event, Flow, Observer, Termination},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
+    observer::{
+        Event, Flow, Observer, Termination,
+        boxed_observer::{IntoBoxedObserver, ObserverMode},
+    },
     thread_mode::{Local, Shared, ThreadMode},
     utils::{on_panic::on_panic, pending_events::PendingEvents},
 };
@@ -397,13 +399,13 @@ where
     M: ThreadMode,
     OR: Observer<T, E>,
 {
-    fn subscribe(mut self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(mut self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let pipe = self
             .0
             .take()
             .expect("the pipe is taken by either subscribing or dropping");
         deliver(&pipe, observer);
-        Subscription::new(Disposal(pipe.is_closed))
+        DisposeOnDrop::new(Disposal(pipe.is_closed))
     }
 }
 
@@ -428,7 +430,7 @@ where
     M: ObserverMode,
     OR: IntoBoxedObserver<'or, T, E, M>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.0.subscribe(M::boxed(observer))
     }
 }

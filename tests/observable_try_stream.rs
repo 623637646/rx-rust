@@ -8,7 +8,7 @@ use crate::tests_utils::{test_channel::test_channel, test_scheduler::block_on};
 use futures::{FutureExt, Stream, StreamExt, TryStreamExt};
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
@@ -73,7 +73,7 @@ fn test_completed_lazy_subscription() {
                 subscribed_cloned.write(true);
                 assert!(observer.on_next(111).is_continue());
                 observer.on_termination(Termination::Completed);
-                Subscription::default()
+                DisposeOnDrop::default()
             });
 
         let stream = observable.into_try_stream();
@@ -232,7 +232,7 @@ fn test_mut_ref() {
         let observable = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, &str>| {
             assert!(observer.on_next(&mut value).is_continue());
             observer.on_termination(Termination::Completed);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
 
         let mut stream = observable.into_try_stream();
@@ -553,7 +553,7 @@ fn test_next_on_unsub() {
         // The source emits from inside its own disposal, so the value arrives while the stream is
         // being dropped. It must be dropped instead of reaching the stream.
         let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 let mut observer = observer;
                 assert!(observer.on_next(111).is_continue());
             }))
@@ -579,7 +579,7 @@ fn test_complete_on_unsub() {
         // The source completes from inside its own disposal, so it terminates while the stream is
         // being dropped. The termination must be dropped instead of ending the stream.
         let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 observer.on_termination(Termination::Completed);
             }))
         });
@@ -603,7 +603,7 @@ fn test_error_on_unsub() {
     block_on(|scheduler| async move {
         // Like `test_complete_on_unsub`, with an error: it must not reach the stream either.
         let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 observer.on_termination(Termination::Error("error"));
             }))
         });
@@ -636,7 +636,7 @@ fn test_lifetime_sub() {
         let observable = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, &str>| {
             assert!(observer.on_next(111).is_continue());
             observer.on_termination(Termination::Completed);
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
@@ -658,7 +658,7 @@ fn test_lifetime_or() {
         let observable = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, _, &str>| {
             assert!(observer.on_next(&life_marker_2).is_continue());
             life_marker_1 = Some(observer);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let _stream = observable.into_try_stream();
     }

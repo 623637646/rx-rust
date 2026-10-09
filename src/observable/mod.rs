@@ -1,7 +1,7 @@
 //! The sending end of a stream: the [`Observable`] trait and the fluent operator API on it.
 //!
 //! An [`Observable`] is anything that can be subscribed to with an
-//! [`Observer`]; subscribing returns a [`Subscription`], which unsubscribes when dropped. Every
+//! [`Observer`]; subscribing returns a [`DisposeOnDrop`], which unsubscribes when dropped. Every
 //! operator is a struct in [`operators`](crate::operators) that implements `Observable` over its
 //! source, and [`ObservableExt`] gives each of them a method, so a pipeline reads as a chain of
 //! calls.
@@ -34,7 +34,7 @@ use crate::operators::others::{
     observable_try_stream::{ObservableTryStream, StreamBuffer},
 };
 use crate::{
-    disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{
         boxed_observable::{
             BoxedObservable, BoxedObservableFor, CloneableBoxedObservable,
@@ -109,9 +109,6 @@ use crate::{
 };
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 
-/// What [`Observable::subscribe`] returns: a disposal that unsubscribes when it is dropped.
-pub type Subscription<D> = BoundDropDisposal<D>;
-
 /// The part of an observable that does not depend on who observes it: what it emits, the thread
 /// its events can arrive on, and the disposal of a subscription to it.
 ///
@@ -133,7 +130,7 @@ pub trait ObservableTypes {
     /// several sources joins theirs ([`Joined`](crate::thread_mode::Joined)). An operator that
     /// needs shared state picks its pointer from it. See [`thread_mode`](crate::thread_mode).
     type Mode: ThreadMode;
-    /// The disposal of a subscription to this observable.
+    /// The inner disposal of the [`DisposeOnDrop`] returned by [`Observable::subscribe`].
     type Disposal: Disposable;
 }
 
@@ -166,8 +163,8 @@ where
 {
     /// Subscribes `observer`, which receives the events from now on, consuming the observable.
     ///
-    /// The returned [`Subscription`] unsubscribes when dropped.
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal>;
+    /// The returned [`DisposeOnDrop`] unsubscribes when dropped.
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal>;
 }
 
 /// The operators, as methods on every [`Observable`].
@@ -494,7 +491,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     where
         OR: Observer<Self::Item, Self::Error>,
         D: Disposable,
-        F: FnOnce(Self, Emitter<OR, Self::Mode>) -> Subscription<D>,
+        F: FnOnce(Self, Emitter<OR, Self::Mode>) -> DisposeOnDrop<D>,
     {
         HookOnSubscription::new(self, callback)
     }
@@ -511,7 +508,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         F: FnOnce(
             Self,
             <Self::Mode as ObserverMode>::BoxedObserver<'a, Self::Item, Self::Error>,
-        ) -> Subscription<D>,
+        ) -> DisposeOnDrop<D>,
     {
         HookOnSubscription::new_boxed(self, callback)
     }
@@ -1080,7 +1077,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
         self,
         on_next: FN,
         on_termination: FT,
-    ) -> Subscription<Self::Disposal>
+    ) -> DisposeOnDrop<Self::Disposal>
     where
         Self: Observable<CallbackObserver<FN, FT>>,
         FN: FnMut(Self::Item) -> R,

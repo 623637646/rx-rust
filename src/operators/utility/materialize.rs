@@ -2,7 +2,7 @@
 //! [`ObservableExt::materialize`](crate::observable::ObservableExt::materialize).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Event, Flow, Observer, Termination},
 };
@@ -70,7 +70,7 @@ where
     OR: Observer<Event<T, E>, Infallible>,
     OE: Observable<MaterializeObserver<OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.0.subscribe(MaterializeObserver(observer))
     }
 }

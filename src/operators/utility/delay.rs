@@ -2,7 +2,7 @@
 //! [`ObservableExt::delay`](crate::observable::ObservableExt::delay).
 
 use crate::delegate_disposal;
-use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
+use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use crate::observer::EventBatch;
 use crate::scheduler::{RecursiveContext, SchedulerTypes, Task};
 use crate::thread_mode::{Joined, ThreadMode};
@@ -10,7 +10,6 @@ use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::{
-    observable::Subscription,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Scheduler, TaskState},
@@ -141,7 +140,7 @@ where
         >,
     S: Scheduler<DelayTask<DelayMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model::<T, S::Disposal> {
             values: VecDeque::new(),
             completion: None,
@@ -167,7 +166,7 @@ struct Model<T, D: Disposable> {
     /// Keeps at most one recursive scheduler task alive while events are waiting. The slot is
     /// reserved while the task is being scheduled, which covers schedulers that can execute a
     /// zero-delay task before returning its disposal.
-    timer: SubscriptionSlot<BoundDropDisposal<D>>,
+    timer: SubscriptionSlot<DisposeOnDrop<D>>,
 }
 
 impl<T, D: Disposable> Model<T, D> {

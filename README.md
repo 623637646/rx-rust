@@ -60,7 +60,7 @@ Range::new(1..=5)
     );
 ```
 
-`subscribe` returns a `Subscription`, and dropping it unsubscribes. A synchronous source such as
+`subscribe` returns a `DisposeOnDrop`, and dropping it unsubscribes. A synchronous source such as
 `Range` delivers everything before `subscribe` returns, so the example above can ignore it; a source
 that emits later must have its subscription kept alive for as long as the events are wanted:
 
@@ -96,7 +96,7 @@ pub trait ObservableTypes {
 }
 
 pub trait Observable<OR>: ObservableTypes {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal>;
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal>;
 }
 ```
 
@@ -422,7 +422,7 @@ Debugging                   | `debug`, `debug_default_print`, `hook_on_subscript
 - `src/observable` – The `Observable` trait, `ObservableExt` (every operator as a method), and the
   boxed observables.
 - `src/observer` – The `Observer` trait, `Flow`, `Termination`, and the callback observer.
-- `src/disposable` – `Disposable` and the `Subscription` that disposes on drop.
+- `src/disposable` – `Disposable` and the `DisposeOnDrop` that disposes on drop.
 - `src/operators` – One operator per file, grouped by category to mirror ReactiveX terminology.
 - `src/subject` – The subjects.
 - `src/scheduler` – The `Scheduler` trait and its adapters for the supported runtimes.

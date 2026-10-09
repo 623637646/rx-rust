@@ -90,7 +90,10 @@ pub use task::{
     TaskState, drive, yield_now,
 };
 
-use crate::{disposable::Disposable, observable::Subscription, thread_mode::ThreadMode};
+use crate::{
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    thread_mode::ThreadMode,
+};
 #[cfg(feature = "futures")]
 use futures::Stream;
 use std::{
@@ -110,7 +113,8 @@ pub trait SchedulerTypes {
     /// [`Local`](crate::thread_mode::Local) for one that runs them on the scheduling thread.
     type Mode: ThreadMode;
 
-    /// The disposal [`Scheduler::run_task`] returns: disposing it cancels the task.
+    /// The inner disposal of the [`DisposeOnDrop`] returned by [`Scheduler::run_task`]: disposing
+    /// it cancels the task.
     ///
     /// A disposed task should be dropped promptly. The task of a time-based operator or of
     /// `observe_on` holds the operator's context, and a subscription disposed after its source let
@@ -143,18 +147,19 @@ pub trait SchedulerTypes {
 /// what it requires of them: `Send + 'static` for a multi-threaded scheduler, `'static` for a
 /// single-threaded one. A trait method could not tighten its bounds per implementation.
 pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
-    /// Spawns `task`, to start after `delay`. Dropping the returned subscription cancels it.
+    /// Spawns `task`, to start after `delay`. Dropping or disposing the returned handle cancels it.
     ///
     /// A `delay` too long for an [`Instant`] to represent never ends: the task is never stepped,
     /// and is kept until it is disposed. [`drive`] does that for the schedulers built on it.
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal>;
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>)
+    -> DisposeOnDrop<Self::Disposal>;
 }
 
 /// The closure-taking conveniences of every scheduler, built on [`Scheduler::run_task`]. A
 /// multi-threaded scheduler refuses a closure that is not `Send`.
 pub trait SchedulerExt: SchedulerTypes + Clone {
     /// Runs `task` once, after `delay`.
-    fn schedule<F>(&self, task: F, delay: Option<Duration>) -> Subscription<Self::Disposal>
+    fn schedule<F>(&self, task: F, delay: Option<Duration>) -> DisposeOnDrop<Self::Disposal>
     where
         F: FnOnce(),
         Self: Scheduler<OnceContext<F>>,
@@ -169,7 +174,7 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
         &self,
         task: F,
         delay: Option<Duration>,
-    ) -> Subscription<Self::Disposal>
+    ) -> DisposeOnDrop<Self::Disposal>
     where
         F: FnMut(usize, Instant) -> TaskState,
         Self: Scheduler<RecursiveContext<F>>,
@@ -191,7 +196,7 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
         task: F,
         period: Duration,
         delay: Option<Duration>,
-    ) -> Subscription<Self::Disposal>
+    ) -> DisposeOnDrop<Self::Disposal>
     where
         F: FnMut(usize) -> bool,
         Self: Scheduler<PeriodicContext<F>>,
@@ -206,7 +211,7 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
     }
 
     /// Drives `future` to completion.
-    fn spawn_future<FU>(&self, future: FU) -> Subscription<Self::Disposal>
+    fn spawn_future<FU>(&self, future: FU) -> DisposeOnDrop<Self::Disposal>
     where
         FU: Future<Output = ()>,
         Self: Scheduler<FutureThenContext<(), ()>, FU>,
@@ -219,7 +224,7 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
     /// `callback` returning `false`, or a disposal, stops the stream right there, without the
     /// final `None`. The task yields after each element, even when the stream is always ready.
     #[cfg(feature = "futures")]
-    fn schedule_stream<SM, F>(&self, stream: SM, callback: F) -> Subscription<Self::Disposal>
+    fn schedule_stream<SM, F>(&self, stream: SM, callback: F) -> DisposeOnDrop<Self::Disposal>
     where
         SM: Stream,
         F: FnMut(Option<SM::Item>) -> bool,

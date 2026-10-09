@@ -3,7 +3,8 @@
 
 use crate::observer::boxed_observer::ObserverMode;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
     utils::MarkerType,
@@ -153,7 +154,7 @@ where
     F: FnMut(&T) -> K,
     K: Eq + Hash,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.source.subscribe(SourceObserver {
             observer,
             senders: HashMap::new(),

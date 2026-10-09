@@ -7,7 +7,7 @@ use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::{
     observable::{Observable, ObservableExt},
@@ -129,7 +129,7 @@ fn test_mut_ref() {
         assert!(observer.on_next(&mut value_2).is_continue());
         assert!(observer.on_next(&mut value_3).is_continue());
         observer.on_termination(Termination::Completed);
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let observable = observable.with_error_type();
 
@@ -295,7 +295,7 @@ fn test_lifetime_sub() {
     {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
@@ -319,7 +319,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let observable = observable.with_error_type();
 
@@ -334,7 +334,7 @@ fn test_clone() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let observable = observable.with_error_type::<String>();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

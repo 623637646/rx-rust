@@ -2,7 +2,8 @@
 
 use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -56,16 +57,16 @@ where
     OR: Observer<T, Infallible>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
         for value in self.0.into_iter() {
             if observer.on_next(value).is_stop() {
                 // The observer stopped: stop iterating, which is the only way to end an infinite
                 // iterator (the subscription only exists once this returns), and release the
                 // observer without a termination, like a disposed one.
-                return Subscription::default();
+                return DisposeOnDrop::default();
             }
         }
         observer.on_termination(Termination::Completed);
-        Subscription::default()
+        DisposeOnDrop::default()
     }
 }

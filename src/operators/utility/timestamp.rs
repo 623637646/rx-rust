@@ -2,7 +2,7 @@
 //! [`ObservableExt::timestamp`](crate::observable::ObservableExt::timestamp).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::SchedulerTypes,
@@ -74,7 +74,7 @@ where
     OE: Observable<TimestampObserver<OR, S>, Item = T, Error = E>,
     S: SchedulerTypes,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = TimestampObserver {
             observer,
             scheduler: self.scheduler,

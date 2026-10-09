@@ -1,7 +1,8 @@
 //! The [`FromTryStream`] source.
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
     scheduler::{Scheduler, SchedulerTypes, StreamThenContext, Task},
 };
@@ -88,7 +89,7 @@ where
     SM: Stream<Item = Result<T, E>>,
     S: Scheduler<StreamThenContext<Option<OR>, Result<T, E>>, SM>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let task = Task::from_stream_then(
             Some(observer),
             self.stream,

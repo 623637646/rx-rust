@@ -3,7 +3,7 @@
 
 use crate::utils::MarkerType;
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -85,7 +85,7 @@ macro_rules! average_observer_impl {
             OR: Observer<f64, E>,
             OE: Observable<AverageObserver<$t, OR>, Item = $t, Error = E>,
         {
-            fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+            fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
                 let observer = AverageObserver {
                     observer,
                     sum: 0f64,

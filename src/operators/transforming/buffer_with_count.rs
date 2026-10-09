@@ -2,7 +2,7 @@
 //! [`ObservableExt::buffer_with_count`](crate::observable::ObservableExt::buffer_with_count).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -68,7 +68,7 @@ where
     OR: Observer<Vec<T>, E>,
     OE: Observable<BufferWithCountObserver<T, OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = BufferWithCountObserver {
             observer,
             values: Vec::default(),

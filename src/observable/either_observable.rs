@@ -1,6 +1,6 @@
 //! An observable that is one of two types, without boxing.
 
-use super::{Observable, ObservableTypes, Subscription};
+use super::{DisposeOnDrop, Observable, ObservableTypes};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, either_disposal::EitherDisposal},
@@ -46,7 +46,7 @@ delegate_disposal!(
     /// The disposal of an [`EitherObservable`] subscription: the subscription of the side that was
     /// subscribed to.
     Disposal<A, B>,
-    EitherDisposal<Subscription<A>, Subscription<B>>,
+    EitherDisposal<DisposeOnDrop<A>, DisposeOnDrop<B>>,
     where A: Disposable, B: Disposable
 );
 
@@ -68,13 +68,13 @@ where
     A: Observable<OR>,
     B: Observable<OR> + ObservableTypes<Item = A::Item, Error = A::Error>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         match self {
             Self::Left(observable) => {
-                Subscription::new(EitherDisposal::Left(observable.subscribe(observer)).into())
+                DisposeOnDrop::new(EitherDisposal::Left(observable.subscribe(observer)).into())
             }
             Self::Right(observable) => {
-                Subscription::new(EitherDisposal::Right(observable.subscribe(observer)).into())
+                DisposeOnDrop::new(EitherDisposal::Right(observable.subscribe(observer)).into())
             }
         }
     }

@@ -8,7 +8,7 @@ use crate::operators::combining::concat_all::SourceObserver;
 use crate::operators::transforming::map::MapObserver;
 use crate::thread_mode::Joined;
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
     utils::MarkerType,
@@ -122,7 +122,7 @@ where
         >,
     F: FnMut(T0) -> OE1,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observable = Map::new(self.source, self.callback);
         let observable = ConcatAll::new(observable);
         observable.subscribe(observer)

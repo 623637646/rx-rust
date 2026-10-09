@@ -9,8 +9,8 @@ use crate::utils::MarkerType;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::Disposable,
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -123,7 +123,7 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
             first: SourceState {
                 queue: VecDeque::new(),
@@ -145,7 +145,7 @@ where
             };
             let subscription_1 = self.source_1.subscribe(observer_1);
             let subscription_2 = self.source_2.subscribe(observer_2);
-            subscription_1.preceded_by_bound(subscription_2)
+            subscription_1.preceded_by_wrapped(subscription_2)
         })
         .map_into()
     }

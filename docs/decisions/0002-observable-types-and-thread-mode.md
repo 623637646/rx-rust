@@ -35,7 +35,7 @@ pub trait ObservableTypes {
 }
 
 pub trait Observable<OR>: ObservableTypes {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal>;
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal>;
 }
 
 pub trait ThreadMode: 'static {                     // sealed; Local / Shared are never instantiated
@@ -59,7 +59,7 @@ pub trait ObserverMode: ThreadMode + Sized {
 
 pub trait SchedulerTypes { type Mode: ThreadMode; type Disposal: Disposable; }
 pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal>;
+    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> DisposeOnDrop<Self::Disposal>;
 }
 ```
 
@@ -153,7 +153,7 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    its own `Observer` implementation.** Proving that implementation would depend on itself, and
    rustc reports `E0275` (overflow). `retry` and `concat_all` (and so `concat_map`) re-subscribe
    that way. They carry a `utils::resubscribe::Resubscribe`, a function pointer
-   `fn(OE, Self) -> Subscription<D>` created where the operator is subscribed — where the bound is
+   `fn(OE, Self) -> DisposeOnDrop<D>` created where the operator is subscribed — where the bound is
    stated and holds — and call it instead. It is public so that a user-written operator can do the
    same. An observer that subscribes with a *different* observer type (`switch`, `merge_all`,
    `catch`, `concat`) needs nothing special.

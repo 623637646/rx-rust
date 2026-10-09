@@ -8,7 +8,7 @@ use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::error_handling::retry::RetryAction;
 use rx_rust::scheduler::SchedulerExt;
@@ -25,7 +25,7 @@ fn test_completed() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::<String>::Completed);
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -62,7 +62,7 @@ fn test_error() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -109,7 +109,7 @@ fn test_unsubscribe() {
                 scheduler.sleep(DURATION_100_MS).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
-            Subscription::new(CallbackDisposal::new(move || handle.dispose()))
+            DisposeOnDrop::new(CallbackDisposal::new(move || handle.dispose()))
         });
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
@@ -188,7 +188,7 @@ fn test_ref() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(&value).is_continue());
         observer.on_termination(Termination::Error(&error));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -205,7 +205,7 @@ fn test_mut_ref() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(&mut value).is_continue());
         observer.on_termination(Termination::Error(&mut error));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -243,7 +243,7 @@ fn test_async() {
                 scheduler.sleep(DURATION_100_MS).await;
                 observer.on_termination(Termination::<String>::Completed);
             });
-            Subscription::new(CallbackDisposal::new(move || handle.dispose()))
+            DisposeOnDrop::new(CallbackDisposal::new(move || handle.dispose()))
         });
         let (checker, observer) = Checker::new();
 
@@ -277,7 +277,7 @@ fn test_subscribe_by_different_observer() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
@@ -302,7 +302,7 @@ fn test_unsub_on_next_by_take() {
         assert!(observer.on_next(111).is_stop());
         assert!(observer.on_next(222).is_stop());
         observer.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     })
     .take(1);
     let (checker, observer) = Checker::new();
@@ -326,7 +326,7 @@ fn test_lifetime_sub() {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
@@ -349,7 +349,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
@@ -366,7 +366,7 @@ fn test_fn() {
         s.consume();
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
 }
 
@@ -375,7 +375,7 @@ fn test_clone() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
@@ -385,7 +385,7 @@ fn test_type_inference_with_subscribe() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
 
     let observable = observable.filter(|_| true);
@@ -398,7 +398,7 @@ fn test_type_inference_without_subscribe() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(111).is_continue());
         observer.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
 
     observable.filter(|_| true);
@@ -414,7 +414,7 @@ fn test_emitter_completed() {
     let observable = Create::shared(|mut emitter| {
         assert!(emitter.on_next(111).is_continue());
         emitter.on_termination(Termination::<String>::Completed);
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -450,7 +450,7 @@ fn test_emitter_error() {
     let observable = Create::shared(|mut emitter| {
         assert!(emitter.on_next(111).is_continue());
         emitter.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -472,7 +472,7 @@ fn test_emitter_unsubscribe() {
                 scheduler.sleep(DURATION_100_MS).await;
                 emitter.on_termination(Termination::<String>::Completed);
             });
-            Subscription::new(CallbackDisposal::new(move || handle.dispose()))
+            DisposeOnDrop::new(CallbackDisposal::new(move || handle.dispose()))
         });
         let (checker_1, observer_1) = Checker::new();
         let (checker_2, observer_2) = Checker::new();
@@ -508,7 +508,7 @@ fn test_emitter_unsub_on_next_by_take() {
         assert!(emitter.on_next(111).is_stop());
         assert!(emitter.on_next(222).is_stop());
         emitter.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     })
     .take(1);
     let (checker, observer) = Checker::new();
@@ -525,7 +525,7 @@ fn test_emitter_ref() {
     let observable = Create::shared(|mut emitter| {
         assert!(emitter.on_next(&value).is_continue());
         emitter.on_termination(Termination::Error(&error));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -547,7 +547,7 @@ fn test_emitter_lifetime_or() {
     {
         let observable = Create::shared(|emitter| {
             life_marker_1 = Some(emitter);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
@@ -563,7 +563,7 @@ fn test_emitter_retry() {
     let observable = Create::shared(|mut emitter| {
         assert!(emitter.on_next(0).is_continue());
         emitter.on_termination(Termination::Error("error"));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
     let mut attempts = 0;
@@ -577,7 +577,7 @@ fn test_emitter_retry() {
             RetryAction::Retry(Create::shared_boxed(move |mut observer| {
                 assert!(observer.on_next(attempts).is_continue());
                 observer.on_termination(Termination::Error("again"));
-                Subscription::default()
+                DisposeOnDrop::default()
             }))
         })
         .subscribe(observer);

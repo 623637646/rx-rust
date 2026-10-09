@@ -7,7 +7,7 @@ use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::conditional_boolean::default_if_empty::DefaultIfEmpty;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
@@ -332,7 +332,7 @@ fn test_lifetime_sub() {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
@@ -357,7 +357,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let observable = observable.default_if_empty(&life_marker_2);
 
@@ -370,7 +370,7 @@ fn test_lifetime_or() {
 fn test_clone() {
     let observable = Create::shared_boxed(|observer| {
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let observable = observable.default_if_empty(111);
     _ = observable.clone(); // Make sure it's Clone when E is not Clone.

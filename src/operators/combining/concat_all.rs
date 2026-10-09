@@ -11,7 +11,8 @@ use crate::utils::serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutc
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::MarkerType,
@@ -131,7 +132,7 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
             pending_observables: VecDeque::new(),
             slot: SubscriptionSlot::Idle,
@@ -154,7 +155,7 @@ where
     /// Values wait here while an inner is active or its subscription is still being built.
     /// An idle slot always has an empty queue.
     pending_observables: VecDeque<OE1>,
-    slot: SubscriptionSlot<Subscription<OE1::Disposal>>,
+    slot: SubscriptionSlot<DisposeOnDrop<OE1::Disposal>>,
     is_source_completed: bool,
 }
 
@@ -255,7 +256,7 @@ where
 }
 
 type NextStep<T, E, OE, D> =
-    UpdateOutcome<T, E, Option<OE>, DropDecided<Option<Subscription<D>>>, true>;
+    UpdateOutcome<T, E, Option<OE>, DropDecided<Option<DisposeOnDrop<D>>>, true>;
 
 /// `fill` and `release` hand back the finished subscription to whichever runs second. Only
 /// that caller advances the queue; the first leaves the slot occupied for the other to finish.
@@ -263,7 +264,7 @@ type NextStep<T, E, OE, D> =
 /// slot cannot race a source emission. The returned subscription is dropped outside the lock.
 fn next_step<T, E, OE1>(
     model: &mut Model<OE1>,
-    finished: Option<Subscription<OE1::Disposal>>,
+    finished: Option<DisposeOnDrop<OE1::Disposal>>,
 ) -> NextStep<T, E, OE1, OE1::Disposal>
 where
     OE1: ObservableTypes<Item = T, Error = E>,

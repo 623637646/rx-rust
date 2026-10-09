@@ -2,7 +2,8 @@
 //! [`ObservableExt::with_error_type`](crate::observable::ObservableExt::with_error_type).
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::MarkerType,
 };
@@ -66,7 +67,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<WithErrorTypeObserver<E, OR>, Item = T, Error = Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = WithErrorTypeObserver {
             observer,
             _marker: PhantomData,

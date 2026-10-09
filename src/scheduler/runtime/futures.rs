@@ -3,8 +3,7 @@
 //! Timers come from `async-io`.
 
 use crate::{
-    disposable::Disposable,
-    observable::Subscription,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     scheduler::{Scheduler, SchedulerTypes, Task, drive},
     thread_mode::{Local, Shared},
 };
@@ -69,12 +68,16 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         let handle = self
             .pool
             .spawn_with_handle(drive(task, delay, self.clone(), sleep))
             .expect("failed to spawn future");
-        Subscription::new(FuturesDisposal(handle))
+        DisposeOnDrop::new(FuturesDisposal(handle))
     }
 }
 
@@ -132,12 +135,16 @@ where
     TC: 'static,
     P: 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         let handle = self
             .spawner
             .spawn_local_with_handle(drive(task, delay, self.clone(), sleep))
             .expect("failed to spawn future");
-        Subscription::new(FuturesDisposal(handle))
+        DisposeOnDrop::new(FuturesDisposal(handle))
     }
 }
 

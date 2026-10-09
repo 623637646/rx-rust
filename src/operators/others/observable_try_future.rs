@@ -2,10 +2,10 @@
 //! [`ObservableExt::into_try_future`](crate::observable::ObservableExt::into_try_future).
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    thread_mode::mutable::MutableHelper,
-    thread_mode::{Shared, ThreadMode},
+    thread_mode::{Shared, ThreadMode, mutable::MutableHelper},
     utils::lazy_subscription::LazySubscription,
 };
 use educe::Educe;
@@ -58,7 +58,7 @@ where
     OE: ObservableTypes,
 {
     #[educe(Debug(ignore))]
-    subscription: LazySubscription<OE, Subscription<OE::Disposal>>,
+    subscription: LazySubscription<OE, DisposeOnDrop<OE::Disposal>>,
     #[educe(Debug(ignore))]
     context: ContextPtr<OE>,
 }

@@ -4,7 +4,8 @@
 use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
 use crate::observer::emitter::Emitter;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -107,7 +108,7 @@ where
         >,
     F: FnOnce(Emitter<OR, <OE as ObservableTypes>::Mode>, Termination<E>),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = HookOnTerminationObserver {
             observer: Emitter::new(observer),
             callback: self.callback,
@@ -133,7 +134,7 @@ where
         Termination<E>,
     ),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = HookOnTerminationObserver {
             observer: <<OE as ObservableTypes>::Mode as ObserverMode>::boxed(observer),
             callback: self.callback,

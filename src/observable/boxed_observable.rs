@@ -20,8 +20,10 @@
 use super::{Observable, ObservableTypes, Observer};
 use crate::utils::MarkerType;
 use crate::{
-    disposable::boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
-    observable::Subscription,
+    disposable::{
+        boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
+        dispose_on_drop::DisposeOnDrop,
+    },
     observer::boxed_observer::{BoxedObserver, SendBoxedObserver},
     thread_mode::ThreadMode,
 };
@@ -70,7 +72,7 @@ macro_rules! boxed_observable {
             pub struct $observable_for<'sub, 'oe, T, E, M, OR> {
                 #[educe(Debug(ignore))]
                 subscribe: $pointer<
-                    dyn $fn_trait(OR) -> Subscription<$disposal<'sub>> $(+ $marker)* + 'oe,
+                    dyn $fn_trait(OR) -> DisposeOnDrop<$disposal<'sub>> $(+ $marker)* + 'oe,
                 >,
                 #[educe(Debug(ignore))]
                 _marker: MarkerType<(T, E, M)>,
@@ -108,7 +110,7 @@ macro_rules! boxed_observable {
             OR: Observer<T, E>,
         {
             #[inline]
-            fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+            fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
                 (self.subscribe)(observer)
             }
         }
@@ -145,7 +147,7 @@ macro_rules! boxed_observable {
             OR: Observer<T, E> $(+ $send)? + 'or,
         {
             #[inline]
-            fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+            fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
                 self.0.subscribe($observer::new(observer))
             }
         }

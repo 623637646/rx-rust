@@ -14,8 +14,7 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::{
-    disposable::Disposable,
-    observable::Subscription,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::never::Never, utility::subscribe_on::SubscribeOn},
@@ -1400,7 +1399,7 @@ fn test_next_on_unsub() {
         // it.
         let observable =
             Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-                Subscription::new(CallbackDisposal::new(move || {
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
                     let mut observer = observer;
                     assert!(observer.on_next(111).is_continue());
                 }))
@@ -1430,7 +1429,7 @@ fn test_complete_on_unsub() {
         // reaches it.
         let observable =
             Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-                Subscription::new(CallbackDisposal::new(move || {
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
                     observer.on_termination(Termination::Completed);
                 }))
             });
@@ -1458,7 +1457,7 @@ fn test_error_on_unsub() {
         // unsubscribing. SubscribeOn hands the observer to its source, so the error still reaches
         // it.
         let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 observer.on_termination(Termination::Error("error"));
             }))
         });
@@ -1631,7 +1630,7 @@ fn test_clone() {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(TestStruct).is_continue());
             observer.on_termination(Termination::Error(TestStruct));
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let observable = observable.subscribe_on(ThreadCheckerScheduler::new("thread_1"));
         _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

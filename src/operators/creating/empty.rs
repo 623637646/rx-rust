@@ -2,7 +2,8 @@
 
 use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
 };
 use std::convert::Infallible;
@@ -42,8 +43,8 @@ impl<OR> Observable<OR> for Empty
 where
     OR: Observer<Infallible, Infallible>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         observer.on_termination(Termination::Completed);
-        Subscription::default()
+        DisposeOnDrop::default()
     }
 }

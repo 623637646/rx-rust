@@ -4,9 +4,9 @@
 use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{
-    Disposable, bound_drop_disposal::BoundDropDisposal, option_disposal::OptionDisposal,
+    Disposable, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
 };
-use crate::observable::{Observable, ObservableTypes, Subscription};
+use crate::observable::{Observable, ObservableTypes};
 use crate::observer::{Flow, Observer, Termination};
 use crate::scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState};
 use crate::thread_mode::{Joined, ThreadMode};
@@ -104,7 +104,7 @@ type TimeoutMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerT
 
 /// The source subscription a [`Timeout`] context owns: the timer, then the source.
 type TimeoutSources<OE, S> = ChainDisposal<
-    OptionDisposal<BoundDropDisposal<<S as SchedulerTypes>::Disposal>>,
+    OptionDisposal<DisposeOnDrop<<S as SchedulerTypes>::Disposal>>,
     <OE as ObservableTypes>::Disposal,
 >;
 
@@ -118,7 +118,7 @@ type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, T, Error<E>, Model, ChainDisposal<OptionDisposal<BoundDropDisposal<SD>>, D>>,
+    subscribe_with_context::Disposal<M, T, Error<E>, Model, ChainDisposal<OptionDisposal<DisposeOnDrop<SD>>, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -143,7 +143,7 @@ where
         >,
     S: Scheduler<TimeoutTask<T, E, OR, OE, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
             deadline: self.scheduler.now().checked_add(self.duration),
         };
@@ -204,7 +204,7 @@ where
 fn setup_timer<M, T, E, OR, S, D>(
     context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     scheduler: &S,
-) -> OptionDisposal<BoundDropDisposal<S::Disposal>>
+) -> OptionDisposal<DisposeOnDrop<S::Disposal>>
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,

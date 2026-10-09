@@ -7,7 +7,8 @@ use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use rx_rust::{
-    observable::{Observable, ObservableExt, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableExt},
     observer::{EventBatch, Flow, Observer, Termination},
     utils::subscribe_with_context::subscribe_with_context,
 };
@@ -27,7 +28,7 @@ fn delivers_batch_in_order_with_termination() {
     let _subscription =
         subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_out = Some(context);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
     let context = context_out.unwrap();
 
@@ -51,7 +52,7 @@ fn dispose_during_batch_stops_remaining_events() {
     let subscription = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_out = Some(context);
-            Subscription::default()
+            DisposeOnDrop::default()
         })
     })
     .hook_on_next(move |observer, value| {
@@ -85,7 +86,7 @@ fn dispose_during_batch_suppresses_pending_termination() {
     let subscription = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_out = Some(context);
-            Subscription::default()
+            DisposeOnDrop::default()
         })
     })
     .hook_on_next(move |observer, value| {
@@ -117,7 +118,7 @@ fn reentrant_send_is_queued_after_pending_events() {
         subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_slot.replace_value(Some(context.clone()));
             context_out = Some(context);
-            Subscription::default()
+            DisposeOnDrop::default()
         })
     })
     .hook_on_next(move |observer, value| {
@@ -151,7 +152,7 @@ fn empty_batch_is_a_no_op() {
     let _subscription =
         subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_out = Some(context);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
     let context = context_out.unwrap();
 
@@ -171,7 +172,7 @@ fn stopped_update_drops_callback_outside_lock() {
     let subscription =
         subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
             context_out = Some(context);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
     let context = context_out.unwrap();
     drop(subscription);

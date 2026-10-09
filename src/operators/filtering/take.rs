@@ -1,9 +1,9 @@
 //! The [`Take`] operator, behind [`ObservableExt::take`](crate::observable::ObservableExt::take).
 
 use crate::delegate_disposal;
+use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::disposable::{Disposable, DisposableExt};
-use crate::observable::Subscription;
 use crate::thread_mode::ThreadMode;
 use crate::utils::subscribe_with_auto_dispose_on_termination;
 use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
@@ -57,7 +57,7 @@ impl<OE> Take<OE> {
 
 delegate_disposal!(
     Disposal<M, D>,
-    OptionDisposal<Subscription<subscribe_with_auto_dispose_on_termination::Disposal<M, D>>>,
+    OptionDisposal<DisposeOnDrop<subscribe_with_auto_dispose_on_termination::Disposal<M, D>>>,
     where M: ThreadMode, D: Disposable
 );
 
@@ -86,10 +86,10 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         if self.count == 0 {
             observer.on_termination(Termination::Completed);
-            OptionDisposal::none().into_subscription()
+            OptionDisposal::none().into_dispose_on_drop()
         } else {
             subscribe_with_auto_dispose_on_termination(observer, |observer| {
                 self.source.subscribe(TakeObserver {
@@ -98,7 +98,7 @@ where
                 })
             })
             .into_option()
-            .into_subscription()
+            .into_dispose_on_drop()
         }
     }
 }

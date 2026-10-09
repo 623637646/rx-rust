@@ -2,7 +2,8 @@
 //! [`ObservableExt::map_err`](crate::observable::ObservableExt::map_err).
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::MarkerType,
 };
@@ -72,7 +73,7 @@ where
     OE: Observable<MapErrObserver<OR, F>, Item = T, Error = E>,
     F: FnOnce(E) -> E1,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.source.subscribe(MapErrObserver {
             observer,
             callback: self.callback,

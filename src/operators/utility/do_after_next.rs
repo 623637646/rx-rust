@@ -2,7 +2,7 @@
 //! [`ObservableExt::do_after_next`](crate::observable::ObservableExt::do_after_next).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -80,7 +80,7 @@ where
     OE: Observable<DoAfterNextObserver<OR, F>, Item = T, Error = E>,
     F: FnMut(T),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.source.subscribe(DoAfterNextObserver {
             observer,
             callback: self.callback,

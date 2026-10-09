@@ -5,7 +5,8 @@ use crate::disposable::Disposable;
 use crate::thread_mode::ThreadMode;
 use crate::thread_mode::mutable::{MutableExt, MutableHelper};
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -76,7 +77,7 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let sources = self.sources.into_iter();
         let minimum_source_count = sources.size_hint().0;
         let observer = OE::Mode::ptr(Some(observer));
@@ -108,15 +109,15 @@ where
             observer.on_termination(Termination::Completed);
         }
 
-        Subscription::new(Disposal(context))
+        DisposeOnDrop::new(Disposal(context))
     }
 }
 
 enum AmbState<D: Disposable> {
-    Racing(Vec<Option<Subscription<D>>>),
+    Racing(Vec<Option<DisposeOnDrop<D>>>),
     Won {
         key: usize,
-        subscription: Option<Subscription<D>>,
+        subscription: Option<DisposeOnDrop<D>>,
     },
     Stopped,
 }
@@ -136,7 +137,7 @@ where
     })
 }
 
-fn store_subscription<D, P>(context: &P, key: usize, subscription: Subscription<D>) -> bool
+fn store_subscription<D, P>(context: &P, key: usize, subscription: DisposeOnDrop<D>) -> bool
 where
     D: Disposable,
     P: MutableHelper<Value = AmbState<D>>,

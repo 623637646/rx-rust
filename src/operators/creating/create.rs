@@ -5,8 +5,8 @@ use crate::observer::emitter::Emitter;
 use crate::thread_mode::{Local, Shared, ThreadMode};
 use crate::utils::MarkerType;
 use crate::{
-    disposable::Disposable,
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
     observer::{
         Observer,
         boxed_observer::{BoxedObserver, SendBoxedObserver},
@@ -19,12 +19,13 @@ use std::marker::PhantomData;
 /// See <https://reactivex.io/documentation/operators/create.html>
 ///
 /// The builder is called with the observer at each subscription, emits to it, and returns the
-/// subscription that stops what it started (`Subscription::default()` when it is done on return).
+/// subscription that stops what it started (`DisposeOnDrop::default()` when it is done on return).
 ///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::{ObservableExt, Subscription},
+///     disposable::dispose_on_drop::DisposeOnDrop,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::creating::create::Create,
 /// };
@@ -35,7 +36,7 @@ use std::marker::PhantomData;
 ///     if emitter.on_next(42).is_continue() {
 ///         emitter.on_termination(Termination::<()>::Completed);
 ///     }
-///     Subscription::default()
+///     DisposeOnDrop::default()
 /// })
 /// .map(|value| value + 1)
 /// .subscribe_with_callback(|value| values.push(value), |_| {});
@@ -61,7 +62,8 @@ use std::marker::PhantomData;
 ///
 /// ```rust
 /// use rx_rust::{
-///     observable::{ObservableExt, Subscription},
+///     disposable::dispose_on_drop::DisposeOnDrop,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination, boxed_observer::BoxedObserver},
 ///     operators::creating::create::Create,
 ///     thread_mode::Local,
@@ -71,7 +73,7 @@ use std::marker::PhantomData;
 ///     i32,
 ///     (),
 ///     (),
-///     impl FnOnce(BoxedObserver<'a, i32, ()>) -> Subscription<()> + Clone,
+///     impl FnOnce(BoxedObserver<'a, i32, ()>) -> DisposeOnDrop<()> + Clone,
 ///     Local,
 ///     true,
 /// > {
@@ -79,7 +81,7 @@ use std::marker::PhantomData;
 ///         if observer.on_next(1).is_continue() {
 ///             observer.on_termination(Termination::Completed);
 ///         }
-///         Subscription::default()
+///         DisposeOnDrop::default()
 ///     })
 /// }
 ///
@@ -93,7 +95,8 @@ use std::marker::PhantomData;
 ///
 /// ```compile_fail
 /// use rx_rust::{
-///     observable::{ObservableExt, Subscription},
+///     disposable::dispose_on_drop::DisposeOnDrop,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::creating::create::Create,
 /// };
@@ -101,7 +104,7 @@ use std::marker::PhantomData;
 /// let source = Create::local(|mut emitter| {
 ///     let _ = emitter.on_next(1);
 ///     emitter.on_termination(Termination::<()>::Completed);
-///     Subscription::default()
+///     DisposeOnDrop::default()
 /// });
 /// source.clone().map(|value: i32| value + 1).subscribe_with_callback(|_| {}, |_| {});
 /// source.subscribe_with_callback(|_| {}, |_| {}); // A different observer type.
@@ -111,7 +114,8 @@ use std::marker::PhantomData;
 ///
 /// ```rust
 /// use rx_rust::{
-///     observable::{ObservableExt, Subscription},
+///     disposable::dispose_on_drop::DisposeOnDrop,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::creating::create::Create,
 /// };
@@ -119,7 +123,7 @@ use std::marker::PhantomData;
 /// let source = Create::local_boxed(|mut observer| {
 ///     let _ = observer.on_next(1);
 ///     observer.on_termination(Termination::<()>::Completed);
-///     Subscription::default()
+///     DisposeOnDrop::default()
 /// });
 /// source.clone().map(|value: i32| value + 1).subscribe_with_callback(|_| {}, |_| {});
 /// source.subscribe_with_callback(|_| {}, |_| {}); // A different observer type.
@@ -137,7 +141,8 @@ use std::marker::PhantomData;
 ///
 /// ```compile_fail
 /// use rx_rust::{
-///     observable::{ObservableExt, Subscription},
+///     disposable::dispose_on_drop::DisposeOnDrop,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::creating::create::Create,
 /// };
@@ -150,14 +155,15 @@ use std::marker::PhantomData;
 ///     })
 ///     .join()
 ///     .unwrap();
-///     Subscription::default()
+///     DisposeOnDrop::default()
 /// })
 /// .subscribe_with_callback(|_: i32| {}, |_| {});
 /// ```
 ///
 /// ```rust
 /// use rx_rust::{
-///     observable::{ObservableExt, Subscription},
+///     disposable::dispose_on_drop::DisposeOnDrop,
+///     observable::ObservableExt,
 ///     observer::{Observer, Termination},
 ///     operators::creating::create::Create,
 /// };
@@ -170,7 +176,7 @@ use std::marker::PhantomData;
 ///     })
 ///     .join()
 ///     .unwrap();
-///     Subscription::default()
+///     DisposeOnDrop::default()
 /// })
 /// .subscribe_with_callback(|_: i32| {}, |_| {});
 /// ```
@@ -200,13 +206,13 @@ impl<T, E, D, F> Create<T, E, D, F, Local> {
     /// [`local_boxed`](Create::local_boxed).
     ///
     /// The builder returns the subscription that stops what it started; one that is done when it
-    /// returns gives back `Subscription::default()`. A `Subscription` rather than a closure makes
+    /// returns gives back `DisposeOnDrop::default()`. A `DisposeOnDrop` rather than a closure makes
     /// it easy to wrap another observable. `OR` is not stored: it only gives the builder its
     /// expected signature where the `Create` is made.
     pub fn local<OR: Observer<T, E>>(builder: F) -> Self
     where
         D: Disposable,
-        F: FnOnce(Emitter<OR, Local>) -> Subscription<D>,
+        F: FnOnce(Emitter<OR, Local>) -> DisposeOnDrop<D>,
     {
         Self::with_builder(builder)
     }
@@ -216,7 +222,7 @@ impl<T, E, D, F> Create<T, E, D, F, Local> {
     pub fn local_boxed<'a>(builder: F) -> Create<T, E, D, F, Local, true>
     where
         D: Disposable,
-        F: FnOnce(BoxedObserver<'a, T, E>) -> Subscription<D>,
+        F: FnOnce(BoxedObserver<'a, T, E>) -> DisposeOnDrop<D>,
     {
         Create::with_builder(builder)
     }
@@ -228,7 +234,7 @@ impl<T, E, D, F> Create<T, E, D, F, Shared> {
     pub fn shared<OR: Observer<T, E>>(builder: F) -> Self
     where
         D: Disposable,
-        F: FnOnce(Emitter<OR, Shared>) -> Subscription<D>,
+        F: FnOnce(Emitter<OR, Shared>) -> DisposeOnDrop<D>,
     {
         Self::with_builder(builder)
     }
@@ -239,7 +245,7 @@ impl<T, E, D, F> Create<T, E, D, F, Shared> {
     pub fn shared_boxed<'a>(builder: F) -> Create<T, E, D, F, Shared, true>
     where
         D: Disposable,
-        F: FnOnce(SendBoxedObserver<'a, T, E>) -> Subscription<D>,
+        F: FnOnce(SendBoxedObserver<'a, T, E>) -> DisposeOnDrop<D>,
     {
         Create::with_builder(builder)
     }
@@ -269,9 +275,9 @@ where
     D: Disposable,
     M: ThreadMode,
     OR: Observer<T, E>,
-    F: FnOnce(Emitter<OR, M>) -> Subscription<D>,
+    F: FnOnce(Emitter<OR, M>) -> DisposeOnDrop<D>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         (self.builder)(Emitter::new(observer))
     }
 }
@@ -281,9 +287,9 @@ where
     D: Disposable,
     M: ObserverMode,
     OR: IntoBoxedObserver<'a, T, E, M>,
-    F: FnOnce(M::BoxedObserver<'a, T, E>) -> Subscription<D>,
+    F: FnOnce(M::BoxedObserver<'a, T, E>) -> DisposeOnDrop<D>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         (self.builder)(M::boxed(observer))
     }
 }

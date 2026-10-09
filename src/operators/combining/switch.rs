@@ -11,7 +11,8 @@ use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::MarkerType,
@@ -129,7 +130,7 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
             slot: SubscriptionSlot::Idle,
             is_source_completed: false,
@@ -143,7 +144,7 @@ where
 }
 
 struct Model<D: Disposable> {
-    slot: SubscriptionSlot<Subscription<D>>,
+    slot: SubscriptionSlot<DisposeOnDrop<D>>,
     is_source_completed: bool,
     /// The current inner subscription is always the one subscribed last, so the id it was handed
     /// is [`IdGenerator::latest`]. An inner observer whose id is no longer the latest was

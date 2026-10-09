@@ -7,14 +7,15 @@
 //! every poll, and [`release`](LazySubscription::release)s the source as soon as it has its answer.
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::Observer,
 };
 
 /// Where a future or stream adapter stands with its source: the source it has not subscribed to
 /// yet, the subscription it holds, or nothing once it has released it.
 ///
-/// The subscription is the parameter `S`, always `Subscription<OE::Disposal>`, rather than spelled in
+/// The subscription is the parameter `S`, always `DisposeOnDrop<OE::Disposal>`, rather than spelled in
 /// the variant: there, the drop check asks the disposal type to outlive the adapter before
 /// normalizing it, so the projection `OE::Disposal` drags along every borrow of the source, and an
 /// adapter over a source that borrows a local would hold that borrow until the adapter is
@@ -28,7 +29,7 @@ pub enum LazySubscription<OE, S> {
     Released,
 }
 
-impl<OE> LazySubscription<OE, Subscription<OE::Disposal>>
+impl<OE> LazySubscription<OE, DisposeOnDrop<OE::Disposal>>
 where
     OE: ObservableTypes,
 {

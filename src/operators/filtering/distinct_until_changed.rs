@@ -3,7 +3,7 @@
 //! [`ObservableExt::distinct_until_changed_with_key_selector`](crate::observable::ObservableExt::distinct_until_changed_with_key_selector).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -93,7 +93,7 @@ where
     F: FnMut(&T) -> K,
     K: Eq,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = DistinctUntilChangedObserver {
             observer,
             key_selector: self.key_selector,

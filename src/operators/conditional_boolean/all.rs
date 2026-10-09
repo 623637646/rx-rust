@@ -1,6 +1,6 @@
 //! The [`All`] operator, behind [`ObservableExt::all`](crate::observable::ObservableExt::all).
 
-use crate::observable::Subscription;
+use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::utils::MarkerType;
 use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::{
@@ -92,7 +92,7 @@ where
         >,
     F: FnMut(T) -> bool,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let observer = AllObserver {
                 observer: Some(observer),

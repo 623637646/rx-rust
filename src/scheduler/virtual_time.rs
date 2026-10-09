@@ -54,8 +54,7 @@
 //! that calls `advance_by`. Advancing from two threads at once, or from inside a task, panics.
 
 use crate::{
-    disposable::Disposable,
-    observable::Subscription,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     scheduler::{Scheduler, SchedulerTypes, Task, TaskState},
     thread_mode::{Shared, mutable::MutableHelper},
     utils::id_generator::{Id, IdGenerator},
@@ -429,7 +428,11 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         let (mut stepper, pinned) = task.split();
         let mut pinned: Pin<Box<P>> = Box::pin(pinned);
         let job: Job = Box::new(move |cx, now| stepper.step(pinned.as_mut(), cx, now));
@@ -441,7 +444,7 @@ where
             state.push(id, job, due, 0);
             id
         });
-        Subscription::new(VirtualTimeDisposal {
+        DisposeOnDrop::new(VirtualTimeDisposal {
             state: self.state.clone(),
             id,
         })

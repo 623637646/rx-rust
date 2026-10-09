@@ -7,9 +7,9 @@
 use super::ref_count::RefCount;
 use crate::disposable::Disposable;
 use crate::observable::ObservableTypes;
-use crate::observable::{Observable, Subscription};
 use crate::observer::Observer;
 use crate::subject::SubjectObservable;
+use crate::{disposable::dispose_on_drop::DisposeOnDrop, observable::Observable};
 use educe::Educe;
 
 /// Marker for a connectable controller that is not connected to its source.
@@ -19,7 +19,7 @@ pub struct Disconnected;
 /// State carried by a connected controller. Dropping it disconnects the source.
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct Connected<D: Disposable>(Subscription<D>);
+pub struct Connected<D: Disposable>(DisposeOnDrop<D>);
 
 /// Multicasts a source `Observable` through a `Subject`, but waits until its
 /// [`connect`](ConnectableController::connect) method is called before subscribing to the source

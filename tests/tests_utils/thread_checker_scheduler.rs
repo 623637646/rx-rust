@@ -5,7 +5,7 @@ use futures::future::{BoxFuture, abortable};
 use futures::stream::AbortHandle;
 use futures::task::LocalSpawnExt;
 use rx_rust::disposable::Disposable;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::scheduler::{Scheduler, SchedulerTypes, Task, drive};
 use rx_rust::thread_mode::Shared;
 use std::cell::Cell;
@@ -112,7 +112,11 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         let future = drive(task, delay, self.clone(), |duration| async move {
             async_io::Timer::after(duration).await;
         });
@@ -120,6 +124,6 @@ where
         self.send(Command::Spawn(Box::pin(async move {
             let _ = abortable.await;
         })));
-        Subscription::new(ThreadCheckerDisposal(abort_handle))
+        DisposeOnDrop::new(ThreadCheckerDisposal(abort_handle))
     }
 }

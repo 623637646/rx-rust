@@ -46,8 +46,9 @@ use educe::Educe;
 
 /// The one inner subscription an operator holds at a time.
 ///
-/// `D` is the value being held — a [`Subscription`](crate::observable::Subscription) in every
-/// current use, which disposes when dropped.
+/// `D` is the value being held — a
+/// [`DisposeOnDrop`](crate::disposable::dispose_on_drop::DisposeOnDrop) in every current use, which
+/// disposes when dropped.
 #[derive(Educe)]
 #[educe(Debug)]
 pub enum SubscriptionSlot<D> {

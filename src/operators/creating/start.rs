@@ -4,7 +4,8 @@ use crate::operators::creating::defer::Defer;
 use crate::operators::creating::just::Just;
 use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::Observer,
 };
 use educe::Educe;
@@ -61,7 +62,7 @@ where
     OR: Observer<T, Infallible>,
     F: FnOnce() -> T,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         Defer::new(|| Just::new(self.0())).subscribe(observer)
     }
 }

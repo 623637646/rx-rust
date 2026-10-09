@@ -7,8 +7,8 @@ use crate::observer::boxed_observer::ObserverMode;
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::MarkerType;
 use crate::{
-    disposable::Disposable,
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
     observer::{EventBatch, Flow, Observer, Termination},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
     utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
@@ -186,7 +186,7 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = DelegateObserver {
             outer_observer: observer,
             sender: None,
@@ -200,7 +200,7 @@ where
             let _ = context.send_next(DelegateAction::EmitWindow);
             let boundary_subscription = self.boundary.subscribe(BoundaryObserver(context.clone()));
             let source_subscription = self.source.subscribe(SourceObserver(context));
-            boundary_subscription.preceded_by_bound(source_subscription)
+            boundary_subscription.preceded_by_wrapped(source_subscription)
         })
         .map_into()
     }

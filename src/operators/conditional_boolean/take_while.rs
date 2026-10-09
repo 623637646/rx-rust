@@ -5,7 +5,8 @@ use crate::utils::subscribe_with_auto_dispose_on_termination;
 use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -84,7 +85,7 @@ where
         >,
     F: FnMut(&T) -> bool,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             let observer = TakeWhileObserver {
                 observer: Some(observer),

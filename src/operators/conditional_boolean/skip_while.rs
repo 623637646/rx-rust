@@ -2,7 +2,8 @@
 //! [`ObservableExt::skip_while`](crate::observable::ObservableExt::skip_while).
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -70,7 +71,7 @@ where
     OE: Observable<SkipWhileObserver<OR, F>, Item = T, Error = E>,
     F: FnMut(&T) -> bool,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = SkipWhileObserver {
             observer,
             callback: self.callback,

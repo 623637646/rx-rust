@@ -3,8 +3,7 @@ mod tests_utils;
 use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
-    disposable::callback_disposal::CallbackDisposal,
-    observable::Subscription,
+    disposable::{callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observer::{Flow, Observer, Termination},
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
@@ -34,7 +33,7 @@ fn test_completed() {
         HookOnTerminationObserver(|| {}),
         |observer| {
             observer_slot = Some(observer);
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 is_disposed_of_source.write(true);
             }))
         },
@@ -68,7 +67,7 @@ fn test_panicking_on_termination_disposes_the_source() {
         }),
         |observer| {
             observer_slot = Some(observer);
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 is_disposed_of_source.write(true);
             }))
         },

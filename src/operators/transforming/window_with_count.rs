@@ -6,7 +6,7 @@ use crate::disposable::{Disposable, DisposableExt, option_disposal::OptionDispos
 use crate::observer::boxed_observer::ObserverMode;
 use crate::utils::MarkerType;
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
@@ -110,7 +110,7 @@ impl<OE> WindowWithCount<'_, OE> {
 
 delegate_disposal!(
     Disposal<D>,
-    OptionDisposal<Subscription<D>>,
+    OptionDisposal<DisposeOnDrop<D>>,
     where D: Disposable
 );
 
@@ -137,11 +137,11 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let (sender, window) = unicast_subject::new_boxed();
         if observer.on_next(window).is_stop() {
             // The first window ended the stream, so the source is never subscribed to.
-            return OptionDisposal::none().into_subscription();
+            return OptionDisposal::none().into_dispose_on_drop();
         }
 
         let observer = WindowWithCountObserver {
@@ -153,7 +153,7 @@ where
         self.source
             .subscribe(observer)
             .into_option()
-            .into_subscription()
+            .into_dispose_on_drop()
     }
 }
 

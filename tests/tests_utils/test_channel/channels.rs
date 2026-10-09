@@ -11,9 +11,9 @@ use educe::Educe;
 use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
-    observable::{Observable, ObservableTypes, Subscription},
-    observer::boxed_observer::IntoBoxedObserver,
-    observer::{Flow, Observer, Termination},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
+    observer::{Flow, Observer, Termination, boxed_observer::IntoBoxedObserver},
 };
 use std::sync::{Arc, Mutex};
 
@@ -106,7 +106,7 @@ impl<'or, T, E, OR> Observable<OR> for ChannelsObservable<'or, T, E>
 where
     OR: IntoBoxedObserver<'or, T, E, Shared>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let channel = new_channel();
         // Registered before the subscription, so that a value sent from inside it already finds
         // the channel.

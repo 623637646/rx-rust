@@ -8,8 +8,8 @@
 use super::Subject;
 use crate::delegate_disposal;
 use crate::disposable::DisposableExt;
+use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::disposable::option_disposal::OptionDisposal;
-use crate::observable::Subscription;
 use crate::observer::EventBatch;
 use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
 use crate::thread_mode::{Local, Shared};
@@ -99,7 +99,7 @@ where
     T: Clone,
     E: Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         match self
             .0
             .subscribe_with(observer, |last, terminated| match terminated {
@@ -115,7 +115,7 @@ where
             Some(disposal) => OptionDisposal::some(disposal),
             None => OptionDisposal::none(),
         }
-        .into_subscription()
+        .into_dispose_on_drop()
     }
 }
 

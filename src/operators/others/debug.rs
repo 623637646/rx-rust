@@ -4,8 +4,8 @@
 
 use crate::utils::MarkerType;
 use crate::{
-    disposable::Disposable,
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -96,7 +96,7 @@ impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
                 DebugEvent::OnTermination(termination) => {
                     println!("[{}]: OnTermination({:?})", label, termination)
                 }
-                DebugEvent::Subscribed => println!("[{}]: Subscription", label),
+                DebugEvent::Subscribed => println!("[{}]: DisposeOnDrop", label),
                 DebugEvent::Disposed => println!("[{}]: Dispose", label),
             },
         }
@@ -122,7 +122,7 @@ where
     C: Clone,
     F: Fn(C, DebugEvent<'_, T, E>) + Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         (self.callback)(self.context.clone(), DebugEvent::Subscribed);
         let observer = DebugObserver {
             observer,
@@ -130,7 +130,7 @@ where
             callback: self.callback.clone(),
         };
         let source_disposal = self.source.subscribe(observer);
-        Subscription::new(Disposal {
+        DisposeOnDrop::new(Disposal {
             source_disposal,
             context: self.context,
             callback: self.callback,
@@ -142,7 +142,7 @@ where
 /// The disposal of a [`struct@Debug`] subscription: disposes the source, then reports
 /// [`DebugEvent::Disposed`].
 pub struct Disposal<D: Disposable, C, F, T, E> {
-    source_disposal: Subscription<D>,
+    source_disposal: DisposeOnDrop<D>,
     context: C,
     callback: F,
     _marker: MarkerType<(T, E)>,

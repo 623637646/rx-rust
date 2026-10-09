@@ -3,7 +3,8 @@
 use crate::operators::creating::from_iter::FromIter;
 use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::Observer,
 };
 use educe::Educe;
@@ -63,7 +64,7 @@ where
     OR: Observer<T, Infallible>,
     T: Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
     }
 }

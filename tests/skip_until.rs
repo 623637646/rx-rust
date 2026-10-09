@@ -7,7 +7,7 @@ use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
@@ -384,7 +384,7 @@ fn test_mut_ref() {
         assert!(observer.on_next(&mut value_1).is_continue());
         assert!(observer.on_next(&mut value_2).is_continue());
         assert!(observer.on_next(&mut value_3).is_continue());
-        Subscription::default()
+        DisposeOnDrop::default()
     });
 
     let start_subject = BehaviorSubject::shared(());
@@ -780,7 +780,7 @@ fn test_next_on_unsub() {
     // The source emits from inside its own disposal, so the value arrives while downstream is
     // unsubscribing. It must be dropped instead of reaching the observer.
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
             assert!(observer.on_next(111).is_stop());
         }))
@@ -807,7 +807,7 @@ fn test_complete_on_unsub() {
     // The source completes from inside its own disposal, so it terminates while downstream is
     // unsubscribing. The termination must be dropped instead of reaching the observer.
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Completed);
         }))
     });
@@ -833,7 +833,7 @@ fn test_error_on_unsub() {
     // The source fails from inside its own disposal, so it terminates while downstream is
     // unsubscribing. The error must be dropped instead of reaching the observer.
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Error("error"));
         }))
     });
@@ -866,13 +866,13 @@ fn test_lifetime_sub() {
     {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(111).is_continue());
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker_1.consume_ref();
             }))
         });
         let start_subject = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(()).is_continue());
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker_2.consume_ref();
             }))
         });
@@ -898,11 +898,11 @@ fn test_lifetime_or() {
     {
         let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let start_subject = Create::shared_boxed(|observer: SendBoxedObserver<'_, (), _>| {
             life_marker_2 = Some(observer);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let observable = observable.skip_until(start_subject);
 
@@ -926,7 +926,7 @@ fn test_lifetime_or_sub() {
         let observable =
             Create::shared_boxed(|observer: SendBoxedObserver<'_, &TestStruct, Infallible>| {
                 life_marker_or = Some(observer);
-                Subscription::new(CallbackDisposal::new(|| {
+                DisposeOnDrop::new(CallbackDisposal::new(|| {
                     life_marker_sub.consume_ref();
                 }))
             });
@@ -943,10 +943,10 @@ fn test_clone() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let start_subject =
-        Create::shared_boxed(|_: SendBoxedObserver<'_, (), _>| Subscription::default());
+        Create::shared_boxed(|_: SendBoxedObserver<'_, (), _>| DisposeOnDrop::default());
     let observable = observable.skip_until(start_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }

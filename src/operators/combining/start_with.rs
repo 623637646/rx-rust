@@ -4,7 +4,8 @@
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, DisposableExt, option_disposal::OptionDisposal};
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::Observer,
 };
 use educe::Educe;
@@ -57,7 +58,7 @@ impl<OE, I> StartWith<OE, I> {
 
 delegate_disposal!(
     Disposal<D>,
-    OptionDisposal<Subscription<D>>,
+    OptionDisposal<DisposeOnDrop<D>>,
     where D: Disposable
 );
 
@@ -78,17 +79,17 @@ where
     OE: Observable<OR, Item = T, Error = E>,
     I: IntoIterator<Item = T>,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
         for value in self.values.into_iter() {
             if observer.on_next(value).is_stop() {
                 // The prepended values ended the stream, so the source is never subscribed to and
                 // there is nothing to dispose of.
-                return OptionDisposal::none().into_subscription();
+                return OptionDisposal::none().into_dispose_on_drop();
             }
         }
         self.source
             .subscribe(observer)
             .into_option()
-            .into_subscription()
+            .into_dispose_on_drop()
     }
 }

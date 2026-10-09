@@ -3,8 +3,11 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal},
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::{
+        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+        shared_disposal::SharedDisposal,
+    },
+    observable::{Observable, ObservableTypes},
     observer::Observer,
     scheduler::{OnceContext, Scheduler, SchedulerTypes, Task},
     thread_mode::{Joined, ThreadMode},
@@ -124,7 +127,7 @@ impl<OE, S> SubscribeOn<OE, S> {
 
 delegate_disposal!(
     Disposal<M, SD, D>,
-    ChainDisposal<SD, SharedDisposal<M, Subscription<D>>>,
+    ChainDisposal<SD, SharedDisposal<M, DisposeOnDrop<D>>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -138,7 +141,7 @@ type SubscribeOnMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as Schedu
 
 /// The slot the task puts the source's subscription into once it has subscribed.
 type UpstreamSlot<OE, S> =
-    SharedDisposal<SubscribeOnMode<OE, S>, Subscription<<OE as ObservableTypes>::Disposal>>;
+    SharedDisposal<SubscribeOnMode<OE, S>, DisposeOnDrop<<OE as ObservableTypes>::Disposal>>;
 
 /// The task of a [`SubscribeOn`]: the source, the observer, and where to put the subscription.
 type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;
@@ -161,7 +164,7 @@ where
     OE: Observable<OR, Item = T, Error = E>,
     S: Scheduler<SubscribeOnTask<OE, OR, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // The subscription happens later, and the disposal may come first: the slot then hands
         // the subscription back to be disposed at once.
         let upstream_slot = UpstreamSlot::<OE, S>::default();

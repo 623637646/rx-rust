@@ -3,10 +3,10 @@
 //! [`ObservableExt::into_try_stream_with`](crate::observable::ObservableExt::into_try_stream_with).
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    thread_mode::mutable::MutableHelper,
-    thread_mode::{Shared, ThreadMode},
+    thread_mode::{Shared, ThreadMode, mutable::MutableHelper},
     utils::lazy_subscription::LazySubscription,
 };
 use educe::Educe;
@@ -67,7 +67,7 @@ where
     OE: ObservableTypes<Item = T, Error = E>,
 {
     #[educe(Debug(ignore))]
-    subscription: LazySubscription<OE, Subscription<OE::Disposal>>,
+    subscription: LazySubscription<OE, DisposeOnDrop<OE::Disposal>>,
     /// Always behind the thread-safe pointer, whatever the source's mode: every synchronous source
     /// is `Local`, and many of them are `Send`, so a pointer picked from the mode would make the
     /// stream over them `!Send` and keep it out of a multi-threaded executor. A source that really

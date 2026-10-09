@@ -8,7 +8,7 @@ use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::conditional_boolean::take_while::TakeWhile;
 use rx_rust::operators::creating::create::Create;
@@ -176,7 +176,7 @@ fn test_mut_ref() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(&mut value).is_continue());
         observer.on_termination(Termination::Error(&mut error));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (checker, observer) = Checker::new();
 
@@ -376,7 +376,7 @@ fn test_lifetime_sub() {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
@@ -401,7 +401,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let observable = observable.take_while(|_| true);
 
@@ -425,7 +425,7 @@ fn test_lifetime_or_sub() {
         let observable =
             Create::shared_boxed(|observer: SendBoxedObserver<'_, &TestStruct, Infallible>| {
                 life_marker_or = Some(observer);
-                Subscription::new(CallbackDisposal::new(|| {
+                DisposeOnDrop::new(CallbackDisposal::new(|| {
                     life_marker_sub.consume_ref();
                 }))
             });
@@ -454,7 +454,7 @@ fn test_clone() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let observable = observable.take_while(|_| true);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

@@ -4,8 +4,8 @@
 use crate::delegate_disposal;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
-    disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
     observer::{Event, EventBatch, Flow, Observer, Termination},
     scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState},
     thread_mode::{Joined, ThreadMode},
@@ -159,7 +159,7 @@ where
         ObserveOnTask<ObserveOnContextMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
     >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model::<T, E, S::Disposal> {
             values: Vec::new(),
             termination: None,
@@ -182,7 +182,7 @@ struct Model<T, E, D: Disposable> {
     /// Keeps at most one recursive scheduler task alive while events are waiting. The slot is
     /// reserved while the task is being scheduled, which covers schedulers that can execute it
     /// before returning its disposal.
-    task: SubscriptionSlot<BoundDropDisposal<D>>,
+    task: SubscriptionSlot<DisposeOnDrop<D>>,
 }
 
 pub struct ObserveOnObserver<M, T, E, OR, S, D>

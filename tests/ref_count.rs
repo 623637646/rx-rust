@@ -8,7 +8,7 @@ use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::connectable::ref_count::RefCount;
 use rx_rust::operators::creating::create::Create;
@@ -252,7 +252,7 @@ fn test_last_unsubscribe_removes_subject_observer_before_disconnecting_source() 
     let source_disconnected_cloned = source_disconnected.clone();
     let source = Create::shared_boxed(move |_: SendBoxedObserver<'_, (), Infallible>| {
         let source_disconnected = source_disconnected_cloned.clone();
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             source_disconnected.write(true);
         }))
     });
@@ -1419,7 +1419,7 @@ fn test_next_on_unsub() {
     // subscription is being disposed, which disconnects the connectable observable. It must be
     // dropped instead of reaching the observer.
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             let mut observer = observer;
             assert!(observer.on_next(111).is_continue());
         }))
@@ -1444,7 +1444,7 @@ fn test_complete_on_unsub() {
     // subscription is being disposed, which disconnects the connectable observable. The
     // termination must be dropped instead of reaching the observer.
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Completed);
         }))
     });
@@ -1468,7 +1468,7 @@ fn test_error_on_unsub() {
     // is being disposed, which disconnects the connectable observable. The error must be dropped
     // instead of reaching the observer.
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Error("error"));
         }))
     });
@@ -1666,7 +1666,7 @@ fn test_lifetime_sub() {
     {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(111).is_continue());
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
@@ -1690,7 +1690,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::shared_boxed(|observer| {
             life_marker.replace_value(Some(Some(observer)));
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let observable = observable.publish().ref_count();
 
@@ -1716,7 +1716,7 @@ fn test_lifetime_or_sub() {
 
         let observable =
             Create::shared_boxed(|_: SendBoxedObserver<'_, &TestStruct, Infallible>| {
-                Subscription::default()
+                DisposeOnDrop::default()
             });
         let observable = observable.publish().ref_count();
         _subscription = observable.subscribe(observer);
@@ -1728,7 +1728,7 @@ fn test_clone() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let observable = observable.publish().ref_count();
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
@@ -1777,7 +1777,7 @@ fn test_panicking_late_subscriber_keeps_the_ref_count() {
     let source = Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
         observer.on_termination(Termination::Completed);
         let is_disconnected = is_disconnected_of_source.clone();
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             is_disconnected.write(true);
         }))
     });

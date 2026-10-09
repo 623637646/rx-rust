@@ -16,8 +16,7 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
 use rx_rust::{
-    disposable::Disposable,
-    observable::Subscription,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::{creating::never::Never, utility::observe_on::ObserveOn},
@@ -1472,7 +1471,7 @@ fn test_next_on_unsub() {
         // unsubscribing. It must be dropped instead of reaching the observer.
         let observable =
             Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-                Subscription::new(CallbackDisposal::new(move || {
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
                     let mut observer = observer;
                     assert!(observer.on_next(111).is_stop());
                 }))
@@ -1500,7 +1499,7 @@ fn test_complete_on_unsub() {
         // unsubscribing. The termination must be dropped instead of reaching the observer.
         let observable =
             Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-                Subscription::new(CallbackDisposal::new(move || {
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
                     observer.on_termination(Termination::Completed);
                 }))
             });
@@ -1526,7 +1525,7 @@ fn test_error_on_unsub() {
         // The source fails from inside its own disposal, so it terminates while downstream is
         // unsubscribing. The error must be dropped instead of reaching the observer.
         let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 observer.on_termination(Termination::Error("error"));
             }))
         });
@@ -1591,7 +1590,7 @@ fn test_race_condition_unsub_on_next_by_take() {
         let observable =
             Create::shared_boxed(|observer: SendBoxedObserver<'_, usize, Infallible>| {
                 sender = Some(observer);
-                Subscription::new(CallbackDisposal::new(move || disposed.send(()).unwrap()))
+                DisposeOnDrop::new(CallbackDisposal::new(move || disposed.send(()).unwrap()))
             });
         let (checker, observer) = Checker::new();
         let (terminated, termination) = mpsc::channel();
@@ -1776,7 +1775,7 @@ fn test_clone() {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(TestStruct).is_continue());
             observer.on_termination(Termination::Error(TestStruct));
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let observable = observable.observe_on(ThreadCheckerScheduler::new("thread_1"));
         _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

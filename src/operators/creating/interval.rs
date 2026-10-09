@@ -1,7 +1,8 @@
 //! The [`Interval`] source.
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::Observer,
     scheduler::{PeriodicContext, Scheduler, SchedulerTypes, Task},
 };
@@ -109,7 +110,7 @@ where
     OR: Observer<usize, Infallible>,
     S: Scheduler<PeriodicContext<OR>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let task = Task::periodic(
             observer,
             // The answer is what keeps the schedule running, so an observer that stopped ends it:

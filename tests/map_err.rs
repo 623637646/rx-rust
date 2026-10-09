@@ -4,7 +4,8 @@ use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::{checker::Checker, checker::State, test_struct::TestStruct};
 use rx_rust::operators::creating::create::Create;
 use rx_rust::{
-    observable::{Observable, ObservableExt, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::error_handling::map_err::MapErr,
 };
@@ -90,7 +91,7 @@ fn test_clone() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let observable = observable.map_err(|_| String::new());
 

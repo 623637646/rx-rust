@@ -1,7 +1,7 @@
 //! The [`Skip`] operator, behind [`ObservableExt::skip`](crate::observable::ObservableExt::skip).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -63,7 +63,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<SkipObserver<OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.source.subscribe(SkipObserver {
             observer,
             count: self.count,

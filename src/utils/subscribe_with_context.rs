@@ -16,15 +16,15 @@
 //! which disposes its source:
 //! ```rust
 //! use rx_rust::{
-//!     observable::{Observable, ObservableExt, ObservableTypes, Subscription},
+//!     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+//!     observable::{Observable, ObservableExt, ObservableTypes},
 //!     observer::{Flow, Observer, Termination},
 //!     operators::creating::range::Range,
 //!     thread_mode::ThreadMode,
 //!     utils::{
 //!         serialized_delivery::UpdateOutcome,
-//!         subscribe_with_context::{self, subscribe_with_context, SubscriptionContext},
+//!         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
 //!     },
-//!     disposable::Disposable,
 //! };
 //!
 //! struct TotalUntil<OE> { source: OE, limit: i32 }
@@ -54,7 +54,7 @@
 //!             Error = E,
 //!         >,
 //! {
-//!     fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+//!     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
 //!         let limit = self.limit;
 //!         subscribe_with_context(observer, 0, |context| {
 //!             self.source.subscribe(TotalObserver { context, limit })
@@ -94,8 +94,7 @@
 
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
-    disposable::{Disposable, DisposableExt},
-    observable::Subscription,
+    disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
     observer::{EventBatch, Flow, Observer, Termination},
     thread_mode::ThreadMode,
     utils::{
@@ -143,12 +142,12 @@ pub fn subscribe_with_context<M, T, E, OR, D, MD, F>(
     observer: OR,
     model: MD,
     builder: F,
-) -> Subscription<Disposal<M, T, E, MD, D>>
+) -> DisposeOnDrop<Disposal<M, T, E, MD, D>>
 where
     M: ThreadMode,
     OR: Observer<T, E>,
     D: Disposable,
-    F: FnOnce(SubscriptionContext<M, T, E, OR, MD, D>) -> Subscription<D>,
+    F: FnOnce(SubscriptionContext<M, T, E, OR, MD, D>) -> DisposeOnDrop<D>,
 {
     debug_assert_observer_compatibility::<OR>();
     let context = SubscriptionContext::<M, T, E, OR, MD, D>::new(observer, model);
@@ -162,7 +161,7 @@ where
         resources.source_subscription = Some(subscription);
         UpdateOutcome::new(())
     });
-    disposal.into_subscription()
+    disposal.into_dispose_on_drop()
 }
 
 /// What a context owns besides its observer and its queued events.
@@ -173,7 +172,7 @@ where
 struct ContextResources<MD, D: Disposable> {
     model: MD,
     /// `None` while the builder is still running.
-    source_subscription: Option<Subscription<D>>,
+    source_subscription: Option<DisposeOnDrop<D>>,
 }
 
 type ContextDelivery<M, T, E, OR, MD, D> = SerializedDelivery<M, T, E, OR, ContextResources<MD, D>>;

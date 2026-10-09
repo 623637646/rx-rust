@@ -3,10 +3,12 @@ use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
-    disposable::Disposable,
-    observable::{Observable, ObservableTypes, Subscription},
-    observer::boxed_observer::{IntoBoxedObserver, ObserverMode},
-    observer::{EventBatch, Flow, Observer, Termination},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
+    observer::{
+        EventBatch, Flow, Observer, Termination,
+        boxed_observer::{IntoBoxedObserver, ObserverMode},
+    },
     utils::serialized_delivery::SerializedDelivery,
 };
 use std::mem;
@@ -187,7 +189,7 @@ impl<'or, T, E, OR> Observable<OR> for ReceiverObservable<'or, T, E>
 where
     OR: IntoBoxedObserver<'or, T, E, Shared>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         // Kept out of the closure below, so that a refused subscription drops the observer outside
         // the lock, while the assertion unwinds.
         let mut observer = Some(Shared::boxed(observer));
@@ -208,7 +210,7 @@ where
         // Panic outside the lock, which leaves it usable.
         assert!(initialized, "the channel is subscribed to only once");
 
-        Subscription::new(ReceiverObservableDisposal {
+        DisposeOnDrop::new(ReceiverObservableDisposal {
             channel: self.channel,
         })
     }

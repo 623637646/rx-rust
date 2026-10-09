@@ -2,10 +2,10 @@
 //! [`ObservableExt::retry`](crate::observable::ObservableExt::retry).
 
 use crate::delegate_disposal;
+use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::disposable::{
     Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
 };
-use crate::observable::Subscription;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::resubscribe::Resubscribe;
@@ -74,7 +74,7 @@ impl<OE, F> Retry<OE, F> {
 
 delegate_disposal!(
     Disposal<M, D, D1>,
-    ChainDisposal<SharedDisposal<M, Subscription<D1>>, D>,
+    ChainDisposal<SharedDisposal<M, DisposeOnDrop<D1>>, D>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -115,7 +115,7 @@ where
         >,
     F: FnMut(E) -> RetryAction<E, OE1>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let shared_disposal = SharedDisposal::default();
         let observer = RetryObserver {
             observer,
@@ -133,7 +133,7 @@ where
 pub struct RetryObserver<M: ThreadMode, OR, F, OE1: ObservableTypes> {
     observer: OR,
     callback: F,
-    shared_disposal: SharedDisposal<M, Subscription<OE1::Disposal>>,
+    shared_disposal: SharedDisposal<M, DisposeOnDrop<OE1::Disposal>>,
     /// Subscribes the observable the callback returned, with this observer.
     resubscribe: Resubscribe<OE1, Self>,
 }

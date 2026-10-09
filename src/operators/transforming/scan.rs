@@ -1,7 +1,7 @@
 //! The [`Scan`] operator, behind [`ObservableExt::scan`](crate::observable::ObservableExt::scan).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::MarkerType,
@@ -81,7 +81,7 @@ where
     OE: Observable<ScanObserver<T, OR, F>, Item = T1, Error = E>,
     F: FnMut(T, T1) -> T,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = ScanObserver {
             observer,
             value: Some(self.initial_value),

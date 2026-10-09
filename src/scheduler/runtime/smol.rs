@@ -2,8 +2,7 @@
 //! your own, [`SmolLocalScheduler`] for a [`LocalExecutor`].
 
 use crate::{
-    disposable::Disposable,
-    observable::Subscription,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     scheduler::{Scheduler, SchedulerTypes, Task, drive},
     thread_mode::{Local, Shared},
 };
@@ -93,7 +92,11 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         let future = drive(task, delay, self.clone(), sleep);
         let task = match &self.target {
             SharedTarget::Global => smol::spawn(future),
@@ -102,7 +105,7 @@ where
                 .expect("the executor of the SmolScheduler has been dropped")
                 .spawn(future),
         };
-        Subscription::new(SmolDisposal(task))
+        DisposeOnDrop::new(SmolDisposal(task))
     }
 }
 
@@ -168,12 +171,16 @@ where
     TC: 'static,
     P: 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         let executor = self
             .executor
             .upgrade()
             .expect("the executor of the SmolLocalScheduler has been dropped");
-        Subscription::new(SmolDisposal(executor.spawn(drive(
+        DisposeOnDrop::new(SmolDisposal(executor.spawn(drive(
             task,
             delay,
             self.clone(),

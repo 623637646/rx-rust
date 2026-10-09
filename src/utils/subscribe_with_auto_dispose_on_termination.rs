@@ -11,8 +11,9 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, DisposableExt, shared_disposal::SharedDisposal},
-    observable::Subscription,
+    disposable::{
+        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, shared_disposal::SharedDisposal,
+    },
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
     utils::on_panic::on_panic,
@@ -21,7 +22,7 @@ use educe::Educe;
 
 delegate_disposal!(
     Disposal<M, D>,
-    SharedDisposal<M, Subscription<D>>,
+    SharedDisposal<M, DisposeOnDrop<D>>,
     where M: ThreadMode, D: Disposable
 );
 
@@ -31,7 +32,8 @@ delegate_disposal!(
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::{Observable, ObservableExt, Subscription},
+///     disposable::dispose_on_drop::DisposeOnDrop,
+///     observable::{Observable, ObservableExt},
 ///     observer::{Flow, Observer, Termination},
 ///     operators::creating::range::Range,
 ///     thread_mode::Local,
@@ -71,11 +73,11 @@ delegate_disposal!(
 pub fn subscribe_with_auto_dispose_on_termination<M, OR, D, F>(
     observer: OR,
     builder: F,
-) -> Subscription<Disposal<M, D>>
+) -> DisposeOnDrop<Disposal<M, D>>
 where
     M: ThreadMode,
     D: Disposable,
-    F: FnOnce(AutoDisposeOnTerminationObserver<M, OR, D>) -> Subscription<D>,
+    F: FnOnce(AutoDisposeOnTerminationObserver<M, OR, D>) -> DisposeOnDrop<D>,
 {
     let shared_disposal = SharedDisposal::default();
     let observer = AutoDisposeOnTerminationObserver {
@@ -84,7 +86,7 @@ where
     };
     shared_disposal.replace(|| builder(observer));
 
-    shared_disposal.into_subscription()
+    shared_disposal.into_dispose_on_drop()
 }
 
 /// Whether `OR` is an [`AutoDisposeOnTerminationObserver`], whatever its generic arguments are.
@@ -110,7 +112,7 @@ pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
 #[educe(Debug)]
 pub struct AutoDisposeOnTerminationObserver<M: ThreadMode, OR, D: Disposable> {
     observer: OR,
-    shared_disposal: SharedDisposal<M, Subscription<D>>,
+    shared_disposal: SharedDisposal<M, DisposeOnDrop<D>>,
 }
 
 impl<M, T, E, OR, D> Observer<T, E> for AutoDisposeOnTerminationObserver<M, OR, D>

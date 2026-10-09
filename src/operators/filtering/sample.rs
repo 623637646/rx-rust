@@ -8,8 +8,7 @@ use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::Disposable,
-    observable::Subscription,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -127,14 +126,14 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model { last_value: None };
         subscribe_with_context(observer, model, |context| {
             let sample_observer = SampleObserver(context.clone());
             let sampler_observer = SamplerObserver(context);
             let subscription_1 = self.sampler.subscribe(sampler_observer);
             let subscription_2 = self.source.subscribe(sample_observer);
-            subscription_1.preceded_by_bound(subscription_2)
+            subscription_1.preceded_by_wrapped(subscription_2)
         })
         .map_into()
     }

@@ -7,7 +7,7 @@ use crate::tests_utils::test_channel::test_channel;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::observable::Subscription;
+use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::thread_mode::mutable::MutableBoolHelper;
@@ -29,7 +29,7 @@ fn test_completed() {
 
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new(CallbackDisposal::new(|| {
+        DisposeOnDrop::new(CallbackDisposal::new(|| {
             disposed.write(true);
         }))
     });
@@ -70,7 +70,7 @@ fn test_error() {
 
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new(CallbackDisposal::new(|| {
+        DisposeOnDrop::new(CallbackDisposal::new(|| {
             disposed.write(true);
         }))
     });
@@ -111,7 +111,7 @@ fn test_unsubscribe() {
 
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new(CallbackDisposal::new(|| {
+        DisposeOnDrop::new(CallbackDisposal::new(|| {
             disposed.write(true);
         }))
     });
@@ -161,7 +161,7 @@ fn test_ref() {
 
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new(CallbackDisposal::new(|| {
+        DisposeOnDrop::new(CallbackDisposal::new(|| {
             disposed.write(true);
         }))
     });
@@ -217,7 +217,7 @@ fn test_mut_ref() {
 
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, &mut i32, &mut i32>| {
         boxed_observer = Some(observer);
-        Subscription::new(CallbackDisposal::new(|| {
+        DisposeOnDrop::new(CallbackDisposal::new(|| {
             disposed.write(true);
         }))
     });
@@ -273,7 +273,7 @@ fn test_async() {
         let boxed_observer_cloned = boxed_observer.clone();
         let observable = Create::shared_boxed(move |observer| {
             boxed_observer_cloned.set(observer);
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 disposed_cloned.write(true);
             }))
         });
@@ -341,7 +341,7 @@ fn test_subscribe_by_different_observer() {
             boxed_observer_2.set(observer);
             disposed_2.clone()
         };
-        Subscription::new(CallbackDisposal::new(move || {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
             disposed.write(true);
         }))
     });
@@ -421,7 +421,7 @@ fn test_unsub_on_next_by_take() {
 
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         boxed_observer = Some(observer);
-        Subscription::new(CallbackDisposal::new(|| {
+        DisposeOnDrop::new(CallbackDisposal::new(|| {
             disposed.write(true);
         }))
     });
@@ -456,7 +456,7 @@ fn test_multiple_operation() {
 
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new(CallbackDisposal::new(|| {
+        DisposeOnDrop::new(CallbackDisposal::new(|| {
             disposed.write(true);
         }))
     });
@@ -513,7 +513,7 @@ fn test_without_convenient_api() {
 
     let observable = Create::shared_boxed(|observer| {
         boxed_observer = Some(observer);
-        Subscription::new(CallbackDisposal::new(|| {
+        DisposeOnDrop::new(CallbackDisposal::new(|| {
             disposed.write(true);
         }))
     });
@@ -566,7 +566,7 @@ fn test_lifetime_sub() {
         let observable = Create::shared_boxed(|mut observer| {
             assert!(observer.on_next(1).is_continue());
             observer.on_termination(Termination::<String>::Completed);
-            Subscription::new(CallbackDisposal::new(|| {
+            DisposeOnDrop::new(CallbackDisposal::new(|| {
                 life_marker.consume_ref();
             }))
         });
@@ -591,7 +591,7 @@ fn test_lifetime_or() {
     {
         let observable = Create::shared_boxed(|observer| {
             life_marker_1 = Some(observer);
-            Subscription::default()
+            DisposeOnDrop::default()
         });
         let observable = observable.do_after_disposal(|| {});
 
@@ -619,7 +619,7 @@ fn test_clone() {
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let observable = observable.do_after_disposal(|| {});
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.

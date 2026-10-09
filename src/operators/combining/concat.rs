@@ -8,7 +8,8 @@ use crate::disposable::{
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -63,7 +64,7 @@ impl<OE1, OE2> Concat<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<M, D1, D2>,
-    ChainDisposal<SharedDisposal<M, Subscription<D2>>, D1>,
+    ChainDisposal<SharedDisposal<M, DisposeOnDrop<D2>>, D1>,
     where M: ThreadMode, D1: Disposable, D2: Disposable
 );
 
@@ -93,7 +94,7 @@ where
         >,
     OE2: Observable<OR, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let sub_2 = SharedDisposal::default();
         let observer = ConcatObserver {
             observer,
@@ -110,7 +111,7 @@ where
 pub struct ConcatObserver<M: ThreadMode, OR, OE2, D: Disposable> {
     observer: OR,
     source_2: OE2,
-    sub_2: SharedDisposal<M, Subscription<D>>,
+    sub_2: SharedDisposal<M, DisposeOnDrop<D>>,
 }
 
 impl<M, T, E, OR, OE2> Observer<T, E> for ConcatObserver<M, OR, OE2, OE2::Disposal>

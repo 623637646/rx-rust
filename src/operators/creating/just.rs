@@ -2,7 +2,8 @@
 
 use crate::thread_mode::Local;
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
 };
 use educe::Educe;
@@ -52,10 +53,10 @@ impl<T, OR> Observable<OR> for Just<T>
 where
     OR: Observer<T, Infallible>,
 {
-    fn subscribe(self, mut observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
         if observer.on_next(self.0).is_continue() {
             observer.on_termination(Termination::Completed);
         }
-        Subscription::default()
+        DisposeOnDrop::default()
     }
 }

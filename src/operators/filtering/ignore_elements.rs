@@ -3,7 +3,7 @@
 
 use crate::operators::filtering::filter::FilterObserver;
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
     operators::filtering::filter::Filter,
@@ -66,7 +66,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<FilterObserver<OR, fn(&T) -> bool>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         Filter::new(self.source, (|_| false) as fn(&T) -> bool).subscribe(observer)
     }
 }

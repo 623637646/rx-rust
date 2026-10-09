@@ -10,7 +10,8 @@ use crate::utils::id_generator::{Id, IdGenerator};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::MarkerType,
@@ -131,7 +132,7 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
             subscriptions: HashMap::new(),
             keys: IdGenerator::default(),
@@ -147,7 +148,7 @@ where
 struct Model<D: Disposable> {
     /// Keys are never reused, so a late inner observer can never remove another
     /// inner observer's subscription.
-    subscriptions: HashMap<Id, Option<Subscription<D>>>,
+    subscriptions: HashMap<Id, Option<DisposeOnDrop<D>>>,
     keys: IdGenerator,
     is_source_terminated: bool,
 }

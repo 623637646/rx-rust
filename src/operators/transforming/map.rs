@@ -1,7 +1,7 @@
 //! The [`Map`] operator, behind [`ObservableExt::map`](crate::observable::ObservableExt::map).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::MarkerType,
@@ -76,7 +76,7 @@ where
     OE: Observable<MapObserver<OR, F>, Item = T0, Error = E>,
     F: FnMut(T0) -> T,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = MapObserver {
             observer,
             callback: self.callback,

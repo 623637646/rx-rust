@@ -1,7 +1,8 @@
 //! The [`FromTryFuture`] source.
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
     scheduler::{FutureThenContext, Scheduler, SchedulerTypes, Task},
 };
@@ -86,7 +87,7 @@ where
     FU: Future<Output = Result<T, E>>,
     S: Scheduler<FutureThenContext<OR, Result<T, E>>, FU>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let task =
             Task::from_future_then(observer, self.future, |mut observer, result| match result {
                 Ok(value) => {

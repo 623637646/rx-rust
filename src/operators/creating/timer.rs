@@ -1,7 +1,8 @@
 //! The [`Timer`] source.
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
     scheduler::{OnceContext, Scheduler, SchedulerTypes, Task},
 };
@@ -86,7 +87,7 @@ where
     OR: Observer<T, Infallible>,
     S: Scheduler<OnceContext<(OR, T)>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let task = Task::once((observer, self.value), |(mut observer, value)| {
             if observer.on_next(value).is_continue() {
                 observer.on_termination(Termination::Completed);

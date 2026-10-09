@@ -2,12 +2,11 @@
 //! [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce).
 
 use crate::delegate_disposal;
-use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
+use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::Subscription,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState},
@@ -127,7 +126,7 @@ where
         >,
     S: Scheduler<DebounceTask<DebounceMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model::<T, S::Disposal>::Idle;
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(DebounceObserver {
@@ -149,7 +148,7 @@ enum Model<T, D: Disposable> {
         /// represent: it then waits for the completion. The clock only moves forward, so a later
         /// value's deadline is `None` too.
         deadline: Option<Instant>,
-        timer: Option<BoundDropDisposal<D>>,
+        timer: Option<DisposeOnDrop<D>>,
     },
 }
 

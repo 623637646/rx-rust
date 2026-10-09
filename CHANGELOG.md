@@ -20,6 +20,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** `disposable::bound_drop_disposal::BoundDropDisposal` is now
+  `disposable::dispose_on_drop::DisposeOnDrop`, and the `observable::Subscription` alias is
+  removed. Observable and scheduler APIs return `DisposeOnDrop<D>` directly.
+  `DisposableExt::into_subscription` becomes `into_dispose_on_drop`, and
+  `preceded_by_bound` becomes `preceded_by_wrapped`; disposal behavior is unchanged.
 - **Breaking:** `Interval` emits its first value one period after the subscription, as ReactiveX
   does, instead of at once. `Interval::new(period, scheduler)` replaces
   `Interval::new(period, scheduler, delay)`, and `Interval::with_initial_delay(initial_delay,

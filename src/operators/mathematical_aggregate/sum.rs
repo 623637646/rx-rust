@@ -1,7 +1,7 @@
 //! The [`Sum`] operator, behind [`ObservableExt::sum`](crate::observable::ObservableExt::sum).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -68,7 +68,7 @@ where
     T: AddAssign,
     OE: Observable<SumObserver<T, OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = SumObserver {
             observer,
             sum: None,

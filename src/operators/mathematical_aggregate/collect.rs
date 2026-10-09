@@ -3,7 +3,7 @@
 //! [`ObservableExt::to_vec`](crate::observable::ObservableExt::to_vec).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::MarkerType,
@@ -83,7 +83,7 @@ where
     C: Default + Extend<T>,
     OE: Observable<CollectObserver<C, OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = CollectObserver {
             observer,
             collection: C::default(),

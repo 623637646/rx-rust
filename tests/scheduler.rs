@@ -683,8 +683,7 @@ fn test_tokio_current_panics_outside_of_a_runtime() {
 /// `Stepper::step`.
 mod main_loop {
     use rx_rust::{
-        disposable::Disposable,
-        observable::Subscription,
+        disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
         scheduler::{Scheduler, SchedulerTypes, Task, TaskState},
         thread_mode::Shared,
     };
@@ -872,7 +871,7 @@ mod main_loop {
             &self,
             task: Task<TC, P>,
             delay: Option<Duration>,
-        ) -> Subscription<Self::Disposal> {
+        ) -> DisposeOnDrop<Self::Disposal> {
             let id = self.next_id.fetch_add(1, Ordering::Relaxed);
             let (mut stepper, pinned) = task.split();
             let mut pinned: Pin<Box<P>> = Box::pin(pinned);
@@ -880,7 +879,7 @@ mod main_loop {
             let at = Instant::now() + delay.unwrap_or_default();
             // A loop that has quit drops the task with the message.
             let _ = self.sender.send(Message::Run(id, job, at));
-            Subscription::new(MainLoopDisposal {
+            DisposeOnDrop::new(MainLoopDisposal {
                 id,
                 sender: self.sender.clone(),
             })

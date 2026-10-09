@@ -1,7 +1,7 @@
 //! The [`Max`] operator, behind [`ObservableExt::max`](crate::observable::ObservableExt::max).
 
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
@@ -71,7 +71,7 @@ where
     T: PartialOrd,
     OE: Observable<MaxObserver<T, OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = MaxObserver {
             observer,
             max: None,

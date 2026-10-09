@@ -12,7 +12,7 @@
 ///   OE::Disposal>`);
 /// - a `Disposal` of the operator's own module.
 ///
-/// Anything else — a combination such as `ChainDisposal<SharedDisposal<Subscription<D2>>, D1>`,
+/// Anything else — a combination such as `ChainDisposal<SharedDisposal<DisposeOnDrop<D2>>, D1>`,
 /// or a type naming one of the operator's private types, such as its model — gets its `Disposal`
 /// from this macro. The public `type Disposal` then shows neither how the disposal is built nor the
 /// types inside it, which stay private: the field of the generated type is private, and an
@@ -22,14 +22,17 @@
 /// them.
 ///
 /// The generated type implements [`Disposable`] and `From<Inner>`, so
-/// [`DisposableExt::into_subscription`] turns the inner value into a [`Subscription`] of it.
+/// [`DisposableExt::into_dispose_on_drop`] converts the inner value to the named disposal and wraps
+/// it in [`DisposeOnDrop`].
 ///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
 ///     delegate_disposal,
-///     disposable::{callback_disposal::CallbackDisposal, option_disposal::OptionDisposal, Disposable, DisposableExt},
-///     observable::Subscription,
+///     disposable::{
+///         Disposable, DisposableExt, callback_disposal::CallbackDisposal,
+///         dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
+///     },
 /// };
 ///
 /// delegate_disposal!(
@@ -40,16 +43,16 @@
 /// );
 ///
 /// let mut disposed = false;
-/// let subscription: Subscription<MyDisposal<_>> =
-///     OptionDisposal::some(CallbackDisposal::new(|| disposed = true)).into_subscription();
-/// drop(subscription);
+/// let disposal: DisposeOnDrop<MyDisposal<_>> =
+///     OptionDisposal::some(CallbackDisposal::new(|| disposed = true)).into_dispose_on_drop();
+/// drop(disposal);
 /// assert!(disposed);
 /// ```
 ///
 /// [`Disposable`]: crate::disposable::Disposable
 /// [`Disposable::dispose`]: crate::disposable::Disposable::dispose
-/// [`DisposableExt::into_subscription`]: crate::disposable::DisposableExt::into_subscription
-/// [`Subscription`]: crate::observable::Subscription
+/// [`DisposableExt::into_dispose_on_drop`]: crate::disposable::DisposableExt::into_dispose_on_drop
+/// [`DisposeOnDrop`]: crate::disposable::dispose_on_drop::DisposeOnDrop
 #[macro_export]
 macro_rules! delegate_disposal {
     (

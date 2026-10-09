@@ -5,8 +5,8 @@ use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
 use crate::observer::emitter::Emitter;
 use crate::utils::MarkerType;
 use crate::{
-    disposable::Disposable,
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
     observer::Observer,
 };
 use educe::Educe;
@@ -76,7 +76,7 @@ impl<OE, F, D> HookOnSubscription<OE, F, D> {
         OE: ObservableTypes,
         OR: Observer<OE::Item, OE::Error>,
         D: Disposable,
-        F: FnOnce(OE, Emitter<OR, OE::Mode>) -> Subscription<D>,
+        F: FnOnce(OE, Emitter<OR, OE::Mode>) -> DisposeOnDrop<D>,
     {
         Self::with_callback(source, callback)
     }
@@ -93,7 +93,7 @@ impl<OE, F, D> HookOnSubscription<OE, F, D> {
         F: FnOnce(
             OE,
             <OE::Mode as ObserverMode>::BoxedObserver<'a, OE::Item, OE::Error>,
-        ) -> Subscription<D>,
+        ) -> DisposeOnDrop<D>,
     {
         HookOnSubscription::with_callback(source, callback)
     }
@@ -126,9 +126,9 @@ where
     OE: ObservableTypes,
     OR: Observer<<OE as ObservableTypes>::Item, <OE as ObservableTypes>::Error>,
     D: Disposable,
-    F: FnOnce(OE, Emitter<OR, <OE as ObservableTypes>::Mode>) -> Subscription<D>,
+    F: FnOnce(OE, Emitter<OR, <OE as ObservableTypes>::Mode>) -> DisposeOnDrop<D>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         (self.callback)(self.source, Emitter::new(observer))
     }
 }
@@ -151,9 +151,9 @@ where
             <OE as ObservableTypes>::Item,
             <OE as ObservableTypes>::Error,
         >,
-    ) -> Subscription<D>,
+    ) -> DisposeOnDrop<D>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         (self.callback)(
             self.source,
             <<OE as ObservableTypes>::Mode as ObserverMode>::boxed(observer),

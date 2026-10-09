@@ -1,7 +1,8 @@
 //! The [`Defer`] source.
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::Observer,
 };
 use educe::Educe;
@@ -60,7 +61,7 @@ where
     F: FnOnce() -> OE,
     OE: Observable<OR, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observable = self.0();
         observable.subscribe(observer)
     }

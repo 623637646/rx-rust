@@ -2,7 +2,8 @@
 //! [`ObservableExt::default_if_empty`](crate::observable::ObservableExt::default_if_empty).
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -70,7 +71,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<DefaultIfEmptyObserver<T, OR>, Item = T, Error = E>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = DefaultIfEmptyObserver {
             observer,
             default_value: Some(self.default_value),

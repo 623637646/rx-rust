@@ -2,8 +2,7 @@
 
 use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
-use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
-use crate::observable::Subscription;
+use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
@@ -166,7 +165,7 @@ where
         >,
     S: Scheduler<BufferWithTimeOrCountTask<T, E, OR, OE, S>>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         assert!(!self.time_span.is_zero(), "time_span must be non-zero");
         let model = Model::<T> {
             values: Vec::with_capacity(self.count.get()),
@@ -181,7 +180,7 @@ where
             };
             let sub = self.source.subscribe(buffer_observer);
             let disposal = setup_emit_timer(context, self.scheduler, self.time_span);
-            sub.preceded_by_bound(disposal)
+            sub.preceded_by_wrapped(disposal)
         })
         .map_into()
     }
@@ -262,7 +261,7 @@ fn setup_emit_timer<M, T, E, OR, D, S>(
     context: BufferWithTimeOrCountContext<M, T, E, OR, D>,
     scheduler: S,
     time_span: Duration,
-) -> BoundDropDisposal<S::Disposal>
+) -> DisposeOnDrop<S::Disposal>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,

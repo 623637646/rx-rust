@@ -3,8 +3,10 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal},
-    observable::Subscription,
+    disposable::{
+        Disposable, callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal,
+        dispose_on_drop::DisposeOnDrop,
+    },
     observable::{Observable, ObservableTypes},
     observer::Observer,
 };
@@ -81,7 +83,7 @@ where
     OE: Observable<OR, Item = T, Error = E>,
     F: FnOnce(),
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.source
             .subscribe(observer)
             .preceded_by(CallbackDisposal::new(self.callback))

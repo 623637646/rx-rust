@@ -2,7 +2,8 @@
 //! [`ObservableExt::into_shared`](crate::observable::ObservableExt::into_shared).
 
 use crate::{
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
     observer::Observer,
     thread_mode::Shared,
 };
@@ -67,7 +68,7 @@ where
     OR: Observer<OE::Item, OE::Error>,
     OE: Observable<OR>,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.source.subscribe(observer)
     }
 }

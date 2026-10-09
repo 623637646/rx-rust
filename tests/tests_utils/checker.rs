@@ -10,7 +10,8 @@ use rx_rust::{
 };
 use std::sync::{Arc, Mutex};
 use {
-    futures::Stream, futures::stream::StreamExt, rx_rust::observable::Subscription,
+    futures::{Stream, stream::StreamExt},
+    rx_rust::disposable::dispose_on_drop::DisposeOnDrop,
     std::convert::Infallible,
 };
 
@@ -137,7 +138,7 @@ impl<T> Checker<T, Infallible> {
     pub(crate) fn from_stream(
         stream: impl Stream<Item = T> + Send + 'static,
         scheduler: TestScheduler,
-    ) -> (Self, Subscription<impl Disposable + Send + 'static>)
+    ) -> (Self, DisposeOnDrop<impl Disposable + Send + 'static>)
     where
         T: Send + 'static,
     {
@@ -161,7 +162,7 @@ impl<T> Checker<T, Infallible> {
                 values,
                 state: state.clone(),
             },
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 use rx_rust::disposable::Disposable;
                 handle.dispose();
                 state.with_mut(|lock| match &*lock {
@@ -180,7 +181,7 @@ impl<T, E> Checker<T, E> {
     pub(crate) fn from_try_stream(
         stream: impl Stream<Item = Result<T, E>> + Send + 'static,
         scheduler: TestScheduler,
-    ) -> (Self, Subscription<impl Disposable + Send + 'static>)
+    ) -> (Self, DisposeOnDrop<impl Disposable + Send + 'static>)
     where
         T: Send + 'static,
         E: Send + 'static,
@@ -215,7 +216,7 @@ impl<T, E> Checker<T, E> {
                 values,
                 state: state.clone(),
             },
-            Subscription::new(CallbackDisposal::new(move || {
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
                 use rx_rust::disposable::Disposable;
                 handle.dispose();
                 state.with_mut(|lock| match &*lock {

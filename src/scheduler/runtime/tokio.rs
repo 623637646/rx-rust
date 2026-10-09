@@ -2,8 +2,7 @@
 //! [`LocalSet`].
 
 use crate::{
-    disposable::Disposable,
-    observable::Subscription,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     scheduler::{Scheduler, SchedulerTypes, Task, drive},
     thread_mode::{Local, Shared},
 };
@@ -121,9 +120,13 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         let future = drive(task, delay, self.clone(), tokio::time::sleep);
-        Subscription::new(TokioDisposal(self.handle.spawn(future)))
+        DisposeOnDrop::new(TokioDisposal(self.handle.spawn(future)))
     }
 }
 
@@ -216,7 +219,11 @@ where
     TC: 'static,
     P: 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         let future = drive(task, delay, self.clone(), tokio::time::sleep);
         let handle = match &self.target {
             LocalTarget::Ambient => tokio::task::spawn_local(future),
@@ -225,7 +232,7 @@ where
                 .expect("the LocalSet of the TokioLocalScheduler has been dropped")
                 .spawn_local(future),
         };
-        Subscription::new(TokioDisposal(handle))
+        DisposeOnDrop::new(TokioDisposal(handle))
     }
 }
 

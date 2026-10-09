@@ -7,8 +7,8 @@ use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::Disposable,
-    observable::{Observable, ObservableTypes, Subscription},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -124,11 +124,11 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         subscribe_with_context(observer, (), |context| {
             let subscription_1 = self.stop.subscribe(StopObserver(context.clone()));
             let subscription_2 = self.source.subscribe(TakeUntilObserver(context));
-            subscription_1.preceded_by_bound(subscription_2)
+            subscription_1.preceded_by_wrapped(subscription_2)
         })
         .map_into()
     }

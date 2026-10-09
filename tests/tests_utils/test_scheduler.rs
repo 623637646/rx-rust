@@ -19,8 +19,7 @@ use futures::{
     task::LocalSpawnExt,
 };
 use rx_rust::{
-    disposable::{Disposable, boxed_disposal::SendBoxedDisposal},
-    observable::Subscription,
+    disposable::{Disposable, boxed_disposal::SendBoxedDisposal, dispose_on_drop::DisposeOnDrop},
     scheduler::{
         Scheduler, SchedulerExt, SchedulerTypes, Task, TaskState,
         runtime::{
@@ -256,11 +255,15 @@ where
     TC: Send + 'static,
     P: Send + 'static,
 {
-    fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>) -> Subscription<Self::Disposal> {
+    fn run_task(
+        &self,
+        task: Task<TC, P>,
+        delay: Option<Duration>,
+    ) -> DisposeOnDrop<Self::Disposal> {
         fn erase<D: Disposable + Send + 'static>(
-            subscription: Subscription<D>,
-        ) -> Subscription<SendBoxedDisposal<'static>> {
-            subscription.map_inner(SendBoxedDisposal::new)
+            handle: DisposeOnDrop<D>,
+        ) -> DisposeOnDrop<SendBoxedDisposal<'static>> {
+            handle.map_inner(SendBoxedDisposal::new)
         }
         match self {
             Self::Tokio(scheduler) => erase(scheduler.run_task(task, delay)),

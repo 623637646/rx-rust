@@ -1,7 +1,7 @@
 //! The [`Throttle`] operator, behind
 //! [`ObservableExt::throttle`](crate::observable::ObservableExt::throttle).
 
-use crate::observable::Subscription;
+use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
@@ -82,7 +82,7 @@ where
     OE: Observable<ThrottleObserver<OR, S>, Item = T, Error = E>,
     S: SchedulerTypes,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         self.source.subscribe(ThrottleObserver {
             observer,
             time_span: self.time_span,

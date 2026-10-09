@@ -4,7 +4,7 @@
 use crate::operators::filtering::element_at::ElementAtObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
     operators::filtering::element_at::ElementAt,
@@ -79,7 +79,7 @@ where
             Error = E,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         ElementAt::new(self.source, 0).subscribe(observer)
     }
 }

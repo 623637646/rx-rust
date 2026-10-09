@@ -5,7 +5,6 @@
 
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
-use crate::observable::{Observable, ObservableTypes, Subscription};
 use crate::observer::Observer;
 use crate::operators::connectable::connectable_controller::{
     ConnectableController, Connected, Disconnected,
@@ -15,6 +14,10 @@ use crate::subject::SubjectObservable;
 use crate::thread_mode::ThreadMode;
 use crate::thread_mode::mutable::MutableHelper;
 use crate::utils::on_panic::OnPanic;
+use crate::{
+    disposable::dispose_on_drop::DisposeOnDrop,
+    observable::{Observable, ObservableTypes},
+};
 use educe::Educe;
 use std::num::NonZeroUsize;
 
@@ -142,7 +145,7 @@ where
     OE: Observable<S, Item = T, Error = E> + Clone,
     S: Subject<T, E> + Observable<OR> + Clone,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let controller = self.state.with_mut(|current| match &mut *current {
             state @ State::Disconnected { .. } => {
                 let State::Disconnected { controller } =

@@ -1,9 +1,9 @@
-//! Releasing what a subscription holds: the [`Disposable`] trait and its combinators.
+//! Releasing resources: the [`Disposable`] trait and its combinators.
 //!
 //! [`Observable::subscribe`](crate::observable::Observable::subscribe) returns a
-//! [`Subscription`], which is a [`BoundDropDisposal`](bound_drop_disposal::BoundDropDisposal):
-//! dropping it disposes the disposal inside, which is how a subscription is cancelled. Operators
-//! build that disposal out of the small types here, each of which does one thing:
+//! [`DisposeOnDrop`]: dropping it disposes the resource inside, cancelling the subscription.
+//! [`Scheduler::run_task`](crate::scheduler::Scheduler::run_task) uses the same wrapper to cancel
+//! a task on drop. Operators build their disposals out of the small types here:
 //!
 //! - [`()`](empty_disposal) disposes nothing;
 //! - [`CallbackDisposal`](callback_disposal::CallbackDisposal) runs a closure;
@@ -30,31 +30,29 @@
 //! assert_eq!(disposed.get(), 10);
 //! ```
 
-pub mod bound_drop_disposal;
 pub mod boxed_disposal;
 pub mod callback_disposal;
 pub mod chain_disposal;
 mod delegate_disposal;
+pub mod dispose_on_drop;
 pub mod either_disposal;
 pub mod empty_disposal;
 pub mod option_disposal;
 pub mod shared_disposal;
 
 pub use crate::delegate_disposal;
-use crate::{
-    disposable::{
-        boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
-        chain_disposal::ChainDisposal,
-        either_disposal::EitherDisposal,
-        option_disposal::OptionDisposal,
-    },
-    observable::Subscription,
+use crate::disposable::{
+    boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
+    chain_disposal::ChainDisposal,
+    dispose_on_drop::DisposeOnDrop,
+    either_disposal::EitherDisposal,
+    option_disposal::OptionDisposal,
 };
 
 /// A resource that is released exactly once, by consuming it.
 ///
 /// Disposing takes `self`, so a disposal cannot be disposed twice, and a type that must dispose
-/// when dropped wraps it in a [`BoundDropDisposal`](bound_drop_disposal::BoundDropDisposal).
+/// when dropped wraps it in a [`DisposeOnDrop`].
 pub trait Disposable {
     /// Releases the resource.
     fn dispose(self);
@@ -78,13 +76,16 @@ pub trait DisposableExt: Disposable + Sized {
         SendBoxedDisposal::new(self)
     }
 
-    /// Converts this disposal into a subscription whose inner disposal is
-    /// created through [`From`].
-    fn into_subscription<D>(self) -> Subscription<D>
+    /// Converts this disposal through [`From`] and wraps it in [`DisposeOnDrop`].
+    ///
+    /// Dropping or disposing the returned wrapper disposes the converted value. The conversion
+    /// can name an operator's disposal through [`delegate_disposal!`]; to wrap a value without
+    /// converting it, use [`DisposeOnDrop::new`].
+    fn into_dispose_on_drop<D>(self) -> DisposeOnDrop<D>
     where
         D: Disposable + From<Self>,
     {
-        Subscription::new(self.into())
+        DisposeOnDrop::new(self.into())
     }
 
     /// Wraps this disposal as the present case of an [`OptionDisposal`].

@@ -13,8 +13,8 @@ mod tests_utils;
 
 use futures::executor::LocalPool;
 use rx_rust::{
-    disposable::Disposable,
-    observable::{Observable, ObservableExt, ObservableTypes, Subscription},
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableExt, ObservableTypes},
     observer::{
         Observer, Termination,
         boxed_observer::{ObserverMode, SendBoxedObserver},
@@ -63,7 +63,7 @@ impl<T: Clone, E: Clone> Record<T, E> {
 
 /// Subscribes `observable` with callbacks that hold `Rc`s, so that neither they nor the observer
 /// they make are `Send`.
-fn record<T, E, OE>(observable: OE) -> (Record<T, E>, Subscription<OE::Disposal>)
+fn record<T, E, OE>(observable: OE) -> (Record<T, E>, DisposeOnDrop<OE::Disposal>)
 where
     T: 'static,
     E: 'static,
@@ -156,7 +156,7 @@ fn test_create() {
             assert!(emitter.on_next(value).is_continue());
         }
         emitter.on_termination(Termination::<Infallible>::Completed);
-        Subscription::default()
+        DisposeOnDrop::default()
     }));
     assert_eq!(record.values(), rcs([1, 2]));
     assert_eq!(record.termination(), Some(Termination::Completed));
@@ -170,7 +170,7 @@ fn test_create_boxed() {
         state_cloned.with_mut(|count| *count += 1);
         assert!(observer.on_next(Rc::new(1)).is_continue());
         observer.on_termination(Termination::<Infallible>::Completed);
-        Subscription::default()
+        DisposeOnDrop::default()
     });
     let (record, _subscription) = record(source);
     assert_eq!(record.values(), rcs([1]));

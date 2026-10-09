@@ -3,7 +3,7 @@
 
 use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::{
-    observable::Subscription,
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Event, Flow, Observer, Termination},
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
@@ -80,7 +80,7 @@ where
             Error = Infallible,
         >,
 {
-    fn subscribe(self, observer: OR) -> Subscription<Self::Disposal> {
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         subscribe_with_auto_dispose_on_termination(observer, |observer| {
             self.0.subscribe(DematerializeObserver(Some(observer)))
         })
