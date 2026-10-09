@@ -202,7 +202,7 @@ where
             let source_subscription = self.source.subscribe(SourceObserver(context));
             boundary_subscription.preceded_by_wrapped(source_subscription)
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 

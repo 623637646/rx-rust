@@ -156,7 +156,7 @@ where
             let timer = setup_timer(context, &self.scheduler);
             source_subscription.preceded_by(timer)
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 

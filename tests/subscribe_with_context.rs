@@ -46,8 +46,8 @@ fn delivers_batch_in_order_with_termination() {
 #[test]
 fn dispose_during_batch_stops_remaining_events() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
-    let subscription_slot = Arc::new(Mutex::new(None));
-    let dispose_slot = subscription_slot.clone();
+    let reservation_slot = Arc::new(Mutex::new(None));
+    let dispose_slot = reservation_slot.clone();
     let mut context_out = None;
     let subscription = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
@@ -64,7 +64,7 @@ fn dispose_during_batch_stops_remaining_events() {
         Flow::Continue
     })
     .subscribe(observer);
-    subscription_slot.replace_value(Some(subscription));
+    reservation_slot.replace_value(Some(subscription));
     let context = context_out.unwrap();
 
     let _ = context.send(EventBatch::NextBatch(vec![1, 2, 3]));
@@ -80,8 +80,8 @@ fn dispose_during_batch_stops_remaining_events() {
 #[test]
 fn dispose_during_batch_suppresses_pending_termination() {
     let (checker, observer) = Checker::<i32, Infallible>::new();
-    let subscription_slot = Arc::new(Mutex::new(None));
-    let dispose_slot = subscription_slot.clone();
+    let reservation_slot = Arc::new(Mutex::new(None));
+    let dispose_slot = reservation_slot.clone();
     let mut context_out = None;
     let subscription = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
         subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
@@ -97,7 +97,7 @@ fn dispose_during_batch_suppresses_pending_termination() {
         Flow::Continue
     })
     .subscribe(observer);
-    subscription_slot.replace_value(Some(subscription));
+    reservation_slot.replace_value(Some(subscription));
     let context = context_out.unwrap();
 
     let _ = context.send(EventBatch::NextBatchAndTermination(
@@ -207,8 +207,8 @@ fn stopped_update_drops_callback_outside_lock() {
 fn dispose_during_batch_unsubscribes_upstream() {
     let (mut sender, receiver, channel_checker) = test_channel::<i32, Infallible>();
     let (checker, observer) = Checker::<i32, Infallible>::new();
-    let subscription_slot = Arc::new(Mutex::new(None));
-    let dispose_slot = subscription_slot.clone();
+    let reservation_slot = Arc::new(Mutex::new(None));
+    let dispose_slot = reservation_slot.clone();
     let context_slot = Arc::new(Mutex::new(None));
     let send_slot = context_slot.clone();
 
@@ -236,7 +236,7 @@ fn dispose_during_batch_unsubscribes_upstream() {
             Flow::Continue
         })
         .subscribe(observer);
-    subscription_slot.replace_value(Some(subscription));
+    reservation_slot.replace_value(Some(subscription));
 
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
     assert!(sender.on_next(1).is_stop());

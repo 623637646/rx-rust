@@ -7,9 +7,9 @@ use crate::operators::others::with_error_type::WithErrorType;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::id_generator::{Id, IdGenerator};
+use crate::utils::reservation_slot::ReservationSlot;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
-use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -132,19 +132,19 @@ where
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
-            slot: SubscriptionSlot::Idle,
+            slot: ReservationSlot::Idle,
             is_source_completed: false,
             sub_ids: IdGenerator::default(),
         };
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(SwitchObserver(context))
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 
 struct Model<D: Disposable> {
-    slot: SubscriptionSlot<DisposeOnDrop<D>>,
+    slot: ReservationSlot<DisposeOnDrop<D>>,
     is_source_completed: bool,
     /// The current inner subscription is always the one subscribed last, so the id it was handed
     /// is [`IdGenerator::latest`]. An inner observer whose id is no longer the latest was

@@ -3,7 +3,7 @@
 
 use crate::delegate_disposal;
 use crate::disposable::{
-    Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
+    Disposable, chain_disposal::ChainDisposal, replaceable_disposal::ReplaceableDisposal,
 };
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
@@ -64,7 +64,7 @@ impl<OE1, OE2> Concat<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<M, D1, D2>,
-    ChainDisposal<SharedDisposal<M, DisposeOnDrop<D2>>, D1>,
+    ChainDisposal<ReplaceableDisposal<M, DisposeOnDrop<D2>>, D1>,
     where M: ThreadMode, D1: Disposable, D2: Disposable
 );
 
@@ -95,7 +95,7 @@ where
     OE2: Observable<OR, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let sub_2 = SharedDisposal::default();
+        let sub_2 = ReplaceableDisposal::default();
         let observer = ConcatObserver {
             observer,
             source_2: self.source_2,
@@ -104,14 +104,14 @@ where
         self.source_1
             .subscribe(observer)
             .preceded_by(sub_2)
-            .map_into()
+            .map_inner_into()
     }
 }
 
 pub struct ConcatObserver<M: ThreadMode, OR, OE2, D: Disposable> {
     observer: OR,
     source_2: OE2,
-    sub_2: SharedDisposal<M, DisposeOnDrop<D>>,
+    sub_2: ReplaceableDisposal<M, DisposeOnDrop<D>>,
 }
 
 impl<M, T, E, OR, OE2> Observer<T, E> for ConcatObserver<M, OR, OE2, OE2::Disposal>
@@ -127,11 +127,11 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                // `replace` does not run the builder once the subscription was disposed, so the
+                // `replace_with` does not run the builder once the subscription was disposed, so the
                 // second source is never subscribed after downstream unsubscribed, and a
                 // subscription built while downstream unsubscribes is disposed right away.
                 self.sub_2
-                    .replace(|| self.source_2.subscribe(self.observer));
+                    .replace_with(|| self.source_2.subscribe(self.observer));
             }
             error @ Termination::Error(_) => {
                 self.observer.on_termination(error);

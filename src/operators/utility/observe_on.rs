@@ -10,8 +10,8 @@ use crate::{
     scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState},
     thread_mode::{Joined, ThreadMode},
     utils::{
+        reservation_slot::ReservationSlot,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
-        subscription_slot::SubscriptionSlot,
     },
 };
 use educe::Educe;
@@ -163,7 +163,7 @@ where
         let model = Model::<T, E, S::Disposal> {
             values: Vec::new(),
             termination: None,
-            task: SubscriptionSlot::Idle,
+            task: ReservationSlot::Idle,
         };
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(ObserveOnObserver {
@@ -171,7 +171,7 @@ where
                 scheduler: self.scheduler,
             })
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 
@@ -182,7 +182,7 @@ struct Model<T, E, D: Disposable> {
     /// Keeps at most one recursive scheduler task alive while events are waiting. The slot is
     /// reserved while the task is being scheduled, which covers schedulers that can execute it
     /// before returning its disposal.
-    task: SubscriptionSlot<DisposeOnDrop<D>>,
+    task: ReservationSlot<DisposeOnDrop<D>>,
 }
 
 pub struct ObserveOnObserver<M, T, E, OR, S, D>

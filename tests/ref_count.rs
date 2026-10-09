@@ -892,7 +892,7 @@ fn test_next_on_next() {
             // The subject is terminated as soon as `on_termination` is called, which the callback
             // of the first value did: the callback of the second sees it terminated while the
             // termination is still queued behind that value.
-            assert_eq!(subject_cloned.terminated().is_some(), value > 1);
+            assert_eq!(subject_cloned.termination().is_some(), value > 1);
             if value < 3 {
                 // Like the termination above: the send of `1` is queued behind the running
                 // delivery, the send of `2` finds the subject terminated.

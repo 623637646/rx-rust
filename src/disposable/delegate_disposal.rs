@@ -12,7 +12,7 @@
 ///   OE::Disposal>`);
 /// - a `Disposal` of the operator's own module.
 ///
-/// Anything else — a combination such as `ChainDisposal<SharedDisposal<DisposeOnDrop<D2>>, D1>`,
+/// Anything else — a combination such as `ChainDisposal<ReplaceableDisposal<DisposeOnDrop<D2>>, D1>`,
 /// or a type naming one of the operator's private types, such as its model — gets its `Disposal`
 /// from this macro. The public `type Disposal` then shows neither how the disposal is built nor the
 /// types inside it, which stay private: the field of the generated type is private, and an

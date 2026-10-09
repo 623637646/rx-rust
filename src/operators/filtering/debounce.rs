@@ -135,7 +135,7 @@ where
                 scheduler: self.scheduler,
             })
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 

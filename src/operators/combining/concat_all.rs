@@ -6,10 +6,10 @@ use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
+use crate::utils::reservation_slot::ReservationSlot;
 use crate::utils::resubscribe::Resubscribe;
 use crate::utils::serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
-use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
@@ -135,7 +135,7 @@ where
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
             pending_observables: VecDeque::new(),
-            slot: SubscriptionSlot::Idle,
+            slot: ReservationSlot::Idle,
             is_source_completed: false,
         };
         subscribe_with_context(observer, model, |context| {
@@ -144,7 +144,7 @@ where
                 subscribe_inner: Resubscribe::new(),
             })
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 
@@ -155,7 +155,7 @@ where
     /// Values wait here while an inner is active or its subscription is still being built.
     /// An idle slot always has an empty queue.
     pending_observables: VecDeque<OE1>,
-    slot: SubscriptionSlot<DisposeOnDrop<OE1::Disposal>>,
+    slot: ReservationSlot<DisposeOnDrop<OE1::Disposal>>,
     is_source_completed: bool,
 }
 

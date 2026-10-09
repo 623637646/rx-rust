@@ -76,7 +76,7 @@ use crate::{
             sum::Sum,
         },
         others::{
-            debug::{Debug, DebugEvent, DefaultPrintType},
+            debug::{Debug, DebugEvent, DebugPrintCallback},
             hook_on_next::HookOnNext,
             hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination,
@@ -305,16 +305,16 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// [`debug`](ObservableExt::debug) that prints every event with `println!`, prefixed by
     /// `label`.
-    fn debug_default_print<L>(
+    fn debug_to_stdout<L>(
         self,
         label: L,
-    ) -> Debug<Self, L, DefaultPrintType<L, Self::Item, Self::Error>>
+    ) -> Debug<Self, L, DebugPrintCallback<L, Self::Item, Self::Error>>
     where
         L: Display,
         Self::Item: std::fmt::Debug,
         Self::Error: std::fmt::Debug,
     {
-        Debug::new_default_print(self, label)
+        Debug::with_stdout(self, label)
     }
 
     /// Emits a default value if the source completes without emitting any items.
@@ -764,8 +764,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// fallible one goes through [`into_try_stream`](Self::into_try_stream).
     ///
     /// The items that arrive between two polls are all kept, so a source faster than the
-    /// consumer grows the buffer without bound; [`into_stream_with`](Self::into_stream_with)
-    /// takes a buffer that bounds it.
+    /// consumer grows the buffer without bound;
+    /// [`into_stream_with_buffer`](Self::into_stream_with_buffer) takes a buffer of your choice.
     #[cfg(feature = "futures")]
     fn into_stream(self) -> ObservableStream<Self::Item, Self>
     where
@@ -795,7 +795,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// use std::convert::Infallible;
     ///
     /// let mut subject = PublishSubject::<_, Infallible, rx_rust::thread_mode::Local>::local();
-    /// let mut stream = subject.clone().into_stream_with(Latest::new());
+    /// let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
     /// assert_eq!(stream.next().now_or_never(), None); // subscribes
     ///
     /// subject.on_next(1);
@@ -805,7 +805,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// assert_eq!(stream.next().now_or_never(), None);
     /// ```
     #[cfg(feature = "futures")]
-    fn into_stream_with<B>(self, buffer: B) -> ObservableStream<Self::Item, Self, B>
+    fn into_stream_with_buffer<B>(self, buffer: B) -> ObservableStream<Self::Item, Self, B>
     where
         Self: ObservableTypes<Error = std::convert::Infallible>,
         B: StreamBuffer<Self::Item>,
@@ -828,17 +828,19 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// The items that arrive between two polls are all kept, so a source faster than the
     /// consumer grows the buffer without bound;
-    /// [`into_try_stream_with`](Self::into_try_stream_with) takes a buffer that bounds it.
+    /// [`into_try_stream_with_buffer`](Self::into_try_stream_with_buffer) takes a buffer of your
+    /// choice.
     #[cfg(feature = "futures")]
     fn into_try_stream(self) -> ObservableTryStream<Self::Item, Self::Error, Self> {
         ObservableTryStream::new(self)
     }
 
     /// Converts the observable into an async stream of `Result`s that keeps the items arriving
-    /// between two polls in `buffer`. This is [`into_stream_with`](Self::into_stream_with) for
-    /// a source that can fail; see there for the buffers.
+    /// between two polls in `buffer`. This is
+    /// [`into_stream_with_buffer`](Self::into_stream_with_buffer) for a source that can fail;
+    /// see there for the buffers.
     #[cfg(feature = "futures")]
-    fn into_try_stream_with<B>(
+    fn into_try_stream_with_buffer<B>(
         self,
         buffer: B,
     ) -> ObservableTryStream<Self::Item, Self::Error, Self, B>

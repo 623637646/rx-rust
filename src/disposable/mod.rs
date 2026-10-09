@@ -10,7 +10,7 @@
 //! - [`ChainDisposal`] disposes two in order, and
 //!   [`EitherDisposal`] one of two;
 //! - [`OptionDisposal`] disposes a value that may be absent;
-//! - [`SharedDisposal`](shared_disposal::SharedDisposal) is a cloneable slot for a disposal that
+//! - [`ReplaceableDisposal`](replaceable_disposal::ReplaceableDisposal) is a cloneable slot for a disposal that
 //!   is built, or replaced, later;
 //! - [`BoxedDisposal`] erases the type.
 //!
@@ -38,7 +38,7 @@ pub mod dispose_on_drop;
 pub mod either_disposal;
 pub mod empty_disposal;
 pub mod option_disposal;
-pub mod shared_disposal;
+pub mod replaceable_disposal;
 
 pub use crate::delegate_disposal;
 use crate::disposable::{

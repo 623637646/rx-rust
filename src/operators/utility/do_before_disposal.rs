@@ -87,6 +87,6 @@ where
         self.source
             .subscribe(observer)
             .preceded_by(CallbackDisposal::new(self.callback))
-            .map_into()
+            .map_inner_into()
     }
 }

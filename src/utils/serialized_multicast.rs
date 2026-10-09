@@ -161,7 +161,7 @@ where
     /// The termination, once one has been queued.
     ///
     /// A multicast killed by a panicking observer reports none: see the module documentation.
-    pub fn terminated(&self) -> Option<Termination<E>> {
+    pub fn termination(&self) -> Option<Termination<E>> {
         self.read(|_, termination| termination.cloned())
             .unwrap_or(None)
     }

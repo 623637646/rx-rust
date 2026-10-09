@@ -91,6 +91,6 @@ where
         self.source
             .subscribe(observer)
             .then(CallbackDisposal::new(self.callback))
-            .map_into()
+            .map_inner_into()
     }
 }

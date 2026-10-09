@@ -1,6 +1,6 @@
 //! The [`ObservableTryStream`] adapter, behind
 //! [`ObservableExt::into_try_stream`](crate::observable::ObservableExt::into_try_stream),
-//! [`ObservableExt::into_try_stream_with`](crate::observable::ObservableExt::into_try_stream_with).
+//! [`ObservableExt::into_try_stream_with_buffer`](crate::observable::ObservableExt::into_try_stream_with_buffer).
 
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -202,7 +202,7 @@ where
     }
 }
 
-/// Decides what [`into_stream_with`](crate::observable::ObservableExt::into_stream_with) keeps
+/// Decides what [`into_stream_with_buffer`](crate::observable::ObservableExt::into_stream_with_buffer) keeps
 /// when the source pushes faster than the stream is polled.
 ///
 /// An observable pushes at its own pace while a `Stream` hands out one item per poll, so the
@@ -245,7 +245,7 @@ where
 /// }
 ///
 /// let mut subject = PublishSubject::<_, Infallible, rx_rust::thread_mode::Local>::local();
-/// let mut stream = subject.clone().into_stream_with(Sum::default());
+/// let mut stream = subject.clone().into_stream_with_buffer(Sum::default());
 /// assert_eq!(stream.next().now_or_never(), None); // subscribes
 ///
 /// subject.on_next(1);

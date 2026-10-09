@@ -135,7 +135,7 @@ where
             let sub_2 = self.source_2.subscribe(ObserverImpl2(context));
             sub_1.preceded_by_wrapped(sub_2)
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 

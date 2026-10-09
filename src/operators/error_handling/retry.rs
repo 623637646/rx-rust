@@ -4,7 +4,7 @@
 use crate::delegate_disposal;
 use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::disposable::{
-    Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
+    Disposable, chain_disposal::ChainDisposal, replaceable_disposal::ReplaceableDisposal,
 };
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
@@ -74,7 +74,7 @@ impl<OE, F> Retry<OE, F> {
 
 delegate_disposal!(
     Disposal<M, D, D1>,
-    ChainDisposal<SharedDisposal<M, DisposeOnDrop<D1>>, D>,
+    ChainDisposal<ReplaceableDisposal<M, DisposeOnDrop<D1>>, D>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -116,24 +116,24 @@ where
     F: FnMut(E) -> RetryAction<E, OE1>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let shared_disposal = SharedDisposal::default();
+        let replaceable_disposal = ReplaceableDisposal::default();
         let observer = RetryObserver {
             observer,
             callback: self.callback,
-            shared_disposal: shared_disposal.clone(),
+            replaceable_disposal: replaceable_disposal.clone(),
             resubscribe: Resubscribe::new(),
         };
         self.source
             .subscribe(observer)
-            .preceded_by(shared_disposal)
-            .map_into()
+            .preceded_by(replaceable_disposal)
+            .map_inner_into()
     }
 }
 
 pub struct RetryObserver<M: ThreadMode, OR, F, OE1: ObservableTypes> {
     observer: OR,
     callback: F,
-    shared_disposal: SharedDisposal<M, DisposeOnDrop<OE1::Disposal>>,
+    replaceable_disposal: ReplaceableDisposal<M, DisposeOnDrop<OE1::Disposal>>,
     /// Subscribes the observable the callback returned, with this observer.
     resubscribe: Resubscribe<OE1, Self>,
 }
@@ -157,9 +157,9 @@ where
                 match action {
                     RetryAction::Retry(observable) => {
                         let resubscribe = self.resubscribe;
-                        self.shared_disposal
+                        self.replaceable_disposal
                             .clone()
-                            .replace(|| resubscribe.subscribe(observable, self));
+                            .replace_with(|| resubscribe.subscribe(observable, self));
                     }
                     RetryAction::Stop(error) => {
                         self.observer.on_termination(Termination::Error(error))

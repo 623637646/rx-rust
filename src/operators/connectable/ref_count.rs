@@ -181,7 +181,8 @@ where
         if let Some(controller) = controller {
             handle_connecting_or_disconnecting(self.state.clone(), Purpose::Connect(controller));
         }
-        sub.then(RefCountDisposal { state: self.state }).map_into()
+        sub.then(RefCountDisposal { state: self.state })
+            .map_inner_into()
     }
 }
 

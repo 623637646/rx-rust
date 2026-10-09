@@ -12,7 +12,7 @@
 //! | [`AsyncSubject`](async_subject::AsyncSubject) | The last value, delivered on completion; nothing on error. |
 //! | [`unicast_subject`] | A single-consumer pipe that buffers what is sent before the subscription. |
 //!
-//! Every subject terminates at most once, and reports it through [`Subject::terminated`].
+//! Every subject terminates at most once, and reports it through [`Subject::termination`].
 //!
 //! # Examples
 //! ```rust
@@ -52,7 +52,7 @@ use educe::Educe;
 /// documentation](self) and <https://reactivex.io/documentation/subject.html>.
 pub trait Subject<T, E>: ObservableTypes<Item = T, Error = E> + Observer<T, E> {
     /// The termination this subject has received, if it has received one.
-    fn terminated(&self) -> Option<Termination<E>>
+    fn termination(&self) -> Option<Termination<E>>
     where
         E: Clone;
 }

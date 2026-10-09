@@ -182,7 +182,7 @@ where
             let disposal = setup_emit_timer(context, self.scheduler, self.time_span);
             sub.preceded_by_wrapped(disposal)
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 

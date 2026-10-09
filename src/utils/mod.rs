@@ -16,8 +16,8 @@
 //! [thread mode](crate::thread_mode) that picks them, in
 //! [`thread_mode::mutable`](crate::thread_mode::mutable).
 //!
-//! The other modules are private to the crate: the queue behind a running delivery, the slot of a
-//! single inner subscription, the id generator, the panic guard and the lazy subscription of the
+//! The other modules are private to the crate: the queue behind a running delivery, the reservation
+//! slot, the id generator, the panic guard and the lazy subscription of the
 //! future and stream adapters. They serve the crate's own operators and appear in no public
 //! signature.
 //!
@@ -28,12 +28,12 @@ pub(crate) mod id_generator;
 pub(crate) mod lazy_subscription;
 pub(crate) mod on_panic;
 pub(crate) mod pending_events;
+pub(crate) mod reservation_slot;
 pub mod resubscribe;
 pub mod serialized_delivery;
 pub mod serialized_multicast;
 pub mod subscribe_with_auto_dispose_on_termination;
 pub mod subscribe_with_context;
-pub(crate) mod subscription_slot;
 
 use std::marker::PhantomData;
 

@@ -681,7 +681,7 @@ macro_rules! subscribe {
 fn test_buffer_unbounded() {
     block_on(|_| async move {
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
-        let mut stream = subject.clone().into_stream_with(Unbounded::new());
+        let mut stream = subject.clone().into_stream_with_buffer(Unbounded::new());
         subscribe!(stream);
 
         assert!(subject.on_next(111).is_continue());
@@ -701,7 +701,7 @@ fn test_buffer_unbounded() {
 fn test_buffer_latest() {
     block_on(|_| async move {
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
-        let mut stream = subject.clone().into_stream_with(Latest::new());
+        let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
         subscribe!(stream);
 
         // One item at a time goes through unchanged.
@@ -726,7 +726,7 @@ fn test_buffer_latest_completed() {
     // The newest item survives a completion that arrives before it is polled.
     block_on(|_| async move {
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
-        let mut stream = subject.clone().into_stream_with(Latest::new());
+        let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
         subscribe!(stream);
 
         assert!(subject.on_next(111).is_continue());
@@ -743,7 +743,7 @@ fn test_buffer_latest_error() {
     // The newest item is yielded before the error that followed it.
     block_on(|_| async move {
         let mut subject = PublishSubject::<_, &str, _>::shared();
-        let mut stream = subject.clone().into_try_stream_with(Latest::new());
+        let mut stream = subject.clone().into_try_stream_with_buffer(Latest::new());
         subscribe!(stream);
 
         assert!(subject.on_next(111).is_continue());
@@ -761,7 +761,7 @@ fn test_buffer_bounded_drop_oldest() {
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
         let mut stream = subject
             .clone()
-            .into_stream_with(Bounded::drop_oldest(capacity(2)));
+            .into_stream_with_buffer(Bounded::drop_oldest(capacity(2)));
         subscribe!(stream);
 
         assert!(subject.on_next(111).is_continue());
@@ -792,7 +792,7 @@ fn test_buffer_bounded_drop_newest() {
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
         let mut stream = subject
             .clone()
-            .into_stream_with(Bounded::drop_newest(capacity(2)));
+            .into_stream_with_buffer(Bounded::drop_newest(capacity(2)));
         subscribe!(stream);
 
         assert!(subject.on_next(111).is_continue());
@@ -822,7 +822,7 @@ fn test_buffer_bounded_one_is_latest() {
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
         let mut stream = subject
             .clone()
-            .into_stream_with(Bounded::new(capacity(1), Overflow::DropOldest));
+            .into_stream_with_buffer(Bounded::new(capacity(1), Overflow::DropOldest));
         subscribe!(stream);
 
         assert!(subject.on_next(111).is_continue());
@@ -852,7 +852,7 @@ fn test_buffer_evicted_dropped_outside_lock() {
     block_on(|_| async move {
         let drop_count = DropCount::new();
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
-        let mut stream = subject.clone().into_stream_with(Latest::new());
+        let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
         assert_eq!(poll_number(&mut stream), None);
 
         let mut subject_cloned = subject.clone();
@@ -884,7 +884,7 @@ fn test_buffer_evicted_dropped_outside_lock_drop_newest() {
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
         let mut stream = subject
             .clone()
-            .into_stream_with(Bounded::drop_newest(capacity(1)));
+            .into_stream_with_buffer(Bounded::drop_newest(capacity(1)));
         assert_eq!(poll_number(&mut stream), None);
 
         assert!(subject.on_next((111, None)).is_continue());
@@ -931,7 +931,9 @@ fn test_buffer_custom() {
 
     block_on(|_| async move {
         let mut subject = PublishSubject::<_, &str, _>::shared();
-        let mut stream = subject.clone().into_try_stream_with(Batch(Vec::new()));
+        let mut stream = subject
+            .clone()
+            .into_try_stream_with_buffer(Batch(Vec::new()));
         subscribe!(stream);
 
         assert!(subject.on_next(111).is_continue());
@@ -953,7 +955,7 @@ fn test_buffer_ref() {
     block_on(|_| async move {
         let values = [111, 222];
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
-        let mut stream = subject.clone().into_stream_with(Latest::new());
+        let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
         subscribe!(stream);
 
         assert!(subject.on_next(&values[0]).is_continue());
@@ -970,7 +972,7 @@ fn test_buffer_async() {
     // A consumer slower than the source sees only the newest item of each burst.
     block_on(|scheduler| async move {
         let mut subject = PublishSubject::<_, Infallible, _>::shared();
-        let mut stream = subject.clone().into_stream_with(Latest::new());
+        let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
         subscribe!(stream);
 
         assert!(subject.on_next(111).is_continue());

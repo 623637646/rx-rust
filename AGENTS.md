@@ -41,7 +41,7 @@ Rules of thumb:
   need to know whether it builds.
 - Changing `src/operators/<group>/<name>.rs` → run `tests/<name>.rs`. The mapping is one-to-one for
   nearly every operator and subject. Changing a crate-private module such as
-  `src/utils/subscription_slot.rs` → run its unit tests, `cargo test --lib utils::subscription_slot`,
+  `src/utils/reservation_slot.rs` → run its unit tests, `cargo test --lib utils::reservation_slot`,
   plus the integration tests of the operators that use it.
 - Do not re-run a test that already passed unless the code under it changed.
 - `cargo nextest run` also takes the `--test` filters above, and fails tests that leak; prefer it
@@ -108,7 +108,7 @@ cargo tarpaulin --out Html
 - `src/utils/` — shared machinery. Public modules are for users writing their own operators:
   `subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`, `serialized_delivery`,
   `serialized_multicast`, `resubscribe`. A module shared inside the crate only is
-  `pub(crate) mod`: `pending_events`, `subscription_slot`, `id_generator`, `on_panic`,
+  `pub(crate) mod`: `pending_events`, `reservation_slot`, `id_generator`, `on_panic`,
   `lazy_subscription`. A module stays public only when a public signature names its items or a
   user writing an operator needs them; otherwise it is `pub(crate)`.
 - `tests/<name>.rs` — integration tests, one file per operator; shared helpers in

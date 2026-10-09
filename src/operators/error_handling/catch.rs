@@ -4,7 +4,7 @@
 use crate::delegate_disposal;
 use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::disposable::{
-    Disposable, chain_disposal::ChainDisposal, shared_disposal::SharedDisposal,
+    Disposable, chain_disposal::ChainDisposal, replaceable_disposal::ReplaceableDisposal,
 };
 use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
@@ -69,7 +69,7 @@ impl<E0, OE, F> Catch<E0, OE, F> {
 
 delegate_disposal!(
     Disposal<M, D, D1>,
-    ChainDisposal<SharedDisposal<M, DisposeOnDrop<D1>>, D>,
+    ChainDisposal<ReplaceableDisposal<M, DisposeOnDrop<D1>>, D>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -103,24 +103,24 @@ where
     F: FnOnce(E0) -> OE1,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let shared_disposal = SharedDisposal::default();
+        let replaceable_disposal = ReplaceableDisposal::default();
         let observer = CatchObserver {
             observer,
             callback: self.callback,
-            shared_disposal: shared_disposal.clone(),
+            replaceable_disposal: replaceable_disposal.clone(),
             _marker: PhantomData,
         };
         self.source
             .subscribe(observer)
-            .preceded_by(shared_disposal)
-            .map_into()
+            .preceded_by(replaceable_disposal)
+            .map_inner_into()
     }
 }
 
 pub struct CatchObserver<M: ThreadMode, E, OR, F, D: Disposable> {
     observer: OR,
     callback: F,
-    shared_disposal: SharedDisposal<M, DisposeOnDrop<D>>,
+    replaceable_disposal: ReplaceableDisposal<M, DisposeOnDrop<D>>,
     _marker: MarkerType<E>,
 }
 
@@ -139,7 +139,7 @@ where
         match termination {
             Termination::Completed => self.observer.on_termination(Termination::Completed),
             Termination::Error(error) => {
-                self.shared_disposal.replace(|| {
+                self.replaceable_disposal.replace_with(|| {
                     let observable = (self.callback)(error);
                     observable.subscribe(self.observer)
                 });

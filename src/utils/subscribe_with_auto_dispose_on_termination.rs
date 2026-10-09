@@ -12,7 +12,8 @@
 use crate::{
     delegate_disposal,
     disposable::{
-        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, shared_disposal::SharedDisposal,
+        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop,
+        replaceable_disposal::ReplaceableDisposal,
     },
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
@@ -22,7 +23,7 @@ use educe::Educe;
 
 delegate_disposal!(
     Disposal<M, D>,
-    SharedDisposal<M, DisposeOnDrop<D>>,
+    ReplaceableDisposal<M, DisposeOnDrop<D>>,
     where M: ThreadMode, D: Disposable
 );
 
@@ -79,14 +80,14 @@ where
     D: Disposable,
     F: FnOnce(AutoDisposeOnTerminationObserver<M, OR, D>) -> DisposeOnDrop<D>,
 {
-    let shared_disposal = SharedDisposal::default();
+    let replaceable_disposal = ReplaceableDisposal::default();
     let observer = AutoDisposeOnTerminationObserver {
         observer,
-        shared_disposal: shared_disposal.clone(),
+        replaceable_disposal: replaceable_disposal.clone(),
     };
-    shared_disposal.replace(|| builder(observer));
+    replaceable_disposal.replace_with(|| builder(observer));
 
-    shared_disposal.into_dispose_on_drop()
+    replaceable_disposal.into_dispose_on_drop()
 }
 
 /// Whether `OR` is an [`AutoDisposeOnTerminationObserver`], whatever its generic arguments are.
@@ -112,7 +113,7 @@ pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
 #[educe(Debug)]
 pub struct AutoDisposeOnTerminationObserver<M: ThreadMode, OR, D: Disposable> {
     observer: OR,
-    shared_disposal: SharedDisposal<M, DisposeOnDrop<D>>,
+    replaceable_disposal: ReplaceableDisposal<M, DisposeOnDrop<D>>,
 }
 
 impl<M, T, E, OR, D> Observer<T, E> for AutoDisposeOnTerminationObserver<M, OR, D>
@@ -127,7 +128,7 @@ where
             // The observer ended its own stream, which is what a termination does too, so the
             // subscription is disposed here as well: the source is asked to stop by the flow this
             // returns, and released by the disposal whether or not it honors it.
-            self.shared_disposal.clone().dispose();
+            self.replaceable_disposal.clone().dispose();
         }
         flow
     }
@@ -135,15 +136,15 @@ where
     fn on_termination(self, termination: Termination<E>) {
         let Self {
             observer,
-            shared_disposal,
+            replaceable_disposal,
         } = self;
         // Without the guard the source stays subscribed after the termination, until the
         // subscription `subscribe_with_auto_dispose_on_termination` returned is dropped. The
         // returning path disposes right after the callback, so the panicking path takes exactly
         // the locks the returning one would: nothing new can deadlock on the unwinding thread.
-        let guard = on_panic(|| shared_disposal.clone().dispose());
+        let guard = on_panic(|| replaceable_disposal.clone().dispose());
         observer.on_termination(termination);
         drop(guard);
-        shared_disposal.dispose();
+        replaceable_disposal.dispose();
     }
 }

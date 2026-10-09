@@ -295,7 +295,7 @@ rather than in a second observable type — the `Flowable` of RxJava — and the
 conversions. `FromStream` polls its stream only after `on_next` returns, so the stream's pace is
 kept through every synchronous operator, up to the first asynchronous one. In the other direction
 `into_stream()` keeps every item that arrives between two polls, so a source faster than the
-consumer grows its buffer without bound; `into_stream_with(buffer)` bounds it with a
+consumer grows its buffer without bound; `into_stream_with_buffer(buffer)` bounds it with a
 `StreamBuffer` that decides what survives — `Latest` keeps the newest item, `Bounded` a fixed
 number of them, dropping the oldest or the newest — or folds the items into one, in an
 implementation of your own:
@@ -310,7 +310,7 @@ use rx_rust::{
 use std::convert::Infallible;
 
 let mut subject = PublishSubject::<_, Infallible, rx_rust::thread_mode::Local>::local();
-let mut stream = subject.clone().into_stream_with(Latest::new());
+let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
 assert_eq!(stream.next().now_or_never(), None); // the first poll subscribes
 
 subject.on_next(1);
@@ -414,8 +414,8 @@ Mathematical and aggregate  | `count`, `sum`, `average`, `min`, `max`, `reduce`,
 Error handling              | `catch`, `map_err`, `retry`
 Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
 Connectable                 | `multicast`, `publish`, `publish_last`, `replay`, `share`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
-Conversion                  | `into_future`, `into_try_future`, `into_stream`, `into_stream_with`, `into_try_stream`, `into_try_stream_with`, `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
-Debugging                   | `debug`, `debug_default_print`, `hook_on_subscription`, `hook_on_next`, `hook_on_termination`
+Conversion                  | `into_future`, `into_try_future`, `into_stream`, `into_stream_with_buffer`, `into_try_stream`, `into_try_stream_with_buffer`, `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
+Debugging                   | `debug`, `debug_to_stdout`, `hook_on_subscription`, `hook_on_next`, `hook_on_termination`
 
 ## Project layout
 

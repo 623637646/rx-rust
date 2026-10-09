@@ -171,7 +171,7 @@ where
     T: Clone,
     E: Clone,
 {
-    fn terminated(&self) -> Option<Termination<E>> {
-        self.0.terminated()
+    fn termination(&self) -> Option<Termination<E>> {
+        self.0.termination()
     }
 }

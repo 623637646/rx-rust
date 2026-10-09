@@ -5,7 +5,7 @@ use crate::{
     delegate_disposal,
     disposable::{
         Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-        shared_disposal::SharedDisposal,
+        replaceable_disposal::ReplaceableDisposal,
     },
     observable::{Observable, ObservableTypes},
     observer::Observer,
@@ -127,7 +127,7 @@ impl<OE, S> SubscribeOn<OE, S> {
 
 delegate_disposal!(
     Disposal<M, SD, D>,
-    ChainDisposal<SD, SharedDisposal<M, DisposeOnDrop<D>>>,
+    ChainDisposal<SD, ReplaceableDisposal<M, DisposeOnDrop<D>>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -141,7 +141,7 @@ type SubscribeOnMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as Schedu
 
 /// The slot the task puts the source's subscription into once it has subscribed.
 type UpstreamSlot<OE, S> =
-    SharedDisposal<SubscribeOnMode<OE, S>, DisposeOnDrop<<OE as ObservableTypes>::Disposal>>;
+    ReplaceableDisposal<SubscribeOnMode<OE, S>, DisposeOnDrop<<OE as ObservableTypes>::Disposal>>;
 
 /// The task of a [`SubscribeOn`]: the source, the observer, and where to put the subscription.
 type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;
@@ -171,10 +171,10 @@ where
         let task = Task::once(
             (self.source, observer, upstream_slot.clone()),
             |(source, observer, upstream_slot)| {
-                upstream_slot.replace(|| source.subscribe(observer));
+                upstream_slot.replace_with(|| source.subscribe(observer));
             },
         );
         let disposal = self.scheduler.run_task(task, None);
-        disposal.then(upstream_slot).map_into()
+        disposal.then(upstream_slot).map_inner_into()
     }
 }

@@ -20,6 +20,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** disposal and adapter APIs now name their behavior explicitly:
+  `disposable::shared_disposal::SharedDisposal` becomes
+  `disposable::replaceable_disposal::ReplaceableDisposal`, with `replace_with` instead of
+  `replace`; `DisposeOnDrop::map_into` becomes `map_inner_into`. `Subject::terminated` and
+  `SerializedMulticast::terminated` become `termination`. The stream conversions are
+  `into_stream_with_buffer` and `into_try_stream_with_buffer`. Debug printing uses
+  `DebugPrintCallback`, `Debug::with_stdout` and `ObservableExt::debug_to_stdout` instead of
+  `DefaultPrintType`, `new_default_print` and `debug_default_print`. The crate-private
+  `utils::subscription_slot::SubscriptionSlot` becomes `utils::reservation_slot::ReservationSlot`.
+  The stdout debug printer labels subscription events `Subscribed`.
 - **Breaking:** `disposable::bound_drop_disposal::BoundDropDisposal` is now
   `disposable::dispose_on_drop::DisposeOnDrop`, and the `observable::Subscription` alias is
   removed. Observable and scheduler APIs return `DisposeOnDrop<D>` directly.

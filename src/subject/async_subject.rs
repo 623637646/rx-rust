@@ -174,10 +174,10 @@ where
     T: Clone,
     E: Clone,
 {
-    fn terminated(&self) -> Option<Termination<E>>
+    fn termination(&self) -> Option<Termination<E>>
     where
         E: Clone,
     {
-        self.0.terminated()
+        self.0.termination()
     }
 }

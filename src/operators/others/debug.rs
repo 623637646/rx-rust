@@ -1,6 +1,6 @@
 //! The [`struct@Debug`] operator, behind
 //! [`ObservableExt::debug`](crate::observable::ObservableExt::debug),
-//! [`ObservableExt::debug_default_print`](crate::observable::ObservableExt::debug_default_print).
+//! [`ObservableExt::debug_to_stdout`](crate::observable::ObservableExt::debug_to_stdout).
 
 use crate::utils::MarkerType;
 use crate::{
@@ -41,7 +41,7 @@ pub enum DebugEvent<'a, T: 'a, E: 'a> {
 /// let mut values = Vec::new();
 /// let mut terminations = Vec::new();
 ///
-/// let observable = Debug::new_default_print(FromIter::new(vec![1, 2]), "trace");
+/// let observable = Debug::with_stdout(FromIter::new(vec![1, 2]), "trace");
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| terminations.push(termination),
@@ -73,16 +73,16 @@ impl<OE, C, F> Debug<OE, C, F> {
     }
 }
 
-/// The callback type of [`Debug::new_default_print`](struct@Debug#method.new_default_print), which
+/// The callback type of [`Debug::with_stdout`](struct@Debug#method.with_stdout), which
 /// prints each event to stdout.
-pub type DefaultPrintType<C, T, E> = fn(C, DebugEvent<'_, T, E>);
+pub type DebugPrintCallback<C, T, E> = fn(C, DebugEvent<'_, T, E>);
 
-impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
+impl<T, E, OE, C> Debug<OE, C, DebugPrintCallback<C, T, E>> {
     /// Creates a [`struct@Debug`] over `source` that prints every event to stdout, prefixed by
     /// `label`;
-    /// [`ObservableExt::debug_default_print`](crate::observable::ObservableExt::debug_default_print)
+    /// [`ObservableExt::debug_to_stdout`](crate::observable::ObservableExt::debug_to_stdout)
     /// is the fluent form.
-    pub fn new_default_print(source: OE, label: C) -> Self
+    pub fn with_stdout(source: OE, label: C) -> Self
     where
         C: Display,
         T: std::fmt::Debug,
@@ -96,7 +96,7 @@ impl<T, E, OE, C> Debug<OE, C, DefaultPrintType<C, T, E>> {
                 DebugEvent::OnTermination(termination) => {
                     println!("[{}]: OnTermination({:?})", label, termination)
                 }
-                DebugEvent::Subscribed => println!("[{}]: DisposeOnDrop", label),
+                DebugEvent::Subscribed => println!("[{}]: Subscribed", label),
                 DebugEvent::Disposed => println!("[{}]: Dispose", label),
             },
         }

@@ -156,7 +156,7 @@ fn test_conversion_preserves_disposal() {
 
     let disposal = disposal.map_inner(DisposableExt::into_boxed);
     assert!(!disposed.read());
-    let disposal = disposal.map_into::<Converted<_>>();
+    let disposal = disposal.map_inner_into::<Converted<_>>();
     assert!(!disposed.read());
 
     drop(disposal);

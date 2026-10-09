@@ -141,7 +141,7 @@ where
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(MergeAllObserver(context))
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 

@@ -4,7 +4,7 @@
 //!
 //! - a *generation*, compared against [`IdGenerator::latest`] to tell whether something built with
 //!   the lock released is still the current one — see
-//!   [`SharedDisposal`](crate::disposable::shared_disposal::SharedDisposal) and
+//!   [`ReplaceableDisposal`](crate::disposable::replaceable_disposal::ReplaceableDisposal) and
 //!   [`Switch`](crate::operators::combining::switch::Switch);
 //! - a *key*, identifying an entry of a collection — see
 //!   [`MergeAll`](crate::operators::combining::merge_all::MergeAll) and the observers of

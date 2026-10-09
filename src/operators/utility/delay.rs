@@ -6,9 +6,9 @@ use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use crate::observer::EventBatch;
 use crate::scheduler::{RecursiveContext, SchedulerTypes, Task};
 use crate::thread_mode::{Joined, ThreadMode};
+use crate::utils::reservation_slot::ReservationSlot;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
-use crate::utils::subscription_slot::SubscriptionSlot;
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
@@ -144,7 +144,7 @@ where
         let model = Model::<T, S::Disposal> {
             values: VecDeque::new(),
             completion: None,
-            timer: SubscriptionSlot::Idle,
+            timer: ReservationSlot::Idle,
         };
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(DelayObserver {
@@ -153,7 +153,7 @@ where
                 scheduler: self.scheduler,
             })
         })
-        .map_into()
+        .map_inner_into()
     }
 }
 
@@ -166,7 +166,7 @@ struct Model<T, D: Disposable> {
     /// Keeps at most one recursive scheduler task alive while events are waiting. The slot is
     /// reserved while the task is being scheduled, which covers schedulers that can execute a
     /// zero-delay task before returning its disposal.
-    timer: SubscriptionSlot<DisposeOnDrop<D>>,
+    timer: ReservationSlot<DisposeOnDrop<D>>,
 }
 
 impl<T, D: Disposable> Model<T, D> {
