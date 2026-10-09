@@ -250,9 +250,11 @@ not invent new names for existing cases.
 
 ## Commits
 
-Prefix the subject with a category in brackets, matching existing history:
-`[Feature]`, `[Improvement]`, `[BugFix]`, `[Refactoring]`, `[Tests]`, `[Miscellaneous]`.
+Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>)!: <subject>`,
+the subject lowercase, imperative, without a trailing period. Types: `feat`, `fix`, `perf`,
+`refactor`, `test`, `docs`, `build`, `ci`, `chore`. The scope is optional — an operator, `scheduler`,
+`subject`, … — and `!` marks a breaking change to the public API (or the MSRV).
 
-Example: `[Tests] Add drop_probe and serialized_delivery tests.`
+Example: `test(scheduler): check that a periodic task catches up after an overrun`
 
 Do not commit or push unless asked.
