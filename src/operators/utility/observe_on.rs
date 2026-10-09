@@ -6,11 +6,10 @@ use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     disposable::{Disposable, bound_drop_disposal::BoundDropDisposal},
     observable::{Observable, ObservableTypes, Subscription},
-    observer::{Event, Flow, Observer, Termination},
+    observer::{Event, EventBatch, Flow, Observer, Termination},
     scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState},
     thread_mode::{Joined, ThreadMode},
     utils::{
-        pending_events::EventBatch,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
         subscription_slot::SubscriptionSlot,
     },

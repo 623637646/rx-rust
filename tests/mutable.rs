@@ -148,13 +148,20 @@ macro_rules! mutable_tests {
             #[cfg(panic = "unwind")]
             #[test]
             fn test_cleanup_during_unwinding_after_lock_panic() {
-                use rx_rust::utils::on_panic::on_panic;
+                /// Runs its callback when dropped, which here only happens while unwinding.
+                struct Cleanup<F: FnMut()>(F);
+
+                impl<F: FnMut()> Drop for Cleanup<F> {
+                    fn drop(&mut self) {
+                        (self.0)();
+                    }
+                }
 
                 let value = Mutable::new(Some(1));
                 crate::tests_utils::panic::expect_panic_on_drop(|panic_on_drop| {
                     // Runs after the lock guard has unwound, but before the original panic is
                     // caught.
-                    let _cleanup = on_panic(|| {
+                    let _cleanup = Cleanup(|| {
                         assert!(std::thread::panicking());
                         assert_eq!(value.with_ref(|value| *value), Some(1));
                         assert_eq!(value.take_value(), Some(1));

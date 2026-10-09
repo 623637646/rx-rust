@@ -20,9 +20,9 @@
 //! # Examples
 //! ```rust
 //! use rx_rust::{
-//!     observer::{callback_observer::CallbackObserver, Flow, Termination},
+//!     observer::{callback_observer::CallbackObserver, EventBatch, Flow, Termination},
 //!     thread_mode::Local,
-//!     utils::{pending_events::EventBatch, serialized_delivery::{SerializedDelivery, UpdateOutcome}},
+//!     utils::serialized_delivery::{SerializedDelivery, UpdateOutcome},
 //! };
 //! use std::sync::{Arc, Mutex};
 //!
@@ -44,12 +44,9 @@
 
 use crate::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use crate::{
-    observer::{Flow, Observer, Termination},
+    observer::{EventBatch, Flow, Observer, Termination},
     thread_mode::ThreadMode,
-    utils::{
-        on_panic::on_panic,
-        pending_events::{EventBatch, PendingEvents},
-    },
+    utils::{on_panic::on_panic, pending_events::PendingEvents},
 };
 use educe::Educe;
 

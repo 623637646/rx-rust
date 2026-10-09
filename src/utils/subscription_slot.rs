@@ -41,19 +41,6 @@
 //! inner completes. Those two belong to different deliveries and are not serialized against each
 //! other, so either may find a build in flight and must queue instead of reserving. Answering
 //! `false` is exactly what keeps the queue in order.
-//!
-//! # Examples
-//! ```rust
-//! use rx_rust::{disposable::callback_disposal::CallbackDisposal, utils::subscription_slot::SubscriptionSlot};
-//!
-//! let mut slot = SubscriptionSlot::Idle;
-//! assert!(slot.reserve_if_idle()); // Step 1, under the lock.
-//! let subscription = CallbackDisposal::new(|| {}); // Step 2, built with the lock released.
-//! assert!(slot.fill(subscription).is_none()); // Step 3, under the lock: stored.
-//!
-//! let evicted = slot.reserve_replacing(); // The next swap evicts the stored subscription…
-//! assert!(evicted.is_some()); // …to be disposed outside the lock.
-//! ```
 
 use educe::Educe;
 
@@ -80,11 +67,6 @@ impl<D> SubscriptionSlot<D> {
     /// Whether the slot is [`Idle`](Self::Idle).
     pub fn is_idle(&self) -> bool {
         matches!(self, Self::Idle)
-    }
-
-    /// Whether a build is still in flight, even if its subscription has already been released.
-    pub fn is_reserved(&self) -> bool {
-        matches!(self, Self::Reserved | Self::ReleasedWhileReserved)
     }
 
     /// Reserves the slot for a subscription that is about to be built, and gives back the
@@ -178,5 +160,169 @@ impl<D> SubscriptionSlot<D> {
             Self::Idle => unreachable!("the slot was released without being reserved"),
             Self::ReleasedWhileReserved => unreachable!("the slot was already released"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SubscriptionSlot;
+    use std::{cell::Cell, rc::Rc};
+
+    /// Counts the drops of the probes it hands out.
+    struct DropCount(Rc<Cell<usize>>);
+
+    struct Probe(Rc<Cell<usize>>);
+
+    impl Drop for Probe {
+        fn drop(&mut self) {
+            self.0.set(self.0.get() + 1);
+        }
+    }
+
+    /// Whether a build is still in flight, even if its subscription has already been released.
+    fn is_reserved<D>(slot: &SubscriptionSlot<D>) -> bool {
+        matches!(
+            slot,
+            SubscriptionSlot::Reserved | SubscriptionSlot::ReleasedWhileReserved
+        )
+    }
+
+    impl DropCount {
+        fn new() -> Self {
+            Self(Rc::new(Cell::new(0)))
+        }
+
+        fn get(&self) -> usize {
+            self.0.get()
+        }
+
+        fn probe(&self) -> Probe {
+            Probe(self.0.clone())
+        }
+    }
+
+    #[test]
+    fn test_reserve_fill_evict() {
+        let drops = DropCount::new();
+        let mut slot = SubscriptionSlot::Idle;
+        assert!(slot.reserve_if_idle()); // Step 1, under the lock.
+        let subscription = drops.probe(); // Step 2, built with the lock released.
+        assert!(slot.fill(subscription).is_none()); // Step 3, under the lock: stored.
+
+        let evicted = slot.reserve_replacing(); // The next swap evicts the stored subscription…
+        assert!(evicted.is_some()); // …to be disposed outside the lock.
+        assert_eq!(drops.get(), 0);
+        drop(evicted);
+        assert_eq!(drops.get(), 1);
+    }
+
+    #[test]
+    fn test_release_before_fill_keeps_reservation() {
+        let drops = DropCount::new();
+        let mut slot = SubscriptionSlot::Idle;
+        assert!(slot.reserve_if_idle());
+
+        assert!(slot.release().is_none());
+        assert!(!slot.is_idle());
+        assert!(is_reserved(&slot));
+        assert!(!slot.reserve_if_idle());
+
+        let finished = slot.fill(drops.probe());
+        assert!(finished.is_some());
+        assert!(slot.is_idle());
+        assert_eq!(drops.get(), 0);
+
+        // A later build is independent of the finished subscription returned to the caller.
+        assert!(slot.reserve_if_idle());
+        assert!(slot.fill(drops.probe()).is_none());
+        drop(finished);
+        assert_eq!(drops.get(), 1);
+        assert!(!slot.is_idle());
+        assert!(!is_reserved(&slot));
+
+        let finished = slot.release();
+        assert!(finished.is_some());
+        assert!(slot.is_idle());
+        assert_eq!(drops.get(), 1);
+        drop(finished);
+        assert_eq!(drops.get(), 2);
+    }
+
+    #[test]
+    fn test_fill_before_release_hands_back_subscription() {
+        let drops = DropCount::new();
+        let mut slot = SubscriptionSlot::Idle;
+        assert!(slot.reserve_if_idle());
+        assert!(slot.fill(drops.probe()).is_none());
+        assert!(!slot.reserve_if_idle());
+
+        let finished = slot.release();
+        assert!(finished.is_some());
+        assert!(slot.is_idle());
+        assert_eq!(drops.get(), 0);
+        drop(finished);
+        assert_eq!(drops.get(), 1);
+    }
+
+    #[test]
+    fn test_reserve_replacing_active_subscription() {
+        let drops = DropCount::new();
+        let mut slot = SubscriptionSlot::Idle;
+        assert!(slot.reserve_replacing().is_none());
+        assert!(slot.fill(drops.probe()).is_none());
+
+        let evicted = slot.reserve_replacing();
+        assert!(evicted.is_some());
+        assert!(is_reserved(&slot));
+        assert_eq!(drops.get(), 0);
+        drop(evicted);
+        assert_eq!(drops.get(), 1);
+
+        assert!(slot.release().is_none());
+        let finished = slot.fill(drops.probe());
+        assert!(finished.is_some());
+        assert!(slot.is_idle());
+        drop(finished);
+        assert_eq!(drops.get(), 2);
+    }
+
+    #[test]
+    #[should_panic(expected = "the slot is already reserved")]
+    fn test_reserve_replacing_rejects_released_build_in_flight() {
+        let mut slot = SubscriptionSlot::<()>::Idle;
+        assert!(slot.reserve_if_idle());
+        assert!(slot.release().is_none());
+        slot.reserve_replacing();
+    }
+
+    #[test]
+    #[should_panic(expected = "the slot was released without being reserved")]
+    fn test_release_rejects_idle_slot() {
+        SubscriptionSlot::<()>::Idle.release();
+    }
+
+    #[test]
+    fn test_release_rejects_released_build_in_flight() {
+        let mut slot = SubscriptionSlot::<()>::Idle;
+        assert!(slot.reserve_if_idle());
+        assert!(slot.release().is_none());
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| slot.release()));
+        assert!(result.is_err());
+        // Reject the duplicate before changing state: catching the panic must not free the slot.
+        assert!(matches!(slot, SubscriptionSlot::ReleasedWhileReserved));
+        assert!(!slot.reserve_if_idle());
+        assert_eq!(slot.fill(()), Some(()));
+        assert!(slot.is_idle());
+    }
+
+    #[test]
+    #[should_panic(expected = "the slot was released without being reserved")]
+    fn test_release_rejects_already_released_subscription() {
+        let mut slot = SubscriptionSlot::<()>::Idle;
+        assert!(slot.reserve_if_idle());
+        assert!(slot.fill(()).is_none());
+        assert_eq!(slot.release(), Some(()));
+        slot.release();
     }
 }

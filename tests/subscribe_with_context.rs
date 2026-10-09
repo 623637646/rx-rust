@@ -8,8 +8,8 @@ use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use rx_rust::{
     observable::{Observable, ObservableExt, Subscription},
-    observer::{Flow, Observer, Termination},
-    utils::{pending_events::EventBatch, subscribe_with_context::subscribe_with_context},
+    observer::{EventBatch, Flow, Observer, Termination},
+    utils::subscribe_with_context::subscribe_with_context,
 };
 use std::convert::Infallible;
 use std::sync::atomic::AtomicBool;

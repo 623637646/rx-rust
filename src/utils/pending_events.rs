@@ -1,49 +1,9 @@
-//! The queue of events waiting behind a running delivery, and the batches that feed it.
-//!
-//! # Examples
-//! ```rust
-//! use rx_rust::{observer::{Event, Termination}, utils::pending_events::PendingEvents};
-//!
-//! let mut pending = PendingEvents::<i32, ()>::new();
-//! assert!(pending.push(Event::Next(1)).is_none());
-//! assert!(pending.push(Event::Termination(Termination::Completed)).is_none());
-//! // Nothing can follow a termination: the event is handed back to be dropped elsewhere.
-//! assert!(pending.push(Event::Next(2)).is_some());
-//!
-//! assert_eq!(pending.pop(), Some(Event::Next(1)));
-//! assert_eq!(pending.pop(), Some(Event::Termination(Termination::Completed)));
-//! assert_eq!(pending.pop(), None);
-//! ```
+//! The queue of events waiting behind a running delivery, fed by
+//! [`EventBatch`](crate::observer::EventBatch)es.
 
-use crate::observer::{Event, Termination};
+use crate::observer::{Event, EventBatch, Termination};
 use educe::Educe;
 use std::collections::VecDeque;
-
-/// Events queued as one unit, so that nothing can slip in between them.
-#[derive(Educe)]
-#[educe(Debug, Clone, PartialEq, Eq)]
-pub enum EventBatch<T, E> {
-    /// One value.
-    Next(T),
-    /// The termination alone.
-    Termination(Termination<E>),
-    /// A last value, then the termination.
-    NextAndTermination(T, Termination<E>),
-    /// Several values, in order.
-    NextBatch(Vec<T>),
-    /// Several values, then the termination.
-    NextBatchAndTermination(Vec<T>, Termination<E>),
-}
-
-impl<T, E> EventBatch<T, E> {
-    /// Returns whether the batch carries a termination, after which nothing can be queued.
-    pub fn ends_stream(&self) -> bool {
-        matches!(
-            self,
-            Self::Termination(_) | Self::NextAndTermination(..) | Self::NextBatchAndTermination(..)
-        )
-    }
-}
 
 /// The events waiting to be delivered to an observer.
 ///
@@ -167,5 +127,31 @@ impl<T, E> PendingEvents<T, E> {
     /// Takes the last event, whether or not values are still queued before it.
     pub fn take_termination(&mut self) -> Option<Termination<E>> {
         self.termination.take()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PendingEvents;
+    use crate::observer::{Event, Termination};
+
+    #[test]
+    fn test_nothing_after_termination() {
+        let mut pending = PendingEvents::<i32, ()>::new();
+        assert!(pending.push(Event::Next(1)).is_none());
+        assert!(
+            pending
+                .push(Event::Termination(Termination::Completed))
+                .is_none()
+        );
+        // Nothing can follow a termination: the event is handed back to be dropped elsewhere.
+        assert!(pending.push(Event::Next(2)).is_some());
+
+        assert_eq!(pending.pop(), Some(Event::Next(1)));
+        assert_eq!(
+            pending.pop(),
+            Some(Event::Termination(Termination::Completed))
+        );
+        assert_eq!(pending.pop(), None);
     }
 }

@@ -9,12 +9,9 @@ use crate::utils::MarkerType;
 use crate::{
     disposable::Disposable,
     observable::{Observable, ObservableTypes, Subscription},
-    observer::{Flow, Observer, Termination},
+    observer::{EventBatch, Flow, Observer, Termination},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
-    utils::{
-        pending_events::EventBatch,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
-    },
+    utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
 };
 use educe::Educe;
 use std::marker::PhantomData;

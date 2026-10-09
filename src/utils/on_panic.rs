@@ -22,23 +22,6 @@
 //! `drop(guard)` where the scope ends before the enclosing block. When the returning path needs
 //! something back from the guard, park it in the guard's state and take it with
 //! [`OnPanic::disarm`], which ends the scope and hands the state over.
-//!
-//! # Examples
-//! ```rust
-//! use rx_rust::utils::on_panic::on_panic;
-//! use std::{panic::catch_unwind, sync::atomic::{AtomicBool, Ordering}};
-//!
-//! static UNDONE: AtomicBool = AtomicBool::new(false);
-//!
-//! let result = catch_unwind(|| {
-//!     let guard = on_panic(|| UNDONE.store(true, Ordering::SeqCst));
-//!     panic!("the callback unwinds");
-//!     # #[allow(unreachable_code)]
-//!     drop(guard); // The returning path, which is not reached here.
-//! });
-//! assert!(result.is_err());
-//! assert!(UNDONE.load(Ordering::SeqCst));
-//! ```
 
 use educe::Educe;
 
@@ -78,4 +61,48 @@ impl<T, F: FnOnce(T)> Drop for OnPanic<T, F> {
 /// Runs `action` if the current scope unwinds, for a guard that carries no state.
 pub fn on_panic<F: FnOnce()>(action: F) -> OnPanic<(), impl FnOnce(())> {
     OnPanic::new((), move |()| action())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{OnPanic, on_panic};
+    use std::{
+        cell::Cell,
+        panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
+    };
+
+    #[test]
+    fn test_disarm() {
+        let seen = Cell::new(None);
+        let guard = OnPanic::new(111, |state| seen.set(Some(state)));
+
+        // The scope ends the returning way, so the state comes back and the action never runs.
+        assert_eq!(guard.disarm(), 111);
+        assert_eq!(seen.get(), None);
+    }
+
+    #[test]
+    fn test_dropped_without_panicking() {
+        let seen = Cell::new(None);
+
+        drop(on_panic(|| seen.set(Some(111))));
+
+        assert_eq!(seen.get(), None);
+    }
+
+    #[cfg(panic = "unwind")]
+    #[test]
+    fn test_panic() {
+        let seen = Cell::new(None);
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = OnPanic::new(111, |state| seen.set(Some(state)));
+            // Unwinds out of the guarded scope without running the panic hook, which would print.
+            resume_unwind(Box::new(()));
+        }));
+
+        assert!(result.is_err());
+        // The action ran on the unwinding thread, with the state the guard was carrying.
+        assert_eq!(seen.get(), Some(111));
+    }
 }

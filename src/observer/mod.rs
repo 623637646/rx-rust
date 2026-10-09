@@ -2,8 +2,9 @@
 //!
 //! An observer gets each value through [`Observer::on_next`], answering with a [`Flow`] that says
 //! whether it accepts more, and the last event through [`Observer::on_termination`], which
-//! consumes it. [`Termination`] is that last event, and [`Event`] is either kind of event as a
-//! value, for `materialize` and friends.
+//! consumes it. [`Termination`] is that last event, [`Event`] is either kind of event as a
+//! value, for `materialize` and friends, and [`EventBatch`] is several events that must arrive
+//! together.
 //!
 //! A pair of closures is an observer too, through
 //! [`CallbackObserver`](callback_observer::CallbackObserver), and
@@ -123,6 +124,34 @@ pub enum Event<T, E> {
     Next(T),
     /// The last event.
     Termination(Termination<E>),
+}
+
+/// Events delivered as one unit, so that nothing can slip in between them: what the serialized
+/// deliveries of [`utils`](crate::utils) take, and what an update of a
+/// [`SubscriptionContext`](crate::utils::subscribe_with_context::SubscriptionContext) queues.
+#[derive(Educe)]
+#[educe(Debug, Clone, PartialEq, Eq)]
+pub enum EventBatch<T, E> {
+    /// One value.
+    Next(T),
+    /// The termination alone.
+    Termination(Termination<E>),
+    /// A last value, then the termination.
+    NextAndTermination(T, Termination<E>),
+    /// Several values, in order.
+    NextBatch(Vec<T>),
+    /// Several values, then the termination.
+    NextBatchAndTermination(Vec<T>, Termination<E>),
+}
+
+impl<T, E> EventBatch<T, E> {
+    /// Returns whether the batch carries a termination, after which nothing can be queued.
+    pub fn ends_stream(&self) -> bool {
+        matches!(
+            self,
+            Self::Termination(_) | Self::NextAndTermination(..) | Self::NextBatchAndTermination(..)
+        )
+    }
 }
 
 /// Type erasure for any [`Observer`].

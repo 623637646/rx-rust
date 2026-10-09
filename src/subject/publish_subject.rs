@@ -10,9 +10,9 @@ use crate::delegate_disposal;
 use crate::disposable::DisposableExt;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::observable::Subscription;
+use crate::observer::EventBatch;
 use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
 use crate::thread_mode::{Local, Shared};
-use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_multicast::{MulticastDisposal, SerializedMulticast};
 use crate::{
     observable::{Observable, ObservableTypes},

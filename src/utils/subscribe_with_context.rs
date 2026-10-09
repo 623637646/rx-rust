@@ -96,10 +96,9 @@ use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     disposable::{Disposable, DisposableExt},
     observable::Subscription,
-    observer::{Flow, Observer, Termination},
+    observer::{EventBatch, Flow, Observer, Termination},
     thread_mode::ThreadMode,
     utils::{
-        pending_events::EventBatch,
         serialized_delivery::{DeliveryStop, SerializedDelivery},
         subscribe_with_auto_dispose_on_termination::is_auto_dispose_on_termination_observer,
     },

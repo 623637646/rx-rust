@@ -51,9 +51,9 @@
 //! ```rust
 //! use rx_rust::{
 //!     disposable::Disposable,
-//!     observer::{callback_observer::CallbackObserver, Flow, Termination},
+//!     observer::{callback_observer::CallbackObserver, EventBatch, Flow, Termination},
 //!     thread_mode::Local,
-//!     utils::{pending_events::EventBatch, serialized_multicast::SerializedMulticast},
+//!     utils::serialized_multicast::SerializedMulticast,
 //! };
 //! use std::sync::{Arc, Mutex};
 //!
@@ -79,11 +79,11 @@
 //! ```
 
 use crate::disposable::Disposable;
+use crate::observer::EventBatch;
 use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
 use crate::observer::{Flow, Observer, Termination};
 use crate::thread_mode::mutable::MutableBoolHelper;
 use crate::utils::id_generator::{Id, IdGenerator};
-use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome};
 use educe::Educe;
 
@@ -467,8 +467,12 @@ where
 }
 
 /// Unsubscribes one observer from a [`SerializedMulticast`].
+#[derive(Educe)]
+#[educe(Debug(bound()))]
 pub struct MulticastDisposal<'or, T, E, M: ObserverMode, R> {
+    #[educe(Debug(ignore))]
     delivery: Delivery<'or, T, E, M, R>,
+    #[educe(Debug(ignore))]
     disposed: M::Flag,
     id: Id,
 }

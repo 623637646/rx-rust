@@ -16,11 +16,8 @@ use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
-    observer::{Flow, Observer, Termination},
-    utils::{
-        pending_events::EventBatch,
-        serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome},
-    },
+    observer::{EventBatch, Flow, Observer, Termination},
+    utils::serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome},
 };
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};

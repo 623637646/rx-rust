@@ -6,8 +6,8 @@ use rx_rust::{
     disposable::Disposable,
     observable::{Observable, ObservableTypes, Subscription},
     observer::boxed_observer::{IntoBoxedObserver, ObserverMode},
-    observer::{Flow, Observer, Termination},
-    utils::{pending_events::EventBatch, serialized_delivery::SerializedDelivery},
+    observer::{EventBatch, Flow, Observer, Termination},
+    utils::serialized_delivery::SerializedDelivery,
 };
 use std::mem;
 use std::sync::{Arc, Mutex};

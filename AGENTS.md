@@ -40,7 +40,9 @@ Rules of thumb:
 - Compile errors are cheaper to find than test failures: use `cargo check --tests` when you only
   need to know whether it builds.
 - Changing `src/operators/<group>/<name>.rs` → run `tests/<name>.rs`. The mapping is one-to-one for
-  nearly every operator and subject.
+  nearly every operator and subject. Changing a crate-private module such as
+  `src/utils/subscription_slot.rs` → run its unit tests, `cargo test --lib utils::subscription_slot`,
+  plus the integration tests of the operators that use it.
 - Do not re-run a test that already passed unless the code under it changed.
 - `cargo nextest run` also takes the `--test` filters above, and fails tests that leak; prefer it
   over `cargo test` when a test may hang.
@@ -103,11 +105,14 @@ cargo tarpaulin --out Html
   implementations, one module per runtime and feature, with
   its `Shared` and `Local` scheduler side by side; `virtual_time.rs` the scheduler on a virtual
   clock that tests move forward (`VirtualTime`, always compiled).
-- `src/utils/` — shared machinery: `serialized_delivery`, `serialized_multicast`,
-  `subscribe_with_context`, `pending_events`. Public modules are for users writing their own
-  operators; a module shared inside the crate only is `pub(crate) mod`.
+- `src/utils/` — shared machinery. Public modules are for users writing their own operators:
+  `subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`, `serialized_delivery`,
+  `serialized_multicast`, `resubscribe`. A module shared inside the crate only is
+  `pub(crate) mod`: `pending_events`, `subscription_slot`, `id_generator`, `on_panic`,
+  `lazy_subscription`. A module stays public only when a public signature names its items or a
+  user writing an operator needs them; otherwise it is `pub(crate)`.
 - `tests/<name>.rs` — integration tests, one file per operator; shared helpers in
-  `tests/tests_utils/`.
+  `tests/tests_utils/`. Crate-private modules carry their own unit tests (see below).
 
 ## Code conventions
 
@@ -190,9 +195,16 @@ cargo tarpaulin --out Html
 
 ## Test conventions
 
-Integration tests (not `#[cfg(test)]` modules). Each file starts with `mod tests_utils;` and builds
-sources with `test_channel()` plus a `Checker` observer, asserting on `checker.values()`,
-`checker.state()` and the channel state after each event.
+The public API is tested by integration tests, in `tests/`. Each file starts with
+`mod tests_utils;` and builds sources with `test_channel()` plus a `Checker` observer, asserting on
+`checker.values()`, `checker.state()` and the channel state after each event.
+
+What is `pub(crate)` cannot be reached from `tests/`, nor from a doctest, so it is tested by a
+`#[cfg(test)] mod tests` at the bottom of its own file (`cargo test --lib`), with `use super::…`.
+Those tests cannot use `tests/tests_utils/` either: keep the few helpers they need local to the
+module, and keep them small — a crate-private item is a building block, tested on its own state
+machine, while its effect on the operators stays covered by the operators' integration tests. Do
+not make an item public only to test it from `tests/`.
 
 Pick the source by what the test needs from it, not by habit:
 

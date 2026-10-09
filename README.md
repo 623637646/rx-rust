@@ -386,8 +386,8 @@ Debugging                   | `debug`, `debug_default_print`, `hook_on_subscript
 - `src/thread_mode` – `ThreadMode`, `Local` and `Shared`, and the pointers, locks and flags each
   mode uses (`thread_mode::mutable`). The boxed observer each mode uses is `ObserverMode`, in
   `src/observer/boxed_observer.rs`.
-- `src/utils` – Shared machinery: serialized delivery, the subscription context most stateful
-  operators are written with.
+- `src/utils` – Shared machinery for writing operators: serialized delivery, the subscription
+  context most stateful operators are written with.
 - `tests/` – One integration test file per operator, using the same checklist of cases for each;
   great as executable documentation.
 

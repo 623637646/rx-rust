@@ -8,14 +8,20 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- `utils::lazy_subscription::LazySubscription`, the subscription of a future or stream adapter:
-  made on the first poll, released when the adapter is over.
 - `ObservableExt::into_shared` (`operators::others::into_shared::IntoShared`) declares an
   observable `Shared`, so that a `Local` source such as `Just` erases into the same type as a
   `Shared` one, and a chain of `Local` sources can be erased into a `Send` box.
 
 ### Changed
 
+- **Breaking:** `utils::pending_events::EventBatch` moved to `observer::EventBatch`, next to
+  `Event` and `Termination`.
+- **Breaking:** the crate-internal parts of `utils` are no longer public:
+  `utils::id_generator`, `utils::on_panic`, `utils::pending_events` (`PendingEvents`) and
+  `utils::subscription_slot`. They appear in no public signature; the helpers for writing an
+  operator (`subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`,
+  `serialized_delivery`, `serialized_multicast`, `resubscribe`) stay public.
+- `utils::serialized_multicast::MulticastDisposal` implements `Debug`.
 - **Breaking:** the MSRV is 1.89 (was 1.88), for educe 0.8 (was 0.6). educe 0.6 bounded a derived
   `Eq` by `PartialEq` only, which made `Termination<f64>`, `Event<f64, _>`, `EventBatch`,
   `DebugEvent` and `timeout::Error` `Eq` over a type that is not; they now require `Eq`.

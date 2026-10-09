@@ -3,9 +3,9 @@
 
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, bound_drop_disposal::BoundDropDisposal};
+use crate::observer::EventBatch;
 use crate::scheduler::{RecursiveContext, SchedulerTypes, Task};
 use crate::thread_mode::{Joined, ThreadMode};
-use crate::utils::pending_events::EventBatch;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::utils::subscription_slot::SubscriptionSlot;

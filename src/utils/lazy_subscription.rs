@@ -5,31 +5,6 @@
 //! subscribe when it is built, since nothing is listening until it is first polled. It holds a
 //! [`LazySubscription`] instead, calls [`subscribe_once`](LazySubscription::subscribe_once) from
 //! every poll, and [`release`](LazySubscription::release)s the source as soon as it has its answer.
-//!
-//! # Examples
-//! ```rust
-//! use rx_rust::{
-//!     observer::callback_observer::CallbackObserver,
-//!     operators::creating::range::Range,
-//!     utils::lazy_subscription::LazySubscription,
-//! };
-//!
-//! let mut seen = Vec::new();
-//! let mut subscription = LazySubscription::new(Range::new(1..4));
-//! assert!(matches!(subscription, LazySubscription::Source(_))); // Nothing subscribed yet.
-//!
-//! subscription.subscribe_once(|| CallbackObserver::new(|value| seen.push(value), |_| {}));
-//! assert!(matches!(subscription, LazySubscription::Subscribed(_)));
-//!
-//! assert_eq!(seen, [1, 2, 3]);
-//!
-//! // Every later call is a no-op: the source is not subscribed to again.
-//! subscription.subscribe_once(|| CallbackObserver::new(|value| seen.push(value), |_| {}));
-//! assert_eq!(seen, [1, 2, 3]);
-//!
-//! subscription.release(); // Disposes the subscription.
-//! assert!(matches!(subscription, LazySubscription::Released));
-//! ```
 
 use crate::{
     observable::{Observable, ObservableTypes, Subscription},
@@ -80,5 +55,28 @@ where
     /// Releases the subscription now instead of whenever the adapter itself is dropped.
     pub fn release(&mut self) {
         *self = Self::Released;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::LazySubscription;
+    use crate::{observer::callback_observer::CallbackObserver, operators::creating::range::Range};
+
+    #[test]
+    fn test_subscribe_once_then_release() {
+        let mut seen = Vec::new();
+        let mut subscription = LazySubscription::new(Range::new(1..4));
+        assert!(matches!(subscription, LazySubscription::Source(_))); // Nothing subscribed yet.
+
+        subscription.subscribe_once(|| CallbackObserver::new(|value| seen.push(value), |_| {}));
+        assert!(matches!(subscription, LazySubscription::Subscribed(_)));
+
+        // Every later call is a no-op: the source is not subscribed to again.
+        subscription.subscribe_once(|| CallbackObserver::new(|value| seen.push(value), |_| {}));
+
+        subscription.release(); // Disposes the subscription.
+        assert!(matches!(subscription, LazySubscription::Released));
+        assert_eq!(seen, [1, 2, 3]);
     }
 }
