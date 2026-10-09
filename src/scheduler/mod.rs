@@ -17,6 +17,7 @@
 //!
 //! [`VirtualTimeScheduler`](virtual_time::VirtualTimeScheduler) runs on a virtual clock that a
 //! test moves forward, for exact and instant time-based tests.
+//!
 //! # Executor lifetime
 //!
 //! A task can reach its own scheduler: `debounce` keeps its scheduler in its observer, and an

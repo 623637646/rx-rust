@@ -8,12 +8,29 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `scheduler::virtual_time`: `VirtualTime`, a clock that a test moves forward with `advance_by`,
+  and its `VirtualTimeScheduler`, which queues the tasks and runs them, on the calling thread, at
+  the instants they are due. Time-based tests become exact, synchronous and instant.
+- `SchedulerTypes::now`, the time on the scheduler's clock, the system's by default. Every operator
+  that measures time reads it there, so that a scheduler with a clock of its own, such as
+  `VirtualTimeScheduler`, drives the deadlines and timestamps of the operators it is given.
 - `ObservableExt::into_shared` (`operators::others::into_shared::IntoShared`) declares an
   observable `Shared`, so that a `Local` source such as `Just` erases into the same type as a
   `Shared` one, and a chain of `Local` sources can be erased into a `Send` box.
 
 ### Changed
 
+- **Breaking:** `throttle`, `timestamp` and `time_interval` take a scheduler, for its clock:
+  `.throttle(span, scheduler)`, `.timestamp(scheduler)`, `.time_interval(scheduler)`. They
+  schedule nothing; the bound is `SchedulerTypes`.
+- **Breaking:** a task step is given the scheduler's time: `TaskHandler` takes a fourth argument,
+  `now: Instant`, and so do `Stepper::step`, the step of `Task::recursive` (`(state, count, now)`)
+  and the closure of `SchedulerExt::schedule_recursively` (`(count, now)`). A
+  `TaskState::SleepUntil` is an instant on that clock. `drive` takes the scheduler it runs for,
+  whose `now` it passes to every step.
+- A `delay` given to `Scheduler::run_task` that is too long for an `Instant` to represent never
+  ends: the task is never started and is kept until it is disposed. Tokio's timer used to fire it
+  after some thirty years.
 - **Breaking:** `utils::pending_events::EventBatch` moved to `observer::EventBatch`, next to
   `Event` and `Termination`.
 - **Breaking:** the crate-internal parts of `utils` are no longer public:
@@ -111,6 +128,13 @@ All notable changes to this project are documented here. The format follows
   — and so on that task's thread, as after delivering a termination. In exchange, their source's
   disposal must be `Send + 'static` where the scheduler's tasks must be, as `timeout`'s already
   was. See `docs/decisions/0005-the-context-owns-its-source.md`.
+
+### Fixed
+
+- A delay, period, time span or timeout too long for an `Instant` to represent no longer panics on
+  overflow; its deadline is never reached instead. `delay` never delivers the value, nor anything
+  after it, `timeout` never fires, `debounce` never emits the pending value, and `interval` and
+  the `buffer_with_time*` timers stop.
 
 ### Removed
 

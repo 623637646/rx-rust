@@ -19,8 +19,8 @@ impl<C> Task<PeriodicContext<C>> {
     /// `false`.
     ///
     /// The n-th step is due at `anchor + n * period`, on the scheduler's clock; without an anchor,
-    /// the time of the first step is the anchor. A step that overruns the period is followed by the missed ones back to back,
-    /// never skipped, each after a yield point.
+    /// the time of the first step is the anchor. A step that overruns the period is followed by the
+    /// missed ones back to back, never skipped, each after a yield point.
     ///
     /// A step due later than an [`Instant`] can represent never comes: the task finishes after the
     /// step before it, and drops `state`, as it does when `step` returns `false`.

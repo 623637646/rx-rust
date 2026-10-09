@@ -24,7 +24,7 @@ Add the crate with the scheduler feature for the runtime you use:
 
 ```toml
 [dependencies]
-rx-rust = { version = "1.0", features = ["tokio-scheduler"] }
+rx-rust = { version = "2.0", features = ["tokio-scheduler"] }
 ```
 
 Enable the scheduler feature for your runtime; `tokio-scheduler` is the most common choice, and the
@@ -162,6 +162,7 @@ Feature                  | Scheduler value
 `tokio-scheduler`        | `rx_rust::scheduler::runtime::tokio::TokioScheduler::current()`, or `from_handle(runtime.handle().clone())` for a `Runtime` you own; `TokioLocalScheduler::ambient()` for the running `LocalSet`, or `from_local_set(&local_set)` for a given one (`Local` mode)
 `smol-scheduler`         | `rx_rust::scheduler::runtime::smol::SmolScheduler::global()`, or `from_executor(&executor)` for an `Executor` you own; `SmolLocalScheduler::from_executor(&executor)` for a `LocalExecutor` (`Local` mode)
 `futures-scheduler`      | `rx_rust::scheduler::runtime::futures::ThreadPoolScheduler::from_pool(pool)` for a `ThreadPool`; `LocalPoolScheduler::from_spawner(pool.spawner())` for a `LocalPool` (`Local` mode)
+(always)                 | `rx_rust::scheduler::virtual_time::VirtualTime::new().scheduler()`, on a virtual clock for tests (see [Testing on virtual time](#testing-on-virtual-time))
 
 ```rust
 #[tokio::main]
@@ -183,6 +184,49 @@ async fn main() {
 
 `subscribe_on` and `observe_on` move the subscription, or the delivery of events, onto a scheduler;
 the operators without a scheduler argument run synchronously on whichever thread pushes into them.
+
+Time comes from the scheduler too: every deadline, `timestamp`, `time_interval` and `throttle`
+reads the scheduler's clock (`SchedulerTypes::now`), never the system's directly.
+
+### Testing on virtual time
+
+`VirtualTime` is a clock that moves only when told to, and its `scheduler()` is a `Scheduler` like
+the others. A test hands that scheduler to the operators, then moves the clock with `advance_by`,
+which runs every task due by then on the calling thread, each at the instant it was due. Time-based
+pipelines are then tested on exact boundaries, synchronously, without sleeping and without an async
+runtime:
+
+```rust
+use rx_rust::{
+    observable::ObservableExt, operators::creating::interval::Interval,
+    scheduler::virtual_time::VirtualTime,
+};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+
+let time = VirtualTime::new();
+let values = Arc::new(Mutex::new(Vec::new()));
+let values_observer = Arc::clone(&values);
+let minute = Duration::from_secs(60);
+let _subscription = Interval::new(minute, time.scheduler(), Some(minute))
+    .take(3)
+    .subscribe_with_callback(move |value| values_observer.lock().unwrap().push(value), |_| {});
+
+time.advance_by(Duration::from_secs(59));
+assert!(values.lock().unwrap().is_empty());
+time.advance_by(Duration::from_secs(1));
+assert_eq!(*values.lock().unwrap(), [0]);
+// Three hours pass at once, and the interval still emits each value at its own instant.
+time.advance_by(Duration::from_secs(3 * 60 * 60));
+assert_eq!(*values.lock().unwrap(), [0, 1, 2]);
+```
+
+`run_task` only queues a task, even without a delay, so `advance_by(Duration::ZERO)` is what runs
+the work an `observe_on` or a `delay` of zero has queued. The scheduler is `Shared`. A pipeline
+that waits on something else than the clock — real IO, a timer of another runtime — belongs on a
+real scheduler.
 
 ## Futures and streams
 
