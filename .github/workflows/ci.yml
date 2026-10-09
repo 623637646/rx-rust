@@ -60,15 +60,23 @@ jobs:
     name: check every feature
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # Clippy denies warnings for the all-features build only; a warning that only one feature set
+    # produces (an unused import, dead code) must fail here.
+    env:
+      RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
       # No `--locked` here: `--no-dev-deps` rewrites Cargo.toml for the duration of the run,
-      # which changes the resolved lock file.
+      # which changes the resolved lock file. `futures` is the implicit feature of the optional
+      # dependency, which a user can enable on its own; cargo-hack skips it unless told.
       - name: Library, each feature and no feature
-        run: cargo hack --each-feature --no-dev-deps check --lib
+        run: cargo hack --each-feature --optional-deps futures --no-dev-deps check --lib
+      # Every other build is a debug build, which never compiles the `not(debug_assertions)` code.
+      - name: Library, release
+        run: cargo check --locked --release --lib --all-features
       - name: Tests
         run: cargo check --locked --tests
 
@@ -85,7 +93,8 @@ jobs:
         with:
           toolchain: ${{ steps.msrv.outputs.version }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo check --locked --features tokio-scheduler --lib
+      # Every feature, so that the code of every scheduler is checked against the MSRV.
+      - run: cargo check --locked --all-features --lib
 
   doc:
     name: docs and doctests
