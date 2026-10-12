@@ -24,7 +24,7 @@ use educe::Educe;
 
 delegate_disposal!(
     Disposal<M, D>,
-    ReplaceableDisposal<M, DisposeOnDrop<D>>,
+    ReplaceableDisposal<M, D>,
     where M: ThreadMode, D: Disposable
 );
 
@@ -127,7 +127,7 @@ pub type DisposalOf<OE> =
 #[educe(Debug)]
 pub struct AutoDisposeOnTerminationObserver<M: ThreadMode, OR, D: Disposable> {
     observer: OR,
-    replaceable_disposal: ReplaceableDisposal<M, DisposeOnDrop<D>>,
+    replaceable_disposal: ReplaceableDisposal<M, D>,
 }
 
 impl<M, T, E, OR, D> Observer<T, E> for AutoDisposeOnTerminationObserver<M, OR, D>

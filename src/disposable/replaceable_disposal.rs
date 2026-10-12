@@ -3,7 +3,7 @@
 
 use crate::thread_mode::mutable::MutableHelper;
 use crate::{
-    disposable::Disposable,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     thread_mode::ThreadMode,
     utils::id_generator::{Id, IdGenerator},
 };
@@ -11,25 +11,28 @@ use educe::Educe;
 
 #[derive(Educe)]
 #[educe(Debug, Default)]
-enum State<D> {
+enum State<D: Disposable> {
     #[educe(Default)]
     Idle,
     /// A disposal is being built with the lock released. The id is what the finished build
     /// compares itself against: a later `replace_with` starts its own build and stores its own id
     /// here, which is what makes the earlier one stale.
     Building(Id),
-    Active(D),
+    Active(DisposeOnDrop<D>),
     Disposed,
 }
 
 #[derive(Educe)]
 #[educe(Debug, Default)]
-struct Inner<D> {
+struct Inner<D: Disposable> {
     state: State<D>,
     id_generator: IdGenerator,
 }
 
 /// A cloneable slot holding at most one disposal, releasing the old disposal when replaced.
+///
+/// The slot holds the [`DisposeOnDrop`] that `subscribe` or `run_task` returns, so dropping its
+/// last clone disposes what it holds, as dropping that wrapper would.
 ///
 /// An operator that subscribes to something *after* it has already returned its own
 /// subscription — `concat` subscribing to its second source, `catch` to its fallback,
@@ -40,17 +43,18 @@ struct Inner<D> {
 /// # Examples
 /// ```rust
 /// use rx_rust::disposable::{
-///     Disposable, callback_disposal::CallbackDisposal, replaceable_disposal::ReplaceableDisposal,
+///     Disposable, DisposableExt, callback_disposal::CallbackDisposal,
+///     replaceable_disposal::ReplaceableDisposal,
 /// };
 /// use rx_rust::thread_mode::Local;
 /// use std::cell::Cell;
 ///
 /// let disposed = Cell::new(false);
-/// let slot = ReplaceableDisposal::<Local, _>::default();
+/// let slot = ReplaceableDisposal::<Local, CallbackDisposal<_>>::default();
 /// let handle = slot.clone();
 ///
 /// // Filled later, through a clone.
-/// slot.replace_with(|| CallbackDisposal::new(|| disposed.set(true)));
+/// slot.replace_with(|| CallbackDisposal::new(|| disposed.set(true)).into_dispose_on_drop());
 /// assert!(!disposed.get());
 ///
 /// handle.dispose();
@@ -61,25 +65,24 @@ struct Inner<D> {
 /// the pointer is the one the thread mode `M` picks, including for `Local`.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
-pub struct ReplaceableDisposal<M: ThreadMode, D>(#[educe(Debug(ignore))] M::Ptr<Inner<D>>);
+pub struct ReplaceableDisposal<M: ThreadMode, D: Disposable>(
+    #[educe(Debug(ignore))] M::Ptr<Inner<D>>,
+);
 
 // Written by hand rather than derived: it builds through `M::ptr`, since `M::Ptr` is not `Default`.
-impl<M: ThreadMode, D> Default for ReplaceableDisposal<M, D> {
+impl<M: ThreadMode, D: Disposable> Default for ReplaceableDisposal<M, D> {
     fn default() -> Self {
         Self(M::ptr(Inner::default()))
     }
 }
 
-impl<M: ThreadMode, D> ReplaceableDisposal<M, D> {
+impl<M: ThreadMode, D: Disposable> ReplaceableDisposal<M, D> {
     /// Disposes the held disposal, if any, then builds and stores a new one.
     ///
     /// The builder runs with the lock released, so it may subscribe to anything. If the slot is
     /// disposed, or replaced again, while the builder runs, what it built is disposed at once;
     /// once the slot has been disposed the builder is not run at all.
-    pub fn replace_with(&self, disposal_builder: impl FnOnce() -> D)
-    where
-        D: Disposable,
-    {
+    pub fn replace_with(&self, disposal_builder: impl FnOnce() -> DisposeOnDrop<D>) {
         // The superseded disposal is handed back rather than disposed under the lock.
         let (id, superseded) = self.0.with_mut(|inner| {
             if matches!(inner.state, State::Disposed) {

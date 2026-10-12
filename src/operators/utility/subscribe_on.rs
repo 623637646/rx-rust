@@ -127,7 +127,7 @@ impl<OE, S> SubscribeOn<OE, S> {
 
 delegate_disposal!(
     Disposal<M, SD, D>,
-    ChainDisposal<SD, ReplaceableDisposal<M, DisposeOnDrop<D>>>,
+    ChainDisposal<SD, ReplaceableDisposal<M, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -141,7 +141,7 @@ type SubscribeOnMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as Schedu
 
 /// The slot the task puts the source's subscription into once it has subscribed.
 type UpstreamSlot<OE, S> =
-    ReplaceableDisposal<SubscribeOnMode<OE, S>, DisposeOnDrop<<OE as ObservableTypes>::Disposal>>;
+    ReplaceableDisposal<SubscribeOnMode<OE, S>, <OE as ObservableTypes>::Disposal>;
 
 /// The task of a [`SubscribeOn`]: the source, the observer, and where to put the subscription.
 type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;

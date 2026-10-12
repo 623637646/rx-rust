@@ -27,7 +27,9 @@ All notable changes to this project are documented here. The format follows
 - **Breaking:** disposal and adapter APIs now name their behavior explicitly:
   `disposable::shared_disposal::SharedDisposal` becomes
   `disposable::replaceable_disposal::ReplaceableDisposal`, with `replace_with` instead of
-  `replace`; `DisposeOnDrop::map_into` becomes `map_inner_into`. `Subject::terminated` and
+  `replace`. Its `D` is the inner disposal: the slot holds the `DisposeOnDrop<D>` that
+  `replace_with`'s builder returns, as `subscribe` and `run_task` do, so dropping its last clone
+  disposes it; `DisposeOnDrop::map_into` becomes `map_inner_into`. `Subject::terminated` and
   `SerializedMulticast::terminated` become `termination`. The stream conversions are
   `into_stream_with_buffer` and `into_try_stream_with_buffer`. Debug printing uses
   `DebugPrintCallback`, `Debug::with_stdout` and `ObservableExt::debug_to_stdout` instead of

@@ -63,7 +63,7 @@ impl<OE1, OE2> Concat<OE1, OE2> {
 
 delegate_disposal!(
     Disposal<M, D1, D2>,
-    ChainDisposal<ReplaceableDisposal<M, DisposeOnDrop<D2>>, D1>,
+    ChainDisposal<ReplaceableDisposal<M, D2>, D1>,
     where M: ThreadMode, D1: Disposable, D2: Disposable
 );
 
@@ -105,7 +105,7 @@ where
 pub struct ConcatObserver<M: ThreadMode, OR, OE2, D: Disposable> {
     observer: OR,
     source_2: OE2,
-    sub_2: ReplaceableDisposal<M, DisposeOnDrop<D>>,
+    sub_2: ReplaceableDisposal<M, D>,
 }
 
 impl<M, T, E, OR, OE2> Observer<T, E> for ConcatObserver<M, OR, OE2, OE2::Disposal>

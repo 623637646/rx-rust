@@ -73,7 +73,7 @@ impl<OE, F> Retry<OE, F> {
 
 delegate_disposal!(
     Disposal<M, D, D1>,
-    ChainDisposal<ReplaceableDisposal<M, DisposeOnDrop<D1>>, D>,
+    ChainDisposal<ReplaceableDisposal<M, D1>, D>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -114,7 +114,7 @@ where
 pub struct RetryObserver<M: ThreadMode, OR, F, OE1: ObservableTypes> {
     observer: OR,
     callback: F,
-    replaceable_disposal: ReplaceableDisposal<M, DisposeOnDrop<OE1::Disposal>>,
+    replaceable_disposal: ReplaceableDisposal<M, OE1::Disposal>,
     /// Subscribes the observable the callback returned, with this observer.
     resubscribe: Resubscribe<OE1, Self>,
 }

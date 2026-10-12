@@ -68,7 +68,7 @@ impl<E0, OE, F> Catch<E0, OE, F> {
 
 delegate_disposal!(
     Disposal<M, D, D1>,
-    ChainDisposal<ReplaceableDisposal<M, DisposeOnDrop<D1>>, D>,
+    ChainDisposal<ReplaceableDisposal<M, D1>, D>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -113,7 +113,7 @@ where
 pub struct CatchObserver<M: ThreadMode, E, OR, F, D: Disposable> {
     observer: OR,
     callback: F,
-    replaceable_disposal: ReplaceableDisposal<M, DisposeOnDrop<D>>,
+    replaceable_disposal: ReplaceableDisposal<M, D>,
     _marker: MarkerType<E>,
 }
 
