@@ -1,13 +1,12 @@
 //! The [`TakeWhile`] operator, behind
 //! [`ObservableExt::take_while`](crate::observable::ObservableExt::take_while).
 
-use crate::utils::subscribe_with_auto_dispose_on_termination;
-use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 
@@ -65,21 +64,14 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::Disposal>;
+    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for TakeWhile<OE, F>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            TakeWhileObserver<
-                AutoDisposeOnTerminationObserver<
-                    <OE as ObservableTypes>::Mode,
-                    OR,
-                    <OE as ObservableTypes>::Disposal,
-                >,
-                F,
-            >,
+            TakeWhileObserver<subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>, F>,
             Item = T,
             Error = E,
         >,

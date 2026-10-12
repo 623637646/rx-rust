@@ -15,6 +15,7 @@ use crate::{
         Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop,
         replaceable_disposal::ReplaceableDisposal,
     },
+    observable::ObservableTypes,
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
     utils::on_panic::on_panic,
@@ -106,6 +107,19 @@ pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
             AutoDisposeOnTerminationObserver<crate::thread_mode::Local, (), ()>,
         >()
 }
+
+/// The [`AutoDisposeOnTerminationObserver`] of an operator built on this helper, subscribing the
+/// source `OE` and delivering to `OR`: what the operator's `Observable` bound names.
+pub type ObserverOf<OE, OR> = AutoDisposeOnTerminationObserver<
+    <OE as ObservableTypes>::Mode,
+    OR,
+    <OE as ObservableTypes>::Disposal,
+>;
+
+/// The [`Disposal`] of such an operator over the source `OE`: what its `ObservableTypes::Disposal`
+/// is.
+pub type DisposalOf<OE> =
+    Disposal<<OE as ObservableTypes>::Mode, <OE as ObservableTypes>::Disposal>;
 
 /// The observer [`subscribe_with_auto_dispose_on_termination`] hands to its builder: the
 /// downstream observer, plus the disposal of the source to run when it terminates or stops.

@@ -2,7 +2,6 @@
 
 use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::utils::MarkerType;
-use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::{
     self, subscribe_with_auto_dispose_on_termination,
 };
@@ -72,21 +71,14 @@ where
     type Item = bool;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::Disposal>;
+    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
 }
 
 impl<T, E, OE, F, OR> Observable<OR> for All<T, OE, F>
 where
     OR: Observer<bool, E>,
     OE: Observable<
-            AllObserver<
-                AutoDisposeOnTerminationObserver<
-                    <OE as ObservableTypes>::Mode,
-                    OR,
-                    <OE as ObservableTypes>::Disposal,
-                >,
-                F,
-            >,
+            AllObserver<subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>, F>,
             Item = T,
             Error = E,
         >,

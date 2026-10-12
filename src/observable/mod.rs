@@ -109,6 +109,18 @@ use crate::{
 };
 use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 
+/// The thread mode of an operator with the two sources `A` and `B`: their modes
+/// [`Joined`](crate::thread_mode::Joined), `Shared` as soon as one of them is.
+pub type JoinedMode<A, B> =
+    crate::thread_mode::Joined<<A as ObservableTypes>::Mode, <B as ObservableTypes>::Mode>;
+
+/// The disposals of the two sources `A` and `B` chained into one: disposing it disposes `A`'s
+/// subscription first, then `B`'s.
+pub type ChainDisposalOf<A, B> = crate::disposable::chain_disposal::ChainDisposal<
+    <A as ObservableTypes>::Disposal,
+    <B as ObservableTypes>::Disposal,
+>;
+
 /// The part of an observable that does not depend on who observes it: what it emits, the thread
 /// its events can arrive on, and the disposal of a subscription to it.
 ///

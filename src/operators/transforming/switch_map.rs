@@ -6,10 +6,9 @@ use crate::operators::combining::switch::Switch;
 use crate::operators::combining::switch::SwitchInnerObserver;
 use crate::operators::combining::switch::SwitchObserver;
 use crate::operators::transforming::map::MapObserver;
-use crate::thread_mode::Joined;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{Observable, ObservableTypes},
+    observable::{JoinedMode, Observable, ObservableTypes},
     observer::Observer,
     utils::MarkerType,
 };
@@ -79,10 +78,10 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = Joined<OE::Mode, OE1::Mode>;
+    type Mode = JoinedMode<OE, OE1>;
     /// The disposal of the [`Switch`] this operator is built on.
     type Disposal = crate::operators::combining::switch::Disposal<
-        Joined<OE::Mode, OE1::Mode>,
+        JoinedMode<OE, OE1>,
         T,
         E,
         OE::Disposal,
@@ -96,7 +95,7 @@ where
     OE: Observable<
             MapObserver<
                 SwitchObserver<
-                    Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                    JoinedMode<OE, OE1>,
                     T,
                     E,
                     OR,
@@ -110,7 +109,7 @@ where
         >,
     OE1: Observable<
             SwitchInnerObserver<
-                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                JoinedMode<OE, OE1>,
                 T,
                 E,
                 OR,

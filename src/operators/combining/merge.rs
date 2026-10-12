@@ -3,13 +3,12 @@
 
 use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
-use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{Observable, ObservableTypes},
+    observable::{ChainDisposalOf, JoinedMode, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -44,7 +43,7 @@ use educe::Educe;
 /// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 ///
-/// The mode is the two sources' joined ([`Joined`]): a merge of
+/// The mode is the two sources' joined ([`JoinedMode`]): a merge of
 /// `Local` sources keeps its state in an `Rc` and takes an observer holding one,
 ///
 /// ```rust
@@ -107,38 +106,20 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = Joined<OE1::Mode, OE2::Mode>;
-    type Disposal = Disposal<Joined<OE1::Mode, OE2::Mode>, T, E, OE1::Disposal, OE2::Disposal>;
+    type Mode = JoinedMode<OE1, OE2>;
+    type Disposal = Disposal<JoinedMode<OE1, OE2>, T, E, OE1::Disposal, OE2::Disposal>;
 }
 
 impl<T, E, OE1, OE2, OR> Observable<OR> for Merge<OE1, OE2>
 where
     OR: Observer<T, E>,
     OE1: Observable<
-            MergeObserver<
-                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
-                T,
-                E,
-                OR,
-                ChainDisposal<
-                    <OE2 as ObservableTypes>::Disposal,
-                    <OE1 as ObservableTypes>::Disposal,
-                >,
-            >,
+            MergeObserver<JoinedMode<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
             Item = T,
             Error = E,
         >,
     OE2: Observable<
-            MergeObserver<
-                Joined<<OE1 as ObservableTypes>::Mode, <OE2 as ObservableTypes>::Mode>,
-                T,
-                E,
-                OR,
-                ChainDisposal<
-                    <OE2 as ObservableTypes>::Disposal,
-                    <OE1 as ObservableTypes>::Disposal,
-                >,
-            >,
+            MergeObserver<JoinedMode<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
             Item = T,
             Error = E,
         >,

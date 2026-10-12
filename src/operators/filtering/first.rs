@@ -2,12 +2,12 @@
 //! [`ObservableExt::first`](crate::observable::ObservableExt::first).
 
 use crate::operators::filtering::element_at::ElementAtObserver;
-use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
     operators::filtering::element_at::ElementAt,
+    utils::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 
@@ -60,21 +60,14 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal =
-        crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::Disposal>;
+    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
 }
 
 impl<T, E, OE, OR> Observable<OR> for First<OE>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            ElementAtObserver<
-                AutoDisposeOnTerminationObserver<
-                    <OE as ObservableTypes>::Mode,
-                    OR,
-                    <OE as ObservableTypes>::Disposal,
-                >,
-            >,
+            ElementAtObserver<subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>>,
             Item = T,
             Error = E,
         >,

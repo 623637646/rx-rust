@@ -3,13 +3,12 @@
 
 use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
-use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{Observable, ObservableTypes},
+    observable::{ChainDisposalOf, JoinedMode, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -90,38 +89,20 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = Joined<OE::Mode, OE1::Mode>;
-    type Disposal = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::Disposal, OE1::Disposal>;
+    type Mode = JoinedMode<OE, OE1>;
+    type Disposal = Disposal<JoinedMode<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for Sample<OE, OE1>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            SampleObserver<
-                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
-                T,
-                E,
-                OR,
-                ChainDisposal<
-                    <OE as ObservableTypes>::Disposal,
-                    <OE1 as ObservableTypes>::Disposal,
-                >,
-            >,
+            SampleObserver<JoinedMode<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
             Item = T,
             Error = E,
         >,
     OE1: Observable<
-            SamplerObserver<
-                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
-                T,
-                E,
-                OR,
-                ChainDisposal<
-                    <OE as ObservableTypes>::Disposal,
-                    <OE1 as ObservableTypes>::Disposal,
-                >,
-            >,
+            SamplerObserver<JoinedMode<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
             Item = (),
             Error = E,
         >,

@@ -1,13 +1,12 @@
 //! The [`Contains`] operator, behind
 //! [`ObservableExt::contains`](crate::observable::ObservableExt::contains).
 
-use crate::utils::subscribe_with_auto_dispose_on_termination;
-use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
 
@@ -64,21 +63,14 @@ where
     type Item = bool;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::Disposal>;
+    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
 }
 
 impl<T, E, OE, OR> Observable<OR> for Contains<T, OE>
 where
     OR: Observer<bool, E>,
     OE: Observable<
-            ContainsObserver<
-                T,
-                AutoDisposeOnTerminationObserver<
-                    <OE as ObservableTypes>::Mode,
-                    OR,
-                    <OE as ObservableTypes>::Disposal,
-                >,
-            >,
+            ContainsObserver<T, subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>>,
             Item = T,
             Error = E,
         >,

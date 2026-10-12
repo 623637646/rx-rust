@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Type aliases for the shapes operators spell out: `observable::JoinedMode<A, B>` (the mode of an
+  operator with two sources) and `observable::ChainDisposalOf<A, B>` (their disposals, `A`'s
+  first); `subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>` and `DisposalOf<OE>`.
+  They are aliases, so every type they name is unchanged.
 - `scheduler::virtual_time`: `VirtualTime`, a clock that a test moves forward with `advance_by`,
   and its `VirtualTimeScheduler`, which queues the tasks and runs them, on the calling thread, at
   the instants they are due. Time-based tests become exact, synchronous and instant.

@@ -1,11 +1,11 @@
 //! The [`Dematerialize`] operator, behind
 //! [`ObservableExt::dematerialize`](crate::observable::ObservableExt::dematerialize).
 
-use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Event, Flow, Observer, Termination},
+    utils::subscribe_with_auto_dispose_on_termination,
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
@@ -61,21 +61,14 @@ where
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal =
-        crate::utils::subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode, OE::Disposal>;
+    type Disposal = subscribe_with_auto_dispose_on_termination::DisposalOf<OE>;
 }
 
 impl<T, E, OE, OR> Observable<OR> for Dematerialize<OE>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            DematerializeObserver<
-                AutoDisposeOnTerminationObserver<
-                    <OE as ObservableTypes>::Mode,
-                    OR,
-                    <OE as ObservableTypes>::Disposal,
-                >,
-            >,
+            DematerializeObserver<subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>>,
             Item = Event<T, E>,
             Error = Infallible,
         >,

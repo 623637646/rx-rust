@@ -5,11 +5,10 @@ use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::disposable::option_disposal::OptionDisposal;
 use crate::disposable::{Disposable, DisposableExt};
 use crate::thread_mode::ThreadMode;
-use crate::utils::subscribe_with_auto_dispose_on_termination;
-use crate::utils::subscribe_with_auto_dispose_on_termination::AutoDisposeOnTerminationObserver;
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::subscribe_with_auto_dispose_on_termination,
     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;
@@ -75,13 +74,7 @@ impl<T, E, OE, OR> Observable<OR> for Take<OE>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            TakeObserver<
-                AutoDisposeOnTerminationObserver<
-                    <OE as ObservableTypes>::Mode,
-                    OR,
-                    <OE as ObservableTypes>::Disposal,
-                >,
-            >,
+            TakeObserver<subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>>,
             Item = T,
             Error = E,
         >,

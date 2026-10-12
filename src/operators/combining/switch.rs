@@ -4,7 +4,6 @@
 use crate::delegate_disposal;
 use crate::disposable::Disposable;
 use crate::operators::others::with_error_type::WithErrorType;
-use crate::thread_mode::Joined;
 use crate::thread_mode::ThreadMode;
 use crate::utils::id_generator::{Id, IdGenerator};
 use crate::utils::reservation_slot::ReservationSlot;
@@ -12,7 +11,7 @@ use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{Observable, ObservableTypes},
+    observable::{JoinedMode, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::MarkerType,
@@ -98,8 +97,8 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = Joined<OE::Mode, OE1::Mode>;
-    type Disposal = Disposal<Joined<OE::Mode, OE1::Mode>, T, E, OE::Disposal, OE1::Disposal>;
+    type Mode = JoinedMode<OE, OE1>;
+    type Disposal = Disposal<JoinedMode<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for Switch<OE, OE1>
@@ -107,7 +106,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<
             SwitchObserver<
-                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                JoinedMode<OE, OE1>,
                 T,
                 E,
                 OR,
@@ -119,7 +118,7 @@ where
         >,
     OE1: Observable<
             SwitchInnerObserver<
-                Joined<<OE as ObservableTypes>::Mode, <OE1 as ObservableTypes>::Mode>,
+                JoinedMode<OE, OE1>,
                 T,
                 E,
                 OR,
