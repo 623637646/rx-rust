@@ -7,10 +7,10 @@ use crate::{
         Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
         replaceable_disposal::ReplaceableDisposal,
     },
-    observable::{Observable, ObservableTypes},
+    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::Observer,
     scheduler::{OnceContext, Scheduler, SchedulerTypes, Task},
-    thread_mode::{Joined, ThreadMode},
+    thread_mode::ThreadMode,
 };
 use educe::Educe;
 
@@ -131,17 +131,9 @@ delegate_disposal!(
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
-/// The thread mode of a [`SubscribeOn`]: relative to the thread that subscribes, the events come
-/// from the scheduler's thread, where the subscription is moved, and the source may move them
-/// again.
-///
-/// It is not the source's mode alone: `Just.subscribe_on(pool).merge(Just)` would then share the
-/// state of `merge` through an `Rc`, which both the pool's thread and the subscribing one reach.
-type SubscribeOnMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
-
 /// The slot the task puts the source's subscription into once it has subscribed.
 type UpstreamSlot<OE, S> =
-    ReplaceableDisposal<SubscribeOnMode<OE, S>, <OE as ObservableTypes>::Disposal>;
+    ReplaceableDisposal<JoinedSchedulerModeOf<OE, S>, <OE as ObservableTypes>::Disposal>;
 
 /// The task of a [`SubscribeOn`]: the source, the observer, and where to put the subscription.
 type SubscribeOnTask<OE, OR, S> = OnceContext<(OE, OR, UpstreamSlot<OE, S>)>;
@@ -153,9 +145,15 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = SubscribeOnMode<OE, S>;
+    /// Relative to the thread that subscribes, the events come from the scheduler's thread, where
+    /// the subscription is moved, and the source may move them again, so the mode is both joined.
+    ///
+    /// It is not the source's mode alone: `Just.subscribe_on(pool).merge(Just)` would then share
+    /// the state of `merge` through an `Rc`, which both the pool's thread and the subscribing one
+    /// reach.
+    type Mode = JoinedSchedulerModeOf<OE, S>;
     /// First the task that subscribes, then the subscription it made.
-    type Disposal = Disposal<SubscribeOnMode<OE, S>, S::Disposal, OE::Disposal>;
+    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for SubscribeOn<OE, S>

@@ -8,9 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- Type aliases for the shapes operators spell out: `observable::JoinedMode<A, B>` (the mode of an
-  operator with two sources) and `observable::ChainDisposalOf<A, B>` (their disposals, `A`'s
-  first); `subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>` and `DisposalOf<OE>`.
+- Type aliases for the shapes operators spell out: `observable::JoinedModeOf<A, B>` (the mode of
+  an operator with two sources) and `observable::ChainDisposalOf<A, B>` (their disposals, `A`'s
+  first); `observable::JoinedSchedulerModeOf<OE, S>` (the mode of an operator with a source and a
+  scheduler); `observable::BoxedObserverOf<'a, OE>` (the boxed observer of a source's mode);
+  `subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>` and `DisposalOf<OE>`.
   They are aliases, so every type they name is unchanged.
 - `scheduler::Clock`, `SystemClock` and `virtual_time::VirtualClock`: a handle on a scheduler's
   clock that can go where the scheduler cannot, such as a background producer feeding a local

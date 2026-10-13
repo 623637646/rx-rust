@@ -6,10 +6,10 @@ use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::{Observable, ObservableTypes},
+    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
-    thread_mode::{Joined, ThreadMode},
+    thread_mode::ThreadMode,
 };
 use educe::Educe;
 use std::time::Instant;
@@ -103,11 +103,6 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
     }
 }
 
-/// The thread mode of a [`BufferWithTimeOrCount`]: the timer's thread and the source's both emit
-/// buffers.
-type BufferWithTimeOrCountMode<OE, S> =
-    Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
-
 /// The source subscription a [`BufferWithTimeOrCount`] context owns: the timer, then the source.
 type BufferWithTimeOrCountSources<OE, S> =
     ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
@@ -123,7 +118,7 @@ type BufferWithTimeOrCountContext<M, T, E, OR, D> =
 /// the observer.
 type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
     BufferWithTimeOrCountContext<
-        BufferWithTimeOrCountMode<OE, S>,
+        JoinedSchedulerModeOf<OE, S>,
         T,
         E,
         OR,
@@ -144,8 +139,9 @@ where
 {
     type Item = Vec<T>;
     type Error = E;
-    type Mode = BufferWithTimeOrCountMode<OE, S>;
-    type Disposal = Disposal<BufferWithTimeOrCountMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
+    /// The timer's thread and the source's both emit buffers, so the mode is both joined.
+    type Mode = JoinedSchedulerModeOf<OE, S>;
+    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for BufferWithTimeOrCount<OE, S>
@@ -153,7 +149,7 @@ where
     OR: Observer<Vec<T>, E>,
     OE: Observable<
             BufferWithTimeOrCountObserver<
-                BufferWithTimeOrCountMode<OE, S>,
+                JoinedSchedulerModeOf<OE, S>,
                 T,
                 E,
                 OR,

@@ -146,7 +146,7 @@ cargo tarpaulin --out Html
   downstream observer to a user closure, and Rust rejects user code holding a value of a private
   type, so the observer and every type in its generic arguments must be public. What sits only in
   its fields or in the where-clauses of trait impls — the model, the context, scheduler task and
-  mode aliases — stays private: privacy does not check those where-clauses. `Mode` is the source's, `JoinedMode<A, B>` for several sources, or the scheduler's. Ask for
+  mode aliases — stays private: privacy does not check those where-clauses. `Mode` is the source's, `JoinedModeOf<A, B>` for several sources, `JoinedSchedulerModeOf<OE, S>` for a source and a scheduler, or the scheduler's alone (`timer`, `observe_on`). Ask for
   `OR: IntoBoxedObserver<'a, T, E, M>` only where the observer is boxed (a subject, `create`, a
   hook), box it with `M::boxed(observer)`, and bound a generic mode there by `M: ObserverMode`.
   Inside the bounds of the impl being written, project qualified —
@@ -164,8 +164,10 @@ cargo tarpaulin --out Html
   types inside stay private. `grep -rn "type Disposal = " src/operators` lists them all.
 - **Type aliases for repeated shapes**: a helper names the types an operator built on it spells
   out, from the operator's source and scheduler types: `XxxOf<OE, …>` in the helper's module
-  (`subscribe_with_auto_dispose_on_termination::{ObserverOf, DisposalOf}`), `JoinedMode<A, B>` and
-  `ChainDisposalOf<A, B>` in `observable` for an operator with two sources. Use them rather than
+  (`subscribe_with_auto_dispose_on_termination::{ObserverOf, DisposalOf}`), `JoinedModeOf<A, B>` and
+  `ChainDisposalOf<A, B>` in `observable` for an operator with two sources, `JoinedSchedulerModeOf<OE, S>`
+  for one with a source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a
+  source's mode. Use them rather than
   spelling the projections out. Such an alias is written with qualified projections
   (`<OE as ObservableTypes>::Mode`), so it can appear in the bounds of `OE` itself, and it can
   name only public types: a private model still goes through `delegate_disposal!`.

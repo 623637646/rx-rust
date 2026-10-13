@@ -1,11 +1,10 @@
 //! An observable that is one of two types, without boxing.
 
-use super::{DisposeOnDrop, Observable, ObservableTypes};
+use super::{DisposeOnDrop, JoinedModeOf, Observable, ObservableTypes};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, either_disposal::EitherDisposal},
     observer::Observer,
-    thread_mode::Joined,
 };
 use educe::Educe;
 
@@ -58,7 +57,7 @@ where
     type Item = A::Item;
     type Error = A::Error;
     /// Either side can be the one subscribed to, so the mode is both sides' joined.
-    type Mode = Joined<A::Mode, B::Mode>;
+    type Mode = JoinedModeOf<A, B>;
     type Disposal = Disposal<A::Disposal, B::Disposal>;
 }
 

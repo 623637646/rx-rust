@@ -8,7 +8,7 @@ use crate::operators::combining::concat_all::SourceObserver;
 use crate::operators::transforming::map::MapObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{JoinedMode, Observable, ObservableTypes},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
     utils::MarkerType,
 };
@@ -78,10 +78,10 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE, OE1>;
+    type Mode = JoinedModeOf<OE, OE1>;
     /// The disposal of the [`ConcatAll`] this operator is built on.
     type Disposal = crate::operators::combining::concat_all::Disposal<
-        JoinedMode<OE, OE1>,
+        JoinedModeOf<OE, OE1>,
         T,
         E,
         OE::Disposal,
@@ -95,7 +95,7 @@ where
     OE: Observable<
             MapObserver<
                 SourceObserver<
-                    JoinedMode<OE, OE1>,
+                    JoinedModeOf<OE, OE1>,
                     T,
                     E,
                     OR,
@@ -108,7 +108,7 @@ where
             Error = E,
         >,
     OE1: Observable<
-            InnerObserver<JoinedMode<OE, OE1>, T, E, OR, OE1, <OE as ObservableTypes>::Disposal>,
+            InnerObserver<JoinedModeOf<OE, OE1>, T, E, OR, OE1, <OE as ObservableTypes>::Disposal>,
             Item = T,
             Error = E,
         >,

@@ -8,7 +8,7 @@ use crate::operators::combining::merge_all::MergeAllObserver;
 use crate::operators::transforming::map::MapObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{JoinedMode, Observable, ObservableTypes},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
     utils::MarkerType,
 };
@@ -76,10 +76,10 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE, OE1>;
+    type Mode = JoinedModeOf<OE, OE1>;
     /// The disposal of the [`MergeAll`] this operator is built on.
     type Disposal = crate::operators::combining::merge_all::Disposal<
-        JoinedMode<OE, OE1>,
+        JoinedModeOf<OE, OE1>,
         T,
         E,
         OE::Disposal,
@@ -93,7 +93,7 @@ where
     OE: Observable<
             MapObserver<
                 MergeAllObserver<
-                    JoinedMode<OE, OE1>,
+                    JoinedModeOf<OE, OE1>,
                     T,
                     E,
                     OR,
@@ -107,7 +107,7 @@ where
         >,
     OE1: Observable<
             MergeAllInnerObserver<
-                JoinedMode<OE, OE1>,
+                JoinedModeOf<OE, OE1>,
                 T,
                 E,
                 OR,

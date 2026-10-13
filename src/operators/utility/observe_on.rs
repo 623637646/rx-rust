@@ -5,10 +5,10 @@ use crate::delegate_disposal;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{Observable, ObservableTypes},
+    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Event, EventBatch, Flow, Observer, Termination},
     scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
-    thread_mode::{Joined, ThreadMode},
+    thread_mode::ThreadMode,
     utils::{
         reservation_slot::ReservationSlot,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
@@ -107,11 +107,6 @@ impl<OE, S> ObserveOn<OE, S> {
     }
 }
 
-/// The thread mode of the state an [`ObserveOn`] shares between its source's thread and the
-/// scheduler's.
-type ObserveOnContextMode<OE, S> =
-    Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
-
 /// The context of an [`ObserveOn`] subscription.
 type ObserveOnContext<M, T, E, OR, S, D> =
     SubscriptionContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::Disposal>, D>;
@@ -137,7 +132,9 @@ where
     type Error = E;
     /// Every event is delivered by the scheduler's task, so the mode is the scheduler's.
     type Mode = S::Mode;
-    type Disposal = Disposal<ObserveOnContextMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
+    /// The context is shared between the source's thread and the scheduler's, so its mode is both
+    /// joined.
+    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for ObserveOn<OE, S>
@@ -145,7 +142,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<
             ObserveOnObserver<
-                ObserveOnContextMode<OE, S>,
+                JoinedSchedulerModeOf<OE, S>,
                 T,
                 E,
                 OR,
@@ -156,7 +153,7 @@ where
             Error = E,
         >,
     S: Scheduler<
-        ObserveOnTask<ObserveOnContextMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
+        ObserveOnTask<JoinedSchedulerModeOf<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
     >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {

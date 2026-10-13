@@ -9,7 +9,7 @@ use crate::disposable::{
 use crate::thread_mode::ThreadMode;
 use crate::utils::resubscribe::Resubscribe;
 use crate::{
-    observable::{JoinedMode, Observable, ObservableTypes},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -85,15 +85,15 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE, OE1>;
-    type Disposal = Disposal<JoinedMode<OE, OE1>, OE::Disposal, OE1::Disposal>;
+    type Mode = JoinedModeOf<OE, OE1>;
+    type Disposal = Disposal<JoinedModeOf<OE, OE1>, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E, OE, OE1, F, OR> Observable<OR> for Retry<OE, F>
 where
     OR: Observer<T, E>,
-    OE: Observable<RetryObserver<JoinedMode<OE, OE1>, OR, F, OE1>, Item = T, Error = E>,
-    OE1: Observable<RetryObserver<JoinedMode<OE, OE1>, OR, F, OE1>, Item = T, Error = E>,
+    OE: Observable<RetryObserver<JoinedModeOf<OE, OE1>, OR, F, OE1>, Item = T, Error = E>,
+    OE1: Observable<RetryObserver<JoinedModeOf<OE, OE1>, OR, F, OE1>, Item = T, Error = E>,
     F: FnMut(E) -> RetryAction<E, OE1>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {

@@ -9,7 +9,7 @@ use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{ChainDisposalOf, JoinedMode, Observable, ObservableTypes},
+    observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -85,8 +85,8 @@ where
 {
     type Item = bool;
     type Error = E;
-    type Mode = JoinedMode<OE1, OE2>;
-    type Disposal = Disposal<JoinedMode<OE1, OE2>, T, E, OE1::Disposal, OE2::Disposal>;
+    type Mode = JoinedModeOf<OE1, OE2>;
+    type Disposal = Disposal<JoinedModeOf<OE1, OE2>, T, E, OE1::Disposal, OE2::Disposal>;
 }
 
 impl<T, E, OE1, OE2, OR> Observable<OR> for SequenceEqual<T, OE1, OE2>
@@ -94,12 +94,12 @@ where
     OR: Observer<bool, E>,
     T: PartialEq,
     OE1: Observable<
-            SequenceEqualObserver<JoinedMode<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
+            SequenceEqualObserver<JoinedModeOf<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
             Item = T,
             Error = E,
         >,
     OE2: Observable<
-            SequenceEqualObserver<JoinedMode<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
+            SequenceEqualObserver<JoinedModeOf<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
             Item = T,
             Error = E,
         >,

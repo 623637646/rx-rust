@@ -6,7 +6,7 @@ use crate::observer::emitter::Emitter;
 use crate::utils::MarkerType;
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{Observable, ObservableTypes},
+    observable::{BoxedObserverOf, Observable, ObservableTypes},
     observer::Observer,
 };
 use educe::Educe;
@@ -90,10 +90,7 @@ impl<OE, F, D> HookOnSubscription<OE, F, D> {
         OE: ObservableTypes,
         OE::Mode: ObserverMode,
         D: Disposable,
-        F: FnOnce(
-            OE,
-            <OE::Mode as ObserverMode>::BoxedObserver<'a, OE::Item, OE::Error>,
-        ) -> DisposeOnDrop<D>,
+        F: FnOnce(OE, BoxedObserverOf<'a, OE>) -> DisposeOnDrop<D>,
     {
         HookOnSubscription::with_callback(source, callback)
     }
@@ -144,14 +141,7 @@ where
             <OE as ObservableTypes>::Mode,
         >,
     D: Disposable,
-    F: FnOnce(
-        OE,
-        <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<
-            'a,
-            <OE as ObservableTypes>::Item,
-            <OE as ObservableTypes>::Error,
-        >,
-    ) -> DisposeOnDrop<D>,
+    F: FnOnce(OE, BoxedObserverOf<'a, OE>) -> DisposeOnDrop<D>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         (self.callback)(

@@ -6,10 +6,10 @@ use crate::disposable::chain_disposal::ChainDisposal;
 use crate::disposable::{
     Disposable, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
 };
-use crate::observable::{Observable, ObservableTypes};
+use crate::observable::{JoinedSchedulerModeOf, Observable, ObservableTypes};
 use crate::observer::{Flow, Observer, Termination};
 use crate::scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task};
-use crate::thread_mode::{Joined, ThreadMode};
+use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use educe::Educe;
@@ -98,10 +98,6 @@ impl<OE, S> Timeout<OE, S> {
     }
 }
 
-/// The thread mode of a [`Timeout`]: the source's thread emits the values, the timer's the
-/// timeout.
-type TimeoutMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
-
 /// The source subscription a [`Timeout`] context owns: the timer, then the source.
 type TimeoutSources<OE, S> = ChainDisposal<
     OptionDisposal<DisposeOnDrop<<S as SchedulerTypes>::Disposal>>,
@@ -113,7 +109,14 @@ type TimeoutSources<OE, S> = ChainDisposal<
 /// once: disposing the source makes it drop its own handle, and a handle dropped once the context
 /// has stopped releases the observer.
 type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
-    SubscriptionContext<TimeoutMode<OE, S>, T, Error<E>, OR, Model, TimeoutSources<OE, S>>,
+    SubscriptionContext<
+        JoinedSchedulerModeOf<OE, S>,
+        T,
+        Error<E>,
+        OR,
+        Model,
+        TimeoutSources<OE, S>,
+    >,
 >;
 
 delegate_disposal!(
@@ -129,8 +132,9 @@ where
 {
     type Item = T;
     type Error = Error<E>;
-    type Mode = TimeoutMode<OE, S>;
-    type Disposal = Disposal<TimeoutMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
+    /// The source's thread emits the values, the timer's the timeout, so the mode is both joined.
+    type Mode = JoinedSchedulerModeOf<OE, S>;
+    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for Timeout<OE, S>
@@ -138,7 +142,7 @@ where
     OR: Observer<T, Error<E>>,
     OE: Observable<
             TimeoutObserver<
-                TimeoutMode<OE, S>,
+                JoinedSchedulerModeOf<OE, S>,
                 T,
                 E,
                 OR,

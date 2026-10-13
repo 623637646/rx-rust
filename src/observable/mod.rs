@@ -111,8 +111,23 @@ use std::{fmt::Display, num::NonZeroUsize, time::Duration};
 
 /// The thread mode of an operator with the two sources `A` and `B`: their modes
 /// [`Joined`](crate::thread_mode::Joined), `Shared` as soon as one of them is.
-pub type JoinedMode<A, B> =
+pub type JoinedModeOf<A, B> =
     crate::thread_mode::Joined<<A as ObservableTypes>::Mode, <B as ObservableTypes>::Mode>;
+
+/// The thread mode of an operator with the source `OE` and the scheduler `S`: their modes
+/// [`Joined`](crate::thread_mode::Joined), `Shared` as soon as one of them is.
+pub type JoinedSchedulerModeOf<OE, S> = crate::thread_mode::Joined<
+    <OE as ObservableTypes>::Mode,
+    <S as crate::scheduler::SchedulerTypes>::Mode,
+>;
+
+/// The boxed observer of the source `OE`'s mode, for its items and errors: what an operator that
+/// hands the downstream observer to a user callback boxes it into, so it subscribes any observer.
+pub type BoxedObserverOf<'a, OE> = <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<
+    'a,
+    <OE as ObservableTypes>::Item,
+    <OE as ObservableTypes>::Error,
+>;
 
 /// The disposals of the two sources `A` and `B` chained into one: disposing it disposes `A`'s
 /// subscription first, then `B`'s.
@@ -517,10 +532,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     where
         D: Disposable,
         Self::Mode: ObserverMode,
-        F: FnOnce(
-            Self,
-            <Self::Mode as ObserverMode>::BoxedObserver<'a, Self::Item, Self::Error>,
-        ) -> DisposeOnDrop<D>,
+        F: FnOnce(Self, BoxedObserverOf<'a, Self>) -> DisposeOnDrop<D>,
     {
         HookOnSubscription::new_boxed(self, callback)
     }
@@ -544,10 +556,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     fn hook_on_termination_boxed<'a, F>(self, callback: F) -> HookOnTermination<Self, F, true>
     where
         Self::Mode: ObserverMode,
-        F: FnOnce(
-            <Self::Mode as ObserverMode>::BoxedObserver<'a, Self::Item, Self::Error>,
-            Termination<Self::Error>,
-        ),
+        F: FnOnce(BoxedObserverOf<'a, Self>, Termination<Self::Error>),
     {
         HookOnTermination::new_boxed(self, callback)
     }

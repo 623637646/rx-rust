@@ -8,7 +8,7 @@ use crate::disposable::{
 };
 use crate::thread_mode::ThreadMode;
 use crate::{
-    observable::{JoinedMode, Observable, ObservableTypes},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     utils::MarkerType,
 };
@@ -80,15 +80,15 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE, OE1>;
-    type Disposal = Disposal<JoinedMode<OE, OE1>, OE::Disposal, OE1::Disposal>;
+    type Mode = JoinedModeOf<OE, OE1>;
+    type Disposal = Disposal<JoinedModeOf<OE, OE1>, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E0, E, OE, OE1, F, OR> Observable<OR> for Catch<E0, OE, F>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            CatchObserver<JoinedMode<OE, OE1>, E, OR, F, <OE1 as ObservableTypes>::Disposal>,
+            CatchObserver<JoinedModeOf<OE, OE1>, E, OR, F, <OE1 as ObservableTypes>::Disposal>,
             Item = T,
             Error = E0,
         >,

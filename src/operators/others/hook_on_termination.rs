@@ -5,7 +5,7 @@ use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
 use crate::observer::emitter::Emitter;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{Observable, ObservableTypes},
+    observable::{BoxedObserverOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -80,10 +80,7 @@ impl<OE, F> HookOnTermination<OE, F> {
     where
         OE: ObservableTypes,
         OE::Mode: ObserverMode,
-        F: FnOnce(
-            <OE::Mode as ObserverMode>::BoxedObserver<'a, OE::Item, OE::Error>,
-            Termination<OE::Error>,
-        ),
+        F: FnOnce(BoxedObserverOf<'a, OE>, Termination<OE::Error>),
     {
         HookOnTermination { source, callback }
     }
@@ -121,18 +118,8 @@ impl<'a, T, E, OE, F, OR> Observable<OR> for HookOnTermination<OE, F, true>
 where
     <OE as ObservableTypes>::Mode: ObserverMode,
     OR: IntoBoxedObserver<'a, T, E, <OE as ObservableTypes>::Mode>,
-    OE: Observable<
-            HookOnTerminationObserver<
-                <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<'a, T, E>,
-                F,
-            >,
-            Item = T,
-            Error = E,
-        >,
-    F: FnOnce(
-        <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<'a, T, E>,
-        Termination<E>,
-    ),
+    OE: Observable<HookOnTerminationObserver<BoxedObserverOf<'a, OE>, F>, Item = T, Error = E>,
+    F: FnOnce(BoxedObserverOf<'a, OE>, Termination<E>),
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = HookOnTerminationObserver {

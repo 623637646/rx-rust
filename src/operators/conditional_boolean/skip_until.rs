@@ -9,7 +9,7 @@ use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{ChainDisposalOf, JoinedMode, Observable, ObservableTypes},
+    observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -89,20 +89,20 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE, OE1>;
-    type Disposal = Disposal<JoinedMode<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
+    type Mode = JoinedModeOf<OE, OE1>;
+    type Disposal = Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for SkipUntil<OE, OE1>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            SkipUntilObserver<JoinedMode<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
+            SkipUntilObserver<JoinedModeOf<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
             Item = T,
             Error = E,
         >,
     OE1: Observable<
-            StartObserver<JoinedMode<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
+            StartObserver<JoinedModeOf<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
             Item = (),
             Error = E,
         >,

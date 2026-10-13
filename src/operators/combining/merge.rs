@@ -8,7 +8,7 @@ use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{ChainDisposalOf, JoinedMode, Observable, ObservableTypes},
+    observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -43,7 +43,7 @@ use educe::Educe;
 /// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 ///
-/// The mode is the two sources' joined ([`JoinedMode`]): a merge of
+/// The mode is the two sources' joined ([`JoinedModeOf`]): a merge of
 /// `Local` sources keeps its state in an `Rc` and takes an observer holding one,
 ///
 /// ```rust
@@ -106,20 +106,20 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE1, OE2>;
-    type Disposal = Disposal<JoinedMode<OE1, OE2>, T, E, OE1::Disposal, OE2::Disposal>;
+    type Mode = JoinedModeOf<OE1, OE2>;
+    type Disposal = Disposal<JoinedModeOf<OE1, OE2>, T, E, OE1::Disposal, OE2::Disposal>;
 }
 
 impl<T, E, OE1, OE2, OR> Observable<OR> for Merge<OE1, OE2>
 where
     OR: Observer<T, E>,
     OE1: Observable<
-            MergeObserver<JoinedMode<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
+            MergeObserver<JoinedModeOf<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
             Item = T,
             Error = E,
         >,
     OE2: Observable<
-            MergeObserver<JoinedMode<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
+            MergeObserver<JoinedModeOf<OE1, OE2>, T, E, OR, ChainDisposalOf<OE2, OE1>>,
             Item = T,
             Error = E,
         >,

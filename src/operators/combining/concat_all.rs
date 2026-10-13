@@ -11,7 +11,7 @@ use crate::utils::serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutc
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{JoinedMode, Observable, ObservableTypes},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::MarkerType,
@@ -99,20 +99,20 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE, OE1>;
-    type Disposal = Disposal<JoinedMode<OE, OE1>, T, E, OE::Disposal, OE1>;
+    type Mode = JoinedModeOf<OE, OE1>;
+    type Disposal = Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for ConcatAll<OE, OE1>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            SourceObserver<JoinedMode<OE, OE1>, T, E, OR, OE1, <OE as ObservableTypes>::Disposal>,
+            SourceObserver<JoinedModeOf<OE, OE1>, T, E, OR, OE1, <OE as ObservableTypes>::Disposal>,
             Item = OE1,
             Error = E,
         >,
     OE1: Observable<
-            InnerObserver<JoinedMode<OE, OE1>, T, E, OR, OE1, <OE as ObservableTypes>::Disposal>,
+            InnerObserver<JoinedModeOf<OE, OE1>, T, E, OR, OE1, <OE as ObservableTypes>::Disposal>,
             Item = T,
             Error = E,
         >,

@@ -3,11 +3,11 @@
 
 use crate::delegate_disposal;
 use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
-use crate::thread_mode::{Joined, ThreadMode};
+use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::{Observable, ObservableTypes},
+    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
 };
@@ -85,10 +85,6 @@ impl<OE, S> Debounce<OE, S> {
     }
 }
 
-/// The thread mode of a [`Debounce`]: the timer's thread emits the values, the source's the
-/// terminations.
-type DebounceMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
-
 /// The context of a [`Debounce`] subscription.
 type DebounceContext<M, T, E, OR, S, D> =
     SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>, D>;
@@ -112,19 +108,30 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = DebounceMode<OE, S>;
-    type Disposal = Disposal<DebounceMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
+    /// The timer's thread emits the values, the source's the terminations, so the mode is both
+    /// joined.
+    type Mode = JoinedSchedulerModeOf<OE, S>;
+    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for Debounce<OE, S>
 where
     OR: Observer<T, E>,
     OE: Observable<
-            DebounceObserver<DebounceMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
+            DebounceObserver<
+                JoinedSchedulerModeOf<OE, S>,
+                T,
+                E,
+                OR,
+                S,
+                <OE as ObservableTypes>::Disposal,
+            >,
             Item = T,
             Error = E,
         >,
-    S: Scheduler<DebounceTask<DebounceMode<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>>,
+    S: Scheduler<
+        DebounceTask<JoinedSchedulerModeOf<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
+    >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model::<T, S::Disposal>::Idle;

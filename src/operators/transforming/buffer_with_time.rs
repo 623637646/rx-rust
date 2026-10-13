@@ -6,10 +6,10 @@ use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::{Observable, ObservableTypes},
+    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, PeriodicContext, Scheduler, SchedulerTypes, Task},
-    thread_mode::{Joined, ThreadMode},
+    thread_mode::ThreadMode,
 };
 use educe::Educe;
 use std::time::Duration;
@@ -98,10 +98,6 @@ impl<OE, S> BufferWithTime<OE, S> {
     }
 }
 
-/// The thread mode of a [`BufferWithTime`]: the timer's thread emits the buffers, the source's
-/// the last one.
-type BufferWithTimeMode<OE, S> = Joined<<OE as ObservableTypes>::Mode, <S as SchedulerTypes>::Mode>;
-
 /// The source subscription a [`BufferWithTime`] context owns: the timer, then the source.
 type BufferWithTimeSources<OE, S> =
     ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
@@ -113,7 +109,7 @@ type BufferWithTimeSources<OE, S> =
 /// observer.
 type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
     SubscriptionContext<
-        BufferWithTimeMode<OE, S>,
+        JoinedSchedulerModeOf<OE, S>,
         Vec<T>,
         E,
         OR,
@@ -135,8 +131,10 @@ where
 {
     type Item = Vec<T>;
     type Error = E;
-    type Mode = BufferWithTimeMode<OE, S>;
-    type Disposal = Disposal<BufferWithTimeMode<OE, S>, T, E, S::Disposal, OE::Disposal>;
+    /// The timer's thread emits the buffers, the source's the last one, so the mode is both
+    /// joined.
+    type Mode = JoinedSchedulerModeOf<OE, S>;
+    type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for BufferWithTime<OE, S>
@@ -144,7 +142,7 @@ where
     OR: Observer<Vec<T>, E>,
     OE: Observable<
             BufferWithTimeObserver<
-                BufferWithTimeMode<OE, S>,
+                JoinedSchedulerModeOf<OE, S>,
                 T,
                 E,
                 OR,

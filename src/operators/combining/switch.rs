@@ -11,7 +11,7 @@ use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{JoinedMode, Observable, ObservableTypes},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     operators::creating::from_iter::FromIter,
     utils::MarkerType,
@@ -97,8 +97,8 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE, OE1>;
-    type Disposal = Disposal<JoinedMode<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
+    type Mode = JoinedModeOf<OE, OE1>;
+    type Disposal = Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T, E, OE, OE1, OR> Observable<OR> for Switch<OE, OE1>
@@ -106,7 +106,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<
             SwitchObserver<
-                JoinedMode<OE, OE1>,
+                JoinedModeOf<OE, OE1>,
                 T,
                 E,
                 OR,
@@ -118,7 +118,7 @@ where
         >,
     OE1: Observable<
             SwitchInnerObserver<
-                JoinedMode<OE, OE1>,
+                JoinedModeOf<OE, OE1>,
                 T,
                 E,
                 OR,

@@ -8,7 +8,7 @@ use crate::disposable::{
 use crate::thread_mode::ThreadMode;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
-    observable::{JoinedMode, Observable, ObservableTypes},
+    observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
 };
 use educe::Educe;
@@ -74,15 +74,15 @@ where
 {
     type Item = T;
     type Error = E;
-    type Mode = JoinedMode<OE1, OE2>;
-    type Disposal = Disposal<JoinedMode<OE1, OE2>, OE1::Disposal, OE2::Disposal>;
+    type Mode = JoinedModeOf<OE1, OE2>;
+    type Disposal = Disposal<JoinedModeOf<OE1, OE2>, OE1::Disposal, OE2::Disposal>;
 }
 
 impl<T, E, OE1, OE2, OR> Observable<OR> for Concat<OE1, OE2>
 where
     OR: Observer<T, E>,
     OE1: Observable<
-            ConcatObserver<JoinedMode<OE1, OE2>, OR, OE2, <OE2 as ObservableTypes>::Disposal>,
+            ConcatObserver<JoinedModeOf<OE1, OE2>, OR, OE2, <OE2 as ObservableTypes>::Disposal>,
             Item = T,
             Error = E,
         >,
