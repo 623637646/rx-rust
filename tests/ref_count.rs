@@ -10,9 +10,11 @@ use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
+use rx_rust::operators::connectable::connectable_controller::ConnectableController;
 use rx_rust::operators::connectable::ref_count::RefCount;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
+use rx_rust::operators::creating::just::Just;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::subject::Subject;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
@@ -1725,13 +1727,29 @@ fn test_lifetime_or_sub() {
 
 #[test]
 fn test_clone() {
-    let observable = Create::shared_boxed(|mut observer| {
-        assert!(observer.on_next(TestStruct).is_continue());
-        observer.on_termination(Termination::Error(TestStruct));
+    let observable = Create::shared_boxed(|mut observer: SendBoxedObserver<'_, i32, &str>| {
+        assert!(observer.on_next(111).is_continue());
+        observer.on_termination(Termination::Error("error"));
         DisposeOnDrop::default()
     });
     let observable = observable.publish().ref_count();
-    _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
+    _ = observable.clone();
+}
+
+/// The state is behind the subject's mode, not the source's: a `Local` source that is `Send`,
+/// multicast through a `Shared` subject, makes a `RefCount` that can be erased into a `Send` box.
+#[test]
+fn test_send_boxed_local_source() {
+    let (checker, observer) = Checker::new();
+
+    let subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
+    let observable = ConnectableController::new(Just::new(111), subject)
+        .ref_count()
+        .into_send_boxed();
+
+    let _subscription = observable.subscribe(observer);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]

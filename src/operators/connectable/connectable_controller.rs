@@ -143,7 +143,7 @@ impl<OE, S> ConnectableController<OE, S, Disconnected> {
     pub fn ref_count(self) -> RefCount<OE, S>
     where
         OE: ObservableTypes,
-        S: Clone,
+        S: ObservableTypes + Clone,
     {
         RefCount::new(self)
     }

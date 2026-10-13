@@ -91,6 +91,7 @@ where
 pub struct RefCount<OE, S>
 where
     OE: ObservableTypes,
+    S: ObservableTypes,
 {
     #[educe(Debug(ignore))]
     observable: SubjectObservable<S>,
@@ -98,24 +99,28 @@ where
     state: StatePtr<OE, S>,
 }
 
-/// The shared state of a [`RefCount`], behind the pointer the source's thread mode picks: it is
-/// reached from wherever subscribers subscribe and dispose, which is where the subject the source
-/// feeds is reached from too.
-type StatePtr<OE, S> = <<OE as ObservableTypes>::Mode as ThreadMode>::Ptr<
+/// The shared state of a [`RefCount`], behind the pointer the subject's thread mode picks — the
+/// mode of the [`RefCount`] itself: it is reached from wherever subscribers subscribe and dispose,
+/// and the source is connected and disconnected from there too.
+///
+/// The source's mode does not enter it. A `Local` value source such as `FromIter` is still `Send`,
+/// and multicast through a `Shared` subject the `RefCount` must be `Send` as its mode says; a
+/// `Shared` source multicast through a `Local` subject is confined to one thread by the subject.
+type StatePtr<OE, S> = <<S as ObservableTypes>::Mode as ThreadMode>::Ptr<
     State<OE, S, <OE as ObservableTypes>::Disposal>,
 >;
 
 impl<OE, S> RefCount<OE, S>
 where
     OE: ObservableTypes,
-    S: Clone,
+    S: ObservableTypes + Clone,
 {
     /// Creates a [`RefCount`] over a disconnected controller;
     /// [`ConnectableController::ref_count`] is the fluent form.
     pub fn new(controller: ConnectableController<OE, S, Disconnected>) -> Self {
         Self {
             observable: controller.observable(),
-            state: OE::Mode::ptr(State::Disconnected { controller }),
+            state: S::Mode::ptr(State::Disconnected { controller }),
         }
     }
 }
@@ -237,6 +242,7 @@ fn restore_subscriber<T, E, OE, S>(
 struct RefCountDisposal<OE, S>
 where
     OE: ObservableTypes,
+    S: ObservableTypes,
 {
     state: StatePtr<OE, S>,
 }
