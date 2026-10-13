@@ -1,5 +1,5 @@
-use super::{Task, TaskState};
-use std::future::Future;
+use super::{Next, Task};
+use std::{future::Future, task::Poll};
 
 /// The state of [`Task::from_future_then`]. `O` is the future's output.
 pub struct FutureThenContext<C, O> {
@@ -23,14 +23,15 @@ where
             },
             future,
             |context, future, cx, _| {
-                future.poll(cx).map(|output| {
-                    let state = context
-                        .state
-                        .take()
-                        .expect("from_future_then handler called after completion");
-                    (context.on_ready)(state, output);
-                    TaskState::Finished
-                })
+                let Poll::Ready(output) = future.poll(cx) else {
+                    return Next::Pending;
+                };
+                let state = context
+                    .state
+                    .take()
+                    .expect("from_future_then handler called after completion");
+                (context.on_ready)(state, output);
+                Next::Finished
             },
         )
     }

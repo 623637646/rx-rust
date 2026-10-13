@@ -21,7 +21,7 @@ use futures::{
 use rx_rust::{
     disposable::{Disposable, boxed_disposal::SendBoxedDisposal, dispose_on_drop::DisposeOnDrop},
     scheduler::{
-        Scheduler, SchedulerExt, SchedulerTypes, Task, TaskState,
+        Next, Scheduler, SchedulerExt, SchedulerTypes, Task,
         runtime::{
             futures::{LocalPoolScheduler, ThreadPoolScheduler},
             smol::{SmolLocalScheduler, SmolScheduler},
@@ -227,12 +227,12 @@ impl TestScheduler {
         let timer = self.schedule_recursively(
             move |_, now| {
                 if now < deadline {
-                    return TaskState::SleepUntil(deadline);
+                    return Next::SleepUntil(deadline);
                 }
                 if let Some(sender) = sender.take() {
                     let _ = sender.send(());
                 }
-                TaskState::Finished
+                Next::Finished
             },
             None,
         );

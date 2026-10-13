@@ -1,10 +1,12 @@
-use super::{Task, TaskState};
-use crate::scheduler::SchedulerTypes;
+//! [`drive()`]: how a [`Task`] runs on an async executor, the driver every built-in runtime
+//! scheduler spawns.
+
+use super::{Next, SchedulerTypes, Task};
 use std::{
     future::{Future, pending, poll_fn},
     pin::{Pin, pin},
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 /// Runs `task` after `delay` on an async executor: a scheduler spawns the future it returns, as
@@ -16,7 +18,7 @@ use std::{
 /// waits, without a timer, until it is disposed, whatever `sleep` would make of that duration
 /// (tokio's wakes after some thirty years).
 ///
-/// Every step gets `scheduler.now()`, and a [`TaskState::SleepUntil`] is measured against it.
+/// Every step gets `scheduler.now()`, and a [`Next::SleepUntil`] is measured against it.
 /// Between two steps the task yields through [`yield_now`], also for a `SleepUntil` whose instant
 /// has passed (tokio's `Sleep` would be ready at once, without yielding). A scheduler that wants
 /// another kind of yield drives the task itself through [`Task::split`] and
@@ -38,16 +40,43 @@ pub async fn drive<TC, P, S, SF>(
         }
         sleep(delay).await;
     }
+    // How long until `at`, or `None` when it has come.
+    let delay_until = |at: Instant| {
+        at.checked_duration_since(scheduler.now())
+            .filter(|delay| !delay.is_zero())
+    };
     loop {
-        match poll_fn(|cx| stepper.step(pinned.as_mut(), cx, scheduler.now())).await {
-            TaskState::Finished => break,
-            TaskState::Yield => yield_now().await,
-            TaskState::SleepUntil(at) => match at.checked_duration_since(scheduler.now()) {
-                Some(delay) if !delay.is_zero() => sleep(delay).await,
-                _ => yield_now().await,
+        let next =
+            poll_fn(|cx| Poll::Ready(stepper.step(pinned.as_mut(), cx, scheduler.now()))).await;
+        match next {
+            Next::Finished => break,
+            Next::Yield => yield_now().await,
+            Next::SleepUntil(at) => match delay_until(at) {
+                Some(delay) => sleep(delay).await,
+                None => yield_now().await,
             },
+            Next::Pending => until_woken(pending()).await,
         }
     }
+}
+
+/// Waits for `sleep`, or for the task to be woken by anything else, whichever comes first: a
+/// [`Next::Pending`] waits with a `sleep` that never ends.
+///
+/// The handler registered the task's waker, and the sleep registers it too: whatever wakes the
+/// task — the handler's event, the timer, or a spurious wake — polls this again, which ends the
+/// wait. A wake that came while the handler was still running polls it again at once, as the
+/// executor re-polls a task woken during its own poll.
+async fn until_woken(sleep: impl Future<Output = ()>) {
+    let mut sleep = pin!(sleep);
+    let mut polled = false;
+    poll_fn(|cx| {
+        if std::mem::replace(&mut polled, true) {
+            return Poll::Ready(());
+        }
+        sleep.as_mut().poll(cx)
+    })
+    .await;
 }
 
 /// A future that yields to the executor once, then completes: what [`drive`] yields with between

@@ -1,5 +1,4 @@
-use super::{Task, TaskState};
-use std::task::Poll;
+use super::{Next, Task};
 
 /// The state of [`Task::once`].
 pub struct OnceContext<C> {
@@ -19,7 +18,7 @@ impl<C> Task<OnceContext<C>> {
                 if let Some(state) = context.state.take() {
                     (context.run)(state);
                 }
-                Poll::Ready(TaskState::Finished)
+                Next::Finished
             },
         )
     }

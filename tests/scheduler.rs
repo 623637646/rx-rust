@@ -12,14 +12,14 @@ use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::scheduler::{Scheduler, SchedulerExt, Task, TaskState, drive};
+use rx_rust::scheduler::{Next, Scheduler, SchedulerExt, Task, drive};
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use std::convert::Infallible;
 use std::pin::pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, mpsc};
-use std::task::{Context, Poll, Waker};
+use std::task::{Context, Waker};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -82,9 +82,7 @@ fn test_schedule_with_abort_while_sleeping() {
         let (tx, mut rx) = futures::channel::mpsc::unbounded();
         let task = Task::new(tx, |tx, _, _, _| {
             let _ = tx.unbounded_send(());
-            Poll::Ready(TaskState::SleepUntil(
-                Instant::now() + Duration::from_secs(1),
-            ))
+            Next::SleepUntil(Instant::now() + Duration::from_secs(1))
         });
         let disposal = scheduler.run_task(task, None);
         // The first step has run: the task now sleeps.
@@ -122,10 +120,10 @@ fn test_schedule_recursively_without_delay() {
             move |index, _| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
-                    TaskState::Finished
+                    Next::Finished
                 } else {
                     tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
-                    TaskState::SleepUntil(first + DURATION_10_MS * (index as u32 + 1))
+                    Next::SleepUntil(first + DURATION_10_MS * (index as u32 + 1))
                 }
             },
             None,
@@ -153,10 +151,10 @@ fn test_schedule_recursively_with_delay() {
             move |index, _| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
-                    TaskState::Finished
+                    Next::Finished
                 } else {
                     tx.as_ref().unwrap().unbounded_send(Instant::now()).unwrap();
-                    TaskState::SleepUntil(first + DURATION_10_MS * (index as u32 + 1))
+                    Next::SleepUntil(first + DURATION_10_MS * (index as u32 + 1))
                 }
             },
             Some(DURATION_10_MS),
@@ -185,10 +183,10 @@ fn test_schedule_recursively_small_delay() {
             move |index, _| {
                 if index == RECURSION_EXECUTION_TIMES {
                     tx.take().unwrap();
-                    TaskState::Finished
+                    Next::Finished
                 } else {
                     tx.as_ref().unwrap().unbounded_send(()).unwrap();
-                    TaskState::SleepUntil(first + small * (index as u32 + 1))
+                    Next::SleepUntil(first + small * (index as u32 + 1))
                 }
             },
             Some(small),
@@ -213,7 +211,7 @@ fn test_schedule_recursively_continue_immediately_yields_and_disposes() {
             move |index, _| {
                 // The receiver may be gone after disposal races; ignore errors.
                 let _ = tx.unbounded_send(index);
-                TaskState::Yield
+                Next::Yield
             },
             None,
         );
@@ -236,7 +234,7 @@ fn test_schedule_recursively_continue_at_past_instant_yields_and_disposes() {
             move |index, _| {
                 let _ = tx.unbounded_send(index);
                 // Always in the past by the time it is evaluated.
-                TaskState::SleepUntil(past)
+                Next::SleepUntil(past)
             },
             None,
         );
@@ -684,7 +682,7 @@ fn test_tokio_current_panics_outside_of_a_runtime() {
 mod main_loop {
     use rx_rust::{
         disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-        scheduler::{Scheduler, SchedulerTypes, Task, TaskState},
+        scheduler::{Next, Scheduler, SchedulerTypes, Task},
         thread_mode::Shared,
     };
     use std::{
@@ -695,13 +693,13 @@ mod main_loop {
             atomic::{AtomicU64, Ordering},
             mpsc,
         },
-        task::{Context, Poll, Wake, Waker},
+        task::{Context, Wake, Waker},
         thread::{self, JoinHandle, ThreadId},
         time::{Duration, Instant},
     };
 
     /// A task with its pinned state boxed and its type erased: calling it steps it once.
-    type Job = Box<dyn FnMut(&mut Context<'_>) -> Poll<TaskState> + Send>;
+    type Job = Box<dyn FnMut(&mut Context<'_>) -> Next + Send>;
 
     enum Message {
         /// Queue a task, to be stepped first once `Instant` is reached.
@@ -782,13 +780,13 @@ mod main_loop {
                         sender: sender.clone(),
                     }));
                     match job(&mut Context::from_waker(&waker)) {
-                        Poll::Pending => *wait = Wait::Waker,
-                        Poll::Ready(TaskState::Finished) => drop(jobs.remove(&id)),
-                        Poll::Ready(TaskState::Yield) => {
+                        Next::Pending => *wait = Wait::Waker,
+                        Next::Finished => drop(jobs.remove(&id)),
+                        Next::Yield => {
                             *wait = Wait::Ready;
                             ready.push_back(id);
                         }
-                        Poll::Ready(TaskState::SleepUntil(at)) => *wait = Wait::Until(at),
+                        Next::SleepUntil(at) => *wait = Wait::Until(at),
                     }
                 }
                 match receiver.try_recv() {

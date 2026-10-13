@@ -99,10 +99,11 @@ cargo tarpaulin --out Html
   pointer and flag each mode picks, and the lock helpers (`thread_mode::mutable`). The boxed
   observer of a mode is the extension `ObserverMode` in `src/observer/boxed_observer.rs`.
 - `src/scheduler/` — `Scheduler<TC, P>` runs a `Task` (a context plus a `fn` handler);
-  `SchedulerExt` adds the closure conveniences. `task/` holds the task and how to run it:
-  `mod.rs` the task and its `Stepper`, `drive.rs` the async driver (`drive`, `yield_now`), and one
-  file per constructor with the state type it names (`once.rs`, `periodic.rs`, …); `runtime/` the
-  implementations, one module per runtime and feature, with
+  `SchedulerExt` adds the closure conveniences. `task/` holds the task: `mod.rs` the task, what
+  its handler answers (`Next`) and its `Stepper`, and one file per constructor with the state type
+  it names (`once.rs`, `periodic.rs`, …); `drive.rs` the async driver (`drive`, `yield_now`), which
+  runs a task through its `Stepper` on an executor; `runtime/` the
+  implementations, one module per runtime and feature, built on `drive`, with
   its `Shared` and `Local` scheduler side by side; `virtual_time.rs` the scheduler on a virtual
   clock that tests move forward (`VirtualTime`, always compiled).
 - `src/utils/` — shared machinery. Public modules are for users writing their own operators:

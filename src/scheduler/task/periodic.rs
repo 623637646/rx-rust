@@ -1,8 +1,5 @@
-use super::{Task, TaskState};
-use std::{
-    task::Poll,
-    time::{Duration, Instant},
-};
+use super::{Next, Task};
+use std::time::{Duration, Instant};
 
 /// The state of [`Task::periodic`].
 pub struct PeriodicContext<C> {
@@ -46,16 +43,16 @@ impl<C> Task<PeriodicContext<C>> {
             |context, _, _, now| {
                 let next_time = context.next_time.get_or_insert(now);
                 if !(context.step)(&mut context.state, context.count) {
-                    return Poll::Ready(TaskState::Finished);
+                    return Next::Finished;
                 }
                 context.count += 1;
                 match next_time.checked_add(context.period) {
                     Some(at) => {
                         *next_time = at;
-                        Poll::Ready(TaskState::SleepUntil(at))
+                        Next::SleepUntil(at)
                     }
                     // The next step never comes, nor does any after it: nothing is left to do.
-                    None => Poll::Ready(TaskState::Finished),
+                    None => Next::Finished,
                 }
             },
         )

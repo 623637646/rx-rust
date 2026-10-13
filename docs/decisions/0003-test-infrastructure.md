@@ -156,7 +156,7 @@ flaked: the `ci` profile of `.config/nextest.toml` retries every test twice for 
   method (the system clock), so a custom scheduler is not broken by it. Outside a task an operator
   reads `scheduler.now()` — at subscription, on an event. Inside a task the handler gets the time of
   the step as an argument: `TaskHandler` and `Stepper::step` take a `now: Instant`, and so do the
-  steps of `Task::recursive` and the closure of `schedule_recursively`. A `TaskState::SleepUntil` is
+  steps of `Task::recursive` and the closure of `schedule_recursively`. A `Next::SleepUntil` is
   an instant on that clock. `Task::periodic` without an anchor anchors on its first step's `now`.
 - **`drive` takes the scheduler** (`drive(task, delay, scheduler, sleep)`), steps with
   `scheduler.now()` and measures a `SleepUntil` against it. What is left to the implementer is that

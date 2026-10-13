@@ -38,7 +38,7 @@
 //! it is due by then. [`advance_by(Duration::ZERO)`](VirtualTime::advance_by) runs the tasks due
 //! now.
 //!
-//! A task that waits on something else than the clock ([`Poll::Pending`]: a channel, a future of
+//! A task that waits on something else than the clock ([`Next::Pending`]: a channel, a future of
 //! another runtime) is queued again, at the current time, when it is woken: in the same
 //! `advance_by` if something it runs wakes it, at the next one otherwise. A task waiting on real
 //! IO or a real timer is therefore never woken while the clock advances: such a pipeline belongs
@@ -55,7 +55,7 @@
 
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    scheduler::{Scheduler, SchedulerTypes, Task, TaskState},
+    scheduler::{Next, Scheduler, SchedulerTypes, Task},
     thread_mode::{Shared, mutable::MutableHelper},
     utils::id_generator::{Id, IdGenerator},
 };
@@ -65,7 +65,7 @@ use std::{
     collections::{BinaryHeap, HashMap},
     pin::Pin,
     sync::{Arc, Mutex, Weak},
-    task::{Context, Poll, Wake, Waker},
+    task::{Context, Wake, Waker},
     time::{Duration, Instant},
 };
 
@@ -109,7 +109,7 @@ pub struct VirtualTimeDisposal {
 const MAX_STALLED_STEPS: u32 = 10_000;
 
 /// A task as the queue holds it: its stepper and its pinned state, behind one call.
-type Job = Box<dyn FnMut(&mut Context<'_>, Instant) -> Poll<TaskState> + Send>;
+type Job = Box<dyn FnMut(&mut Context<'_>, Instant) -> Next + Send>;
 
 /// Everything of a [`VirtualTime`], behind one lock. The lock never runs a task nor drops one: a
 /// step and a drop can take it again (a disposal, a wake, a read of the clock), so they happen
@@ -141,7 +141,7 @@ enum Slot {
         woken: bool,
         stalled: u32,
     },
-    /// Returned [`Poll::Pending`]: it waits to be woken.
+    /// Returned [`Next::Pending`]: it waits to be woken.
     Parked(Job),
 }
 
@@ -195,7 +195,7 @@ impl State {
     }
 
     /// Acts on the answer of a step.
-    fn after_step(&mut self, id: Id, job: Job, poll: Poll<TaskState>) -> AfterStep {
+    fn after_step(&mut self, id: Id, job: Job, next: Next) -> AfterStep {
         self.running = None;
         let (woken, stalled) = match self.slots.get(&id) {
             Some(&Slot::Running {
@@ -209,18 +209,18 @@ impl State {
                 return AfterStep::Done(job);
             }
         };
-        match poll {
-            Poll::Ready(TaskState::Finished) => {
+        match next {
+            Next::Finished => {
                 self.slots.remove(&id);
                 AfterStep::Done(job)
             }
-            Poll::Ready(TaskState::Yield) => {
+            Next::Yield => {
                 self.push(id, job, Some(self.now), 0);
                 AfterStep::Requeued
             }
             // Requeued with a new sequence even when the instant has passed, so that the other
             // tasks due now get their turn first.
-            Poll::Ready(TaskState::SleepUntil(at)) => {
+            Next::SleepUntil(at) => {
                 let stalled = if at <= self.now { stalled + 1 } else { 0 };
                 if stalled >= MAX_STALLED_STEPS {
                     self.slots.remove(&id);
@@ -231,11 +231,11 @@ impl State {
             }
             // Woken before its step returned: it runs again rather than wait for a wake that
             // already came.
-            Poll::Pending if woken => {
+            Next::Pending if woken => {
                 self.push(id, job, Some(self.now), 0);
                 AfterStep::Requeued
             }
-            Poll::Pending => {
+            Next::Pending => {
                 self.slots.insert(id, Slot::Parked(job));
                 AfterStep::Requeued
             }
@@ -337,8 +337,8 @@ impl VirtualTime {
                 id,
                 state: Arc::downgrade(&self.state),
             }));
-            let poll = job(&mut Context::from_waker(&waker), now);
-            match self.state.with_mut(|state| state.after_step(id, job, poll)) {
+            let step = job(&mut Context::from_waker(&waker), now);
+            match self.state.with_mut(|state| state.after_step(id, job, step)) {
                 AfterStep::Requeued => {}
                 AfterStep::Done(job) => drop(job),
                 AfterStep::Stalled(job) => {

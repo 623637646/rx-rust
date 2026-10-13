@@ -79,15 +79,17 @@
     allow(rustdoc::broken_intra_doc_links)
 )]
 
+mod drive;
 pub mod runtime;
 mod task;
 pub mod virtual_time;
 
+pub use drive::{drive, yield_now};
 #[cfg(feature = "futures")]
 pub use task::StreamThenContext;
 pub use task::{
-    FutureThenContext, OnceContext, PeriodicContext, RecursiveContext, Stepper, Task, TaskHandler,
-    TaskState, drive, yield_now,
+    FutureThenContext, Next, OnceContext, PeriodicContext, RecursiveContext, Stepper, Task,
+    TaskHandler,
 };
 
 use crate::{
@@ -135,13 +137,13 @@ pub trait SchedulerTypes {
     /// Every operator that measures time reads it here, at subscription or on an event, and a
     /// task gets it as the `now` of each step, so that a scheduler with a clock of its own — a
     /// virtual one in tests — drives the deadlines and timestamps of the operators it is given.
-    /// A [`TaskState::SleepUntil`] is an instant on this clock.
+    /// A [`Next::SleepUntil`] is an instant on this clock.
     fn now(&self) -> Instant {
         Instant::now()
     }
 }
 
-/// Runs a [`Task`], after an optional delay, until it reports [`TaskState::Finished`].
+/// Runs a [`Task`], after an optional delay, until it reports [`Next::Finished`].
 ///
 /// The trait is generic over the task's states `TC` and `P` so that each implementation states
 /// what it requires of them: `Send + 'static` for a multi-threaded scheduler, `'static` for a
@@ -167,16 +169,16 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
         self.run_task(Task::once(task, |task| task()), delay)
     }
 
-    /// Runs `task(count, now)` until it returns [`TaskState::Finished`], as [`Task::recursive`]
+    /// Runs `task(count, now)` until it returns [`Next::Finished`], as [`Task::recursive`]
     /// does. `now` is the time of the step on the scheduler's clock, the one a
-    /// [`TaskState::SleepUntil`] is measured on.
+    /// [`Next::SleepUntil`] is measured on.
     fn schedule_recursively<F>(
         &self,
         task: F,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal>
     where
-        F: FnMut(usize, Instant) -> TaskState,
+        F: FnMut(usize, Instant) -> Next,
         Self: Scheduler<RecursiveContext<F>>,
     {
         self.run_task(

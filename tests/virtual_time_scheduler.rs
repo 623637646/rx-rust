@@ -9,12 +9,12 @@ use rx_rust::observable::ObservableExt;
 use rx_rust::operators::creating::interval::Interval;
 use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::{VirtualTime, VirtualTimeScheduler};
-use rx_rust::scheduler::{Scheduler, SchedulerExt, SchedulerTypes, Task, TaskState};
+use rx_rust::scheduler::{Next, Scheduler, SchedulerExt, SchedulerTypes, Task};
 use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::task::{Poll, Waker};
+use std::task::Waker;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -121,9 +121,9 @@ fn test_steps_see_the_instant_they_were_due() {
         move |count, now| {
             log_at(&log_task, "step", now, start);
             match count {
-                0 => TaskState::SleepUntil(now + DURATION_10_MS),
-                1 => TaskState::SleepUntil(now + DURATION_10_MS * 3),
-                _ => TaskState::Finished,
+                0 => Next::SleepUntil(now + DURATION_10_MS),
+                1 => Next::SleepUntil(now + DURATION_10_MS * 3),
+                _ => Next::Finished,
             }
         },
         Some(DURATION_10_MS),
@@ -184,9 +184,9 @@ fn test_yield_lets_others_run_first() {
         move |count, _| {
             order_a.with_mut(|order| order.push("a"));
             if count == 0 {
-                TaskState::Yield
+                Next::Yield
             } else {
-                TaskState::Finished
+                Next::Finished
             }
         },
         None,
@@ -315,7 +315,7 @@ fn test_dispose_while_running() {
             if let Some(disposal) = own_disposal_task.take_value() {
                 Disposable::dispose(disposal);
             }
-            TaskState::SleepUntil(now + DURATION_10_MS)
+            Next::SleepUntil(now + DURATION_10_MS)
         },
         None,
     );
@@ -533,7 +533,7 @@ fn test_handler_gets_virtual_now() {
     let _disposal = time.scheduler().run_task(
         Task::new(seen_task, |seen, _, _, now| {
             let _ = seen.replace_value(Some(now));
-            Poll::Ready(TaskState::Finished)
+            Next::Finished
         }),
         Some(DURATION_100_MS),
     );
@@ -604,9 +604,9 @@ fn test_sleep_until_passed_instant_a_few_times() {
         move |count, now| {
             steps_task.with_mut(|steps| *steps += 1);
             if count < 100 {
-                TaskState::SleepUntil(now)
+                Next::SleepUntil(now)
             } else {
-                TaskState::Finished
+                Next::Finished
             }
         },
         None,
@@ -625,7 +625,7 @@ fn test_stalled_task_panics() {
     let _disposal = time.scheduler().schedule_recursively(
         move |_, now| {
             let _ = &probe;
-            TaskState::SleepUntil(now)
+            Next::SleepUntil(now)
         },
         None,
     );
@@ -678,7 +678,7 @@ fn test_repeated_wakes_run_once() {
             |(steps, waker), _, cx, _| {
                 steps.with_mut(|steps| *steps += 1);
                 let _ = waker.replace_value(Some(cx.waker().clone()));
-                Poll::Pending
+                Next::Pending
             },
         ),
         None,
@@ -712,9 +712,9 @@ fn test_woken_before_its_step_returns() {
             });
             if count == 1 {
                 cx.waker().wake_by_ref();
-                Poll::Pending
+                Next::Pending
             } else {
-                Poll::Ready(TaskState::Finished)
+                Next::Finished
             }
         }),
         None,
@@ -838,7 +838,7 @@ fn test_race_condition_queue_while_advancing() {
                 disposals.push(scheduler.schedule_recursively(
                     move |_, now| {
                         let _ = seen_task.replace_value(Some(now));
-                        TaskState::Finished
+                        Next::Finished
                     },
                     None,
                 ));

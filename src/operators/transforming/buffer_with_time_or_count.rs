@@ -8,7 +8,7 @@ use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState},
+    scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
     thread_mode::{Joined, ThreadMode},
 };
 use educe::Educe;
@@ -275,21 +275,19 @@ where
         context
             .update(|model| match model.deadline {
                 Some(deadline) if now < deadline => {
-                    UpdateOutcome::new(TaskState::SleepUntil(deadline)).without_events()
+                    UpdateOutcome::new(Next::SleepUntil(deadline)).without_events()
                 }
                 Some(deadline) => {
                     // Fixed-rate: the next deadline is counted from this one, not from `now`, so
                     // that a late tick does not push the next ones back.
                     model.deadline = deadline.checked_add(model.time_span);
-                    let state = model
-                        .deadline
-                        .map_or(TaskState::Finished, TaskState::SleepUntil);
+                    let state = model.deadline.map_or(Next::Finished, Next::SleepUntil);
                     UpdateOutcome::new(state).with_next_event(model.take_bundle())
                 }
                 // A full bundle moved the deadline out of range: no timed bundle is left.
-                None => UpdateOutcome::new(TaskState::Finished).without_events(),
+                None => UpdateOutcome::new(Next::Finished).without_events(),
             })
-            .unwrap_or(TaskState::Finished)
+            .unwrap_or(Next::Finished)
     });
     scheduler.run_task(task, Some(time_span))
 }

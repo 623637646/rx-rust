@@ -7,7 +7,7 @@ use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Event, EventBatch, Flow, Observer, Termination},
-    scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState},
+    scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
     thread_mode::{Joined, ThreadMode},
     utils::{
         reservation_slot::ReservationSlot,
@@ -243,34 +243,32 @@ where
                         // Nothing left to deliver. An empty batch is a no-op for the context,
                         // and every branch must produce one so their types agree.
                         None if values.is_empty() => {
-                            (TaskState::Finished, EventBatch::NextBatch(Vec::new()), None)
+                            (Next::Finished, EventBatch::NextBatch(Vec::new()), None)
                         }
                         // Recur instead of stopping: values arriving while this batch is
                         // delivered are pushed onto the model, and only another pass takes
                         // them. They cannot start a task of their own, because this one holds
                         // the task slot until a pass finds the model empty.
-                        None => (TaskState::Yield, EventBatch::NextBatch(values), None),
+                        None => (Next::Yield, EventBatch::NextBatch(values), None),
                         Some(completion @ Termination::Completed) => (
-                            TaskState::Finished,
+                            Next::Finished,
                             EventBatch::NextBatchAndTermination(values, completion),
                             None,
                         ),
                         // An error preempts the values buffered before it, unlike a completion.
-                        Some(error @ Termination::Error(_)) => (
-                            TaskState::Finished,
-                            EventBatch::Termination(error),
-                            Some(values),
-                        ),
+                        Some(error @ Termination::Error(_)) => {
+                            (Next::Finished, EventBatch::Termination(error), Some(values))
+                        }
                     };
                     let finished_task = match action {
-                        TaskState::Finished => model.task.release(),
+                        Next::Finished => model.task.release(),
                         _ => None,
                     };
                     UpdateOutcome::new(action)
                         .with_events(events)
                         .with_drop_outside((finished_task, discarded_values))
                 })
-                .unwrap_or(TaskState::Finished)
+                .unwrap_or(Next::Finished)
         });
         let task = self.scheduler.run_task(task, None);
 

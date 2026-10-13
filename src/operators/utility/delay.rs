@@ -12,7 +12,7 @@ use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{Scheduler, TaskState},
+    scheduler::{Next, Scheduler},
 };
 use educe::Educe;
 use std::{
@@ -254,7 +254,7 @@ where
                     if model.values.is_empty()
                         && model.completion.is_some_and(|deadline| deadline <= now)
                     {
-                        return UpdateOutcome::new(TaskState::Finished)
+                        return UpdateOutcome::new(Next::Finished)
                             .with_events(EventBatch::NextBatchAndTermination(
                                 values,
                                 Termination::Completed,
@@ -263,16 +263,16 @@ where
                     }
 
                     match model.next_deadline() {
-                        Some(deadline) => UpdateOutcome::new(TaskState::SleepUntil(deadline))
+                        Some(deadline) => UpdateOutcome::new(Next::SleepUntil(deadline))
                             .with_events(EventBatch::NextBatch(values))
                             .without_drop_outside(),
                         // Nothing is waiting anymore: stop the timer until the next event.
-                        None => UpdateOutcome::new(TaskState::Finished)
+                        None => UpdateOutcome::new(Next::Finished)
                             .with_events(EventBatch::NextBatch(values))
                             .with_drop_outside(model.timer.release()),
                     }
                 })
-                .unwrap_or(TaskState::Finished)
+                .unwrap_or(Next::Finished)
         });
         let disposal = self.scheduler.run_task(
             task,

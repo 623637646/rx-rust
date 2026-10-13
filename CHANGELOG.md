@@ -55,10 +55,14 @@ All notable changes to this project are documented here. The format follows
 - **Breaking:** `throttle`, `timestamp` and `time_interval` take a scheduler, for its clock:
   `.throttle(span, scheduler)`, `.timestamp(scheduler)`, `.time_interval(scheduler)`. They
   schedule nothing; the bound is `SchedulerTypes`.
+- **Breaking:** a task handler returns a `Next` (formerly `TaskState`) rather than a
+  `Poll<TaskState>`, and so does `Stepper::step`: `Poll::Pending` is `Next::Pending`. A handler that forwards a poll
+  matches on it (`let Poll::Ready(output) = future.poll(cx) else { return Next::Pending };`).
+  A scheduler that steps tasks itself handles the new variant.
 - **Breaking:** a task step is given the scheduler's time: `TaskHandler` takes a fourth argument,
   `now: Instant`, and so do `Stepper::step`, the step of `Task::recursive` (`(state, count, now)`)
   and the closure of `SchedulerExt::schedule_recursively` (`(count, now)`). A
-  `TaskState::SleepUntil` is an instant on that clock. `drive` takes the scheduler it runs for,
+  `Next::SleepUntil` is an instant on that clock. `drive` takes the scheduler it runs for,
   whose `now` it passes to every step.
 - A `delay` given to `Scheduler::run_task` that is too long for an `Instant` to represent never
   ends: the task is never started and is kept until it is disposed. Tokio's timer used to fire it

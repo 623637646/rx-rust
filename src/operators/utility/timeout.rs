@@ -8,7 +8,7 @@ use crate::disposable::{
 };
 use crate::observable::{Observable, ObservableTypes};
 use crate::observer::{Flow, Observer, Termination};
-use crate::scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState};
+use crate::scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task};
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
@@ -225,14 +225,14 @@ where
         context
             .update(|model| match model.deadline {
                 Some(deadline) if now < deadline => {
-                    UpdateOutcome::new(TaskState::SleepUntil(deadline)).without_events()
+                    UpdateOutcome::new(Next::SleepUntil(deadline)).without_events()
                 }
-                Some(_) => UpdateOutcome::new(TaskState::Finished)
+                Some(_) => UpdateOutcome::new(Next::Finished)
                     .with_termination_event(Termination::Error(Error::Timeout)),
                 // A value moved the deadline out of range: the timeout never fires anymore.
-                None => UpdateOutcome::new(TaskState::Finished).without_events(),
+                None => UpdateOutcome::new(Next::Finished).without_events(),
             })
-            .unwrap_or(TaskState::Finished)
+            .unwrap_or(Next::Finished)
     });
     let timer = scheduler.run_task(
         task,

@@ -1,5 +1,6 @@
-use super::{Task, TaskState};
+use super::{Next, Task};
 use futures::Stream;
+use std::task::Poll;
 
 /// The state of [`Task::from_stream_then`]. `I` is the element type.
 pub struct StreamThenContext<C, I> {
@@ -35,16 +36,19 @@ where
             },
             stream,
             |context, stream, cx, _| {
-                stream.poll_next(cx).map(|item| match item {
+                let Poll::Ready(item) = stream.poll_next(cx) else {
+                    return Next::Pending;
+                };
+                match item {
                     Some(item) => {
                         let state = context
                             .state
                             .as_mut()
                             .expect("from_stream_then handler called after completion");
                         if (context.on_item)(state, item) {
-                            TaskState::Yield
+                            Next::Yield
                         } else {
-                            TaskState::Finished
+                            Next::Finished
                         }
                     }
                     None => {
@@ -53,9 +57,9 @@ where
                             .take()
                             .expect("from_stream_then handler called after completion");
                         (context.on_end)(state);
-                        TaskState::Finished
+                        Next::Finished
                     }
-                })
+                }
             },
         )
     }

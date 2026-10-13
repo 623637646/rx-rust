@@ -9,7 +9,7 @@ use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{RecursiveContext, Scheduler, SchedulerTypes, Task, TaskState},
+    scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -210,7 +210,7 @@ where
                 .update(|model| {
                     let deadline = match model {
                         Model::Idle => {
-                            return UpdateOutcome::new(TaskState::Finished)
+                            return UpdateOutcome::new(Next::Finished)
                                 .without_events()
                                 .without_drop_outside();
                         }
@@ -219,12 +219,12 @@ where
                     let Some(deadline) = deadline else {
                         // A value with no deadline replaced the one this timer was for: it waits
                         // for the completion, and the timer has nothing left to do.
-                        return UpdateOutcome::new(TaskState::Finished)
+                        return UpdateOutcome::new(Next::Finished)
                             .without_events()
                             .without_drop_outside();
                     };
                     if now < deadline {
-                        return UpdateOutcome::new(TaskState::SleepUntil(deadline))
+                        return UpdateOutcome::new(Next::SleepUntil(deadline))
                             .without_events()
                             .without_drop_outside();
                     }
@@ -235,12 +235,12 @@ where
                             value,
                             deadline: _,
                             timer,
-                        } => UpdateOutcome::new(TaskState::Finished)
+                        } => UpdateOutcome::new(Next::Finished)
                             .with_next_event(value)
                             .with_drop_outside(timer),
                     }
                 })
-                .unwrap_or(TaskState::Finished)
+                .unwrap_or(Next::Finished)
         });
         let disposal = self.scheduler.run_task(
             task,
