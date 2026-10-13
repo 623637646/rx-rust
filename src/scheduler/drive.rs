@@ -55,6 +55,10 @@ pub async fn drive<TC, P, C, SF>(
                 None => yield_now().await,
             },
             Next::Pending => until_woken(pending()).await,
+            Next::PendingUntil(at) => match delay_until(at) {
+                Some(delay) => until_woken(sleep(delay)).await,
+                None => yield_now().await,
+            },
         }
     }
 }

@@ -351,6 +351,87 @@ fn test_pending_until_woken() {
     assert_eq!(time.pending_tasks(), 0);
 }
 
+/// A task waiting for its waker or an instant, not woken, runs at the instant.
+#[test]
+fn test_pending_until_runs_at_its_instant() {
+    let time = VirtualTime::new();
+    let start = time.now();
+    let log: Log = Arc::default();
+
+    let _disposal = time.scheduler().run_task(
+        Task::new((log.clone(), start), |(log, start), _, _, now| {
+            log_at(log, "step", now, *start);
+            if now == *start {
+                Next::PendingUntil(now + DURATION_100_MS)
+            } else {
+                Next::Finished
+            }
+        }),
+        None,
+    );
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert_eq!(log.clone_value(), [("step", Duration::ZERO)]);
+    assert_eq!(time.pending_tasks(), 1);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(
+        log.clone_value(),
+        [("step", Duration::ZERO), ("step", DURATION_100_MS)]
+    );
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// Woken first, it runs at the current time, and its entry at the instant is gone: a sleep it
+/// asks for then is not cut short by it.
+#[test]
+fn test_pending_until_woken_first() {
+    let time = VirtualTime::new();
+    let start = time.now();
+    let log: Log = Arc::default();
+    let waker: Arc<Mutex<Option<Waker>>> = Arc::new(Mutex::new(None));
+
+    let _disposal = time.scheduler().run_task(
+        Task::new(
+            (log.clone(), waker.clone(), start),
+            |(log, waker, start), _, cx, now| {
+                log_at(log, "step", now, *start);
+                match log.with_ref(Vec::len) {
+                    1 => {
+                        let _ = waker.replace_value(Some(cx.waker().clone()));
+                        Next::PendingUntil(now + DURATION_100_MS)
+                    }
+                    2 => Next::SleepUntil(*start + DURATION_100_MS * 2),
+                    _ => Next::Finished,
+                }
+            },
+        ),
+        None,
+    );
+    time.advance_by(DURATION_10_MS);
+    assert_eq!(log.clone_value(), [("step", Duration::ZERO)]);
+
+    waker.take_value().unwrap().wake();
+    time.advance_by(Duration::ZERO);
+    assert_eq!(
+        log.clone_value(),
+        [("step", Duration::ZERO), ("step", DURATION_10_MS)]
+    );
+
+    time.advance_by(DURATION_100_MS * 2 - DURATION_10_MS - DURATION_1_MS);
+    assert_eq!(log.with_ref(Vec::len), 2);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(
+        log.clone_value(),
+        [
+            ("step", Duration::ZERO),
+            ("step", DURATION_10_MS),
+            ("step", DURATION_100_MS * 2)
+        ]
+    );
+    assert_eq!(time.pending_tasks(), 0);
+}
+
 /// The clock reads the virtual time from any thread.
 #[test]
 fn test_clock_from_another_thread() {

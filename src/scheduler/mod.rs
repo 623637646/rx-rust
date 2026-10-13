@@ -50,6 +50,9 @@
 //! ([`SchedulerTypes::clock`]). An operator that only reads the time (`throttle`, `timestamp`,
 //! `time_interval`) takes a [`Clock`] rather than a scheduler.
 //!
+//! A task that waits for an event and a deadline at once registers its waker and returns
+//! [`Next::PendingUntil`]: it is stepped again when woken, or at the deadline.
+//!
 //! # Examples
 //! ```rust
 //! # #[cfg(not(feature = "tokio-scheduler"))]

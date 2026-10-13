@@ -15,6 +15,8 @@ All notable changes to this project are documented here. The format follows
 - `scheduler::Clock`, `SystemClock` and `virtual_time::VirtualClock`: a handle on a scheduler's
   clock that can go where the scheduler cannot, such as a background producer feeding a local
   scheduler.
+- `Next::PendingUntil(instant)`: a task waits for its waker or for the instant, whichever
+  comes first. `drive` and `VirtualTime` support it.
 - `scheduler::virtual_time`: `VirtualTime`, a clock that a test moves forward with `advance_by`,
   and its `VirtualTimeScheduler`, which queues the tasks and runs them, on the calling thread, at
   the instants they are due; `VirtualTime::clock` is the virtual clock alone. Time-based tests
@@ -67,9 +69,10 @@ All notable changes to this project are documented here. The format follows
   it. A custom scheduler on the system's clock adds `type Clock = SystemClock` and
   `fn clock(&self) -> SystemClock { SystemClock }`.
 - **Breaking:** a task handler returns a `Next` (formerly `TaskState`) rather than a
-  `Poll<TaskState>`, and so does `Stepper::step`: `Poll::Pending` is `Next::Pending`. A handler that forwards a poll
-  matches on it (`let Poll::Ready(output) = future.poll(cx) else { return Next::Pending };`).
-  A scheduler that steps tasks itself handles the new variant.
+  `Poll<TaskState>`, and so does `Stepper::step`: `Poll::Pending` is `Next::Pending`, and `Next::PendingUntil` is a
+  `Pending` with a deadline. A handler that forwards a poll matches on it
+  (`let Poll::Ready(output) = future.poll(cx) else { return Next::Pending };`). A scheduler
+  that steps tasks itself handles the two new variants.
 - **Breaking:** a task step is given the scheduler's time: `TaskHandler` takes a fourth argument,
   `now: Instant`, and so do `Stepper::step`, the step of `Task::recursive` (`(state, count, now)`)
   and the closure of `SchedulerExt::schedule_recursively` (`(count, now)`). A

@@ -12,7 +12,7 @@ use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::scheduler::{Next, Scheduler, SchedulerExt, SchedulerTypes, Task, drive};
+use rx_rust::scheduler::{Clock, Next, Scheduler, SchedulerExt, SchedulerTypes, Task, drive};
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use std::convert::Infallible;
@@ -92,6 +92,51 @@ fn test_schedule_with_abort_while_sleeping() {
         // Dropping the task drops `tx`, which closes the channel.
         assert!(rx.next().await.is_none());
         assert!(start_time.elapsed() < DURATION_100_MS);
+    });
+}
+
+// A task waiting for its waker or an instant runs again as soon as it is woken, long before the
+// instant.
+#[test]
+fn test_pending_until_woken_first() {
+    block_on(|scheduler| async move {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded::<Waker>();
+        let task = Task::new(Some(tx), |tx, _, cx, now| match tx.as_ref() {
+            Some(sender) if !sender.is_closed() => {
+                let _ = sender.unbounded_send(cx.waker().clone());
+                // Sent once: the next step, woken, finishes.
+                sender.close_channel();
+                Next::PendingUntil(now + Duration::from_secs(1))
+            }
+            _ => Next::Finished,
+        });
+        let start_time = Instant::now();
+        let _disposal = scheduler.run_task(task, None);
+        let waker = rx.next().await.unwrap();
+        waker.wake();
+        // The woken step finishes the task, which drops the sender and ends the stream.
+        assert!(rx.next().await.is_none());
+        assert!(start_time.elapsed() < DURATION_100_MS);
+    });
+}
+
+// Not woken, a task waiting for its waker or an instant runs again at the instant.
+#[test]
+fn test_pending_until_instant() {
+    block_on(|scheduler| async move {
+        let (tx, mut rx) = futures::channel::mpsc::unbounded();
+        let deadline = scheduler.clock().now() + DURATION_30_MS;
+        let task = Task::new((tx, deadline), |(tx, deadline), _, _, now| {
+            // A spurious wake may step it early: it waits on.
+            if now < *deadline {
+                return Next::PendingUntil(*deadline);
+            }
+            let _ = tx.unbounded_send(now);
+            Next::Finished
+        });
+        let _disposal = scheduler.run_task(task, None);
+        assert!(rx.next().await.unwrap() >= deadline);
+        assert!(rx.next().await.is_none());
     });
 }
 
@@ -715,6 +760,8 @@ mod main_loop {
         Until(Instant),
         /// For its waker.
         Waker,
+        /// For its waker, or until this instant, whichever comes first.
+        WakerOrUntil(Instant),
     }
 
     /// The handle of a [`MainLoop`]: `Clone + Send`, so any thread can queue tasks on the loop.
@@ -762,7 +809,7 @@ mod main_loop {
             // Move the sleepers whose instant has come to the ready queue.
             let now = Instant::now();
             for (id, (_, wait)) in &mut jobs {
-                if matches!(wait, Wait::Until(at) if *at <= now) {
+                if matches!(wait, Wait::Until(at) | Wait::WakerOrUntil(at) if *at <= now) {
                     *wait = Wait::Ready;
                     ready.push_back(*id);
                 }
@@ -783,6 +830,7 @@ mod main_loop {
                             ready.push_back(id);
                         }
                         Next::SleepUntil(at) => *wait = Wait::Until(at),
+                        Next::PendingUntil(at) => *wait = Wait::WakerOrUntil(at),
                     }
                 }
                 match receiver.try_recv() {
@@ -793,7 +841,7 @@ mod main_loop {
                 let next_due = jobs
                     .values()
                     .filter_map(|(_, wait)| match wait {
-                        Wait::Until(at) => Some(*at),
+                        Wait::Until(at) | Wait::WakerOrUntil(at) => Some(*at),
                         Wait::Ready | Wait::Waker => None,
                     })
                     .min();
@@ -815,7 +863,9 @@ mod main_loop {
                 Message::Wake(id) => {
                     // A wake may arrive for a task that is already ready, sleeping or gone: only a task
                     // waiting for its waker moves.
-                    if let Some((_, wait @ Wait::Waker)) = jobs.get_mut(&id) {
+                    if let Some((_, wait @ (Wait::Waker | Wait::WakerOrUntil(_)))) =
+                        jobs.get_mut(&id)
+                    {
                         *wait = Wait::Ready;
                         ready.push_back(id);
                     }

@@ -40,7 +40,9 @@
 //!
 //! A task that waits on something else than the clock ([`Next::Pending`]: a channel, a future of
 //! another runtime) is queued again, at the current time, when it is woken: in the same
-//! `advance_by` if something it runs wakes it, at the next one otherwise. A task waiting on real
+//! `advance_by` if something it runs wakes it, at the next one otherwise. A task that waits for
+//! both ([`Next::PendingUntil`]) is queued at its instant, and again at the current time if it is
+//! woken first. A task waiting on real
 //! IO or a real timer is therefore never woken while the clock advances: such a pipeline belongs
 //! on a real scheduler.
 //!
@@ -61,8 +63,7 @@ use crate::{
 };
 use educe::Educe;
 use std::{
-    cmp::Reverse,
-    collections::{BinaryHeap, HashMap},
+    collections::{BTreeMap, HashMap},
     pin::Pin,
     sync::{Arc, Mutex, Weak},
     task::{Context, Wake, Waker},
@@ -75,8 +76,10 @@ use std::{
 /// time.
 ///
 /// The scheduler handles do not keep it alive: a task often holds a handle of its own scheduler
-/// (an `interval` upstream of a `debounce`, say), so a strong handle would form a cycle through
-/// the queue. Dropping the `VirtualTime` drops every task still queued, which cancels them.
+/// (an `interval` upstream of a `switch_map` whose inner observables are delayed on it, say), so a
+/// strong handle would form a cycle through the queue. Dropping the `VirtualTime` drops every task
+/// still queued, which cancels them, then those queued as they drop, until none is left: a task
+/// whose drop always queues another keeps the drop from returning.
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct VirtualTime {
@@ -119,7 +122,9 @@ pub struct VirtualTimeDisposal {
 
 /// How many steps in a row a task may ask to sleep until an instant that has already passed before
 /// [`VirtualTime::advance_by`] gives up on it. On a real clock such a task waits for time to move;
-/// on the virtual clock, which moves only between due tasks, it would loop forever.
+/// on the virtual clock, which moves only between due tasks, it would loop forever. A heuristic,
+/// to catch a deadline off by one in a test: a task that legitimately asks this many times in a row
+/// is rejected too.
 const MAX_STALLED_STEPS: u32 = 10_000;
 
 /// A task as the queue holds it: its stepper and its pinned state, behind one call.
@@ -132,31 +137,34 @@ struct State {
     now: Instant,
     ids: IdGenerator,
     next_sequence: u64,
-    /// The queued tasks by when they are due, then by the order they were queued in. A task has at
-    /// most one entry, none when it is never due; the entry of a disposed task stays until it
-    /// comes up, and is skipped then.
-    queue: BinaryHeap<Reverse<(Instant, u64, Id)>>,
-    slots: HashMap<Id, Slot>,
+    /// The waiting tasks due at some instant, by that instant, then by the order they were queued
+    /// in. Every entry is the `key` of a [`WaitingTask`], removed with it.
+    queue: BTreeMap<(Instant, u64), Id>,
+    /// Every task but the running one.
+    waiting: HashMap<Id, WaitingTask>,
     advancing: bool,
-    /// The task whose step is running, so that a panic of it removes its slot.
-    running: Option<Id>,
+    /// The task whose step is running; its job is with `advance_by`. One at most, since
+    /// `advance_by` does not run twice at once.
+    running: Option<RunningTask>,
 }
 
-/// Where a task is. `stalled` counts its steps in a row that asked to sleep until an instant that
-/// had passed (see [`MAX_STALLED_STEPS`]).
-enum Slot {
-    Queued {
-        job: Job,
-        stalled: u32,
-    },
-    /// Taken out to run a step. A disposal meanwhile sets `cancelled`, a wake sets `woken`.
-    Running {
-        cancelled: bool,
-        woken: bool,
-        stalled: u32,
-    },
-    /// Returned [`Next::Pending`]: it waits to be woken.
-    Parked(Job),
+/// A task waiting for its turn. `key` is its entry in the queue, `None` when it is never due or
+/// waits to be woken ([`Next::Pending`]); `wakeable`: a wake queues it again at the current time.
+/// `stalled` counts its steps in a row that asked to sleep until an instant that had passed (see
+/// [`MAX_STALLED_STEPS`]).
+struct WaitingTask {
+    job: Job,
+    key: Option<(Instant, u64)>,
+    wakeable: bool,
+    stalled: u32,
+}
+
+/// The task whose step is running. A disposal meanwhile sets `cancelled`, a wake sets `woken`.
+struct RunningTask {
+    id: Id,
+    cancelled: bool,
+    woken: bool,
+    stalled: u32,
 }
 
 /// What to do with a task after one of its steps.
@@ -169,104 +177,115 @@ enum AfterStep {
 }
 
 impl State {
-    /// Queues `job`, due at `due`, or never when it is `None`.
-    fn push(&mut self, id: Id, job: Job, due: Option<Instant>, stalled: u32) {
-        if let Some(due) = due {
-            let sequence = self.next_sequence;
+    /// Queues `job`, due at `due`, or never when it is `None`; a wake queues it again at the
+    /// current time when it is `wakeable`.
+    fn push(&mut self, id: Id, job: Job, due: Option<Instant>, stalled: u32, wakeable: bool) {
+        let key = due.map(|due| {
+            let key = (due, self.next_sequence);
             self.next_sequence += 1;
-            self.queue.push(Reverse((due, sequence, id)));
+            self.queue.insert(key, id);
+            key
+        });
+        self.waiting.insert(
+            id,
+            WaitingTask {
+                job,
+                key,
+                wakeable,
+                stalled,
+            },
+        );
+    }
+
+    /// Takes a waiting task out, with its entry in the queue.
+    fn unqueue(&mut self, id: Id) -> Option<WaitingTask> {
+        let task = self.waiting.remove(&id)?;
+        if let Some(key) = task.key {
+            self.queue.remove(&key);
         }
-        self.slots.insert(id, Slot::Queued { job, stalled });
+        Some(task)
     }
 
     /// Takes out the next task due by `target` and sets the clock to when it was due; when none
     /// is left, sets the clock to `target`. Both under the one lock, so that a task queued from
     /// another thread meanwhile is either run by this `advance_by` or due after it.
     fn next_due(&mut self, target: Instant) -> Option<(Id, Job, Instant)> {
-        while let Some(&Reverse((due, _, id))) = self.queue.peek() {
-            if due > target {
-                break;
-            }
-            self.queue.pop();
-            if let Some(slot) = self.slots.get_mut(&id)
-                && let Slot::Queued { stalled, .. } = *slot
-                && let Slot::Queued { job, .. } = std::mem::replace(
-                    slot,
-                    Slot::Running {
-                        cancelled: false,
-                        woken: false,
-                        stalled,
-                    },
-                )
-            {
-                self.now = self.now.max(due);
-                self.running = Some(id);
-                return Some((id, job, self.now));
-            }
-        }
-        self.now = self.now.max(target);
-        None
+        let Some(entry) = self
+            .queue
+            .first_entry()
+            .filter(|entry| entry.key().0 <= target)
+        else {
+            self.now = self.now.max(target);
+            return None;
+        };
+        let ((due, _), id) = entry.remove_entry();
+        let Some(WaitingTask { job, stalled, .. }) = self.waiting.remove(&id) else {
+            unreachable!("every entry of the queue is the key of a waiting task");
+        };
+        self.running = Some(RunningTask {
+            id,
+            cancelled: false,
+            woken: false,
+            stalled,
+        });
+        self.now = self.now.max(due);
+        Some((id, job, self.now))
     }
 
-    /// Acts on the answer of a step.
-    fn after_step(&mut self, id: Id, job: Job, next: Next) -> AfterStep {
-        self.running = None;
-        let (woken, stalled) = match self.slots.get(&id) {
-            Some(&Slot::Running {
-                cancelled: false,
-                woken,
-                stalled,
-            }) => (woken, stalled),
+    /// Acts on the answer of a step of the running task.
+    fn after_step(&mut self, job: Job, next: Next) -> AfterStep {
+        let Some(RunningTask {
+            id,
+            cancelled: false,
+            woken,
+            stalled,
+        }) = self.running.take()
+        else {
             // Disposed while it ran.
-            _ => {
-                self.slots.remove(&id);
-                return AfterStep::Done(job);
-            }
+            return AfterStep::Done(job);
         };
         match next {
-            Next::Finished => {
-                self.slots.remove(&id);
-                AfterStep::Done(job)
-            }
+            Next::Finished => AfterStep::Done(job),
             Next::Yield => {
-                self.push(id, job, Some(self.now), 0);
-                AfterStep::Requeued
-            }
-            // Requeued with a new sequence even when the instant has passed, so that the other
-            // tasks due now get their turn first.
-            Next::SleepUntil(at) => {
-                let stalled = if at <= self.now { stalled + 1 } else { 0 };
-                if stalled >= MAX_STALLED_STEPS {
-                    self.slots.remove(&id);
-                    return AfterStep::Stalled(job);
-                }
-                self.push(id, job, Some(at.max(self.now)), stalled);
+                self.push(id, job, Some(self.now), 0, false);
                 AfterStep::Requeued
             }
             // Woken before its step returned: it runs again rather than wait for a wake that
             // already came.
-            Next::Pending if woken => {
-                self.push(id, job, Some(self.now), 0);
+            Next::Pending | Next::PendingUntil(_) if woken => {
+                self.push(id, job, Some(self.now), 0, false);
+                AfterStep::Requeued
+            }
+            // Requeued with a new sequence even when the instant has passed, so that the other
+            // tasks due now get their turn first.
+            Next::SleepUntil(at) | Next::PendingUntil(at) => {
+                let stalled = if at <= self.now { stalled + 1 } else { 0 };
+                if stalled >= MAX_STALLED_STEPS {
+                    return AfterStep::Stalled(job);
+                }
+                let wakeable = matches!(next, Next::PendingUntil(_));
+                self.push(id, job, Some(at.max(self.now)), stalled, wakeable);
                 AfterStep::Requeued
             }
             Next::Pending => {
-                self.slots.insert(id, Slot::Parked(job));
+                self.push(id, job, None, 0, true);
                 AfterStep::Requeued
             }
         }
     }
 
     /// Queues a waiting task again, at the current time. A task already queued stays as it is, so
-    /// that repeated wakes run it once.
+    /// that repeated wakes run it once, unless it waits for a wake, alone or with its instant: its
+    /// entry, if any, is replaced by one now.
     fn wake(&mut self, id: Id) {
-        match self.slots.get_mut(&id) {
-            Some(Slot::Parked(_)) => {
-                if let Some(Slot::Parked(job)) = self.slots.remove(&id) {
-                    self.push(id, job, Some(self.now), 0);
-                }
-            }
-            Some(Slot::Running { woken, .. }) => *woken = true,
-            Some(Slot::Queued { .. }) | None => {}
+        if let Some(running) = &mut self.running
+            && running.id == id
+        {
+            running.woken = true;
+        } else if self.waiting.get(&id).is_some_and(|task| task.wakeable)
+            && let Some(task) = self.unqueue(id)
+        {
+            self.push(id, task.job, Some(self.now), task.stalled, false);
         }
     }
 }
@@ -286,8 +305,8 @@ impl VirtualTime {
                 now: Instant::now(),
                 ids: IdGenerator::default(),
                 next_sequence: 0,
-                queue: BinaryHeap::new(),
-                slots: HashMap::new(),
+                queue: BTreeMap::new(),
+                waiting: HashMap::new(),
                 advancing: false,
                 running: None,
             })),
@@ -318,15 +337,16 @@ impl VirtualTime {
     /// The number of tasks queued, never due or waiting to be woken: what a disposal must bring
     /// down.
     pub fn pending_tasks(&self) -> usize {
-        self.state.with_ref(|state| state.slots.len())
+        self.state
+            .with_ref(|state| state.waiting.len() + usize::from(state.running.is_some()))
     }
 
     /// Moves the clock forward by `duration`, running on this thread every task due by then, each
     /// at the instant it was due (see the [module docs](self)). `Duration::ZERO` runs the tasks
     /// due now.
     ///
-    /// A task that never stops yielding makes this loop forever, as it would spin on a real
-    /// executor.
+    /// A task that never stops yielding, or wakes itself in every step, makes this loop forever, as
+    /// it would spin on a real executor.
     ///
     /// # Panics
     ///
@@ -361,7 +381,7 @@ impl VirtualTime {
                 state: Arc::downgrade(&self.state),
             }));
             let step = job(&mut Context::from_waker(&waker), now);
-            match self.state.with_mut(|state| state.after_step(id, job, step)) {
+            match self.state.with_mut(|state| state.after_step(job, step)) {
                 AfterStep::Requeued => {}
                 AfterStep::Done(job) => drop(job),
                 AfterStep::Stalled(job) => {
@@ -383,29 +403,27 @@ impl Drop for VirtualTime {
         // Dropping a task can dispose or queue others, which takes the lock: take them all out
         // first, and repeat until none is left.
         loop {
-            let slots = self.state.with_mut(|state| {
+            let tasks = self.state.with_mut(|state| {
                 state.queue.clear();
-                std::mem::take(&mut state.slots)
+                std::mem::take(&mut state.waiting)
             });
-            if slots.is_empty() {
+            if tasks.is_empty() {
                 break;
             }
-            drop(slots);
+            drop(tasks);
         }
     }
 }
 
 /// Clears the `advancing` flag when `advance_by` returns or unwinds. A task that panicked has no
-/// job left, only its `Running` slot, which is removed here.
+/// job left, only its running record, which is cleared here.
 struct AdvancingGuard<'a>(&'a Mutex<State>);
 
 impl Drop for AdvancingGuard<'_> {
     fn drop(&mut self) {
         self.0.with_mut(|state| {
             state.advancing = false;
-            if let Some(id) = state.running.take() {
-                state.slots.remove(&id);
-            }
+            state.running = None;
         });
     }
 }
@@ -476,7 +494,7 @@ where
             // Nothing in here can panic and drop the task under the lock: a delay too long to
             // represent is a task that never comes due.
             let due = state.now.checked_add(delay.unwrap_or_default());
-            state.push(id, job, due, 0);
+            state.push(id, job, due, 0, false);
             id
         });
         DisposeOnDrop::new(VirtualTimeDisposal {
@@ -491,16 +509,14 @@ impl Disposable for VirtualTimeDisposal {
         let Some(state) = self.state.upgrade() else {
             return;
         };
-        let job = state.with_mut(|state| match state.slots.get_mut(&self.id) {
-            Some(Slot::Running { cancelled, .. }) => {
-                *cancelled = true;
-                None
+        let job = state.with_mut(|state| {
+            if let Some(running) = &mut state.running
+                && running.id == self.id
+            {
+                running.cancelled = true;
+                return None;
             }
-            Some(_) => match state.slots.remove(&self.id) {
-                Some(Slot::Queued { job, .. } | Slot::Parked(job)) => Some(job),
-                _ => None,
-            },
-            None => None,
+            state.unqueue(self.id).map(|task| task.job)
         });
         // Outside the lock: dropping the task can dispose others.
         drop(job);

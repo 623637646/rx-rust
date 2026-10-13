@@ -39,8 +39,8 @@ pub struct Task<TC, P = ()> {
 }
 
 /// The handler of a [`Task`]: it does some work, and answers when it wants to be called again.
-/// [`Next::Pending`] means the waker in `cx` was registered, as a `Pending` of `Future::poll`
-/// does; the other states ignore it.
+/// [`Next::Pending`] and [`Next::PendingUntil`] mean the waker in `cx` was registered,
+/// as a `Pending` of `Future::poll` does; the other states ignore it.
 ///
 /// The [`Instant`] is the time of the step on the scheduler's clock
 /// ([`SchedulerTypes::clock`](crate::scheduler::SchedulerTypes::clock)), the clock a
@@ -48,7 +48,8 @@ pub struct Task<TC, P = ()> {
 /// `Instant::now()`, so that it follows a scheduler whose clock is not the system's.
 pub type TaskHandler<TC, P> = fn(&mut TC, Pin<&mut P>, &mut Context<'_>, Instant) -> Next;
 
-/// What a handler asks the scheduler to do next.
+/// What a handler asks the scheduler to do next. `Sleep*` waits for the clock only, `Pending*`
+/// for the waker the handler registered, and `*Until` has a deadline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Next {
     /// The task is done; the handler is not called again.
@@ -66,6 +67,13 @@ pub enum Next {
     /// Call the handler again when the waker in `cx` is woken. The handler registered the waker,
     /// which may be woken before the handler returns.
     Pending,
+    /// Call the handler again when the waker in `cx` is woken, or at this instant, whichever comes
+    /// first: a [`Pending`](Self::Pending) with a deadline. The handler must accept being called
+    /// before the instant, since any wake of the task, a spurious one included, ends the wait. An
+    /// instant that has already passed is a [`Yield`](Self::Yield).
+    ///
+    /// This is what a task waiting for events and for a timer at once returns.
+    PendingUntil(Instant),
 }
 
 impl<TC> Task<TC> {
@@ -128,7 +136,10 @@ impl<TC, P> Task<TC, P> {
 ///   scheduler's clock, and in any case not before other tasks had a turn;
 /// - [`Pending`](Next::Pending): the handler registered the waker in `cx`; do not step again
 ///   before it is woken. It may be woken before `step` returns, which the caller must handle (with
-///   a flag, say).
+///   a flag, say);
+/// - [`PendingUntil(at)`](Next::PendingUntil): step again once the waker in `cx` is woken, or
+///   at `at`, whichever comes first, and in any case not before other tasks had a turn. As for
+///   `Pending`, the waker may be woken before `step` returns.
 ///
 /// The `delay` of [`run_task`](crate::scheduler::Scheduler::run_task) is the caller's to
 /// implement: wait that long before the first `step`.
