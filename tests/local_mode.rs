@@ -26,7 +26,7 @@ use rx_rust::{
         creating::{create::Create, from_iter::FromIter},
     },
     scheduler::{
-        SchedulerExt, SchedulerTypes,
+        SchedulerExt, SchedulerTypes, TaskWaker,
         runtime::{
             futures::{LocalPoolScheduler, ThreadPoolScheduler},
             smol::{SmolLocalScheduler, SmolScheduler},
@@ -42,7 +42,15 @@ use rx_rust::{
         mutable::{MutableExt, MutableHelper},
     },
 };
-use std::{cell::RefCell, convert::Infallible, rc::Rc, time::Duration};
+use std::{
+    cell::RefCell,
+    convert::Infallible,
+    num::NonZeroUsize,
+    rc::Rc,
+    sync::{Arc, Mutex},
+    thread::{self, ThreadId},
+    time::Duration,
+};
 use tests_utils::{DURATION_10_MS, DURATION_100_MS};
 
 /// What [`record`] has seen: the values, then the termination.
@@ -351,6 +359,10 @@ assert_send!(Emitter<SendBoxedObserver<'static, i32, ()>, Shared>);
 assert_not_send!(PublishSubject<'static, i32, (), Local>);
 assert_send!(PublishSubject<'static, i32, (), Shared>);
 
+// The waker of a wakeable task crosses threads only in the `Shared` mode.
+assert_not_send!(TaskWaker<Local>);
+assert_send!(TaskWaker<Shared>);
+
 assert_not_send!(LocalPoolScheduler);
 assert_send!(ThreadPoolScheduler);
 assert_not_send!(TokioLocalScheduler);
@@ -430,3 +442,138 @@ const _: fn(TokioLocalScheduler, TokioScheduler) = |local, background| {
         .subscribe_on(background)
         .subscribe_with_callback(|_| {}, |_| {});
 };
+
+// MARK: - A source on another thread
+
+// The operators that deliver through a scheduler give their source an observer that holds the
+// scheduler's clock and a waker, never the scheduler: a `Shared` source, which may send from
+// another thread, builds with a single-threaded scheduler. The events cross to the scheduler's
+// thread, so they and the downstream observer are `Send`.
+const _: fn(TokioLocalScheduler) = |local| {
+    let subject: PublishSubject<'_, i32, Infallible, Shared> = PublishSubject::shared();
+    let _delay = subject
+        .clone()
+        .delay(DURATION_100_MS, local.clone())
+        .subscribe_with_callback(|_| {}, |_| {});
+    let _debounce = subject
+        .clone()
+        .debounce(DURATION_100_MS, local.clone())
+        .subscribe_with_callback(|_| {}, |_| {});
+    let _observe_on = subject
+        .clone()
+        .observe_on(local.clone())
+        .subscribe_with_callback(|_| {}, |_| {});
+    let _buffer = subject
+        .buffer_with_time_or_count(NonZeroUsize::MIN, DURATION_100_MS, local)
+        .subscribe_with_callback(|_| {}, |_| {});
+};
+
+/// What [`record_threads`] has seen: the values, each with the thread it was delivered on, then
+/// the termination. The callbacks of a `Shared` source must be `Send`.
+struct ThreadRecord {
+    values: Arc<Mutex<Vec<(i32, ThreadId)>>>,
+    termination: Arc<Mutex<Option<Termination<Infallible>>>>,
+}
+
+impl ThreadRecord {
+    fn values(&self) -> Vec<i32> {
+        self.values
+            .with_ref(|values| values.iter().map(|(value, _)| *value).collect())
+    }
+
+    /// Whether every value was delivered on the calling thread.
+    fn delivered_here(&self) -> bool {
+        let here = thread::current().id();
+        self.values
+            .with_ref(|values| values.iter().all(|(_, thread)| *thread == here))
+    }
+
+    fn termination(&self) -> Option<Termination<Infallible>> {
+        self.termination.clone_value()
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn record_threads<OE>(observable: OE) -> (ThreadRecord, DisposeOnDrop<OE::Disposal>)
+where
+    OE: ObservableTypes<Item = i32, Error = Infallible>
+        + Observable<
+            CallbackObserver<
+                Box<dyn FnMut(i32) + Send>,
+                Box<dyn FnOnce(Termination<Infallible>) + Send>,
+            >,
+        >,
+{
+    let values = Arc::new(Mutex::new(Vec::new()));
+    let termination = Arc::new(Mutex::new(None));
+    let values_cloned = values.clone();
+    let termination_cloned = termination.clone();
+    let on_next: Box<dyn FnMut(i32) + Send> = Box::new(move |value| {
+        values_cloned.with_mut(|values| values.push((value, thread::current().id())));
+    });
+    let on_termination: Box<dyn FnOnce(Termination<Infallible>) + Send> = Box::new(move |end| {
+        assert!(termination_cloned.replace_value(Some(end)).is_none());
+    });
+    let subscription = observable.subscribe_with_callback(on_next, on_termination);
+    (
+        ThreadRecord {
+            values,
+            termination,
+        },
+        subscription,
+    )
+}
+
+/// Sends `values`, then the completion if `complete`, from a thread of its own, and waits for it.
+fn send_from_another_thread(
+    subject: &PublishSubject<'static, i32, Infallible, Shared>,
+    values: Vec<i32>,
+    complete: bool,
+) {
+    let mut subject = subject.clone();
+    thread::spawn(move || {
+        for value in values {
+            assert!(subject.on_next(value).is_continue());
+        }
+        if complete {
+            subject.on_termination(Termination::Completed);
+        }
+    })
+    .join()
+    .unwrap();
+}
+
+on_local_schedulers!(test_delay_from_another_thread, |scheduler| async move {
+    let subject = PublishSubject::shared();
+    let (record, _subscription) = record_threads(subject.clone().delay(DURATION_10_MS, scheduler));
+    send_from_another_thread(&subject, vec![1, 2], true);
+    assert!(record.values().is_empty());
+    sleep(DURATION_100_MS).await;
+    assert_eq!(record.values(), [1, 2]);
+    assert!(record.delivered_here());
+    assert_eq!(record.termination(), Some(Termination::Completed));
+});
+
+on_local_schedulers!(test_debounce_from_another_thread, |scheduler| async move {
+    let subject = PublishSubject::shared();
+    let (record, _subscription) =
+        record_threads(subject.clone().debounce(DURATION_10_MS, scheduler));
+    send_from_another_thread(&subject, vec![1, 2], false);
+    sleep(DURATION_100_MS).await;
+    assert_eq!(record.values(), [2]);
+    assert!(record.delivered_here());
+    assert_eq!(record.termination(), None);
+});
+
+on_local_schedulers!(
+    test_observe_on_from_another_thread,
+    |scheduler| async move {
+        let subject = PublishSubject::shared();
+        let (record, _subscription) = record_threads(subject.clone().observe_on(scheduler));
+        send_from_another_thread(&subject, vec![1, 2, 3], true);
+        sleep(DURATION_10_MS).await;
+        assert_eq!(record.values(), [1, 2, 3]);
+        assert!(record.delivered_here());
+        assert_eq!(record.termination(), Some(Termination::Completed));
+    }
+);

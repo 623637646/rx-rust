@@ -6,7 +6,7 @@ use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
+    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
@@ -103,10 +103,6 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
     }
 }
 
-/// The source subscription a [`BufferWithTimeOrCount`] context owns: the timer, then the source.
-type BufferWithTimeOrCountSources<OE, S> =
-    ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
-
 /// The context of a [`BufferWithTimeOrCount`] subscription.
 type BufferWithTimeOrCountContext<M, T, E, OR, D> =
     SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>;
@@ -122,7 +118,7 @@ type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
         T,
         E,
         OR,
-        BufferWithTimeOrCountSources<OE, S>,
+        ChainSchedulerDisposalOf<S, OE>,
     >,
 >;
 
@@ -153,7 +149,7 @@ where
                 T,
                 E,
                 OR,
-                BufferWithTimeOrCountSources<OE, S>,
+                ChainSchedulerDisposalOf<S, OE>,
                 <S as SchedulerTypes>::Clock,
             >,
             Item = T,

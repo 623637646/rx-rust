@@ -137,7 +137,10 @@ cargo tarpaulin --out Html
   a termination, or a drop that only means it sends nothing more (decision 0004) — the task finishes
   the work already accepted. That forms no cycle, since the context holds only the task's disposal,
   and a disposal still releases the downstream observer at once, through the handle the source
-  drops as it is disposed.
+  drops as it is disposed. An operator whose scheduler delivers what its source sends (`delay`,
+  `debounce`, `observe_on`) starts one `Task::wakeable` when it is subscribed, and gives the
+  source's observer the `TaskWaker`, never the scheduler: the source may send from a thread a
+  `Local` scheduler cannot reach. The observer changes the model, then wakes the task.
 - **Implementing an observable** takes two impls: `ObservableTypes` with the associated `Item`,
   `Error`, `Mode` and `Disposal` — which must not mention the observer — and `Observable<OR>`,
   whose bounds name the observer the source is subscribed with
@@ -166,9 +169,9 @@ cargo tarpaulin --out Html
   out, from the operator's source and scheduler types: `XxxOf<OE, …>` in the helper's module
   (`subscribe_with_auto_dispose_on_termination::{ObserverOf, DisposalOf}`), `JoinedModeOf<A, B>` and
   `ChainDisposalOf<A, B>` in `observable` for an operator with two sources, `JoinedSchedulerModeOf<OE, S>`
-  for one with a source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a
-  source's mode. Use them rather than
-  spelling the projections out. Such an alias is written with qualified projections
+  and `ChainSchedulerDisposalOf<S, OE>` (the task's disposal, then the source's) for one with a
+  source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a source's mode. Use
+  them rather than spelling the projections out. Such an alias is written with qualified projections
   (`<OE as ObservableTypes>::Mode`), so it can appear in the bounds of `OE` itself, and it can
   name only public types: a private model still goes through `delegate_disposal!`.
 - Keep `pub` surface minimal; add `Clone`/`Send`/`Sync`/`'static` bounds only where actually needed.

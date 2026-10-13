@@ -13,7 +13,7 @@ impl<C> Task<RecursiveContext<C>> {
     /// — until it returns [`Next::Finished`], sleeping or yielding in between as it asks.
     /// There is always a yield point between two steps, so that other tasks run and a disposal
     /// takes effect. `step` has no waker to register, so a [`Next::Pending`] waits until the
-    /// task is disposed.
+    /// task is disposed; a task woken from outside is a [`Task::wakeable`].
     pub fn recursive(state: C, step: fn(&mut C, usize, Instant) -> Next) -> Self {
         Self::new(
             RecursiveContext {

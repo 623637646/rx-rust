@@ -147,8 +147,8 @@ fn test_error() {
     assert_eq!(channel_checker.state(), ChannelState::Error("error"));
 }
 
-/// A time span too long for an `Instant` to represent never passes: no timer is started, and only
-/// the completion emits, the last value.
+/// A time span too long for an `Instant` to represent never passes: the timer only waits for the
+/// source, and only the completion emits, the last value.
 #[test]
 fn test_time_span_too_long_never_passes() {
     let time = VirtualTime::new();
@@ -165,17 +165,18 @@ fn test_time_span_too_long_never_passes() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert_eq!(time.pending_tasks(), 0);
+    assert_eq!(time.pending_tasks(), 1);
 
     sender.on_termination(Termination::Completed);
     assert_eq!(checker.values(), [222]);
+    assert_eq!(time.pending_tasks(), 0);
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
 /// The first value is due at the last instant the clock can represent; the value a millisecond
-/// later replaces it and is out of range. The timer wakes at the first deadline and finishes
-/// without emitting.
+/// later replaces it and is out of range. The timer wakes at the first deadline and goes back to
+/// waiting for the source, without emitting.
 #[test]
 fn test_time_span_out_of_range_after_next() {
     let time = VirtualTime::new();
@@ -196,12 +197,13 @@ fn test_time_span_out_of_range_after_next() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert_eq!(time.pending_tasks(), 0);
+    assert_eq!(time.pending_tasks(), 1);
 
     subscription.dispose();
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]

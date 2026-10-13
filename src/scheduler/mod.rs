@@ -20,11 +20,12 @@
 //!
 //! # Executor lifetime
 //!
-//! A task can reach its own scheduler: `debounce` keeps its scheduler in its observer, and an
-//! `interval` upstream on the same scheduler holds that observer in its task. An executor that runs
-//! only while someone drives it — a `LocalSet`, a smol executor, a `LocalPool` — would then be kept
-//! alive by its own pending tasks once nobody drives it, so the schedulers of those hold it weakly,
-//! and dropping it cancels its tasks. A Tokio runtime is not kept alive by its handle either. A
+//! A task can reach its own scheduler: the `switch_map` of an `interval` whose inner observables
+//! are delayed on the same scheduler keeps that scheduler in its closure, which the observer the
+//! `interval` holds in its task carries. An executor that runs only while someone drives it — a
+//! `LocalSet`, a smol executor, a `LocalPool` — would then be kept alive by its own pending tasks
+//! once nobody drives it, so the schedulers of those hold it weakly, and dropping it cancels its
+//! tasks. A Tokio runtime is not kept alive by its handle either. A
 //! [`ThreadPoolScheduler`](runtime::futures::ThreadPoolScheduler) holds its pool: the pool's
 //! threads always run, so a disposed task is dropped and lets the pool go.
 //!
@@ -51,7 +52,13 @@
 //! `time_interval`) takes a [`Clock`] rather than a scheduler.
 //!
 //! A task that waits for an event and a deadline at once registers its waker and returns
-//! [`Next::PendingUntil`]: it is stepped again when woken, or at the deadline.
+//! [`Next::PendingUntil`]: it is stepped again when woken, or at the deadline. [`Task::wakeable`]
+//! registers it for its step, and returns the [`TaskWaker`] that wakes it from outside. That is
+//! how `delay`, `debounce` and `observe_on` work: each runs one wakeable task for the whole
+//! subscription, started when it is subscribed, and their source, which may send from a thread the
+//! scheduler cannot reach, only wakes it. A scheduler must therefore step a task again once its
+//! waker is woken, from any thread; one that only honors the deadlines would leave those operators
+//! waiting forever.
 //!
 //! # Examples
 //! ```rust
@@ -95,7 +102,7 @@ pub use drive::{drive, yield_now};
 pub use task::StreamThenContext;
 pub use task::{
     FutureThenContext, Next, OnceContext, PeriodicContext, RecursiveContext, Stepper, Task,
-    TaskHandler,
+    TaskHandler, TaskWaker, WakeableContext,
 };
 
 use crate::{

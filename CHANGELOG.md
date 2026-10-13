@@ -11,7 +11,8 @@ All notable changes to this project are documented here. The format follows
 - Type aliases for the shapes operators spell out: `observable::JoinedModeOf<A, B>` (the mode of
   an operator with two sources) and `observable::ChainDisposalOf<A, B>` (their disposals, `A`'s
   first); `observable::JoinedSchedulerModeOf<OE, S>` (the mode of an operator with a source and a
-  scheduler); `observable::BoxedObserverOf<'a, OE>` (the boxed observer of a source's mode);
+  scheduler) and `observable::ChainSchedulerDisposalOf<S, OE>` (the disposal of its scheduler task,
+  then its source's); `observable::BoxedObserverOf<'a, OE>` (the boxed observer of a source's mode);
   `subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>` and `DisposalOf<OE>`.
   They are aliases, so every type they name is unchanged.
 - `scheduler::Clock`, `SystemClock` and `virtual_time::VirtualClock`: a handle on a scheduler's
@@ -19,6 +20,10 @@ All notable changes to this project are documented here. The format follows
   scheduler.
 - `Next::PendingUntil(instant)`: a task waits for its waker or for the instant, whichever
   comes first. `drive` and `VirtualTime` support it.
+- `Task::wakeable(state, step)` returns a task and the `TaskWaker` that wakes it from outside,
+  from another thread than the scheduler's in the `Shared` mode: the task registers its waker
+  before each step, so no wake is lost, and dropping the `TaskWaker` tells the task that nothing
+  will wake it anymore. `WakeableContext` is its state type.
 - `scheduler::virtual_time`: `VirtualTime`, a clock that a test moves forward with `advance_by`,
   and its `VirtualTimeScheduler`, which queues the tasks and runs them, on the calling thread, at
   the instants they are due; `VirtualTime::clock` is the virtual clock alone. Time-based tests
@@ -181,6 +186,16 @@ All notable changes to this project are documented here. The format follows
   — and so on that task's thread, as after delivering a termination. In exchange, their source's
   disposal must be `Send + 'static` where the scheduler's tasks must be, as `timeout`'s already
   was. See `docs/decisions/0005-the-context-owns-its-source.md`.
+- **Breaking:** the observers that `delay`, `debounce`, `observe_on` and
+  `buffer_with_time_or_count` give their source no longer hold the scheduler, so a `Shared`
+  source, which may send from another thread, builds with a single-threaded scheduler:
+  `observe_on(TokioLocalScheduler::ambient())` moves the events of a background source onto a
+  `LocalSet`. `delay`, `debounce` and `observe_on` run one task for the whole subscription, started
+  when they are subscribed and parked on `Next::Pending` / `Next::PendingUntil` while nothing is
+  due, instead of one per burst of events; the source's observer wakes it (`Task::wakeable`). A
+  custom scheduler must step a task again once its waker is woken, as the built-in ones do.
+  `DelayObserver`, `DebounceObserver` and `BufferWithTimeOrCountObserver` take the clock's type
+  instead of the scheduler's, and `ObserveOnObserver` takes neither.
 
 ### Fixed
 

@@ -214,8 +214,9 @@ fn test_error() {
 }
 
 /// A delay too long for an `Instant` to represent never ends: the values and the completion never
-/// come due, and no timer waits for them. Once the source has completed, nothing is left to
-/// deliver, so the observer is released without a termination, as after `abandon` (decision 0004).
+/// come due, and the timer only waits for the source. Once the source has completed, nothing is
+/// left to deliver, so the timer finishes and the observer is released without a termination, as
+/// after `abandon` (decision 0004).
 #[test]
 fn test_delay_too_long_never_comes_due() {
     let time = VirtualTime::new();
@@ -231,7 +232,7 @@ fn test_delay_too_long_never_comes_due() {
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
-    assert_eq!(time.pending_tasks(), 0);
+    assert_eq!(time.pending_tasks(), 1);
 
     sender.on_termination(Termination::Completed);
     time.advance_by(DURATION_1_YEAR);

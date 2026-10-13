@@ -101,6 +101,12 @@ of them releases it, and the downstream observer with it. An operator without a 
 moment holds nothing, so the context is released at once. Nothing has to be promoted, and no
 operator can get it wrong by holding the wrong kind of handle: there is only one.
 
+`delay`, `debounce` and `observe_on` run one task for the whole subscription, a `Task::wakeable`
+that parks while nothing is due, since their source, which may send from a thread a `Local`
+scheduler cannot reach, cannot start one. Their work is done once nothing is queued and the source
+has let go of its observer: the observer holds the task's `TaskWaker`, whose drop wakes the task
+and tells it that nothing will wake it anymore, so it finishes and releases the context.
+
 What the weak handle did — releasing the downstream observer before `dispose` returns, although
 another handle may still be alive — is done by the `Drop` of `SerializedDelivery`, the state every
 handle shares:

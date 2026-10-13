@@ -4,17 +4,15 @@
 use crate::delegate_disposal;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
+    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Event, EventBatch, Flow, Observer, Termination},
-    scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
+    scheduler::{Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
     thread_mode::ThreadMode,
-    utils::{
-        reservation_slot::ReservationSlot,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
-    },
+    utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
 };
 use educe::Educe;
+use std::time::Instant;
 
 /// Specifies the `Scheduler` on which an observer will observe this Observable: every event is
 /// delivered from a task of that scheduler, in order.
@@ -64,22 +62,9 @@ use educe::Educe;
 /// }
 /// ```
 ///
-/// The source is subscribed with an observer that holds `scheduler`, and calls it from wherever
-/// the source emits. A `Local` scheduler is bound to its thread, so a source that emits from a
-/// task on another thread is refused at compile time:
-///
-/// ```compile_fail
-/// use rx_rust::{
-///     observable::ObservableExt, operators::creating::from_future::FromFuture,
-///     scheduler::runtime::tokio::{TokioLocalScheduler, TokioScheduler},
-/// };
-///
-/// let _subscription = FromFuture::new(async { 1 }, TokioScheduler::current())
-///     .observe_on(TokioLocalScheduler::ambient())
-///     .subscribe_with_callback(|_| {}, |_| {});
-/// ```
-///
-/// A `Shared` scheduler can be reached from there:
+/// The source is subscribed with an observer that only queues the events and wakes the task of
+/// `scheduler`, which is started when the operator is subscribed. So a source that emits from
+/// another thread can be observed on a `Local` scheduler, bound to the thread it was made on:
 ///
 /// ```no_run
 /// use rx_rust::{
@@ -88,7 +73,7 @@ use educe::Educe;
 /// };
 ///
 /// let _subscription = FromFuture::new(async { 1 }, TokioScheduler::current())
-///     .observe_on(TokioScheduler::current())
+///     .observe_on(TokioLocalScheduler::ambient())
 ///     .subscribe_with_callback(|_| {}, |_| {});
 /// ```
 #[derive(Educe)]
@@ -108,18 +93,20 @@ impl<OE, S> ObserveOn<OE, S> {
 }
 
 /// The context of an [`ObserveOn`] subscription.
-type ObserveOnContext<M, T, E, OR, S, D> =
-    SubscriptionContext<M, T, E, OR, Model<T, E, <S as SchedulerTypes>::Disposal>, D>;
+type ObserveOnContext<M, T, E, OR, D> = SubscriptionContext<M, T, E, OR, Model<T, E>, D>;
 
-/// The task of an [`ObserveOn`]. It holds the context strongly, so that the events already queued
-/// are delivered after the source has let go of its observer, terminated or not. A disposal still
-/// releases the observer at once: the source drops its own handle as it is disposed, and a handle
-/// dropped once the context has stopped releases the observer.
-type ObserveOnTask<M, T, E, OR, S, D> = RecursiveContext<ObserveOnContext<M, T, E, OR, S, D>>;
+/// The state of the [`ObserveOn`] task, one wakeable task for the whole subscription, which the
+/// source's observer wakes.
+///
+/// The task holds the context strongly, so that the events already queued are delivered after the
+/// source has let go of its observer, terminated or not; it finishes once nothing is left. A
+/// disposal still releases the observer at once: the source drops its own handle as it is
+/// disposed, and a handle dropped once the context has stopped releases the observer.
+type ObserveOnTask<M, T, E, OR, D> = WakeableContext<ObserveOnContext<M, T, E, OR, D>, M>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, T, E, Model<T, E, SD>, D>,
+    subscribe_with_context::Disposal<M, T, E, Model<T, E>, ChainDisposal<SD, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -146,145 +133,133 @@ where
                 T,
                 E,
                 OR,
-                S,
-                <OE as ObservableTypes>::Disposal,
+                ChainSchedulerDisposalOf<S, OE>,
             >,
             Item = T,
             Error = E,
         >,
     S: Scheduler<
-        ObserveOnTask<JoinedSchedulerModeOf<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
+        ObserveOnTask<JoinedSchedulerModeOf<OE, S>, T, E, OR, ChainSchedulerDisposalOf<S, OE>>,
     >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let model = Model::<T, E, S::Disposal> {
+        let model = Model::<T, E> {
             values: Vec::new(),
             termination: None,
-            task: ReservationSlot::Idle,
         };
         subscribe_with_context(observer, model, |context| {
-            self.source.subscribe(ObserveOnObserver {
-                context,
-                scheduler: self.scheduler,
-            })
+            let (task, waker) = Task::wakeable(context.clone(), step_task);
+            let source_subscription = self.source.subscribe(ObserveOnObserver { context, waker });
+            // The context owns only the task's disposal, through its source subscription, never
+            // the task, which its runtime owns: holding the context strongly forms no cycle.
+            // Stopping the context disposes the task.
+            let task = self.scheduler.run_task(task, None);
+            source_subscription.preceded_by_wrapped(task)
         })
         .map_inner_into()
     }
 }
 
 /// The state of an [`ObserveOn`] subscription.
-struct Model<T, E, D: Disposable> {
+struct Model<T, E> {
     values: Vec<T>,
     termination: Option<Termination<E>>,
-    /// Keeps at most one recursive scheduler task alive while events are waiting. The slot is
-    /// reserved while the task is being scheduled, which covers schedulers that can execute it
-    /// before returning its disposal.
-    task: ReservationSlot<DisposeOnDrop<D>>,
 }
 
-pub struct ObserveOnObserver<M, T, E, OR, S, D>
+/// One step of the task: delivers the events queued since the last one, then waits for the source
+/// to send more. `source_closed` is the `closed` of [`Task::wakeable`]: the source let go of its
+/// observer, so it sends nothing more.
+fn step_task<M, T, E, OR, D>(
+    context: &mut ObserveOnContext<M, T, E, OR, D>,
+    source_closed: bool,
+    _: Instant,
+) -> Next
 where
-    D: Disposable,
     M: ThreadMode,
-    S: SchedulerTypes,
+    OR: Observer<T, E>,
+    D: Disposable,
 {
-    context: ObserveOnContext<M, T, E, OR, S, D>,
-    scheduler: S,
+    context
+        .update(|model| {
+            let termination = model.termination.take();
+            let values = std::mem::take(&mut model.values);
+            let (next, events, discarded_values) = match termination {
+                // Nothing left to deliver. An empty batch is a no-op for the context, and every
+                // branch must produce one so their types agree. Once the source sends nothing
+                // more either, the observer is released without a termination (decision 0004).
+                None if values.is_empty() => {
+                    let next = if source_closed {
+                        Next::Finished
+                    } else {
+                        Next::Pending
+                    };
+                    (next, EventBatch::NextBatch(Vec::new()), None)
+                }
+                // Yield rather than park, so that the values arriving while this batch is
+                // delivered are taken by the next pass without waiting for a wake.
+                None => (Next::Yield, EventBatch::NextBatch(values), None),
+                Some(completion @ Termination::Completed) => (
+                    Next::Finished,
+                    EventBatch::NextBatchAndTermination(values, completion),
+                    None,
+                ),
+                // An error preempts the values buffered before it, unlike a completion.
+                Some(error @ Termination::Error(_)) => {
+                    (Next::Finished, EventBatch::Termination(error), Some(values))
+                }
+            };
+            UpdateOutcome::new(next)
+                .with_events(events)
+                .with_drop_outside(discarded_values)
+        })
+        .unwrap_or(Next::Finished)
 }
 
-impl<M, T, E, OR, S, D> ObserveOnObserver<M, T, E, OR, S, D>
+/// The observer an [`ObserveOn`] gives its source. It queues the events and wakes the task, and
+/// holds no scheduler, which may be `Local` while the source sends from another thread.
+pub struct ObserveOnObserver<M: ThreadMode, T, E, OR, D: Disposable> {
+    context: ObserveOnContext<M, T, E, OR, D>,
+    waker: TaskWaker<M>,
+}
+
+impl<M, T, E, OR, D> ObserveOnObserver<M, T, E, OR, D>
 where
-    D: Disposable,
     M: ThreadMode,
-    S: SchedulerTypes,
+    OR: Observer<T, E>,
+    D: Disposable,
 {
-    /// Queues `event` for the observing scheduler, starting the delivering task if it is stopped.
-    ///
-    /// Only one task exists at a time. `Observer` serializes its callers — `on_next` takes
-    /// `&mut self` and `on_termination` takes `self` — so a task cannot be started here while
-    /// another call is between starting a task and storing its disposal below.
+    /// Queues `event` for the observing scheduler, and wakes its task if nothing was queued.
     ///
     /// Returns [`Flow::Stop`] once the context has stopped: the event was then dropped, and so
     /// would every later one be. What downstream itself answers is only known once the task
     /// delivers, so this is otherwise [`Flow::Continue`].
-    fn queue_event(&self, event: Event<T, E>) -> Flow
-    where
-        OR: Observer<T, E>,
-        S: Scheduler<ObserveOnTask<M, T, E, OR, S, D>>,
-    {
-        let task_setup = self.context.update(|model| {
+    fn queue_event(&self, event: Event<T, E>) -> Flow {
+        let wake = self.context.update(|model| {
+            // A task woken for an earlier event that it has not taken yet takes this one too.
+            let wake = model.values.is_empty() && model.termination.is_none();
             match event {
                 Event::Next(value) => model.values.push(value),
                 Event::Termination(termination) => model.termination = Some(termination),
             }
-            UpdateOutcome::new(model.task.reserve_if_idle())
+            UpdateOutcome::new(wake).without_events()
         });
-        match task_setup {
-            Ok(true) => {}
-            // A build is in flight, so this event is left in the model for whoever finishes that
-            // handoff: either the running task picks it up on its next pass, or — when the task
-            // has already stopped — the `fill` below that hands its handle back does.
-            Ok(false) => return Flow::Continue,
-            Err(DeliveryStopped) => return Flow::Stop,
+        match wake {
+            Ok(wake) => {
+                if wake {
+                    self.waker.wake();
+                }
+                Flow::Continue
+            }
+            Err(DeliveryStopped) => Flow::Stop,
         }
-
-        // The model holds only the task's disposal, never the task, which its runtime owns: holding
-        // the context strongly forms no cycle. Stopping the context drops the model, which cancels
-        // the task.
-        let task = Task::recursive(self.context.clone(), |context, _, _| {
-            context
-                .update(|model| {
-                    let termination = model.termination.take();
-                    let values = std::mem::take(&mut model.values);
-                    let (action, events, discarded_values) = match termination {
-                        // Nothing left to deliver. An empty batch is a no-op for the context,
-                        // and every branch must produce one so their types agree.
-                        None if values.is_empty() => {
-                            (Next::Finished, EventBatch::NextBatch(Vec::new()), None)
-                        }
-                        // Recur instead of stopping: values arriving while this batch is
-                        // delivered are pushed onto the model, and only another pass takes
-                        // them. They cannot start a task of their own, because this one holds
-                        // the task slot until a pass finds the model empty.
-                        None => (Next::Yield, EventBatch::NextBatch(values), None),
-                        Some(completion @ Termination::Completed) => (
-                            Next::Finished,
-                            EventBatch::NextBatchAndTermination(values, completion),
-                            None,
-                        ),
-                        // An error preempts the values buffered before it, unlike a completion.
-                        Some(error @ Termination::Error(_)) => {
-                            (Next::Finished, EventBatch::Termination(error), Some(values))
-                        }
-                    };
-                    let finished_task = match action {
-                        Next::Finished => model.task.release(),
-                        _ => None,
-                    };
-                    UpdateOutcome::new(action)
-                        .with_events(events)
-                        .with_drop_outside((finished_task, discarded_values))
-                })
-                .unwrap_or(Next::Finished)
-        });
-        let task = self.scheduler.run_task(task, None);
-
-        // A scheduler that runs the task at once can have delivered, and ended, the stream before
-        // this runs: the flow of this update is what reports it.
-        self.context.update_flow(move |model| {
-            // If the task already stopped, `fill` gives the handle back to dispose outside the
-            // lock.
-            UpdateOutcome::empty().with_drop_outside(model.task.fill(task))
-        })
     }
 }
 
-impl<M, T, E, OR, S, D> Observer<T, E> for ObserveOnObserver<M, T, E, OR, S, D>
+impl<M, T, E, OR, D> Observer<T, E> for ObserveOnObserver<M, T, E, OR, D>
 where
-    D: Disposable,
-    OR: Observer<T, E>,
     M: ThreadMode,
-    S: Scheduler<ObserveOnTask<M, T, E, OR, S, D>>,
+    OR: Observer<T, E>,
+    D: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.queue_event(Event::Next(value))

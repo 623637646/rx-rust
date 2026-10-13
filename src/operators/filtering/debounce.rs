@@ -2,14 +2,16 @@
 //! [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce).
 
 use crate::delegate_disposal;
-use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
+use crate::disposable::{
+    Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+};
 use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
+    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
+    scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -86,18 +88,20 @@ impl<OE, S> Debounce<OE, S> {
 }
 
 /// The context of a [`Debounce`] subscription.
-type DebounceContext<M, T, E, OR, S, D> =
-    SubscriptionContext<M, T, E, OR, Model<T, <S as SchedulerTypes>::Disposal>, D>;
+type DebounceContext<M, T, E, OR, D> = SubscriptionContext<M, T, E, OR, Model<T>, D>;
 
-/// The task of a [`Debounce`] timer. It holds the context strongly, so that a pending value is
-/// still emitted after the source dropped its observer. A disposal still releases the observer at
-/// once: the source drops its own handle as it is disposed, and a handle dropped once the context
-/// has stopped releases the observer (see `SerializedDelivery`).
-type DebounceTask<M, T, E, OR, S, D> = RecursiveContext<DebounceContext<M, T, E, OR, S, D>>;
+/// The state of the [`Debounce`] timer, one wakeable task for the whole subscription, which the
+/// source's observer wakes.
+///
+/// The task holds the context strongly, so that a pending value is still emitted after the source
+/// dropped its observer; it finishes once nothing is pending. A disposal still releases the
+/// observer at once: the source drops its own handle as it is disposed, and a handle dropped once
+/// the context has stopped releases the observer (see `SerializedDelivery`).
+type DebounceTask<M, T, E, OR, D> = WakeableContext<DebounceContext<M, T, E, OR, D>, M>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, T, E, Model<T, SD>, D>,
+    subscribe_with_context::Disposal<M, T, E, Model<T>, ChainDisposal<SD, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -123,31 +127,37 @@ where
                 T,
                 E,
                 OR,
-                S,
-                <OE as ObservableTypes>::Disposal,
+                ChainSchedulerDisposalOf<S, OE>,
+                <S as SchedulerTypes>::Clock,
             >,
             Item = T,
             Error = E,
         >,
     S: Scheduler<
-        DebounceTask<JoinedSchedulerModeOf<OE, S>, T, E, OR, S, <OE as ObservableTypes>::Disposal>,
+        DebounceTask<JoinedSchedulerModeOf<OE, S>, T, E, OR, ChainSchedulerDisposalOf<S, OE>>,
     >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let model = Model::<T, S::Disposal>::Idle;
-        subscribe_with_context(observer, model, |context| {
-            self.source.subscribe(DebounceObserver {
+        subscribe_with_context(observer, Model::<T>::Idle, |context| {
+            let (task, waker) = Task::wakeable(context.clone(), step_timer);
+            let source_subscription = self.source.subscribe(DebounceObserver {
                 context,
                 time_span: self.time_span,
-                scheduler: self.scheduler,
-            })
+                clock: self.scheduler.clock(),
+                waker,
+            });
+            // The context owns only the task's disposal, through its source subscription, never
+            // the task, which its runtime owns: holding the context strongly forms no cycle.
+            // Stopping the context disposes the timer, which cancels the task.
+            let timer = self.scheduler.run_task(task, None);
+            source_subscription.preceded_by_wrapped(timer)
         })
         .map_inner_into()
     }
 }
 
 /// The state of a [`Debounce`] subscription.
-enum Model<T, D: Disposable> {
+enum Model<T> {
     Idle,
     Active {
         value: T,
@@ -155,116 +165,99 @@ enum Model<T, D: Disposable> {
         /// represent: it then waits for the completion. The clock only moves forward, so a later
         /// value's deadline is `None` too.
         deadline: Option<Instant>,
-        timer: Option<DisposeOnDrop<D>>,
     },
 }
 
-pub struct DebounceObserver<M, T, E, OR, S, D>
+/// One step of the timer: emits the pending value once its deadline has passed, then waits for the
+/// deadline of the pending value, or for the source to send.
+///
+/// A value that replaces the pending one only moves the deadline: the timer wakes at the old one,
+/// and waits on for the new one. `source_closed` is the `closed` of [`Task::wakeable`]: the source
+/// let go of its observer, so it sends nothing more.
+fn step_timer<M, T, E, OR, D>(
+    context: &mut DebounceContext<M, T, E, OR, D>,
+    source_closed: bool,
+    now: Instant,
+) -> Next
 where
-    D: Disposable,
     M: ThreadMode,
-    S: SchedulerTypes,
+    OR: Observer<T, E>,
+    D: Disposable,
 {
-    context: DebounceContext<M, T, E, OR, S, D>,
-    time_span: Duration,
-    scheduler: S,
+    // Once nothing is pending, and the source sends nothing more, the observer is released
+    // without a termination (decision 0004).
+    let idle = if source_closed {
+        Next::Finished
+    } else {
+        Next::Pending
+    };
+    context
+        .update(|model| match model {
+            Model::Active {
+                deadline: Some(deadline),
+                ..
+            } if *deadline <= now => match std::mem::replace(model, Model::Idle) {
+                Model::Active { value, .. } => UpdateOutcome::new(idle).with_next_event(value),
+                Model::Idle => unreachable!(),
+            },
+            Model::Active {
+                deadline: Some(deadline),
+                ..
+            } => UpdateOutcome::new(Next::PendingUntil(*deadline)).without_events(),
+            // Nothing is pending, or the pending value never comes due: it waits for the
+            // completion, which the source's observer emits itself.
+            Model::Active { deadline: None, .. } | Model::Idle => {
+                UpdateOutcome::new(idle).without_events()
+            }
+        })
+        .unwrap_or(Next::Finished)
 }
 
-impl<M, T, E, OR, S, D> Observer<T, E> for DebounceObserver<M, T, E, OR, S, D>
+/// The observer a [`Debounce`] gives its source. It holds the scheduler's clock rather than the
+/// scheduler, which may be `Local` while the source sends from another thread, and wakes the timer
+/// rather than scheduling it.
+pub struct DebounceObserver<M: ThreadMode, T, E, OR, D: Disposable, C> {
+    context: DebounceContext<M, T, E, OR, D>,
+    time_span: Duration,
+    clock: C,
+    waker: TaskWaker<M>,
+}
+
+impl<M, T, E, OR, D, C> Observer<T, E> for DebounceObserver<M, T, E, OR, D, C>
 where
-    D: Disposable,
-    OR: Observer<T, E>,
     M: ThreadMode,
-    S: Scheduler<DebounceTask<M, T, E, OR, S, D>>,
+    OR: Observer<T, E>,
+    D: Disposable,
+    C: Clock,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        let deadline = self.scheduler.clock().now().checked_add(self.time_span);
-        let timer_setup = self.context.update(|model| {
-            let (timer_setup, previous_value) = match model {
-                Model::Idle => {
-                    *model = Model::Active {
-                        value,
-                        deadline,
-                        timer: None,
-                    };
-                    (deadline, None)
-                }
-                Model::Active {
-                    value: current_value,
-                    deadline: current_deadline,
-                    ..
-                } => {
-                    let previous_value = std::mem::replace(current_value, value);
-                    *current_deadline = deadline;
-                    (None, Some(previous_value))
-                }
-            };
-            UpdateOutcome::new(timer_setup).with_drop_outside(previous_value)
-        });
-        let deadline = match timer_setup {
-            Ok(Some(deadline)) => deadline,
-            // The value replaced the pending one, whose timer is still running, or it never comes
-            // due and needs no timer.
-            Ok(None) => return Flow::Continue,
-            Err(DeliveryStopped) => return Flow::Stop,
-        };
-
-        // The model holds only the task's disposal, never the task, which its runtime owns: holding
-        // the context strongly forms no cycle. Stopping the context drops the model, which cancels
-        // the task.
-        let task = Task::recursive(self.context.clone(), |context, _, now| {
-            context
-                .update(|model| {
-                    let deadline = match model {
-                        Model::Idle => {
-                            return UpdateOutcome::new(Next::Finished)
-                                .without_events()
-                                .without_drop_outside();
-                        }
-                        Model::Active { deadline, .. } => *deadline,
-                    };
-                    let Some(deadline) = deadline else {
-                        // A value with no deadline replaced the one this timer was for: it waits
-                        // for the completion, and the timer has nothing left to do.
-                        return UpdateOutcome::new(Next::Finished)
-                            .without_events()
-                            .without_drop_outside();
-                    };
-                    if now < deadline {
-                        return UpdateOutcome::new(Next::SleepUntil(deadline))
-                            .without_events()
-                            .without_drop_outside();
-                    }
-
-                    match std::mem::replace(model, Model::Idle) {
-                        Model::Idle => unreachable!(),
-                        Model::Active {
-                            value,
-                            deadline: _,
-                            timer,
-                        } => UpdateOutcome::new(Next::Finished)
-                            .with_next_event(value)
-                            .with_drop_outside(timer),
-                    }
-                })
-                .unwrap_or(Next::Finished)
-        });
-        let disposal = self.scheduler.run_task(
-            task,
-            Some(deadline.saturating_duration_since(self.scheduler.clock().now())),
-        );
-
-        let mut disposal = Some(disposal);
-        self.context.update_flow(move |model| {
-            if let Model::Active { timer, .. } = model
-                && timer.is_none()
-            {
-                *timer = disposal.take();
+        let deadline = self.clock.now().checked_add(self.time_span);
+        let wake = self.context.update(|model| match model {
+            // The timer waits for the source: wake it, unless the value never comes due.
+            Model::Idle => {
+                *model = Model::Active { value, deadline };
+                UpdateOutcome::new(deadline.is_some()).without_drop_outside()
             }
-            // If the timer already fired (possible for a zero time span), dispose the returned
-            // handle outside the lock.
-            UpdateOutcome::empty().with_drop_outside(disposal)
-        })
+            // The timer already waits for the pending value's deadline, which this one only
+            // moves later.
+            Model::Active {
+                value: current_value,
+                deadline: current_deadline,
+            } => {
+                let previous_value = std::mem::replace(current_value, value);
+                *current_deadline = deadline;
+                UpdateOutcome::new(false).with_drop_outside(previous_value)
+            }
+        });
+        match wake {
+            Ok(wake) => {
+                if wake {
+                    self.waker.wake();
+                }
+                Flow::Continue
+            }
+            Err(DeliveryStopped) => Flow::Stop,
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -273,16 +266,9 @@ where
                 let _ = self
                     .context
                     .update(|model| match std::mem::replace(model, Model::Idle) {
-                        Model::Idle => UpdateOutcome::empty()
-                            .with_termination_event(completion)
-                            .without_drop_outside(),
-                        Model::Active {
-                            value,
-                            deadline: _,
-                            timer,
-                        } => UpdateOutcome::empty()
-                            .with_next_and_termination_events(value, completion)
-                            .with_drop_outside(timer),
+                        Model::Idle => UpdateOutcome::empty().with_termination_event(completion),
+                        Model::Active { value, .. } => UpdateOutcome::empty()
+                            .with_next_and_termination_events(value, completion),
                     });
             }
             error @ Termination::Error(_) => {

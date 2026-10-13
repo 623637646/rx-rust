@@ -6,7 +6,7 @@ use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
+    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, PeriodicContext, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
@@ -98,10 +98,6 @@ impl<OE, S> BufferWithTime<OE, S> {
     }
 }
 
-/// The source subscription a [`BufferWithTime`] context owns: the timer, then the source.
-type BufferWithTimeSources<OE, S> =
-    ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
-
 /// The task of a [`BufferWithTime`] timer. It holds the context strongly, so that the buffers keep
 /// being cut after the source has let go of its observer without a termination, until the
 /// subscription is disposed. A disposal still releases the observer at once: disposing the source
@@ -114,7 +110,7 @@ type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
         E,
         OR,
         Vec<T>,
-        BufferWithTimeSources<OE, S>,
+        ChainSchedulerDisposalOf<S, OE>,
     >,
 >;
 
@@ -146,7 +142,7 @@ where
                 T,
                 E,
                 OR,
-                BufferWithTimeSources<OE, S>,
+                ChainSchedulerDisposalOf<S, OE>,
             >,
             Item = T,
             Error = E,

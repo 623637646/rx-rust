@@ -13,15 +13,19 @@ use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::scheduler::{Clock, Next, Scheduler, SchedulerExt, SchedulerTypes, Task, drive};
+use rx_rust::scheduler::{
+    Clock, Next, Scheduler, SchedulerExt, SchedulerTypes, Stepper, Task, TaskWaker,
+    WakeableContext, drive,
+};
 use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use std::convert::Infallible;
 use std::future::Future;
 use std::pin::pin;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
-use std::task::{Context, Waker};
+use std::task::{Context, Wake, Waker};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -232,6 +236,165 @@ fn test_pending_until_instant() {
         let _disposal = scheduler.run_task(task, None);
         assert!(rx.next().await.unwrap() >= deadline);
         assert!(rx.next().await.is_none());
+    });
+}
+
+/// A waker that counts its wakes.
+#[derive(Default)]
+struct WakeCounter(AtomicUsize);
+
+impl Wake for WakeCounter {
+    fn wake(self: Arc<Self>) {
+        self.wake_by_ref();
+    }
+    fn wake_by_ref(self: &Arc<Self>) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+impl WakeCounter {
+    fn new() -> (Arc<Self>, Waker) {
+        let counter = Arc::new(Self::default());
+        (counter.clone(), Waker::from(counter))
+    }
+
+    fn wakes(&self) -> usize {
+        self.0.load(Ordering::SeqCst)
+    }
+}
+
+/// The `closed` of each step of a [`recording_wakeable`] task.
+type Steps = Arc<Mutex<Vec<bool>>>;
+
+/// A wakeable task, split to be stepped by the test, that records the `closed` of each step and
+/// waits for a wake.
+fn recording_wakeable() -> (
+    Steps,
+    Stepper<WakeableContext<Steps, Shared>, ()>,
+    TaskWaker<Shared>,
+) {
+    let steps = Arc::new(Mutex::new(Vec::new()));
+    let (task, waker) = Task::wakeable(steps.clone(), |steps, closed, _| {
+        steps.with_mut(|steps| steps.push(closed));
+        Next::Pending
+    });
+    let (stepper, ()) = task.split();
+    (steps, stepper, waker)
+}
+
+/// Steps `stepper` once, with `waker` registered.
+fn step_with<TC>(stepper: &mut Stepper<TC, ()>, waker: &Waker) -> Next {
+    stepper.step(pin!(()), &mut Context::from_waker(waker), Instant::now())
+}
+
+/// A wake before the first step has no waker to wake: the first step comes anyway.
+#[test]
+fn test_wakeable_wake_before_first_step() {
+    let (steps, mut stepper, task_waker) = recording_wakeable();
+    let (counter, waker) = WakeCounter::new();
+    task_waker.wake();
+    assert_eq!(step_with(&mut stepper, &waker), Next::Pending);
+    assert_eq!(steps.clone_value(), [false]);
+    assert_eq!(counter.wakes(), 0);
+}
+
+/// Each step registers the waker once: the first wake after it wakes the task, the next ones wait
+/// for the following step.
+#[test]
+fn test_wakeable_wakes_once_per_step() {
+    let (steps, mut stepper, task_waker) = recording_wakeable();
+    let (counter, waker) = WakeCounter::new();
+    assert_eq!(step_with(&mut stepper, &waker), Next::Pending);
+    task_waker.wake();
+    assert_eq!(counter.wakes(), 1);
+    task_waker.wake();
+    assert_eq!(counter.wakes(), 1);
+
+    assert_eq!(step_with(&mut stepper, &waker), Next::Pending);
+    assert_eq!(step_with(&mut stepper, &waker), Next::Pending);
+    task_waker.wake();
+    assert_eq!(counter.wakes(), 2);
+    assert_eq!(steps.clone_value(), [false, false, false]);
+}
+
+/// A step with another waker replaces the one registered before.
+#[test]
+fn test_wakeable_wakes_the_last_waker() {
+    let (_steps, mut stepper, task_waker) = recording_wakeable();
+    let (first_counter, first) = WakeCounter::new();
+    let (second_counter, second) = WakeCounter::new();
+    assert_eq!(step_with(&mut stepper, &first), Next::Pending);
+    assert_eq!(step_with(&mut stepper, &second), Next::Pending);
+    task_waker.wake();
+    assert_eq!(first_counter.wakes(), 0);
+    assert_eq!(second_counter.wakes(), 1);
+}
+
+/// Dropping the waker wakes the task, whose next step is told it is closed.
+#[test]
+fn test_wakeable_drop_wakes_and_closes() {
+    let (steps, mut stepper, task_waker) = recording_wakeable();
+    let (counter, waker) = WakeCounter::new();
+    assert_eq!(step_with(&mut stepper, &waker), Next::Pending);
+    drop(task_waker);
+    assert_eq!(counter.wakes(), 1);
+    assert_eq!(step_with(&mut stepper, &waker), Next::Pending);
+    assert_eq!(steps.clone_value(), [false, true]);
+}
+
+/// A waker dropped before the first step has nothing to wake; the first step is told it is
+/// closed.
+#[test]
+fn test_wakeable_drop_before_first_step() {
+    let (steps, mut stepper, task_waker) = recording_wakeable();
+    let (counter, waker) = WakeCounter::new();
+    drop(task_waker);
+    assert_eq!(step_with(&mut stepper, &waker), Next::Pending);
+    assert_eq!(steps.clone_value(), [true]);
+    assert_eq!(counter.wakes(), 0);
+}
+
+/// A task dropped — finished or disposed — lets go of its waker: a later wake reaches nothing.
+#[test]
+fn test_wakeable_dropped_task_is_not_woken() {
+    let (_steps, mut stepper, task_waker) = recording_wakeable();
+    let (counter, waker) = WakeCounter::new();
+    assert_eq!(step_with(&mut stepper, &waker), Next::Pending);
+    drop(stepper);
+    task_waker.wake();
+    drop(task_waker);
+    assert_eq!(counter.wakes(), 0);
+}
+
+/// A wakeable task on every scheduler, the single-threaded ones included, woken from another
+/// thread: it takes what the thread sent, and finishes once the thread dropped the waker.
+#[test]
+fn test_wakeable_woken_from_another_thread() {
+    block_on(|scheduler| async move {
+        let inbox = Arc::new(Mutex::new(Vec::new()));
+        let (tx, rx) = futures::channel::mpsc::unbounded();
+        let (task, waker): (_, TaskWaker<Shared>) =
+            Task::wakeable((inbox.clone(), tx), |(inbox, tx), closed, _| {
+                for value in inbox.with_mut(std::mem::take) {
+                    let _ = tx.unbounded_send(value);
+                }
+                // Finishing drops the sender, which ends the stream.
+                if closed {
+                    Next::Finished
+                } else {
+                    Next::Pending
+                }
+            });
+        let _disposal = scheduler.run_task(task, None);
+        thread::spawn(move || {
+            inbox.with_mut(|inbox| inbox.push(1));
+            waker.wake();
+            inbox.with_mut(|inbox| inbox.push(2));
+            drop(waker);
+        })
+        .join()
+        .unwrap();
+        assert_eq!(rx.collect::<Vec<_>>().await, [1, 2]);
     });
 }
 

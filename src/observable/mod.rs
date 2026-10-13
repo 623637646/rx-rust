@@ -136,6 +136,14 @@ pub type ChainDisposalOf<A, B> = crate::disposable::chain_disposal::ChainDisposa
     <B as ObservableTypes>::Disposal,
 >;
 
+/// The disposal of a task run on the scheduler `S` and that of the source `OE` chained into one:
+/// disposing it cancels the task first, then disposes the source's subscription. What the context
+/// of an operator with a long-lived scheduler task owns, as `delay` or `buffer_with_time` do.
+pub type ChainSchedulerDisposalOf<S, OE> = crate::disposable::chain_disposal::ChainDisposal<
+    <S as crate::scheduler::SchedulerTypes>::Disposal,
+    <OE as ObservableTypes>::Disposal,
+>;
+
 /// The part of an observable that does not depend on who observes it: what it emits, the thread
 /// its events can arrive on, and the disposal of a subscription to it.
 ///
