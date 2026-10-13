@@ -6,6 +6,7 @@ use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::drop_probe::DropProbe;
 use crate::tests_utils::test_scheduler::block_on;
+use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
 use futures::StreamExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::observable::ObservableExt;
@@ -16,6 +17,7 @@ use rx_rust::scheduler::{Clock, Next, Scheduler, SchedulerExt, SchedulerTypes, T
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use std::convert::Infallible;
+use std::future::Future;
 use std::pin::pin;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, mpsc};
@@ -24,6 +26,99 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 const RECURSION_EXECUTION_TIMES: usize = 200;
+
+#[test]
+fn test_thread_checker_executor_shutdown_while_pending() {
+    let executor = ThreadCheckerExecutor::new("shutdown_while_pending");
+    let scheduler = executor.scheduler();
+    let (dropped, receiver) = mpsc::channel();
+    let probe = DropProbe::new().on_drop(Box::new(move || {
+        dropped.send(get_thread_name()).unwrap();
+    }));
+    // Both the driver and the task's context retain scheduling handles.
+    let disposal = scheduler.run_task(
+        Task::new((probe, scheduler.clone()), |_, _, _, _| Next::Pending),
+        None,
+    );
+    futures::executor::block_on(executor.run_until_stalled());
+
+    // Retain the cancellation handle: releasing the executor must release even a parked task.
+    assert_eq!(receiver.try_recv(), Err(mpsc::TryRecvError::Empty));
+    drop(executor);
+    assert_eq!(receiver.try_recv().unwrap(), Some("shutdown_while_pending"));
+    drop(disposal);
+}
+
+#[test]
+fn test_thread_checker_executor_shutdown_before_first_poll() {
+    let executor = ThreadCheckerExecutor::new("shutdown_before_first_poll");
+    let scheduler = executor.scheduler();
+    let (dropped, receiver) = mpsc::channel();
+    let probe = DropProbe::new().on_drop(Box::new(move || {
+        dropped.send(get_thread_name()).unwrap();
+    }));
+    let disposal = scheduler.run_task(
+        Task::new((probe, scheduler.clone()), |_, _, _, _| {
+            panic!("shutdown must release the task without polling it");
+        }),
+        None,
+    );
+
+    assert_eq!(receiver.try_recv(), Err(mpsc::TryRecvError::Empty));
+    drop(executor);
+    assert_eq!(
+        receiver.try_recv().unwrap(),
+        Some("shutdown_before_first_poll")
+    );
+    drop(disposal);
+}
+
+#[test]
+fn test_thread_checker_executor_shutdown_on_own_thread() {
+    let executor = Arc::new(ThreadCheckerExecutor::new("shutdown_on_own_thread"));
+    let scheduler = executor.scheduler();
+    let executor_in_task = executor.clone();
+    let (started, start) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let (dropped, receiver) = mpsc::channel();
+    let disposal = scheduler.schedule(
+        move || {
+            started.send(()).unwrap();
+            released.recv_timeout(Duration::from_secs(1)).unwrap();
+            drop(executor_in_task);
+            dropped.send(get_thread_name()).unwrap();
+        },
+        None,
+    );
+
+    // Queue the run, then release its borrow so that only the task will retain the owner.
+    {
+        let mut run = pin!(executor.run_until_stalled());
+        assert!(
+            run.as_mut()
+                .poll(&mut Context::from_waker(Waker::noop()))
+                .is_pending()
+        );
+    }
+    start.recv_timeout(Duration::from_secs(1)).unwrap();
+    drop(executor);
+    release.send(()).unwrap();
+    assert_eq!(
+        receiver.recv_timeout(Duration::from_secs(1)).unwrap(),
+        Some("shutdown_on_own_thread")
+    );
+    drop(disposal);
+}
+
+#[test]
+#[should_panic(expected = "the dropped_executor thread is gone")]
+fn test_thread_checker_scheduler_panics_once_the_executor_is_dropped() {
+    let executor = ThreadCheckerExecutor::new("dropped_executor");
+    let scheduler = executor.scheduler();
+    drop(executor);
+
+    let _disposal = scheduler.schedule(|| {}, None);
+}
 
 #[test]
 fn test_schedule_without_delay() {

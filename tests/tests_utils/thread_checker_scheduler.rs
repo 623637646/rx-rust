@@ -1,4 +1,4 @@
-use educe::Educe;
+use futures::FutureExt;
 use futures::channel::oneshot;
 use futures::executor::LocalPool;
 use futures::future::{BoxFuture, abortable};
@@ -18,46 +18,51 @@ thread_local! {
     static THREAD_NAME: Cell<Option<&'static str>> = const { Cell::new(None) };
 }
 
-/// The name of the [`ThreadCheckerScheduler`] whose thread this is, `None` on any other thread.
+/// The name of the [`ThreadCheckerExecutor`] whose thread this is, `None` on any other thread.
 pub(crate) fn get_thread_name() -> Option<&'static str> {
-    THREAD_NAME.with(|name| name.get())
+    THREAD_NAME.get()
 }
 
 enum Command {
     Spawn(BoxFuture<'static, ()>),
     RunUntilStalled(oneshot::Sender<thread::Result<()>>),
+    Shutdown,
 }
 
-/// A scheduler with a thread of its own, named for [`get_thread_name`], that runs its tasks only
-/// when the test asks for it.
+/// The owner of a thread, named for [`get_thread_name`], that runs its tasks only when the test
+/// asks for it. [`Scheduler::run_task`] only queues the task; [`Self::run_until_stalled`] runs every
+/// queued task until none can make progress. So the test decides when the scheduler's thread runs
+/// relative to its own, instead of racing it, and waits for exactly the work it started instead of
+/// sleeping.
 ///
-/// [`Scheduler::run_task`] only queues the task. [`Self::run_until_stalled`] then runs, on that
-/// thread, every queued task until none can make progress, and returns once they have. So the test
-/// decides when the scheduler's thread runs relative to its own, instead of racing it, and waits
-/// for exactly the work it started instead of sleeping.
+/// Dropping the owner stops the thread, which releases all its tasks even if they hold scheduler
+/// clones or their cancellation handles remain alive. On any other thread, dropping the owner also
+/// waits for that shutdown. On the executor's own thread, it returns to the event loop to finish
+/// the shutdown without joining itself.
 ///
-/// A disposed task is dropped, on the scheduler's thread, by the next [`Self::run_until_stalled`].
-#[derive(Educe)]
-#[educe(Debug, Clone)]
-pub(crate) struct ThreadCheckerScheduler {
-    name: &'static str,
-    #[educe(Debug(ignore))]
-    commands: mpsc::Sender<Command>,
+/// [`Self::scheduler`] gives out handles that can queue tasks without keeping the executor alive.
+#[derive(Debug)]
+pub(crate) struct ThreadCheckerExecutor {
+    scheduler: ThreadCheckerScheduler,
+    thread: Option<thread::JoinHandle<()>>,
 }
 
-impl ThreadCheckerScheduler {
+impl ThreadCheckerExecutor {
+    /// Starts the executor's thread; tasks remain queued until [`Self::run_until_stalled`].
     pub(crate) fn new(name: &'static str) -> Self {
         let (commands, receiver) = mpsc::channel();
-        let thread = thread::Builder::new().name(name.to_owned());
-        thread
+        let thread = thread::Builder::new()
+            .name(name.to_owned())
             .spawn(move || {
-                THREAD_NAME.with(|thread_name| thread_name.set(Some(name)));
+                THREAD_NAME.set(Some(name));
                 let mut pool = LocalPool::new();
-                let spawner = pool.spawner();
-                // Ends once every handle on the scheduler is gone.
+                // Scheduler clones, those held by the tasks included, keep the channel open: only
+                // the owner's `Shutdown` ends the loop. The receiver goes first, then the pool and
+                // its tasks.
                 for command in receiver {
                     match command {
-                        Command::Spawn(future) => spawner
+                        Command::Spawn(future) => pool
+                            .spawner()
                             .spawn_local(future)
                             .expect("the pool lives as long as this thread"),
                         Command::RunUntilStalled(done) => {
@@ -67,30 +72,72 @@ impl ThreadCheckerScheduler {
                                 panic::catch_unwind(AssertUnwindSafe(|| pool.run_until_stalled()));
                             let _ = done.send(result);
                         }
+                        Command::Shutdown => break,
                     }
                 }
             })
-            .expect("the scheduler's thread starts");
-        Self { name, commands }
+            .expect("the executor's thread starts");
+        Self {
+            scheduler: ThreadCheckerScheduler { name, commands },
+            thread: Some(thread),
+        }
     }
 
-    /// Runs the queued tasks on the scheduler's thread until none of them can make progress, and
+    /// Returns a scheduling handle that does not keep this executor alive.
+    pub(crate) fn scheduler(&self) -> ThreadCheckerScheduler {
+        self.scheduler.clone()
+    }
+
+    /// Runs the queued tasks on the executor's thread until none of them can make progress, and
     /// resumes on the calling thread a panic one of them raised.
     pub(crate) async fn run_until_stalled(&self) {
-        let (sender, receiver) = oneshot::channel();
-        self.send(Command::RunUntilStalled(sender));
-        let result = receiver
-            .await
-            .unwrap_or_else(|_| panic!("the {} thread is gone", self.name));
+        let (done, result) = oneshot::channel();
+        self.scheduler.send(Command::RunUntilStalled(done));
+        let result = result.await.unwrap_or_else(|_| self.scheduler.gone());
         if let Err(payload) = result {
             panic::resume_unwind(payload);
         }
     }
+}
 
+impl Drop for ThreadCheckerExecutor {
+    fn drop(&mut self) {
+        // Fails only if the thread already panicked, which the join below reports.
+        let _ = self.scheduler.commands.send(Command::Shutdown);
+        let thread = self.thread.take().expect("the executor owns its thread");
+        if thread.thread().id() == thread::current().id() {
+            // The event loop finishes shutting down once this task returns; it cannot join itself.
+            return;
+        }
+        if let Err(payload) = thread.join()
+            && !thread::panicking()
+        {
+            panic::resume_unwind(payload);
+        }
+    }
+}
+
+/// A scheduling handle of a [`ThreadCheckerExecutor`]. It does not keep the executor alive: once
+/// the executor is dropped, scheduling panics.
+///
+/// [`Scheduler::run_task`] only queues the task. [`ThreadCheckerExecutor::run_until_stalled`] runs
+/// the queued tasks on that thread until none can make progress. A disposed task is dropped on the
+/// executor's thread by the next such run, or when the executor is dropped.
+#[derive(Debug, Clone)]
+pub(crate) struct ThreadCheckerScheduler {
+    name: &'static str,
+    commands: mpsc::Sender<Command>,
+}
+
+impl ThreadCheckerScheduler {
     fn send(&self, command: Command) {
         if self.commands.send(command).is_err() {
-            panic!("the {} thread is gone", self.name);
+            self.gone();
         }
+    }
+
+    fn gone(&self) -> ! {
+        panic!("the {} thread is gone", self.name)
     }
 }
 
@@ -122,13 +169,10 @@ where
         task: Task<TC, P>,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal> {
-        let future = drive(task, delay, self.clock(), |duration| async move {
-            async_io::Timer::after(duration).await;
-        });
-        let (abortable, abort_handle) = abortable(future);
-        self.send(Command::Spawn(Box::pin(async move {
-            let _ = abortable.await;
-        })));
+        let (future, abort_handle) = abortable(drive(task, delay, self.clock(), |duration| {
+            async_io::Timer::after(duration).map(drop)
+        }));
+        self.send(Command::Spawn(future.map(drop).boxed()));
         DisposeOnDrop::new(ThreadCheckerDisposal(abort_handle))
     }
 }

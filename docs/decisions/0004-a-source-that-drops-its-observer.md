@@ -48,7 +48,7 @@ is most needed, and in which it stayed silent.
 - **The outcome depended on timing.** With a scheduler on another thread, the task may have
   delivered some of the values before the drop: the observer got any prefix of `1, 2, 3`. That is
   the race the test suite was made deterministic to rule out
-  (see [AGENTS.md](../../AGENTS.md), `ThreadCheckerScheduler`), handed to the users instead.
+  (see [AGENTS.md](../../AGENTS.md), `ThreadCheckerExecutor`), handed to the users instead.
 - **It contradicted the crate's own reading of a drop.** `Never` drops its observer at once, so
   dropping an observer means "nothing more will come", not "cancel". The disposal and `Flow::Stop`
   already stop the context before the observer is dropped; neither needs the drop to say anything.

@@ -255,10 +255,14 @@ without `block_on`. Assert on exact boundaries (`DURATION_100_MS - DURATION_1_MS
 keeps asking to sleep until an instant that has passed makes `advance_by` panic after 10 000 steps
 (an off-by-one `<` where `<=` was meant), rather than hang. See `docs/testing.md`.
 
-A test that checks which thread a callback runs on uses `ThreadCheckerScheduler`
-(`tests/tests_utils/thread_checker_scheduler.rs`). It does not run a task by itself: `run_task`
-only queues it, and the test calls `thread_1.run_until_stalled().await` (the handle it kept) to run
-the queued work on that named thread and wait for it — never a `sleep`. The test, not the OS,
+A test that checks which thread a callback runs on owns a `ThreadCheckerExecutor`
+(`tests/tests_utils/thread_checker_scheduler.rs`) and gives the operator its
+`thread_1.scheduler()`, a `ThreadCheckerScheduler` that does not keep the executor alive.
+`run_task` only queues a task; the test calls `thread_1.run_until_stalled().await` on the executor
+to run the queued work on that named thread and wait for it — never a `sleep`. Dropping the
+executor stops its thread, which drops its tasks there, even if scheduler clones or task disposals
+remain alive. It waits for the thread to end unless dropped on that same thread,
+where the event loop finishes the shutdown after the current task returns. The test, not the OS,
 decides the interleaving, so assert one exact outcome per step, never "either this or that"; a
 panic on that thread fails the test from `run_until_stalled`. Real concurrency between the source's
 thread and the delivering one is the job of the `test_race_condition*` tests: a
