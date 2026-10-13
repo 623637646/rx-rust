@@ -158,7 +158,7 @@ where
                 E,
                 OR,
                 BufferWithTimeOrCountSources<OE, S>,
-                S,
+                <S as SchedulerTypes>::Clock,
             >,
             Item = T,
             Error = E,
@@ -176,7 +176,7 @@ where
         subscribe_with_context(observer, model, |context| {
             let buffer_observer = BufferWithTimeOrCountObserver {
                 context: context.clone(),
-                scheduler: self.scheduler.clone(),
+                clock: self.scheduler.clock(),
             };
             let sub = self.source.subscribe(buffer_observer);
             let disposal = setup_emit_timer(context, self.scheduler, self.time_span);
@@ -206,17 +206,19 @@ impl<T> Model<T> {
     }
 }
 
-pub struct BufferWithTimeOrCountObserver<M: ThreadMode, T, E, OR, D: Disposable, S> {
+/// The observer a [`BufferWithTimeOrCount`] gives its source. It holds the scheduler's clock rather
+/// than the scheduler, which may be `Local` while the source sends from another thread.
+pub struct BufferWithTimeOrCountObserver<M: ThreadMode, T, E, OR, D: Disposable, C> {
     context: BufferWithTimeOrCountContext<M, T, E, OR, D>,
-    scheduler: S,
+    clock: C,
 }
 
-impl<M, T, E, OR, D, S> Observer<T, E> for BufferWithTimeOrCountObserver<M, T, E, OR, D, S>
+impl<M, T, E, OR, D, C> Observer<T, E> for BufferWithTimeOrCountObserver<M, T, E, OR, D, C>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
     D: Disposable,
-    S: SchedulerTypes,
+    C: Clock,
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.context.update_flow(|model| {
@@ -227,7 +229,7 @@ where
             // A full bundle restarts the timer: the next timed bundle comes `time_span` after it,
             // which is never before the one already due, itself at most `time_span` after the
             // last tick. Out of range means never, as it already did for the deadline due.
-            model.deadline = self.scheduler.clock().now().checked_add(model.time_span);
+            model.deadline = self.clock.now().checked_add(model.time_span);
             UpdateOutcome::empty().with_next_event(model.take_bundle())
         })
     }
