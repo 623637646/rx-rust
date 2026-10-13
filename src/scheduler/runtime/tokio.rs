@@ -3,7 +3,7 @@
 
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    scheduler::{Scheduler, SchedulerTypes, Task, drive},
+    scheduler::{Scheduler, SchedulerTypes, SystemClock, Task, drive},
     thread_mode::{Local, Shared},
 };
 use std::{
@@ -113,6 +113,11 @@ impl TokioScheduler {
 impl SchedulerTypes for TokioScheduler {
     type Mode = Shared;
     type Disposal = TokioDisposal;
+    type Clock = SystemClock;
+
+    fn clock(&self) -> SystemClock {
+        SystemClock
+    }
 }
 
 impl<TC, P> Scheduler<TC, P> for TokioScheduler
@@ -125,7 +130,7 @@ where
         task: Task<TC, P>,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal> {
-        let future = drive(task, delay, self.clone(), tokio::time::sleep);
+        let future = drive(task, delay, self.clock(), tokio::time::sleep);
         DisposeOnDrop::new(TokioDisposal(self.handle.spawn(future)))
     }
 }
@@ -212,6 +217,11 @@ impl TokioLocalScheduler {
 impl SchedulerTypes for TokioLocalScheduler {
     type Mode = Local;
     type Disposal = TokioDisposal;
+    type Clock = SystemClock;
+
+    fn clock(&self) -> SystemClock {
+        SystemClock
+    }
 }
 
 impl<TC, P> Scheduler<TC, P> for TokioLocalScheduler
@@ -224,7 +234,7 @@ where
         task: Task<TC, P>,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal> {
-        let future = drive(task, delay, self.clone(), tokio::time::sleep);
+        let future = drive(task, delay, self.clock(), tokio::time::sleep);
         let handle = match &self.target {
             LocalTarget::Ambient => tokio::task::spawn_local(future),
             LocalTarget::Handle(local_set) => local_set

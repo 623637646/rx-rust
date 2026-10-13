@@ -8,7 +8,7 @@ use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{PeriodicContext, Scheduler, SchedulerTypes, Task},
+    scheduler::{Clock, PeriodicContext, Scheduler, SchedulerTypes, Task},
     thread_mode::{Joined, ThreadMode},
 };
 use educe::Educe;
@@ -232,7 +232,7 @@ where
         time_span,
         // Fixed-rate, anchored to the time of the subscription plus `time_span`. A span too long
         // for an `Instant` never ends: the first step never comes, so it needs no anchor.
-        scheduler.now().checked_add(time_span),
+        scheduler.clock().now().checked_add(time_span),
     );
     scheduler.run_task(task, Some(time_span))
 }

@@ -12,12 +12,17 @@ All notable changes to this project are documented here. The format follows
   operator with two sources) and `observable::ChainDisposalOf<A, B>` (their disposals, `A`'s
   first); `subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>` and `DisposalOf<OE>`.
   They are aliases, so every type they name is unchanged.
+- `scheduler::Clock`, `SystemClock` and `virtual_time::VirtualClock`: a handle on a scheduler's
+  clock that can go where the scheduler cannot, such as a background producer feeding a local
+  scheduler.
 - `scheduler::virtual_time`: `VirtualTime`, a clock that a test moves forward with `advance_by`,
   and its `VirtualTimeScheduler`, which queues the tasks and runs them, on the calling thread, at
-  the instants they are due. Time-based tests become exact, synchronous and instant.
-- `SchedulerTypes::now`, the time on the scheduler's clock, the system's by default. Every operator
-  that measures time reads it there, so that a scheduler with a clock of its own, such as
-  `VirtualTimeScheduler`, drives the deadlines and timestamps of the operators it is given.
+  the instants they are due; `VirtualTime::clock` is the virtual clock alone. Time-based tests
+  become exact, synchronous and instant.
+- `SchedulerTypes::clock`, the scheduler's `Clock` (`SystemClock` for the built-in schedulers).
+  Every operator that measures time reads it there, so that a scheduler with a clock of its own,
+  such as `VirtualTimeScheduler` (`VirtualClock`), drives the deadlines and timestamps of the
+  operators it is given.
 - `ObservableExt::into_shared` (`operators::others::into_shared::IntoShared`) declares an
   observable `Shared`, so that a `Local` source such as `Just` erases into the same type as a
   `Shared` one, and a chain of `Local` sources can be erased into a `Send` box.
@@ -52,9 +57,15 @@ All notable changes to this project are documented here. The format follows
   `BufferWithTimeOrCount::new`) lose their `delay: Option<Duration>` argument and time their first
   bundle one `time_span` after the subscription, as ReactiveX does. With `None`, the first bundle
   used to be emitted at once, and so empty.
-- **Breaking:** `throttle`, `timestamp` and `time_interval` take a scheduler, for its clock:
-  `.throttle(span, scheduler)`, `.timestamp(scheduler)`, `.time_interval(scheduler)`. They
-  schedule nothing; the bound is `SchedulerTypes`.
+- **Breaking:** `throttle`, `timestamp` and `time_interval` take a `Clock`, not a scheduler, since
+  they schedule nothing: `.throttle(span, scheduler.clock())`, `.timestamp(SystemClock)`,
+  `.time_interval(time.clock())` on a `VirtualTime`. The operator is then `Send` whatever
+  scheduler the clock comes from, and needs no runtime feature. The observer of `timeout` holds
+  only the scheduler's `Clock`, so a local scheduler can time a background source.
+- **Breaking:** `SchedulerTypes` requires `type Clock: Clock` and `fn clock(&self)`, the only
+  source of its time: there is no `now` method on the scheduler, `scheduler.clock().now()` reads
+  it. A custom scheduler on the system's clock adds `type Clock = SystemClock` and
+  `fn clock(&self) -> SystemClock { SystemClock }`.
 - **Breaking:** a task handler returns a `Next` (formerly `TaskState`) rather than a
   `Poll<TaskState>`, and so does `Stepper::step`: `Poll::Pending` is `Next::Pending`. A handler that forwards a poll
   matches on it (`let Poll::Ready(output) = future.poll(cx) else { return Next::Pending };`).
@@ -62,8 +73,9 @@ All notable changes to this project are documented here. The format follows
 - **Breaking:** a task step is given the scheduler's time: `TaskHandler` takes a fourth argument,
   `now: Instant`, and so do `Stepper::step`, the step of `Task::recursive` (`(state, count, now)`)
   and the closure of `SchedulerExt::schedule_recursively` (`(count, now)`). A
-  `Next::SleepUntil` is an instant on that clock. `drive` takes the scheduler it runs for,
-  whose `now` it passes to every step.
+  `Next::SleepUntil` is an instant on that clock. `drive` takes the clock of the scheduler
+  it runs for (`drive(task, delay, scheduler.clock(), sleep)`), whose time it passes to every
+  step.
 - A `delay` given to `Scheduler::run_task` that is too long for an `Instant` to represent never
   ends: the task is never started and is kept until it is disposed. Tokio's timer used to fire it
   after some thirty years.

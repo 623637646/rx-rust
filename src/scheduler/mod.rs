@@ -37,15 +37,18 @@
 //! concrete closure or future uses [`SchedulerExt`] instead.
 //!
 //! Implementing a scheduler takes [`SchedulerTypes`] and [`Scheduler::run_task`]. On an async
-//! executor, spawn the future [`drive`] returns; a synchronous loop drives the task itself through
+//! executor, spawn the future [`drive`] returns, given the scheduler's clock; a synchronous loop drives the task itself through
 //! [`Task::split`] and [`Stepper::step`].
 //!
 //! # Time
 //!
-//! Time comes from the scheduler, never from `Instant::now()`: an operator reads
-//! [`SchedulerTypes::now`] at subscription or on an event, and a task gets the time of each step
-//! from the scheduler that runs it. A scheduler with a clock of its own therefore drives every
-//! deadline and timestamp of the operators it is given.
+//! Time comes from the scheduler's [`Clock`], never from `Instant::now()`: an operator reads
+//! `scheduler.clock().now()` at subscription or on an event, and a task gets the time of each step
+//! from the clock of the scheduler that runs it. A scheduler with a clock of its own therefore
+//! drives every deadline and timestamp of the operators it is given. Where the time is read on the
+//! source's thread, which a `Local` scheduler cannot reach, the operator holds the clock itself
+//! ([`SchedulerTypes::clock`]). An operator that only reads the time (`throttle`, `timestamp`,
+//! `time_interval`) takes a [`Clock`] rather than a scheduler.
 //!
 //! # Examples
 //! ```rust
@@ -103,8 +106,30 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// A handle on a scheduler's clock, apart from the scheduler: [`SchedulerTypes::clock`] returns
+/// it, and it is where the scheduler's time is read.
+///
+/// An operator that stamps events where they are produced holds the clock of its scheduler, not
+/// the scheduler: the producer may run on another thread than the scheduler's, which may not be
+/// `Send` (a `Local` one), while every built-in clock is.
+pub trait Clock: Clone {
+    /// The current time on this clock.
+    fn now(&self) -> Instant;
+}
+
+/// The system's clock, [`Instant::now`]: the clock of every built-in scheduler but
+/// [`VirtualTimeScheduler`](virtual_time::VirtualTimeScheduler).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SystemClock;
+
+impl Clock for SystemClock {
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+}
+
 /// The part of a scheduler that does not depend on the task: the thread mode its tasks run in,
-/// and the disposal that cancels one.
+/// the disposal that cancels one, and its clock.
 ///
 /// It is split from [`Scheduler`] because neither may depend on the task's type: a scheduler has
 /// one kind of handle whatever it runs, so an operator's disposal can name `S::Disposal` without
@@ -132,15 +157,19 @@ pub trait SchedulerTypes {
     /// stops. The disposals of the built-in schedulers are handles to their runtime's task.
     type Disposal: Disposable;
 
-    /// The current time on the scheduler's clock: the system's for the built-in schedulers.
+    /// The clock of the scheduler: [`SystemClock`] for the built-in schedulers but
+    /// [`VirtualTimeScheduler`](virtual_time::VirtualTimeScheduler).
+    type Clock: Clock;
+
+    /// A handle on the scheduler's clock: the only source of the scheduler's time.
     ///
-    /// Every operator that measures time reads it here, at subscription or on an event, and a
-    /// task gets it as the `now` of each step, so that a scheduler with a clock of its own — a
-    /// virtual one in tests — drives the deadlines and timestamps of the operators it is given.
-    /// A [`Next::SleepUntil`] is an instant on this clock.
-    fn now(&self) -> Instant {
-        Instant::now()
-    }
+    /// Every operator that measures time reads it here (`scheduler.clock().now()`), at
+    /// subscription or on an event, or keeps the handle where the scheduler cannot go: an operator
+    /// stamps the events of its source with it, on the source's thread. A task gets the clock's
+    /// time as the `now` of each step, so that a scheduler with a clock of its own — a virtual one
+    /// in tests — drives the deadlines and timestamps of the operators it is given. A
+    /// [`Next::SleepUntil`] is an instant on this clock.
+    fn clock(&self) -> Self::Clock;
 }
 
 /// Runs a [`Task`], after an optional delay, until it reports [`Next::Finished`].
@@ -205,7 +234,7 @@ pub trait SchedulerExt: SchedulerTypes + Clone {
     {
         // An anchor out of range is a delay that never ends: the first run never comes, so it
         // needs no anchor.
-        let anchor = self.now().checked_add(delay.unwrap_or_default());
+        let anchor = self.clock().now().checked_add(delay.unwrap_or_default());
         self.run_task(
             Task::periodic(task, |task, count| task(count), period, anchor),
             delay,

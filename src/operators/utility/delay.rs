@@ -12,7 +12,7 @@ use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{Next, Scheduler},
+    scheduler::{Clock, Next, Scheduler},
 };
 use educe::Educe;
 use std::{
@@ -208,7 +208,7 @@ where
     where
         S: Scheduler<DelayTask<M, T, E, OR, S, D>>,
     {
-        let Some(deadline) = self.scheduler.now().checked_add(self.delay) else {
+        let Some(deadline) = self.scheduler.clock().now().checked_add(self.delay) else {
             // The event never comes due, and neither does any later one, since the clock only
             // moves forward: there is nothing to queue, and the values already queued keep their
             // timer. The context still answers, so that a stopped one says `Stop` as it does for
@@ -276,7 +276,7 @@ where
         });
         let disposal = self.scheduler.run_task(
             task,
-            Some(deadline.saturating_duration_since(self.scheduler.now())),
+            Some(deadline.saturating_duration_since(self.scheduler.clock().now())),
         );
 
         // A zero delay can fire the timer before this runs, and that firing can end the stream:

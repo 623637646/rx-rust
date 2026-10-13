@@ -185,8 +185,10 @@ async fn main() {
 `subscribe_on` and `observe_on` move the subscription, or the delivery of events, onto a scheduler;
 the operators without a scheduler argument run synchronously on whichever thread pushes into them.
 
-Time comes from the scheduler too: every deadline, `timestamp`, `time_interval` and `throttle`
-reads the scheduler's clock (`SchedulerTypes::now`), never the system's directly.
+Time comes from the scheduler too: every deadline reads the scheduler's clock
+(`scheduler.clock().now()`, the `Clock` of `SchedulerTypes::clock`), never the system's directly.
+`timestamp`, `time_interval` and `throttle`, which schedule nothing, take that clock rather than
+the scheduler: `.timestamp(scheduler.clock())`, or `.timestamp(SystemClock)` without a runtime.
 
 ### Testing on virtual time
 

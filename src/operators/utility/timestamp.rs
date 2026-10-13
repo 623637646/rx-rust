@@ -5,13 +5,14 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::SchedulerTypes,
+    scheduler::Clock,
 };
 use educe::Educe;
 use std::time::Instant;
 
-/// Attaches the [`Instant`] it arrived at, on the clock of a scheduler
-/// ([`SchedulerTypes::now`]), to each item emitted by an Observable.
+/// Attaches the [`Instant`] it arrived at, on a [`Clock`], to each item emitted by an Observable:
+/// [`SystemClock`](crate::scheduler::SystemClock), or a scheduler's
+/// ([`SchedulerTypes::clock`](crate::scheduler::SchedulerTypes::clock)).
 /// See <https://reactivex.io/documentation/operators/timestamp.html>
 ///
 /// # Examples
@@ -31,7 +32,7 @@ use std::time::Instant;
 /// let mut subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> =
 ///     PublishSubject::local();
 ///
-/// let subscription = Timestamp::new(subject.clone(), time.scheduler())
+/// let subscription = Timestamp::new(subject.clone(), time.clock())
 ///     .subscribe_with_callback(|timestamped_value| timestamped.push(timestamped_value), |_| {});
 ///
 /// subject.on_next(1);
@@ -44,21 +45,21 @@ use std::time::Instant;
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-pub struct Timestamp<OE, S> {
+pub struct Timestamp<OE, C> {
     source: OE,
-    scheduler: S,
+    clock: C,
 }
 
-impl<OE, S> Timestamp<OE, S> {
-    /// Creates a [`Timestamp`] over `source`, on the clock of `scheduler`;
+impl<OE, C> Timestamp<OE, C> {
+    /// Creates a [`Timestamp`] over `source`, on `clock`;
     /// [`ObservableExt::timestamp`](crate::observable::ObservableExt::timestamp) is the fluent
     /// form.
-    pub fn new(source: OE, scheduler: S) -> Self {
-        Self { source, scheduler }
+    pub fn new(source: OE, clock: C) -> Self {
+        Self { source, clock }
     }
 }
 
-impl<T, E, OE, S> ObservableTypes for Timestamp<OE, S>
+impl<T, E, OE, C> ObservableTypes for Timestamp<OE, C>
 where
     OE: ObservableTypes<Item = T, Error = E>,
 {
@@ -68,33 +69,33 @@ where
     type Disposal = OE::Disposal;
 }
 
-impl<T, E, OE, S, OR> Observable<OR> for Timestamp<OE, S>
+impl<T, E, OE, C, OR> Observable<OR> for Timestamp<OE, C>
 where
     OR: Observer<(T, Instant), E>,
-    OE: Observable<TimestampObserver<OR, S>, Item = T, Error = E>,
-    S: SchedulerTypes,
+    OE: Observable<TimestampObserver<OR, C>, Item = T, Error = E>,
+    C: Clock,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = TimestampObserver {
             observer,
-            scheduler: self.scheduler,
+            clock: self.clock,
         };
         self.source.subscribe(observer)
     }
 }
 
-pub struct TimestampObserver<OR, S> {
+pub struct TimestampObserver<OR, C> {
     observer: OR,
-    scheduler: S,
+    clock: C,
 }
 
-impl<T, E, OR, S> Observer<T, E> for TimestampObserver<OR, S>
+impl<T, E, OR, C> Observer<T, E> for TimestampObserver<OR, C>
 where
     OR: Observer<(T, Instant), E>,
-    S: SchedulerTypes,
+    C: Clock,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.observer.on_next((value, self.scheduler.now()))
+        self.observer.on_next((value, self.clock.now()))
     }
 
     fn on_termination(self, termination: Termination<E>) {

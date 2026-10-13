@@ -55,7 +55,7 @@
 
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    scheduler::{Next, Scheduler, SchedulerTypes, Task},
+    scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
     thread_mode::{Shared, mutable::MutableHelper},
     utils::id_generator::{Id, IdGenerator},
 };
@@ -71,7 +71,8 @@ use std::{
 
 /// The owner of a virtual clock and of the tasks queued on it. The test keeps it and moves the
 /// clock with [`advance_by`](Self::advance_by); the operators get the
-/// [`scheduler`](Self::scheduler).
+/// [`scheduler`](Self::scheduler), or the [`clock`](Self::clock) alone when they only read the
+/// time.
 ///
 /// The scheduler handles do not keep it alive: a task often holds a handle of its own scheduler
 /// (an `interval` upstream of a `debounce`, say), so a strong handle would form a cycle through
@@ -84,7 +85,7 @@ pub struct VirtualTime {
 }
 
 /// The [`Scheduler`] of a [`VirtualTime`]: it queues the tasks there, and its
-/// [`now`](SchedulerTypes::now) is the virtual clock.
+/// [`clock`](SchedulerTypes::clock) is the virtual clock.
 ///
 /// # Panics
 ///
@@ -92,6 +93,19 @@ pub struct VirtualTime {
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct VirtualTimeScheduler {
+    #[educe(Debug(ignore))]
+    state: Weak<Mutex<State>>,
+}
+
+/// The [`Clock`] of a [`VirtualTime`] and of its [`VirtualTimeScheduler`]: the virtual time,
+/// readable from any thread.
+///
+/// # Panics
+///
+/// Reading the time panics once the [`VirtualTime`] has been dropped.
+#[derive(Educe)]
+#[educe(Debug, Clone)]
+pub struct VirtualClock {
     #[educe(Debug(ignore))]
     state: Weak<Mutex<State>>,
 }
@@ -287,6 +301,15 @@ impl VirtualTime {
         }
     }
 
+    /// The virtual clock, for an operator that reads the time without scheduling anything
+    /// (`throttle`, `timestamp`, `time_interval`): the [`clock`](SchedulerTypes::clock) of
+    /// [`scheduler`](Self::scheduler).
+    pub fn clock(&self) -> VirtualClock {
+        VirtualClock {
+            state: Arc::downgrade(&self.state),
+        }
+    }
+
     /// The current virtual time.
     pub fn now(&self) -> Instant {
         self.state.with_ref(|state| state.now)
@@ -417,9 +440,21 @@ impl VirtualTimeScheduler {
 impl SchedulerTypes for VirtualTimeScheduler {
     type Mode = Shared;
     type Disposal = VirtualTimeDisposal;
+    type Clock = VirtualClock;
 
+    fn clock(&self) -> VirtualClock {
+        VirtualClock {
+            state: self.state.clone(),
+        }
+    }
+}
+
+impl Clock for VirtualClock {
     fn now(&self) -> Instant {
-        self.state().with_ref(|state| state.now)
+        self.state
+            .upgrade()
+            .expect("the VirtualTime of the VirtualClock has been dropped")
+            .with_ref(|state| state.now)
     }
 }
 

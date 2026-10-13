@@ -179,14 +179,17 @@ cargo tarpaulin --out Html
   name a mode pointer or a private type, set it explicitly, `Clone(bound())` or
   `Clone(bound(S: Clone))`, so that the public impl does not list it. Write an impl by hand only
   when it is not structural, e.g. a `Default` that calls a constructor.
-- **Time comes from the scheduler**, never from `Instant::now()`: an operator reads
-  `SchedulerTypes::now()` at subscription or on an event, and a task handler uses the `now` its step
+- **Time comes from the scheduler's clock**, never from `Instant::now()`: an operator reads
+  `scheduler.clock().now()` at subscription or on an event, and the observer given to the source
+  holds the `Clock` (`SchedulerTypes::clock()`), a `Send` handle, rather than a scheduler that may
+  be `Local`; a task handler uses the `now` its step
   is given (`Task::recursive`'s third argument, `schedule_recursively`'s second). An operator that
-  measures time without scheduling anything (`throttle`, `timestamp`, `time_interval`) still takes a
-  scheduler, for its clock. That is what lets `VirtualTime` drive every operator; CI fails on an
+  measures time without scheduling anything (`throttle`, `timestamp`, `time_interval`) takes a
+  `C: Clock`, not a scheduler: `scheduler.clock()`, `SystemClock`, or `time.clock()` in a test.
+  That is what lets `VirtualTime` drive every operator; CI fails on an
   `Instant::now` in `src/` outside `scheduler/mod.rs` and `scheduler/virtual_time.rs`. Read the
   clock outside a context lock when the value is needed anyway (`let deadline =
-  self.scheduler.now() + span;` before `update`).
+  self.clock.now() + span;` before `update`).
 - Public items get doc comments; operators link to their reactivex.io page.
 - `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce
   parallel representations.

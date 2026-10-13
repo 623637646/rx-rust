@@ -43,7 +43,7 @@ pub struct Task<TC, P = ()> {
 /// does; the other states ignore it.
 ///
 /// The [`Instant`] is the time of the step on the scheduler's clock
-/// ([`SchedulerTypes::now`](crate::scheduler::SchedulerTypes::now)), the clock a
+/// ([`SchedulerTypes::clock`](crate::scheduler::SchedulerTypes::clock)), the clock a
 /// [`Next::SleepUntil`] is measured on. A handler takes the time from there rather than from
 /// `Instant::now()`, so that it follows a scheduler whose clock is not the system's.
 pub type TaskHandler<TC, P> = fn(&mut TC, Pin<&mut P>, &mut Context<'_>, Instant) -> Next;
@@ -140,7 +140,7 @@ pub struct Stepper<TC, P> {
 impl<TC, P> Stepper<TC, P> {
     /// Drives one step: calls the handler once and returns its answer. `pinned` must be the state
     /// [`split`](Task::split) out of the same task, and `now` the scheduler's current time
-    /// ([`SchedulerTypes::now`](crate::scheduler::SchedulerTypes::now)).
+    /// (that of [`SchedulerTypes::clock`](crate::scheduler::SchedulerTypes::clock)).
     pub fn step(&mut self, pinned: Pin<&mut P>, cx: &mut Context<'_>, now: Instant) -> Next {
         (self.handler)(&mut self.context, pinned, cx, now)
     }

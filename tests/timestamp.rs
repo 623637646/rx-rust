@@ -10,6 +10,7 @@ use crate::tests_utils::{
 };
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::operators::creating::create::Create;
+use rx_rust::scheduler::SchedulerTypes;
 use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
@@ -42,11 +43,11 @@ fn check_values_within<T: PartialEq + Debug>(
 #[test]
 fn test_completed() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.timestamp(scheduler.clone());
+    let observable = observable.timestamp(clock.clone());
     time.advance_by(DURATION_30_MS);
 
     let start = time.now();
@@ -87,11 +88,11 @@ fn test_completed() {
 #[test]
 fn test_error() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.timestamp(scheduler.clone());
+    let observable = observable.timestamp(clock.clone());
     time.advance_by(DURATION_30_MS);
 
     let start = time.now();
@@ -132,11 +133,11 @@ fn test_error() {
 #[test]
 fn test_unsubscribe() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.timestamp(scheduler.clone());
+    let observable = observable.timestamp(clock.clone());
     time.advance_by(DURATION_30_MS);
 
     let start = time.now();
@@ -177,7 +178,7 @@ fn test_unsubscribe() {
 #[test]
 fn test_ref() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let value_1 = 111;
     let value_2 = 222;
     let value_3 = 333;
@@ -185,7 +186,7 @@ fn test_ref() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.timestamp(scheduler.clone());
+    let observable = observable.timestamp(clock.clone());
     time.advance_by(DURATION_30_MS);
 
     let start = time.now();
@@ -234,14 +235,14 @@ fn test_ref() {
 #[test]
 fn test_mut_ref() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let mut value_1 = 111;
     let mut value_2 = 222;
     let mut value_3 = 333;
     let (mut sender, observable, channel_checker) = test_channel::<'_, &mut i32, _>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.timestamp(scheduler.clone());
+    let observable = observable.timestamp(clock.clone());
     time.advance_by(DURATION_30_MS);
 
     let start = time.now();
@@ -285,7 +286,7 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel();
         let (checker, observer) = Checker::new();
 
-        let observable = observable.timestamp(scheduler.clone());
+        let observable = observable.timestamp(scheduler.clock());
         scheduler.sleep(DURATION_30_MS).await;
 
         let start = Instant::now();
@@ -348,12 +349,12 @@ fn test_async() {
 #[test]
 fn test_subscribe_by_different_observer() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (channels, observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable = observable.timestamp(scheduler.clone());
+    let observable = observable.timestamp(clock.clone());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
     time.advance_by(DURATION_30_MS);
@@ -423,11 +424,11 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_on_next_by_take() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.timestamp(scheduler.clone()).take(1);
+    let observable = observable.timestamp(clock.clone()).take(1);
     time.advance_by(DURATION_30_MS);
 
     let start = time.now();
@@ -446,13 +447,11 @@ fn test_unsub_on_next_by_take() {
 #[test]
 fn test_multiple_operation() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable
-        .timestamp(scheduler.clone())
-        .timestamp(scheduler.clone());
+    let observable = observable.timestamp(clock.clone()).timestamp(clock.clone());
     time.advance_by(DURATION_30_MS);
 
     let start = time.now();
@@ -509,11 +508,11 @@ fn test_multiple_operation() {
 #[test]
 fn test_without_convenient_api() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Timestamp::new(observable, scheduler.clone());
+    let observable = Timestamp::new(observable, clock.clone());
     time.advance_by(DURATION_30_MS);
 
     let start = time.now();
@@ -571,7 +570,7 @@ fn test_lifetime_sub() {
             }))
         });
 
-        let observable = observable.timestamp(time.scheduler());
+        let observable = observable.timestamp(time.clock());
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -594,7 +593,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             DisposeOnDrop::default()
         });
-        let observable = observable.timestamp(time.scheduler());
+        let observable = observable.timestamp(time.clock());
 
         let (_, mut observer) = Checker::<_, Infallible>::new();
         assert!(
@@ -614,7 +613,7 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         DisposeOnDrop::default()
     });
-    let observable = observable.timestamp(time.scheduler());
+    let observable = observable.timestamp(time.clock());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
@@ -623,7 +622,7 @@ fn test_type_inference_with_subscribe() {
     let time = VirtualTime::new();
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
-    let observable = observable.timestamp(time.scheduler());
+    let observable = observable.timestamp(time.clock());
     let (_, observer) = Checker::new();
     let _ = observable.subscribe(observer);
 }
@@ -633,5 +632,5 @@ fn test_type_inference_without_subscribe() {
     let time = VirtualTime::new();
     let (_, observable, _) = test_channel::<'_, i32, Infallible>();
 
-    observable.timestamp(time.scheduler());
+    observable.timestamp(time.clock());
 }

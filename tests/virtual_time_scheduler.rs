@@ -9,7 +9,7 @@ use rx_rust::observable::ObservableExt;
 use rx_rust::operators::creating::interval::Interval;
 use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::{VirtualTime, VirtualTimeScheduler};
-use rx_rust::scheduler::{Next, Scheduler, SchedulerExt, SchedulerTypes, Task};
+use rx_rust::scheduler::{Clock, Next, Scheduler, SchedulerExt, SchedulerTypes, Task};
 use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -56,11 +56,13 @@ fn test_clock() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let start = time.now();
-    assert_eq!(scheduler.now(), start);
+    assert_eq!(scheduler.clock().now(), start);
+    assert_eq!(time.clock().now(), start);
 
     time.advance_by(DURATION_10_MS);
     assert_eq!(time.now(), start + DURATION_10_MS);
-    assert_eq!(scheduler.now(), start + DURATION_10_MS);
+    assert_eq!(scheduler.clock().now(), start + DURATION_10_MS);
+    assert_eq!(time.clock().now(), start + DURATION_10_MS);
 
     // Nothing is due: the clock still lands on the target.
     time.advance_by(DURATION_100_MS);
@@ -153,7 +155,7 @@ fn test_periodic_rate() {
 
     let _disposal = scheduler.schedule_periodically(
         move |_| {
-            log_at(&log_task, "tick", scheduler_task.now(), start);
+            log_at(&log_task, "tick", scheduler_task.clock().now(), start);
             true
         },
         DURATION_10_MS,
@@ -211,12 +213,12 @@ fn test_task_queued_while_advancing() {
     let inner_disposals_outer = inner_disposals.clone();
     let _outer = scheduler.schedule(
         move || {
-            log_at(&log_outer, "outer", scheduler_outer.now(), start);
+            log_at(&log_outer, "outer", scheduler_outer.clock().now(), start);
             for (label, delay) in [("soon", DURATION_10_MS), ("late", DURATION_100_MS)] {
                 let log = log_outer.clone();
                 let scheduler = scheduler_outer.clone();
                 let disposal = scheduler_outer.schedule(
-                    move || log_at(&log, label, scheduler.now(), start),
+                    move || log_at(&log, label, scheduler.clock().now(), start),
                     Some(delay),
                 );
                 inner_disposals_outer.with_mut(|disposals| disposals.push(disposal));
@@ -349,6 +351,16 @@ fn test_pending_until_woken() {
     assert_eq!(time.pending_tasks(), 0);
 }
 
+/// The clock reads the virtual time from any thread.
+#[test]
+fn test_clock_from_another_thread() {
+    let time = VirtualTime::new();
+    let clock = time.scheduler().clock();
+    time.advance_by(DURATION_100_MS);
+    let now = thread::spawn(move || clock.now()).join().unwrap();
+    assert_eq!(now, time.now());
+}
+
 #[test]
 fn test_woken_from_another_thread() {
     let time = VirtualTime::new();
@@ -375,7 +387,9 @@ fn test_time_from_another_thread() {
     time.advance_by(DURATION_100_MS);
     let expected = time.now();
 
-    let seen = thread::spawn(move || scheduler.now()).join().unwrap();
+    let seen = thread::spawn(move || scheduler.clock().now())
+        .join()
+        .unwrap();
     assert_eq!(seen, expected);
 }
 
@@ -553,7 +567,7 @@ fn test_with_operators() {
         Interval::with_initial_delay(Duration::ZERO, DURATION_10_MS, scheduler.clone())
             .take(3)
             .delay(DURATION_100_MS, scheduler.clone())
-            .timestamp(scheduler.clone())
+            .timestamp(time.clock())
             .subscribe_with_callback(
                 move |(value, at): (usize, Instant)| {
                     values_observer.with_mut(|values| values.push((value, at - start)));
@@ -650,7 +664,8 @@ fn test_woken_during_advance_runs_in_the_same_call() {
     let scheduler_task = scheduler.clone();
     let _waiting = scheduler.spawn_future(async move {
         let value = receiver.await.ok();
-        let _ = received_task.replace_value(value.map(|value| (value, scheduler_task.now())));
+        let _ =
+            received_task.replace_value(value.map(|value| (value, scheduler_task.clock().now())));
     });
     let mut sender = Some(sender);
     let _sending = scheduler.schedule(
@@ -834,7 +849,7 @@ fn test_race_condition_queue_while_advancing() {
             for _ in 0..TASKS {
                 let seen = Arc::new(Mutex::new(None));
                 let seen_task = seen.clone();
-                let before = scheduler.now();
+                let before = scheduler.clock().now();
                 disposals.push(scheduler.schedule_recursively(
                     move |_, now| {
                         let _ = seen_task.replace_value(Some(now));
@@ -842,7 +857,7 @@ fn test_race_condition_queue_while_advancing() {
                     },
                     None,
                 ));
-                let after = scheduler.now();
+                let after = scheduler.clock().now();
                 records.with_mut(|records| records.push((before, after, seen)));
             }
             done.store(true, Ordering::SeqCst);

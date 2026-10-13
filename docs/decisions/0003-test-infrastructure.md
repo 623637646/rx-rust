@@ -152,17 +152,19 @@ flaked: the `ci` profile of `.config/nextest.toml` retries every test twice for 
 
 ### Decision
 
-- **The time comes from the scheduler.** `SchedulerTypes::now(&self) -> Instant` is a default
-  method (the system clock), so a custom scheduler is not broken by it. Outside a task an operator
-  reads `scheduler.now()` — at subscription, on an event. Inside a task the handler gets the time of
+- **The time comes from the scheduler's clock.** `SchedulerTypes::clock(&self) -> Self::Clock`
+  returns a `Clock`, the only source of the scheduler's time (`SystemClock` for the built-in
+  schedulers but the virtual one). Outside a task an operator reads `scheduler.clock().now()` — at
+  subscription, on an event — or keeps the clock where the scheduler cannot go. Inside a task the handler gets the time of
   the step as an argument: `TaskHandler` and `Stepper::step` take a `now: Instant`, and so do the
   steps of `Task::recursive` and the closure of `schedule_recursively`. A `Next::SleepUntil` is
   an instant on that clock. `Task::periodic` without an anchor anchors on its first step's `now`.
-- **`drive` takes the scheduler** (`drive(task, delay, scheduler, sleep)`), steps with
-  `scheduler.now()` and measures a `SleepUntil` against it. What is left to the implementer is that
+- **`drive` takes the scheduler's clock** (`drive(task, delay, clock, sleep)`), steps with
+  `clock.now()` and measures a `SleepUntil` against it. What is left to the implementer is that
   `sleep` runs on the same clock.
-- **`throttle`, `timestamp` and `time_interval` take a scheduler**, for its clock only: they
-  schedule nothing. A breaking change, made with the others of 2.0.
+- **`throttle`, `timestamp` and `time_interval` take a `Clock`**, not a scheduler: they schedule
+  nothing. The caller passes `scheduler.clock()`, `SystemClock`, or `VirtualTime::clock()` in a
+  test. A breaking change, made with the others of 2.0 (see History: a scheduler for its clock).
 - **`scheduler::virtual_time`**, always compiled, no feature:
   - `VirtualTime` owns the clock and the queued tasks; the test holds it and calls `advance_by(d)`,
     `now()` and `pending_tasks()`. `advance_by(Duration::ZERO)` runs what is due now.
@@ -200,6 +202,37 @@ flaked: the `ci` profile of `.config/nextest.toml` retries every test twice for 
   suite asserts step by step with `Checker`, and a virtual clock fits that as it is.
 - RxJS's `run()` mode swaps the default time source globally, the thread-local design of the
   History below; Tokio's `time::pause` is per runtime and only for Tokio.
+
+### History: `SchedulerTypes::now`
+
+The time used to be read through `SchedulerTypes::now(&self)`, a default method on the system
+clock, so that a custom scheduler was not broken by it; `drive` took the scheduler to call it. When
+operators needed a clock the producer's thread could hold, `SchedulerTypes::clock` was added, and
+`now` became a second, overridable, source of the same time:
+a scheduler overriding one and not the other would stamp events and compute deadlines on different
+clocks without any error. `now` was removed rather than kept in sync, and `drive` takes the clock.
+
+### History: a scheduler for its clock
+
+`throttle`, `timestamp` and `time_interval` first took a scheduler, for its clock only, when the
+scheduler was the only handle on the time (`SchedulerTypes::now`). Once `Clock` was a type of its
+own, the scheduler was dead weight in them: they used neither its mode, nor its disposal, nor
+`run_task`, only read `clock()` at subscription, and their observers already held the clock. It
+also cost them:
+
+- The operator was `Send` only if the scheduler was. Built with a `Local` scheduler, whose clock is
+  `SystemClock` and `Send`, it could not sit upstream of a `subscribe_on` on a `Shared` one, though
+  it never touched the scheduler there.
+- Using them took a scheduler, so a runtime feature, or a `VirtualTime`: `SystemClock`, always
+  compiled, could not be given directly.
+- The signature promised a capability the operator did not use, and held a scheduler clone (an
+  `Arc` for most runtimes) until the subscription, where a `SystemClock` is zero-sized.
+
+They take a `C: Clock` instead, at the cost of a `.clock()` where a scheduler is at hand, and of
+a difference with RxJava, whose `timestamp(scheduler)` and `throttleFirst(…, scheduler)` take one.
+`VirtualTime::clock()` gives tests the virtual clock without a scheduler. An operator that does
+schedule (`delay`, `debounce`, `timeout`, …) keeps taking the scheduler; a trailing-edge throttle
+would be such an operator, under its own name.
 
 ### History: a thread-local clock (designed, rejected)
 

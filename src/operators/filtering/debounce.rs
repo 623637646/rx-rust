@@ -9,7 +9,7 @@ use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
+    scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
 };
 use educe::Educe;
 use std::time::{Duration, Instant};
@@ -171,7 +171,7 @@ where
     S: Scheduler<DebounceTask<M, T, E, OR, S, D>>,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        let deadline = self.scheduler.now().checked_add(self.time_span);
+        let deadline = self.scheduler.clock().now().checked_add(self.time_span);
         let timer_setup = self.context.update(|model| {
             let (timer_setup, previous_value) = match model {
                 Model::Idle => {
@@ -244,7 +244,7 @@ where
         });
         let disposal = self.scheduler.run_task(
             task,
-            Some(deadline.saturating_duration_since(self.scheduler.now())),
+            Some(deadline.saturating_duration_since(self.scheduler.clock().now())),
         );
 
         let mut disposal = Some(disposal);

@@ -12,7 +12,7 @@ use rx_rust::observable::ObservableExt;
 use rx_rust::observer::{Observer, Termination};
 use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::scheduler::{Next, Scheduler, SchedulerExt, Task, drive};
+use rx_rust::scheduler::{Next, Scheduler, SchedulerExt, SchedulerTypes, Task, drive};
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use std::convert::Infallible;
@@ -372,15 +372,11 @@ fn test_drive_delay_too_long_never_ends() {
     let ran_task = ran.clone();
     let task = Task::once(move || ran_task.write(true), |task| task());
 
-    let mut future = pin!(drive(
-        task,
-        Some(Duration::MAX),
-        time.scheduler(),
-        move |_| {
-            slept_sleep.write(true);
-            std::future::ready(())
-        },
-    ));
+    let clock = time.scheduler().clock();
+    let mut future = pin!(drive(task, Some(Duration::MAX), clock, move |_| {
+        slept_sleep.write(true);
+        std::future::ready(())
+    },));
     let mut cx = Context::from_waker(Waker::noop());
     assert!(future.as_mut().poll(&mut cx).is_pending());
     assert!(future.as_mut().poll(&mut cx).is_pending());
@@ -682,7 +678,7 @@ fn test_tokio_current_panics_outside_of_a_runtime() {
 mod main_loop {
     use rx_rust::{
         disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-        scheduler::{Next, Scheduler, SchedulerTypes, Task},
+        scheduler::{Next, Scheduler, SchedulerTypes, SystemClock, Task},
         thread_mode::Shared,
     };
     use std::{
@@ -858,6 +854,11 @@ mod main_loop {
     impl SchedulerTypes for MainLoopScheduler {
         type Mode = Shared;
         type Disposal = MainLoopDisposal;
+        type Clock = SystemClock;
+
+        fn clock(&self) -> SystemClock {
+            SystemClock
+        }
     }
 
     impl<TC, P> Scheduler<TC, P> for MainLoopScheduler

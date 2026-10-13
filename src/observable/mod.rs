@@ -1150,18 +1150,19 @@ pub trait ObservableExt: ObservableTypes + Sized {
         TakeWhile::new(self, callback)
     }
 
-    /// Throttles emissions to at most one item per `time_span`, on the clock of `scheduler`.
+    /// Throttles emissions to at most one item per `time_span`, on `clock`.
     ///
     /// Leading-edge: the cooldown is decided by comparing item arrival times, so no timer is
-    /// spawned; the scheduler only gives the time.
-    fn throttle<S>(self, time_span: Duration, scheduler: S) -> Throttle<Self, S> {
-        Throttle::new(self, time_span, scheduler)
+    /// spawned and a [`Clock`](crate::scheduler::Clock) is all it takes: `SystemClock`, or
+    /// `scheduler.clock()`.
+    fn throttle<C>(self, time_span: Duration, clock: C) -> Throttle<Self, C> {
+        Throttle::new(self, time_span, clock)
     }
 
     /// Pairs each item with the time elapsed since the previous one, or since the subscription for
-    /// the first, on the clock of `scheduler`.
-    fn time_interval<S>(self, scheduler: S) -> TimeInterval<Self, S> {
-        TimeInterval::new(self, scheduler)
+    /// the first, on `clock`: `SystemClock`, or `scheduler.clock()`.
+    fn time_interval<C>(self, clock: C) -> TimeInterval<Self, C> {
+        TimeInterval::new(self, clock)
     }
 
     /// Errors if the next item, or the first since the subscription, does not arrive within
@@ -1170,10 +1171,10 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Timeout::new(self, duration, scheduler)
     }
 
-    /// Pairs each item with the [`Instant`](std::time::Instant) it arrived at, on the clock of
-    /// `scheduler`.
-    fn timestamp<S>(self, scheduler: S) -> Timestamp<Self, S> {
-        Timestamp::new(self, scheduler)
+    /// Pairs each item with the [`Instant`](std::time::Instant) it arrived at, on `clock`:
+    /// `SystemClock`, or `scheduler.clock()`.
+    fn timestamp<C>(self, clock: C) -> Timestamp<Self, C> {
+        Timestamp::new(self, clock)
     }
 
     /// Gathers all the items into a `Vec` and emits it when the source completes. This is

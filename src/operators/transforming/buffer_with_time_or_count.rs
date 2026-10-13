@@ -8,7 +8,7 @@ use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_
 use crate::{
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
+    scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
     thread_mode::{Joined, ThreadMode},
 };
 use educe::Educe;
@@ -169,7 +169,7 @@ where
         assert!(!self.time_span.is_zero(), "time_span must be non-zero");
         let model = Model::<T> {
             values: Vec::with_capacity(self.count.get()),
-            deadline: self.scheduler.now().checked_add(self.time_span),
+            deadline: self.scheduler.clock().now().checked_add(self.time_span),
             time_span: self.time_span,
             count: self.count,
         };
@@ -227,7 +227,7 @@ where
             // A full bundle restarts the timer: the next timed bundle comes `time_span` after it,
             // which is never before the one already due, itself at most `time_span` after the
             // last tick. Out of range means never, as it already did for the deadline due.
-            model.deadline = self.scheduler.now().checked_add(model.time_span);
+            model.deadline = self.scheduler.clock().now().checked_add(model.time_span);
             UpdateOutcome::empty().with_next_event(model.take_bundle())
         })
     }

@@ -26,7 +26,7 @@ use rx_rust::{
         creating::{create::Create, from_iter::FromIter},
     },
     scheduler::{
-        SchedulerExt,
+        SchedulerExt, SchedulerTypes,
         runtime::{
             futures::{LocalPoolScheduler, ThreadPoolScheduler},
             smol::{SmolLocalScheduler, SmolScheduler},
@@ -416,3 +416,17 @@ on_local_schedulers!(test_switch_map_delayed, |scheduler| async move {
     assert_eq!(record.values(), rcs([2]));
     assert_eq!(record.termination(), Some(Termination::Completed));
 });
+
+// MARK: - The clock of a single-threaded scheduler
+
+// The operators that only read the time take the local scheduler's clock, not the scheduler. That
+// clock is `Send`, so such an operator also builds upstream of a `subscribe_on`, which moves it to
+// another thread: holding the local scheduler, it would not.
+const _: fn(TokioLocalScheduler, TokioScheduler) = |local, background| {
+    let _subscription = FromIter::new([1, 2, 3])
+        .throttle(DURATION_100_MS, local.clock())
+        .timestamp(local.clock())
+        .time_interval(local.clock())
+        .subscribe_on(background)
+        .subscribe_with_callback(|_| {}, |_| {});
+};

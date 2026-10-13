@@ -8,7 +8,7 @@ use crate::disposable::{
 };
 use crate::observable::{Observable, ObservableTypes};
 use crate::observer::{Flow, Observer, Termination};
-use crate::scheduler::{Next, RecursiveContext, Scheduler, SchedulerTypes, Task};
+use crate::scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task};
 use crate::thread_mode::{Joined, ThreadMode};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
@@ -137,7 +137,14 @@ impl<T, E, OE, S, OR> Observable<OR> for Timeout<OE, S>
 where
     OR: Observer<T, Error<E>>,
     OE: Observable<
-            TimeoutObserver<TimeoutMode<OE, S>, T, E, OR, TimeoutSources<OE, S>, S>,
+            TimeoutObserver<
+                TimeoutMode<OE, S>,
+                T,
+                E,
+                OR,
+                TimeoutSources<OE, S>,
+                <S as SchedulerTypes>::Clock,
+            >,
             Item = T,
             Error = E,
         >,
@@ -145,13 +152,13 @@ where
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
-            deadline: self.scheduler.now().checked_add(self.duration),
+            deadline: self.scheduler.clock().now().checked_add(self.duration),
         };
         subscribe_with_context(observer, model, |context| {
             let source_subscription = self.source.subscribe(TimeoutObserver {
                 context: context.clone(),
                 duration: self.duration,
-                scheduler: self.scheduler.clone(),
+                clock: self.scheduler.clock(),
             });
             let timer = setup_timer(context, &self.scheduler);
             source_subscription.preceded_by(timer)
@@ -168,21 +175,21 @@ struct Model {
     deadline: Option<Instant>,
 }
 
-pub struct TimeoutObserver<M: ThreadMode, T, E, OR, D: Disposable, S> {
+pub struct TimeoutObserver<M: ThreadMode, T, E, OR, D: Disposable, C> {
     context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     duration: Duration,
-    scheduler: S,
+    clock: C,
 }
 
-impl<M, T, E, OR, D, S> Observer<T, E> for TimeoutObserver<M, T, E, OR, D, S>
+impl<M, T, E, OR, D, C> Observer<T, E> for TimeoutObserver<M, T, E, OR, D, C>
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,
     D: Disposable,
-    S: SchedulerTypes,
+    C: Clock,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        let deadline = self.scheduler.now().checked_add(self.duration);
+        let deadline = self.clock.now().checked_add(self.duration);
         self.context.update_flow(|model| {
             model.deadline = deadline;
             UpdateOutcome::empty().with_next_event(value)
@@ -236,7 +243,7 @@ where
     });
     let timer = scheduler.run_task(
         task,
-        Some(deadline.saturating_duration_since(scheduler.now())),
+        Some(deadline.saturating_duration_since(scheduler.clock().now())),
     );
     OptionDisposal::some(timer)
 }

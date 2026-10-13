@@ -1,7 +1,7 @@
 //! [`drive()`]: how a [`Task`] runs on an async executor, the driver every built-in runtime
 //! scheduler spawns.
 
-use super::{Next, SchedulerTypes, Task};
+use super::{Clock, Next, Task};
 use std::{
     future::{Future, pending, poll_fn},
     pin::{Pin, pin},
@@ -10,44 +10,43 @@ use std::{
 };
 
 /// Runs `task` after `delay` on an async executor: a scheduler spawns the future it returns, as
-/// every built-in one does, passing itself as `scheduler`. `sleep` is the runtime's timer (tokio's
-/// `time::sleep`, smol's `Timer::after`, …), which must run on the clock of `scheduler`'s
-/// [`now`](SchedulerTypes::now).
+/// every built-in one does, passing its own [`clock`](super::SchedulerTypes::clock).
+/// `sleep` is the runtime's timer (tokio's `time::sleep`, smol's `Timer::after`, …), which must run
+/// on that clock.
 ///
 /// A `delay` too long for an [`Instant`](std::time::Instant) to represent never ends: the task
 /// waits, without a timer, until it is disposed, whatever `sleep` would make of that duration
 /// (tokio's wakes after some thirty years).
 ///
-/// Every step gets `scheduler.now()`, and a [`Next::SleepUntil`] is measured against it.
+/// Every step gets `clock.now()`, and a [`Next::SleepUntil`] is measured against it.
 /// Between two steps the task yields through [`yield_now`], also for a `SleepUntil` whose instant
 /// has passed (tokio's `Sleep` would be ready at once, without yielding). A scheduler that wants
 /// another kind of yield drives the task itself through [`Task::split`] and
 /// [`Stepper::step`](super::Stepper::step).
-pub async fn drive<TC, P, S, SF>(
+pub async fn drive<TC, P, C, SF>(
     task: Task<TC, P>,
     delay: Option<Duration>,
-    scheduler: S,
+    clock: C,
     sleep: impl Fn(Duration) -> SF,
 ) where
-    S: SchedulerTypes,
+    C: Clock,
     SF: Future<Output = ()>,
 {
     let (mut stepper, pinned) = task.split();
     let mut pinned = pin!(pinned);
     if let Some(delay) = delay {
-        if scheduler.now().checked_add(delay).is_none() {
+        if clock.now().checked_add(delay).is_none() {
             return pending().await;
         }
         sleep(delay).await;
     }
     // How long until `at`, or `None` when it has come.
     let delay_until = |at: Instant| {
-        at.checked_duration_since(scheduler.now())
+        at.checked_duration_since(clock.now())
             .filter(|delay| !delay.is_zero())
     };
     loop {
-        let next =
-            poll_fn(|cx| Poll::Ready(stepper.step(pinned.as_mut(), cx, scheduler.now()))).await;
+        let next = poll_fn(|cx| Poll::Ready(stepper.step(pinned.as_mut(), cx, clock.now()))).await;
         match next {
             Next::Finished => break,
             Next::Yield => yield_now().await,

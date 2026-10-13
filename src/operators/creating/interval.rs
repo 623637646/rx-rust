@@ -4,7 +4,7 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
-    scheduler::{PeriodicContext, Scheduler, SchedulerTypes, Task},
+    scheduler::{Clock, PeriodicContext, Scheduler, SchedulerTypes, Task},
 };
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
@@ -120,7 +120,7 @@ where
             // Fixed-rate, anchored to the time of the subscription plus the initial delay. A delay
             // too long for an `Instant` never ends: the first step never comes, so it needs no
             // anchor.
-            self.scheduler.now().checked_add(self.initial_delay),
+            self.scheduler.clock().now().checked_add(self.initial_delay),
         );
         let delay = (!self.initial_delay.is_zero()).then_some(self.initial_delay);
         self.scheduler.run_task(task, delay)

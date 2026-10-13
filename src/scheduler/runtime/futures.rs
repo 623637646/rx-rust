@@ -4,7 +4,7 @@
 
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    scheduler::{Scheduler, SchedulerTypes, Task, drive},
+    scheduler::{Scheduler, SchedulerTypes, SystemClock, Task, drive},
     thread_mode::{Local, Shared},
 };
 use futures::{
@@ -58,6 +58,11 @@ impl ThreadPoolScheduler {
 impl SchedulerTypes for ThreadPoolScheduler {
     type Mode = Shared;
     type Disposal = FuturesDisposal;
+    type Clock = SystemClock;
+
+    fn clock(&self) -> SystemClock {
+        SystemClock
+    }
 }
 
 /// # Panics
@@ -75,7 +80,7 @@ where
     ) -> DisposeOnDrop<Self::Disposal> {
         let handle = self
             .pool
-            .spawn_with_handle(drive(task, delay, self.clone(), sleep))
+            .spawn_with_handle(drive(task, delay, self.clock(), sleep))
             .expect("failed to spawn future");
         DisposeOnDrop::new(FuturesDisposal(handle))
     }
@@ -125,6 +130,11 @@ impl LocalPoolScheduler {
 impl SchedulerTypes for LocalPoolScheduler {
     type Mode = Local;
     type Disposal = FuturesDisposal;
+    type Clock = SystemClock;
+
+    fn clock(&self) -> SystemClock {
+        SystemClock
+    }
 }
 
 /// # Panics
@@ -142,7 +152,7 @@ where
     ) -> DisposeOnDrop<Self::Disposal> {
         let handle = self
             .spawner
-            .spawn_local_with_handle(drive(task, delay, self.clone(), sleep))
+            .spawn_local_with_handle(drive(task, delay, self.clock(), sleep))
             .expect("failed to spawn future");
         DisposeOnDrop::new(FuturesDisposal(handle))
     }

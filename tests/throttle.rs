@@ -15,6 +15,7 @@ use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
+use rx_rust::scheduler::SchedulerTypes;
 use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::{
@@ -28,11 +29,11 @@ use tests_utils::{checker::Checker, test_struct::TestStruct};
 #[test]
 fn test_completed() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -84,11 +85,11 @@ fn test_completed() {
 #[test]
 fn test_error() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -140,13 +141,13 @@ fn test_error() {
 #[test]
 fn test_unsubscribe() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (channels, observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
     let observable_3 = observable_2.clone();
@@ -290,7 +291,7 @@ fn test_async() {
         let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
         let (checker, observer) = Checker::new();
 
-        let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+        let observable = observable.throttle(DURATION_100_MS, scheduler.clock());
 
         let subscription = scheduler
             .spawn(async move { observable.subscribe(observer) })
@@ -321,12 +322,12 @@ fn test_async() {
 #[test]
 fn test_subscribe_by_different_observer() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (channels, observable) = test_channels();
     let (checker_1, observer_1) = Checker::new();
     let (checker_2, observer_2) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
     let observable_1 = observable;
     let observable_2 = observable_1.clone();
 
@@ -363,13 +364,11 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_on_next_by_take() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable
-        .throttle(DURATION_100_MS, scheduler.clone())
-        .take(1);
+    let observable = observable.throttle(DURATION_100_MS, clock.clone()).take(1);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -385,13 +384,13 @@ fn test_unsub_on_next_by_take() {
 #[test]
 fn test_multiple_operation() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
     let observable = observable
-        .throttle(DURATION_100_MS, scheduler.clone())
-        .throttle(DURATION_100_MS + DURATION_30_MS * 2, scheduler.clone());
+        .throttle(DURATION_100_MS, clock.clone())
+        .throttle(DURATION_100_MS + DURATION_30_MS * 2, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -424,11 +423,11 @@ fn test_multiple_operation() {
 #[test]
 fn test_without_convenient_api() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = Throttle::new(observable, DURATION_100_MS, scheduler.clone());
+    let observable = Throttle::new(observable, DURATION_100_MS, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -480,11 +479,11 @@ fn test_without_convenient_api() {
 #[test]
 fn test_complete_after_next() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -501,11 +500,11 @@ fn test_complete_after_next() {
 #[test]
 fn test_error_after_next() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -522,11 +521,11 @@ fn test_error_after_next() {
 #[test]
 fn test_unsub_after_next() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -543,11 +542,11 @@ fn test_unsub_after_next() {
 #[test]
 fn test_unsub_after_completed() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -564,11 +563,11 @@ fn test_unsub_after_completed() {
 #[test]
 fn test_unsub_after_error() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (sender, observable, channel_checker) = test_channel::<'_, i32, _>();
     let (checker, observer) = Checker::new();
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -585,11 +584,11 @@ fn test_unsub_after_error() {
 #[test]
 fn test_next_on_sub() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let subject = BehaviorSubject::<_, Infallible, _>::shared(111);
     let (checker, observer) = Checker::new();
 
-    let observable = subject.clone().throttle(DURATION_100_MS, scheduler.clone());
+    let observable = subject.clone().throttle(DURATION_100_MS, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);
@@ -603,10 +602,10 @@ fn test_next_on_sub() {
 #[test]
 fn test_complete_on_sub() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (checker, observer) = Checker::new();
 
-    let observable = Empty.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = Empty.throttle(DURATION_100_MS, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -616,10 +615,10 @@ fn test_complete_on_sub() {
 #[test]
 fn test_error_on_sub() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (checker, observer) = Checker::new();
 
-    let observable = Throw::new("error").throttle(DURATION_100_MS, scheduler.clone());
+    let observable = Throw::new("error").throttle(DURATION_100_MS, clock.clone());
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -629,7 +628,7 @@ fn test_error_on_sub() {
 #[test]
 fn test_next_on_unsub() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (checker, observer) = Checker::new();
 
     // The source emits from inside its own disposal, so the value arrives while downstream is
@@ -641,7 +640,7 @@ fn test_next_on_unsub() {
         }))
     });
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -655,7 +654,7 @@ fn test_next_on_unsub() {
 #[test]
 fn test_complete_on_unsub() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (checker, observer) = Checker::new();
 
     // The source completes from inside its own disposal, so it terminates while downstream is
@@ -667,7 +666,7 @@ fn test_complete_on_unsub() {
         }))
     });
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -681,7 +680,7 @@ fn test_complete_on_unsub() {
 #[test]
 fn test_error_on_unsub() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let (checker, observer) = Checker::new();
 
     // The source fails from inside its own disposal, so it terminates while downstream is
@@ -692,7 +691,7 @@ fn test_error_on_unsub() {
         }))
     });
 
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -706,7 +705,7 @@ fn test_error_on_unsub() {
 #[test]
 fn test_lifetime_sub() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     // OK
     let life_marker = TestStruct;
     let _subscription;
@@ -724,7 +723,7 @@ fn test_lifetime_sub() {
             }))
         });
 
-        let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+        let observable = observable.throttle(DURATION_100_MS, clock.clone());
 
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
@@ -736,21 +735,21 @@ fn test_lifetime_sub() {
 #[test]
 fn test_clone() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
+    let clock = time.clock();
     let observable = Create::shared_boxed(|mut observer| {
         assert!(observer.on_next(TestStruct).is_continue());
         observer.on_termination(Termination::Error(TestStruct));
         DisposeOnDrop::default()
     });
-    let observable = observable.throttle(DURATION_100_MS, scheduler.clone());
+    let observable = observable.throttle(DURATION_100_MS, clock.clone());
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
 
 #[test]
 fn test_type_inference_with_subscribe() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let observable = Never.throttle(DURATION_100_MS, scheduler.clone());
+    let clock = time.clock();
+    let observable = Never.throttle(DURATION_100_MS, clock.clone());
 
     let observable = observable.filter(|_| true);
     let (_, observer) = Checker::new();
@@ -760,8 +759,8 @@ fn test_type_inference_with_subscribe() {
 #[test]
 fn test_type_inference_without_subscribe() {
     let time = VirtualTime::new();
-    let scheduler = time.scheduler();
-    let observable = Never.throttle(DURATION_100_MS, scheduler.clone());
+    let clock = time.clock();
+    let observable = Never.throttle(DURATION_100_MS, clock.clone());
 
     observable.filter(|_| true);
 }

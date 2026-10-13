@@ -3,7 +3,7 @@
 
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    scheduler::{Scheduler, SchedulerTypes, Task, drive},
+    scheduler::{Scheduler, SchedulerTypes, SystemClock, Task, drive},
     thread_mode::{Local, Shared},
 };
 use smol::{Executor, LocalExecutor};
@@ -85,6 +85,11 @@ async fn sleep(duration: Duration) {
 impl SchedulerTypes for SmolScheduler {
     type Mode = Shared;
     type Disposal = SmolDisposal;
+    type Clock = SystemClock;
+
+    fn clock(&self) -> SystemClock {
+        SystemClock
+    }
 }
 
 impl<TC, P> Scheduler<TC, P> for SmolScheduler
@@ -97,7 +102,7 @@ where
         task: Task<TC, P>,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal> {
-        let future = drive(task, delay, self.clone(), sleep);
+        let future = drive(task, delay, self.clock(), sleep);
         let task = match &self.target {
             SharedTarget::Global => smol::spawn(future),
             SharedTarget::Handle(executor) => executor
@@ -164,6 +169,11 @@ impl SmolLocalScheduler {
 impl SchedulerTypes for SmolLocalScheduler {
     type Mode = Local;
     type Disposal = SmolDisposal;
+    type Clock = SystemClock;
+
+    fn clock(&self) -> SystemClock {
+        SystemClock
+    }
 }
 
 impl<TC, P> Scheduler<TC, P> for SmolLocalScheduler
@@ -183,7 +193,7 @@ where
         DisposeOnDrop::new(SmolDisposal(executor.spawn(drive(
             task,
             delay,
-            self.clone(),
+            self.clock(),
             sleep,
         ))))
     }

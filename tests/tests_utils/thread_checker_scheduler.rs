@@ -6,7 +6,7 @@ use futures::stream::AbortHandle;
 use futures::task::LocalSpawnExt;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
-use rx_rust::scheduler::{Scheduler, SchedulerTypes, Task, drive};
+use rx_rust::scheduler::{Scheduler, SchedulerTypes, SystemClock, Task, drive};
 use rx_rust::thread_mode::Shared;
 use std::cell::Cell;
 use std::panic::{self, AssertUnwindSafe};
@@ -105,6 +105,11 @@ impl Disposable for ThreadCheckerDisposal {
 impl SchedulerTypes for ThreadCheckerScheduler {
     type Mode = Shared;
     type Disposal = ThreadCheckerDisposal;
+    type Clock = SystemClock;
+
+    fn clock(&self) -> SystemClock {
+        SystemClock
+    }
 }
 
 impl<TC, P> Scheduler<TC, P> for ThreadCheckerScheduler
@@ -117,7 +122,7 @@ where
         task: Task<TC, P>,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal> {
-        let future = drive(task, delay, self.clone(), |duration| async move {
+        let future = drive(task, delay, self.clock(), |duration| async move {
             async_io::Timer::after(duration).await;
         });
         let (abortable, abort_handle) = abortable(future);

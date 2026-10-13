@@ -21,7 +21,7 @@ use futures::{
 use rx_rust::{
     disposable::{Disposable, boxed_disposal::SendBoxedDisposal, dispose_on_drop::DisposeOnDrop},
     scheduler::{
-        Next, Scheduler, SchedulerExt, SchedulerTypes, Task,
+        Clock, Next, Scheduler, SchedulerExt, SchedulerTypes, SystemClock, Task,
         runtime::{
             futures::{LocalPoolScheduler, ThreadPoolScheduler},
             smol::{SmolLocalScheduler, SmolScheduler},
@@ -221,7 +221,7 @@ impl TestScheduler {
     /// Resolves after `duration`, timed by a task of the scheduler, so on the clock its other
     /// tasks use. The deadline is taken when this is called, not when the future is first polled.
     pub(crate) fn sleep(&self, duration: Duration) -> BoxFuture<'static, ()> {
-        let deadline = self.now() + duration;
+        let deadline = self.clock().now() + duration;
         let (sender, receiver) = oneshot::channel();
         let mut sender = Some(sender);
         let timer = self.schedule_recursively(
@@ -248,6 +248,11 @@ impl TestScheduler {
 impl SchedulerTypes for TestScheduler {
     type Mode = Shared;
     type Disposal = SendBoxedDisposal<'static>;
+    type Clock = SystemClock;
+
+    fn clock(&self) -> SystemClock {
+        SystemClock
+    }
 }
 
 impl<TC, P> Scheduler<TC, P> for TestScheduler
