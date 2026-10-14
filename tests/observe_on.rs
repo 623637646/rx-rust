@@ -15,13 +15,14 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
+use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
-    observer::{Observer, Termination},
+    observer::{Flow, Observer, Termination},
     operators::{creating::never::Never, utility::observe_on::ObserveOn},
 };
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::Duration;
 use std::{
     convert::Infallible,
@@ -261,10 +262,13 @@ fn test_unsubscribe() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00001111);
 
         subscription.dispose();
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
         assert_eq!(call_history.load(Ordering::SeqCst), 0b11001111);
+        // The task owns the observer, which is released when the scheduler drops the cancelled
+        // task, on its thread.
+        thread_1.run_until_stalled().await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
     });
 }
 
@@ -610,6 +614,41 @@ fn test_unsub_in_the_middle_of_a_batch() {
         // `take(1)` disposes while `observe_on` is delivering the batch, so 222 and 333 stay
         // buffered instead of being pushed downstream.
         assert_eq!(delivered.load(Ordering::SeqCst), 1);
+    });
+}
+
+#[test]
+fn test_unsub_on_next() {
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerExecutor::new("thread_1");
+        let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+        let subscription = Arc::new(Mutex::new(None));
+        let subscription_cloned = subscription.clone();
+
+        // The observer disposes its own subscription while `observe_on` is delivering a batch,
+        // after the first value: the task is still running, so cancelling it cannot stop the
+        // batch, the disposal must.
+        let observable =
+            observable
+                .observe_on(thread_1.scheduler())
+                .hook_on_next(move |observer, value| {
+                    assert_eq!(get_thread_name(), Some("thread_1"));
+                    assert!(observer.on_next(value).is_continue());
+                    if let Some(subscription) = subscription_cloned.take_value() {
+                        Disposable::dispose(subscription);
+                    }
+                    Flow::Continue
+                });
+        subscription.replace_value(Some(observable.subscribe(observer)));
+
+        assert!(sender.on_next(111).is_continue());
+        assert!(sender.on_next(222).is_continue());
+        assert!(sender.on_next(333).is_continue());
+        thread_1.run_until_stalled().await;
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
 }
 
@@ -1019,11 +1058,10 @@ fn test_unsub_after_next() {
         assert_eq!(call_history.load(Ordering::SeqCst), 0b00000011);
 
         assert!(sender.on_next(111).is_continue());
-        // Disposed while 111 is still queued: the task must not deliver it. The queued task holds
-        // the context, but the source dropped its own handle as it was disposed, which released
-        // the observer before the task ran.
+        // Disposed while 111 is still queued: the task must not deliver it. The task owns the
+        // observer, which is released when the scheduler drops the cancelled task, on its thread.
         subscription.dispose();
-        assert_eq!(checker.state(), State::Dropped);
+        assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
         thread_1.run_until_stalled().await;
         assert!(checker.values().is_empty());
         assert_eq!(call_history.load(Ordering::SeqCst), 0b11000011);

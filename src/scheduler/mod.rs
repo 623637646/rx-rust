@@ -153,10 +153,12 @@ pub trait SchedulerTypes {
     /// The inner disposal of the [`DisposeOnDrop`] returned by [`Scheduler::run_task`]: disposing
     /// it cancels the task.
     ///
-    /// A disposed task should be dropped promptly. The task of a time-based operator or of
-    /// `observe_on` holds the operator's context, and a subscription disposed after its source let
-    /// go of its observer releases that observer only when the task is dropped (see
-    /// `docs/decisions/0004-a-source-that-drops-its-observer.md`). A task parked on its own sleep
+    /// A disposed task should be dropped promptly. The task of a time-based operator holds the
+    /// operator's context, and a subscription disposed after its source let go of its observer
+    /// releases that observer only when the task is dropped (see
+    /// `docs/decisions/0004-a-source-that-drops-its-observer.md`); the task of `observe_on` owns
+    /// the downstream observer, which any disposal releases only then (see
+    /// `docs/decisions/0006-observe-on-task-owns-its-observer.md`). A task parked on its own sleep
     /// must therefore be woken to stop: the built-in schedulers wake it, so a disposed task and
     /// the observer it holds are dropped promptly, not when the timer fires.
     ///

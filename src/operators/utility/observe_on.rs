@@ -1,18 +1,19 @@
 //! The [`ObserveOn`] operator, behind
 //! [`ObservableExt::observe_on`](crate::observable::ObservableExt::observe_on).
 
-use crate::delegate_disposal;
-use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
-    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
-    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
-    observer::{Event, EventBatch, Flow, Observer, Termination},
+    delegate_disposal,
+    disposable::{
+        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+        replaceable_disposal::ReplaceableDisposal,
+    },
+    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
+    observer::{Event, Flow, Observer, Termination},
     scheduler::{Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
-    thread_mode::ThreadMode,
-    utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    thread_mode::{ThreadMode, mutable::MutableHelper},
+    utils::serialized_delivery::DeliveryStopped,
 };
 use educe::Educe;
-use std::time::Instant;
 
 /// Specifies the `Scheduler` on which an observer will observe this Observable: every event is
 /// delivered from a task of that scheduler, in order.
@@ -63,19 +64,41 @@ use std::time::Instant;
 /// ```
 ///
 /// The source is subscribed with an observer that only queues the events and wakes the task of
-/// `scheduler`, which is started when the operator is subscribed. So a source that emits from
-/// another thread can be observed on a `Local` scheduler, bound to the thread it was made on:
+/// `scheduler`, which is started when the operator is subscribed and owns the downstream observer.
+/// So a source that emits from another thread can be observed on a `Local` scheduler, bound to the
+/// thread it was made on, by an observer that is not `Send` — only the events cross the threads:
 ///
 /// ```no_run
 /// use rx_rust::{
 ///     observable::ObservableExt, operators::creating::from_future::FromFuture,
 ///     scheduler::runtime::tokio::{TokioLocalScheduler, TokioScheduler},
 /// };
+/// use std::rc::Rc;
 ///
+/// let ui = Rc::new(());
 /// let _subscription = FromFuture::new(async { 1 }, TokioScheduler::current())
 ///     .observe_on(TokioLocalScheduler::ambient())
-///     .subscribe_with_callback(|_| {}, |_| {});
+///     .subscribe_with_callback(move |_| drop(ui.clone()), |_| {});
 /// ```
+///
+/// On a `Shared` scheduler the task, and the observer it owns, may run on any thread, so that
+/// observer must be `Send`:
+///
+/// ```compile_fail
+/// use rx_rust::{
+///     observable::ObservableExt, operators::creating::from_future::FromFuture,
+///     scheduler::runtime::tokio::{TokioLocalScheduler, TokioScheduler},
+/// };
+/// use std::rc::Rc;
+///
+/// let ui = Rc::new(());
+/// let _subscription = FromFuture::new(async { 1 }, TokioScheduler::current())
+///     .observe_on(TokioScheduler::current())
+///     .subscribe_with_callback(move |_| drop(ui.clone()), |_| {});
+/// ```
+///
+/// The task owns the downstream observer, so a disposal stops the delivery at once but releases
+/// that observer only when the scheduler drops the cancelled task, on the scheduler's thread.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
 pub struct ObserveOn<OE, S> {
@@ -92,21 +115,172 @@ impl<OE, S> ObserveOn<OE, S> {
     }
 }
 
-/// The context of an [`ObserveOn`] subscription.
-type ObserveOnContext<M, T, E, OR, D> = SubscriptionContext<M, T, E, OR, Model<T, E>, D>;
+/// What the source's observer, the task and the disposal share: the events not delivered yet, and
+/// whether the delivery has stopped. It holds no observer, so it is `Send` as soon as the events
+/// are.
+struct Inbox<T, E> {
+    values: Vec<T>,
+    termination: Option<Termination<E>>,
+    /// The delivery stopped: disposed, or ended by downstream or by a termination. The source's
+    /// observer then answers [`Flow::Stop`], and nothing more is queued.
+    stopped: bool,
+}
+
+/// A handle on an [`Inbox`], the only place its lock is taken. Disposing it stops the delivery, so
+/// that nothing is delivered once the subscription is disposed, even while the task is running.
+#[derive(Educe)]
+#[educe(Clone(bound()))]
+struct InboxHandle<M: ThreadMode, T, E>(M::Ptr<Inbox<T, E>>);
+
+impl<M: ThreadMode, T, E> InboxHandle<M, T, E> {
+    fn new() -> Self {
+        Self(M::ptr(Inbox {
+            values: Vec::new(),
+            termination: None,
+            stopped: false,
+        }))
+    }
+
+    /// Queues `event`, and returns whether the inbox was empty: the task must then be woken, while
+    /// a task woken for an earlier event that it has not taken yet takes this one too. Once the
+    /// delivery has stopped, drops `event` instead, outside the lock.
+    fn push(&self, event: Event<T, E>) -> Result<bool, DeliveryStopped> {
+        self.0
+            .with_mut(|inbox| {
+                if inbox.stopped {
+                    return Err(event);
+                }
+                let was_empty = inbox.values.is_empty() && inbox.termination.is_none();
+                match event {
+                    Event::Next(value) => inbox.values.push(value),
+                    Event::Termination(termination) => inbox.termination = Some(termination),
+                }
+                Ok(was_empty)
+            })
+            .map_err(|_| DeliveryStopped)
+    }
+
+    /// Takes everything queued, or `None` once the delivery has stopped.
+    fn take(&self) -> Option<(Vec<T>, Option<Termination<E>>)> {
+        self.0.with_mut(|inbox| {
+            (!inbox.stopped).then(|| (std::mem::take(&mut inbox.values), inbox.termination.take()))
+        })
+    }
+
+    fn is_stopped(&self) -> bool {
+        self.0.with_ref(|inbox| inbox.stopped)
+    }
+
+    /// Marks the delivery stopped, and drops what is still queued, outside the lock.
+    fn stop(&self) {
+        drop(self.0.with_mut(|inbox| {
+            inbox.stopped = true;
+            (std::mem::take(&mut inbox.values), inbox.termination.take())
+        }));
+    }
+}
+
+impl<M: ThreadMode, T, E> Disposable for InboxHandle<M, T, E> {
+    fn dispose(self) {
+        self.stop();
+    }
+}
 
 /// The state of the [`ObserveOn`] task, one wakeable task for the whole subscription, which the
 /// source's observer wakes.
 ///
-/// The task holds the context strongly, so that the events already queued are delivered after the
-/// source has let go of its observer, terminated or not; it finishes once nothing is left. A
-/// disposal still releases the observer at once: the source drops its own handle as it is
-/// disposed, and a handle dropped once the context has stopped releases the observer.
-type ObserveOnTask<M, T, E, OR, D> = WakeableContext<ObserveOnContext<M, T, E, OR, D>, M>;
+/// The task owns the downstream observer: only the task touches it, so it never leaves the
+/// scheduler's thread, and it needs to be `Send` only where the scheduler requires its tasks to
+/// be. The observer is therefore released when the scheduler drops the task, promptly after a
+/// disposal rather than within it.
+struct Delivery<M: ThreadMode, T, E, OR, D: Disposable> {
+    inbox: InboxHandle<M, T, E>,
+    /// The source's subscription, disposed as the task stops (decision 0005).
+    source_subscription: ReplaceableDisposal<M, D>,
+    /// `None` once the termination is delivered.
+    observer: Option<OR>,
+}
+
+impl<M: ThreadMode, T, E, OR, D: Disposable> Delivery<M, T, E, OR, D>
+where
+    OR: Observer<T, E>,
+{
+    /// One step of the task: delivers the events queued since the last one, then waits for the
+    /// source to send more. `source_closed` is the `closed` of [`Task::wakeable`]: the source let
+    /// go of its observer, so what this step took is all there is. Every [`Next::Finished`] stops
+    /// the delivery, through the `Drop` of [`Delivery`].
+    fn step(&mut self, source_closed: bool) -> Next {
+        // `None`: disposed.
+        let Some((mut values, termination)) = self.inbox.take() else {
+            return Next::Finished;
+        };
+        // An error preempts the values buffered before it, unlike a completion.
+        if let Some(Termination::Error(_)) = termination {
+            values.clear();
+        }
+        let idle = values.is_empty();
+        if !self.deliver(values) {
+            return Next::Finished;
+        }
+        if let Some(termination) = termination {
+            self.terminate(termination);
+            Next::Finished
+        } else if source_closed {
+            // Released without a termination (decision 0004).
+            Next::Finished
+        } else if idle {
+            Next::Pending
+        } else {
+            // Yield rather than park, so that the values arriving while this batch was delivered
+            // are taken by the next pass without waiting for a wake.
+            Next::Yield
+        }
+    }
+
+    /// Delivers `values` in order, and returns whether the delivery may go on: a disposal, which
+    /// may come from the observer itself or from another thread, is honored before each value.
+    fn deliver(&mut self, values: Vec<T>) -> bool {
+        for value in values {
+            if self.inbox.is_stopped() {
+                return false;
+            }
+            let Some(observer) = self.observer.as_mut() else {
+                return false;
+            };
+            if observer.on_next(value).is_stop() {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// Delivers `termination`, unless the delivery was disposed.
+    fn terminate(&mut self, termination: Termination<E>) {
+        if !self.inbox.is_stopped()
+            && let Some(observer) = self.observer.take()
+        {
+            observer.on_termination(termination);
+        }
+    }
+}
+
+/// The only place the delivery stops on the task's side: the task is dropped once it finishes,
+/// in the same poll as its last step, and also when it is dropped before — cancelled, dropped
+/// with its runtime, or unwound by a panic of the observer — so that the source is never left
+/// sending into an inbox nobody takes from. The observer is dropped after the source is disposed.
+impl<M: ThreadMode, T, E, OR, D: Disposable> Drop for Delivery<M, T, E, OR, D> {
+    fn drop(&mut self) {
+        self.inbox.stop();
+        self.source_subscription.clone().dispose();
+    }
+}
+
+/// The task of an [`ObserveOn`].
+type ObserveOnTask<M, T, E, OR, D> = WakeableContext<Delivery<M, T, E, OR, D>, M>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, T, E, Model<T, E>, ChainDisposal<SD, D>>,
+    ChainDisposal<ChainDisposal<InboxHandle<M, T, E>, SD>, ReplaceableDisposal<M, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -119,133 +293,64 @@ where
     type Error = E;
     /// Every event is delivered by the scheduler's task, so the mode is the scheduler's.
     type Mode = S::Mode;
-    /// The context is shared between the source's thread and the scheduler's, so its mode is both
-    /// joined.
+    /// First the delivery is stopped, then the task cancelled, then the source's subscription
+    /// disposed. The inbox and the source's subscription are shared between the source's thread
+    /// and the scheduler's, so their mode is both joined.
     type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, T, E, S::Disposal, OE::Disposal>;
 }
 
 impl<T, E, OE, S, OR> Observable<OR> for ObserveOn<OE, S>
 where
     OR: Observer<T, E>,
-    OE: Observable<
-            ObserveOnObserver<
-                JoinedSchedulerModeOf<OE, S>,
-                T,
-                E,
-                OR,
-                ChainSchedulerDisposalOf<S, OE>,
-            >,
-            Item = T,
-            Error = E,
-        >,
+    OE: Observable<ObserveOnObserver<JoinedSchedulerModeOf<OE, S>, T, E>, Item = T, Error = E>,
     S: Scheduler<
-        ObserveOnTask<JoinedSchedulerModeOf<OE, S>, T, E, OR, ChainSchedulerDisposalOf<S, OE>>,
+        ObserveOnTask<JoinedSchedulerModeOf<OE, S>, T, E, OR, <OE as ObservableTypes>::Disposal>,
     >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let model = Model::<T, E> {
-            values: Vec::new(),
-            termination: None,
+        let inbox = InboxHandle::new();
+        let source_subscription = ReplaceableDisposal::default();
+        let (task, waker) = Task::wakeable(
+            Delivery {
+                inbox: inbox.clone(),
+                source_subscription: source_subscription.clone(),
+                observer: Some(observer),
+            },
+            |delivery, source_closed, _| delivery.step(source_closed),
+        );
+        let source_observer = ObserveOnObserver {
+            inbox: inbox.clone(),
+            waker,
         };
-        subscribe_with_context(observer, model, |context| {
-            let (task, waker) = Task::wakeable(context.clone(), step_task);
-            let source_subscription = self.source.subscribe(ObserveOnObserver { context, waker });
-            // The context owns only the task's disposal, through its source subscription, never
-            // the task, which its runtime owns: holding the context strongly forms no cycle.
-            // Stopping the context disposes the task.
-            let task = self.scheduler.run_task(task, None);
-            source_subscription.preceded_by_wrapped(task)
-        })
-        .map_inner_into()
+        source_subscription.replace_with(|| self.source.subscribe(source_observer));
+        // The task holds the source's subscription only through the slot, and the runtime owns
+        // the task: no cycle.
+        self.scheduler
+            .run_task(task, None)
+            .preceded_by(inbox)
+            .then(source_subscription)
+            .map_inner_into()
     }
 }
 
-/// The state of an [`ObserveOn`] subscription.
-struct Model<T, E> {
-    values: Vec<T>,
-    termination: Option<Termination<E>>,
-}
-
-/// One step of the task: delivers the events queued since the last one, then waits for the source
-/// to send more. `source_closed` is the `closed` of [`Task::wakeable`]: the source let go of its
-/// observer, so it sends nothing more.
-fn step_task<M, T, E, OR, D>(
-    context: &mut ObserveOnContext<M, T, E, OR, D>,
-    source_closed: bool,
-    _: Instant,
-) -> Next
-where
-    M: ThreadMode,
-    OR: Observer<T, E>,
-    D: Disposable,
-{
-    context
-        .update(|model| {
-            let termination = model.termination.take();
-            let values = std::mem::take(&mut model.values);
-            let (next, events, discarded_values) = match termination {
-                // Nothing left to deliver. An empty batch is a no-op for the context, and every
-                // branch must produce one so their types agree. Once the source sends nothing
-                // more either, the observer is released without a termination (decision 0004).
-                None if values.is_empty() => {
-                    let next = if source_closed {
-                        Next::Finished
-                    } else {
-                        Next::Pending
-                    };
-                    (next, EventBatch::NextBatch(Vec::new()), None)
-                }
-                // Yield rather than park, so that the values arriving while this batch is
-                // delivered are taken by the next pass without waiting for a wake.
-                None => (Next::Yield, EventBatch::NextBatch(values), None),
-                Some(completion @ Termination::Completed) => (
-                    Next::Finished,
-                    EventBatch::NextBatchAndTermination(values, completion),
-                    None,
-                ),
-                // An error preempts the values buffered before it, unlike a completion.
-                Some(error @ Termination::Error(_)) => {
-                    (Next::Finished, EventBatch::Termination(error), Some(values))
-                }
-            };
-            UpdateOutcome::new(next)
-                .with_events(events)
-                .with_drop_outside(discarded_values)
-        })
-        .unwrap_or(Next::Finished)
-}
-
 /// The observer an [`ObserveOn`] gives its source. It queues the events and wakes the task, and
-/// holds no scheduler, which may be `Local` while the source sends from another thread.
-pub struct ObserveOnObserver<M: ThreadMode, T, E, OR, D: Disposable> {
-    context: ObserveOnContext<M, T, E, OR, D>,
+/// holds neither the scheduler, which may be `Local` while the source sends from another thread,
+/// nor the downstream observer, which the task owns: it is `Send` as soon as the events are.
+pub struct ObserveOnObserver<M: ThreadMode, T, E> {
+    inbox: InboxHandle<M, T, E>,
     waker: TaskWaker<M>,
 }
 
-impl<M, T, E, OR, D> ObserveOnObserver<M, T, E, OR, D>
-where
-    M: ThreadMode,
-    OR: Observer<T, E>,
-    D: Disposable,
-{
+impl<M: ThreadMode, T, E> ObserveOnObserver<M, T, E> {
     /// Queues `event` for the observing scheduler, and wakes its task if nothing was queued.
     ///
-    /// Returns [`Flow::Stop`] once the context has stopped: the event was then dropped, and so
+    /// Returns [`Flow::Stop`] once the delivery has stopped: the event is then dropped, and so
     /// would every later one be. What downstream itself answers is only known once the task
     /// delivers, so this is otherwise [`Flow::Continue`].
     fn queue_event(&self, event: Event<T, E>) -> Flow {
-        let wake = self.context.update(|model| {
-            // A task woken for an earlier event that it has not taken yet takes this one too.
-            let wake = model.values.is_empty() && model.termination.is_none();
-            match event {
-                Event::Next(value) => model.values.push(value),
-                Event::Termination(termination) => model.termination = Some(termination),
-            }
-            UpdateOutcome::new(wake).without_events()
-        });
-        match wake {
-            Ok(wake) => {
-                if wake {
+        match self.inbox.push(event) {
+            Ok(was_empty) => {
+                if was_empty {
                     self.waker.wake();
                 }
                 Flow::Continue
@@ -255,18 +360,13 @@ where
     }
 }
 
-impl<M, T, E, OR, D> Observer<T, E> for ObserveOnObserver<M, T, E, OR, D>
-where
-    M: ThreadMode,
-    OR: Observer<T, E>,
-    D: Disposable,
-{
+impl<M: ThreadMode, T, E> Observer<T, E> for ObserveOnObserver<M, T, E> {
     fn on_next(&mut self, value: T) -> Flow {
         self.queue_event(Event::Next(value))
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        // The termination is the last event, so what the context answers is of no use here.
+        // The termination is the last event, so what the inbox answers is of no use here.
         let _ = self.queue_event(Event::Termination(termination));
     }
 }

@@ -196,6 +196,15 @@ All notable changes to this project are documented here. The format follows
   custom scheduler must step a task again once its waker is woken, as the built-in ones do.
   `DelayObserver`, `DebounceObserver` and `BufferWithTimeOrCountObserver` take the clock's type
   instead of the scheduler's, and `ObserveOnObserver` takes neither.
+- **Breaking:** the task of `observe_on` owns the downstream observer, and the observer it gives
+  its source holds only the queued events and the task's waker: `ObserveOnObserver<M, T, E>` names
+  neither the downstream observer nor the source's disposal. The downstream observer never leaves
+  the scheduler's thread, so with a single-threaded scheduler it need not be `Send`, even behind a
+  `Shared` source: a background source observed on a `LocalSet` by callbacks that hold `Rc`s
+  builds. A disposal still stops the delivery at once, but releases that observer only when the
+  scheduler drops the cancelled task, on the scheduler's thread. A task dropped by its runtime
+  before it finished now disposes the source. See
+  `docs/decisions/0006-observe-on-task-owns-its-observer.md`.
 
 ### Fixed
 

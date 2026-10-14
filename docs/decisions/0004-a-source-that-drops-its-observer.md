@@ -106,6 +106,8 @@ that parks while nothing is due, since their source, which may send from a threa
 scheduler cannot reach, cannot start one. Their work is done once nothing is queued and the source
 has let go of its observer: the observer holds the task's `TaskWaker`, whose drop wakes the task
 and tells it that nothing will wake it anymore, so it finishes and releases the context.
+`observe_on` holds no context: its task owns the downstream observer and releases it as it
+finishes, the same way (decision 0006).
 
 What the weak handle did — releasing the downstream observer before `dispose` returns, although
 another handle may still be alive — is done by the `Drop` of `SerializedDelivery`, the state every

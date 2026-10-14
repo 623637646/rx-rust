@@ -448,8 +448,10 @@ const _: fn(TokioLocalScheduler, TokioScheduler) = |local, background| {
 // The operators that deliver through a scheduler give their source an observer that holds the
 // scheduler's clock and a waker, never the scheduler: a `Shared` source, which may send from
 // another thread, builds with a single-threaded scheduler. The events cross to the scheduler's
-// thread, so they and the downstream observer are `Send`.
+// thread, so they are `Send`, and so is the downstream observer, except that of `observe_on`,
+// which only its task touches.
 const _: fn(TokioLocalScheduler) = |local| {
+    let not_send = Rc::new(());
     let subject: PublishSubject<'_, i32, Infallible, Shared> = PublishSubject::shared();
     let _delay = subject
         .clone()
@@ -462,7 +464,7 @@ const _: fn(TokioLocalScheduler) = |local| {
     let _observe_on = subject
         .clone()
         .observe_on(local.clone())
-        .subscribe_with_callback(|_| {}, |_| {});
+        .subscribe_with_callback(move |_| drop(not_send.clone()), |_| {});
     let _buffer = subject
         .buffer_with_time_or_count(NonZeroUsize::MIN, DURATION_100_MS, local)
         .subscribe_with_callback(|_| {}, |_| {});
@@ -568,12 +570,15 @@ on_local_schedulers!(test_debounce_from_another_thread, |scheduler| async move {
 on_local_schedulers!(
     test_observe_on_from_another_thread,
     |scheduler| async move {
+        // The task owns the downstream observer, which never leaves this thread: it need not be
+        // `Send`, and these callbacks hold `Rc`s.
         let subject = PublishSubject::shared();
-        let (record, _subscription) = record_threads(subject.clone().observe_on(scheduler));
+        let (record, _subscription) = record(subject.clone().observe_on(scheduler));
         send_from_another_thread(&subject, vec![1, 2, 3], true);
         sleep(DURATION_10_MS).await;
         assert_eq!(record.values(), [1, 2, 3]);
-        assert!(record.delivered_here());
         assert_eq!(record.termination(), Some(Termination::Completed));
+        // Released by the task, on this thread, once it has delivered the completion.
+        assert_eq!(Rc::strong_count(&record.values), 1);
     }
 );

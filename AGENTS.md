@@ -141,6 +141,10 @@ cargo tarpaulin --out Html
   `debounce`, `observe_on`) starts one `Task::wakeable` when it is subscribed, and gives the
   source's observer the `TaskWaker`, never the scheduler: the source may send from a thread a
   `Local` scheduler cannot reach. The observer changes the model, then wakes the task.
+  `observe_on` goes further and is not built on the context: its task owns the downstream
+  observer, and the source's observer holds only an inbox, so that observer need not be `Send`
+  with a `Local` scheduler; a disposal releases it when the scheduler drops the task, not at once
+  (decision 0006).
 - **Implementing an observable** takes two impls: `ObservableTypes` with the associated `Item`,
   `Error`, `Mode` and `Disposal` — which must not mention the observer — and `Observable<OR>`,
   whose bounds name the observer the source is subscribed with

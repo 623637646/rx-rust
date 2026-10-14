@@ -6,6 +6,8 @@ so that the source is disposed as soon as the context stops.
 ## One helper, owning the source
 
 Status: adopted. `test_stop_on_next` in `observe_on`, `delay` and `debounce` specifies it.
+`observe_on` no longer uses the context (decision 0006), but keeps the rule: its task disposes
+the source as it stops.
 
 `subscribe_with_context` puts the subscription its builder returns inside the context, and the
 context drops it, outside the lock, once it stops — by a disposal, by a termination from any of its
