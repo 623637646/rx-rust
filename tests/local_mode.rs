@@ -582,3 +582,218 @@ on_local_schedulers!(
         assert_eq!(Rc::strong_count(&record.values), 1);
     }
 );
+
+// The clock-only operators run on the source's thread, then `observe_on` brings their events to
+// the single-threaded scheduler, and to an observer that is not `Send`.
+
+/// The test `$name`: `[1, 2, 3]`, sent from a thread of its own through `subscribe_on`, goes
+/// through `$pipeline` onto the single-threaded `$scheduler`, then to an observer that is not
+/// `Send`, which must see `$expected` on the scheduler's thread, then the completion.
+macro_rules! from_another_thread {
+    ($name:ident, |$source:ident, $scheduler:ident| $pipeline:expr, $expected:expr) => {
+        on_local_schedulers!($name, |scheduler| async move {
+            use tests_utils::thread_checker_scheduler::ThreadCheckerExecutor;
+
+            let here = thread::current().id();
+            let thread_1 = ThreadCheckerExecutor::new("thread_1");
+            let $source = FromIter::new([1, 2, 3]).subscribe_on(thread_1.scheduler());
+            let $scheduler = scheduler;
+            let (done_sender, done) = futures::channel::oneshot::channel();
+            let (record, _subscription) = record(
+                $pipeline
+                    .map(move |value| {
+                        assert_eq!(thread::current().id(), here);
+                        Rc::new(value)
+                    })
+                    .do_after_termination(move |_| done_sender.send(()).unwrap()),
+            );
+            thread_1.run_until_stalled().await;
+            done.await.unwrap();
+            assert_eq!(record.values(), rcs($expected));
+            assert_eq!(record.termination(), Some(Termination::Completed));
+        });
+    };
+}
+
+from_another_thread!(
+    test_observe_on_with_subscribe_on,
+    |source, scheduler| source
+        .map(|value| {
+            assert_eq!(
+                tests_utils::thread_checker_scheduler::get_thread_name(),
+                Some("thread_1")
+            );
+            value
+        })
+        .observe_on(scheduler),
+    [1, 2, 3]
+);
+from_another_thread!(
+    test_throttle_from_another_thread,
+    |source, scheduler| source
+        .throttle(DURATION_100_MS, scheduler.clock())
+        .observe_on(scheduler),
+    [1]
+);
+from_another_thread!(
+    test_timestamp_from_another_thread,
+    |source, scheduler| source
+        .timestamp(scheduler.clock())
+        .map(|(value, _)| value)
+        .observe_on(scheduler),
+    [1, 2, 3]
+);
+from_another_thread!(
+    test_time_interval_from_another_thread,
+    |source, scheduler| source
+        .time_interval(scheduler.clock())
+        .map(|(value, _)| value)
+        .observe_on(scheduler),
+    [1, 2, 3]
+);
+from_another_thread!(
+    test_timeout_from_another_thread,
+    |source, scheduler| source
+        .timeout(DURATION_100_MS, scheduler.clone())
+        .observe_on(scheduler),
+    [1, 2, 3]
+);
+
+// MARK: - Where the observer of `observe_on` is released
+
+/// Held by an observer, which it makes not `Send`: counts its drops, and checks that each happens
+/// on the thread it was made on, the scheduler's.
+struct ThreadBound {
+    thread: ThreadId,
+    drops: Rc<RefCell<usize>>,
+}
+
+impl ThreadBound {
+    /// A value bound to the calling thread, and the count of its drops.
+    fn new() -> (Self, Rc<RefCell<usize>>) {
+        let drops = Rc::new(RefCell::new(0));
+        let bound = Self {
+            thread: thread::current().id(),
+            drops: drops.clone(),
+        };
+        (bound, drops)
+    }
+}
+
+impl Drop for ThreadBound {
+    fn drop(&mut self) {
+        assert_eq!(thread::current().id(), self.thread);
+        self.drops.with_mut(|drops| *drops += 1);
+    }
+}
+
+#[test]
+fn test_observe_on_unsub_after_next() {
+    use tests_utils::test_channel::{ChannelState, test_channel};
+
+    let mut pool = LocalPool::new();
+    let scheduler = LocalPoolScheduler::from_spawner(pool.spawner());
+    let (mut sender, observable, channel) = test_channel::<'_, i32, Infallible>();
+    let (bound, drops) = ThreadBound::new();
+    let subscription = observable.observe_on(scheduler).subscribe_with_callback(
+        move |_| -> () {
+            let _ = &bound;
+            panic!("a value was delivered after the disposal");
+        },
+        |_| panic!("a disposed subscription was terminated"),
+    );
+    assert!(sender.on_next(1).is_continue());
+    subscription.dispose();
+    assert_eq!(channel.state(), ChannelState::Unsubscribed);
+    // The task owns the observer, which is released when the scheduler drops the cancelled task.
+    assert_eq!(drops.clone_value(), 0);
+    pool.run_until_stalled();
+    assert_eq!(drops.clone_value(), 1);
+}
+
+#[test]
+fn test_observe_on_executor_dropped() {
+    use tests_utils::test_channel::{ChannelState, test_channel};
+
+    let mut pool = LocalPool::new();
+    let scheduler = LocalPoolScheduler::from_spawner(pool.spawner());
+    let (_sender, observable, channel) = test_channel::<'_, i32, Infallible>();
+    let (bound, drops) = ThreadBound::new();
+    let subscription = observable.observe_on(scheduler).subscribe_with_callback(
+        move |_| {
+            let _ = &bound;
+        },
+        |_| panic!("the executor's drop terminated the subscription"),
+    );
+    // The task parks, waiting for the source.
+    pool.run_until_stalled();
+    assert_eq!(drops.clone_value(), 0);
+    // Dropping the executor drops the task, which releases the observer and disposes the source.
+    drop(pool);
+    assert_eq!(drops.clone_value(), 1);
+    assert_eq!(channel.state(), ChannelState::Unsubscribed);
+    drop(subscription);
+    assert_eq!(drops.clone_value(), 1);
+}
+
+#[test]
+fn test_observe_on_abandon_from_another_thread() {
+    use tests_utils::test_channel::{ChannelState, test_channel};
+
+    let mut pool = LocalPool::new();
+    let scheduler = LocalPoolScheduler::from_spawner(pool.spawner());
+    let (mut sender, observable, channel) = test_channel::<'_, i32, Infallible>();
+    let values = Rc::new(RefCell::new(Vec::new()));
+    let values_cloned = values.clone();
+    let (bound, drops) = ThreadBound::new();
+    let _subscription = observable.observe_on(scheduler).subscribe_with_callback(
+        move |value| {
+            let _ = &bound;
+            values_cloned.with_mut(|values| values.push(value));
+        },
+        |_| panic!("an abandoned subscription was terminated"),
+    );
+    pool.run_until_stalled();
+    thread::spawn(move || {
+        assert!(sender.on_next(1).is_continue());
+        assert!(sender.on_next(2).is_continue());
+        sender.abandon();
+    })
+    .join()
+    .unwrap();
+    assert!(values.clone_value().is_empty());
+    assert_eq!(drops.clone_value(), 0);
+    // The task delivers what was queued, then releases the observer, without a termination
+    // (decision 0004).
+    pool.run_until_stalled();
+    assert_eq!(values.clone_value(), [1, 2]);
+    assert_eq!(drops.clone_value(), 1);
+    assert_eq!(channel.state(), ChannelState::Abandoned);
+}
+
+#[test]
+#[cfg(panic = "unwind")]
+fn test_observe_on_panic_on_sub() {
+    let mut pool = LocalPool::new();
+    let scheduler = LocalPoolScheduler::from_spawner(pool.spawner());
+    let (bound, drops) = ThreadBound::new();
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        Create::shared_boxed(
+            |_: SendBoxedObserver<'static, i32, Infallible>| -> DisposeOnDrop<()> {
+                panic!("the source's subscription panicked");
+            },
+        )
+        .observe_on(scheduler)
+        .subscribe_with_callback(
+            move |_| {
+                let _ = &bound;
+            },
+            |_| panic!("a panicking subscription was terminated"),
+        )
+    }));
+    assert!(result.is_err());
+    // Released as the subscription unwound, before any task ran.
+    assert_eq!(drops.clone_value(), 1);
+    pool.run_until_stalled();
+    assert_eq!(drops.clone_value(), 1);
+}
