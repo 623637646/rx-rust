@@ -94,15 +94,13 @@ where
     F: FnMut(&T) -> bool,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        if !self.skip {
-            self.observer.on_next(value)
-        } else {
+        if self.skip {
             self.skip = (self.callback)(&value);
-            if !self.skip {
-                self.observer.on_next(value)
-            } else {
-                Flow::Continue
-            }
+        }
+        if self.skip {
+            Flow::Continue
+        } else {
+            self.observer.on_next(value)
         }
     }
 

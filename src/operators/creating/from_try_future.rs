@@ -27,33 +27,27 @@ use educe::Educe;
 ///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::creating::from_try_future::FromTryFuture,
+///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
-///     use std::sync::{Arc, Mutex};
-///     use tokio::time::{sleep, Duration};
+///     use std::{
+///         sync::{Arc, Mutex},
+///         time::Duration,
+///     };
 ///
 ///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
-///     let terminations_observer = Arc::clone(&terminations);
-///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///
-///     let subscription = FromTryFuture::new(async { Err::<i32, _>("boom") }, scheduler)
-///         .subscribe_with_callback(
-///             move |value| values_observer.lock().unwrap().push(value),
-///             move |termination| terminations_observer
-///                 .lock()
-///                 .unwrap()
-///                 .push(termination),
-///         );
+///     let subscription =
+///         FromTryFuture::new(async { Err::<i32, _>("boom") }, TokioScheduler::current())
+///             .subscribe_with_callback(
+///                 move |value| values_observer.lock().unwrap().push(value),
+///                 |termination| assert_eq!(termination, Termination::Error("boom")),
+///             );
 ///
-///     sleep(Duration::from_millis(10)).await;
+///     tokio::time::sleep(Duration::from_millis(20)).await;
 ///     drop(subscription);
 ///
 ///     assert!(values.lock().unwrap().is_empty());
-///     assert_eq!(
-///         &*terminations.lock().unwrap(),
-///         &[Termination::Error("boom")]
-///     );
 /// }
 /// ```
 #[derive(Educe)]

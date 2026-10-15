@@ -24,10 +24,10 @@
 //! a `Resubscribe<OE1, Self>`, created in `Retry`'s `Observable<OR>::subscribe`, and calls it with
 //! itself when the callback asks for a retry.
 
-use crate::observer::Observer;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
+    observer::Observer,
 };
 use educe::Educe;
 
@@ -55,15 +55,5 @@ impl<OE: ObservableTypes, OR> Resubscribe<OE, OR> {
     /// Subscribes `observable` with `observer`.
     pub(crate) fn subscribe(self, observable: OE, observer: OR) -> DisposeOnDrop<OE::Disposal> {
         (self.0)(observable, observer)
-    }
-}
-
-impl<OE, OR> Default for Resubscribe<OE, OR>
-where
-    OE: Observable<OR>,
-    OR: Observer<OE::Item, OE::Error>,
-{
-    fn default() -> Self {
-        Self::new()
     }
 }

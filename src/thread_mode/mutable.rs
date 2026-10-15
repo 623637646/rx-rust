@@ -46,14 +46,14 @@
 //! use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 //! use std::sync::Mutex;
 //!
-//! let counter = Mutex::new(vec![1, 2, 3]);
-//! let sum = counter.with_ref(|values| values.iter().sum::<i32>());
+//! let numbers = Mutex::new(vec![1, 2, 3]);
+//! let sum = numbers.with_ref(|values| values.iter().sum::<i32>());
 //! assert_eq!(sum, 6);
 //!
-//! counter.with_mut(|values| values.push(4));
-//! let taken = counter.take_value(); // Drop the values outside the lock.
+//! numbers.with_mut(|values| values.push(4));
+//! let taken = numbers.take_value(); // Drop the values outside the lock.
 //! assert_eq!(taken, [1, 2, 3, 4]);
-//! assert!(counter.with_ref(Vec::is_empty));
+//! assert!(numbers.with_ref(Vec::is_empty));
 //! ```
 
 mod reentrancy;
@@ -202,8 +202,7 @@ impl MutableBoolHelper for Cell<bool> {
         self.set(value)
     }
     fn set_if_changed(&self, value: bool) -> bool {
-        let old = self.replace(value);
-        old != value
+        self.replace(value) != value
     }
 }
 

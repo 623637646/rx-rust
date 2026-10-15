@@ -29,8 +29,7 @@ use std::time::Instant;
 /// let time = VirtualTime::new();
 /// let start = time.now();
 /// let mut timestamped = Vec::new();
-/// let mut subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> =
-///     PublishSubject::local();
+/// let mut subject = PublishSubject::<i32, Infallible, _>::local();
 ///
 /// let subscription = Timestamp::new(subject.clone(), time.clock())
 ///     .subscribe_with_callback(|timestamped_value| timestamped.push(timestamped_value), |_| {});

@@ -84,7 +84,7 @@ impl<D> ReservationSlot<D> {
             // Reject a second build before touching the state, so that a caught panic leaves the
             // first one's reservation intact.
             Self::Reserved | Self::ReleasedWhileReserved => {
-                unreachable!("the slot is already reserved")
+                panic!("the slot is already reserved")
             }
             Self::Idle => {
                 *self = Self::Reserved;
@@ -133,7 +133,7 @@ impl<D> ReservationSlot<D> {
                 Some(value)
             }
             Self::Idle | Self::Active(_) => {
-                unreachable!("the slot was filled without being reserved")
+                panic!("the slot was filled without being reserved")
             }
         }
     }
@@ -159,8 +159,8 @@ impl<D> ReservationSlot<D> {
                 Self::Active(value) => Some(value),
                 _ => unreachable!(),
             },
-            Self::Idle => unreachable!("the slot was released without being reserved"),
-            Self::ReleasedWhileReserved => unreachable!("the slot was already released"),
+            Self::Idle => panic!("the slot was released without being reserved"),
+            Self::ReleasedWhileReserved => panic!("the slot was already released"),
         }
     }
 }
@@ -181,14 +181,6 @@ mod tests {
         }
     }
 
-    /// Whether a build is still in flight, even if its value has already been released.
-    fn is_reserved<D>(slot: &ReservationSlot<D>) -> bool {
-        matches!(
-            slot,
-            ReservationSlot::Reserved | ReservationSlot::ReleasedWhileReserved
-        )
-    }
-
     impl DropCount {
         fn new() -> Self {
             Self(Rc::new(Cell::new(0)))
@@ -201,6 +193,14 @@ mod tests {
         fn probe(&self) -> Probe {
             Probe(self.0.clone())
         }
+    }
+
+    /// Whether a build is still in flight, even if its value has already been released.
+    fn is_reserved<D>(slot: &ReservationSlot<D>) -> bool {
+        matches!(
+            slot,
+            ReservationSlot::Reserved | ReservationSlot::ReleasedWhileReserved
+        )
     }
 
     #[test]

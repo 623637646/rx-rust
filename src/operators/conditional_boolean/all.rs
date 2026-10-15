@@ -1,13 +1,15 @@
 //! The [`All`] operator, behind [`ObservableExt::all`](crate::observable::ObservableExt::all).
 
-use crate::disposable::dispose_on_drop::DisposeOnDrop;
-use crate::utils::MarkerType;
-use crate::utils::subscribe_with_auto_dispose_on_termination::{
-    self, subscribe_with_auto_dispose_on_termination,
-};
 use crate::{
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::{
+        MarkerType,
+        subscribe_with_auto_dispose_on_termination::{
+            self, subscribe_with_auto_dispose_on_termination,
+        },
+    },
 };
 use educe::Educe;
 use std::marker::PhantomData;

@@ -11,7 +11,9 @@
 //!
 //! # Examples
 //! ```rust
-//! use rx_rust::{observable::ObservableExt, observer::Termination, operators::creating::range::Range};
+//! use rx_rust::{
+//!     observable::ObservableExt, observer::Termination, operators::creating::range::Range,
+//! };
 //!
 //! let mut seen = Vec::new();
 //! Range::new(1..=10)
@@ -103,7 +105,10 @@ use crate::{
         },
     },
     subject::{
-        async_subject::AsyncSubject, publish_subject::PublishSubject, replay_subject::ReplaySubject,
+        async_subject::{AsyncSubject, AsyncSubjectOf},
+        behavior_subject::{BehaviorSubject, BehaviorSubjectOf},
+        publish_subject::{PublishSubject, PublishSubjectOf},
+        replay_subject::{ReplaySubject, ReplaySubjectOf},
     },
     thread_mode::ThreadMode,
 };
@@ -116,14 +121,14 @@ pub type JoinedModeOf<A, B> =
 
 /// The thread mode of an operator with the source `OE` and the scheduler `S`: their modes
 /// [`Joined`](crate::thread_mode::Joined), `Shared` as soon as one of them is.
-pub(crate) type JoinedSchedulerModeOf<OE, S> = crate::thread_mode::Joined<
+pub type JoinedSchedulerModeOf<OE, S> = crate::thread_mode::Joined<
     <OE as ObservableTypes>::Mode,
     <S as crate::scheduler::SchedulerTypes>::Mode,
 >;
 
 /// The boxed observer of the source `OE`'s mode, for its items and errors: what an operator that
 /// hands the downstream observer to a user callback boxes it into, so it subscribes any observer.
-pub(crate) type BoxedObserverOf<'a, OE> =
+pub type BoxedObserverOf<'a, OE> =
     <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<
         'a,
         <OE as ObservableTypes>::Item,
@@ -132,7 +137,7 @@ pub(crate) type BoxedObserverOf<'a, OE> =
 
 /// The disposals of the two sources `A` and `B` chained into one: disposing it disposes `A`'s
 /// subscription first, then `B`'s.
-pub(crate) type ChainDisposalOf<A, B> = crate::disposable::chain_disposal::ChainDisposal<
+pub type ChainDisposalOf<A, B> = crate::disposable::chain_disposal::ChainDisposal<
     <A as ObservableTypes>::Disposal,
     <B as ObservableTypes>::Disposal,
 >;
@@ -140,7 +145,7 @@ pub(crate) type ChainDisposalOf<A, B> = crate::disposable::chain_disposal::Chain
 /// The disposal of a task run on the scheduler `S` and that of the source `OE` chained into one:
 /// disposing it cancels the task first, then disposes the source's subscription. What the context
 /// of an operator with a long-lived scheduler task owns, as `delay` or `buffer_with_time` do.
-pub(crate) type ChainSchedulerDisposalOf<S, OE> = crate::disposable::chain_disposal::ChainDisposal<
+pub type ChainSchedulerDisposalOf<S, OE> = crate::disposable::chain_disposal::ChainDisposal<
     <S as crate::scheduler::SchedulerTypes>::Disposal,
     <OE as ObservableTypes>::Disposal,
 >;
@@ -218,11 +223,14 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Races two observables and mirrors whichever one emits an item or terminates first.
-    fn amb_with<OE1>(self, other: OE1) -> Amb<[EitherObservable<Self, OE1>; 2]>
+    fn amb_with<OE2>(self, source_2: OE2) -> Amb<[EitherObservable<Self, OE2>; 2]>
     where
-        OE1: ObservableTypes<Item = Self::Item, Error = Self::Error>,
+        OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
     {
-        Amb::new([EitherObservable::Left(self), EitherObservable::Right(other)])
+        Amb::new([
+            EitherObservable::Left(self),
+            EitherObservable::Right(source_2),
+        ])
     }
 
     /// Calculates the arithmetic mean of all numeric items emitted by the source.
@@ -283,11 +291,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Combines the latest values from both observables whenever either produces a new item.
-    fn combine_latest<T1, OE2>(self, another_source: OE2) -> CombineLatest<Self, OE2>
+    fn combine_latest<T1, OE2>(self, source_2: OE2) -> CombineLatest<Self, OE2>
     where
         OE2: ObservableTypes<Item = T1, Error = Self::Error>,
     {
-        CombineLatest::new(self, another_source)
+        CombineLatest::new(self, source_2)
     }
 
     /// Flattens an observable-of-observables by concatenating each inner observable sequentially.
@@ -527,7 +535,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     where
         OR: Observer<Self::Item, Self::Error>,
         D: Disposable,
-        F: FnOnce(Self, Emitter<OR, Self::Mode>) -> DisposeOnDrop<D>,
+        F: FnOnce(Self, Emitter<Self::Mode, OR>) -> DisposeOnDrop<D>,
     {
         HookOnSubscription::new(self, callback)
     }
@@ -555,7 +563,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     fn hook_on_termination<OR, F>(self, callback: F) -> HookOnTermination<Self, F>
     where
         OR: Observer<Self::Item, Self::Error>,
-        F: FnOnce(Emitter<OR, Self::Mode>, Termination<Self::Error>),
+        F: FnOnce(Emitter<Self::Mode, OR>, Termination<Self::Error>),
     {
         HookOnTermination::new(self, callback)
     }
@@ -820,11 +828,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// use rx_rust::{
     ///     observable::ObservableExt, observer::Observer,
     ///     operators::others::observable_try_stream::Latest,
-    ///     subject::publish_subject::PublishSubject,
+    ///     subject::publish_subject::PublishSubject, thread_mode::Local,
     /// };
     /// use std::convert::Infallible;
     ///
-    /// let mut subject = PublishSubject::<_, Infallible, rx_rust::thread_mode::Local>::local();
+    /// let mut subject = PublishSubject::<_, Infallible, Local>::local();
     /// let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
     /// assert_eq!(stream.next().now_or_never(), None); // subscribes
     ///
@@ -934,11 +942,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Converts the source into a connectable observable using a subject factory.
-    fn multicast<S, F>(self, subject_maker: F) -> ConnectableController<Self, S>
+    fn multicast<S, F>(self, subject_factory: F) -> ConnectableController<Self, S>
     where
         F: FnOnce() -> S,
     {
-        ConnectableController::new(self, subject_maker())
+        ConnectableController::new(self, subject_factory())
     }
 
     /// Delivers the events downstream from tasks of the provided scheduler.
@@ -947,21 +955,27 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Multicasts the source using a `PublishSubject`.
-    #[allow(clippy::type_complexity)]
-    fn publish<'a>(
-        self,
-    ) -> ConnectableController<Self, PublishSubject<'a, Self::Item, Self::Error, Self::Mode>>
+    fn publish<'a>(self) -> ConnectableController<Self, PublishSubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
     {
         self.multicast(PublishSubject::new)
     }
 
-    /// Multicasts the source using an `AsyncSubject`, emitting only the last value.
-    #[allow(clippy::type_complexity)]
-    fn publish_last<'a>(
+    /// Multicasts the source using a `BehaviorSubject`: every subscriber receives the current
+    /// value — `initial_value` until the source emits — before what follows it.
+    fn publish_behavior<'a>(
         self,
-    ) -> ConnectableController<Self, AsyncSubject<'a, Self::Item, Self::Error, Self::Mode>>
+        initial_value: Self::Item,
+    ) -> ConnectableController<Self, BehaviorSubjectOf<'a, Self>>
+    where
+        Self::Mode: ObserverMode,
+    {
+        self.multicast(|| BehaviorSubject::new(initial_value))
+    }
+
+    /// Multicasts the source using an `AsyncSubject`, emitting only the last value.
+    fn publish_last<'a>(self) -> ConnectableController<Self, AsyncSubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
     {
@@ -978,11 +992,10 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Multicasts the source using a `ReplaySubject` that keeps the last `buffer_size` values, or
     /// every value for `None`.
-    #[allow(clippy::type_complexity)]
     fn replay<'a>(
         self,
         buffer_size: Option<usize>,
-    ) -> ConnectableController<Self, ReplaySubject<'a, Self::Item, Self::Error, Self::Mode>>
+    ) -> ConnectableController<Self, ReplaySubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
     {
@@ -1015,16 +1028,15 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Compares two sequences element by element for equality.
-    fn sequence_equal<OE2>(self, another_source: OE2) -> SequenceEqual<Self::Item, Self, OE2>
+    fn sequence_equal<OE2>(self, source_2: OE2) -> SequenceEqual<Self::Item, Self, OE2>
     where
         OE2: ObservableTypes<Item = Self::Item, Error = Self::Error>,
     {
-        SequenceEqual::new(self, another_source)
+        SequenceEqual::new(self, source_2)
     }
 
     /// Shares a single subscription to the source using `PublishSubject` semantics.
-    #[allow(clippy::type_complexity)]
-    fn share<'a>(self) -> RefCount<Self, PublishSubject<'a, Self::Item, Self::Error, Self::Mode>>
+    fn share<'a>(self) -> RefCount<Self, PublishSubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
         Self::Item: Clone,
@@ -1033,10 +1045,23 @@ pub trait ObservableExt: ObservableTypes + Sized {
         self.publish().ref_count()
     }
 
+    /// Shares a single subscription using `BehaviorSubject` semantics: every subscriber first
+    /// receives the current value, `initial_value` until the source emits.
+    fn share_behavior<'a>(
+        self,
+        initial_value: Self::Item,
+    ) -> RefCount<Self, BehaviorSubjectOf<'a, Self>>
+    where
+        Self::Mode: ObserverMode,
+        Self::Item: Clone,
+        Self::Error: Clone,
+    {
+        self.publish_behavior(initial_value).ref_count()
+    }
+
     /// Shares a single subscription using `AsyncSubject` semantics: only the last item, on
     /// completion.
-    #[allow(clippy::type_complexity)]
-    fn share_last<'a>(self) -> RefCount<Self, AsyncSubject<'a, Self::Item, Self::Error, Self::Mode>>
+    fn share_last<'a>(self) -> RefCount<Self, AsyncSubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
         Self::Item: Clone,
@@ -1047,11 +1072,10 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Shares a single subscription using `ReplaySubject` semantics: later subscribers first get
     /// the last `buffer_size` values, or every value for `None`.
-    #[allow(clippy::type_complexity)]
     fn share_replay<'a>(
         self,
         buffer_size: Option<usize>,
-    ) -> RefCount<Self, ReplaySubject<'a, Self::Item, Self::Error, Self::Mode>>
+    ) -> RefCount<Self, ReplaySubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
         Self::Item: Clone,
@@ -1233,11 +1257,11 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Pairs items from both observables by index and emits tuples of corresponding values.
-    fn zip<T1, OE2>(self, another_source: OE2) -> Zip<Self, OE2>
+    fn zip<T1, OE2>(self, source_2: OE2) -> Zip<Self, OE2>
     where
         OE2: ObservableTypes<Item = T1, Error = Self::Error>,
     {
-        Zip::new(self, another_source)
+        Zip::new(self, source_2)
     }
 }
 

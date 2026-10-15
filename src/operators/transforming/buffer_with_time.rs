@@ -1,17 +1,19 @@
 //! The [`BufferWithTime`] operator.
 
-use crate::delegate_disposal;
-use crate::disposable::chain_disposal::ChainDisposal;
-use crate::disposable::{
-    Disposable, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
-};
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
+    delegate_disposal,
+    disposable::{
+        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+        option_disposal::OptionDisposal,
+    },
     observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, PeriodicContext, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
+    utils::{
+        serialized_delivery::UpdateOutcome,
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 use std::time::Duration;
@@ -45,12 +47,13 @@ use std::time::Duration;
 ///             creating::from_iter::FromIter,
 ///             transforming::buffer_with_time::BufferWithTime,
 ///         },
+///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
 ///     use std::sync::{Arc, Mutex};
 ///     use std::time::{Duration, Instant};
 ///     use tokio::time::sleep;
 ///
-///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
+///     let scheduler = TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
@@ -63,20 +66,14 @@ use std::time::Duration;
 ///     )
 ///     .subscribe_with_callback(
 ///         move |value| values_observer.lock().unwrap().push(value),
-///         move |termination| terminations_observer
-///             .lock()
-///             .unwrap()
-///             .push(termination),
+///         move |termination| terminations_observer.lock().unwrap().push(termination),
 ///     );
 ///
 ///     sleep(Duration::from_millis(10)).await;
 ///     drop(subscription);
 ///
 ///     assert_eq!(&*values.lock().unwrap(), &[vec![1, 2, 3]]);
-///     assert_eq!(
-///         &*terminations.lock().unwrap(),
-///         &[Termination::Completed]
-///     );
+///     assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// }
 /// ```
 #[derive(Educe)]
@@ -124,7 +121,13 @@ type BufferWithTimeTask<T, E, OR, OE, S> = PeriodicContext<
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, Vec<T>, E, Vec<T>, ChainDisposal<OptionDisposal<DisposeOnDrop<SD>>, D>>,
+    subscribe_with_context::Disposal<
+        M,
+        Vec<T>,
+        E,
+        Vec<T>,
+        ChainDisposal<OptionDisposal<DisposeOnDrop<SD>>, D>,
+    >,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 

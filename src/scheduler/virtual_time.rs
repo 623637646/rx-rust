@@ -42,9 +42,8 @@
 //! another runtime) is queued again, at the current time, when it is woken: in the same
 //! `advance_by` if something it runs wakes it, at the next one otherwise. A task that waits for
 //! both ([`Next::PendingUntil`]) is queued at its instant, and again at the current time if it is
-//! woken first. A task waiting on real
-//! IO or a real timer is therefore never woken while the clock advances: such a pipeline belongs
-//! on a real scheduler.
+//! woken first. A task waiting on real IO or a real timer is therefore never woken while the clock
+//! advances: such a pipeline belongs on a real scheduler.
 //!
 //! A delay too long for an [`Instant`] to represent never comes due: the task stays queued, and
 //! counted by [`VirtualTime::pending_tasks`], until it is disposed.
@@ -115,6 +114,7 @@ pub struct VirtualClock {
 
 /// The handle of a task queued on a [`VirtualTime`]; disposing it drops the task, or, while the
 /// task is running, drops it once its step returns.
+#[derive(Debug)]
 pub struct VirtualTimeDisposal {
     state: Weak<Mutex<State>>,
     id: Id,

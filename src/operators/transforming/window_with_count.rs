@@ -1,15 +1,15 @@
 //! The [`WindowWithCount`] operator, behind
 //! [`ObservableExt::window_with_count`](crate::observable::ObservableExt::window_with_count).
 
-use crate::delegate_disposal;
-use crate::disposable::{Disposable, DisposableExt, option_disposal::OptionDisposal};
-use crate::observer::boxed_observer::ObserverMode;
-use crate::utils::MarkerType;
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{
+        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
+    },
     observable::{Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
+    observer::{Flow, Observer, Termination, boxed_observer::ObserverMode},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -66,23 +66,14 @@ use std::{cmp::Ordering, num::NonZeroUsize};
 ///         );
 ///         inner_subscriptions_observer.lock().unwrap().push(sub);
 ///     },
-///     move |termination| terminations_observer
-///         .lock()
-///         .unwrap()
-///         .push(termination),
+///     move |termination| terminations_observer.lock().unwrap().push(termination),
 /// );
 ///
 /// drop(subscription);
 /// inner_subscriptions.lock().unwrap().drain(..).for_each(drop);
 ///
-/// assert_eq!(
-///     &*windows.lock().unwrap(),
-///     &[vec![1, 2], vec![3, 4], vec![]]
-/// );
-/// assert_eq!(
-///     &*terminations.lock().unwrap(),
-///     &[Termination::Completed]
-/// );
+/// assert_eq!(&*windows.lock().unwrap(), &[vec![1, 2], vec![3, 4], vec![]]);
+/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
@@ -188,7 +179,9 @@ where
                 self.sent_count = 0;
                 self.observer.on_next(new_window)
             }
-            Ordering::Greater => unreachable!(),
+            Ordering::Greater => {
+                unreachable!("the count is reset as soon as a window is full")
+            }
         }
     }
 

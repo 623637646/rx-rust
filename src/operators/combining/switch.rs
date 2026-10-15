@@ -1,20 +1,20 @@
 //! The [`Switch`] operator, behind
 //! [`ObservableExt::switch`](crate::observable::ObservableExt::switch).
 
-use crate::delegate_disposal;
-use crate::disposable::Disposable;
-use crate::operators::others::with_error_type::WithErrorType;
-use crate::thread_mode::ThreadMode;
-use crate::utils::id_generator::{Id, IdGenerator};
-use crate::utils::reservation_slot::ReservationSlot;
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    operators::creating::from_iter::FromIter,
-    utils::MarkerType,
+    operators::{creating::from_iter::FromIter, others::with_error_type::WithErrorType},
+    thread_mode::ThreadMode,
+    utils::{
+        MarkerType,
+        id_generator::{Id, IdGenerator},
+        reservation_slot::ReservationSlot,
+        serialized_delivery::UpdateOutcome,
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 use std::marker::PhantomData;

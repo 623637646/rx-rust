@@ -6,18 +6,19 @@
 //! one twice.
 
 use super::Subject;
-use crate::delegate_disposal;
-use crate::disposable::DisposableExt;
-use crate::disposable::dispose_on_drop::DisposeOnDrop;
-use crate::disposable::option_disposal::OptionDisposal;
-use crate::observer::EventBatch;
-use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
-use crate::thread_mode::{Local, Shared};
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::serialized_multicast::{Admission, MulticastDisposal, SerializedMulticast};
 use crate::{
+    delegate_disposal,
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal},
     observable::{Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
+    observer::{
+        EventBatch, Flow, Observer, Termination,
+        boxed_observer::{IntoBoxedObserver, ObserverMode},
+    },
+    thread_mode::{Local, Shared},
+    utils::{
+        serialized_delivery::UpdateOutcome,
+        serialized_multicast::{Admission, MulticastDisposal, SerializedMulticast},
+    },
 };
 use educe::Educe;
 use std::collections::VecDeque;
@@ -37,7 +38,7 @@ use std::collections::VecDeque;
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let subject = ReplaySubject::<i32, std::convert::Infallible, rx_rust::thread_mode::Local>::local(Some(2));
+/// let subject = ReplaySubject::<i32, std::convert::Infallible, _>::local(Some(2));
 /// let mut sender = subject.clone();
 /// let _ = sender.on_next(1);
 /// let _ = sender.on_next(2);
@@ -56,6 +57,17 @@ use std::collections::VecDeque;
 pub struct ReplaySubject<'or, T, E, M: ObserverMode>(
     #[educe(Debug(ignore))] SerializedMulticast<'or, T, E, M, Buffer<T>>,
 );
+
+/// The [`ReplaySubject`] a source `OE` is multicast through: its items, its errors and its thread mode.
+///
+/// This is the subject [`ObservableExt::replay`](crate::observable::ObservableExt::replay) and
+/// [`ObservableExt::share_replay`](crate::observable::ObservableExt::share_replay) build.
+pub type ReplaySubjectOf<'or, OE> = ReplaySubject<
+    'or,
+    <OE as ObservableTypes>::Item,
+    <OE as ObservableTypes>::Error,
+    <OE as ObservableTypes>::Mode,
+>;
 
 /// The replayed values, and how many of them are kept.
 #[derive(Educe)]
@@ -196,10 +208,7 @@ where
     T: Clone,
     E: Clone,
 {
-    fn termination(&self) -> Option<Termination<E>>
-    where
-        E: Clone,
-    {
+    fn termination(&self) -> Option<Termination<E>> {
         self.0.termination()
     }
 }

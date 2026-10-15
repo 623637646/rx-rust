@@ -1,12 +1,11 @@
 //! The [`IgnoreElements`] operator, behind
 //! [`ObservableExt::ignore_elements`](crate::observable::ObservableExt::ignore_elements).
 
-use crate::operators::filtering::filter::FilterObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
-    operators::filtering::filter::Filter,
+    operators::filtering::filter::{Filter, FilterObserver},
 };
 use educe::Educe;
 

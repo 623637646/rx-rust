@@ -1,5 +1,8 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+// A `pub` item in a `pub(crate)` module is unreachable from outside, so it is a leftover; CI denies
+// warnings, which makes this one an error there.
+#![warn(unreachable_pub)]
 // The README is the crate-level documentation, and its examples are doctests. They use the Tokio
 // scheduler, so both only exist under that feature; docs.rs builds with every feature (see
 // `Cargo.toml`).

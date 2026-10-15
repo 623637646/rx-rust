@@ -1,10 +1,10 @@
 //! The [`FromResult`] source.
 
-use crate::thread_mode::Local;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
+    thread_mode::Local,
 };
 use educe::Educe;
 

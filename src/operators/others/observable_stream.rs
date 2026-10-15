@@ -2,12 +2,12 @@
 //! [`ObservableExt::into_stream`](crate::observable::ObservableExt::into_stream),
 //! [`ObservableExt::into_stream_with_buffer`](crate::observable::ObservableExt::into_stream_with_buffer).
 
-use crate::thread_mode::Shared;
 use crate::{
     observable::{Observable, ObservableTypes},
     operators::others::observable_try_stream::{
         ObservableTryStream, ObservableTryStreamObserver, StreamBuffer, Unbounded,
     },
+    thread_mode::Shared,
 };
 use educe::Educe;
 use futures::Stream;

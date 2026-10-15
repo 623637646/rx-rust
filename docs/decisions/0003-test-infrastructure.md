@@ -108,7 +108,7 @@ these are E0277 anyway.
   and a comment above it says it must follow the trait.
 - **"Not `Send`" is also asserted in `tests/local_mode.rs`**, as constant items checked when the
   file compiles: `assert_not_send!` for what the `Local` mode picks (the mode, its pointer, its
-  boxed observer, `Emitter<_, Local>`, a local subject, the single-threaded schedulers) and
+  boxed observer, `Emitter<Local, _>`, a local subject, the single-threaded schedulers) and
   `assert_send!` for each `Shared` twin. `assert_not_send!` is the ambiguity trick of the
   `static_assertions` crate, written out in a few lines rather than added as a dependency. It
   cannot pass for a wrong reason: a typo fails the build.
@@ -136,7 +136,7 @@ be the costliest part of a `trybuild` target and the least useful.
 
 Reconsider when a guarantee with no possible twin is added, or when the wording of an error becomes
 part of the design (a `#[diagnostic::on_unimplemented]` message, or `Emitter`'s promise that the
-error names `Emitter<_, Local>`): only a snapshot pins that.
+error names `Emitter<Local, _>`): only a snapshot pins that.
 
 ## A virtual-time scheduler
 

@@ -1,15 +1,15 @@
 //! The [`Catch`] operator, behind
 //! [`ObservableExt::catch`](crate::observable::ObservableExt::catch).
 
-use crate::delegate_disposal;
-use crate::disposable::dispose_on_drop::DisposeOnDrop;
-use crate::disposable::{
-    Disposable, chain_disposal::ChainDisposal, replaceable_disposal::ReplaceableDisposal,
-};
-use crate::thread_mode::ThreadMode;
 use crate::{
+    delegate_disposal,
+    disposable::{
+        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+        replaceable_disposal::ReplaceableDisposal,
+    },
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
     utils::MarkerType,
 };
 use educe::Educe;

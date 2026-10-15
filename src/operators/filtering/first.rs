@@ -1,12 +1,11 @@
 //! The [`First`] operator, behind
 //! [`ObservableExt::first`](crate::observable::ObservableExt::first).
 
-use crate::operators::filtering::element_at::ElementAtObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
-    operators::filtering::element_at::ElementAt,
+    operators::filtering::element_at::{ElementAt, ElementAtObserver},
     utils::subscribe_with_auto_dispose_on_termination,
 };
 use educe::Educe;

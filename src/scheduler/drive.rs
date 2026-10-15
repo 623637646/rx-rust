@@ -46,6 +46,7 @@ pub async fn drive<TC, P, C, SF>(
             .filter(|delay| !delay.is_zero())
     };
     loop {
+        // The `poll_fn` is only there for the `Context` the step takes; it never waits.
         let next = poll_fn(|cx| Poll::Ready(stepper.step(pinned.as_mut(), cx, clock.now()))).await;
         match next {
             Next::Finished => break,

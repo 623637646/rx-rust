@@ -1,16 +1,17 @@
 //! The [`SequenceEqual`] operator, behind
 //! [`ObservableExt::sequence_equal`](crate::observable::ObservableExt::sequence_equal).
 
-use crate::delegate_disposal;
-use crate::disposable::chain_disposal::ChainDisposal;
-use crate::thread_mode::ThreadMode;
-use crate::utils::MarkerType;
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
+    utils::{
+        MarkerType,
+        serialized_delivery::UpdateOutcome,
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 use std::collections::VecDeque;

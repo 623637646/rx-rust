@@ -2,11 +2,11 @@
 //! [`ObservableExt::debug`](crate::observable::ObservableExt::debug),
 //! [`ObservableExt::debug_to_stdout`](crate::observable::ObservableExt::debug_to_stdout).
 
-use crate::utils::MarkerType;
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::{fmt::Display, marker::PhantomData};
@@ -75,7 +75,7 @@ impl<OE, C, F> Debug<OE, C, F> {
 
 /// The callback type of [`Debug::with_stdout`](struct@Debug#method.with_stdout), which
 /// prints each event to stdout.
-pub(crate) type DebugPrintCallback<C, T, E> = fn(C, DebugEvent<'_, T, E>);
+pub type DebugPrintCallback<C, T, E> = fn(C, DebugEvent<'_, T, E>);
 
 impl<T, E, OE, C> Debug<OE, C, DebugPrintCallback<C, T, E>> {
     /// Creates a [`struct@Debug`] over `source` that prints every event to stdout, prefixed by

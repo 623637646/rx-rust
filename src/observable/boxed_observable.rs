@@ -18,7 +18,6 @@
 //! box and moved to another thread before it is subscribed, and erasing never changes the mode.
 
 use super::{Observable, ObservableTypes, Observer};
-use crate::utils::MarkerType;
 use crate::{
     disposable::{
         boxed_disposal::{BoxedDisposal, SendBoxedDisposal},
@@ -26,6 +25,7 @@ use crate::{
     },
     observer::boxed_observer::{BoxedObserver, SendBoxedObserver},
     thread_mode::ThreadMode,
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::{marker::PhantomData, rc::Rc, sync::Arc};
@@ -98,7 +98,9 @@ macro_rules! boxed_observable {
             }
         }
 
-        impl<'sub, T, E, M: ThreadMode, OR> ObservableTypes for $observable_for<'sub, '_, T, E, M, OR> {
+        impl<'sub, T, E, M: ThreadMode, OR> ObservableTypes
+            for $observable_for<'sub, '_, T, E, M, OR>
+        {
             type Item = T;
             type Error = E;
             type Mode = M;
@@ -151,7 +153,6 @@ macro_rules! boxed_observable {
                 self.0.subscribe($observer::new(observer))
             }
         }
-
     };
 }
 

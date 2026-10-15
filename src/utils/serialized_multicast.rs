@@ -47,13 +47,18 @@
 //! rejects every event, reports no termination, and drops a new observer without notifying it —
 //! there is no termination left to give it.
 
-use crate::disposable::Disposable;
-use crate::observer::EventBatch;
-use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
-use crate::observer::{Flow, Observer, Termination};
-use crate::thread_mode::mutable::MutableBoolHelper;
-use crate::utils::id_generator::{Id, IdGenerator};
-use crate::utils::serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome};
+use crate::{
+    disposable::Disposable,
+    observer::{
+        EventBatch, Flow, Observer, Termination,
+        boxed_observer::{IntoBoxedObserver, ObserverMode},
+    },
+    thread_mode::mutable::MutableBoolHelper,
+    utils::{
+        id_generator::{Id, IdGenerator},
+        serialized_delivery::{DeliveryStopped, SerializedDelivery, UpdateOutcome},
+    },
+};
 use educe::Educe;
 
 /// A shared, serialized delivery of events to many observers, guarding the host's state with it.
@@ -461,10 +466,14 @@ where
 #[cfg(test)]
 mod tests {
     use super::SerializedMulticast;
-    use crate::disposable::Disposable;
-    use crate::observer::callback_observer::CallbackObserver;
-    use crate::observer::{EventBatch, Flow, Termination};
-    use crate::thread_mode::Local;
+    use crate::{
+        disposable::Disposable,
+        observer::{EventBatch, Flow, Termination, callback_observer::CallbackObserver},
+        thread_mode::{
+            Local,
+            mutable::{MutableExt, MutableHelper},
+        },
+    };
     use std::sync::{Arc, Mutex};
 
     /// Two observers share one delivery in subscription order, a disposed one stops receiving, and
@@ -478,7 +487,7 @@ mod tests {
         let first = multicast
             .clone()
             .subscribe(CallbackObserver::new(
-                move |value| seen_by_first.lock().unwrap().push(("first", value)),
+                move |value| seen_by_first.with_mut(|seen| seen.push(("first", value))),
                 |_| {},
             ))
             .expect("not terminated yet");
@@ -486,7 +495,7 @@ mod tests {
         let _second = multicast
             .clone()
             .subscribe(CallbackObserver::new(
-                move |value| seen_by_second.lock().unwrap().push(("second", value)),
+                move |value| seen_by_second.with_mut(|seen| seen.push(("second", value))),
                 |_| {},
             ))
             .expect("not terminated yet");
@@ -499,7 +508,7 @@ mod tests {
             Flow::Stop
         );
         assert_eq!(
-            *seen.lock().unwrap(),
+            seen.clone_value(),
             [("first", 1), ("second", 1), ("second", 2)]
         );
     }

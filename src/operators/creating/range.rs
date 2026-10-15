@@ -1,11 +1,11 @@
 //! The [`Range`] source.
 
-use crate::operators::creating::from_iter::FromIter;
-use crate::thread_mode::Local;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
+    operators::creating::from_iter::FromIter,
+    thread_mode::Local,
 };
 use educe::Educe;
 use std::convert::Infallible;

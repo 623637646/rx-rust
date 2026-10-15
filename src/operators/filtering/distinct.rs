@@ -67,7 +67,7 @@ impl<T, OE> Distinct<OE, fn(&T) -> T> {
     {
         Self {
             source,
-            key_selector: |x| x.clone(),
+            key_selector: |value| value.clone(),
         }
     }
 }

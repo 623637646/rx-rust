@@ -62,7 +62,6 @@ where
     OE: Observable<OR, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let observable = self.0();
-        observable.subscribe(observer)
+        self.0().subscribe(observer)
     }
 }

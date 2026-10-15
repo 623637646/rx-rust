@@ -3,20 +3,17 @@
 //! [`ObservableExt::share_last`](crate::observable::ObservableExt::share_last),
 //! [`ObservableExt::share_replay`](crate::observable::ObservableExt::share_replay).
 
-use crate::delegate_disposal;
-use crate::disposable::{Disposable, chain_disposal::ChainDisposal};
-use crate::observer::Observer;
-use crate::operators::connectable::connectable_controller::{
-    ConnectableController, Connected, Disconnected,
-};
-use crate::subject::Subject;
-use crate::subject::SubjectObservable;
-use crate::thread_mode::ThreadMode;
-use crate::thread_mode::mutable::MutableHelper;
-use crate::utils::on_panic::OnPanic;
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
+    observer::Observer,
+    operators::connectable::connectable_controller::{
+        ConnectableController, Connected, Disconnected,
+    },
+    subject::{Subject, SubjectObservable},
+    thread_mode::{ThreadMode, mutable::MutableHelper},
+    utils::on_panic::OnPanic,
 };
 use educe::Educe;
 use std::num::NonZeroUsize;
@@ -64,7 +61,7 @@ where
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
+/// let subject = PublishSubject::<i32, Infallible, _>::local();
 /// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), subject);
 /// let observable = controller.ref_count();
 /// let values_observer = Arc::clone(&values);
@@ -72,19 +69,13 @@ where
 ///
 /// let subscription = observable.clone().subscribe_with_callback(
 ///     move |value| values_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer
-///         .lock()
-///         .unwrap()
-///         .push(termination),
+///     move |termination| terminations_observer.lock().unwrap().push(termination),
 /// );
 ///
 /// drop(subscription);
 ///
 /// assert_eq!(&*values.lock().unwrap(), &[1, 2]);
-/// assert_eq!(
-///     &*terminations.lock().unwrap(),
-///     &[Termination::Completed]
-/// );
+/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone(bound(S: Clone)))]
@@ -254,7 +245,9 @@ where
 {
     fn dispose(self) {
         let controller = self.state.with_mut(|current| match &mut *current {
-            State::Disconnected { .. } => unreachable!(),
+            State::Disconnected { .. } => {
+                unreachable!("a subscription of a disconnected ref count")
+            }
             State::ConnectingOrDisconnecting { subscribers } => {
                 *subscribers = subscribers
                     .checked_sub(1)
@@ -301,7 +294,9 @@ fn handle_connecting_or_disconnecting<T, E, OE, S>(
             Purpose::Connect(controller) => {
                 let controller = controller.connect();
                 state.with_mut(|current| match &mut *current {
-                    State::Disconnected { .. } => unreachable!(),
+                    State::Disconnected { .. } => {
+                        unreachable!("the controller of the connecting state is held here")
+                    }
                     State::ConnectingOrDisconnecting { subscribers } => {
                         if *subscribers == 0 {
                             // Every subscriber left while connecting: disconnect again.
@@ -314,13 +309,17 @@ fn handle_connecting_or_disconnecting<T, E, OE, S>(
                             None
                         }
                     }
-                    State::Connected { .. } => unreachable!(),
+                    State::Connected { .. } => {
+                        unreachable!("the controller of the connected state is held here")
+                    }
                 })
             }
             Purpose::Disconnect(controller) => {
                 let controller = controller.disconnect();
                 state.with_mut(|current| match &mut *current {
-                    State::Disconnected { .. } => unreachable!(),
+                    State::Disconnected { .. } => {
+                        unreachable!("the controller of the disconnecting state is held here")
+                    }
                     State::ConnectingOrDisconnecting { subscribers } => {
                         if *subscribers == 0 {
                             *current = State::Disconnected { controller };
@@ -330,7 +329,9 @@ fn handle_connecting_or_disconnecting<T, E, OE, S>(
                             Some(Purpose::Connect(controller))
                         }
                     }
-                    State::Connected { .. } => unreachable!(),
+                    State::Connected { .. } => {
+                        unreachable!("the controller of the connected state is held here")
+                    }
                 })
             }
         };

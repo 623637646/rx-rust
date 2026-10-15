@@ -164,6 +164,7 @@ async fn sleep(duration: Duration) {
 
 /// The handle of a task spawned by a [`ThreadPoolScheduler`] or a [`LocalPoolScheduler`];
 /// disposing it cancels the task.
+#[derive(Debug)]
 pub struct FuturesDisposal(RemoteHandle<()>);
 
 impl Disposable for FuturesDisposal {

@@ -1,19 +1,19 @@
 //! The [`MergeAll`] operator, behind
 //! [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all).
 
-use crate::delegate_disposal;
-use crate::disposable::Disposable;
-use crate::operators::others::with_error_type::WithErrorType;
-use crate::thread_mode::ThreadMode;
-use crate::utils::id_generator::{Id, IdGenerator};
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    operators::creating::from_iter::FromIter,
-    utils::MarkerType,
+    operators::{creating::from_iter::FromIter, others::with_error_type::WithErrorType},
+    thread_mode::ThreadMode,
+    utils::{
+        MarkerType,
+        id_generator::{Id, IdGenerator},
+        serialized_delivery::UpdateOutcome,
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 use std::collections::HashMap;
@@ -135,7 +135,7 @@ where
         let model = Model {
             subscriptions: HashMap::new(),
             keys: IdGenerator::default(),
-            is_source_terminated: false,
+            is_source_completed: false,
         };
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(MergeAllObserver(context))
@@ -149,7 +149,7 @@ struct Model<D: Disposable> {
     /// inner observer's subscription.
     subscriptions: HashMap<Id, Option<DisposeOnDrop<D>>>,
     keys: IdGenerator,
-    is_source_terminated: bool,
+    is_source_completed: bool,
 }
 
 impl<D: Disposable> Model<D> {
@@ -210,7 +210,7 @@ where
                     if model.subscriptions.is_empty() {
                         UpdateOutcome::empty().with_termination_event(completion)
                     } else {
-                        model.is_source_terminated = true;
+                        model.is_source_completed = true;
                         UpdateOutcome::empty().without_events()
                     }
                 });
@@ -243,7 +243,7 @@ where
             completion @ Termination::Completed => {
                 let _ = self.context.update(|model| {
                     let subscription = model.subscriptions.remove(&self.key);
-                    if model.is_source_terminated && model.subscriptions.is_empty() {
+                    if model.is_source_completed && model.subscriptions.is_empty() {
                         UpdateOutcome::empty()
                             .with_termination_event(completion)
                             .with_drop_outside(subscription)

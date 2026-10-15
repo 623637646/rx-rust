@@ -1,17 +1,17 @@
 //! The [`Window`] operator, behind
 //! [`ObservableExt::window`](crate::observable::ObservableExt::window).
 
-use crate::delegate_disposal;
-use crate::disposable::chain_disposal::ChainDisposal;
-use crate::observer::boxed_observer::ObserverMode;
-use crate::thread_mode::ThreadMode;
-use crate::utils::MarkerType;
 use crate::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
-    observer::{EventBatch, Flow, Observer, Termination},
+    observer::{EventBatch, Flow, Observer, Termination, boxed_observer::ObserverMode},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
-    utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    thread_mode::ThreadMode,
+    utils::{
+        MarkerType,
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -51,8 +51,8 @@ use std::marker::PhantomData;
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 /// let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let mut source: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
-/// let mut boundary: PublishSubject<'_, (), Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
+/// let mut source = PublishSubject::<i32, Infallible, _>::local();
+/// let mut boundary = PublishSubject::<(), Infallible, _>::local();
 /// let windows_observer = Arc::clone(&windows);
 /// let terminations_observer = Arc::clone(&terminations);
 /// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
@@ -73,10 +73,7 @@ use std::marker::PhantomData;
 ///         );
 ///         inner_subscriptions_observer.lock().unwrap().push(sub);
 ///     },
-///     move |termination| terminations_observer
-///         .lock()
-///         .unwrap()
-///         .push(termination),
+///     move |termination| terminations_observer.lock().unwrap().push(termination),
 /// );
 ///
 /// source.on_next(1);
@@ -87,14 +84,8 @@ use std::marker::PhantomData;
 /// drop(subscription);
 /// inner_subscriptions.lock().unwrap().drain(..).for_each(drop);
 ///
-/// assert_eq!(
-///     &*windows.lock().unwrap(),
-///     &[vec![1, 2], vec![3]]
-/// );
-/// assert_eq!(
-///     &*terminations.lock().unwrap(),
-///     &[Termination::Completed]
-/// );
+/// assert_eq!(&*windows.lock().unwrap(), &[vec![1, 2], vec![3]]);
+/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

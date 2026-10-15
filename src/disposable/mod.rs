@@ -7,11 +7,10 @@
 //!
 //! - `()` disposes nothing;
 //! - [`CallbackDisposal`](callback_disposal::CallbackDisposal) runs a closure;
-//! - [`ChainDisposal`] disposes two in order, and
-//!   [`EitherDisposal`] one of two;
+//! - [`ChainDisposal`] disposes two in order, [`EitherDisposal`] one of two;
 //! - [`OptionDisposal`] disposes a value that may be absent;
-//! - [`ReplaceableDisposal`](replaceable_disposal::ReplaceableDisposal) is a cloneable slot for a disposal that
-//!   is built, or replaced, later;
+//! - [`ReplaceableDisposal`](replaceable_disposal::ReplaceableDisposal) is a cloneable slot for a
+//!   disposal that is built, or replaced, later;
 //! - [`BoxedDisposal`] erases the type.
 //!
 //! [`DisposableExt`] wraps any disposal into these, and [`delegate_disposal!`] names a deeply
@@ -19,7 +18,7 @@
 //!
 //! # Examples
 //! ```rust
-//! use rx_rust::disposable::{callback_disposal::CallbackDisposal, Disposable, DisposableExt};
+//! use rx_rust::disposable::{Disposable, DisposableExt, callback_disposal::CallbackDisposal};
 //! use std::cell::Cell;
 //!
 //! let disposed = Cell::new(0);

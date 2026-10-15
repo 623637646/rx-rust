@@ -75,7 +75,8 @@
 //!         self.context.update_flow(|total| {
 //!             *total += value;
 //!             if *total > self.limit {
-//!                 UpdateOutcome::empty().with_next_and_termination_events(*total, Termination::Completed)
+//!                 UpdateOutcome::empty()
+//!                     .with_next_and_termination_events(*total, Termination::Completed)
 //!             } else {
 //!                 UpdateOutcome::empty().with_next_event(*total)
 //!             }
@@ -87,18 +88,19 @@
 //! }
 //!
 //! let mut seen = Vec::new();
-//! TotalUntil { source: Range::new(1..), limit: 5 }
-//!     .subscribe_with_callback(|total| seen.push(total), |t| assert_eq!(t, Termination::Completed));
+//! TotalUntil { source: Range::new(1..), limit: 5 }.subscribe_with_callback(
+//!     |total| seen.push(total),
+//!     |t| assert_eq!(t, Termination::Completed),
+//! );
 //! assert_eq!(seen, [1, 3, 6]);
 //! ```
 
-use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use crate::{
     disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
     observer::{EventBatch, Flow, Observer, Termination},
     thread_mode::ThreadMode,
     utils::{
-        serialized_delivery::{DeliveryStop, SerializedDelivery},
+        serialized_delivery::{DeliveryStop, DeliveryStopped, SerializedDelivery, UpdateOutcome},
         subscribe_with_auto_dispose_on_termination::is_auto_dispose_on_termination_observer,
     },
 };
@@ -179,7 +181,8 @@ type ContextDelivery<M, T, E, OR, MD, D> = SerializedDelivery<M, T, E, OR, Conte
 
 /// The shared state of an operator: its model and its downstream observer, behind one lock.
 ///
-/// Handed to the builder of [`subscribe_with_context`], cloned into each of the operator's observers, and driven through [`update`](Self::update),
+/// Handed to the builder of [`subscribe_with_context`], cloned into each of the operator's
+/// observers, and driven through [`update`](Self::update),
 /// [`update_flow`](Self::update_flow), [`send_next`](Self::send_next) and
 /// [`send_termination`](Self::send_termination). `M` is the thread mode, `MD` the model, and `D`
 /// the disposal of the source subscription the context owns. See the

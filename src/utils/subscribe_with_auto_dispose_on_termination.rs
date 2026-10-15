@@ -34,9 +34,8 @@ delegate_disposal!(
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     disposable::dispose_on_drop::DisposeOnDrop,
-///     observable::{Observable, ObservableExt},
-///     observer::{Flow, Observer, Termination},
+///     observable::Observable,
+///     observer::{Flow, Observer, Termination, callback_observer::CallbackObserver},
 ///     operators::creating::range::Range,
 ///     thread_mode::Local,
 ///     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
@@ -62,13 +61,14 @@ delegate_disposal!(
 /// }
 ///
 /// let mut seen = Vec::new();
-/// let observer = rx_rust::observer::callback_observer::CallbackObserver::new(
+/// let observer = CallbackObserver::new(
 ///     |value| seen.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
-/// let subscription = subscribe_with_auto_dispose_on_termination::<Local, _, _, _>(observer, |observer| {
-///     Range::new(1..).subscribe(FirstObserver(Some(observer)))
-/// });
+/// let subscription = subscribe_with_auto_dispose_on_termination::<Local, _, _, _>(
+///     observer,
+///     |observer| Range::new(1..).subscribe(FirstObserver(Some(observer))),
+/// );
 /// drop(subscription);
 /// assert_eq!(seen, [1]);
 /// ```
@@ -110,7 +110,7 @@ pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
 
 /// The [`AutoDisposeOnTerminationObserver`] of an operator built on this helper, subscribing the
 /// source `OE` and delivering to `OR`: what the operator's `Observable` bound names.
-pub(crate) type ObserverOf<OE, OR> = AutoDisposeOnTerminationObserver<
+pub type ObserverOf<OE, OR> = AutoDisposeOnTerminationObserver<
     <OE as ObservableTypes>::Mode,
     OR,
     <OE as ObservableTypes>::Disposal,
@@ -118,7 +118,7 @@ pub(crate) type ObserverOf<OE, OR> = AutoDisposeOnTerminationObserver<
 
 /// The [`Disposal`] of such an operator over the source `OE`: what its `ObservableTypes::Disposal`
 /// is.
-pub(crate) type DisposalOf<OE> =
+pub type DisposalOf<OE> =
     Disposal<<OE as ObservableTypes>::Mode, <OE as ObservableTypes>::Disposal>;
 
 /// The observer [`subscribe_with_auto_dispose_on_termination`] hands to its builder: the

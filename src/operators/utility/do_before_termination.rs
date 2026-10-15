@@ -39,10 +39,7 @@ use educe::Educe;
 ///     |termination| terminations.push(termination),
 /// );
 ///
-/// assert_eq!(
-///     &*callback_terminations.lock().unwrap(),
-///     &[Termination::Completed]
-/// );
+/// assert_eq!(&*callback_terminations.lock().unwrap(), &[Termination::Completed]);
 /// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]

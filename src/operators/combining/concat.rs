@@ -1,15 +1,15 @@
 //! The [`Concat`] operator, behind
 //! [`ObservableExt::concat_with`](crate::observable::ObservableExt::concat_with).
 
-use crate::delegate_disposal;
-use crate::disposable::{
-    Disposable, chain_disposal::ChainDisposal, replaceable_disposal::ReplaceableDisposal,
-};
-use crate::thread_mode::ThreadMode;
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{
+        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+        replaceable_disposal::ReplaceableDisposal,
+    },
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
 };
 use educe::Educe;
 
@@ -122,8 +122,8 @@ where
     fn on_termination(self, termination: Termination<E>) {
         match termination {
             Termination::Completed => {
-                // `replace_with` does not run the builder once the subscription was disposed, so the
-                // second source is never subscribed after downstream unsubscribed, and a
+                // `replace_with` does not run the builder once the subscription was disposed,
+                // so the second source is never subscribed after downstream unsubscribed, and a
                 // subscription built while downstream unsubscribes is disposed right away.
                 self.sub_2
                     .replace_with(|| self.source_2.subscribe(self.observer));

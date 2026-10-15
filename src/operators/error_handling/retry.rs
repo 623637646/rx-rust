@@ -1,16 +1,16 @@
 //! The [`Retry`] operator, behind
 //! [`ObservableExt::retry`](crate::observable::ObservableExt::retry).
 
-use crate::delegate_disposal;
-use crate::disposable::dispose_on_drop::DisposeOnDrop;
-use crate::disposable::{
-    Disposable, chain_disposal::ChainDisposal, replaceable_disposal::ReplaceableDisposal,
-};
-use crate::thread_mode::ThreadMode;
-use crate::utils::resubscribe::Resubscribe;
 use crate::{
+    delegate_disposal,
+    disposable::{
+        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+        replaceable_disposal::ReplaceableDisposal,
+    },
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
+    utils::resubscribe::Resubscribe,
 };
 use educe::Educe;
 
@@ -42,7 +42,9 @@ pub enum RetryAction<E, OE1> {
 /// let mut values = Vec::new();
 /// let mut terminations = Vec::new();
 ///
-/// let observable = Retry::new(Throw::new("boom").with_item_type(), |_| RetryAction::Retry(Just::new(42).with_error_type()));
+/// let observable = Retry::new(Throw::new("boom").with_item_type(), |_| {
+///     RetryAction::Retry(Just::new(42).with_error_type())
+/// });
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| terminations.push(termination),

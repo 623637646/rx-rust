@@ -1,13 +1,15 @@
 //! The [`HookOnSubscription`] operator, behind
 //! [`ObservableExt::hook_on_subscription`](crate::observable::ObservableExt::hook_on_subscription).
 
-use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
-use crate::observer::emitter::Emitter;
-use crate::utils::MarkerType;
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{BoxedObserverOf, Observable, ObservableTypes},
-    observer::Observer,
+    observer::{
+        Observer,
+        boxed_observer::{IntoBoxedObserver, ObserverMode},
+        emitter::Emitter,
+    },
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;
@@ -76,7 +78,7 @@ impl<OE, F, D> HookOnSubscription<OE, F, D> {
         OE: ObservableTypes,
         OR: Observer<OE::Item, OE::Error>,
         D: Disposable,
-        F: FnOnce(OE, Emitter<OR, OE::Mode>) -> DisposeOnDrop<D>,
+        F: FnOnce(OE, Emitter<OE::Mode, OR>) -> DisposeOnDrop<D>,
     {
         Self::with_callback(source, callback)
     }
@@ -123,7 +125,7 @@ where
     OE: ObservableTypes,
     OR: Observer<<OE as ObservableTypes>::Item, <OE as ObservableTypes>::Error>,
     D: Disposable,
-    F: FnOnce(OE, Emitter<OR, <OE as ObservableTypes>::Mode>) -> DisposeOnDrop<D>,
+    F: FnOnce(OE, Emitter<<OE as ObservableTypes>::Mode, OR>) -> DisposeOnDrop<D>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         (self.callback)(self.source, Emitter::new(observer))

@@ -1,11 +1,10 @@
 //! The [`Last`] operator, behind [`ObservableExt::last`](crate::observable::ObservableExt::last).
 
-use crate::operators::filtering::take_last::TakeLastObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
-    operators::filtering::take_last::TakeLast,
+    operators::filtering::take_last::{TakeLast, TakeLastObserver},
 };
 use educe::Educe;
 

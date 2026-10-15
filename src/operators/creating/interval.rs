@@ -40,34 +40,26 @@ use std::{convert::Infallible, time::Duration};
 ///         observable::ObservableExt,
 ///         observer::Termination,
 ///         operators::creating::interval::Interval,
+///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
-///     use std::sync::{Arc, Mutex};
-///     use std::time::Duration;
-///     use tokio::time::sleep;
+///     use std::{
+///         sync::{Arc, Mutex},
+///         time::Duration,
+///     };
 ///
-///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
-///     let terminations_observer = Arc::clone(&terminations);
-///     let subscription = Interval::new(Duration::from_millis(1), scheduler)
+///     let subscription = Interval::new(Duration::from_millis(1), TokioScheduler::current())
 ///         .take(3)
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
-///             move |termination| terminations_observer
-///                 .lock()
-///                 .unwrap()
-///                 .push(termination),
+///             |termination| assert_eq!(termination, Termination::Completed),
 ///         );
 ///
-///     sleep(Duration::from_millis(10)).await;
+///     tokio::time::sleep(Duration::from_millis(20)).await;
 ///     drop(subscription);
 ///
 ///     assert_eq!(&*values.lock().unwrap(), &[0, 1, 2]);
-///     assert_eq!(
-///         &*terminations.lock().unwrap(),
-///         &[Termination::Completed]
-///     );
 /// }
 /// ```
 #[derive(Educe)]

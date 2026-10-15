@@ -1,11 +1,10 @@
 //! The [`GroupBy`] operator, behind
 //! [`ObservableExt::group_by`](crate::observable::ObservableExt::group_by).
 
-use crate::observer::boxed_observer::ObserverMode;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
+    observer::{Flow, Observer, Termination, boxed_observer::ObserverMode},
     subject::unicast_subject::{self, BoxedUnicastObservable, BoxedUnicastSender},
     utils::MarkerType,
 };
@@ -77,10 +76,7 @@ use std::{
 ///             );
 ///             inner_subscriptions_observer.lock().unwrap().push(sub);
 ///         },
-///         move |termination| terminations_observer
-///             .lock()
-///             .unwrap()
-///             .push(termination),
+///         move |termination| terminations_observer.lock().unwrap().push(termination),
 ///     );
 ///
 /// drop(subscription);
@@ -94,10 +90,7 @@ use std::{
 /// grouped.iter_mut().for_each(|values| values.sort());
 /// grouped.sort();
 /// assert_eq!(grouped, vec![vec![1, 3], vec![2, 4]]);
-/// assert_eq!(
-///     &*terminations.lock().unwrap(),
-///     &[Termination::Completed]
-/// );
+/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

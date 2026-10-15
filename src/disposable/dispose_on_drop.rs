@@ -58,8 +58,8 @@ impl<D: Disposable> DisposeOnDrop<D> {
 
     /// Converts the inner disposal with `f`, wrapping the result to dispose it on drop.
     ///
-    /// Unlike [`map_inner_into`](Self::map_inner_into) it needs no `From`, which is what erasing the disposal
-    /// into a box takes.
+    /// Unlike [`map_inner_into`](Self::map_inner_into) this needs no `From` impl, which erasing
+    /// the disposal into a box has none of.
     pub fn map_inner<D1: Disposable>(self, f: impl FnOnce(D) -> D1) -> DisposeOnDrop<D1> {
         DisposeOnDrop::new(f(self.into_inner()))
     }

@@ -354,8 +354,8 @@ assert_not_send!(<Local as ObserverMode>::BoxedObserver<'static, i32, ()>);
 assert_send!(<Shared as ObserverMode>::BoxedObserver<'static, i32, ()>);
 
 // What `Create::local` hands its builder: not `Send` even around a `Send` observer.
-assert_not_send!(Emitter<SendBoxedObserver<'static, i32, ()>, Local>);
-assert_send!(Emitter<SendBoxedObserver<'static, i32, ()>, Shared>);
+assert_not_send!(Emitter<Local, SendBoxedObserver<'static, i32, ()>>);
+assert_send!(Emitter<Shared, SendBoxedObserver<'static, i32, ()>>);
 
 assert_not_send!(PublishSubject<'static, i32, (), Local>);
 assert_send!(PublishSubject<'static, i32, (), Shared>);

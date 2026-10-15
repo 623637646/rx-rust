@@ -39,8 +39,8 @@
 //! example below.
 //!
 //! Implementing a scheduler takes [`SchedulerTypes`] and [`Scheduler::run_task`]. On an async
-//! executor, spawn the future [`drive`] returns, given the scheduler's clock; a synchronous loop drives the task itself through
-//! [`Task::split`] and [`Stepper::step`].
+//! executor, spawn the future [`drive`] returns, given the scheduler's clock; a synchronous loop
+//! drives the task itself through [`Task::split`] and [`Stepper::step`].
 //!
 //! # Time
 //!
@@ -68,10 +68,8 @@
 //! # #[cfg(feature = "tokio-scheduler")]
 //! #[tokio::main]
 //! async fn main() {
-//!     use rx_rust::scheduler::{Scheduler, Task};
+//!     use rx_rust::scheduler::{Scheduler, Task, runtime::tokio::TokioScheduler};
 //!     use std::{sync::{Arc, Mutex}, time::Duration};
-//!
-//!     use rx_rust::scheduler::runtime::tokio::TokioScheduler;
 //!
 //!     let scheduler = TokioScheduler::current();
 //!     let ran = Arc::new(Mutex::new(false));
@@ -102,7 +100,7 @@ pub use drive::drive;
 #[cfg(feature = "futures")]
 pub use task::StreamThenContext;
 pub use task::{
-    FutureThenContext, Next, OnceContext, PeriodicContext, Stepper, Task, TaskWaker,
+    FutureThenContext, Next, OnceContext, PeriodicContext, Stepper, Task, TaskHandler, TaskWaker,
     WakeableContext,
 };
 

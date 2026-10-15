@@ -5,18 +5,19 @@
 //! subscriber can neither miss a value emitted while it was subscribing nor observe one twice.
 
 use super::Subject;
-use crate::delegate_disposal;
-use crate::disposable::DisposableExt;
-use crate::disposable::dispose_on_drop::DisposeOnDrop;
-use crate::disposable::option_disposal::OptionDisposal;
-use crate::observer::EventBatch;
-use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
-use crate::thread_mode::{Local, Shared};
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::serialized_multicast::{Admission, MulticastDisposal, SerializedMulticast};
 use crate::{
+    delegate_disposal,
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal},
     observable::{Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
+    observer::{
+        EventBatch, Flow, Observer, Termination,
+        boxed_observer::{IntoBoxedObserver, ObserverMode},
+    },
+    thread_mode::{Local, Shared},
+    utils::{
+        serialized_delivery::UpdateOutcome,
+        serialized_multicast::{Admission, MulticastDisposal, SerializedMulticast},
+    },
 };
 use educe::Educe;
 
@@ -34,7 +35,7 @@ use educe::Educe;
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let mut sender = BehaviorSubject::<i32, std::convert::Infallible, rx_rust::thread_mode::Local>::local(0);
+/// let mut sender = BehaviorSubject::<i32, std::convert::Infallible, _>::local(0);
 /// let _ = sender.on_next(1);
 /// assert_eq!(sender.value(), 1);
 ///
@@ -48,6 +49,19 @@ use educe::Educe;
 pub struct BehaviorSubject<'or, T, E, M: ObserverMode>(
     #[educe(Debug(ignore))] SerializedMulticast<'or, T, E, M, T>,
 );
+
+/// The [`BehaviorSubject`] a source `OE` is multicast through: its items, its errors and its
+/// thread mode.
+///
+/// This is the subject
+/// [`ObservableExt::publish_behavior`](crate::observable::ObservableExt::publish_behavior) and
+/// [`ObservableExt::share_behavior`](crate::observable::ObservableExt::share_behavior) build.
+pub type BehaviorSubjectOf<'or, OE> = BehaviorSubject<
+    'or,
+    <OE as ObservableTypes>::Item,
+    <OE as ObservableTypes>::Error,
+    <OE as ObservableTypes>::Mode,
+>;
 
 impl<T, E, M: ObserverMode> BehaviorSubject<'_, T, E, M> {
     /// Creates a subject in the mode `M`, for code that is generic over the mode, such as an
@@ -167,10 +181,7 @@ where
     T: Clone,
     E: Clone,
 {
-    fn termination(&self) -> Option<Termination<E>>
-    where
-        E: Clone,
-    {
+    fn termination(&self) -> Option<Termination<E>> {
         self.0.termination()
     }
 }

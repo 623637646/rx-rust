@@ -1,10 +1,9 @@
 //! A cloneable slot for a disposal that is built, and maybe replaced, after the slot was handed
 //! out.
 
-use crate::thread_mode::mutable::MutableHelper;
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-    thread_mode::ThreadMode,
+    thread_mode::{ThreadMode, mutable::MutableHelper},
     utils::id_generator::{Id, IdGenerator},
 };
 use educe::Educe;
@@ -38,7 +37,8 @@ struct Inner<D: Disposable> {
 /// subscription — `concat` subscribing to its second source, `catch` to its fallback,
 /// `subscribe_on` from a scheduler task — hands the caller a clone of this slot and fills it when
 /// the time comes. Disposing the slot disposes whatever it holds then and prevents later builders
-/// from running. If a build is already in progress, its result is disposed when the builder returns.
+/// from running. If a build is already in progress, its result is disposed when the builder
+/// returns.
 ///
 /// # Examples
 /// ```rust
@@ -124,10 +124,7 @@ impl<M: ThreadMode, D: Disposable> ReplaceableDisposal<M, D> {
     }
 }
 
-impl<M: ThreadMode, D> Disposable for ReplaceableDisposal<M, D>
-where
-    D: Disposable,
-{
+impl<M: ThreadMode, D: Disposable> Disposable for ReplaceableDisposal<M, D> {
     fn dispose(self) {
         // The state is replaced under the lock and matched after it is released, so the inner
         // disposal is disposed outside the lock.

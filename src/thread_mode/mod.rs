@@ -46,9 +46,9 @@ mod sealed {
 /// The trait is sealed: the two modes are the only ones. Even a mode that only forwards to
 /// [`Local`] cannot be added:
 ///
-// This example has no twin that compiles, so nothing tells that it still fails for the sealing
-// alone: it must implement every item of `ThreadMode`, and follow the trait when an item is added
-// or changed. Otherwise a missing item fails it too, and it would pass with the sealing gone.
+// No twin compiles here, so nothing proves that the sealing is what fails it: keep every item of
+// `ThreadMode` implemented as the trait changes, or a missing one would fail the example too, and
+// it would pass with the sealing gone.
 /// ```compile_fail
 /// use rx_rust::thread_mode::{Local, ThreadMode};
 ///

@@ -6,17 +6,16 @@
 //! for everything else that governs the ordering here.
 
 use super::Subject;
-use crate::delegate_disposal;
-use crate::disposable::DisposableExt;
-use crate::disposable::dispose_on_drop::DisposeOnDrop;
-use crate::disposable::option_disposal::OptionDisposal;
-use crate::observer::EventBatch;
-use crate::observer::boxed_observer::{IntoBoxedObserver, ObserverMode};
-use crate::thread_mode::{Local, Shared};
-use crate::utils::serialized_multicast::{MulticastDisposal, SerializedMulticast};
 use crate::{
+    delegate_disposal,
+    disposable::{DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal},
     observable::{Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
+    observer::{
+        EventBatch, Flow, Observer, Termination,
+        boxed_observer::{IntoBoxedObserver, ObserverMode},
+    },
+    thread_mode::{Local, Shared},
+    utils::serialized_multicast::{MulticastDisposal, SerializedMulticast},
 };
 use educe::Educe;
 
@@ -92,6 +91,17 @@ use educe::Educe;
 pub struct PublishSubject<'or, T, E, M: ObserverMode>(
     #[educe(Debug(ignore))] SerializedMulticast<'or, T, E, M>,
 );
+
+/// The [`PublishSubject`] a source `OE` is multicast through: its items, its errors and its thread mode.
+///
+/// This is the subject [`ObservableExt::publish`](crate::observable::ObservableExt::publish) and
+/// [`ObservableExt::share`](crate::observable::ObservableExt::share) build.
+pub type PublishSubjectOf<'or, OE> = PublishSubject<
+    'or,
+    <OE as ObservableTypes>::Item,
+    <OE as ObservableTypes>::Error,
+    <OE as ObservableTypes>::Mode,
+>;
 
 impl<T, E, M: ObserverMode> PublishSubject<'_, T, E, M> {
     /// Creates a subject in the mode `M`, for code that is generic over the mode, such as an

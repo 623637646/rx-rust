@@ -67,12 +67,14 @@ that emits later must have its subscription kept alive for as long as the events
 ```rust
 #[tokio::main]
 async fn main() {
-    use rx_rust::{observable::ObservableExt, operators::creating::interval::Interval};
+    use rx_rust::{
+        observable::ObservableExt, operators::creating::interval::Interval,
+        scheduler::runtime::tokio::TokioScheduler,
+    };
     use std::time::Duration;
     use tokio::time::sleep;
 
-    let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
-    let subscription = Interval::new(Duration::from_millis(10), scheduler)
+    let subscription = Interval::new(Duration::from_millis(10), TokioScheduler::current())
         .subscribe_with_callback(|tick| println!("tick {tick}"), |_| {});
 
     sleep(Duration::from_millis(35)).await;
@@ -168,12 +170,14 @@ Feature                  | Scheduler value
 #[tokio::main]
 async fn main() {
     use futures::StreamExt;
-    use rx_rust::{observable::ObservableExt, operators::creating::from_iter::FromIter};
+    use rx_rust::{
+        observable::ObservableExt, operators::creating::from_iter::FromIter,
+        scheduler::runtime::tokio::TokioScheduler,
+    };
     use std::time::Duration;
 
-    let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
     let values = FromIter::new(vec![1, 2, 3])
-        .delay(Duration::from_millis(5), scheduler)
+        .delay(Duration::from_millis(5), TokioScheduler::current())
         .into_stream()
         .collect::<Vec<_>>()
         .await;
@@ -243,13 +247,14 @@ async fn main() {
     use rx_rust::{
         observable::ObservableExt,
         operators::creating::{from_future::FromFuture, range::Range},
+        scheduler::runtime::tokio::TokioScheduler,
     };
 
     async fn fetch_name(id: u32) -> String {
         format!("user-{id}")
     }
 
-    let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
+    let scheduler = TokioScheduler::current();
     let names = Range::new(1..=3)
         .concat_map(move |id| FromFuture::new(fetch_name(id), scheduler.clone()))
         .into_stream()
@@ -311,7 +316,7 @@ use rx_rust::{
 };
 use std::convert::Infallible;
 
-let mut subject = PublishSubject::<_, Infallible, rx_rust::thread_mode::Local>::local();
+let mut subject = PublishSubject::<_, Infallible, _>::local();
 let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
 assert_eq!(stream.next().now_or_never(), None); // the first poll subscribes
 
@@ -383,7 +388,7 @@ use rx_rust::{
 
 let mut seen = Vec::new();
 
-let subject = PublishSubject::<i32, std::convert::Infallible, rx_rust::thread_mode::Local>::local();
+let subject = PublishSubject::<i32, std::convert::Infallible, _>::local();
 let mut sender = subject.clone();
 let subscription = subject.subscribe_with_callback(|value| seen.push(value), |_| {});
 
@@ -415,7 +420,7 @@ Conditional and boolean     | `all`, `contains`, `sequence_equal`, `default_if_e
 Mathematical and aggregate  | `count`, `sum`, `average`, `min`, `max`, `reduce`, `collect`, `to_vec`
 Error handling              | `catch`, `map_err`, `retry`
 Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
-Connectable                 | `multicast`, `publish`, `publish_last`, `replay`, `share`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
+Connectable                 | `multicast`, `publish`, `publish_behavior`, `publish_last`, `replay`, `share`, `share_behavior`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
 Conversion                  | `into_future`, `into_try_future`, `into_stream`, `into_stream_with_buffer`, `into_try_stream`, `into_try_stream_with_buffer`, `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
 Debugging                   | `debug`, `debug_to_stdout`, `hook_on_subscription`, `hook_on_next`, `hook_on_termination`
 

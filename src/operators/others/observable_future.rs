@@ -1,10 +1,10 @@
 //! The [`ObservableFuture`] adapter, behind
 //! [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future).
 
-use crate::thread_mode::Shared;
 use crate::{
     observable::{Observable, ObservableTypes},
     operators::others::observable_try_future::{ObservableTryFuture, ObservableTryFutureObserver},
+    thread_mode::Shared,
 };
 use educe::Educe;
 use std::{convert::Infallible, task::Poll};

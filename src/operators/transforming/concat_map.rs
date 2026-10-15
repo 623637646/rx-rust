@@ -2,14 +2,14 @@
 //! [`ObservableExt::concat_map`](crate::observable::ObservableExt::concat_map).
 
 use super::map::Map;
-use crate::operators::combining::concat_all::ConcatAll;
-use crate::operators::combining::concat_all::InnerObserver;
-use crate::operators::combining::concat_all::SourceObserver;
-use crate::operators::transforming::map::MapObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
+    operators::{
+        combining::concat_all::{self, ConcatAll, InnerObserver, SourceObserver},
+        transforming::map::MapObserver,
+    },
     utils::MarkerType,
 };
 use educe::Educe;
@@ -80,13 +80,7 @@ where
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
     /// The disposal of the [`ConcatAll`] this operator is built on.
-    type Disposal = crate::operators::combining::concat_all::Disposal<
-        JoinedModeOf<OE, OE1>,
-        T,
-        E,
-        OE::Disposal,
-        OE1,
-    >;
+    type Disposal = concat_all::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1>;
 }
 
 impl<T0, T, E, OE, OE1, F, OR> Observable<OR> for ConcatMap<T0, OE, OE1, F>

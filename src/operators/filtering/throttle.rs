@@ -1,8 +1,8 @@
 //! The [`Throttle`] operator, behind
 //! [`ObservableExt::throttle`](crate::observable::ObservableExt::throttle).
 
-use crate::disposable::dispose_on_drop::DisposeOnDrop;
 use crate::{
+    disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::Clock,
@@ -33,8 +33,7 @@ use std::time::{Duration, Instant};
 ///
 /// let time = VirtualTime::new();
 /// let mut values = Vec::new();
-/// let mut subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> =
-///     PublishSubject::local();
+/// let mut subject = PublishSubject::<i32, Infallible, _>::local();
 ///
 /// let subscription = Throttle::new(subject.clone(), Duration::from_millis(5), time.clock())
 ///     .subscribe_with_callback(|value| values.push(value), |_| {});

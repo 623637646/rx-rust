@@ -1,10 +1,11 @@
 //! The [`StartWith`] operator, behind
 //! [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with).
 
-use crate::delegate_disposal;
-use crate::disposable::{Disposable, DisposableExt, option_disposal::OptionDisposal};
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{
+        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
+    },
     observable::{Observable, ObservableTypes},
     observer::Observer,
 };

@@ -58,8 +58,10 @@ boxed_observer!(
     ///
     /// # Examples
     /// ```rust
-    /// use rx_rust::observer::{boxed_observer::BoxedObserver, BoxedObserverExt, Flow, Observer, Termination};
-    /// use rx_rust::observer::callback_observer::CallbackObserver;
+    /// use rx_rust::observer::{
+    ///     BoxedObserverExt, Flow, Observer, Termination, boxed_observer::BoxedObserver,
+    ///     callback_observer::CallbackObserver,
+    /// };
     ///
     /// let mut seen = Vec::new();
     /// let mut observer: BoxedObserver<'_, i32, ()> =

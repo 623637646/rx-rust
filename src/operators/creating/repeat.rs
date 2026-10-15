@@ -1,11 +1,11 @@
 //! The [`Repeat`] source.
 
-use crate::operators::creating::from_iter::FromIter;
-use crate::thread_mode::Local;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
+    operators::creating::from_iter::FromIter,
+    thread_mode::Local,
 };
 use educe::Educe;
 use std::convert::Infallible;
@@ -36,16 +36,16 @@ use std::convert::Infallible;
 #[educe(Debug, Clone)]
 pub struct Repeat<T> {
     value: T,
-    n: usize,
+    count: usize,
 }
 
 impl<T> Repeat<T> {
     /// Creates a [`Repeat`].
-    pub fn new(value: T, n: usize) -> Self
+    pub fn new(value: T, count: usize) -> Self
     where
         T: Clone,
     {
-        Self { value, n }
+        Self { value, count }
     }
 }
 
@@ -65,6 +65,6 @@ where
     T: Clone,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        FromIter::new(std::iter::repeat_n(self.value, self.n)).subscribe(observer)
+        FromIter::new(std::iter::repeat_n(self.value, self.count)).subscribe(observer)
     }
 }

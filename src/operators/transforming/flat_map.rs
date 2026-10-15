@@ -2,14 +2,14 @@
 //! [`ObservableExt::flat_map`](crate::observable::ObservableExt::flat_map).
 
 use super::map::Map;
-use crate::operators::combining::merge_all::MergeAll;
-use crate::operators::combining::merge_all::MergeAllInnerObserver;
-use crate::operators::combining::merge_all::MergeAllObserver;
-use crate::operators::transforming::map::MapObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
+    operators::{
+        combining::merge_all::{self, MergeAll, MergeAllInnerObserver, MergeAllObserver},
+        transforming::map::MapObserver,
+    },
     utils::MarkerType,
 };
 use educe::Educe;
@@ -78,13 +78,7 @@ where
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
     /// The disposal of the [`MergeAll`] this operator is built on.
-    type Disposal = crate::operators::combining::merge_all::Disposal<
-        JoinedModeOf<OE, OE1>,
-        T,
-        E,
-        OE::Disposal,
-        OE1::Disposal,
-    >;
+    type Disposal = merge_all::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T0, T, E, OE, OE1, F, OR> Observable<OR> for FlatMap<T0, OE, OE1, F>

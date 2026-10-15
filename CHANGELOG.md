@@ -8,11 +8,36 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `ObservableExt::publish_behavior(initial_value)` and `ObservableExt::share_behavior(initial_value)`
+  multicast through a `BehaviorSubject`, so every subscriber receives the current value — the
+  initial one until the source emits — before what follows it. They complete the set next to
+  `publish` / `share` (`PublishSubject`), `publish_last` / `share_last` (`AsyncSubject`) and
+  `replay` / `share_replay` (`ReplaySubject`), and
+  `subject::behavior_subject::BehaviorSubjectOf<'or, OE>` names the subject they build, as the
+  other three subjects' `…Of` aliases do.
+- `Debug` for `disposable::chain_disposal::ChainDisposal`, for the disposal types
+  `delegate_disposal!` generates, whenever the disposal inside them is `Debug`, and for the
+  schedulers' own disposals (`TokioDisposal`, `SmolDisposal`, `FuturesDisposal`,
+  `VirtualTimeDisposal`), so that the `DisposeOnDrop` a `subscribe` or a `run_task` returns can be
+  printed whatever it is built of. `ChainDisposal` is `Clone` as well, when both of its sides are.
+- `scheduler::TaskHandler<TC, P>`, the `fn` type of a task's handler, is public: it is what
+  `Task::new` and `Task::with_pinned` take, and its documentation states what the handler must do
+  with the waker in `cx` and that the `Instant` is the scheduler's time, not `Instant::now()`.
 - `observable::JoinedModeOf<A, B>`, the mode of an operator with two sources. It is an alias, so
-  every type it names is unchanged. The aliases for the other shapes operators spell out — the
-  chained disposals, the joined scheduler mode, the boxed observer of a source's mode and the two
-  of `subscribe_with_auto_dispose_on_termination` — are crate-private: they name no type a caller
-  cannot spell out itself.
+  every type it names is unchanged.
+- The other aliases for the shapes the crate's operators spell out are public as well, so that a
+  caller can write the name a signature uses, and an operator written outside the crate the same
+  shorthand: `observable::ChainDisposalOf<A, B>`, the disposals of the two sources `A` and `B`
+  chained, `A`'s disposed first, as `merge`, `zip` and the other two-source operators chain them;
+  `observable::JoinedSchedulerModeOf<OE, S>`, the `Mode` of `delay`, `debounce`, `timeout`,
+  `subscribe_on`, `buffer_with_time` and `buffer_with_time_or_count`;
+  `observable::ChainSchedulerDisposalOf<S, OE>`, the disposal of a task on `S` chained before that
+  of the source `OE`, as the context of `delay` and `debounce` owns it;
+  `observable::BoxedObserverOf<'a, OE>`, the observer the callback of
+  `hook_on_subscription_boxed` gets; `utils::subscribe_with_auto_dispose_on_termination::ObserverOf`
+  and `DisposalOf`, the observer and the `Disposal` of an operator built on that helper, as `take`
+  and `first` are; and `operators::others::debug::DebugPrintCallback<C, T, E>`, the callback type
+  of `debug_to_stdout`. They are aliases, so every type they name is unchanged.
 - `scheduler::Clock`, `SystemClock` and `virtual_time::VirtualClock`: a handle on a scheduler's
   clock that can go where the scheduler cannot, such as a background producer feeding a local
   scheduler.
@@ -36,6 +61,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** `observer::emitter::Emitter<OR, M>` is now `Emitter<M, OR>`, the mode first, like
+  every other type that takes one (`ReplaceableDisposal<M, D>`, the operators' observers). The
+  callbacks of `Create::local` / `shared` and of `hook_on_subscription` / `hook_on_termination`
+  infer it, so only code naming the type itself changes.
 - **Breaking:** disposal and adapter APIs now name their behavior explicitly:
   `disposable::shared_disposal::SharedDisposal` becomes
   `disposable::replaceable_disposal::ReplaceableDisposal`, with `replace_with` instead of

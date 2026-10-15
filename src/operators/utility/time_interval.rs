@@ -29,8 +29,7 @@ use std::time::{Duration, Instant};
 ///
 /// let time = VirtualTime::new();
 /// let mut intervals = Vec::new();
-/// let mut subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> =
-///     PublishSubject::local();
+/// let mut subject = PublishSubject::<i32, Infallible, _>::local();
 ///
 /// let subscription = TimeInterval::new(subject.clone(), time.clock())
 ///     .subscribe_with_callback(|interval| intervals.push(interval), |_| {});
@@ -82,7 +81,7 @@ where
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = TimeIntervalObserver {
             observer,
-            time_stamp: self.clock.now(),
+            previous_timestamp: self.clock.now(),
             clock: self.clock,
         };
         self.source.subscribe(observer)
@@ -93,7 +92,8 @@ where
 pub struct TimeIntervalObserver<OR, C> {
     observer: OR,
     clock: C,
-    time_stamp: Instant,
+    /// When the previous value arrived, or the subscription for the first one.
+    previous_timestamp: Instant,
 }
 
 impl<T, E, OR, C> Observer<T, E> for TimeIntervalObserver<OR, C>
@@ -103,8 +103,8 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         let now = self.clock.now();
-        let time_span = now.saturating_duration_since(self.time_stamp);
-        self.time_stamp = now;
+        let time_span = now.saturating_duration_since(self.previous_timestamp);
+        self.previous_timestamp = now;
         self.observer.on_next((value, time_span))
     }
 

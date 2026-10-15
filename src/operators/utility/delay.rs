@@ -1,19 +1,17 @@
 //! The [`Delay`] operator, behind
 //! [`ObservableExt::delay`](crate::observable::ObservableExt::delay).
 
-use crate::delegate_disposal;
-use crate::disposable::{
-    Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-};
-use crate::observer::EventBatch;
-use crate::scheduler::{SchedulerTypes, Task, TaskWaker, WakeableContext};
-use crate::thread_mode::ThreadMode;
-use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
-    observer::{Flow, Observer, Termination},
-    scheduler::{Clock, Next, Scheduler},
+    observer::{EventBatch, Flow, Observer, Termination},
+    scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
+    thread_mode::ThreadMode,
+    utils::{
+        serialized_delivery::{DeliveryStopped, UpdateOutcome},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 use std::{
@@ -43,6 +41,7 @@ use std::{
 ///             creating::from_iter::FromIter,
 ///             utility::delay::Delay,
 ///         },
+///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
 ///     use std::{
 ///         sync::{Arc, Mutex},
@@ -50,7 +49,7 @@ use std::{
 ///     };
 ///     use tokio::time::sleep;
 ///
-///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
+///     let scheduler = TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
@@ -63,20 +62,14 @@ use std::{
 ///     )
 ///     .subscribe_with_callback(
 ///         move |value| values_observer.lock().unwrap().push(value),
-///         move |termination| terminations_observer
-///             .lock()
-///             .unwrap()
-///             .push(termination),
+///         move |termination| terminations_observer.lock().unwrap().push(termination),
 ///     );
 ///
 ///     sleep(Duration::from_millis(10)).await;
 ///     drop(subscription);
 ///
 ///     assert_eq!(&*values.lock().unwrap(), &[1, 2, 3]);
-///     assert_eq!(
-///         &*terminations.lock().unwrap(),
-///         &[Termination::Completed]
-///     );
+///     assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// }
 /// ```
 #[derive(Educe)]

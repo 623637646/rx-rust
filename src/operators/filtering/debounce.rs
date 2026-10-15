@@ -37,12 +37,13 @@ use std::time::{Duration, Instant};
 ///             creating::just::Just,
 ///             filtering::debounce::Debounce,
 ///         },
+///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
 ///     use std::sync::{Arc, Mutex};
 ///     use std::time::Duration;
 ///     use tokio::time::sleep;
 ///
-///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
+///     let scheduler = TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);

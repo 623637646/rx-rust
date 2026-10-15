@@ -186,20 +186,17 @@ where
         task: Task<TC, P>,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal> {
+        let future = drive(task, delay, self.clock(), sleep);
         let executor = self
             .executor
             .upgrade()
             .expect("the executor of the SmolLocalScheduler has been dropped");
-        DisposeOnDrop::new(SmolDisposal(executor.spawn(drive(
-            task,
-            delay,
-            self.clock(),
-            sleep,
-        ))))
+        DisposeOnDrop::new(SmolDisposal(executor.spawn(future)))
     }
 }
 
 /// The handle of a task spawned on smol; disposing it cancels the task.
+#[derive(Debug)]
 pub struct SmolDisposal(smol::Task<()>);
 
 impl Disposable for SmolDisposal {

@@ -1,15 +1,16 @@
 //! The [`Sample`] operator, behind
 //! [`ObservableExt::sample`](crate::observable::ObservableExt::sample).
 
-use crate::delegate_disposal;
-use crate::disposable::chain_disposal::ChainDisposal;
-use crate::thread_mode::ThreadMode;
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
+    utils::{
+        serialized_delivery::UpdateOutcome,
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 
@@ -30,17 +31,14 @@ use educe::Educe;
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let mut source: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
-/// let mut sampler: PublishSubject<'_, (), Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
+/// let mut source = PublishSubject::<i32, Infallible, _>::local();
+/// let mut sampler = PublishSubject::<(), Infallible, _>::local();
 /// let values_observer = Arc::clone(&values);
 /// let terminations_observer = Arc::clone(&terminations);
 ///
 /// let subscription = Sample::new(source.clone(), sampler.clone()).subscribe_with_callback(
 ///     move |value| values_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer
-///         .lock()
-///         .unwrap()
-///         .push(termination),
+///     move |termination| terminations_observer.lock().unwrap().push(termination),
 /// );
 ///
 /// source.on_next(1);
@@ -52,10 +50,7 @@ use educe::Educe;
 ///
 /// drop(subscription);
 /// assert_eq!(&*values.lock().unwrap(), &[1, 3]);
-/// assert_eq!(
-///     &*terminations.lock().unwrap(),
-///     &[Termination::Completed]
-/// );
+/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

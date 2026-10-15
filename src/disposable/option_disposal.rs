@@ -10,13 +10,15 @@ use educe::Educe;
 ///
 /// # Examples
 /// ```rust
-/// use rx_rust::disposable::{callback_disposal::CallbackDisposal, option_disposal::OptionDisposal, Disposable};
+/// use rx_rust::disposable::{
+///     Disposable, callback_disposal::CallbackDisposal, option_disposal::OptionDisposal,
+/// };
 ///
 /// let mut disposed = false;
 /// OptionDisposal::some(CallbackDisposal::new(|| disposed = true)).dispose();
 /// assert!(disposed);
 ///
-/// OptionDisposal::<CallbackDisposal<fn()>>::none().dispose(); // Nothing to release.
+/// OptionDisposal::<()>::none().dispose(); // Nothing to release.
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

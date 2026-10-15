@@ -31,7 +31,7 @@ impl IdGenerator {
     /// The next id, greater than every id handed out before.
     ///
     /// `u64` is big enough that this never wraps on any platform.
-    #[must_use = "the id identifies what is being handed out, and is the only way to recognize it later"]
+    #[must_use = "the id identifies what is handed out, and is the only way to recognize it later"]
     pub(crate) fn next_id(&mut self) -> Id {
         self.0 += 1;
         Id(self.0)

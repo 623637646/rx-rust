@@ -96,7 +96,6 @@
 //! [`Subject`]: crate::subject::Subject
 //! [`ObservableExt::multicast`]: crate::observable::ObservableExt::multicast
 
-use crate::thread_mode::mutable::{MutableBoolHelper, MutableHelper};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
@@ -104,7 +103,10 @@ use crate::{
         Event, Flow, Observer, Termination,
         boxed_observer::{IntoBoxedObserver, ObserverMode},
     },
-    thread_mode::{Local, Shared, ThreadMode},
+    thread_mode::{
+        Local, Shared, ThreadMode,
+        mutable::{MutableBoolHelper, MutableHelper},
+    },
     utils::{on_panic::on_panic, pending_events::PendingEvents},
 };
 use educe::Educe;
@@ -500,8 +502,9 @@ fn deliver<T, E, M: ThreadMode, OR: Observer<T, E>>(pipe: &Pipe<T, E, M, OR>, mu
                 }
             }
             Step::Terminate(next_observer, termination) => {
-                // The pipe is closed already, so a panic here needs no guard.
-                Observer::<T, E>::on_termination(next_observer, termination); // Notify outside the lock
+                // The pipe is closed already, so a panic here needs no guard. Notified
+                // outside the lock.
+                Observer::<T, E>::on_termination(next_observer, termination);
                 return;
             }
             Step::Park => return,

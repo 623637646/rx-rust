@@ -28,7 +28,8 @@
 //!
 //! let seen = Arc::new(Mutex::new(Vec::new()));
 //! let seen_in_observer = Arc::clone(&seen);
-//! let observer = CallbackObserver::new(move |value| seen_in_observer.lock().unwrap().push(value), |_| {});
+//! let observer =
+//!     CallbackObserver::new(move |value| seen_in_observer.lock().unwrap().push(value), |_| {});
 //!
 //! // The resources here are a counter the host updates under the delivery's lock.
 //! let delivery = SerializedDelivery::<Local, i32, (), _, i32>::idle(observer, 0);
@@ -42,10 +43,12 @@
 //! assert_eq!(*seen.lock().unwrap(), [1, 10]);
 //! ```
 
-use crate::thread_mode::mutable::{MutableBoolHelper, MutableExt, MutableHelper};
 use crate::{
     observer::{EventBatch, Flow, Observer, Termination},
-    thread_mode::ThreadMode,
+    thread_mode::{
+        ThreadMode,
+        mutable::{MutableBoolHelper, MutableExt, MutableHelper},
+    },
     utils::{on_panic::on_panic, pending_events::PendingEvents},
 };
 use educe::Educe;

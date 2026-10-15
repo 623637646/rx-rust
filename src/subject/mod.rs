@@ -81,7 +81,7 @@ impl<T, E, S> SubjectExt<T, E> for S where S: Subject<T, E> {}
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let mut sender = PublishSubject::<i32, std::convert::Infallible, rx_rust::thread_mode::Local>::local();
+/// let mut sender = PublishSubject::<i32, std::convert::Infallible, _>::local();
 /// let observable = sender.clone().into_observable(); // `on_next` is not available on it.
 ///
 /// let subscription = observable.subscribe_with_callback(|value| seen.push(value), |_| {});

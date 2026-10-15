@@ -31,11 +31,12 @@ use educe::Educe;
 ///             creating::from_iter::FromIter,
 ///             utility::subscribe_on::SubscribeOn,
 ///         },
+///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
 ///     use std::sync::{Arc, Mutex};
 ///     use tokio::time::{sleep, Duration};
 ///
-///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
+///     let scheduler = TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
@@ -44,20 +45,14 @@ use educe::Educe;
 ///     let subscription = SubscribeOn::new(FromIter::new(vec![1, 2, 3]), scheduler.clone())
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
-///             move |termination| terminations_observer
-///                 .lock()
-///                 .unwrap()
-///                 .push(termination),
+///             move |termination| terminations_observer.lock().unwrap().push(termination),
 ///         );
 ///
 ///     sleep(Duration::from_millis(10)).await;
 ///     drop(subscription);
 ///
 ///     assert_eq!(&*values.lock().unwrap(), &[1, 2, 3]);
-///     assert_eq!(
-///         &*terminations.lock().unwrap(),
-///         &[Termination::Completed]
-///     );
+///     assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// }
 /// ```
 ///

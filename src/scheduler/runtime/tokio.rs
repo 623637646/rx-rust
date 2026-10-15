@@ -247,6 +247,7 @@ where
 }
 
 /// The handle of a task spawned on Tokio; disposing it aborts the task.
+#[derive(Debug)]
 pub struct TokioDisposal(JoinHandle<()>);
 
 impl Disposable for TokioDisposal {

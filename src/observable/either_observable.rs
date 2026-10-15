@@ -44,9 +44,9 @@ pub enum EitherObservable<A, B> {
 delegate_disposal!(
     /// The disposal of an [`EitherObservable`] subscription: the subscription of the side that was
     /// subscribed to.
-    Disposal<A, B>,
-    EitherDisposal<DisposeOnDrop<A>, DisposeOnDrop<B>>,
-    where A: Disposable, B: Disposable
+    Disposal<D1, D2>,
+    EitherDisposal<DisposeOnDrop<D1>, DisposeOnDrop<D2>>,
+    where D1: Disposable, D2: Disposable
 );
 
 impl<A, B> ObservableTypes for EitherObservable<A, B>

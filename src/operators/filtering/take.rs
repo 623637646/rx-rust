@@ -1,15 +1,16 @@
 //! The [`Take`] operator, behind [`ObservableExt::take`](crate::observable::ObservableExt::take).
 
-use crate::delegate_disposal;
-use crate::disposable::dispose_on_drop::DisposeOnDrop;
-use crate::disposable::option_disposal::OptionDisposal;
-use crate::disposable::{Disposable, DisposableExt};
-use crate::thread_mode::ThreadMode;
 use crate::{
+    delegate_disposal,
+    disposable::{
+        Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
+    },
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    utils::subscribe_with_auto_dispose_on_termination,
-    utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
+    thread_mode::ThreadMode,
+    utils::subscribe_with_auto_dispose_on_termination::{
+        self, subscribe_with_auto_dispose_on_termination,
+    },
 };
 use educe::Educe;
 

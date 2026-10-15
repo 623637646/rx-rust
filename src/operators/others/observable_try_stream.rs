@@ -203,7 +203,8 @@ where
     }
 }
 
-/// Decides what [`into_stream_with_buffer`](crate::observable::ObservableExt::into_stream_with_buffer) keeps
+/// Decides what
+/// [`into_stream_with_buffer`](crate::observable::ObservableExt::into_stream_with_buffer) keeps
 /// when the source pushes faster than the stream is polled.
 ///
 /// An observable pushes at its own pace while a `Stream` hands out one item per poll, so the
@@ -245,7 +246,7 @@ where
 ///     }
 /// }
 ///
-/// let mut subject = PublishSubject::<_, Infallible, rx_rust::thread_mode::Local>::local();
+/// let mut subject = PublishSubject::<_, Infallible, _>::local();
 /// let mut stream = subject.clone().into_stream_with_buffer(Sum::default());
 /// assert_eq!(stream.next().now_or_never(), None); // subscribes
 ///

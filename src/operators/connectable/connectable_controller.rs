@@ -5,11 +5,12 @@
 //! [`ObservableExt::replay`](crate::observable::ObservableExt::replay).
 
 use super::ref_count::RefCount;
-use crate::disposable::Disposable;
-use crate::observable::ObservableTypes;
-use crate::observer::Observer;
-use crate::subject::SubjectObservable;
-use crate::{disposable::dispose_on_drop::DisposeOnDrop, observable::Observable};
+use crate::{
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    observable::{Observable, ObservableTypes},
+    observer::Observer,
+    subject::SubjectObservable,
+};
 use educe::Educe;
 
 /// Marker for a connectable controller that is not connected to its source.
@@ -45,7 +46,7 @@ pub struct Connected<D: Disposable>(DisposeOnDrop<D>);
 /// let values_2 = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let subject: PublishSubject<'_, i32, Infallible, rx_rust::thread_mode::Local> = PublishSubject::local();
+/// let subject = PublishSubject::<i32, Infallible, _>::local();
 /// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), subject);
 /// let observable = controller.observable();
 /// let values_1_observer = Arc::clone(&values_1);
@@ -58,10 +59,7 @@ pub struct Connected<D: Disposable>(DisposeOnDrop<D>);
 /// );
 /// let subscription_2 = observable.subscribe_with_callback(
 ///     move |value| values_2_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer
-///         .lock()
-///         .unwrap()
-///         .push(termination),
+///     move |termination| terminations_observer.lock().unwrap().push(termination),
 /// );
 ///
 /// // Nothing is emitted until the source is connected.
@@ -73,10 +71,7 @@ pub struct Connected<D: Disposable>(DisposeOnDrop<D>);
 ///
 /// assert_eq!(&*values_1.lock().unwrap(), &[1, 2]);
 /// assert_eq!(&*values_2.lock().unwrap(), &[1, 2]);
-/// assert_eq!(
-///     &*terminations.lock().unwrap(),
-///     &[Termination::Completed]
-/// );
+/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug)]

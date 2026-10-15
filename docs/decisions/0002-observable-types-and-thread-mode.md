@@ -127,7 +127,7 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    each for a fixed observer type; the lifetimes bound the observer (`'or`), the disposal (`'sub`)
    and the observable (`'oe`).
 9. **`Create` offers both builders.** A closure cannot be generic, so its parameter decides what a
-   `Create` subscribes. `Create::local` / `shared` hand it an `Emitter<OR, M>`, the unboxed
+   `Create` subscribes. `Create::local` / `shared` hand it an `Emitter<M, OR>`, the unboxed
    downstream observer: zero-cost, but the `Create` subscribes the one observer type it was
    inferred for, so it must be built and subscribed in one function. `Create::local_boxed` /
    `shared_boxed` hand it a `BoxedObserver` / `SendBoxedObserver`: one allocation per subscription
@@ -137,7 +137,7 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
 
    Both are one type, `Create<T, E, D, F, M, const BOXED: bool = false>`. `BOXED` only picks the
    `Observable` impl; `Clone`, `Debug` and `ObservableTypes` are written once. Without it the two
-   impls (`F: FnOnce(Emitter<OR, M>)` and `F: FnOnce(M::BoxedObserver<'a, ..>)`) overlap, since a
+   impls (`F: FnOnce(Emitter<M, OR>)` and `F: FnOnce(M::BoxedObserver<'a, ..>)`) overlap, since a
    closure type could implement both signatures. A marker wrapping the builder
    (`BoxingBuilder<'a, F>`) told them apart before, but had to be spelled in every return type;
    named marker types (`Unboxed` / `Boxed`) would have needed a name and a home of their own. The

@@ -1,6 +1,7 @@
 //! A disposal that disposes two others in order.
 
 use crate::disposable::Disposable;
+use educe::Educe;
 
 /// A disposal that disposes `first`, then `second`.
 ///
@@ -10,8 +11,9 @@ use crate::disposable::Disposable;
 ///
 /// # Examples
 /// ```rust
-/// use rx_rust::disposable::{callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal, Disposable};
-///
+/// use rx_rust::disposable::{
+///     Disposable, callback_disposal::CallbackDisposal, chain_disposal::ChainDisposal,
+/// };
 /// use std::cell::RefCell;
 ///
 /// let order = RefCell::new(Vec::new());
@@ -22,6 +24,8 @@ use crate::disposable::Disposable;
 /// .dispose();
 /// assert_eq!(*order.borrow(), ["first", "second"]);
 /// ```
+#[derive(Educe)]
+#[educe(Debug, Clone)]
 pub struct ChainDisposal<D1, D2> {
     first: D1,
     second: D2,

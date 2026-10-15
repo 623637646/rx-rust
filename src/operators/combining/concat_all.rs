@@ -1,20 +1,20 @@
 //! The [`ConcatAll`] operator, behind
 //! [`ObservableExt::concat_all`](crate::observable::ObservableExt::concat_all).
 
-use crate::delegate_disposal;
-use crate::disposable::Disposable;
-use crate::operators::others::with_error_type::WithErrorType;
-use crate::thread_mode::ThreadMode;
-use crate::utils::reservation_slot::ReservationSlot;
-use crate::utils::resubscribe::Resubscribe;
-use crate::utils::serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutcome};
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    delegate_disposal,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    operators::creating::from_iter::FromIter,
-    utils::MarkerType,
+    operators::{creating::from_iter::FromIter, others::with_error_type::WithErrorType},
+    thread_mode::ThreadMode,
+    utils::{
+        MarkerType,
+        reservation_slot::ReservationSlot,
+        resubscribe::Resubscribe,
+        serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutcome},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 use std::{collections::VecDeque, marker::PhantomData};

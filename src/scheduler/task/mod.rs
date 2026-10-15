@@ -29,9 +29,9 @@ use std::{pin::Pin, task::Context, time::Instant};
 /// exactly when `TC: Send` and `P: Send`. Each constructor names its state type the same
 /// way (`OnceContext`, `PeriodicContext`, …).
 ///
-/// A task runs either through [`drive()`](super::drive()), on an async executor, or step by step through
-/// [`split`](Self::split) and [`Stepper::step`], from a synchronous loop (a UI event loop, a game
-/// frame loop).
+/// A task runs either through [`drive()`](super::drive()), on an async executor, or step by step
+/// through [`split`](Self::split) and [`Stepper::step`], from a synchronous loop (a UI event loop,
+/// a game frame loop).
 pub struct Task<TC, P = ()> {
     context: TC,
     pinned: P,
@@ -46,7 +46,7 @@ pub struct Task<TC, P = ()> {
 /// ([`SchedulerTypes::clock`](crate::scheduler::SchedulerTypes::clock)), the clock a
 /// [`Next::SleepUntil`] is measured on. A handler takes the time from there rather than from
 /// `Instant::now()`, so that it follows a scheduler whose clock is not the system's.
-pub(crate) type TaskHandler<TC, P> = fn(&mut TC, Pin<&mut P>, &mut Context<'_>, Instant) -> Next;
+pub type TaskHandler<TC, P> = fn(&mut TC, Pin<&mut P>, &mut Context<'_>, Instant) -> Next;
 
 /// What a handler asks the scheduler to do next. `Sleep*` waits for the clock only, `Pending*`
 /// for the waker the handler registered, and `*Until` has a deadline.

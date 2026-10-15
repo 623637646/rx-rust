@@ -1,13 +1,14 @@
 //! The [`Amb`] operator, behind
 //! [`ObservableExt::amb_with`](crate::observable::ObservableExt::amb_with).
 
-use crate::disposable::Disposable;
-use crate::thread_mode::ThreadMode;
-use crate::thread_mode::mutable::{MutableExt, MutableHelper};
 use crate::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::{
+        ThreadMode,
+        mutable::{MutableExt, MutableHelper},
+    },
 };
 use educe::Educe;
 

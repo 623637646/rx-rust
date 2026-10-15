@@ -1,10 +1,10 @@
 //! The [`Never`] source.
 
-use crate::thread_mode::Local;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
+    thread_mode::Local,
 };
 use std::convert::Infallible;
 

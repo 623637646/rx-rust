@@ -8,8 +8,7 @@
 /// - one passed through: the disposal of its source or scheduler (`OE::Disposal`,
 ///   `S::Disposal`), or that of the operator it is built on;
 /// - the named disposal of a [`utils`](crate::utils) helper, used as it is, when its parameters
-///   are only the operator's own (`subscribe_with_auto_dispose_on_termination::Disposal<OE::Mode,
-///   OE::Disposal>`);
+///   are only the operator's own (`subscribe_with_auto_dispose_on_termination::DisposalOf<OE>`);
 /// - a `Disposal` of the operator's own module.
 ///
 /// Anything else — a combination such as `ChainDisposal<ReplaceableDisposal<M, D2>, D1>`,
@@ -23,7 +22,8 @@
 ///
 /// The generated type implements [`Disposable`] and `From<Inner>`, so
 /// [`DisposableExt::into_dispose_on_drop`] converts the inner value to the named disposal and wraps
-/// it in [`DisposeOnDrop`].
+/// it in [`DisposeOnDrop`]. It also implements [`Debug`](std::fmt::Debug) whenever the inner
+/// disposal does, so that a [`DisposeOnDrop`] holding it can be printed.
 ///
 /// # Examples
 /// ```rust
@@ -45,6 +45,8 @@
 /// let mut disposed = false;
 /// let disposal: DisposeOnDrop<MyDisposal<_>> =
 ///     OptionDisposal::some(CallbackDisposal::new(|| disposed = true)).into_dispose_on_drop();
+/// assert!(format!("{disposal:?}").contains("MyDisposal"));
+///
 /// drop(disposal);
 /// assert!(disposed);
 /// ```
@@ -120,6 +122,19 @@ macro_rules! delegate_disposal {
         {
             fn dispose(self) {
                 self.0.dispose();
+            }
+        }
+
+        impl<$($generic),+> ::core::fmt::Debug for $name<$($generic),+>
+        where
+            $inner: ::core::fmt::Debug
+            $($where_clause)*
+        {
+            fn fmt(&self, formatter: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                formatter
+                    .debug_tuple(::core::stringify!($name))
+                    .field(&self.0)
+                    .finish()
             }
         }
 

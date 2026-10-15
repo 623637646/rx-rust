@@ -1,10 +1,10 @@
 //! The [`FromIter`] source.
 
-use crate::thread_mode::Local;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Observer, Termination},
+    thread_mode::Local,
 };
 use educe::Educe;
 use std::convert::Infallible;
@@ -58,7 +58,7 @@ where
     I: IntoIterator<Item = T>,
 {
     fn subscribe(self, mut observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        for value in self.0.into_iter() {
+        for value in self.0 {
             if observer.on_next(value).is_stop() {
                 // The observer stopped: stop iterating, which is the only way to end an infinite
                 // iterator (the subscription only exists once this returns), and release the

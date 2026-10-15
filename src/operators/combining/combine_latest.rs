@@ -1,15 +1,16 @@
 //! The [`CombineLatest`] operator, behind
 //! [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest).
 
-use crate::delegate_disposal;
-use crate::disposable::chain_disposal::ChainDisposal;
-use crate::thread_mode::ThreadMode;
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    thread_mode::ThreadMode,
+    utils::{
+        serialized_delivery::UpdateOutcome,
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 
@@ -30,8 +31,8 @@ use educe::Educe;
 /// let mut values = Vec::new();
 /// let mut terminations = Vec::new();
 ///
-/// let mut subject_1 = BehaviorSubject::<'_, i32, Infallible, rx_rust::thread_mode::Local>::local(0);
-/// let mut subject_2 = BehaviorSubject::<'_, i32, Infallible, rx_rust::thread_mode::Local>::local(10);
+/// let mut subject_1 = BehaviorSubject::<i32, Infallible, _>::local(0);
+/// let mut subject_2 = BehaviorSubject::<i32, Infallible, _>::local(10);
 ///
 /// let subscription =
 ///     CombineLatest::new(subject_1.clone(), subject_2.clone()).subscribe_with_callback(

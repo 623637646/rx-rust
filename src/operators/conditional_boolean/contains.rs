@@ -1,12 +1,13 @@
 //! The [`Contains`] operator, behind
 //! [`ObservableExt::contains`](crate::observable::ObservableExt::contains).
 
-use crate::utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    utils::subscribe_with_auto_dispose_on_termination,
+    utils::subscribe_with_auto_dispose_on_termination::{
+        self, subscribe_with_auto_dispose_on_termination,
+    },
 };
 use educe::Educe;
 

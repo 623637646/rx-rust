@@ -1,11 +1,11 @@
 //! The [`Count`] operator, behind
 //! [`ObservableExt::count`](crate::observable::ObservableExt::count).
 
-use crate::utils::MarkerType;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::MarkerType,
 };
 use educe::Educe;
 use std::marker::PhantomData;

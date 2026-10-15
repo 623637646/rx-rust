@@ -1,17 +1,21 @@
 //! The [`Timeout`] operator, behind
 //! [`ObservableExt::timeout`](crate::observable::ObservableExt::timeout).
 
-use crate::delegate_disposal;
-use crate::disposable::chain_disposal::ChainDisposal;
-use crate::disposable::{
-    Disposable, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
+use crate::{
+    delegate_disposal,
+    disposable::{
+        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+        option_disposal::OptionDisposal,
+    },
+    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
+    observer::{Flow, Observer, Termination},
+    scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
+    thread_mode::ThreadMode,
+    utils::{
+        serialized_delivery::UpdateOutcome,
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
-use crate::observable::{JoinedSchedulerModeOf, Observable, ObservableTypes};
-use crate::observer::{Flow, Observer, Termination};
-use crate::scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task};
-use crate::thread_mode::ThreadMode;
-use crate::utils::serialized_delivery::UpdateOutcome;
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use educe::Educe;
 use std::time::{Duration, Instant};
 
@@ -47,24 +51,22 @@ pub enum Error<E> {
 ///         observer::{Observer, Termination},
 ///         operators::utility::timeout::{Error, Timeout},
 ///         subject::publish_subject::PublishSubject,
+///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
 ///     use std::{convert::Infallible, sync::{Arc, Mutex}};
 ///     use tokio::time::{sleep, Duration};
 ///
-///     let scheduler = rx_rust::scheduler::runtime::tokio::TokioScheduler::current();
 ///     let values = Arc::new(Mutex::new(Vec::new()));
 ///     let terminations = Arc::new(Mutex::new(Vec::new()));
 ///     let values_observer = Arc::clone(&values);
 ///     let terminations_observer = Arc::clone(&terminations);
-///     let mut subject: PublishSubject<'static, i32, Infallible, rx_rust::thread_mode::Shared> = PublishSubject::shared();
+///     let mut subject = PublishSubject::<i32, Infallible, _>::shared();
 ///
-///     let subscription = Timeout::new(subject.clone(), Duration::from_millis(5), scheduler.clone())
+///     let scheduler = TokioScheduler::current();
+///     let subscription = Timeout::new(subject.clone(), Duration::from_millis(5), scheduler)
 ///         .subscribe_with_callback(
 ///             move |value| values_observer.lock().unwrap().push(value),
-///             move |termination| terminations_observer
-///                 .lock()
-///                 .unwrap()
-///                 .push(termination),
+///             move |termination| terminations_observer.lock().unwrap().push(termination),
 ///         );
 ///
 ///     subject.on_next(1);
@@ -72,10 +74,7 @@ pub enum Error<E> {
 ///     drop(subscription);
 ///
 ///     assert_eq!(&*values.lock().unwrap(), &[1]);
-///     assert_eq!(
-///         &*terminations.lock().unwrap(),
-///         &[Termination::Error(Error::Timeout)]
-///     );
+///     assert_eq!(&*terminations.lock().unwrap(), &[Termination::Error(Error::Timeout)]);
 /// }
 /// ```
 #[derive(Educe)]
@@ -119,7 +118,13 @@ type TimeoutTask<T, E, OR, OE, S> = SubscriptionContext<
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, T, Error<E>, Model, ChainDisposal<OptionDisposal<DisposeOnDrop<SD>>, D>>,
+    subscribe_with_context::Disposal<
+        M,
+        T,
+        Error<E>,
+        Model,
+        ChainDisposal<OptionDisposal<DisposeOnDrop<SD>>, D>,
+    >,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 

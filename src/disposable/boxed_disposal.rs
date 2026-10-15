@@ -21,7 +21,9 @@ macro_rules! boxed_disposal {
         $(#[$meta])*
         #[derive(Educe)]
         #[educe(Debug)]
-        pub struct $name<'dis>(#[educe(Debug(ignore))] Box<dyn ErasedDisposable $(+ $send)? + 'dis>);
+        pub struct $name<'dis>(
+            #[educe(Debug(ignore))] Box<dyn ErasedDisposable $(+ $send)? + 'dis>,
+        );
 
         impl<'dis> $name<'dis> {
             /// Boxes `disposal`.
@@ -49,7 +51,8 @@ boxed_disposal!(
     /// # Examples
     /// ```rust
     /// use rx_rust::disposable::{
-    ///     boxed_disposal::BoxedDisposal, callback_disposal::CallbackDisposal, Disposable, DisposableExt,
+    ///     Disposable, DisposableExt, boxed_disposal::BoxedDisposal,
+    ///     callback_disposal::CallbackDisposal,
     /// };
     ///
     /// let mut disposed = false;

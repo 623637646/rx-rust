@@ -2,14 +2,14 @@
 //! [`ObservableExt::switch_map`](crate::observable::ObservableExt::switch_map).
 
 use super::map::Map;
-use crate::operators::combining::switch::Switch;
-use crate::operators::combining::switch::SwitchInnerObserver;
-use crate::operators::combining::switch::SwitchObserver;
-use crate::operators::transforming::map::MapObserver;
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::Observer,
+    operators::{
+        combining::switch::{self, Switch, SwitchInnerObserver, SwitchObserver},
+        transforming::map::MapObserver,
+    },
     utils::MarkerType,
 };
 use educe::Educe;
@@ -80,13 +80,7 @@ where
     type Error = E;
     type Mode = JoinedModeOf<OE, OE1>;
     /// The disposal of the [`Switch`] this operator is built on.
-    type Disposal = crate::operators::combining::switch::Disposal<
-        JoinedModeOf<OE, OE1>,
-        T,
-        E,
-        OE::Disposal,
-        OE1::Disposal,
-    >;
+    type Disposal = switch::Disposal<JoinedModeOf<OE, OE1>, T, E, OE::Disposal, OE1::Disposal>;
 }
 
 impl<T0, T, E, OE, OE1, F, OR> Observable<OR> for SwitchMap<T0, OE, OE1, F>

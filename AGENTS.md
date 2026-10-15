@@ -113,7 +113,8 @@ cargo tarpaulin --out Html
   `resubscribe`, `pending_events`, `reservation_slot`, `id_generator`, `on_panic`,
   `lazy_subscription`. A module stays public only when a public signature names its items or a
   user writing an operator needs them; otherwise it is `pub(crate)`, and so is everything in it —
-  `cargo check` with `-W unreachable_pub` is what catches a `pub` left behind in one.
+  the crate's `#![warn(unreachable_pub)]` is what catches a `pub` left behind in one, and CI denies
+  warnings.
 - `tests/<name>.rs` — integration tests, one file per operator; shared helpers in
   `tests/tests_utils/`. Crate-private modules carry their own unit tests (see below).
 
@@ -179,10 +180,18 @@ cargo tarpaulin --out Html
   (`subscribe_with_auto_dispose_on_termination::{ObserverOf, DisposalOf}`), `JoinedModeOf<A, B>` and
   `ChainDisposalOf<A, B>` in `observable` for an operator with two sources, `JoinedSchedulerModeOf<OE, S>`
   and `ChainSchedulerDisposalOf<S, OE>` (the task's disposal, then the source's) for one with a
-  source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a source's mode. Use
+  source and a scheduler, `BoxedObserverOf<'a, OE>` for the boxed observer of a source's mode. All
+  of them are `pub`, so that an operator written outside the crate uses the same shorthand. Use
   them rather than spelling the projections out. Such an alias is written with qualified projections
   (`<OE as ObservableTypes>::Mode`), so it can appear in the bounds of `OE` itself, and it can
   name only public types: a private model still goes through `delegate_disposal!`.
+- **An alias a public signature names is `pub`**: a return type, an associated type of a public
+  impl (`type Mode =`, `type Disposal =`), the parameter or where-clause of a public fn. Rustdoc
+  expands an alias in place, so a crate-private one leaves the docs without its name or its doc
+  comment, and the privacy lints do not see through aliases, so nothing else catches it. Only the
+  where-clauses of trait impls, which privacy does not check either, may name a crate-private one
+  (an operator's own task alias, `DelayTask` in the bounds of `delay`). An alias in a private
+  module is re-exported where its module's public items are (`scheduler::TaskHandler`).
 - Keep `pub` surface minimal; add `Clone`/`Send`/`Sync`/`'static` bounds only where actually needed.
 - **Derives** on a generic type go through `#[derive(Educe)]`, not `#[derive(...)]` (which bounds
   every type parameter) and not hand-written impls. A field that cannot or should not be printed
