@@ -26,7 +26,7 @@ use rx_rust::{
         creating::{create::Create, from_iter::FromIter},
     },
     scheduler::{
-        SchedulerExt, SchedulerTypes, TaskWaker,
+        SchedulerTypes, TaskWaker,
         runtime::{
             futures::{LocalPoolScheduler, ThreadPoolScheduler},
             smol::{SmolLocalScheduler, SmolScheduler},
@@ -51,6 +51,7 @@ use std::{
     thread::{self, ThreadId},
     time::Duration,
 };
+use tests_utils::scheduler_ext::SchedulerExt;
 use tests_utils::{DURATION_10_MS, DURATION_100_MS};
 
 /// What [`record`] has seen: the values, then the termination.

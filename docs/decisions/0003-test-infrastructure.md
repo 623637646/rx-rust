@@ -156,8 +156,8 @@ flaked: the `ci` profile of `.config/nextest.toml` retries every test twice for 
   returns a `Clock`, the only source of the scheduler's time (`SystemClock` for the built-in
   schedulers but the virtual one). Outside a task an operator reads `scheduler.clock().now()` — at
   subscription, on an event — or keeps the clock where the scheduler cannot go. Inside a task the handler gets the time of
-  the step as an argument: `TaskHandler` and `Stepper::step` take a `now: Instant`, and so do the
-  steps of `Task::recursive` and the closure of `schedule_recursively`. A `Next::SleepUntil` is
+  the step as an argument: `TaskHandler` and `Stepper::step` take a `now: Instant`, and so does
+  the closure of the tests' `schedule_recursively`. A `Next::SleepUntil` is
   an instant on that clock. `Task::periodic` without an anchor anchors on its first step's `now`.
 - **`drive` takes the scheduler's clock** (`drive(task, delay, clock, sleep)`), steps with
   `clock.now()` and measures a `SleepUntil` against it. What is left to the implementer is that

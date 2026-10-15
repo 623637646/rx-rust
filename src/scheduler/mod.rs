@@ -34,8 +34,9 @@
 //! A scheduler runs a [`Task`]: a state, an optional pinned state (usually a future) and a `fn`
 //! handler. Unlike a closure or an `async` block, such a task has a type an operator can name in a
 //! `where` clause (`S: Scheduler<DelayTask<…>>`), which lets each scheduler state what it requires
-//! of it: `Send` for a multi-threaded one, nothing for a single-threaded one. Code that holds a
-//! concrete closure or future uses [`SchedulerExt`] instead.
+//! of it: `Send` for a multi-threaded one, nothing for a single-threaded one. A closure has no such
+//! name, so code that runs one later passes what it captures as the task's state instead, as in the
+//! example below.
 //!
 //! Implementing a scheduler takes [`SchedulerTypes`] and [`Scheduler::run_task`]. On an async
 //! executor, spawn the future [`drive`] returns, given the scheduler's clock; a synchronous loop drives the task itself through
@@ -67,18 +68,18 @@
 //! # #[cfg(feature = "tokio-scheduler")]
 //! #[tokio::main]
 //! async fn main() {
-//!     use rx_rust::scheduler::SchedulerExt;
+//!     use rx_rust::scheduler::{Scheduler, Task};
 //!     use std::{sync::{Arc, Mutex}, time::Duration};
 //!
 //!     use rx_rust::scheduler::runtime::tokio::TokioScheduler;
 //!
 //!     let scheduler = TokioScheduler::current();
 //!     let ran = Arc::new(Mutex::new(false));
-//!     let ran_in_task = Arc::clone(&ran);
 //!
-//!     // Runs the closure after 5 ms; dropping the returned disposal before that would cancel it.
-//!     let _disposal = scheduler.schedule(
-//!         move || *ran_in_task.lock().unwrap() = true,
+//!     // Runs the task after 5 ms; dropping the returned disposal before that would cancel it. The
+//!     // task's state is what a closure would have captured.
+//!     let _disposal = scheduler.run_task(
+//!         Task::once(Arc::clone(&ran), |ran| *ran.lock().unwrap() = true),
 //!         Some(Duration::from_millis(5)),
 //!     );
 //!     tokio::time::sleep(Duration::from_millis(20)).await;
@@ -101,20 +102,15 @@ pub use drive::{drive, yield_now};
 #[cfg(feature = "futures")]
 pub use task::StreamThenContext;
 pub use task::{
-    FutureThenContext, Next, OnceContext, PeriodicContext, RecursiveContext, Stepper, Task,
-    TaskHandler, TaskWaker, WakeableContext,
+    FutureThenContext, Next, OnceContext, PeriodicContext, Stepper, Task, TaskHandler, TaskWaker,
+    WakeableContext,
 };
 
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     thread_mode::ThreadMode,
 };
-#[cfg(feature = "futures")]
-use futures::Stream;
-use std::{
-    future::Future,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 /// A handle on a scheduler's clock, apart from the scheduler: [`SchedulerTypes::clock`] returns
 /// it, and it is where the scheduler's time is read.
@@ -197,84 +193,3 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>)
     -> DisposeOnDrop<Self::Disposal>;
 }
-
-/// The closure-taking conveniences of every scheduler, built on [`Scheduler::run_task`]. A
-/// multi-threaded scheduler refuses a closure that is not `Send`.
-pub trait SchedulerExt: SchedulerTypes + Clone {
-    /// Runs `task` once, after `delay`.
-    fn schedule<F>(&self, task: F, delay: Option<Duration>) -> DisposeOnDrop<Self::Disposal>
-    where
-        F: FnOnce(),
-        Self: Scheduler<OnceContext<F>>,
-    {
-        self.run_task(Task::once(task, |task| task()), delay)
-    }
-
-    /// Runs `task(count, now)` until it returns [`Next::Finished`], as [`Task::recursive`]
-    /// does. `now` is the time of the step on the scheduler's clock, the one a
-    /// [`Next::SleepUntil`] is measured on.
-    fn schedule_recursively<F>(
-        &self,
-        task: F,
-        delay: Option<Duration>,
-    ) -> DisposeOnDrop<Self::Disposal>
-    where
-        F: FnMut(usize, Instant) -> Next,
-        Self: Scheduler<RecursiveContext<F>>,
-    {
-        self.run_task(
-            Task::recursive(task, |task, count, now| task(count, now)),
-            delay,
-        )
-    }
-
-    /// Runs `task(count)` every `period`, from now plus `delay`, until it returns `false`. Runs
-    /// that fall behind are caught up back to back, never skipped.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `period` is zero.
-    fn schedule_periodically<F>(
-        &self,
-        task: F,
-        period: Duration,
-        delay: Option<Duration>,
-    ) -> DisposeOnDrop<Self::Disposal>
-    where
-        F: FnMut(usize) -> bool,
-        Self: Scheduler<PeriodicContext<F>>,
-    {
-        // An anchor out of range is a delay that never ends: the first run never comes, so it
-        // needs no anchor.
-        let anchor = self.clock().now().checked_add(delay.unwrap_or_default());
-        self.run_task(
-            Task::periodic(task, |task, count| task(count), period, anchor),
-            delay,
-        )
-    }
-
-    /// Drives `future` to completion.
-    fn spawn_future<FU>(&self, future: FU) -> DisposeOnDrop<Self::Disposal>
-    where
-        FU: Future<Output = ()>,
-        Self: Scheduler<FutureThenContext<(), ()>, FU>,
-    {
-        self.run_task(Task::from_future(future), None)
-    }
-
-    /// Drives `stream` to its end: `callback(Some(item))` for each element, then `callback(None)`.
-    ///
-    /// `callback` returning `false`, or a disposal, stops the stream right there, without the
-    /// final `None`. The task yields after each element, even when the stream is always ready.
-    #[cfg(feature = "futures")]
-    fn schedule_stream<SM, F>(&self, stream: SM, callback: F) -> DisposeOnDrop<Self::Disposal>
-    where
-        SM: Stream,
-        F: FnMut(Option<SM::Item>) -> bool,
-        Self: Scheduler<StreamThenContext<F, SM::Item>, SM>,
-    {
-        self.run_task(Task::from_stream(stream, callback), None)
-    }
-}
-
-impl<S: SchedulerTypes + Clone> SchedulerExt for S {}

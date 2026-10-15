@@ -1,3 +1,4 @@
+use crate::tests_utils::scheduler_ext::SchedulerExt;
 use crate::tests_utils::test_scheduler::TestScheduler;
 use educe::Educe;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
@@ -5,7 +6,6 @@ use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::{
     disposable::Disposable,
     observer::{Flow, Observer, Termination},
-    scheduler::SchedulerExt,
     thread_mode::mutable::MutableHelper,
 };
 use std::sync::{Arc, Mutex};

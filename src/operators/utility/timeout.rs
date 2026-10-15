@@ -8,7 +8,7 @@ use crate::disposable::{
 };
 use crate::observable::{JoinedSchedulerModeOf, Observable, ObservableTypes};
 use crate::observer::{Flow, Observer, Termination};
-use crate::scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task};
+use crate::scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task};
 use crate::thread_mode::ThreadMode;
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
@@ -108,15 +108,13 @@ type TimeoutSources<OE, S> = ChainDisposal<
 /// its observer without a termination still times out. A disposal still releases the observer at
 /// once: disposing the source makes it drop its own handle, and a handle dropped once the context
 /// has stopped releases the observer.
-type TimeoutTask<T, E, OR, OE, S> = RecursiveContext<
-    SubscriptionContext<
-        JoinedSchedulerModeOf<OE, S>,
-        T,
-        Error<E>,
-        OR,
-        Model,
-        TimeoutSources<OE, S>,
-    >,
+type TimeoutTask<T, E, OR, OE, S> = SubscriptionContext<
+    JoinedSchedulerModeOf<OE, S>,
+    T,
+    Error<E>,
+    OR,
+    Model,
+    TimeoutSources<OE, S>,
 >;
 
 delegate_disposal!(
@@ -208,7 +206,7 @@ where
     }
 }
 
-/// Drives the timeout with one long-lived recursive scheduler task.
+/// Drives the timeout with one long-lived scheduler task.
 ///
 /// Source values only move `deadline` forward. If the task wakes at an obsolete deadline, it
 /// continues at the latest one; no scheduler task needs to be cancelled or spawned per value.
@@ -219,7 +217,7 @@ fn setup_timer<M, T, E, OR, S, D>(
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,
-    S: Scheduler<RecursiveContext<SubscriptionContext<M, T, Error<E>, OR, Model, D>>>,
+    S: Scheduler<SubscriptionContext<M, T, Error<E>, OR, Model, D>>,
     D: Disposable,
 {
     let deadline = context.update(|model| UpdateOutcome::new(model.deadline).without_events());
@@ -232,7 +230,7 @@ where
     // The context owns only the task's disposal, never the task, which its runtime owns: holding
     // the context strongly forms no cycle. Stopping the context disposes the timer, which cancels
     // the task.
-    let task = Task::recursive(context, |context, _, now| {
+    let task = Task::new(context, |context, _, _, now| {
         context
             .update(|model| match model.deadline {
                 Some(deadline) if now < deadline => {

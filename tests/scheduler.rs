@@ -5,6 +5,7 @@ use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::drop_probe::DropProbe;
+use crate::tests_utils::scheduler_ext::SchedulerExt;
 use crate::tests_utils::test_scheduler::block_on;
 use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
 use futures::StreamExt;
@@ -14,8 +15,7 @@ use rx_rust::observer::{Observer, Termination};
 use rx_rust::operators::creating::just::Just;
 use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::scheduler::{
-    Clock, Next, Scheduler, SchedulerExt, SchedulerTypes, Stepper, Task, TaskWaker,
-    WakeableContext, drive,
+    Clock, Next, Scheduler, SchedulerTypes, Stepper, Task, TaskWaker, WakeableContext, drive,
 };
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::Shared;

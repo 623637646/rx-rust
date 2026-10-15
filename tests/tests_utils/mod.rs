@@ -4,6 +4,7 @@ pub(crate) mod clone_probe;
 pub(crate) mod drop_probe;
 #[cfg(panic = "unwind")]
 pub(crate) mod panic;
+pub(crate) mod scheduler_ext;
 pub(crate) mod shared_sender;
 pub(crate) mod test_channel;
 pub(crate) mod test_scheduler;

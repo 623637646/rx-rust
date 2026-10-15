@@ -36,13 +36,3 @@ where
         )
     }
 }
-
-impl<FU> Task<FutureThenContext<(), ()>, FU>
-where
-    FU: Future<Output = ()>,
-{
-    /// Drives `future` to completion.
-    pub fn from_future(future: FU) -> Self {
-        Self::from_future_then((), future, |(), ()| {})
-    }
-}

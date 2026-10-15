@@ -8,7 +8,6 @@
 mod future;
 mod once;
 mod periodic;
-mod recursive;
 #[cfg(feature = "futures")]
 mod stream;
 mod wakeable;
@@ -16,7 +15,6 @@ mod wakeable;
 pub use future::FutureThenContext;
 pub use once::OnceContext;
 pub use periodic::PeriodicContext;
-pub use recursive::RecursiveContext;
 #[cfg(feature = "futures")]
 pub use stream::StreamThenContext;
 pub use wakeable::{TaskWaker, WakeableContext};

@@ -10,7 +10,7 @@ use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_
 use crate::{
     observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
+    scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
 };
 use educe::Educe;
@@ -120,14 +120,12 @@ type BufferWithTimeOrCountSources<OE, S> = ChainDisposal<
 /// the subscription is disposed. A disposal still releases the observer at once: disposing the
 /// source makes it drop its own handle, and a handle dropped once the context has stopped releases
 /// the observer.
-type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
-    BufferWithTimeOrCountContext<
-        JoinedSchedulerModeOf<OE, S>,
-        T,
-        E,
-        OR,
-        BufferWithTimeOrCountSources<OE, S>,
-    >,
+type BufferWithTimeOrCountTask<T, E, OR, OE, S> = BufferWithTimeOrCountContext<
+    JoinedSchedulerModeOf<OE, S>,
+    T,
+    E,
+    OR,
+    BufferWithTimeOrCountSources<OE, S>,
 >;
 
 delegate_disposal!(
@@ -253,7 +251,7 @@ where
     }
 }
 
-/// Drives the timed bundles with one long-lived recursive scheduler task, as `timeout` does.
+/// Drives the timed bundles with one long-lived scheduler task, as `timeout` does.
 ///
 /// A full bundle only moves `deadline` (see `BufferWithTimeOrCountObserver::on_next`): if the task
 /// wakes at an obsolete deadline, it sleeps on to the current one. No scheduler task is spawned or
@@ -268,7 +266,7 @@ where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
     D: Disposable,
-    S: Scheduler<RecursiveContext<BufferWithTimeOrCountContext<M, T, E, OR, D>>>,
+    S: Scheduler<BufferWithTimeOrCountContext<M, T, E, OR, D>>,
 {
     // The source terminated synchronously while it was being subscribed: no bundle is left to cut.
     if context
@@ -281,7 +279,7 @@ where
     // The context owns only the task's disposal, through its source subscription, never the task,
     // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
     // disposes its source subscription, which cancels the task.
-    let task = Task::recursive(context, |context, _, now| {
+    let task = Task::new(context, |context, _, _, now| {
         context
             .update(|model| match model.deadline {
                 Some(deadline) if now < deadline => {

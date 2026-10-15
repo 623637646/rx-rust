@@ -12,6 +12,7 @@
 //! downstream pick the thread-safe pointers. The `Local` mode itself is covered by
 //! `tests/local_mode.rs`.
 
+use crate::tests_utils::scheduler_ext::SchedulerExt;
 use futures::{
     channel::oneshot,
     executor::{LocalPool, ThreadPool},
@@ -21,7 +22,7 @@ use futures::{
 use rx_rust::{
     disposable::{Disposable, boxed_disposal::SendBoxedDisposal, dispose_on_drop::DisposeOnDrop},
     scheduler::{
-        Clock, Next, Scheduler, SchedulerExt, SchedulerTypes, SystemClock, Task,
+        Clock, Next, Scheduler, SchedulerTypes, SystemClock, Task,
         runtime::{
             futures::{LocalPoolScheduler, ThreadPoolScheduler},
             smol::{SmolLocalScheduler, SmolScheduler},

@@ -105,8 +105,11 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    future or a stream) and a `fn` handler; `Scheduler<TC, P>` is implemented per runtime with the
    `Send` bounds that runtime needs (`TC: Send` on Tokio, nothing on the local pool). Operators
    define their task context as a named struct, so the bound is stated on a type, not on an `async`
-   block. `SchedulerExt` keeps the closure conveniences (`schedule`, `schedule_periodically`,
-   `spawn_future`, …) for code that does not need to be generic over the mode.
+   block. There are no closure conveniences (`schedule`, `schedule_periodically`, `spawn_future`,
+   …): a closure's type cannot be named in a generic bound, so no operator could use them, and code
+   that holds a concrete scheduler passes the captures as the task's state
+   (`run_task(Task::once(state, …), delay)`) or spawns on its runtime directly. The tests keep
+   their own, in `tests/tests_utils/scheduler_ext.rs`.
 
    Every runtime with a local executor gets a `Local` scheduler next to its `Shared` one
    (`TokioLocalScheduler`, `SmolLocalScheduler`, `LocalPoolScheduler`). Every scheduler is a type

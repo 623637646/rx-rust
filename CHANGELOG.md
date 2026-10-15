@@ -81,9 +81,8 @@ All notable changes to this project are documented here. The format follows
   (`let Poll::Ready(output) = future.poll(cx) else { return Next::Pending };`). A scheduler
   that steps tasks itself handles the two new variants.
 - **Breaking:** a task step is given the scheduler's time: `TaskHandler` takes a fourth argument,
-  `now: Instant`, and so do `Stepper::step`, the step of `Task::recursive` (`(state, count, now)`)
-  and the closure of `SchedulerExt::schedule_recursively` (`(count, now)`). A
-  `Next::SleepUntil` is an instant on that clock. `drive` takes the clock of the scheduler
+  `now: Instant`, and so does `Stepper::step`. A `Next::SleepUntil` is an instant on that
+  clock. `drive` takes the clock of the scheduler
   it runs for (`drive(task, delay, scheduler.clock(), sleep)`), whose time it passes to every
   step.
 - A `delay` given to `Scheduler::run_task` that is too long for an `Instant` to represent never
@@ -117,9 +116,14 @@ All notable changes to this project are documented here. The format follows
   `MaybeSync`) are removed. All features are additive: the scheduler features can be enabled
   together, and `local-pool-scheduler` no longer excludes the others.
 - **Breaking:** `Scheduler` is now `Scheduler<TC, P>` over `SchedulerTypes { Mode, Disposal }` and
-  runs a nameable `Task` (a context, an optional future or stream, and a `fn` handler); the
-  closure-based `schedule`, `schedule_periodically`, `spawn_future`, … moved to `SchedulerExt`,
-  which every scheduler implements.
+  runs a nameable `Task` (a context, an optional future or stream, and a `fn` handler), built with
+  `Task::new`, `with_pinned`, `once`, `periodic`, `wakeable`, `from_future_then` or
+  `from_stream_then`. The closure-based `schedule`, `schedule_recursively`,
+  `schedule_periodically`, `spawn_future` and `schedule_stream` are removed: the task's state
+  carries what the closure captured (`scheduler.run_task(Task::once(state, |state| …), delay)`,
+  `Task::periodic`, or `Task::new` for a step that decides when it runs next), and code that holds
+  a concrete runtime's scheduler can spawn on that runtime directly. `sleep` is removed too: an
+  operator schedules a task, and a test on `VirtualTime` advances its clock.
 - **Breaking:** type erasure is explicit: `into_boxed` / `into_cloneable_boxed` erase without
   `Send`, `into_send_boxed` / `into_send_cloneable_boxed` (and `SendBoxedObserver`,
   `SendBoxedDisposal`) keep it, and `into_boxed_for` / `into_send_boxed_for` fix the observer type.

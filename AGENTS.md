@@ -98,8 +98,9 @@ cargo tarpaulin --out Html
   `Local`, `Shared`, `Joined` (the mode of an operator with several sources), the pointer, weak
   pointer and flag each mode picks, and the lock helpers (`thread_mode::mutable`). The boxed
   observer of a mode is the extension `ObserverMode` in `src/observer/boxed_observer.rs`.
-- `src/scheduler/` — `Scheduler<TC, P>` runs a `Task` (a context plus a `fn` handler);
-  `SchedulerExt` adds the closure conveniences. `task/` holds the task: `mod.rs` the task, what
+- `src/scheduler/` — `Scheduler<TC, P>` runs a `Task` (a context plus a `fn` handler); there
+  are no closure conveniences, except the tests' `tests/tests_utils/scheduler_ext.rs`. `task/`
+  holds the task: `mod.rs` the task, what
   its handler answers (`Next`) and its `Stepper`, and one file per constructor with the state type
   it names (`once.rs`, `periodic.rs`, …); `drive.rs` the async driver (`drive`, `yield_now`), which
   runs a task through its `Stepper` on an executor; `runtime/` the
@@ -192,7 +193,7 @@ cargo tarpaulin --out Html
   `scheduler.clock().now()` at subscription or on an event, and the observer given to the source
   holds the `Clock` (`SchedulerTypes::clock()`), a `Send` handle, rather than a scheduler that may
   be `Local`; a task handler uses the `now` its step
-  is given (`Task::recursive`'s third argument, `schedule_recursively`'s second). An operator that
+  is given (the fourth argument of a `TaskHandler`). An operator that
   measures time without scheduling anything (`throttle`, `timestamp`, `time_interval`) takes a
   `C: Clock`, not a scheduler: `scheduler.clock()`, `SystemClock`, or `time.clock()` in a test.
   That is what lets `VirtualTime` drive every operator; CI fails on an

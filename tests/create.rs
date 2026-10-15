@@ -4,6 +4,7 @@ use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
 use crate::tests_utils::checker::State;
+use crate::tests_utils::scheduler_ext::SchedulerExt;
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
@@ -11,7 +12,6 @@ use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::error_handling::retry::RetryAction;
-use rx_rust::scheduler::SchedulerExt;
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::{
     observable::{Observable, ObservableExt},

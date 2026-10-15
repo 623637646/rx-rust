@@ -64,23 +64,3 @@ where
         )
     }
 }
-
-impl<SM, F> Task<StreamThenContext<F, SM::Item>, SM>
-where
-    SM: Stream,
-    F: FnMut(Option<SM::Item>) -> bool,
-{
-    /// Drives `stream` to its end: `callback(Some(item))` for every element, then
-    /// `callback(None)`. `callback` returning `false` stops right there, and the final `None` is
-    /// then never delivered.
-    pub fn from_stream(stream: SM, callback: F) -> Self {
-        Self::from_stream_then(
-            callback,
-            stream,
-            |callback, item| callback(Some(item)),
-            |mut callback| {
-                callback(None);
-            },
-        )
-    }
-}
