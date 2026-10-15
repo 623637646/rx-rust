@@ -2,11 +2,13 @@
 
 use crate::delegate_disposal;
 use crate::disposable::chain_disposal::ChainDisposal;
-use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
+use crate::disposable::{
+    Disposable, dispose_on_drop::DisposeOnDrop, option_disposal::OptionDisposal,
+};
 use crate::utils::serialized_delivery::UpdateOutcome;
 use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
-    observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
+    observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, Next, RecursiveContext, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
@@ -107,6 +109,12 @@ impl<OE, S> BufferWithTimeOrCount<OE, S> {
 type BufferWithTimeOrCountContext<M, T, E, OR, D> =
     SubscriptionContext<M, Vec<T>, E, OR, Model<T>, D>;
 
+/// The source subscription a [`BufferWithTimeOrCount`] context owns: the timer, then the source.
+type BufferWithTimeOrCountSources<OE, S> = ChainDisposal<
+    OptionDisposal<DisposeOnDrop<<S as SchedulerTypes>::Disposal>>,
+    <OE as ObservableTypes>::Disposal,
+>;
+
 /// The task of a [`BufferWithTimeOrCount`] timer. It holds the context strongly, so that the
 /// buffers keep being cut after the source has let go of its observer without a termination, until
 /// the subscription is disposed. A disposal still releases the observer at once: disposing the
@@ -118,13 +126,13 @@ type BufferWithTimeOrCountTask<T, E, OR, OE, S> = RecursiveContext<
         T,
         E,
         OR,
-        ChainSchedulerDisposalOf<S, OE>,
+        BufferWithTimeOrCountSources<OE, S>,
     >,
 >;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, Vec<T>, E, Model<T>, ChainDisposal<SD, D>>,
+    subscribe_with_context::Disposal<M, Vec<T>, E, Model<T>, ChainDisposal<OptionDisposal<DisposeOnDrop<SD>>, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -149,7 +157,7 @@ where
                 T,
                 E,
                 OR,
-                ChainSchedulerDisposalOf<S, OE>,
+                BufferWithTimeOrCountSources<OE, S>,
                 <S as SchedulerTypes>::Clock,
             >,
             Item = T,
@@ -171,8 +179,8 @@ where
                 clock: self.scheduler.clock(),
             };
             let sub = self.source.subscribe(buffer_observer);
-            let disposal = setup_emit_timer(context, self.scheduler, self.time_span);
-            sub.preceded_by_wrapped(disposal)
+            let timer = setup_emit_timer(context, self.scheduler, self.time_span);
+            sub.preceded_by(timer)
         })
         .map_inner_into()
     }
@@ -255,13 +263,21 @@ fn setup_emit_timer<M, T, E, OR, D, S>(
     context: BufferWithTimeOrCountContext<M, T, E, OR, D>,
     scheduler: S,
     time_span: Duration,
-) -> DisposeOnDrop<S::Disposal>
+) -> OptionDisposal<DisposeOnDrop<S::Disposal>>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
     D: Disposable,
     S: Scheduler<RecursiveContext<BufferWithTimeOrCountContext<M, T, E, OR, D>>>,
 {
+    // The source terminated synchronously while it was being subscribed: no bundle is left to cut.
+    if context
+        .update(|_| UpdateOutcome::new(()).without_events())
+        .is_err()
+    {
+        return OptionDisposal::none();
+    }
+
     // The context owns only the task's disposal, through its source subscription, never the task,
     // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
     // disposes its source subscription, which cancels the task.
@@ -283,5 +299,5 @@ where
             })
             .unwrap_or(Next::Finished)
     });
-    scheduler.run_task(task, Some(time_span))
+    OptionDisposal::some(scheduler.run_task(task, Some(time_span)))
 }
