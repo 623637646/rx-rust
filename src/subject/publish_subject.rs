@@ -1,6 +1,6 @@
 //! A multicast subject that forwards what it receives to every observer.
 //!
-//! It is [`SerializedMulticast`] with nothing of its own to guard: every method here is one call
+//! It is `SerializedMulticast` with nothing of its own to guard: every method here is one call
 //! into it. The subject is terminated as soon as [`Observer::on_termination`] is *called*, not when
 //! the termination reaches the observers — see the multicast's module documentation for why, and
 //! for everything else that governs the ordering here.

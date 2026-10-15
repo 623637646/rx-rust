@@ -98,11 +98,11 @@ pub mod runtime;
 mod task;
 pub mod virtual_time;
 
-pub use drive::{drive, yield_now};
+pub use drive::drive;
 #[cfg(feature = "futures")]
 pub use task::StreamThenContext;
 pub use task::{
-    FutureThenContext, Next, OnceContext, PeriodicContext, Stepper, Task, TaskHandler, TaskWaker,
+    FutureThenContext, Next, OnceContext, PeriodicContext, Stepper, Task, TaskWaker,
     WakeableContext,
 };
 

@@ -13,14 +13,14 @@ use std::collections::VecDeque;
 /// that re-enters that lock.
 #[derive(Educe)]
 #[educe(Debug, Default)]
-pub struct PendingEvents<T, E> {
+pub(crate) struct PendingEvents<T, E> {
     values: VecDeque<T>,
     termination: Option<Termination<E>>,
 }
 
 impl<T, E> PendingEvents<T, E> {
     /// An empty queue.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             values: VecDeque::new(),
             termination: None,
@@ -32,7 +32,7 @@ impl<T, E> PendingEvents<T, E> {
     /// The queue is built here, so it is never already terminated and nothing can be given back.
     /// The first value is handed to the caller instead of being queued, so a batch carrying a
     /// single value leaves the queue empty and never allocates it.
-    pub fn from_batch(events: EventBatch<T, E>) -> (Option<T>, Self) {
+    pub(crate) fn from_batch(events: EventBatch<T, E>) -> (Option<T>, Self) {
         let empty_queue = |termination| Self {
             values: VecDeque::new(),
             termination,
@@ -64,18 +64,18 @@ impl<T, E> PendingEvents<T, E> {
     }
 
     /// Returns whether the last event has been queued, after which nothing can be queued anymore.
-    pub fn is_terminated(&self) -> bool {
+    pub(crate) fn is_terminated(&self) -> bool {
         self.termination.is_some()
     }
 
     /// Returns whether there is nothing left to deliver.
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.values.is_empty() && self.termination.is_none()
     }
 
     /// Queues `event`, or gives it back when the last event has already been queued.
     #[must_use = "a rejected event must be dropped outside the lock that guards these events"]
-    pub fn push(&mut self, event: Event<T, E>) -> Option<Event<T, E>> {
+    pub(crate) fn push(&mut self, event: Event<T, E>) -> Option<Event<T, E>> {
         if self.is_terminated() {
             return Some(event);
         }
@@ -91,7 +91,7 @@ impl<T, E> PendingEvents<T, E> {
     /// A batch is queued as a whole: it holds at most one termination and queues it last, so no
     /// event of a batch can be rejected on its own.
     #[must_use = "rejected events must be dropped outside the lock that guards these events"]
-    pub fn push_batch(&mut self, events: EventBatch<T, E>) -> Option<EventBatch<T, E>> {
+    pub(crate) fn push_batch(&mut self, events: EventBatch<T, E>) -> Option<EventBatch<T, E>> {
         if self.is_terminated() {
             return Some(events);
         }
@@ -112,7 +112,7 @@ impl<T, E> PendingEvents<T, E> {
     }
 
     /// Takes the next event to deliver, which is the termination once no value is left.
-    pub fn pop(&mut self) -> Option<Event<T, E>> {
+    pub(crate) fn pop(&mut self) -> Option<Event<T, E>> {
         match self.pop_next() {
             Some(value) => Some(Event::Next(value)),
             None => self.take_termination().map(Event::Termination),
@@ -120,12 +120,12 @@ impl<T, E> PendingEvents<T, E> {
     }
 
     /// Takes the next value to deliver, leaving the termination in place.
-    pub fn pop_next(&mut self) -> Option<T> {
+    pub(crate) fn pop_next(&mut self) -> Option<T> {
         self.values.pop_front()
     }
 
     /// Takes the last event, whether or not values are still queued before it.
-    pub fn take_termination(&mut self) -> Option<Termination<E>> {
+    pub(crate) fn take_termination(&mut self) -> Option<Termination<E>> {
         self.termination.take()
     }
 }

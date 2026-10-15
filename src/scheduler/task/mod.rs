@@ -46,7 +46,7 @@ pub struct Task<TC, P = ()> {
 /// ([`SchedulerTypes::clock`](crate::scheduler::SchedulerTypes::clock)), the clock a
 /// [`Next::SleepUntil`] is measured on. A handler takes the time from there rather than from
 /// `Instant::now()`, so that it follows a scheduler whose clock is not the system's.
-pub type TaskHandler<TC, P> = fn(&mut TC, Pin<&mut P>, &mut Context<'_>, Instant) -> Next;
+pub(crate) type TaskHandler<TC, P> = fn(&mut TC, Pin<&mut P>, &mut Context<'_>, Instant) -> Next;
 
 /// What a handler asks the scheduler to do next. `Sleep*` waits for the clock only, `Pending*`
 /// for the waker the handler registered, and `*Until` has a deadline.

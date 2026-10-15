@@ -116,22 +116,23 @@ pub type JoinedModeOf<A, B> =
 
 /// The thread mode of an operator with the source `OE` and the scheduler `S`: their modes
 /// [`Joined`](crate::thread_mode::Joined), `Shared` as soon as one of them is.
-pub type JoinedSchedulerModeOf<OE, S> = crate::thread_mode::Joined<
+pub(crate) type JoinedSchedulerModeOf<OE, S> = crate::thread_mode::Joined<
     <OE as ObservableTypes>::Mode,
     <S as crate::scheduler::SchedulerTypes>::Mode,
 >;
 
 /// The boxed observer of the source `OE`'s mode, for its items and errors: what an operator that
 /// hands the downstream observer to a user callback boxes it into, so it subscribes any observer.
-pub type BoxedObserverOf<'a, OE> = <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<
-    'a,
-    <OE as ObservableTypes>::Item,
-    <OE as ObservableTypes>::Error,
->;
+pub(crate) type BoxedObserverOf<'a, OE> =
+    <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<
+        'a,
+        <OE as ObservableTypes>::Item,
+        <OE as ObservableTypes>::Error,
+    >;
 
 /// The disposals of the two sources `A` and `B` chained into one: disposing it disposes `A`'s
 /// subscription first, then `B`'s.
-pub type ChainDisposalOf<A, B> = crate::disposable::chain_disposal::ChainDisposal<
+pub(crate) type ChainDisposalOf<A, B> = crate::disposable::chain_disposal::ChainDisposal<
     <A as ObservableTypes>::Disposal,
     <B as ObservableTypes>::Disposal,
 >;
@@ -139,7 +140,7 @@ pub type ChainDisposalOf<A, B> = crate::disposable::chain_disposal::ChainDisposa
 /// The disposal of a task run on the scheduler `S` and that of the source `OE` chained into one:
 /// disposing it cancels the task first, then disposes the source's subscription. What the context
 /// of an operator with a long-lived scheduler task owns, as `delay` or `buffer_with_time` do.
-pub type ChainSchedulerDisposalOf<S, OE> = crate::disposable::chain_disposal::ChainDisposal<
+pub(crate) type ChainSchedulerDisposalOf<S, OE> = crate::disposable::chain_disposal::ChainDisposal<
     <S as crate::scheduler::SchedulerTypes>::Disposal,
     <OE as ObservableTypes>::Disposal,
 >;

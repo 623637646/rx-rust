@@ -1,6 +1,6 @@
 //! A subject that remembers only its last value and replays it on completion.
 //!
-//! The last value lives in the [`SerializedMulticast`]'s resources, so reading it, reading the
+//! The last value lives in the `SerializedMulticast`'s resources, so reading it, reading the
 //! termination and emitting are one atomic step: the value that is replayed on completion is
 //! exactly the one every later subscriber observes, and a value that arrives once the completion
 //! was queued is dropped rather than replacing it.

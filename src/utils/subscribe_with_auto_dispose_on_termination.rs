@@ -110,7 +110,7 @@ pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
 
 /// The [`AutoDisposeOnTerminationObserver`] of an operator built on this helper, subscribing the
 /// source `OE` and delivering to `OR`: what the operator's `Observable` bound names.
-pub type ObserverOf<OE, OR> = AutoDisposeOnTerminationObserver<
+pub(crate) type ObserverOf<OE, OR> = AutoDisposeOnTerminationObserver<
     <OE as ObservableTypes>::Mode,
     OR,
     <OE as ObservableTypes>::Disposal,
@@ -118,7 +118,7 @@ pub type ObserverOf<OE, OR> = AutoDisposeOnTerminationObserver<
 
 /// The [`Disposal`] of such an operator over the source `OE`: what its `ObservableTypes::Disposal`
 /// is.
-pub type DisposalOf<OE> =
+pub(crate) type DisposalOf<OE> =
     Disposal<<OE as ObservableTypes>::Mode, <OE as ObservableTypes>::Disposal>;
 
 /// The observer [`subscribe_with_auto_dispose_on_termination`] hands to its builder: the

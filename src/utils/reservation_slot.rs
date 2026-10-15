@@ -53,7 +53,7 @@ use educe::Educe;
 /// disposes when dropped.
 #[derive(Educe)]
 #[educe(Debug)]
-pub enum ReservationSlot<D> {
+pub(crate) enum ReservationSlot<D> {
     /// No value is held and no build is in flight.
     Idle,
     /// A value is being built with the lock released. The reservation tells a concurrent update
@@ -68,7 +68,7 @@ pub enum ReservationSlot<D> {
 
 impl<D> ReservationSlot<D> {
     /// Whether the slot is [`Idle`](Self::Idle).
-    pub fn is_idle(&self) -> bool {
+    pub(crate) fn is_idle(&self) -> bool {
         matches!(self, Self::Idle)
     }
 
@@ -79,7 +79,7 @@ impl<D> ReservationSlot<D> {
     ///
     /// Panics if a build is still in flight, including after a release: only one build may be
     /// outstanding, and it must fill the slot before another can reserve it.
-    pub fn reserve_replacing(&mut self) -> Option<D> {
+    pub(crate) fn reserve_replacing(&mut self) -> Option<D> {
         match self {
             // Reject a second build before touching the state, so that a caught panic leaves the
             // first one's reservation intact.
@@ -103,7 +103,7 @@ impl<D> ReservationSlot<D> {
     /// This is the form used by a host that keeps one task alive while there is work to do: it
     /// starts a task only when none is running, instead of replacing a running one.
     #[must_use = "a reservation that is not followed by a build leaves the slot reserved forever"]
-    pub fn reserve_if_idle(&mut self) -> bool {
+    pub(crate) fn reserve_if_idle(&mut self) -> bool {
         match self {
             Self::Idle => {
                 *self = Self::Reserved;
@@ -122,7 +122,7 @@ impl<D> ReservationSlot<D> {
     /// # Panics
     ///
     /// Panics if no build is in flight: the slot is idle or already active.
-    pub fn fill(&mut self, value: D) -> Option<D> {
+    pub(crate) fn fill(&mut self, value: D) -> Option<D> {
         match self {
             Self::Reserved => {
                 *self = Self::Active(value);
@@ -149,7 +149,7 @@ impl<D> ReservationSlot<D> {
     ///
     /// Panics if the slot is idle or was already released while its build is still in flight.
     /// Each reservation may be released only once.
-    pub fn release(&mut self) -> Option<D> {
+    pub(crate) fn release(&mut self) -> Option<D> {
         match self {
             Self::Reserved => {
                 *self = Self::ReleasedWhileReserved;

@@ -8,13 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- Type aliases for the shapes operators spell out: `observable::JoinedModeOf<A, B>` (the mode of
-  an operator with two sources) and `observable::ChainDisposalOf<A, B>` (their disposals, `A`'s
-  first); `observable::JoinedSchedulerModeOf<OE, S>` (the mode of an operator with a source and a
-  scheduler) and `observable::ChainSchedulerDisposalOf<S, OE>` (the disposal of its scheduler task,
-  then its source's); `observable::BoxedObserverOf<'a, OE>` (the boxed observer of a source's mode);
-  `subscribe_with_auto_dispose_on_termination::ObserverOf<OE, OR>` and `DisposalOf<OE>`.
-  They are aliases, so every type they name is unchanged.
+- `observable::JoinedModeOf<A, B>`, the mode of an operator with two sources. It is an alias, so
+  every type it names is unchanged. The aliases for the other shapes operators spell out — the
+  chained disposals, the joined scheduler mode, the boxed observer of a source's mode and the two
+  of `subscribe_with_auto_dispose_on_termination` — are crate-private: they name no type a caller
+  cannot spell out itself.
 - `scheduler::Clock`, `SystemClock` and `virtual_time::VirtualClock`: a handle on a scheduler's
   clock that can go where the scheduler cannot, such as a background producer feeding a local
   scheduler.
@@ -43,10 +41,10 @@ All notable changes to this project are documented here. The format follows
   `disposable::replaceable_disposal::ReplaceableDisposal`, with `replace_with` instead of
   `replace`. Its `D` is the inner disposal: the slot holds the `DisposeOnDrop<D>` that
   `replace_with`'s builder returns, as `subscribe` and `run_task` do, so dropping its last clone
-  disposes it; `DisposeOnDrop::map_into` becomes `map_inner_into`. `Subject::terminated` and
-  `SerializedMulticast::terminated` become `termination`. The stream conversions are
+  disposes it; `DisposeOnDrop::map_into` becomes `map_inner_into`. `Subject::terminated` becomes
+  `termination`. The stream conversions are
   `into_stream_with_buffer` and `into_try_stream_with_buffer`. Debug printing uses
-  `DebugPrintCallback`, `Debug::with_stdout` and `ObservableExt::debug_to_stdout` instead of
+  `Debug::with_stdout` and `ObservableExt::debug_to_stdout` instead of
   `DefaultPrintType`, `new_default_print` and `debug_default_print`. The crate-private
   `utils::subscription_slot::SubscriptionSlot` becomes `utils::reservation_slot::ReservationSlot`.
   The stdout debug printer labels subscription events `Subscribed`.
@@ -91,11 +89,13 @@ All notable changes to this project are documented here. The format follows
 - **Breaking:** `utils::pending_events::EventBatch` moved to `observer::EventBatch`, next to
   `Event` and `Termination`.
 - **Breaking:** the crate-internal parts of `utils` are no longer public:
-  `utils::id_generator`, `utils::on_panic`, `utils::pending_events` (`PendingEvents`) and
-  `utils::subscription_slot`. They appear in no public signature; the helpers for writing an
-  operator (`subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`,
-  `serialized_delivery`, `serialized_multicast`, `resubscribe`) stay public.
-- `utils::serialized_multicast::MulticastDisposal` implements `Debug`.
+  `utils::id_generator`, `utils::on_panic`, `utils::pending_events` (`PendingEvents`),
+  `utils::subscription_slot`, `utils::serialized_multicast` (`SerializedMulticast`, `Admission`,
+  `MulticastDisposal`) and `utils::resubscribe` (`Resubscribe`). They appear in no public
+  signature: the multicast is reached through the subjects it is made of, and the re-subscription
+  through `retry` and `concat_all`. The helpers for writing an operator
+  (`subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`,
+  `serialized_delivery`) stay public.
 - **Breaking:** the MSRV is 1.89 (was 1.88), for educe 0.8 (was 0.6). educe 0.6 bounded a derived
   `Eq` by `PartialEq` only, which made `Termination<f64>`, `Event<f64, _>`, `EventBatch`,
   `DebugEvent` and `timeout::Error` `Eq` over a type that is not; they now require `Eq`.
@@ -223,6 +223,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Removed
 
+- **Breaking:** the `disposable::empty_disposal` module. It only held `impl Disposable for ()`,
+  which is a trait implementation and stays in effect; nothing could be named through the path.
 - **Breaking:** the `async-std-scheduler` feature and `AsyncStdScheduler`. async-std is
   discontinued upstream, which points to smol instead: use `smol-scheduler` and
   `SmolScheduler::global()`.

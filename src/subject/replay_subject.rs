@@ -1,6 +1,6 @@
 //! A subject that buffers what it emits and replays that buffer to every new subscriber.
 //!
-//! The buffer lives in the [`SerializedMulticast`]'s resources, so buffering a value and
+//! The buffer lives in the `SerializedMulticast`'s resources, so buffering a value and
 //! forwarding it are one atomic step, and so are snapshotting the buffer and joining the
 //! multicast: a subscriber can neither miss a value emitted while it was subscribing nor observe
 //! one twice.

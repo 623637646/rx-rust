@@ -46,37 +46,6 @@
 //! being notified, and the termination goes with the resources. From then on the multicast
 //! rejects every event, reports no termination, and drops a new observer without notifying it —
 //! there is no termination left to give it.
-//!
-//! # Examples
-//! ```rust
-//! use rx_rust::{
-//!     disposable::Disposable,
-//!     observer::{callback_observer::CallbackObserver, EventBatch, Flow, Termination},
-//!     thread_mode::Local,
-//!     utils::serialized_multicast::SerializedMulticast,
-//! };
-//! use std::sync::{Arc, Mutex};
-//!
-//! let seen = Arc::new(Mutex::new(Vec::new()));
-//! let multicast = SerializedMulticast::<i32, (), Local, ()>::idle(());
-//!
-//! let seen_by_first = Arc::clone(&seen);
-//! let first = multicast
-//!     .clone()
-//!     .subscribe(CallbackObserver::new(move |value| seen_by_first.lock().unwrap().push(("first", value)), |_| {}))
-//!     .expect("not terminated yet");
-//! let seen_by_second = Arc::clone(&seen);
-//! let _second = multicast
-//!     .clone()
-//!     .subscribe(CallbackObserver::new(move |value| seen_by_second.lock().unwrap().push(("second", value)), |_| {}))
-//!     .expect("not terminated yet");
-//!
-//! assert_eq!(multicast.send(EventBatch::Next(1)), Flow::Continue);
-//! first.dispose();
-//! assert_eq!(multicast.send(EventBatch::Next(2)), Flow::Continue);
-//! assert_eq!(multicast.send(EventBatch::Termination(Termination::Completed)), Flow::Stop);
-//! assert_eq!(*seen.lock().unwrap(), [("first", 1), ("second", 1), ("second", 2)]);
-//! ```
 
 use crate::disposable::Disposable;
 use crate::observer::EventBatch;
@@ -94,7 +63,7 @@ use educe::Educe;
 /// the pointers and the boxes the observers are stored in.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
-pub struct SerializedMulticast<'or, T, E, M: ObserverMode, R = ()>(
+pub(crate) struct SerializedMulticast<'or, T, E, M: ObserverMode, R = ()>(
     #[educe(Debug(ignore))] Delivery<'or, T, E, M, R>,
 );
 
@@ -118,7 +87,7 @@ struct Resources<E, R> {
 /// What the host decided, under the lock, for an observer that wants to join.
 #[derive(Educe)]
 #[educe(Debug)]
-pub enum Admission<T, E> {
+pub(crate) enum Admission<T, E> {
     /// Deliver these values to the newcomer, then let it join the multicast. Use an empty [`Vec`],
     /// which allocates nothing, when there is nothing to replay.
     Join(Vec<T>),
@@ -139,7 +108,7 @@ enum Admitted<T, E> {
 
 impl<'or, T, E, M: ObserverMode, R> SerializedMulticast<'or, T, E, M, R> {
     /// Starts with no observer, no termination, and the host's state parked in the resources.
-    pub fn idle(host: R) -> Self {
+    pub(crate) fn idle(host: R) -> Self {
         Self(SerializedDelivery::idle(
             Subscribers {
                 entries: Vec::new(),
@@ -161,7 +130,7 @@ where
     /// The termination, once one has been queued.
     ///
     /// A multicast killed by a panicking observer reports none: see the module documentation.
-    pub fn termination(&self) -> Option<Termination<E>> {
+    pub(crate) fn termination(&self) -> Option<Termination<E>> {
         self.read(|_, termination| termination.cloned())
             .unwrap_or(None)
     }
@@ -171,7 +140,7 @@ where
     /// `read` must not notify anyone and must not drop a value that can re-enter this multicast:
     /// it runs under the lock. Returns [`DeliveryStopped`], without running `read`, once the
     /// delivery has stopped.
-    pub fn read<Out>(
+    pub(crate) fn read<Out>(
         &self,
         read: impl FnOnce(&R, Option<&Termination<E>>) -> Out,
     ) -> Result<Out, DeliveryStopped> {
@@ -192,7 +161,7 @@ where
     /// `update` must not notify anyone and must not drop a value that can re-enter this multicast:
     /// it runs under the lock. Returns [`DeliveryStopped`], without running `update`, once the
     /// delivery has stopped.
-    pub fn update<Out, DO, const EVENTS_DECIDED: bool>(
+    pub(crate) fn update<Out, DO, const EVENTS_DECIDED: bool>(
         &self,
         update: impl FnOnce(
             &mut R,
@@ -220,7 +189,7 @@ where
     /// has terminated — including by `events` itself: a multicast with no subscriber left is
     /// still open, and a subscriber that stops takes only itself away. This is [`Self::update`]
     /// for a host that reads nothing and decides nothing.
-    pub fn send(&self, events: EventBatch<T, E>) -> Flow {
+    pub(crate) fn send(&self, events: EventBatch<T, E>) -> Flow {
         self.update(|_, terminated| {
             if terminated.is_some() {
                 return UpdateOutcome::new(Flow::Stop)
@@ -240,7 +209,7 @@ where
     }
 
     /// Subscribes `observer`, replaying nothing and terminating it at once when already terminated.
-    pub fn subscribe(
+    pub(crate) fn subscribe(
         self,
         observer: impl IntoBoxedObserver<'or, T, E, M>,
     ) -> Option<MulticastDisposal<'or, T, E, M, R>> {
@@ -259,7 +228,7 @@ where
     /// Returns the disposal of the subscription, or [`None`] when the observer did not join: it
     /// has then already been notified, outside the lock — unless the multicast was killed by a
     /// panicking observer, in which case it is dropped without being notified.
-    pub fn subscribe_with(
+    pub(crate) fn subscribe_with(
         self,
         observer: impl IntoBoxedObserver<'or, T, E, M>,
         admit: impl FnOnce(&mut R, Option<&Termination<E>>) -> Admission<T, E>,
@@ -469,7 +438,7 @@ where
 /// Unsubscribes one observer from a [`SerializedMulticast`].
 #[derive(Educe)]
 #[educe(Debug(bound()))]
-pub struct MulticastDisposal<'or, T, E, M: ObserverMode, R> {
+pub(crate) struct MulticastDisposal<'or, T, E, M: ObserverMode, R> {
     #[educe(Debug(ignore))]
     delivery: Delivery<'or, T, E, M, R>,
     #[educe(Debug(ignore))]
@@ -486,5 +455,52 @@ where
         // The flag is what stops the events; the action only releases the observer afterwards.
         self.disposed.write(true);
         let _ = self.delivery.send(EventBatch::Next(Action::Prune(self.id)));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SerializedMulticast;
+    use crate::disposable::Disposable;
+    use crate::observer::callback_observer::CallbackObserver;
+    use crate::observer::{EventBatch, Flow, Termination};
+    use crate::thread_mode::Local;
+    use std::sync::{Arc, Mutex};
+
+    /// Two observers share one delivery in subscription order, a disposed one stops receiving, and
+    /// a termination stops the multicast.
+    #[test]
+    fn test_two_observers_and_a_disposal() {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let multicast = SerializedMulticast::<i32, (), Local, ()>::idle(());
+
+        let seen_by_first = Arc::clone(&seen);
+        let first = multicast
+            .clone()
+            .subscribe(CallbackObserver::new(
+                move |value| seen_by_first.lock().unwrap().push(("first", value)),
+                |_| {},
+            ))
+            .expect("not terminated yet");
+        let seen_by_second = Arc::clone(&seen);
+        let _second = multicast
+            .clone()
+            .subscribe(CallbackObserver::new(
+                move |value| seen_by_second.lock().unwrap().push(("second", value)),
+                |_| {},
+            ))
+            .expect("not terminated yet");
+
+        assert_eq!(multicast.send(EventBatch::Next(1)), Flow::Continue);
+        first.dispose();
+        assert_eq!(multicast.send(EventBatch::Next(2)), Flow::Continue);
+        assert_eq!(
+            multicast.send(EventBatch::Termination(Termination::Completed)),
+            Flow::Stop
+        );
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [("first", 1), ("second", 1), ("second", 2)]
+        );
     }
 }

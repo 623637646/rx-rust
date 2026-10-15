@@ -20,7 +20,7 @@ use crate::{
 /// normalizing it, so the projection `OE::Disposal` drags along every borrow of the source, and an
 /// adapter over a source that borrows a local would hold that borrow until the adapter is
 /// dropped (`test_mut_ref` of the stream tests).
-pub enum LazySubscription<OE, S> {
+pub(crate) enum LazySubscription<OE, S> {
     /// Not polled yet.
     Source(OE),
     /// Subscribed to the source; dropping it disposes the subscription.
@@ -34,7 +34,7 @@ where
     OE: ObservableTypes,
 {
     /// Holds `source` until the first [`subscribe_once`](Self::subscribe_once).
-    pub fn new(source: OE) -> Self {
+    pub(crate) fn new(source: OE) -> Self {
         Self::Source(source)
     }
 
@@ -42,7 +42,7 @@ where
     ///
     /// A synchronous source delivers everything from inside `subscribe`, while this is
     /// [`Released`](Self::Released); the subscription is stored once `subscribe` returns.
-    pub fn subscribe_once<OR>(&mut self, observer: impl FnOnce() -> OR)
+    pub(crate) fn subscribe_once<OR>(&mut self, observer: impl FnOnce() -> OR)
     where
         OR: Observer<OE::Item, OE::Error>,
         OE: Observable<OR>,
@@ -54,7 +54,7 @@ where
     }
 
     /// Releases the subscription now instead of whenever the adapter itself is dropped.
-    pub fn release(&mut self) {
+    pub(crate) fn release(&mut self) {
         *self = Self::Released;
     }
 }

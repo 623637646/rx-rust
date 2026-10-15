@@ -75,7 +75,7 @@ impl<OE, C, F> Debug<OE, C, F> {
 
 /// The callback type of [`Debug::with_stdout`](struct@Debug#method.with_stdout), which
 /// prints each event to stdout.
-pub type DebugPrintCallback<C, T, E> = fn(C, DebugEvent<'_, T, E>);
+pub(crate) type DebugPrintCallback<C, T, E> = fn(C, DebugEvent<'_, T, E>);
 
 impl<T, E, OE, C> Debug<OE, C, DebugPrintCallback<C, T, E>> {
     /// Creates a [`struct@Debug`] over `source` that prints every event to stdout, prefixed by

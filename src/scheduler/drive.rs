@@ -19,7 +19,7 @@ use std::{
 /// (tokio's wakes after some thirty years).
 ///
 /// Every step gets `clock.now()`, and a [`Next::SleepUntil`] is measured against it.
-/// Between two steps the task yields through [`yield_now`], also for a `SleepUntil` whose instant
+/// Between two steps the task yields through `yield_now`, also for a `SleepUntil` whose instant
 /// has passed (tokio's `Sleep` would be ready at once, without yielding). A scheduler that wants
 /// another kind of yield drives the task itself through [`Task::split`] and
 /// [`Stepper::step`](super::Stepper::step).
@@ -86,7 +86,7 @@ async fn until_woken(sleep: impl Future<Output = ()>) {
 /// two steps. It wakes itself right away, so the task runs again as soon as the other tasks had
 /// their turn, without waiting for the runtime's IO or timer driver as a runtime's own
 /// `yield_now` may.
-pub fn yield_now() -> impl Future<Output = ()> {
+pub(crate) fn yield_now() -> impl Future<Output = ()> {
     YieldNow(false)
 }
 

@@ -108,11 +108,12 @@ cargo tarpaulin --out Html
   its `Shared` and `Local` scheduler side by side; `virtual_time.rs` the scheduler on a virtual
   clock that tests move forward (`VirtualTime`, always compiled).
 - `src/utils/` — shared machinery. Public modules are for users writing their own operators:
-  `subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`, `serialized_delivery`,
-  `serialized_multicast`, `resubscribe`. A module shared inside the crate only is
-  `pub(crate) mod`: `pending_events`, `reservation_slot`, `id_generator`, `on_panic`,
+  `subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`, `serialized_delivery`.
+  A module shared inside the crate only is `pub(crate) mod`: `serialized_multicast`,
+  `resubscribe`, `pending_events`, `reservation_slot`, `id_generator`, `on_panic`,
   `lazy_subscription`. A module stays public only when a public signature names its items or a
-  user writing an operator needs them; otherwise it is `pub(crate)`.
+  user writing an operator needs them; otherwise it is `pub(crate)`, and so is everything in it —
+  `cargo check` with `-W unreachable_pub` is what catches a `pub` left behind in one.
 - `tests/<name>.rs` — integration tests, one file per operator; shared helpers in
   `tests/tests_utils/`. Crate-private modules carry their own unit tests (see below).
 

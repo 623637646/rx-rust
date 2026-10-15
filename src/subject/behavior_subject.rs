@@ -1,6 +1,6 @@
 //! A subject that keeps a current value and hands it to every new subscriber.
 //!
-//! The current value lives in the [`SerializedMulticast`]'s resources, so replacing it and
+//! The current value lives in the `SerializedMulticast`'s resources, so replacing it and
 //! forwarding it are one atomic step, and so are reading it and joining the multicast: a
 //! subscriber can neither miss a value emitted while it was subscribing nor observe one twice.
 

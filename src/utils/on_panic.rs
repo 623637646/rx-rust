@@ -32,16 +32,16 @@ use educe::Educe;
 #[must_use = "a guard that is not bound to a variable is dropped at once, guarding nothing"]
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct OnPanic<T, F: FnOnce(T)>(Option<(T, F)>);
+pub(crate) struct OnPanic<T, F: FnOnce(T)>(Option<(T, F)>);
 
 impl<T, F: FnOnce(T)> OnPanic<T, F> {
     /// Arms the guard, parking `state` in it until the scope ends one way or the other.
-    pub fn new(state: T, action: F) -> Self {
+    pub(crate) fn new(state: T, action: F) -> Self {
         Self(Some((state, action)))
     }
 
     /// Ends the guarded scope the returning way, handing the state back untouched.
-    pub fn disarm(mut self) -> T {
+    pub(crate) fn disarm(mut self) -> T {
         let (state, _action) = self.0.take().expect("the guard is disarmed at most once");
         state
     }
@@ -59,7 +59,7 @@ impl<T, F: FnOnce(T)> Drop for OnPanic<T, F> {
 }
 
 /// Runs `action` if the current scope unwinds, for a guard that carries no state.
-pub fn on_panic<F: FnOnce()>(action: F) -> OnPanic<(), impl FnOnce(())> {
+pub(crate) fn on_panic<F: FnOnce()>(action: F) -> OnPanic<(), impl FnOnce(())> {
     OnPanic::new((), move |()| action())
 }
 

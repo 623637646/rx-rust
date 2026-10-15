@@ -38,13 +38,13 @@ use educe::Educe;
 /// [module documentation](self) for why the bound cannot be stated on the observer instead.
 #[derive(Educe)]
 #[educe(Debug, Clone, Copy)]
-pub struct Resubscribe<OE: ObservableTypes, OR>(
+pub(crate) struct Resubscribe<OE: ObservableTypes, OR>(
     #[educe(Debug(ignore))] fn(OE, OR) -> DisposeOnDrop<OE::Disposal>,
 );
 
 impl<OE: ObservableTypes, OR> Resubscribe<OE, OR> {
     /// Captures the subscription of `OE` with `OR`, while the bound that allows it is in scope.
-    pub fn new() -> Self
+    pub(crate) fn new() -> Self
     where
         OE: Observable<OR>,
         OR: Observer<OE::Item, OE::Error>,
@@ -53,7 +53,7 @@ impl<OE: ObservableTypes, OR> Resubscribe<OE, OR> {
     }
 
     /// Subscribes `observable` with `observer`.
-    pub fn subscribe(self, observable: OE, observer: OR) -> DisposeOnDrop<OE::Disposal> {
+    pub(crate) fn subscribe(self, observable: OE, observer: OR) -> DisposeOnDrop<OE::Disposal> {
         (self.0)(observable, observer)
     }
 }

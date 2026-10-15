@@ -18,27 +18,27 @@
 /// It carries no lock of its own: it lives inside state that is already guarded, and
 /// [`next_id`](Self::next_id) takes `&mut self`.
 #[derive(Debug, Default)]
-pub struct IdGenerator(u64);
+pub(crate) struct IdGenerator(u64);
 
 /// An id handed out by an [`IdGenerator`].
 ///
 /// There is deliberately no `Default`: an id can only be obtained from a generator, so it can
 /// never accidentally equal the value a generator starts from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Id(u64);
+pub(crate) struct Id(u64);
 
 impl IdGenerator {
     /// The next id, greater than every id handed out before.
     ///
     /// `u64` is big enough that this never wraps on any platform.
     #[must_use = "the id identifies what is being handed out, and is the only way to recognize it later"]
-    pub fn next_id(&mut self) -> Id {
+    pub(crate) fn next_id(&mut self) -> Id {
         self.0 += 1;
         Id(self.0)
     }
 
     /// The id handed out last, or `None` before the first one.
-    pub fn latest(&self) -> Option<Id> {
+    pub(crate) fn latest(&self) -> Option<Id> {
         (self.0 != 0).then_some(Id(self.0))
     }
 }

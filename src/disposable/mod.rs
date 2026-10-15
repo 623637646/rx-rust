@@ -5,7 +5,7 @@
 //! [`Scheduler::run_task`](crate::scheduler::Scheduler::run_task) uses the same wrapper to cancel
 //! a task on drop. Operators build their disposals out of the small types here:
 //!
-//! - [`()`](empty_disposal) disposes nothing;
+//! - `()` disposes nothing;
 //! - [`CallbackDisposal`](callback_disposal::CallbackDisposal) runs a closure;
 //! - [`ChainDisposal`] disposes two in order, and
 //!   [`EitherDisposal`] one of two;
@@ -36,7 +36,7 @@ pub mod chain_disposal;
 mod delegate_disposal;
 pub mod dispose_on_drop;
 pub mod either_disposal;
-pub mod empty_disposal;
+mod empty_disposal;
 pub mod option_disposal;
 pub mod replaceable_disposal;
 
