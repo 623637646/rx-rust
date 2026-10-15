@@ -15,6 +15,7 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
+use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
@@ -576,8 +577,8 @@ fn test_stop_on_next() {
     });
 }
 
-/// Values queued before the scheduler task runs are delivered as one batch. Disposing partway
-/// through that batch must stop it: the values behind the disposal are never observed.
+/// Values queued before the scheduler task runs are delivered in one step of the task. Disposing
+/// partway through that step must stop it: the values behind the disposal are never observed.
 #[test]
 fn test_unsub_in_the_middle_of_a_batch() {
     block_on(|_| async move {
@@ -650,6 +651,59 @@ fn test_unsub_on_next() {
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
     });
+}
+
+/// An error sent while the task is delivering the values queued before it preempts those not
+/// delivered yet, as it does those still queued when the task starts.
+#[test]
+fn test_error_in_the_middle_of_a_batch() {
+    let time = VirtualTime::new();
+    let (sender, observable, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+    let sender = Arc::new(Mutex::new(Some(sender)));
+    let sender_cloned = sender.clone();
+    let _subscription = observable
+        .observe_on(time.scheduler())
+        .do_after_next(move |_| {
+            // The first value makes the source fail while 222 is still queued.
+            if let Some(sender) = sender_cloned.take_value() {
+                sender.on_termination(Termination::Error("error"));
+            }
+        })
+        .subscribe(observer);
+
+    let mut sender_taken = sender.take_value().unwrap();
+    assert!(sender_taken.on_next(111).is_continue());
+    assert!(sender_taken.on_next(222).is_continue());
+    assert!(sender.replace_value(Some(sender_taken)).is_none());
+    time.advance_by(Duration::ZERO);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+    assert_eq!(time.pending_tasks(), 0);
+}
+
+/// One task delivers the whole subscription: it waits for the source between the events rather
+/// than finish, and finishes once it has delivered the termination.
+#[test]
+fn test_one_task_for_the_subscription() {
+    let time = VirtualTime::new();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+    let _subscription = observable.observe_on(time.scheduler()).subscribe(observer);
+    time.advance_by(Duration::ZERO);
+    assert_eq!(time.pending_tasks(), 1);
+    assert!(sender.on_next(111).is_continue());
+    time.advance_by(Duration::ZERO);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(time.pending_tasks(), 1);
+    assert!(sender.on_next(222).is_continue());
+    sender.on_termination(Termination::Completed);
+    time.advance_by(Duration::ZERO);
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]

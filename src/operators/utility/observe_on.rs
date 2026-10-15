@@ -171,6 +171,21 @@ impl<M: ThreadMode, T, E> InboxHandle<M, T, E> {
         self.0.with_ref(|inbox| inbox.stopped)
     }
 
+    /// What the task checks before each value it delivers: `Err` once the delivery has stopped,
+    /// the error once one is queued, which it takes, since it preempts the values not delivered
+    /// yet, and `None` otherwise. A completion does not preempt them, so it is left queued.
+    fn take_preempting_error(&self) -> Result<Option<Termination<E>>, DeliveryStopped> {
+        self.0.with_mut(|inbox| {
+            if inbox.stopped {
+                Err(DeliveryStopped)
+            } else if let Some(Termination::Error(_)) = inbox.termination {
+                Ok(inbox.termination.take())
+            } else {
+                Ok(None)
+            }
+        })
+    }
+
     /// Marks the delivery stopped, and drops what is still queued, outside the lock.
     fn stop(&self) {
         drop(self.0.with_mut(|inbox| {
@@ -237,12 +252,19 @@ where
         }
     }
 
-    /// Delivers `values` in order, and returns whether the delivery may go on: a disposal, which
-    /// may come from the observer itself or from another thread, is honored before each value.
+    /// Delivers `values` in order, and returns whether the delivery may go on. Before each value
+    /// it honors a disposal, which may come from the observer itself or from another thread, and
+    /// an error queued since the step took `values`: the error is delivered instead of the values
+    /// left, as it would have been had it come before the step.
     fn deliver(&mut self, values: Vec<T>) -> bool {
         for value in values {
-            if self.inbox.is_stopped() {
-                return false;
+            match self.inbox.take_preempting_error() {
+                Err(DeliveryStopped) => return false,
+                Ok(Some(error)) => {
+                    self.terminate(error);
+                    return false;
+                }
+                Ok(None) => {}
             }
             let Some(observer) = self.observer.as_mut() else {
                 return false;

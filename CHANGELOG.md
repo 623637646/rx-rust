@@ -208,6 +208,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `observe_on` delivers an error before the values still queued when it was sent, even when it
+  comes while the task is delivering a batch of earlier values: the rest of that batch used to be
+  delivered first.
+
 - A delay, period, time span or timeout too long for an `Instant` to represent no longer panics on
   overflow; its deadline is never reached instead. `delay` never delivers the value, nor anything
   after it, `timeout` never fires, `debounce` never emits the pending value, and `interval` and

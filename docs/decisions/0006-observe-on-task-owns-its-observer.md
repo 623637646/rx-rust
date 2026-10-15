@@ -14,11 +14,15 @@ the mode of the source and the scheduler joined. The downstream observer sits in
 alone calls it and drops it. The source's subscription sits in a `ReplaceableDisposal` that the
 task disposes as it stops, so the context-owns-its-source rule (decision 0005) still holds.
 
-The disposal stops the inbox first, then cancels the task, then disposes the source. The task
-checks the inbox before every value it delivers, so nothing is delivered after a disposal, even
-one made by the observer itself in the middle of a batch, or from another thread while the task
-runs. A task dropped before it stopped — cancelled, unwound by a panic of the observer, or dropped
-with its runtime — stops the inbox and disposes the source from its `Drop`.
+The disposal stops the inbox first, then cancels the task, then disposes the source. A step of
+the task takes the events queued so far and delivers them; what comes meanwhile waits for the next
+step, so a step is as long as what was queued when it began, however fast the source keeps
+sending. Before every value it delivers, the task checks the inbox, so nothing is delivered after
+a disposal, even one made by the observer itself in the middle of a batch, or from another thread
+while the task runs, and an error queued meanwhile preempts the values left in the batch, as it
+preempts those still queued when the step begins. A task dropped before it stopped — cancelled,
+unwound by a panic of the observer, or dropped with its runtime — stops the inbox and disposes the
+source from its `Drop`.
 
 ### Why
 
@@ -29,8 +33,8 @@ with its runtime — stops the inbox and disposes the source from its `Drop`.
   context the source's observer held contained the downstream observer, behind a `Shared` pointer
   as soon as the source was `Shared`, which required it to be `Send`.
 - **Nothing is shared that does not have to be.** The observer is called by the task only, so it
-  needs no lock and no serialized delivery; the inbox is one lock taken once per batch, plus one
-  read per value.
+  needs no lock and no serialized delivery; the inbox is one lock, taken once per batch and once per
+  value.
 - **The disposal stays `Send`** with a `Local` scheduler: it holds the inbox, the scheduler's task
   handle and the source's slot, none of which names the observer.
 - **A dropped task stops the source.** A context held by a task that its runtime dropped stayed
