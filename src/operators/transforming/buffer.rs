@@ -143,6 +143,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct BufferObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
 );
@@ -164,6 +165,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct BoundaryObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
 );

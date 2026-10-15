@@ -216,6 +216,7 @@ where
 /// The observer a [`Debounce`] gives its source. It holds the scheduler's clock rather than the
 /// scheduler, which may be `Local` while the source sends from another thread, and wakes the timer
 /// rather than scheduling it.
+#[doc(hidden)]
 pub struct DebounceObserver<M: ThreadMode, T, E, OR, D: Disposable, C> {
     context: DebounceContext<M, T, E, OR, D>,
     time_span: Duration,

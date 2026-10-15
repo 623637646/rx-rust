@@ -181,6 +181,7 @@ where
 type WindowContext<'a, M, T, E, OR, D> =
     SubscriptionContext<M, DelegateAction<T, E>, E, DelegateObserver<'a, M, T, E, OR>, (), D>;
 
+#[doc(hidden)]
 pub struct SourceObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
     WindowContext<'a, M, T, E, OR, D>,
 );
@@ -218,6 +219,7 @@ fn terminate<'a, M, T, E, OR, D>(
     ));
 }
 
+#[doc(hidden)]
 pub struct BoundaryObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
     WindowContext<'a, M, T, E, OR, D>,
 );
@@ -258,6 +260,7 @@ enum DelegateAction<T, E> {
 
 /// Owns the state that the actions act on, so that a window is fed and emitted outside the lock of
 /// the context that serializes the source against the boundary.
+#[doc(hidden)]
 pub struct DelegateObserver<'a, M: ObserverMode, T, E, OR> {
     outer_observer: OR,
     /// The sending end of the window that is currently open, which is the only place where the

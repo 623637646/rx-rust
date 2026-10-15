@@ -94,6 +94,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct ThrottleObserver<OR, C> {
     observer: OR,
     time_span: Duration,

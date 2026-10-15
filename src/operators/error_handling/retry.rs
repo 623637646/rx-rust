@@ -111,6 +111,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct RetryObserver<M: ThreadMode, OR, F, OE1: ObservableTypes> {
     observer: OR,
     callback: F,

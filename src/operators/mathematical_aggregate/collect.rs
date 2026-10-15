@@ -92,6 +92,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct CollectObserver<C, OR> {
     observer: OR,
     collection: C,

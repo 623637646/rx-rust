@@ -102,6 +102,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct ConcatObserver<M: ThreadMode, OR, OE2, D: Disposable> {
     observer: OR,
     source_2: OE2,

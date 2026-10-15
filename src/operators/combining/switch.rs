@@ -152,6 +152,7 @@ struct Model<D: Disposable> {
     sub_ids: IdGenerator,
 }
 
+#[doc(hidden)]
 pub struct SwitchObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposable>(
     SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
 );
@@ -203,6 +204,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct SwitchInnerObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposable>(
     SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
     Id,

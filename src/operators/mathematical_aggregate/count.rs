@@ -78,6 +78,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct CountObserver<OR> {
     observer: OR,
     count: usize,

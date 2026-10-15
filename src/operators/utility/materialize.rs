@@ -75,6 +75,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct MaterializeObserver<OR>(OR);
 
 impl<T, E, OR> Observer<T, E> for MaterializeObserver<OR>

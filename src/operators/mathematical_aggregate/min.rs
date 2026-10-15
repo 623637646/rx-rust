@@ -80,6 +80,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct MinObserver<T, OR> {
     observer: OR,
     min: Option<T>,

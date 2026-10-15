@@ -85,6 +85,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct MapObserver<OR, F> {
     observer: OR,
     callback: F,

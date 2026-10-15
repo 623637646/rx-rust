@@ -115,6 +115,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct TakeUntilObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, T, E, OR, (), D>,
 );
@@ -133,6 +134,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct StopObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, T, E, OR, (), D>,
 );

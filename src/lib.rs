@@ -1,4 +1,5 @@
 #![forbid(unsafe_code)]
+#![deny(missing_docs)]
 // The README is the crate-level documentation, and its examples are doctests. They use the Tokio
 // scheduler, so both only exist under that feature; docs.rs builds with every feature (see
 // `Cargo.toml`).

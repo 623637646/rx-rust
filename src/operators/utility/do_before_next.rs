@@ -86,6 +86,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct DoBeforeNextObserver<OR, F> {
     observer: OR,
     callback: F,

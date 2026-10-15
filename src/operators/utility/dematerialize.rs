@@ -80,6 +80,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct DematerializeObserver<OR>(Option<OR>);
 
 impl<T, E, OR> Observer<Event<T, E>, Infallible> for DematerializeObserver<OR>

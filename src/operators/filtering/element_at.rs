@@ -84,6 +84,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct ElementAtObserver<OR> {
     observer: Option<OR>,
     index: usize,

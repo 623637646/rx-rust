@@ -125,6 +125,7 @@ struct Model {
     started: bool,
 }
 
+#[doc(hidden)]
 pub struct SkipUntilObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, T, E, OR, Model, D>,
 );
@@ -154,6 +155,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct StartObserver<M: ThreadMode, T, E, OR, D: Disposable> {
     context: SubscriptionContext<M, T, E, OR, Model, D>,
     started: bool,

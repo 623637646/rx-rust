@@ -80,6 +80,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct DefaultIfEmptyObserver<T, OR> {
     observer: OR,
     default_value: Option<T>, // None means the source's got at least one value already.

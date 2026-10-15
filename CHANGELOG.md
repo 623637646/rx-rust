@@ -96,6 +96,12 @@ All notable changes to this project are documented here. The format follows
   through `retry` and `concat_all`. The helpers for writing an operator
   (`subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`,
   `serialized_delivery`) stay public.
+- The observer type each operator subscribes its source with (`MapObserver`, `FilterObserver`,
+  `TakeObserver`, … — 75 of them) is `#[doc(hidden)]`. They remain `pub`, because the non-boxed
+  `create`, `hook_on_subscription` and `hook_on_termination` hand the downstream observer to a
+  user closure whose signature names the type, so this is a documentation change, not an API one:
+  nothing that compiled before stops compiling. The crate now denies `missing_docs`, so a public
+  item is either documented or hidden.
 - **Breaking:** the MSRV is 1.89 (was 1.88), for educe 0.8 (was 0.6). educe 0.6 bounded a derived
   `Eq` by `PartialEq` only, which made `Termination<f64>`, `Event<f64, _>`, `EventBatch`,
   `DebugEvent` and `timeout::Error` `Eq` over a type that is not; they now require `Eq`.

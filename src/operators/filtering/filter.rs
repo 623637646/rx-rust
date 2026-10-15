@@ -79,6 +79,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct FilterObserver<OR, F> {
     observer: OR,
     callback: F,

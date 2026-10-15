@@ -124,6 +124,7 @@ struct Model<T> {
     last_value: Option<T>,
 }
 
+#[doc(hidden)]
 pub struct SampleObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, T, E, OR, Model<T>, D>,
 );
@@ -144,6 +145,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct SamplerObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, T, E, OR, Model<T>, D>,
 );

@@ -77,6 +77,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct SumObserver<T, OR> {
     observer: OR,
     sum: Option<T>,

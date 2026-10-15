@@ -358,6 +358,7 @@ where
 /// The observer an [`ObserveOn`] gives its source. It queues the events and wakes the task, and
 /// holds neither the scheduler, which may be `Local` while the source sends from another thread,
 /// nor the downstream observer, which the task owns: it is `Send` as soon as the events are.
+#[doc(hidden)]
 pub struct ObserveOnObserver<M: ThreadMode, T, E> {
     inbox: InboxHandle<M, T, E>,
     waker: TaskWaker<M>,

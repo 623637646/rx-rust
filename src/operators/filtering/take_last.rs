@@ -75,6 +75,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct TakeLastObserver<T, OR> {
     observer: OR,
     buffer: VecDeque<T>,

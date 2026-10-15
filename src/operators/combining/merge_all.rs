@@ -161,6 +161,7 @@ impl<D: Disposable> Model<D> {
     }
 }
 
+#[doc(hidden)]
 pub struct MergeAllObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposable>(
     SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
 );
@@ -221,6 +222,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct MergeAllInnerObserver<M: ThreadMode, T, E, OR, ID: Disposable, SD: Disposable> {
     context: SubscriptionContext<M, T, E, OR, Model<ID>, SD>,
     key: Id,

@@ -161,6 +161,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct ObservableTryStreamObserver<M: ThreadMode, E, B> {
     context: M::Ptr<ObservableTryStreamContext<E, B>>,
 }

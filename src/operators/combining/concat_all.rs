@@ -144,6 +144,7 @@ where
     is_source_completed: bool,
 }
 
+#[doc(hidden)]
 pub struct SourceObserver<M: ThreadMode, T, E, OR, OE1, SD>
 where
     OE1: ObservableTypes<Item = T, Error = E>,
@@ -202,6 +203,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct InnerObserver<M: ThreadMode, T, E, OR, OE1, SD>
 where
     OE1: ObservableTypes<Item = T, Error = E>,

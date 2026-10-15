@@ -163,6 +163,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct SourceObserver<'a, M: ObserverMode, T, E, OR, F, K> {
     observer: OR,
     senders: HashMap<K, BoxedUnicastSender<'a, T, E, M>>,

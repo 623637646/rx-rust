@@ -150,10 +150,13 @@ cargo tarpaulin --out Html
 - **Implementing an observable** takes two impls: `ObservableTypes` with the associated `Item`,
   `Error`, `Mode` and `Disposal` — which must not mention the observer — and `Observable<OR>`,
   whose bounds name the observer the source is subscribed with
-  (`OE: Observable<MapObserver<OR, F>, Item = T0>`). That observer type is `pub`, its fields are
-  not: the non-boxed `create`, `hook_on_subscription` and `hook_on_termination` hand the
-  downstream observer to a user closure, and Rust rejects user code holding a value of a private
-  type, so the observer and every type in its generic arguments must be public. What sits only in
+  (`OE: Observable<MapObserver<OR, F>, Item = T0>`). That observer type is `pub` but
+  `#[doc(hidden)]`, and its fields are not public: the non-boxed `create`,
+  `hook_on_subscription` and `hook_on_termination` hand the downstream observer to a user closure,
+  and Rust rejects user code holding a value of a private type, so the observer and every type in
+  its generic arguments must be public — yet no user ever writes its name, so it stays out of the
+  documentation and needs no doc comment (the crate denies `missing_docs`, which is what lists the
+  ones that lack both). What sits only in
   its fields or in the where-clauses of trait impls — the model, the context, scheduler task and
   mode aliases — stays private: privacy does not check those where-clauses. `Mode` is the source's, `JoinedModeOf<A, B>` for several sources, `JoinedSchedulerModeOf<OE, S>` for a source and a scheduler, or the scheduler's alone (`timer`, `observe_on`). Ask for
   `OR: IntoBoxedObserver<'a, T, E, M>` only where the observer is boxed (a subject, `create`, a
@@ -201,7 +204,9 @@ cargo tarpaulin --out Html
   `Instant::now` in `src/` outside `scheduler/mod.rs` and `scheduler/virtual_time.rs`. Read the
   clock outside a context lock when the value is needed anyway (`let deadline =
   self.clock.now() + span;` before `update`).
-- Public items get doc comments; operators link to their reactivex.io page.
+- Public items get doc comments; operators link to their reactivex.io page. `#![deny(missing_docs)]`
+  enforces it, so an item that is `pub` only because the type system demands it — an operator's
+  observer — takes `#[doc(hidden)]` instead of a doc comment.
 - `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce
   parallel representations.
 - **`Flow`**: `Observer::on_next` returns `Flow::Continue` / `Flow::Stop`. `Stop` is a guarantee —

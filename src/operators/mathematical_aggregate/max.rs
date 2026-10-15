@@ -80,6 +80,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct MaxObserver<T, OR> {
     observer: OR,
     max: Option<T>,

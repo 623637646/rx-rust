@@ -74,6 +74,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct WithItemTypeObserver<T, OR> {
     observer: OR,
     _marker: MarkerType<T>,

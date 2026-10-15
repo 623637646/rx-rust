@@ -141,6 +141,7 @@ struct Model {
     one_is_completed: bool,
 }
 
+#[doc(hidden)]
 pub struct MergeObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, T, E, OR, Model, D>,
 );

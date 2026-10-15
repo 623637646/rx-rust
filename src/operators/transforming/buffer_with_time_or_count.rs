@@ -206,6 +206,7 @@ impl<T> Model<T> {
 
 /// The observer a [`BufferWithTimeOrCount`] gives its source. It holds the scheduler's clock rather
 /// than the scheduler, which may be `Local` while the source sends from another thread.
+#[doc(hidden)]
 pub struct BufferWithTimeOrCountObserver<M: ThreadMode, T, E, OR, D: Disposable, C> {
     context: BufferWithTimeOrCountContext<M, T, E, OR, D>,
     clock: C,

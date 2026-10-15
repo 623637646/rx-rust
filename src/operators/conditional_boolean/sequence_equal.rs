@@ -142,6 +142,7 @@ struct Model<T> {
     second: SourceState<T>,
 }
 
+#[doc(hidden)]
 pub struct SequenceEqualObserver<M: ThreadMode, T, E, OR, D: Disposable> {
     context: SubscriptionContext<M, bool, E, OR, Model<T>, D>,
     is_first: bool,

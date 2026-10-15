@@ -89,6 +89,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct TimeIntervalObserver<OR, C> {
     observer: OR,
     clock: C,

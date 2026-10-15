@@ -238,6 +238,7 @@ where
 /// The observer a [`Delay`] gives its source. It holds the scheduler's clock rather than the
 /// scheduler, which may be `Local` while the source sends from another thread, and wakes the timer
 /// rather than scheduling it.
+#[doc(hidden)]
 pub struct DelayObserver<M: ThreadMode, T, E, OR, D: Disposable, C> {
     context: DelayContext<M, T, E, OR, D>,
     delay: Duration,

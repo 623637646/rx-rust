@@ -177,6 +177,7 @@ struct Model {
     deadline: Option<Instant>,
 }
 
+#[doc(hidden)]
 pub struct TimeoutObserver<M: ThreadMode, T, E, OR, D: Disposable, C> {
     context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     duration: Duration,

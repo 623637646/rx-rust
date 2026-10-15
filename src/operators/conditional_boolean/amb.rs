@@ -219,6 +219,7 @@ enum AmbObserverState<M: ThreadMode, D: Disposable, OR> {
     Lost,
 }
 
+#[doc(hidden)]
 pub struct AmbObserver<M: ThreadMode, D: Disposable, OR>(AmbObserverState<M, D, OR>);
 
 impl<M, T, E, D, OR> Observer<T, E> for AmbObserver<M, D, OR>

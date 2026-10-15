@@ -90,6 +90,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct ReduceObserver<T, OR, F> {
     observer: OR,
     /// `None` only once the callback has panicked, which takes the accumulator with it.

@@ -90,6 +90,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct DoBeforeTerminationObserver<OR, F> {
     observer: OR,
     callback: F,

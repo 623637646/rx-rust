@@ -88,6 +88,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct TakeWhileObserver<OR, F> {
     observer: Option<OR>,
     callback: F,

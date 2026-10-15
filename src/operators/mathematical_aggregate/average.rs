@@ -57,6 +57,7 @@ impl<T, OE> Average<T, OE> {
     }
 }
 
+#[doc(hidden)]
 pub struct AverageObserver<T, OR> {
     observer: OR,
     /// Accumulated in `f64`, the type of the result. Summing in the source's own type overflows

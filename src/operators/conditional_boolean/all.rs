@@ -95,6 +95,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct AllObserver<OR, F> {
     observer: Option<OR>,
     callback: F,

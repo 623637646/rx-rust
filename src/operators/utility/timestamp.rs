@@ -84,6 +84,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct TimestampObserver<OR, C> {
     observer: OR,
     clock: C,

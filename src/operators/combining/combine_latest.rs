@@ -126,6 +126,7 @@ struct Model<T1, T2> {
 
 macro_rules! impl_observer {
     ($name:ident, $t_self:ident, $field_self:ident, $field_other:ident, $combine:expr) => {
+        #[doc(hidden)]
         pub struct $name<M: ThreadMode, T1, T2, E, OR, D: Disposable>(
             SubscriptionContext<M, (T1, T2), E, OR, Model<T1, T2>, D>,
         );

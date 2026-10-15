@@ -103,6 +103,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct DistinctUntilChangedObserver<OR, F, K> {
     observer: OR,
     key_selector: F,

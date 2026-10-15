@@ -87,6 +87,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct ContainsObserver<T, OR> {
     observer: Option<OR>,
     item: T,

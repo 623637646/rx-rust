@@ -71,6 +71,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct SkipObserver<OR> {
     observer: OR,
     count: usize,

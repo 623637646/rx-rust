@@ -96,6 +96,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct TakeObserver<OR> {
     observer: Option<OR>,
     count: usize,

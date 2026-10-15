@@ -82,6 +82,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct HookOnNextObserver<OR, F> {
     observer: OR,
     callback: F,

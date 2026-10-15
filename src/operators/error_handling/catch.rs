@@ -110,6 +110,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct CatchObserver<M: ThreadMode, E, OR, F, D: Disposable> {
     observer: OR,
     callback: F,

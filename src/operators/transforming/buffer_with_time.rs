@@ -169,6 +169,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct BufferWithTimeObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
 );

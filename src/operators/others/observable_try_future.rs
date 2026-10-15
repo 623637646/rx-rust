@@ -130,6 +130,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct ObservableTryFutureObserver<M: ThreadMode, T, E> {
     context: M::Ptr<ObservableTryFutureContext<T, E>>,
 }

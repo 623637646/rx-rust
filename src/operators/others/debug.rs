@@ -159,6 +159,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct DebugObserver<OR, C, F> {
     observer: OR,
     context: C,

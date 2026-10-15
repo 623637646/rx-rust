@@ -157,6 +157,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct WindowWithCountObserver<'a, M: ObserverMode, T, E, OR> {
     observer: OR,
     sender: BoxedUnicastSender<'a, T, E, M>,

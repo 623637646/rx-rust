@@ -78,6 +78,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct BufferWithCountObserver<T, OR> {
     observer: OR,
     values: Vec<T>,

@@ -132,6 +132,7 @@ where
 
 /// The observer [`HookOnTermination`] subscribes its source with: it forwards the values, and hands
 /// the termination to the callback along with the downstream observer.
+#[doc(hidden)]
 pub struct HookOnTerminationObserver<OR, F> {
     observer: OR,
     callback: F,

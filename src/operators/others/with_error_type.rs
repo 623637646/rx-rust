@@ -76,6 +76,7 @@ where
     }
 }
 
+#[doc(hidden)]
 pub struct WithErrorTypeObserver<E, OR> {
     observer: OR,
     _marker: MarkerType<E>,
