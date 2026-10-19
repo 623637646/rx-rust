@@ -193,6 +193,15 @@ cargo tarpaulin --out Html
   (an operator's own task alias, `DelayTask` in the bounds of `delay`). An alias in a private
   module is re-exported where its module's public items are (`scheduler::TaskHandler`).
 - Keep `pub` surface minimal; add `Clone`/`Send`/`Sync`/`'static` bounds only where actually needed.
+  On a constructor (`new`, a fluent method), "needed" means one of two things. The first is type
+  inference: a closure's signature (`F: FnMut(T0) -> T`), a type parameter that appears in no
+  argument and must be tied to the source (`OE: ObservableTypes<Item = T0, …>` for `Map`'s `T0`,
+  `Debug`'s `T, E`), or two sources whose `Item` / `Error` must unify, so that one with a free
+  parameter (a subject, `with_item_type`) is inferred. The second is the body or the struct's
+  fields (`S::Mode::ptr`). A bound that only repeats what the `ObservableTypes` / `Observable` impl
+  checks anyway (`Repeat`'s `T: Clone`, `S: Subject` on `ConnectableController::new`) is left out:
+  it moves the error earlier and nothing more. A callback's `Fn*` bound stays even with no
+  arguments (`F: FnOnce()`), as the only place its signature is written.
 - **Derives** on a generic type go through `#[derive(Educe)]`, not `#[derive(...)]` (which bounds
   every type parameter) and not hand-written impls. A field that cannot or should not be printed
   gets `#[educe(Debug(ignore))]`. Educe infers the bounds from the field types, and leaves out those
