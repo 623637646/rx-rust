@@ -46,10 +46,7 @@ pub struct Min<OE> {
 impl<OE> Min<OE> {
     /// Creates a [`Min`] over `source`;
     /// [`ObservableExt::min`](crate::observable::ObservableExt::min) is the fluent form.
-    pub fn new<T, E>(source: OE) -> Self
-    where
-        OE: ObservableTypes<Item = T, Error = E>,
-    {
+    pub fn new(source: OE) -> Self {
         Self { source }
     }
 }

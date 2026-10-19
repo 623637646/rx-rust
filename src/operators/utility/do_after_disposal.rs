@@ -55,9 +55,8 @@ impl<OE, F> DoAfterDisposal<OE, F> {
     /// Creates a [`DoAfterDisposal`] over `source`;
     /// [`ObservableExt::do_after_disposal`](crate::observable::ObservableExt::do_after_disposal) is
     /// the fluent form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
         F: FnOnce(),
     {
         Self { source, callback }

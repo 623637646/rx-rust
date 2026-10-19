@@ -51,9 +51,8 @@ impl<OE, F> DoBeforeDisposal<OE, F> {
     /// Creates a [`DoBeforeDisposal`] over `source`;
     /// [`ObservableExt::do_before_disposal`](crate::observable::ObservableExt::do_before_disposal)
     /// is the fluent form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
         F: FnOnce(),
     {
         Self { source, callback }

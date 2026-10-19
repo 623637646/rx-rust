@@ -63,6 +63,7 @@ impl<OE, C, F> Debug<OE, C, F> {
     /// [`ObservableExt::debug`](crate::observable::ObservableExt::debug) is the fluent form.
     pub fn new<T, E>(source: OE, context: C, callback: F) -> Self
     where
+        OE: ObservableTypes<Item = T, Error = E>,
         F: Fn(C, DebugEvent<'_, T, E>),
     {
         Self {
@@ -84,6 +85,7 @@ impl<T, E, OE, C> Debug<OE, C, DebugPrintCallback<C, T, E>> {
     /// is the fluent form.
     pub fn with_stdout(source: OE, label: C) -> Self
     where
+        OE: ObservableTypes<Item = T, Error = E>,
         C: Display,
         T: std::fmt::Debug,
         E: std::fmt::Debug,

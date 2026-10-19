@@ -43,9 +43,8 @@ impl<OE, F> DoBeforeSubscription<OE, F> {
     /// Creates a [`DoBeforeSubscription`] over `source`;
     /// [`ObservableExt::do_before_subscription`](crate::observable::ObservableExt::do_before_subscription)
     /// is the fluent form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
         F: FnOnce(),
     {
         Self { source, callback }

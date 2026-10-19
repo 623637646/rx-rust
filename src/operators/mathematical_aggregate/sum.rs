@@ -43,10 +43,7 @@ pub struct Sum<OE> {
 impl<OE> Sum<OE> {
     /// Creates a [`Sum`] over `source`;
     /// [`ObservableExt::sum`](crate::observable::ObservableExt::sum) is the fluent form.
-    pub fn new<T, E>(source: OE) -> Self
-    where
-        OE: ObservableTypes<Item = T, Error = E>,
-    {
+    pub fn new(source: OE) -> Self {
         Self { source }
     }
 }

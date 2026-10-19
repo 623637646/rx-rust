@@ -46,10 +46,7 @@ pub struct Max<OE> {
 impl<OE> Max<OE> {
     /// Creates a [`Max`] over `source`;
     /// [`ObservableExt::max`](crate::observable::ObservableExt::max) is the fluent form.
-    pub fn new<T, E>(source: OE) -> Self
-    where
-        OE: ObservableTypes<Item = T, Error = E>,
-    {
+    pub fn new(source: OE) -> Self {
         Self { source }
     }
 }

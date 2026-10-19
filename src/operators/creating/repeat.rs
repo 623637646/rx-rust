@@ -41,10 +41,7 @@ pub struct Repeat<T> {
 
 impl<T> Repeat<T> {
     /// Creates a [`Repeat`].
-    pub fn new(value: T, count: usize) -> Self
-    where
-        T: Clone,
-    {
+    pub fn new(value: T, count: usize) -> Self {
         Self { value, count }
     }
 }
