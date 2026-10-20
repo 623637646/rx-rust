@@ -58,6 +58,42 @@ subscription is active.
 8. `test_unsub_on_error`
 9. `test_sub_on_error`
 
+## Connectable (`ConnectableController`, `RefCount`)
+
+A connectable creates a subject per round and resets it between rounds
+([decision 0007](decisions/0007-a-subject-per-round.md)), so these cases are about which round a
+subscriber joins. `publish`, `publish_behavior`, `publish_last` and `replay` cover the controller,
+`ref_count` the counting; all of them also cover the basic cases and the hot-observable ones above.
+
+1. `test_share_api` — the same pipeline through the `share*` shortcut instead of
+   `publish*().ref_count()`.
+2. `test_share_api_starts_over` — what the shortcut's subject does not carry into the next round:
+   the current value of `share_behavior`, the buffer of `share_replay`.
+3. `test_connect_without_subscription` — `connect()` with no subscriber subscribes the source, and
+   dropping the controller it returns disposes it.
+4. `test_disconnect_and_reconnect` — `disconnect()` stops the source, and `connect()` starts a new
+   round.
+5. `test_disconnect_resets_the_subject` — the disconnected round's subject is not the one the next
+   subscriber joins.
+6. `test_subscribe_after_completed`, `test_subscribe_after_error` — a subscriber that arrives after
+   the source terminated starts a new round, with a new connection, even while the earlier
+   subscribers still hold their subscriptions.
+7. `test_subscribe_after_all_unsubscribed` — the same once the count has reached zero.
+8. `test_reset_on_complete`, `test_reset_on_complete_false`, `test_reset_on_error_false`,
+   `test_reset_on_ref_count_zero_false`,
+   `test_reset_on_complete_false_still_resets_on_ref_count_zero` — one case per setting of
+   `ConnectableController::reset_on_*` and `RefCount::reset_on_ref_count_zero`, named after the
+   value that is not the default.
+9. `test_last_unsubscribe_removes_subject_observer_before_disconnecting_source` — the order in
+   which the last subscription releases what it holds.
+10. `test_panicking_first_subscriber_gives_the_controller_back`,
+    `test_panicking_late_subscriber_keeps_the_ref_count` — an observer that unwinds from the replay
+    it gets while subscribing leaves the count and the controller as they were.
+11. `test_race_condition_with_unsubscribe` — `test_race_condition` for subscribers that come and
+    go, so the source is connected and disconnected over and over.
+12. `test_send_boxed_local_source` — a `Local` source multicast through a `Shared` subject, erased
+    into a `Send` box.
+
 ## Using a lock (`with_mut` / `with_ref`)
 
 1. `test_next_on_sub`
