@@ -51,6 +51,11 @@ where
 }
 
 /// What [`State::decide`] leaves to do with the lock released.
+///
+/// A decision that takes the controller out of the state must be carried out or cancelled, which
+/// is what gives it back: dropping one strands the controller, so that the ref count would never
+/// connect or disconnect again.
+#[must_use = "a decision must be carried out or cancelled, which gives the controller back"]
 enum Decision<OE, S, C>
 where
     OE: ObservableTypes,
@@ -98,6 +103,11 @@ where
 
     /// Calls the decision off, for a caller that gives the controller back without switching it:
     /// returns the controller taken out, as it was.
+    ///
+    /// `replaced` is always `None` here: only the count reaching zero resets a subject, and the
+    /// one caller that cancels a decision has just counted a subscriber in (`RefCount::subscribe`,
+    /// where a `debug_assert` says so). A subject reset after all is dropped rather than put back,
+    /// since the state has moved on from it.
     fn cancel(self) -> Option<Controller<OE, S, C>> {
         match self {
             Self::Keep => None,
@@ -186,19 +196,18 @@ where
     }
 }
 
-/// Runs `update` on the state, then carries out what the state decides with the lock released:
-/// drops the reset subject, and switches the controller over, gives it back and decides again,
-/// until the state keeps it.
-fn settle<T, E, OE, S, C, F>(state: &StatePtr<OE, S, C>, update: F)
+/// Settles `decision` with the lock released — dropping the reset subject and switching the
+/// controller over — then gives the controller back and settles whatever the state decides next,
+/// until it keeps it.
+///
+/// Its callers change the state and decide under one lock (`state.with_mut(|current| { …;
+/// current.decide() })`), so that nothing can join a subject between the change and the decision
+/// it leads to, and hand the decision here to be carried out with the lock released.
+fn settle<T, E, OE, S, C>(state: &StatePtr<OE, S, C>, mut decision: Decision<OE, S, C>)
 where
     OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
     S: Subject<T, E> + Clone,
-    F: FnOnce(&mut State<OE, S, C>),
 {
-    let mut decision = state.with_mut(|current| {
-        update(current);
-        current.decide()
-    });
     while let Some(switched) = decision.carry_out() {
         decision = state.with_mut(|current| {
             current.give_back(switched);
@@ -378,19 +387,19 @@ where
         let state = self.state.clone();
         let guard = OnPanic::new(decision, move |decision| {
             let controller = decision.cancel();
-            settle(&state, |current| {
+            let decision = state.with_mut(|current| {
                 if let Some(generation) = generation {
                     current.count_out(generation);
                 }
                 if let Some(controller) = controller {
                     current.give_back(controller);
                 }
+                current.decide()
             });
+            settle(&state, decision);
         });
         let subscription = subject.subscribe(observer);
-        if let Some(switched) = guard.disarm().carry_out() {
-            settle(&self.state, |current| current.give_back(switched));
-        }
+        settle(&self.state, guard.disarm());
         subscription
             .then(RefCountDisposal {
                 state: self.state,
@@ -419,6 +428,10 @@ where
         let Some(generation) = self.generation else {
             return;
         };
-        settle::<T, E, OE, S, C, _>(&self.state, |current| current.count_out(generation));
+        let decision = self.state.with_mut(|current| {
+            current.count_out(generation);
+            current.decide()
+        });
+        settle(&self.state, decision);
     }
 }
