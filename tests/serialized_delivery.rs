@@ -549,7 +549,7 @@ fn events_sent_after_stop_are_rejected() {
     assert!(delivery.send(completed()).is_stop());
     assert_eq!(
         records(&log),
-        [Record::ObserverDropped, Record::ResourcesDropped]
+        [Record::ResourcesDropped, Record::ObserverDropped]
     );
 }
 
@@ -603,13 +603,13 @@ fn stop_drops_the_observer_without_notifying_it_and_is_idempotent() {
     delivery.stop();
     assert_eq!(
         records(&log),
-        [Record::ObserverDropped, Record::ResourcesDropped]
+        [Record::ResourcesDropped, Record::ObserverDropped]
     );
 
     delivery.stop();
     assert_eq!(
         records(&log),
-        [Record::ObserverDropped, Record::ResourcesDropped],
+        [Record::ResourcesDropped, Record::ObserverDropped],
         "stopping again must drop nothing more"
     );
 }
@@ -635,10 +635,10 @@ fn stop_drops_the_observer_and_the_resources_outside_the_lock() {
     assert_eq!(
         records(&log),
         [
-            Record::ObserverDropped,
-            Record::Note("observer dropped"),
             Record::ResourcesDropped,
             Record::Note("resources dropped"),
+            Record::ObserverDropped,
+            Record::Note("observer dropped"),
         ]
     );
 }
@@ -693,14 +693,14 @@ fn an_observer_that_stops_drops_the_values_that_are_still_queued() {
     );
 
     // Answering `Flow::Stop` stops the delivery, exactly as stopping it by hand does: the
-    // observer, which the loop holds here, is released before what the state held.
+    // observer, which the loop holds here, is released after what the state held.
     assert_eq!(values(&log), [1, 2]);
     assert_eq!(
         records(&log)[2..],
         [
-            Record::ObserverDropped,
             Record::Note("3 dropped"),
             Record::ResourcesDropped,
+            Record::ObserverDropped,
         ]
     );
     assert!(delivery.send(next(4)).is_stop());
@@ -716,8 +716,8 @@ fn an_observer_that_stops_is_dropped_instead_of_being_terminated() {
         records(&log),
         [
             Record::Next(1),
-            Record::ObserverDropped,
             Record::ResourcesDropped,
+            Record::ObserverDropped,
         ],
         "an observer that ended its own stream must not be terminated on top of that"
     );
@@ -1244,7 +1244,7 @@ fn dropping_the_last_handle_drops_the_observer_without_notifying_it() {
     drop(clone);
     assert_eq!(
         records(&log),
-        [Record::ObserverDropped, Record::ResourcesDropped]
+        [Record::ResourcesDropped, Record::ObserverDropped]
     );
 }
 

@@ -284,7 +284,9 @@ where
 /// The only place the delivery stops on the task's side: the task is dropped once it finishes,
 /// in the same poll as its last step, and also when it is dropped before — cancelled, dropped
 /// with its runtime, or unwound by a panic of the observer — so that the source is never left
-/// sending into an inbox nobody takes from. The observer is dropped after the source is disposed.
+/// sending into an inbox nobody takes from. The observer is dropped after the source is disposed,
+/// with the fields, so that its release tells downstream the source is gone, as a stopped
+/// `SerializedDelivery` releases them.
 impl<M: ThreadMode, T, E, OR, D: Disposable> Drop for Delivery<M, T, E, OR, D> {
     fn drop(&mut self) {
         self.inbox.stop();

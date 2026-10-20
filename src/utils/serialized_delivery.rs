@@ -55,22 +55,25 @@ use educe::Educe;
 
 /// A shared, serialized delivery of events to one observer.
 ///
-/// `R` is whatever the host owns alongside the observer. It is dropped, outside the lock, once the
-/// delivery stops — after the terminal notification when the delivery stops by terminating. The
-/// observer is released before it wherever the stopping code owns the observer; a stop that finds
-/// the observer held by a delivery loop elsewhere, a [`DeliveryStop`], or a callback that unwinds,
-/// drops `R` first.
+/// `R` is whatever the host owns alongside the observer, its sources' subscriptions typically. It
+/// is dropped, outside the lock, once the delivery stops — after the terminal notification when the
+/// delivery stops by terminating. Otherwise the observer is released without a notification, and
+/// only after `R` is dropped, so that its release tells downstream that its sources are gone. The
+/// exceptions are the stops that cannot reach the observer: a [`DeliveryStop`] leaves it parked for
+/// the next handle dropped or event, typically the handle of a source as `R` disposes it, and a stop
+/// that finds it held by a delivery loop on another thread leaves that loop to release it, which it
+/// may do while `R` is still being dropped.
 ///
 /// The pointers are the ones the thread mode `M` picks.
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]
 pub struct SerializedDelivery<M: ThreadMode, T, E, OR, R> {
-    // Declared first so that, when the last handle goes, the observer is released before the
-    // resources, as a stop releases them.
-    #[educe(Debug(ignore))]
-    observer: M::Ptr<Option<OR>>,
     #[educe(Debug(ignore))]
     core: M::Ptr<Core<T, E, R>>,
+    // Declared after the core so that, when the last handle goes, the observer is released after
+    // the resources, as a stop releases them.
+    #[educe(Debug(ignore))]
+    observer: M::Ptr<Option<OR>>,
     /// Set by a [`DeliveryStop`], the one stop that cannot reach the observer and may leave it
     /// parked: only then does the `Drop` of a handle have something to release, so the drop of a
     /// handle takes no lock before it.
@@ -299,8 +302,8 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
     /// Stops the delivery, dropping the observer without notifying it. Stopping again is a no-op.
     pub fn stop(&self) {
         // The observer parked in its cell is taken under the same lock that stops the state, so it
-        // is this call that drops it, before what the state held: downstream is released before
-        // its sources are, and anything its drop emits is rejected. A loop running elsewhere
+        // is this call that drops it, after what the state held: the sources are released before
+        // downstream is, and anything either drop emits is rejected. A loop running elsewhere
         // holds the observer instead, leaving the cell empty, and drops it itself when it sees
         // the stop.
         let (parked, deferred_drop) = self.core.with_mut(|core| {
@@ -309,8 +312,10 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
                 std::mem::replace(core, Core::Stopped),
             )
         });
-        drop(parked); // Drop outside the lock to avoid potential deadlock
+        // Outside the lock to avoid potential deadlock. Should the first drop unwind, the
+        // observer is still released, after it, by the unwind.
         drop(deferred_drop);
+        drop(parked);
     }
 
     /// Creates the handle that stops this delivery without naming its observer.
@@ -444,10 +449,10 @@ where
                     // It has ended its own stream or been disposed, so it is released like a
                     // disposed observer instead of being terminated. The loop holds it, so its
                     // cell is empty; it is dropped as `stop` drops it, after the state is stopped
-                    // and before what the state held.
+                    // and after what the state held.
                     let deferred_drop = self.core.replace_value(Core::Stopped);
-                    drop(observer); // Drop outside the lock to avoid potential deadlock
-                    drop(deferred_drop);
+                    drop(deferred_drop); // Drop outside the lock to avoid potential deadlock
+                    drop(observer);
                     return Flow::Stop;
                 }
             }

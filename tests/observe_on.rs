@@ -16,7 +16,7 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::scheduler::runtime::futures::ThreadPoolScheduler;
 use rx_rust::scheduler::virtual_time::VirtualTime;
-use rx_rust::thread_mode::mutable::MutableExt;
+use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use rx_rust::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
@@ -574,6 +574,51 @@ fn test_stop_on_next() {
         assert_eq!(checker.values(), [111]);
         assert_eq!(checker.state(), State::Dropped);
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    });
+}
+
+/// Downstream ends its own stream: the task disposes the source before it releases downstream, so
+/// that the release tells downstream the source is gone, as the operators built on a context do.
+#[test]
+fn test_stop_on_next_releases_observer_last() {
+    struct StopObserver(Arc<Mutex<Vec<&'static str>>>);
+
+    impl Observer<i32, Infallible> for StopObserver {
+        fn on_next(&mut self, _: i32) -> Flow {
+            Flow::Stop
+        }
+
+        fn on_termination(self, _: Termination<Infallible>) {}
+    }
+
+    impl Drop for StopObserver {
+        fn drop(&mut self) {
+            self.0.with_mut(|log| log.push("observer dropped"));
+        }
+    }
+
+    block_on(|_| async move {
+        let thread_1 = ThreadCheckerExecutor::new("thread_1");
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let observable = Create::shared_boxed({
+            let log = log.clone();
+            move |mut observer: SendBoxedObserver<'_, i32, Infallible>| {
+                assert!(observer.on_next(111).is_continue());
+                let log = log.clone();
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    drop(observer);
+                    log.with_mut(|log| log.push("source disposed"));
+                }))
+            }
+        });
+
+        let _subscription = observable
+            .observe_on(thread_1.scheduler())
+            .subscribe(StopObserver(log.clone()));
+        assert!(log.clone_value().is_empty());
+
+        thread_1.run_until_stalled().await;
+        assert_eq!(log.clone_value(), ["source disposed", "observer dropped"]);
     });
 }
 
