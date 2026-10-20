@@ -406,10 +406,11 @@ source is subscribed when the first observer arrives and unsubscribed when the l
 `connect()` / `disconnect()`.
 
 The subject is created by a subject factory, a `fn(&mut C) -> S` called with a context `C`, and a
-new one replaces it when it is reset, so each round starts over: by default the source terminating, the last subscriber leaving and
-a manual `disconnect()` all reset it. `reset_on_error(false)` / `reset_on_complete(false)` on the
-controller keep a terminated subject for late subscribers, and `reset_on_ref_count_zero(false)` on
-the `RefCount` keeps the source connected without subscribers:
+new one replaces it when it is reset, so each round starts over. By default the source
+terminating, the last subscriber leaving and a manual `disconnect()` all reset it.
+`reset_on_error(false)` / `reset_on_complete(false)` on the controller keep a terminated subject
+for late subscribers, and `reset_on_ref_count_zero(false)` on the `RefCount` keeps the source
+connected without subscribers:
 
 ```rust
 use rx_rust::{
