@@ -14,7 +14,7 @@ use crate::{
 use educe::Educe;
 use std::collections::VecDeque;
 
-/// Pairs the items of two Observables in order: the first of each, then the second of each, and so
+/// Pairs the items of two observables in order: the first of each, then the second of each, and so
 /// on. It completes once a source has completed and every item it emitted was paired.
 /// See <https://reactivex.io/documentation/operators/zip.html>
 ///

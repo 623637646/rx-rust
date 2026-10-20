@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Hands each item of the source Observable, together with the downstream observer, to a callback
+/// Hands each item of the source observable, together with the downstream observer, to a callback
 /// that decides what to forward.
 ///
 /// # Examples

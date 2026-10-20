@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Creates an Observable that emits the return value of a function.
+/// Creates an observable that emits the return value of a function.
 /// See <https://reactivex.io/documentation/operators/start.html>
 ///
 /// # Examples

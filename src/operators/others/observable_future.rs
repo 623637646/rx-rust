@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, task::Poll};
 
-/// A `Future` of the first item of an Observable that cannot fail.
+/// A `Future` of the first item of an observable that cannot fail.
 ///
 /// It resolves with `Some(item)` on the first item, stopping the source right there, and with
 /// `None` when the source completes without one. This is

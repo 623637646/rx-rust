@@ -7,7 +7,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Suppresses the first N items emitted by an Observable.
+/// Suppresses the first N items emitted by an observable.
 /// See <https://reactivex.io/documentation/operators/skip.html>
 ///
 /// # Examples

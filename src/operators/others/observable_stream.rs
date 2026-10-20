@@ -13,7 +13,7 @@ use educe::Educe;
 use futures::Stream;
 use std::{convert::Infallible, task::Poll};
 
-/// Converts an Observable that cannot fail into a `futures::Stream` that can be used with
+/// Converts an observable that cannot fail into a `futures::Stream` that can be used with
 /// `async/await`.
 ///
 /// Each item is yielded as is and completion ends the stream. This is [`ObservableTryStream`]

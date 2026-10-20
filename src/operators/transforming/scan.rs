@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Applies a function to each item emitted by an Observable, sequentially, and emits each
+/// Applies a function to each item emitted by an observable, sequentially, and emits each
 /// intermediate accumulated value.
 /// See <https://reactivex.io/documentation/operators/scan.html>
 ///

@@ -15,7 +15,7 @@ use educe::Educe;
 use std::marker::PhantomData;
 use std::{cmp::Ordering, num::NonZeroUsize};
 
-/// Subdivides the items of an Observable into Observable windows of a specified number of items.
+/// Subdivides the items of an observable into observable windows of a specified number of items.
 /// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// A window is emitted before its first item is delivered, and each window can be subscribed to

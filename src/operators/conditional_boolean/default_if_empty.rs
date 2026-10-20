@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits a specified item if the source Observable completes without emitting any items.
+/// Emits a specified item if the source observable completes without emitting any items.
 /// See <https://reactivex.io/documentation/operators/defaultifempty.html>
 ///
 /// # Examples

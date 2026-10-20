@@ -25,7 +25,7 @@ struct ObservableTryStreamContext<E, B> {
     termination: Option<Termination<E>>,
 }
 
-/// Converts a fallible Observable into a `futures::Stream` of `Result`s that can be used with
+/// Converts a fallible observable into a `futures::Stream` of `Result`s that can be used with
 /// `async/await` and `futures::TryStreamExt`.
 ///
 /// Each item becomes `Ok(item)`. An error from the source becomes the last item, `Err(error)`,

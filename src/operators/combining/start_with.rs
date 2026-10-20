@@ -11,7 +11,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits a specified sequence of values, then the items of the source Observable.
+/// Emits a specified sequence of values, then the items of the source observable.
 /// See <https://reactivex.io/documentation/operators/startwith.html>
 ///
 /// # Examples

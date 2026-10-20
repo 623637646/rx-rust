@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
 
-/// Creates an Observable that emits a single item after a given delay.
+/// Creates an observable that emits a single item after a given delay.
 /// See <https://reactivex.io/documentation/operators/timer.html>
 ///
 /// # Examples

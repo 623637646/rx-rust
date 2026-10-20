@@ -9,10 +9,10 @@ use crate::{
 use educe::Educe;
 use futures::Stream;
 
-/// Converts a `Stream` of `Result`s into an Observable.
+/// Converts a `Stream` of `Result`s into an observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
-/// Each `Ok` is emitted as an item. The first `Err` terminates the Observable with that error and
+/// Each `Ok` is emitted as an item. The first `Err` terminates the observable with that error and
 /// the stream is not polled any further, so whatever it would have yielded after the error is
 /// never seen. A stream that cannot fail goes through
 /// [`FromStream`](crate::operators::creating::from_stream::FromStream) instead.
@@ -94,7 +94,7 @@ where
                 Ok(value) => observer
                     .as_mut()
                     .is_some_and(|observer| observer.on_next(value).is_continue()),
-                // An error is terminal for an Observable, so the stream is left wherever it is.
+                // An error is terminal for an observable, so the stream is left wherever it is.
                 Err(error) => {
                     if let Some(observer) = observer.take() {
                         observer.on_termination(Termination::Error(error));

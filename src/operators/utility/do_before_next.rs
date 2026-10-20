@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback for each item emitted by the source Observable, before the item is emitted
+/// Invokes a callback for each item emitted by the source observable, before the item is emitted
 /// to the downstream observer.
 /// See <https://reactivex.io/documentation/operators/do.html>
 ///

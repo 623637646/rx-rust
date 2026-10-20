@@ -14,7 +14,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Creates an Observable from scratch by means of a builder function.
+/// Creates an observable from scratch by means of a builder function.
 /// See <https://reactivex.io/documentation/operators/create.html>
 ///
 /// The builder is called with the observer at each subscription, emits to it, and returns the

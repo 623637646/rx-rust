@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Creates an Observable that emits a sequence of integers within a specified range.
+/// Creates an observable that emits a sequence of integers within a specified range.
 /// See <https://reactivex.io/documentation/operators/range.html>
 ///
 /// # Examples

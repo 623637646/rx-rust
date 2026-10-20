@@ -16,7 +16,7 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
-/// Emits an item from the source Observable only after a particular time span has passed without
+/// Emits an item from the source observable only after a particular time span has passed without
 /// another source emission.
 /// See <https://reactivex.io/documentation/operators/debounce.html>
 ///

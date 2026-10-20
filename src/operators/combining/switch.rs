@@ -19,8 +19,8 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Flattens an Observable of Observables by emitting the items of the most recently emitted inner
-/// Observable only.
+/// Flattens an observable of observables by emitting the items of the most recently emitted inner
+/// observable only.
 /// See <https://reactivex.io/documentation/operators/switch.html>
 ///
 /// # Examples

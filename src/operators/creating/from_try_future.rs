@@ -8,10 +8,10 @@ use crate::{
 };
 use educe::Educe;
 
-/// Converts a `Future` of a `Result` into an Observable.
+/// Converts a `Future` of a `Result` into an observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
-/// An `Ok` is emitted as the single item, and the Observable then completes; an `Err` terminates it
+/// An `Ok` is emitted as the single item, and the observable then completes; an `Err` terminates it
 /// with that error. This is how a one-shot result, the `Single` of ReactiveX, enters a pipeline.
 /// A future that cannot fail goes through
 /// [`FromFuture`](crate::operators::creating::from_future::FromFuture) instead.

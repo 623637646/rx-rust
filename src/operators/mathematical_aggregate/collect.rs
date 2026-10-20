@@ -11,7 +11,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Gathers all the items emitted by an Observable into a single collection and emits it when the
+/// Gathers all the items emitted by an observable into a single collection and emits it when the
 /// source completes.
 ///
 /// The collection is built with [`Default`] and [`Extend`], so it can be a `Vec<T>`, a

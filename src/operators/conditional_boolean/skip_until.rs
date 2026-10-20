@@ -14,8 +14,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Discards items emitted by a source Observable until a second Observable emits an item. A second
-/// Observable that completes before emitting completes the result.
+/// Discards items emitted by a source observable until a second observable emits an item. A second
+/// observable that completes before emitting completes the result.
 /// See <https://reactivex.io/documentation/operators/skipuntil.html>
 ///
 /// # Examples

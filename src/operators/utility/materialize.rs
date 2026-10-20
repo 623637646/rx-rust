@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Converts an Observable into one that emits each of its events, the termination included, as an
+/// Converts an observable into one that emits each of its events, the termination included, as an
 /// [`Event`] item, then completes.
 /// See <https://reactivex.io/documentation/operators/materialize-dematerialize.html>
 ///

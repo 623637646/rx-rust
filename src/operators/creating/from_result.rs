@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Converts a `Result` into an Observable.
+/// Converts a `Result` into an observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
 /// # Examples

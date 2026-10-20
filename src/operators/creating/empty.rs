@@ -8,7 +8,7 @@ use crate::{
 };
 use std::convert::Infallible;
 
-/// Creates an Observable that emits no items and then terminates normally.
+/// Creates an observable that emits no items and then terminates normally.
 /// See <https://reactivex.io/documentation/operators/empty-never-throw.html>
 ///
 /// # Examples

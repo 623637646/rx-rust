@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::collections::VecDeque;
 
-/// Emits only the last N items emitted by an Observable.
+/// Emits only the last N items emitted by an observable.
 /// See <https://reactivex.io/documentation/operators/takelast.html>
 ///
 /// # Examples

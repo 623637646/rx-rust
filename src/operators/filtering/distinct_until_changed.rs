@@ -9,7 +9,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits an item from the source Observable only if it differs from the immediately preceding
+/// Emits an item from the source observable only if it differs from the immediately preceding
 /// item.
 /// See <https://reactivex.io/documentation/operators/distinctuntilchanged.html>
 ///

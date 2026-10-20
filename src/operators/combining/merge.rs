@@ -14,7 +14,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Combines multiple Observables into a single Observable that emits all of their emissions.
+/// Combines multiple observables into a single observable that emits all of their emissions.
 /// See <https://reactivex.io/documentation/operators/merge.html>
 ///
 /// # Examples

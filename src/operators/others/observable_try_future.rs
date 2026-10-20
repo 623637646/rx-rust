@@ -16,7 +16,7 @@ struct ObservableTryFutureContext<T, E> {
     waker: Option<Waker>,
 }
 
-/// A `Future` of the first item of an Observable.
+/// A `Future` of the first item of an observable.
 ///
 /// It resolves with `Ok(Some(item))` on the first item, stopping the source right there, with
 /// `Ok(None)` when the source completes without one, and with `Err(error)` when the source

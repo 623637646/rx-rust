@@ -16,17 +16,17 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Subdivides the items of an Observable into Observable windows, opening a new one whenever the
-/// `boundary` Observable emits an item.
+/// Subdivides the items of an observable into observable windows, opening a new one whenever the
+/// `boundary` observable emits an item.
 /// See <https://reactivex.io/documentation/operators/window.html>
 ///
 /// Completing the `boundary` stops future window rotation without terminating the current window
-/// or the outer Observable. An error from the `boundary` terminates the current window and the
-/// outer Observable.
+/// or the outer observable. An error from the `boundary` terminates the current window and the
+/// outer observable.
 ///
 /// Each window is a single-consumer pipe: it can be subscribed to once, it buffers the items that
 /// arrive while it has no subscriber, and dropping it without subscribing discards its items. A
-/// window is serialized on its own rather than together with the outer Observable, so the events
+/// window is serialized on its own rather than together with the outer observable, so the events
 /// of a window keep their order among themselves, but they are not ordered against the emission of
 /// a later window. Disposing the outer subscription ends the open window without a termination:
 /// what it had buffered is still delivered to its subscriber, even a later one, which is then
@@ -194,7 +194,7 @@ where
     }
 }
 
-/// Terminates the current window, then the outer Observable.
+/// Terminates the current window, then the outer observable.
 fn terminate<'a, M, T, E, OR, D>(
     context: WindowContext<'a, M, T, E, OR, D>,
     termination: Termination<E>,
@@ -233,7 +233,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         // Completing the boundary only stops the rotation: the current window and the outer
-        // Observable keep going.
+        // observable keep going.
         if let error @ Termination::Error(_) = termination {
             terminate(self.0, error);
         }

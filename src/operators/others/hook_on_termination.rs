@@ -12,7 +12,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Hands the termination of the source Observable, together with the downstream observer, to a
+/// Hands the termination of the source observable, together with the downstream observer, to a
 /// callback that decides what to deliver.
 ///
 /// # Examples

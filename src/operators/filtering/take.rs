@@ -14,7 +14,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits only the first N items emitted by an Observable.
+/// Emits only the first N items emitted by an observable.
 /// See <https://reactivex.io/documentation/operators/take.html>
 ///
 /// # Examples

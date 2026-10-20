@@ -19,8 +19,8 @@ use crate::{
 use educe::Educe;
 use std::{collections::VecDeque, marker::PhantomData};
 
-/// Flattens an Observable of Observables by emitting all of the values of each inner Observable,
-/// one inner Observable after the other.
+/// Flattens an observable of observables by emitting all of the values of each inner observable,
+/// one inner observable after the other.
 /// See <https://reactivex.io/documentation/operators/concat.html>
 ///
 /// # Examples

@@ -14,7 +14,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits the latest values of two Observables as a pair whenever either of them emits, once both
+/// Emits the latest values of two observables as a pair whenever either of them emits, once both
 /// have emitted.
 /// See <https://reactivex.io/documentation/operators/combinelatest.html>
 ///

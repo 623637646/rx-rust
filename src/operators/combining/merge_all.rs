@@ -19,7 +19,7 @@ use educe::Educe;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
-/// Flattens an Observable of Observables by emitting the values of every inner Observable as they
+/// Flattens an observable of observables by emitting the values of every inner observable as they
 /// arrive.
 /// See <https://reactivex.io/documentation/operators/merge.html>
 ///

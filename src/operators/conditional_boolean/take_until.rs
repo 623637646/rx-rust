@@ -11,7 +11,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits the items emitted by a source Observable until a second Observable emits an item or
+/// Emits the items emitted by a source observable until a second observable emits an item or
 /// terminates.
 /// See <https://reactivex.io/documentation/operators/takeuntil.html>
 ///

@@ -24,7 +24,7 @@ pub enum RetryAction<E, OE1> {
     Stop(E),
 }
 
-/// Re-subscribes after an error, to the Observable the callback returns, until the callback
+/// Re-subscribes after an error, to the observable the callback returns, until the callback
 /// gives up with an error of its own.
 ///
 /// Once the subscription is disposed, the callback is no longer called: an error that arrives

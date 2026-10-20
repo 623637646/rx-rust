@@ -18,7 +18,7 @@ use crate::{
 use educe::Educe;
 use std::time::Duration;
 
-/// Periodically gathers items from an Observable into bundles and emits these bundles as `Vec<T>`,
+/// Periodically gathers items from an observable into bundles and emits these bundles as `Vec<T>`,
 /// every `time_span`.
 ///
 /// The first bundle is emitted one `time_span` after the subscription, as ReactiveX does, and

@@ -7,7 +7,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Creates the Observable only when an Observer subscribes, a fresh one for each subscription.
+/// Creates the observable only when an Observer subscribes, a fresh one for each subscription.
 /// See <https://reactivex.io/documentation/operators/defer.html>
 ///
 /// # Examples

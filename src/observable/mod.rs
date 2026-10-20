@@ -1293,12 +1293,12 @@ pub trait ObservableExt: ObservableTypes + Sized {
         WindowWithCount::new(self, count)
     }
 
-    /// Gives an Observable whose error type is `Infallible` a concrete error type.
+    /// Gives an observable whose error type is `Infallible` a concrete error type.
     fn with_error_type<E1>(self) -> WithErrorType<E1, Self> {
         WithErrorType::new(self)
     }
 
-    /// Gives an Observable whose item type is `Infallible` a concrete item type.
+    /// Gives an observable whose item type is `Infallible` a concrete item type.
     fn with_item_type<T1>(self) -> WithItemType<T1, Self> {
         WithItemType::new(self)
     }

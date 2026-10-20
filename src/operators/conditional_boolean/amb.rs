@@ -12,7 +12,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Given two or more source Observables, mirrors only the first of them to emit an item or a
+/// Given two or more source observables, mirrors only the first of them to emit an item or a
 /// termination.
 /// See <https://reactivex.io/documentation/operators/amb.html>
 ///

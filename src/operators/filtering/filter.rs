@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits only those items from an Observable that pass a predicate test.
+/// Emits only those items from an observable that pass a predicate test.
 /// See <https://reactivex.io/documentation/operators/filter.html>
 ///
 /// # Examples

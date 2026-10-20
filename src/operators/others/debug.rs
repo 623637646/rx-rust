@@ -25,7 +25,7 @@ pub enum DebugEvent<'a, T: 'a, E: 'a> {
     Disposed,
 }
 
-/// Reports every event of the source Observable to a callback, and re-emits it unchanged.
+/// Reports every event of the source observable to a callback, and re-emits it unchanged.
 ///
 /// # Examples
 /// ```rust

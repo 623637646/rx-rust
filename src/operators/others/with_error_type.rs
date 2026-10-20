@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
 
-/// Gives an Observable whose error type is `Infallible` a concrete error type.
+/// Gives an observable whose error type is `Infallible` a concrete error type.
 ///
 /// # Examples
 /// ```rust

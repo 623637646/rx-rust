@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::num::NonZeroUsize;
 
-/// Gathers the items of an Observable into bundles of a specified size, emitted as `Vec<T>`; the
+/// Gathers the items of an observable into bundles of a specified size, emitted as `Vec<T>`; the
 /// last bundle, emitted on completion, may be smaller.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///

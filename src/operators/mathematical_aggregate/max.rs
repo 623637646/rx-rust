@@ -7,7 +7,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits the maximum item emitted by an Observable.
+/// Emits the maximum item emitted by an observable.
 /// See <https://reactivex.io/documentation/operators/max.html>
 ///
 /// `T` is only [`PartialOrd`], so values that do not compare — `f64::NAN` among them — are

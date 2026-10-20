@@ -8,7 +8,7 @@ use crate::{
 use educe::Educe;
 use std::ops::AddAssign;
 
-/// Calculates the sum of numbers emitted by an Observable and emits this sum.
+/// Calculates the sum of numbers emitted by an observable and emits this sum.
 /// See <https://reactivex.io/documentation/operators/sum.html>
 ///
 /// # Examples

@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback when the source Observable terminates, before the termination is emitted to
+/// Invokes a callback when the source observable terminates, before the termination is emitted to
 /// the downstream observer.
 /// See <https://reactivex.io/documentation/operators/do.html>
 ///

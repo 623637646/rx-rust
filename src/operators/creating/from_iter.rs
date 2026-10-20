@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Converts an `IntoIterator` into an Observable.
+/// Converts an `IntoIterator` into an observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
 /// # Examples

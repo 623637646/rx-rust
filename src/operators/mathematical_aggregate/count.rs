@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Counts the number of items emitted by the source Observable and emits this count.
+/// Counts the number of items emitted by the source observable and emits this count.
 /// See <https://reactivex.io/documentation/operators/count.html>
 ///
 /// # Examples

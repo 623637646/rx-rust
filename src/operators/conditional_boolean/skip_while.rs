@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Discards items emitted by an Observable until a specified condition becomes false.
+/// Discards items emitted by an observable until a specified condition becomes false.
 /// See <https://reactivex.io/documentation/operators/skipwhile.html>
 ///
 /// # Examples

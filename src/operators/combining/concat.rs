@@ -13,7 +13,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits all of the values of the first Observable, then, once it completes, all of the values of
+/// Emits all of the values of the first observable, then, once it completes, all of the values of
 /// the second.
 /// See <https://reactivex.io/documentation/operators/concat.html>
 ///

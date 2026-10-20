@@ -14,7 +14,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Specifies the `Scheduler` on which an observer will subscribe to this Observable.
+/// Specifies the `Scheduler` on which an observer will subscribe to this observable.
 /// See <https://reactivex.io/documentation/operators/subscribeon.html>
 ///
 /// # Examples

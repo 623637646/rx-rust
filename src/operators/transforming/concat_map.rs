@@ -15,7 +15,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Maps each source value to an Observable and emits all of the values of each, one Observable
+/// Maps each source value to an observable and emits all of the values of each, one observable
 /// after the other.
 /// See <https://reactivex.io/documentation/operators/flatmap.html>
 ///

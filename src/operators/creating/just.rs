@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Creates an Observable that emits a single item and then terminates normally.
+/// Creates an observable that emits a single item and then terminates normally.
 /// See <https://reactivex.io/documentation/operators/just.html>
 ///
 /// # Examples

@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, marker::PhantomData};
 
-/// Gives an Observable whose item type is `Infallible` a concrete item type.
+/// Gives an observable whose item type is `Infallible` a concrete item type.
 ///
 /// # Examples
 /// ```rust

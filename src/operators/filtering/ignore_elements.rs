@@ -9,7 +9,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Ignores every item of an Observable, passing on only its termination.
+/// Ignores every item of an observable, passing on only its termination.
 /// See <https://reactivex.io/documentation/operators/ignoreelements.html>
 ///
 /// # Examples

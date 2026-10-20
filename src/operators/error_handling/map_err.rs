@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Transforms an Observable's error while leaving its items unchanged.
+/// Transforms an observable's error while leaving its items unchanged.
 ///
 /// # Examples
 /// ```rust

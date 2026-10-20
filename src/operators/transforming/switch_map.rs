@@ -15,7 +15,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Maps each source value to an Observable and emits the values of the most recent one only,
+/// Maps each source value to an observable and emits the values of the most recent one only,
 /// unsubscribing from the previous one.
 /// See <https://reactivex.io/documentation/operators/switch.html>
 ///

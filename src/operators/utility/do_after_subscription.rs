@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Invokes a callback when the Observable is subscribed to, after the source has been subscribed
+/// Invokes a callback when the observable is subscribed to, after the source has been subscribed
 /// to.
 /// See <https://reactivex.io/documentation/operators/do.html>
 ///

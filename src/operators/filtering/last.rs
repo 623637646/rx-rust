@@ -8,7 +8,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits only the last item emitted by an Observable.
+/// Emits only the last item emitted by an observable.
 /// See <https://reactivex.io/documentation/operators/last.html>
 ///
 /// A source that completes without an item completes it without one, rather than with an error.

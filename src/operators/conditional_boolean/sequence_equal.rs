@@ -17,7 +17,7 @@ use educe::Educe;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-/// Emits a single boolean value that indicates whether two Observables emit the same sequence of
+/// Emits a single boolean value that indicates whether two observables emit the same sequence of
 /// items.
 /// See <https://reactivex.io/documentation/operators/sequenceequal.html>
 ///

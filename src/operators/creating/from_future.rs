@@ -9,13 +9,13 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Converts a Future into an Observable.
+/// Converts a Future into an observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
-/// The output is emitted as the single item, and the Observable then completes. A future of a
+/// The output is emitted as the single item, and the observable then completes. A future of a
 /// `Result` goes through
 /// [`FromTryFuture`](crate::operators::creating::from_try_future::FromTryFuture) instead, which
-/// turns its `Err` into the error of the Observable.
+/// turns its `Err` into the error of the observable.
 ///
 /// # Examples
 /// ```rust

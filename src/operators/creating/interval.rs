@@ -9,7 +9,7 @@ use crate::{
 use educe::Educe;
 use std::{convert::Infallible, time::Duration};
 
-/// Creates an Observable that emits a sequence of integers spaced by a given time interval.
+/// Creates an observable that emits a sequence of integers spaced by a given time interval.
 /// See <https://reactivex.io/documentation/operators/interval.html>
 ///
 /// [`new`](Self::new) emits `0` one `period` after the subscription, as ReactiveX does, and

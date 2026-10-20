@@ -10,7 +10,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits only the first item emitted by an Observable.
+/// Emits only the first item emitted by an observable.
 /// See <https://reactivex.io/documentation/operators/first.html>
 ///
 /// A source that completes without an item completes it without one, rather than with an error.

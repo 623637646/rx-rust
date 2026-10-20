@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
-/// Emits an item from the source Observable, then ignores subsequent items for a particular time
+/// Emits an item from the source observable, then ignores subsequent items for a particular time
 /// span.
 /// See <https://reactivex.io/documentation/operators/sample.html> (`throttleFirst`).
 ///

@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Creates an Observable that emits a particular item multiple times.
+/// Creates an observable that emits a particular item multiple times.
 /// See <https://reactivex.io/documentation/operators/repeat.html>
 ///
 /// # Examples

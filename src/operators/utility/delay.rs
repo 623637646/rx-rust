@@ -18,7 +18,7 @@ use std::{
     collections::VecDeque,
     time::{Duration, Instant},
 };
-/// Shifts the emissions from an Observable forward in time by a specified duration.
+/// Shifts the emissions from an observable forward in time by a specified duration.
 /// See <https://reactivex.io/documentation/operators/delay.html>
 ///
 /// The completion is delayed like the values, but an error is not: it is delivered at once, and

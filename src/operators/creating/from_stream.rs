@@ -10,7 +10,7 @@ use educe::Educe;
 use futures::Stream;
 use std::convert::Infallible;
 
-/// Converts a `Stream` into an Observable.
+/// Converts a `Stream` into an observable.
 /// See <https://reactivex.io/documentation/operators/from.html>
 ///
 /// # Examples

@@ -11,7 +11,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Emits only the item at `index`, counting from zero, emitted by the source Observable.
+/// Emits only the item at `index`, counting from zero, emitted by the source observable.
 /// See <https://reactivex.io/documentation/operators/elementat.html>
 ///
 /// A source that completes before reaching `index` completes it without an item, rather than with

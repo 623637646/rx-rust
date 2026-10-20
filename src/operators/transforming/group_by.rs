@@ -15,8 +15,8 @@ use std::{
     marker::PhantomData,
 };
 
-/// Divides an Observable into a set of Observables, one per key, each of which emits the items of
-/// the original Observable that map to its key.
+/// Divides an observable into a set of observables, one per key, each of which emits the items of
+/// the original observable that map to its key.
 /// See <https://reactivex.io/documentation/operators/groupby.html>
 ///
 /// A group is emitted before its first item is delivered, so each group can be subscribed to
@@ -25,11 +25,13 @@ use std::{
 /// buffered items followed by the termination.
 ///
 /// A group ends when the source terminates, when its subscription is disposed, or when the group
-/// Observable is dropped without being subscribed to. Later items mapping to the key of an ended
-/// group are discarded, just like the items of a window whose subscriber is gone.
+/// observable is dropped without being subscribed to. Later items mapping to the key of an ended
+/// group are discarded, just like the items of a window whose subscriber is gone. A key is
+/// remembered until the outer subscription ends, so that it keeps mapping to the group it was
+/// first emitted for; an unbounded key space therefore grows the operator's state.
 ///
 /// Each group is a single-consumer pipe: it can be subscribed to once, and it is serialized on its
-/// own rather than together with the outer Observable, so the items of a group keep their order
+/// own rather than together with the outer observable, so the items of a group keep their order
 /// among themselves, but they are not ordered against the emission of another group. Disposing the
 /// outer subscription ends the open groups without a termination: what a group had buffered is
 /// still delivered to its subscriber, even a later one, which is then dropped without being
@@ -196,7 +198,7 @@ where
     }
 
     fn on_termination(mut self, termination: Termination<E>) {
-        // The groups end before the outer Observable does.
+        // The groups end before the outer observable does.
         for (_, sender) in self.senders.drain() {
             sender.on_termination(termination.clone());
         }

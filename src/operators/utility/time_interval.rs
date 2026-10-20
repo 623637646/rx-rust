@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
-/// Emits each item of the source Observable with the time elapsed since the previous one, or,
+/// Emits each item of the source observable with the time elapsed since the previous one, or,
 /// for the first, since the subscription, measured on a [`Clock`]:
 /// [`SystemClock`](crate::scheduler::SystemClock), or a scheduler's
 /// ([`SchedulerTypes::clock`](crate::scheduler::SchedulerTypes::clock)).

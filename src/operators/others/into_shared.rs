@@ -9,7 +9,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Declares an Observable [`Shared`], whatever its own mode.
+/// Declares an observable [`Shared`], whatever its own mode.
 ///
 /// A synchronous source such as `Just` or `Throw` is `Local`, and erasing an observable keeps its
 /// mode, so it cannot share an erased type with a `Shared` source, such as a subject, until it is

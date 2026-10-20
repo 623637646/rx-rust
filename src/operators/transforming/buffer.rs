@@ -14,8 +14,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Gathers items from an Observable into bundles and emits these bundles as `Vec<T>`, whenever a
-/// `boundary` Observable emits an item.
+/// Gathers items from an observable into bundles and emits these bundles as `Vec<T>`, whenever a
+/// `boundary` observable emits an item.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// Terminating the `boundary` terminates the outer Observable: completing it emits the pending
@@ -37,7 +37,7 @@ use educe::Educe;
 ///   composition emits a trailing empty `Vec`, because collecting the empty open window yields
 ///   the initial value.
 /// - [`Window`](crate::operators::transforming::window::Window) requires `E: Clone`, since an
-///   error is delivered to both the current window and the outer Observable. A buffer has no
+///   error is delivered to both the current window and the outer observable. A buffer has no
 ///   window to deliver to and so places no such bound on `E`.
 ///
 /// The composition also pays for machinery a buffer does not need: a subject per window, and one

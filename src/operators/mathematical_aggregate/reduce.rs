@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Applies a function to each item emitted by an Observable, sequentially, and emits the final
+/// Applies a function to each item emitted by an observable, sequentially, and emits the final
 /// accumulated value.
 /// See <https://reactivex.io/documentation/operators/reduce.html>
 ///

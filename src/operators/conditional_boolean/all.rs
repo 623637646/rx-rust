@@ -14,7 +14,7 @@ use crate::{
 use educe::Educe;
 use std::marker::PhantomData;
 
-/// Emits a single boolean value that indicates whether all items emitted by a source Observable
+/// Emits a single boolean value that indicates whether all items emitted by a source observable
 /// satisfy a specified condition.
 /// See <https://reactivex.io/documentation/operators/all.html>
 ///

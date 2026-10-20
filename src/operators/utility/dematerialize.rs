@@ -12,7 +12,7 @@ use crate::{
 use educe::Educe;
 use std::convert::Infallible;
 
-/// Converts an Observable that emits [`Event`]s back into one that emits the items and the
+/// Converts an observable that emits [`Event`]s back into one that emits the items and the
 /// termination those events describe.
 /// See <https://reactivex.io/documentation/operators/materialize-dematerialize.html>
 ///
