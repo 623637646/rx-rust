@@ -1,49 +1,222 @@
 //! The [`RefCount`] operator, behind
 //! [`ObservableExt::share`](crate::observable::ObservableExt::share),
+//! [`ObservableExt::share_behavior`](crate::observable::ObservableExt::share_behavior),
 //! [`ObservableExt::share_last`](crate::observable::ObservableExt::share_last),
 //! [`ObservableExt::share_replay`](crate::observable::ObservableExt::share_replay).
 
+use super::connectable_controller::{
+    ConnectableController, Connected, ConnectionObserver, Current, Disconnected,
+    MulticastObservable,
+};
 use crate::{
     delegate_disposal,
     disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::Observer,
-    operators::connectable::connectable_controller::{
-        ConnectableController, Connected, Disconnected,
-    },
-    subject::{Subject, SubjectObservable},
+    subject::Subject,
     thread_mode::{ThreadMode, mutable::MutableHelper},
-    utils::on_panic::OnPanic,
+    utils::{id_generator::Id, on_panic::OnPanic},
 };
 use educe::Educe;
-use std::num::NonZeroUsize;
 
-/// The connection of a [`RefCount`] and its number of subscribers, shared by its subscriptions.
-enum State<OE, S, D>
+/// The controller of a [`RefCount`], in either of its states.
+enum Controller<OE, S, C>
 where
-    D: Disposable,
+    OE: ObservableTypes,
+    S: ObservableTypes,
 {
-    /// No subscriber, and the source is not connected.
-    Disconnected {
-        controller: ConnectableController<OE, S, Disconnected>,
+    Disconnected(ConnectableController<OE, S, C, Disconnected>),
+    Connected(ConnectableController<OE, S, C, Connected<<OE as ObservableTypes>::Disposal>>),
+}
+
+/// The subscribers of a [`RefCount`] and its controller, shared by its subscriptions.
+///
+/// Subscribers are counted per generation of the controller's subject. A generation ends when its
+/// subject is reset — by the source terminating, or by this ref count when the last subscriber
+/// leaves. A subscriber that arrives after that joins the next generation and starts the count
+/// over, while the subscriptions of the previous one leave without touching it.
+struct State<OE, S, C>
+where
+    OE: ObservableTypes,
+    S: ObservableTypes,
+{
+    reset_on_ref_count_zero: bool,
+    /// The generation the subscribers are counted for, `None` before the first one.
+    generation: Option<Id>,
+    subscribers: usize,
+    /// `None` while a caller holds the controller to switch it over with the lock released. Once
+    /// that is done, the holder gives it back and decides again: the subscribers that arrived or
+    /// left in the meantime may need it switched once more.
+    controller: Option<Controller<OE, S, C>>,
+}
+
+/// What [`State::decide`] leaves to do with the lock released.
+enum Decision<OE, S, C>
+where
+    OE: ObservableTypes,
+    S: ObservableTypes,
+{
+    /// The controller is where the subscribers need it, or a caller is holding it.
+    Keep,
+    /// The subscribers' generation is live and waiting for the source: connect it.
+    Connect(ConnectableController<OE, S, C, Disconnected>),
+    /// The source is connected for a generation the subscribers no longer need: disconnect it,
+    /// after dropping the subject reset under the lock, if any.
+    Disconnect {
+        controller: ConnectableController<OE, S, C, Connected<<OE as ObservableTypes>::Disposal>>,
+        replaced: Option<S>,
     },
-    /// A subscription holds the controller while it connects or disconnects the source with the
-    /// lock released.
-    ConnectingOrDisconnecting {
-        /// The subscribers so far, possibly none: once it is done, the holder of the controller
-        /// disconnects if there are none and connects if there are some.
-        subscribers: usize,
-    },
-    /// Connected, with at least one subscriber.
-    Connected {
-        subscribers: NonZeroUsize,
-        controller: ConnectableController<OE, S, Connected<D>>,
-    },
+}
+
+impl<OE, S, C> Decision<OE, S, C>
+where
+    OE: ObservableTypes,
+    S: ObservableTypes,
+{
+    /// Carries the decision out, and returns the switched controller to give back. It runs with
+    /// the lock released: connecting subscribes to the source, which may emit to subscribers that
+    /// subscribe to or dispose this ref count from there.
+    fn carry_out<T, E>(self) -> Option<Controller<OE, S, C>>
+    where
+        OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
+        S: Subject<T, E> + Clone,
+    {
+        match self {
+            Self::Keep => None,
+            Self::Connect(controller) => Some(Controller::Connected(controller.connect())),
+            Self::Disconnect {
+                controller,
+                replaced,
+            } => {
+                drop(replaced);
+                Some(Controller::Disconnected(
+                    controller.disconnect_without_reset(),
+                ))
+            }
+        }
+    }
+
+    /// Calls the decision off, for a caller that gives the controller back without switching it:
+    /// returns the controller taken out, as it was.
+    fn cancel(self) -> Option<Controller<OE, S, C>> {
+        match self {
+            Self::Keep => None,
+            Self::Connect(controller) => Some(Controller::Disconnected(controller)),
+            Self::Disconnect {
+                controller,
+                replaced,
+            } => {
+                drop(replaced);
+                Some(Controller::Connected(controller))
+            }
+        }
+    }
+}
+
+impl<OE, S, C> State<OE, S, C>
+where
+    OE: ObservableTypes,
+    S: ObservableTypes,
+{
+    /// Counts in a subscriber of `generation`, starting the count over if it is a new one.
+    fn count_in(&mut self, generation: Id) {
+        if self.generation != Some(generation) {
+            self.generation = Some(generation);
+            self.subscribers = 0;
+        }
+        self.subscribers = self
+            .subscribers
+            .checked_add(1)
+            .expect("RefCount subscriber count overflowed");
+    }
+
+    /// Counts out a subscriber of `generation`, unless its generation is over.
+    fn count_out(&mut self, generation: Id) {
+        if self.generation == Some(generation) {
+            self.subscribers = self
+                .subscribers
+                .checked_sub(1)
+                .expect("RefCount subscriber count underflowed");
+        }
+    }
+
+    /// Gives back the controller a caller took out to switch over.
+    fn give_back(&mut self, controller: Controller<OE, S, C>) {
+        debug_assert!(self.controller.is_none(), "the controller is held once");
+        self.controller = Some(controller);
+    }
+
+    /// Decides what to do with the controller, unless a caller is holding it: leaves it in place if
+    /// it is where the subscribers need it, and takes it out to be switched over otherwise.
+    fn decide(&mut self) -> Decision<OE, S, C> {
+        match self.controller.take() {
+            Some(Controller::Disconnected(controller))
+                if self.subscribers > 0
+                    && self
+                        .generation
+                        .is_some_and(|generation| controller.is_live(generation)) =>
+            {
+                Decision::Connect(controller)
+            }
+            // A newer generation has begun, and is waiting for the source.
+            Some(Controller::Connected(controller))
+                if self.generation != Some(controller.generation()) =>
+            {
+                Decision::Disconnect {
+                    controller,
+                    replaced: None,
+                }
+            }
+            // The subject is reset under this lock, so that a subscriber that arrives from now on
+            // joins a new generation instead of a subject that is about to lose its source.
+            Some(Controller::Connected(controller))
+                if self.subscribers == 0 && self.reset_on_ref_count_zero =>
+            {
+                let replaced = controller.reset_live();
+                Decision::Disconnect {
+                    controller,
+                    replaced,
+                }
+            }
+            kept => {
+                self.controller = kept;
+                Decision::Keep
+            }
+        }
+    }
+}
+
+/// Runs `update` on the state, then carries out what the state decides with the lock released:
+/// drops the reset subject, and switches the controller over, gives it back and decides again,
+/// until the state keeps it.
+fn settle<T, E, OE, S, C, F>(state: &StatePtr<OE, S, C>, update: F)
+where
+    OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
+    S: Subject<T, E> + Clone,
+    F: FnOnce(&mut State<OE, S, C>),
+{
+    let mut decision = state.with_mut(|current| {
+        update(current);
+        current.decide()
+    });
+    while let Some(switched) = decision.carry_out() {
+        decision = state.with_mut(|current| {
+            current.give_back(switched);
+            current.decide()
+        });
+    }
 }
 
 /// Makes a [`ConnectableController`] behave like an ordinary `Observable` that automatically
 /// connects on the first subscription and disconnects when the last subscription is disposed. See
 /// <https://reactivex.io/documentation/operators/refcount.html>
+///
+/// A subscriber joins the controller's current subject. Once that subject is reset — when the
+/// source terminates, as the controller's
+/// [`reset_on_error`](ConnectableController::reset_on_error) and
+/// [`reset_on_complete`](ConnectableController::reset_on_complete) say, or when the last subscriber
+/// leaves, as [`reset_on_ref_count_zero`](Self::reset_on_ref_count_zero) says — the next
+/// subscriber starts over with a new subject and a new connection.
 ///
 /// # Examples
 /// ```rust
@@ -51,7 +224,7 @@ where
 ///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
-///         connectable::{connectable_controller::ConnectableController, ref_count::RefCount},
+///         connectable::connectable_controller::ConnectableController,
 ///         creating::from_iter::FromIter,
 ///     },
 ///     subject::publish_subject::PublishSubject,
@@ -61,33 +234,40 @@ where
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let terminations = Arc::new(Mutex::new(Vec::new()));
 ///
-/// let subject = PublishSubject::<i32, Infallible, _>::local();
-/// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), subject);
+/// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), (), |_| {
+///     PublishSubject::<i32, Infallible, _>::local()
+/// });
 /// let observable = controller.ref_count();
-/// let values_observer = Arc::clone(&values);
-/// let terminations_observer = Arc::clone(&terminations);
 ///
-/// let subscription = observable.clone().subscribe_with_callback(
-///     move |value| values_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer.lock().unwrap().push(termination),
+/// for _ in 0..2 {
+///     let values_observer = Arc::clone(&values);
+///     let terminations_observer = Arc::clone(&terminations);
+///     observable.clone().subscribe_with_callback(
+///         move |value| values_observer.lock().unwrap().push(value),
+///         move |termination| terminations_observer.lock().unwrap().push(termination),
+///     );
+/// }
+///
+/// // The source completed, so the second subscriber started over with a new subject.
+/// assert_eq!(&*values.lock().unwrap(), &[1, 2, 1, 2]);
+/// assert_eq!(
+///     &*terminations.lock().unwrap(),
+///     &[Termination::Completed, Termination::Completed],
 /// );
-///
-/// drop(subscription);
-///
-/// assert_eq!(&*values.lock().unwrap(), &[1, 2]);
-/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
-#[educe(Debug, Clone(bound(S: Clone)))]
-pub struct RefCount<OE, S>
+#[educe(Debug, Clone(bound()))]
+pub struct RefCount<OE, S, C = ()>
 where
     OE: ObservableTypes,
     S: ObservableTypes,
 {
     #[educe(Debug(ignore))]
-    observable: SubjectObservable<S>,
+    state: StatePtr<OE, S, C>,
+    /// The controller's observable side, through which subscribers join its current subject even
+    /// while a subscription holds the controller. Its lock is always taken after the state's.
     #[educe(Debug(ignore))]
-    state: StatePtr<OE, S>,
+    observable: MulticastObservable<S, C>,
 }
 
 /// The shared state of a [`RefCount`], behind the pointer the subject's thread mode picks — the
@@ -97,247 +277,148 @@ where
 /// The source's mode does not enter it. A `Local` value source such as `FromIter` is still `Send`,
 /// and multicast through a `Shared` subject the `RefCount` must be `Send` as its mode says; a
 /// `Shared` source multicast through a `Local` subject is confined to one thread by the subject.
-type StatePtr<OE, S> = <<S as ObservableTypes>::Mode as ThreadMode>::Ptr<
-    State<OE, S, <OE as ObservableTypes>::Disposal>,
->;
+type StatePtr<OE, S, C> = <<S as ObservableTypes>::Mode as ThreadMode>::Ptr<State<OE, S, C>>;
 
-impl<OE, S> RefCount<OE, S>
+impl<OE, S, C> RefCount<OE, S, C>
 where
     OE: ObservableTypes,
-    S: ObservableTypes + Clone,
+    S: ObservableTypes,
 {
     /// Creates a [`RefCount`] over a disconnected controller;
     /// [`ConnectableController::ref_count`] is the fluent form.
-    pub fn new(controller: ConnectableController<OE, S, Disconnected>) -> Self {
+    ///
+    /// [`reset_on_ref_count_zero`](Self::reset_on_ref_count_zero) starts out `true`.
+    pub fn new(controller: ConnectableController<OE, S, C, Disconnected>) -> Self {
         Self {
             observable: controller.observable(),
-            state: S::Mode::ptr(State::Disconnected { controller }),
+            state: S::Mode::ptr(State {
+                reset_on_ref_count_zero: true,
+                generation: None,
+                subscribers: 0,
+                controller: Some(Controller::Disconnected(controller)),
+            }),
         }
+    }
+
+    /// What happens when the last subscriber leaves before the source terminates: `true`, the
+    /// default, disconnects the source and resets the subject, so the next subscriber starts over;
+    /// `false` keeps the source connected and the subject alive, so the next subscriber joins it.
+    ///
+    /// A subject kept after its source terminated is not reset by this either way: whether it is
+    /// is what the controller's [`reset_on_error`](ConnectableController::reset_on_error) and
+    /// [`reset_on_complete`](ConnectableController::reset_on_complete) decide.
+    pub fn reset_on_ref_count_zero(self, reset: bool) -> Self {
+        self.state
+            .with_mut(|state| state.reset_on_ref_count_zero = reset);
+        self
     }
 }
 
 delegate_disposal!(
-    Disposal<OE, S>,
-    ChainDisposal<S::Disposal, RefCountDisposal<OE, S>>,
+    Disposal<OE, S, C>,
+    ChainDisposal<<S as ObservableTypes>::Disposal, RefCountDisposal<OE, S, C>>,
     where OE: ObservableTypes,
         S: ObservableTypes
 );
 
-impl<T, E, OE, S> ObservableTypes for RefCount<OE, S>
+impl<T, E, OE, S, C> ObservableTypes for RefCount<OE, S, C>
 where
-    OE: Observable<S, Item = T, Error = E> + Clone,
+    OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
     S: Subject<T, E> + Clone,
 {
     type Item = T;
     type Error = E;
     /// The subscribers are the subject's, so the mode is the subject's.
     type Mode = S::Mode;
-    type Disposal = Disposal<OE, S>;
+    type Disposal = Disposal<OE, S, C>;
 }
 
-impl<T, E, OE, S, OR> Observable<OR> for RefCount<OE, S>
+impl<T, E, OE, S, C, OR> Observable<OR> for RefCount<OE, S, C>
 where
     OR: Observer<T, E>,
-    OE: Observable<S, Item = T, Error = E> + Clone,
+    OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
     S: Subject<T, E> + Observable<OR> + Clone,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let controller = self.state.with_mut(|current| match &mut *current {
-            state @ State::Disconnected { .. } => {
-                let State::Disconnected { controller } =
-                    std::mem::replace(state, State::ConnectingOrDisconnecting { subscribers: 1 })
-                else {
-                    unreachable!()
-                };
-                Some(controller)
+        let (subject, generation, decision) = self.state.with_mut(|state| {
+            let Current {
+                subject,
+                generation,
+                finished,
+            } = self.observable.join();
+            if finished {
+                // The source has terminated and its subject is kept: there is nothing to connect,
+                // and the subject only replays what it has to this subscriber, so it is not counted.
+                return (subject, None, Decision::Keep);
             }
-            State::ConnectingOrDisconnecting { subscribers } => {
-                *subscribers = subscribers
-                    .checked_add(1)
-                    .expect("RefCount subscriber count overflowed");
-                None
-            }
-            State::Connected { subscribers, .. } => {
-                *subscribers = subscribers
-                    .checked_add(1)
-                    .expect("RefCount subscriber count overflowed");
-                None
-            }
+            state.count_in(generation);
+            // Deciding under the same lock reserves the connection for this subscriber: while it
+            // holds the controller, no other caller can connect the source before this subscriber
+            // has joined the subject, and make it miss what the source sends as it is connected.
+            let decision = state.decide();
+            // Counting a subscriber in never brings the count to zero, so nothing is reset here.
+            debug_assert!(
+                !matches!(
+                    decision,
+                    Decision::Disconnect {
+                        replaced: Some(_),
+                        ..
+                    }
+                ),
+                "counting a subscriber in resets nothing"
+            );
+            (subject, Some(generation), decision)
         });
-        // Subscribing notifies the observer inline when the subject has already terminated, so it
-        // can unwind while this subscriber is counted in and the controller is out of the state.
-        // Disarming the guard is what ends that scope: the connection that follows is not covered,
-        // and cannot be, since the controller is consumed by then.
+        // Subscribing notifies the observer inline when the subject has something to replay, so it
+        // can unwind while this subscriber is counted in, and maybe holding the controller: the
+        // guard counts it out and gives the controller back. Without it, the count would stay
+        // inflated forever, so the last subscription would no longer disconnect, and the controller
+        // would be lost. Disarming the guard is what ends that scope: the connection that follows
+        // is not covered, and cannot be, since the controller is consumed by then.
         let state = self.state.clone();
-        let guard = OnPanic::new(controller, move |controller| {
-            restore_subscriber(&state, controller);
+        let guard = OnPanic::new(decision, move |decision| {
+            let controller = decision.cancel();
+            settle(&state, |current| {
+                if let Some(generation) = generation {
+                    current.count_out(generation);
+                }
+                if let Some(controller) = controller {
+                    current.give_back(controller);
+                }
+            });
         });
-        let sub = self.observable.subscribe(observer);
-        let controller = guard.disarm();
-        if let Some(controller) = controller {
-            handle_connecting_or_disconnecting(self.state.clone(), Purpose::Connect(controller));
+        let subscription = subject.subscribe(observer);
+        if let Some(switched) = guard.disarm().carry_out() {
+            settle(&self.state, |current| current.give_back(switched));
         }
-        sub.then(RefCountDisposal { state: self.state })
+        subscription
+            .then(RefCountDisposal {
+                state: self.state,
+                generation,
+            })
             .map_inner_into()
     }
 }
 
-/// Puts back what [`RefCount::subscribe`] took, when subscribing the observer unwinds.
-///
-/// The subscriber is counted in — and the controller of a first subscription is taken out of the
-/// state — before the observer is subscribed to the subject. Without this, a panic from there
-/// would leave the count inflated forever, so the last subscription would no longer disconnect,
-/// and would lose the controller with the state stuck in
-/// [`ConnectingOrDisconnecting`](State::ConnectingOrDisconnecting).
-fn restore_subscriber<T, E, OE, S>(
-    state: &StatePtr<OE, S>,
-    controller: Option<ConnectableController<OE, S, Disconnected>>,
-) where
-    OE: Observable<S, Item = T, Error = E> + Clone,
-    S: Subject<T, E> + Clone,
-{
-    let Some(controller) = controller else {
-        // Only the count was changed, so removing this subscriber is what disposing the
-        // subscription it never got would have done.
-        RefCountDisposal::<OE, S> {
-            state: state.clone(),
-        }
-        .dispose();
-        return;
-    };
-    // The controller is held here, so nothing else can leave the connecting state, and the count
-    // can only have grown: the state is the one this subscription wrote.
-    let controller = state.with_mut(|current| {
-        let State::ConnectingOrDisconnecting { subscribers } = current else {
-            unreachable!("the controller of the connecting state is held by this guard")
-        };
-        let remaining = subscribers
-            .checked_sub(1)
-            .expect("RefCount subscriber count underflowed");
-        if remaining == 0 {
-            // Nobody is left to connect for, so the state goes back to what it was.
-            *current = State::Disconnected { controller };
-            None
-        } else {
-            *subscribers = remaining;
-            Some(controller)
-        }
-    });
-    if let Some(controller) = controller {
-        // Subscribers that arrived meanwhile are still waiting for the connection this
-        // subscription was going to make, so it is made here, as the returning path would.
-        handle_connecting_or_disconnecting(state.clone(), Purpose::Connect(controller));
-    }
-}
-
-struct RefCountDisposal<OE, S>
+struct RefCountDisposal<OE, S, C>
 where
     OE: ObservableTypes,
     S: ObservableTypes,
 {
-    state: StatePtr<OE, S>,
+    state: StatePtr<OE, S, C>,
+    /// The generation this subscriber was counted for, `None` if it was not counted.
+    generation: Option<Id>,
 }
 
-impl<T, E, OE, S> Disposable for RefCountDisposal<OE, S>
+impl<T, E, OE, S, C> Disposable for RefCountDisposal<OE, S, C>
 where
-    OE: Observable<S, Item = T, Error = E> + Clone,
+    OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
     S: Subject<T, E> + Clone,
 {
     fn dispose(self) {
-        let controller = self.state.with_mut(|current| match &mut *current {
-            State::Disconnected { .. } => {
-                unreachable!("a subscription of a disconnected ref count")
-            }
-            State::ConnectingOrDisconnecting { subscribers } => {
-                *subscribers = subscribers
-                    .checked_sub(1)
-                    .expect("RefCount subscriber count underflowed");
-                None
-            }
-            State::Connected { subscribers, .. } if subscribers.get() > 1 => {
-                *subscribers = NonZeroUsize::new(subscribers.get() - 1)
-                    .expect("decremented subscriber count is non-zero");
-                None
-            }
-            State::Connected { .. } => {
-                let State::Connected { controller, .. } =
-                    std::mem::replace(current, State::ConnectingOrDisconnecting { subscribers: 0 })
-                else {
-                    unreachable!()
-                };
-                Some(controller)
-            }
-        });
-        if let Some(controller) = controller {
-            handle_connecting_or_disconnecting(self.state.clone(), Purpose::Disconnect(controller));
-        }
-    }
-}
-
-enum Purpose<OE, S>
-where
-    OE: ObservableTypes,
-{
-    Connect(ConnectableController<OE, S, Disconnected>),
-    Disconnect(ConnectableController<OE, S, Connected<OE::Disposal>>),
-}
-
-fn handle_connecting_or_disconnecting<T, E, OE, S>(
-    state: StatePtr<OE, S>,
-    mut purpose: Purpose<OE, S>,
-) where
-    OE: Observable<S, Item = T, Error = E> + Clone,
-    S: Subject<T, E> + Clone,
-{
-    loop {
-        let next = match purpose {
-            Purpose::Connect(controller) => {
-                let controller = controller.connect();
-                state.with_mut(|current| match &mut *current {
-                    State::Disconnected { .. } => {
-                        unreachable!("the controller of the connecting state is held here")
-                    }
-                    State::ConnectingOrDisconnecting { subscribers } => {
-                        if *subscribers == 0 {
-                            // Every subscriber left while connecting: disconnect again.
-                            Some(Purpose::Disconnect(controller))
-                        } else {
-                            *current = State::Connected {
-                                subscribers: NonZeroUsize::new(*subscribers).unwrap(),
-                                controller,
-                            };
-                            None
-                        }
-                    }
-                    State::Connected { .. } => {
-                        unreachable!("the controller of the connected state is held here")
-                    }
-                })
-            }
-            Purpose::Disconnect(controller) => {
-                let controller = controller.disconnect();
-                state.with_mut(|current| match &mut *current {
-                    State::Disconnected { .. } => {
-                        unreachable!("the controller of the disconnecting state is held here")
-                    }
-                    State::ConnectingOrDisconnecting { subscribers } => {
-                        if *subscribers == 0 {
-                            *current = State::Disconnected { controller };
-                            None
-                        } else {
-                            // Subscribers arrived while disconnecting: connect again.
-                            Some(Purpose::Connect(controller))
-                        }
-                    }
-                    State::Connected { .. } => {
-                        unreachable!("the controller of the connected state is held here")
-                    }
-                })
-            }
+        let Some(generation) = self.generation else {
+            return;
         };
-        match next {
-            Some(next) => purpose = next,
-            None => break,
-        }
+        settle::<T, E, OE, S, C, _>(&self.state, |current| current.count_out(generation));
     }
 }

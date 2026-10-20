@@ -16,3 +16,4 @@ what stops the old design from being proposed again.
 | [0004](0004-a-source-that-drops-its-observer.md) | A source that drops its observer without a termination has fallen silent, not disposed: the operator's own work runs its course |
 | [0005](0005-the-context-owns-its-source.md) | The context of `subscribe_with_context` owns the source subscription and disposes it as soon as it stops; the non-owning helper is gone |
 | [0006](0006-observe-on-task-owns-its-observer.md) | The task of `observe_on` owns the downstream observer, which never leaves the scheduler's thread and need not be `Send`; a disposal releases it promptly, not at once |
+| [0007](0007-a-subject-per-round.md) | A factory, a context and a `fn` pointer, creates the subject of a connectable, and the subject is reset after each round: on termination, on `disconnect`, when a ref count drops to zero — each configurable |

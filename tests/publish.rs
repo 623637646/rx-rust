@@ -10,7 +10,6 @@ use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::connectable::connectable_controller::ConnectableController;
 use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -589,10 +588,7 @@ fn test_without_convenient_api() {
     let (checker_2, observer_2) = Checker::new();
 
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
-    let controller = ConnectableController::<_, PublishSubject<'_, _, _, Shared>>::new(
-        observable,
-        PublishSubject::shared(),
-    );
+    let controller = ConnectableController::new(observable, (), |_| PublishSubject::shared());
     let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
@@ -887,6 +883,98 @@ fn test_disconnect_and_reconnect() {
     assert_eq!(channels.len(), 2);
     assert_eq!(channels.state(0), ChannelState::Unsubscribed);
     assert_eq!(channels.state(1), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_disconnect_resets_the_subject() {
+    let (channels, observable) = test_channels::<'_, i32, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    let controller = observable.publish();
+    let observable = controller.observable();
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let controller = controller.connect();
+    assert!(channels.on_next(0, 1).is_continue());
+    assert_eq!(checker_1.values(), [1]);
+
+    // The first subscriber stays with the subject of the first connection.
+    let controller = controller.disconnect();
+    let _subscription_2 = observable.subscribe(observer_2);
+    let _controller = controller.connect();
+    assert!(channels.on_next(1, 2).is_continue());
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [2]);
+}
+
+#[test]
+fn test_reset_on_complete() {
+    let (channels, observable) = test_channels::<'_, i32, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    let controller = observable.publish();
+    let observable = controller.observable();
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let controller = controller.connect();
+    channels.on_termination(0, Termination::Completed);
+    assert_eq!(checker_1.state(), State::Completed);
+
+    // A subscriber that arrives after the completion joins a new subject, which waits for the
+    // next connection.
+    let _subscription_2 = observable.subscribe(observer_2);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.len(), 1);
+
+    let _controller = controller.disconnect().connect();
+    assert!(channels.on_next(1, 1).is_continue());
+    assert_eq!(checker_2.values(), [1]);
+}
+
+#[test]
+fn test_reset_on_complete_false() {
+    let (channels, observable) = test_channels::<'_, i32, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    let controller = observable.publish().reset_on_complete(false);
+    let observable = controller.observable();
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let controller = controller.connect();
+    channels.on_termination(0, Termination::Completed);
+    assert_eq!(checker_1.state(), State::Completed);
+
+    // The completed subject is kept while connected.
+    let _subscription_2 = observable.clone().subscribe(observer_2);
+    assert_eq!(checker_2.state(), State::Completed);
+
+    // Disconnecting resets it all the same.
+    let _controller = controller.disconnect();
+    let _subscription_3 = observable.subscribe(observer_3);
+    assert_eq!(checker_3.state(), State::Active);
+}
+
+#[test]
+fn test_reset_on_error_false() {
+    let (channels, observable) = test_channels::<'_, i32, &str>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    let controller = observable.publish().reset_on_error(false);
+    let observable = controller.observable();
+
+    let _subscription_1 = observable.clone().subscribe(observer_1);
+    let _controller = controller.connect();
+    channels.on_termination(0, Termination::Error("error"));
+    assert_eq!(checker_1.state(), State::Error("error"));
+
+    let _subscription_2 = observable.subscribe(observer_2);
+    assert_eq!(checker_2.state(), State::Error("error"));
 }
 
 #[test]

@@ -23,6 +23,7 @@ use rx_rust::{
     },
     operators::{
         combining::{combine_latest::CombineLatest, merge::Merge},
+        connectable::ref_count::RefCount,
         creating::{create::Create, from_iter::FromIter},
     },
     scheduler::{
@@ -245,6 +246,19 @@ fn test_async_subject() {
 }
 
 #[test]
+fn test_share_behavior() {
+    // Each subscriber of a source that completes at once begins a new round, from the initial
+    // value, with items that are not `Send`.
+    let observable = FromIter::new(rcs([1, 2])).share_behavior(Rc::new(0));
+    let (record_1, _subscription_1) = record(observable.clone());
+    let (record_2, _subscription_2) = record(observable);
+    assert_eq!(record_1.values(), rcs([0, 1, 2]));
+    assert_eq!(record_1.termination(), Some(Termination::Completed));
+    assert_eq!(record_2.values(), rcs([0, 1, 2]));
+    assert_eq!(record_2.termination(), Some(Termination::Completed));
+}
+
+#[test]
 fn test_merge() {
     let mut subject_1: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
     let mut subject_2: PublishSubject<'_, Rc<i32>, Infallible, Local> = PublishSubject::local();
@@ -359,6 +373,10 @@ assert_send!(Emitter<Shared, SendBoxedObserver<'static, i32, ()>>);
 
 assert_not_send!(PublishSubject<'static, i32, (), Local>);
 assert_send!(PublishSubject<'static, i32, (), Shared>);
+
+// A ref count's state follows its subject's mode.
+assert_not_send!(RefCount<FromIter<Vec<i32>>, PublishSubject<'static, i32, (), Local>>);
+assert_send!(RefCount<FromIter<Vec<i32>>, PublishSubject<'static, i32, (), Shared>>);
 
 // The waker of a wakeable task crosses threads only in the `Shared` mode.
 assert_not_send!(TaskWaker<Local>);

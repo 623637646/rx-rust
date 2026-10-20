@@ -128,12 +128,11 @@ pub type JoinedSchedulerModeOf<OE, S> = crate::thread_mode::Joined<
 
 /// The boxed observer of the source `OE`'s mode, for its items and errors: what an operator that
 /// hands the downstream observer to a user callback boxes it into, so it subscribes any observer.
-pub type BoxedObserverOf<'a, OE> =
-    <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<
-        'a,
-        <OE as ObservableTypes>::Item,
-        <OE as ObservableTypes>::Error,
-    >;
+pub type BoxedObserverOf<'a, OE> = <<OE as ObservableTypes>::Mode as ObserverMode>::BoxedObserver<
+    'a,
+    <OE as ObservableTypes>::Item,
+    <OE as ObservableTypes>::Error,
+>;
 
 /// The disposals of the two sources `A` and `B` chained into one: disposing it disposes `A`'s
 /// subscription first, then `B`'s.
@@ -941,12 +940,35 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Min::new(self)
     }
 
-    /// Converts the source into a connectable observable using a subject factory.
-    fn multicast<S, F>(self, subject_factory: F) -> ConnectableController<Self, S>
+    /// Converts the source into a connectable observable, multicast through the subjects
+    /// `subject_factory` creates from `context`: one for each connection, and a new one whenever
+    /// the previous one is reset.
+    ///
+    /// The factory is a function pointer, a closure that captures nothing: what it needs goes in
+    /// `context`, `()` when nothing.
+    ///
+    /// ```rust
+    /// use rx_rust::{
+    ///     observable::ObservableExt, operators::creating::from_iter::FromIter,
+    ///     subject::replay_subject::ReplaySubject,
+    /// };
+    ///
+    /// let mut seen = Vec::new();
+    /// FromIter::new([1, 2, 3])
+    ///     .multicast(Some(1), |buffer_size| ReplaySubject::local(*buffer_size))
+    ///     .ref_count()
+    ///     .subscribe_with_callback(|value| seen.push(value), |_| {});
+    /// assert_eq!(seen, [1, 2, 3]);
+    /// ```
+    fn multicast<S, C>(
+        self,
+        context: C,
+        subject_factory: fn(&mut C) -> S,
+    ) -> ConnectableController<Self, S, C>
     where
-        F: FnOnce() -> S,
+        S: ObservableTypes,
     {
-        ConnectableController::new(self, subject_factory())
+        ConnectableController::new(self, context, subject_factory)
     }
 
     /// Delivers the events downstream from tasks of the provided scheduler.
@@ -958,28 +980,38 @@ pub trait ObservableExt: ObservableTypes + Sized {
     fn publish<'a>(self) -> ConnectableController<Self, PublishSubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
+        Self::Item: Clone,
+        Self::Error: Clone,
     {
-        self.multicast(PublishSubject::new)
+        self.multicast((), |_| PublishSubject::new())
     }
 
     /// Multicasts the source using a `BehaviorSubject`: every subscriber receives the current
     /// value — `initial_value` until the source emits — before what follows it.
+    ///
+    /// Each connection starts over from `initial_value`.
     fn publish_behavior<'a>(
         self,
         initial_value: Self::Item,
-    ) -> ConnectableController<Self, BehaviorSubjectOf<'a, Self>>
+    ) -> ConnectableController<Self, BehaviorSubjectOf<'a, Self>, Self::Item>
     where
         Self::Mode: ObserverMode,
+        Self::Item: Clone,
+        Self::Error: Clone,
     {
-        self.multicast(|| BehaviorSubject::new(initial_value))
+        self.multicast(initial_value, |initial_value| {
+            BehaviorSubject::new(initial_value.clone())
+        })
     }
 
     /// Multicasts the source using an `AsyncSubject`, emitting only the last value.
     fn publish_last<'a>(self) -> ConnectableController<Self, AsyncSubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
+        Self::Item: Clone,
+        Self::Error: Clone,
     {
-        self.multicast(AsyncSubject::new)
+        self.multicast((), |_| AsyncSubject::new())
     }
 
     /// Aggregates the sequence using an initial seed and an accumulator function.
@@ -995,11 +1027,13 @@ pub trait ObservableExt: ObservableTypes + Sized {
     fn replay<'a>(
         self,
         buffer_size: Option<usize>,
-    ) -> ConnectableController<Self, ReplaySubjectOf<'a, Self>>
+    ) -> ConnectableController<Self, ReplaySubjectOf<'a, Self>, Option<usize>>
     where
         Self::Mode: ObserverMode,
+        Self::Item: Clone,
+        Self::Error: Clone,
     {
-        self.multicast(|| ReplaySubject::new(buffer_size))
+        self.multicast(buffer_size, |buffer_size| ReplaySubject::new(*buffer_size))
     }
 
     /// Re-subscribes to the source based on the retry strategy returned by the callback.
@@ -1036,6 +1070,10 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Shares a single subscription to the source using `PublishSubject` semantics.
+    ///
+    /// The subscription ends, and the next subscriber starts over, when the source terminates or
+    /// the last subscriber leaves; `multicast(..).ref_count()` with the `reset_on_*` options of
+    /// [`ConnectableController`] and [`RefCount`] chooses otherwise.
     fn share<'a>(self) -> RefCount<Self, PublishSubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
@@ -1047,10 +1085,13 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Shares a single subscription using `BehaviorSubject` semantics: every subscriber first
     /// receives the current value, `initial_value` until the source emits.
+    ///
+    /// Like [`share`](Self::share), it starts over when the source terminates or the last
+    /// subscriber leaves, and the current value with it.
     fn share_behavior<'a>(
         self,
         initial_value: Self::Item,
-    ) -> RefCount<Self, BehaviorSubjectOf<'a, Self>>
+    ) -> RefCount<Self, BehaviorSubjectOf<'a, Self>, Self::Item>
     where
         Self::Mode: ObserverMode,
         Self::Item: Clone,
@@ -1061,6 +1102,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Shares a single subscription using `AsyncSubject` semantics: only the last item, on
     /// completion.
+    ///
+    /// Like [`share`](Self::share), it starts over when the source terminates or the last
+    /// subscriber leaves.
     fn share_last<'a>(self) -> RefCount<Self, AsyncSubjectOf<'a, Self>>
     where
         Self::Mode: ObserverMode,
@@ -1072,10 +1116,13 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Shares a single subscription using `ReplaySubject` semantics: later subscribers first get
     /// the last `buffer_size` values, or every value for `None`.
+    ///
+    /// Like [`share`](Self::share), it starts over when the source terminates or the last
+    /// subscriber leaves, and the buffer with it.
     fn share_replay<'a>(
         self,
         buffer_size: Option<usize>,
-    ) -> RefCount<Self, ReplaySubjectOf<'a, Self>>
+    ) -> RefCount<Self, ReplaySubjectOf<'a, Self>, Option<usize>>
     where
         Self::Mode: ObserverMode,
         Self::Item: Clone,

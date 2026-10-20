@@ -1069,14 +1069,27 @@ fn test_sub_on_completed() {
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(channels.state(0), ChannelState::Subscribed);
 
+    // The subject is reset before the termination is delivered, so both late subscribers begin
+    // the next round, whether they subscribe before or after observer 1 is terminated.
     channels.on_termination(0, Termination::Completed);
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Completed);
     assert_eq!(checker_2.values(), []);
-    assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(checker_2.state(), State::Active);
     assert_eq!(checker_3.values(), []);
-    assert_eq!(checker_3.state(), State::Completed);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.len(), 2);
     assert_eq!(channels.state(0), ChannelState::Completed);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+
+    assert!(channels.on_next(1, ()).is_continue());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(checker_2.values(), [3]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), [3]);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 }
 
 #[test]
@@ -1225,14 +1238,27 @@ fn test_sub_on_error() {
     assert_eq!(checker_3.state(), State::Active);
     assert_eq!(channels.state(0), ChannelState::Subscribed);
 
+    // The subject is reset before the termination is delivered, so both late subscribers begin
+    // the next round, whether they subscribe before or after observer 1 is terminated.
     channels.on_termination(0, Termination::Error("error"));
     assert_eq!(checker_1.values(), [1, 2]);
     assert_eq!(checker_1.state(), State::Error("error"));
     assert_eq!(checker_2.values(), []);
-    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(checker_2.state(), State::Active);
     assert_eq!(checker_3.values(), []);
-    assert_eq!(checker_3.state(), State::Error("error"));
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.len(), 2);
     assert_eq!(channels.state(0), ChannelState::Error("error"));
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+
+    assert!(channels.on_next(1, ()).is_continue());
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Error("error"));
+    assert_eq!(checker_2.values(), [3]);
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(checker_3.values(), [3]);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
 }
 
 #[test]
@@ -1656,6 +1682,299 @@ fn test_subscribe_after_all_unsubscribed() {
 }
 
 #[test]
+fn test_subscribe_after_completed() {
+    let (channels, observable) = test_channels::<'_, i32, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    let observable = observable.publish().ref_count();
+
+    let subscription_1 = observable.clone().subscribe(observer_1);
+    assert!(channels.on_next(0, 1).is_continue());
+    channels.on_termination(0, Termination::Completed);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Completed);
+    assert_eq!(channels.len(), 1);
+
+    // The first subscription is still held, but its round ended with the source, so the next
+    // subscriber starts over with a new subject and a new connection.
+    let subscription_2 = observable.clone().subscribe(observer_2);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+
+    // The first round's subscription leaves without counting out a subscriber of the second.
+    drop(subscription_1);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+
+    assert!(channels.on_next(1, 2).is_continue());
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_2.values(), [2]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    drop(subscription_2);
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert_eq!(channels.state(1), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_subscribe_after_error() {
+    let (channels, observable) = test_channels::<'_, i32, &str>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    let observable = observable.publish().ref_count();
+
+    let subscription_1 = observable.clone().subscribe(observer_1);
+    assert!(channels.on_next(0, 1).is_continue());
+    channels.on_termination(0, Termination::Error("error"));
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Error("error"));
+
+    let subscription_2 = observable.clone().subscribe(observer_2);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+
+    drop(subscription_1);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+
+    assert!(channels.on_next(1, 2).is_continue());
+    assert_eq!(checker_2.values(), [2]);
+
+    drop(subscription_2);
+    assert_eq!(channels.state(1), ChannelState::Unsubscribed);
+}
+
+#[test]
+fn test_reset_on_complete_false() {
+    let (channels, observable) = test_channels::<'_, i32, &str>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    let observable = observable.replay(None).reset_on_complete(false).ref_count();
+
+    let subscription_1 = observable.clone().subscribe(observer_1);
+    assert!(channels.on_next(0, 1).is_continue());
+    channels.on_termination(0, Termination::Completed);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Completed);
+
+    // The completed subject is kept: a late subscriber gets what it replays, and the source is not
+    // connected again.
+    let subscription_2 = observable.clone().subscribe(observer_2);
+    assert_eq!(checker_2.values(), [1]);
+    assert_eq!(checker_2.state(), State::Completed);
+    assert_eq!(channels.len(), 1);
+
+    // Not even once every subscriber has left.
+    drop(subscription_1);
+    drop(subscription_2);
+    let _subscription_3 = observable.clone().subscribe(observer_3);
+    assert_eq!(checker_3.values(), [1]);
+    assert_eq!(checker_3.state(), State::Completed);
+    assert_eq!(channels.len(), 1);
+}
+
+#[test]
+fn test_reset_on_error_false() {
+    let (channels, observable) = test_channels::<'_, i32, &str>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    let observable = observable.replay(None).reset_on_error(false).ref_count();
+
+    let subscription_1 = observable.clone().subscribe(observer_1);
+    assert!(channels.on_next(0, 1).is_continue());
+    channels.on_termination(0, Termination::Error("error"));
+    assert_eq!(checker_1.state(), State::Error("error"));
+
+    drop(subscription_1);
+    let _subscription_2 = observable.clone().subscribe(observer_2);
+    assert_eq!(checker_2.values(), [1]);
+    assert_eq!(checker_2.state(), State::Error("error"));
+    assert_eq!(channels.len(), 1);
+}
+
+#[test]
+fn test_reset_on_complete_false_still_resets_on_ref_count_zero() {
+    let (channels, observable) = test_channels::<'_, i32, &str>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    let observable = observable.replay(None).reset_on_complete(false).ref_count();
+
+    // The last subscriber leaves before the source terminates, so the subject is reset.
+    let subscription_1 = observable.clone().subscribe(observer_1);
+    assert!(channels.on_next(0, 1).is_continue());
+    drop(subscription_1);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(channels.state(0), ChannelState::Unsubscribed);
+
+    let _subscription_2 = observable.clone().subscribe(observer_2);
+    assert!(checker_2.values().is_empty());
+    assert_eq!(checker_2.state(), State::Active);
+    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+}
+
+#[test]
+fn test_reset_on_ref_count_zero_false() {
+    let (channels, observable) = test_channels::<'_, i32, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    let observable = observable
+        .replay(None)
+        .ref_count()
+        .reset_on_ref_count_zero(false);
+
+    let subscription_1 = observable.clone().subscribe(observer_1);
+    assert!(channels.on_next(0, 1).is_continue());
+
+    // The source stays connected with no subscriber, and the subject keeps receiving.
+    drop(subscription_1);
+    assert_eq!(channels.state(0), ChannelState::Subscribed);
+    assert!(channels.on_next(0, 2).is_continue());
+    assert_eq!(checker_1.values(), [1]);
+
+    let _subscription_2 = observable.clone().subscribe(observer_2);
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert_eq!(channels.len(), 1);
+
+    // A termination still ends the round, so the next subscriber starts over.
+    channels.on_termination(0, Termination::Completed);
+    assert_eq!(checker_2.state(), State::Completed);
+    let _subscription_3 = observable.clone().subscribe(observer_3);
+    assert!(checker_3.values().is_empty());
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+}
+
+#[test]
+fn test_race_condition() {
+    // Subscribers of a source that completes as soon as it is connected come and go from several
+    // threads: every one of them is terminated, and the source is never connected twice at once.
+    use std::sync::Barrier;
+
+    const SUBSCRIBERS: usize = 4;
+    const ROUNDS: usize = 50;
+
+    for _ in 0..100 {
+        let connected = Arc::new(AtomicUsize::new(0));
+        let overlapped = Arc::new(AtomicBool::new(false));
+        let connected_of_source = connected.clone();
+        let overlapped_of_source = overlapped.clone();
+        let observable = Create::shared_boxed(
+            move |mut observer: SendBoxedObserver<'static, i32, Infallible>| {
+                if connected_of_source.fetch_add(1, Ordering::SeqCst) != 0 {
+                    overlapped_of_source.write(true);
+                }
+                let _ = observer.on_next(1);
+                observer.on_termination(Termination::Completed);
+                let connected = connected_of_source.clone();
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    connected.fetch_sub(1, Ordering::SeqCst);
+                }))
+            },
+        )
+        .share();
+        let barrier = Arc::new(Barrier::new(SUBSCRIBERS));
+
+        let handles: Vec<_> = (0..SUBSCRIBERS)
+            .map(|_| {
+                let observable = observable.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    // The subscriptions are returned, so that each round's subscribers stay counted
+                    // while the other threads start new ones.
+                    (0..ROUNDS)
+                        .map(|_| {
+                            let (checker, observer) = Checker::new();
+                            (checker, observable.clone().subscribe(observer))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+
+        let results: Vec<_> = handles
+            .into_iter()
+            .flat_map(|handle| handle.join().unwrap())
+            .collect();
+        for (checker, _subscription) in &results {
+            // A subscriber that joined a round after its source completed only gets the
+            // completion; either way, none is left waiting for a connection.
+            let values = checker.values();
+            assert!(values == [1] || values.is_empty(), "{values:?}");
+            assert_eq!(checker.state(), State::Completed);
+        }
+        assert!(!overlapped.read(), "the source was connected twice at once");
+        drop(results);
+        assert_eq!(connected.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
+fn test_race_condition_with_unsubscribe() {
+    // Subscribers of a source that never terminates come and go from several threads, so the
+    // source is connected and disconnected over and over: never twice at once, and not at all
+    // once they are gone.
+    use std::sync::Barrier;
+
+    const SUBSCRIBERS: usize = 4;
+    const ROUNDS: usize = 50;
+
+    for _ in 0..100 {
+        let connected = Arc::new(AtomicUsize::new(0));
+        let overlapped = Arc::new(AtomicBool::new(false));
+        let connected_of_source = connected.clone();
+        let overlapped_of_source = overlapped.clone();
+        let observable = Create::shared_boxed(
+            move |mut observer: SendBoxedObserver<'static, i32, Infallible>| {
+                if connected_of_source.fetch_add(1, Ordering::SeqCst) != 0 {
+                    overlapped_of_source.write(true);
+                }
+                let _ = observer.on_next(1);
+                let connected = connected_of_source.clone();
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    connected.fetch_sub(1, Ordering::SeqCst);
+                }))
+            },
+        )
+        .share_behavior(0);
+        let barrier = Arc::new(Barrier::new(SUBSCRIBERS));
+
+        let handles: Vec<_> = (0..SUBSCRIBERS)
+            .map(|_| {
+                let observable = observable.clone();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    for _ in 0..ROUNDS {
+                        // What the observer receives is the subject's business: a subscription
+                        // made while another thread delivers is served by that thread.
+                        let (_, observer) = Checker::new();
+                        drop(observable.clone().subscribe(observer));
+                    }
+                })
+            })
+            .collect();
+        for handle in handles {
+            handle.join().unwrap();
+        }
+        assert!(!overlapped.read(), "the source was connected twice at once");
+        assert_eq!(connected.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
@@ -1742,10 +2061,11 @@ fn test_clone() {
 fn test_send_boxed_local_source() {
     let (checker, observer) = Checker::new();
 
-    let subject: PublishSubject<'_, i32, Infallible, _> = PublishSubject::shared();
-    let observable = ConnectableController::new(Just::new(111), subject)
-        .ref_count()
-        .into_send_boxed();
+    let observable = ConnectableController::new(Just::new(111), (), |_| {
+        PublishSubject::<'_, i32, Infallible, _>::shared()
+    })
+    .ref_count()
+    .into_send_boxed();
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), [111]);
@@ -1770,56 +2090,102 @@ fn test_type_inference_without_subscribe() {
     observable.filter(|_| true);
 }
 
+/// Panics from the first value it receives, which a subscriber of a replaying subject receives
+/// inside `subscribe`.
+#[cfg(panic = "unwind")]
+struct PanicOnNext(Option<crate::tests_utils::panic::PanicOnDrop>);
+
+#[cfg(panic = "unwind")]
+impl Observer<i32, Infallible> for PanicOnNext {
+    fn on_next(&mut self, _value: i32) -> Flow {
+        drop(self.0.take());
+        Flow::Continue
+    }
+
+    fn on_termination(self, _termination: Termination<Infallible>) {}
+}
+
+/// Emits `1` as soon as it is connected and stays connected, counting its connections and
+/// recording its disconnection.
+#[cfg(panic = "unwind")]
+macro_rules! connection_counting_source {
+    ($connections:expr, $is_disconnected:expr) => {{
+        let connections: Arc<AtomicUsize> = $connections;
+        let is_disconnected: Arc<AtomicBool> = $is_disconnected;
+        Create::shared_boxed(
+            move |mut observer: SendBoxedObserver<'_, i32, Infallible>| {
+                connections.fetch_add(1, Ordering::SeqCst);
+                // A subject an observer panicked in is dead, and stops its source.
+                let _ = observer.on_next(1);
+                let is_disconnected = is_disconnected.clone();
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    is_disconnected.write(true);
+                }))
+            },
+        )
+    }};
+}
+
 #[cfg(panic = "unwind")]
 #[test]
 fn test_panicking_late_subscriber_keeps_the_ref_count() {
-    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
+    use crate::tests_utils::panic::expect_panic_on_drop;
 
-    /// Panics from its termination, which is where a late subscriber is notified.
-    struct PanicOnTermination(Option<PanicOnDrop>);
-
-    impl Observer<i32, Infallible> for PanicOnTermination {
-        fn on_next(&mut self, _value: i32) -> Flow {
-            Flow::Continue
-        }
-
-        fn on_termination(self, _termination: Termination<Infallible>) {
-            drop(self.0);
-        }
-    }
-
+    let connections = Arc::new(AtomicUsize::new(0));
     let is_disconnected = Arc::new(AtomicBool::new(false));
-    let is_disconnected_of_source = is_disconnected.clone();
-    // Completes as soon as it is connected, so that a later subscriber is notified inline, while
-    // the ref count stays connected until its last subscription is disposed.
-    let source = Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
-        observer.on_termination(Termination::Completed);
-        let is_disconnected = is_disconnected_of_source.clone();
-        DisposeOnDrop::new(CallbackDisposal::new(move || {
-            is_disconnected.write(true);
-        }))
-    });
-
-    let observable = source.publish().ref_count();
+    let observable = connection_counting_source!(connections.clone(), is_disconnected.clone())
+        .replay(None)
+        .ref_count();
 
     let (checker, observer) = Checker::new();
     let subscription = observable.clone().subscribe(observer);
-    assert_eq!(checker.state(), State::Completed);
-    assert!(!is_disconnected.read());
+    assert_eq!(checker.values(), [1]);
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
 
     let observable_of_panic = observable.clone();
     expect_panic_on_drop(|panic_on_drop| {
-        // The subject has terminated, so this observer is notified inside `subscribe`, and panics.
-        let _subscription = observable_of_panic.subscribe(PanicOnTermination(Some(panic_on_drop)));
+        // The subject replays `1` inside `subscribe`, while this subscriber is counted in.
+        let _subscription = observable_of_panic.subscribe(PanicOnNext(Some(panic_on_drop)));
     });
     assert!(!is_disconnected.read());
 
-    // The subscriber that never came back is not counted in, so the last live subscription is
+    // The subscriber that never came back is counted out again, so the last live subscription is
     // still the one that disconnects the source.
     drop(subscription);
     assert!(is_disconnected.read());
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
 
     // Held until here, so that the disconnection above is the ref count's own, and not the state
     // being dropped with its last handle.
+    drop(observable);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_first_subscriber_gives_the_controller_back() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+
+    let connections = Arc::new(AtomicUsize::new(0));
+    let is_disconnected = Arc::new(AtomicBool::new(false));
+    let observable = connection_counting_source!(connections.clone(), is_disconnected.clone())
+        .publish_behavior(0)
+        .ref_count();
+
+    let observable_of_panic = observable.clone();
+    expect_panic_on_drop(|panic_on_drop| {
+        // The subject hands `0` over inside `subscribe`, while this first subscriber holds the
+        // controller it was about to connect.
+        let _subscription = observable_of_panic.subscribe(PanicOnNext(Some(panic_on_drop)));
+    });
+    assert_eq!(connections.load(Ordering::SeqCst), 0);
+
+    // The controller is back, so the next subscriber connects. It joins the subject the panic
+    // killed, which is the subject's business, so only the connection is checked.
+    let (_, observer) = Checker::new();
+    let subscription = observable.clone().subscribe(observer);
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
+
+    drop(subscription);
+    assert!(is_disconnected.read());
     drop(observable);
 }

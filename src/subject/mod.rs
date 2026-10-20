@@ -69,9 +69,6 @@ impl<T, E, S> SubjectExt<T, E> for S where S: Subject<T, E> {}
 
 /// A subject exposed as an [`Observable`] only, so that a consumer cannot push into it.
 ///
-/// [`ConnectableController::observable`](crate::operators::connectable::connectable_controller::ConnectableController::observable)
-/// hands one out.
-///
 /// # Examples
 /// ```rust
 /// use rx_rust::{

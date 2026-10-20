@@ -10,7 +10,6 @@ use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::connectable::connectable_controller::ConnectableController;
 use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -442,10 +441,9 @@ fn test_without_convenient_api() {
     let (checker_2, observer_2) = Checker::new();
 
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
-    let controller = ConnectableController::<_, BehaviorSubject<'_, _, _, Shared>>::new(
-        observable,
-        BehaviorSubject::shared(0),
-    );
+    let controller = ConnectableController::new(observable, 0, |initial_value| {
+        BehaviorSubject::shared(*initial_value)
+    });
     let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();
@@ -520,6 +518,42 @@ fn test_share_api() {
     assert_eq!(checker_2.values(), [1, 2]);
     assert_eq!(checker_2.state(), State::Completed);
     assert_eq!(channels.state(0), ChannelState::Completed);
+}
+
+#[test]
+fn test_share_api_starts_over() {
+    let (channels, observable) = test_channels::<'_, i32, Infallible>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+    let (checker_3, observer_3) = Checker::new();
+
+    let observable = observable.share_behavior(0);
+
+    let subscription_1 = observable.clone().subscribe(observer_1);
+    assert!(channels.on_next(0, 1).is_continue());
+    assert_eq!(checker_1.values(), [0, 1]);
+
+    // The last subscriber leaves, so the current value goes with the subject.
+    drop(subscription_1);
+    assert_eq!(channels.state(0), ChannelState::Unsubscribed);
+
+    let subscription_2 = observable.clone().subscribe(observer_2);
+    assert_eq!(checker_2.values(), [0]);
+    assert_eq!(channels.len(), 2);
+    assert_eq!(channels.state(1), ChannelState::Subscribed);
+
+    // So does a termination, even with the subscriber still holding its subscription.
+    assert!(channels.on_next(1, 2).is_continue());
+    channels.on_termination(1, Termination::Completed);
+    assert_eq!(checker_2.values(), [0, 2]);
+    assert_eq!(checker_2.state(), State::Completed);
+
+    let _subscription_3 = observable.clone().subscribe(observer_3);
+    assert_eq!(checker_3.values(), [0]);
+    assert_eq!(checker_3.state(), State::Active);
+    assert_eq!(channels.len(), 3);
+    assert_eq!(channels.state(2), ChannelState::Subscribed);
+    drop(subscription_2);
 }
 
 #[test]

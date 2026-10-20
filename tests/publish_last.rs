@@ -10,7 +10,6 @@ use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::connectable::connectable_controller::ConnectableController;
 use rx_rust::operators::creating::create::Create;
-use rx_rust::thread_mode::Shared;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
@@ -590,10 +589,7 @@ fn test_without_convenient_api() {
     let (checker_2, observer_2) = Checker::new();
 
     let observable = observable.map(|_| counter.fetch_add(1, Ordering::SeqCst) + 1);
-    let controller = ConnectableController::<_, AsyncSubject<'_, _, _, Shared>>::new(
-        observable,
-        AsyncSubject::shared(),
-    );
+    let controller = ConnectableController::new(observable, (), |_| AsyncSubject::shared());
     let observable = controller.observable();
     let observable_1 = observable.clone();
     let observable_2 = observable.clone();

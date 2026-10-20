@@ -405,6 +405,33 @@ source is subscribed when the first observer arrives and unsubscribed when the l
 `publish()` / `replay()` / `multicast()` give the `ConnectableController` back for manual
 `connect()` / `disconnect()`.
 
+The subject is created by a subject factory, a `fn(&mut C) -> S` called with a context `C`, and a
+new one replaces it when it is reset, so each round starts over: by default the source terminating, the last subscriber leaving and
+a manual `disconnect()` all reset it. `reset_on_error(false)` / `reset_on_complete(false)` on the
+controller keep a terminated subject for late subscribers, and `reset_on_ref_count_zero(false)` on
+the `RefCount` keeps the source connected without subscribers:
+
+```rust
+use rx_rust::{
+    observable::ObservableExt, operators::creating::from_iter::FromIter,
+    subject::replay_subject::ReplaySubject,
+};
+use std::{cell::RefCell, rc::Rc};
+
+let cached = FromIter::new([1, 2, 3])
+    .multicast(Some(1), |buffer_size| ReplaySubject::local(*buffer_size))
+    .reset_on_complete(false)
+    .ref_count();
+
+let seen = Rc::new(RefCell::new(Vec::new()));
+for _ in 0..2 {
+    let seen = seen.clone();
+    cached.clone().subscribe_with_callback(move |value| seen.borrow_mut().push(value), |_| {});
+}
+// The second subscriber gets the kept `3`, and the source is not connected again.
+assert_eq!(*seen.borrow(), [1, 2, 3, 3]);
+```
+
 ## Operators
 
 The full list, with a doc example for each, is on [docs.rs](https://docs.rs/rx-rust). Sources are
