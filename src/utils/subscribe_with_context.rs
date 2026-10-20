@@ -172,6 +172,9 @@ where
 /// terminating, that happens after the observer was notified, so the source is disposed only after
 /// downstream was told the stream ended.
 struct ContextResources<MD, D: Disposable> {
+    // Declared first so that what the model holds — the inner subscriptions of `switch`,
+    // `merge_all` and `concat_all` — is disposed before the source subscription, the last
+    // subscribed first.
     model: MD,
     /// `None` while the builder is still running.
     source_subscription: Option<DisposeOnDrop<D>>,

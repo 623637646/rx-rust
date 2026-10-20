@@ -147,6 +147,9 @@ where
 struct Model<D: Disposable> {
     /// Keys are never reused, so a late inner observer can never remove another
     /// inner observer's subscription.
+    ///
+    /// They are disposed in no particular order when the context stops, which rejects their events
+    /// first: the order among them cannot be observed downstream.
     subscriptions: HashMap<Id, Option<DisposeOnDrop<D>>>,
     keys: IdGenerator,
     is_source_completed: bool,
