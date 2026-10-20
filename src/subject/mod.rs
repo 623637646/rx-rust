@@ -69,6 +69,14 @@ impl<T, E, S> SubjectExt<T, E> for S where S: Subject<T, E> {}
 
 /// A subject exposed as an [`Observable`] only, so that a consumer cannot push into it.
 ///
+/// This is what code that owns a subject hands out: it keeps the subject to send with, and gives
+/// the wrapper away. The subject's type is kept, so nothing is boxed and no event costs a dynamic
+/// call, unlike erasing it with [`into_boxed`](crate::observable::ObservableExt::into_boxed),
+/// which hides the observer side as well. A connectable is the one place that does not use this:
+/// its `observable()` hands out a
+/// [`MulticastObservable`](crate::operators::connectable::connectable_controller::MulticastObservable),
+/// which joins the subject of its current round rather than one fixed subject.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
