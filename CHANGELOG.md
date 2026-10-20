@@ -8,8 +8,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- `ObservableExt::publish_behavior(initial_value)` and `ObservableExt::share_behavior(initial_value)`
-  multicast through a `BehaviorSubject`, so every subscriber receives the current value — the
+- `ConnectableController::reset_on_error(bool)` / `reset_on_complete(bool)` and
+  `RefCount::reset_on_ref_count_zero(bool)` choose when the subject of a connectable is reset: when
+  its source fails, when it completes, and when the last subscriber of a ref count leaves. All
+  three reset by default; `reset_on_complete(false)` keeps a completed subject, so that a late
+  subscriber still gets what it replays and the source is not connected again, and
+  `reset_on_ref_count_zero(false)` keeps the source connected without subscribers. See
+  `docs/decisions/0007-a-subject-per-round.md`.
+- `ObservableExt::publish_behavior(initial_value)` and
+  `ObservableExt::share_behavior(initial_value)` multicast through a `BehaviorSubject`, so every
+  subscriber receives the current value — the
   initial one until the source emits — before what follows it. They complete the set next to
   `publish` / `share` (`PublishSubject`), `publish_last` / `share_last` (`AsyncSubject`) and
   `replay` / `share_replay` (`ReplaySubject`), and
@@ -61,6 +69,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** a connectable creates a new subject for each round instead of keeping one for its
+  whole life. `ConnectableController::new` and `ObservableExt::multicast` take a context and a
+  `fn(&mut C) -> S` subject factory instead of a subject — what the factory needs goes in the
+  context, which is the third type parameter of `ConnectableController<OE, S, C = ()>` and
+  `RefCount<OE, S, C = ()>` — and `observable()` returns a `MulticastObservable`, which joins the
+  current subject, instead of a `SubjectObservable` pinned to one. `publish`, `publish_behavior`,
+  `publish_last` and `replay` now require `Item` and `Error` to be `Clone`, since the controller
+  stores the subject's mode pointer. A terminated source no longer leaves later subscribers with
+  only the termination — they start a new round, with a new connection — and the current value of
+  `share_behavior` or the buffer of `share_replay` no longer leaks into the next connection, so
+  `share_replay` and `share_last` start over once the source terminates. The `reset_on_*` options
+  above keep the previous behavior where it was wanted.
 - **Breaking:** `observer::emitter::Emitter<OR, M>` is now `Emitter<M, OR>`, the mode first, like
   every other type that takes one (`ReplaceableDisposal<M, D>`, the operators' observers). The
   callbacks of `Create::local` / `shared` and of `hook_on_subscription` / `hook_on_termination`
