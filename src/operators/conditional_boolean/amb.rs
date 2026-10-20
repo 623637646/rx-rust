@@ -206,7 +206,7 @@ where
     let observer = shared_observer
         .take_value()
         .expect("a racing amb must retain its downstream observer");
-    drop(losing_subscriptions); // Dispose losing subscriptions outside the lock.
+    dispose_last_first(losing_subscriptions); // Outside the lock.
     Some(observer)
 }
 
@@ -293,7 +293,15 @@ where
     D: Disposable,
 {
     fn dispose(self) {
-        let old_state = self.0.replace_value(AmbState::Stopped);
-        drop(old_state); // Dispose the remaining subscriptions outside the lock.
+        // The remaining subscriptions are disposed outside the lock.
+        if let AmbState::Racing(subscriptions) = self.0.replace_value(AmbState::Stopped) {
+            dispose_last_first(subscriptions);
+        }
     }
+}
+
+/// Disposes the subscriptions of the racing sources, the last subscribed first, as the chained
+/// disposals of the operators with two sources do.
+fn dispose_last_first<D: Disposable>(subscriptions: Vec<Option<DisposeOnDrop<D>>>) {
+    subscriptions.into_iter().rev().for_each(drop);
 }

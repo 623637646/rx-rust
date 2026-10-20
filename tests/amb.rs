@@ -11,6 +11,7 @@ use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use rx_rust::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
@@ -20,7 +21,11 @@ use rx_rust::{
         creating::{empty::Empty, throw::Throw},
     },
 };
-use std::{convert::Infallible, time::Instant};
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 #[test]
 fn test_completed() {
@@ -497,6 +502,32 @@ fn test_three_sources() {
     assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
     assert_eq!(channel_checker_2.state(), ChannelState::Completed);
     assert_eq!(channel_checker_3.state(), ChannelState::Unsubscribed);
+}
+
+/// Disposing while the race is open disposes the racing sources the last subscribed first, as the
+/// chained disposals of the operators with two sources do.
+#[test]
+fn test_three_sources_unsubscribe_last_first() {
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let source = |index: usize| {
+        let log = log.clone();
+        Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, Infallible>| {
+            let log = log.clone();
+            DisposeOnDrop::new(CallbackDisposal::new(move || {
+                drop(observer);
+                log.with_mut(|log| log.push(index));
+            }))
+        })
+    };
+    let (checker, observer) = Checker::new();
+
+    let subscription = Amb::new([source(1), source(2), source(3)]).subscribe(observer);
+    assert!(log.clone_value().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    assert_eq!(log.clone_value(), [3, 2, 1]);
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]
