@@ -5,7 +5,7 @@ use crate::{
     delegate_disposal,
     disposable::{
         Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-        replaceable_disposal::ReplaceableDisposal,
+        option_disposal::OptionDisposal, replaceable_disposal::ReplaceableDisposal,
     },
     observable::{JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
@@ -26,6 +26,9 @@ pub enum RetryAction<E, OE1> {
 
 /// Re-subscribes after an error, to the Observable the callback returns, until the callback
 /// gives up with an error of its own.
+///
+/// Once the subscription is disposed, the callback is no longer called: an error that arrives
+/// after that is dropped, as it is by [`Catch`](crate::operators::error_handling::catch::Catch).
 /// See <https://reactivex.io/documentation/operators/retry.html>
 ///
 /// # Examples
@@ -75,7 +78,7 @@ impl<OE, F> Retry<OE, F> {
 
 delegate_disposal!(
     Disposal<M, D, D1>,
-    ChainDisposal<ReplaceableDisposal<M, D1>, D>,
+    ChainDisposal<ReplaceableDisposal<M, OptionDisposal<D1>>, D>,
     where M: ThreadMode, D: Disposable, D1: Disposable
 );
 
@@ -117,7 +120,9 @@ where
 pub struct RetryObserver<M: ThreadMode, OR, F, OE1: ObservableTypes> {
     observer: OR,
     callback: F,
-    replaceable_disposal: ReplaceableDisposal<M, OE1::Disposal>,
+    /// Holds the subscription of the observable the callback returned, or nothing once the
+    /// callback gave up.
+    replaceable_disposal: ReplaceableDisposal<M, OptionDisposal<OE1::Disposal>>,
     /// Subscribes the observable the callback returned, with this observer.
     resubscribe: Resubscribe<OE1, Self>,
 }
@@ -136,19 +141,24 @@ where
     fn on_termination(mut self, termination: Termination<E>) {
         match termination {
             completion @ Termination::Completed => self.observer.on_termination(completion),
+            // The callback is asked from the builder, which does not run once the subscription
+            // is disposed: an error that arrives then — from the source's own disposal, say — is
+            // dropped with the observer, without calling the callback.
             Termination::Error(error) => {
-                let action = (self.callback)(error);
-                match action {
-                    RetryAction::Retry(observable) => {
-                        let resubscribe = self.resubscribe;
-                        self.replaceable_disposal
-                            .clone()
-                            .replace_with(|| resubscribe.subscribe(observable, self));
-                    }
-                    RetryAction::Stop(error) => {
-                        self.observer.on_termination(Termination::Error(error))
-                    }
-                }
+                self.replaceable_disposal
+                    .clone()
+                    .replace_with(|| match (self.callback)(error) {
+                        RetryAction::Retry(observable) => {
+                            let resubscribe = self.resubscribe;
+                            resubscribe
+                                .subscribe(observable, self)
+                                .map_inner(OptionDisposal::some)
+                        }
+                        RetryAction::Stop(error) => {
+                            self.observer.on_termination(Termination::Error(error));
+                            DisposeOnDrop::new(OptionDisposal::none())
+                        }
+                    })
             }
         }
     }

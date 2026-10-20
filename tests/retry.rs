@@ -999,27 +999,63 @@ fn test_error_on_unsub() {
     let (checker, observer) = Checker::new();
 
     // The source fails from inside its own disposal, so it terminates while downstream is
-    // unsubscribing. The retried source must not be subscribed after that, and the error must be
-    // dropped instead of reaching the observer.
+    // unsubscribing. The callback must not be asked about that error, the retried source must not
+    // be subscribed, and the error must be dropped instead of reaching the observer.
     let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
         DisposeOnDrop::new(CallbackDisposal::new(move || {
             observer.on_termination(Termination::Error("error"));
         }))
     });
 
+    let calls = Arc::new(Mutex::new(0));
+    let calls_cloned = calls.clone();
     let mut observable_1_option = Some(observable_1);
-    let observable = observable
-        .retry(move |_| RetryAction::Retry(observable_1_option.take().expect("retried once")));
+    let observable = observable.retry(move |_| {
+        calls_cloned.with_mut(|calls| *calls += 1);
+        RetryAction::Retry(observable_1_option.take().expect("retried once"))
+    });
 
     let subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
     assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+    assert_eq!(calls.clone_value(), 0);
 
     subscription.dispose();
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
+    assert_eq!(calls.clone_value(), 0);
+}
+
+/// [`test_error_on_unsub`] with a callback that would give up: the error it would forward must not
+/// reach the observer either, since the callback is not asked once the subscription is disposed.
+#[test]
+fn test_error_on_unsub_stop() {
+    let (checker, observer) = Checker::new();
+
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
+    });
+
+    let calls = Arc::new(Mutex::new(0));
+    let calls_cloned = calls.clone();
+    let observable = observable.retry(move |error| {
+        calls_cloned.with_mut(|calls| *calls += 1);
+        RetryAction::<_, PublishSubject<'_, _, _, Shared>>::Stop(error)
+    });
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(calls.clone_value(), 0);
+
+    subscription.dispose();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(calls.clone_value(), 0);
 }
 
 #[test]
