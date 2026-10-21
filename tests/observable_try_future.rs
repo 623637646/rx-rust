@@ -48,25 +48,20 @@ fn test_completed() {
 
 #[test]
 fn test_completed_lazy_subscription() {
-    block_on(|scheduler| async move {
-        let subscribed = Arc::new(AtomicBool::new(false));
-        let subscribed_cloned = subscribed.clone();
-        let observable =
-            Create::shared_boxed(move |mut observer: SendBoxedObserver<'_, _, &str>| {
-                subscribed_cloned.write(true);
-                assert!(observer.on_next(111).is_stop());
-                DisposeOnDrop::default()
-            });
-
-        let future = observable.into_try_future();
-        assert!(!subscribed.read());
-
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(!subscribed.read());
-
-        assert_eq!(future.await, Ok(Some(111)));
-        assert!(subscribed.read());
+    let subscribed = Arc::new(AtomicBool::new(false));
+    let subscribed_cloned = subscribed.clone();
+    let observable = Create::shared_boxed(move |mut observer: SendBoxedObserver<'_, _, &str>| {
+        subscribed_cloned.write(true);
+        assert!(observer.on_next(111).is_stop());
+        DisposeOnDrop::default()
     });
+
+    let mut future = observable.into_try_future();
+    assert!(!subscribed.read());
+
+    // The first poll is what subscribes, and the first value completes the future at once.
+    assert_eq!((&mut future).now_or_never(), Some(Ok(Some(111))));
+    assert!(subscribed.read());
 }
 
 #[test]

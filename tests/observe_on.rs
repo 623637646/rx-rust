@@ -1,6 +1,5 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
 use crate::tests_utils::{
@@ -1603,83 +1602,81 @@ fn test_error_on_sub() {
 
 #[test]
 fn test_next_on_unsub() {
-    block_on(|scheduler| async move {
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (checker, observer) = Checker::new();
 
-        // The source emits from inside its own disposal, so the value arrives while downstream is
-        // unsubscribing. It must be dropped instead of reaching the observer.
-        let observable =
-            Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-                DisposeOnDrop::new(CallbackDisposal::new(move || {
-                    let mut observer = observer;
-                    assert!(observer.on_next(111).is_stop());
-                }))
-            });
-
-        let observable = observable.observe_on(scheduler.clone());
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
-        subscription.dispose();
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Dropped);
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. It must be dropped instead of reaching the observer.
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            assert!(observer.on_next(111).is_stop());
+        }))
     });
+
+    let observable = observable.observe_on(scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    time.advance_by(Duration::ZERO);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]
 fn test_complete_on_unsub() {
-    block_on(|scheduler| async move {
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (checker, observer) = Checker::new();
 
-        // The source completes from inside its own disposal, so it terminates while downstream is
-        // unsubscribing. The termination must be dropped instead of reaching the observer.
-        let observable =
-            Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-                DisposeOnDrop::new(CallbackDisposal::new(move || {
-                    observer.on_termination(Termination::Completed);
-                }))
-            });
-
-        let observable = observable.observe_on(scheduler.clone());
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
-        subscription.dispose();
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Dropped);
+    // The source completes from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The termination must be dropped instead of reaching the observer.
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
     });
+
+    let observable = observable.observe_on(scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    time.advance_by(Duration::ZERO);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]
 fn test_error_on_unsub() {
-    block_on(|scheduler| async move {
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (checker, observer) = Checker::new();
 
-        // The source fails from inside its own disposal, so it terminates while downstream is
-        // unsubscribing. The error must be dropped instead of reaching the observer.
-        let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-            DisposeOnDrop::new(CallbackDisposal::new(move || {
-                observer.on_termination(Termination::Error("error"));
-            }))
-        });
-
-        let observable = observable.observe_on(scheduler.clone());
-
-        let subscription = observable.subscribe(observer);
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
-        subscription.dispose();
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Dropped);
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. The error must be dropped instead of reaching the observer.
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
     });
+
+    let observable = observable.observe_on(scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    time.advance_by(Duration::ZERO);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 /// The other tests decide when the scheduler's thread runs. Here a thread pool delivers while the
