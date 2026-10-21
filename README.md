@@ -364,6 +364,20 @@ The erased type keeps the mode. Use `into_shared()` before erasing a `Local` sou
 share an erased type with `Shared` sources. A `Send` box can keep either mode; its source and
 disposal must be `Send`.
 
+### Item and error types run under a lock
+
+A subject or an operator with shared state (`combine_latest`, `sequence_equal`, …) clones and
+compares items and errors while it holds its lock: `BehaviorSubject::value()`, the snapshot a
+replaying subject takes for a new subscriber, the pair `combine_latest` builds, the `PartialEq`
+`sequence_equal` calls, the error a subject records as it terminates. A snapshot taken without
+the lock could miss a value or repeat one, and taking it out of the lock would ask `T: Sync` of
+items that are only `Send`. So the `Clone` and `PartialEq` of an item or an error must not
+reach back into the subject or the pipeline that is handling it — no `on_next`, no `subscribe`,
+no `value()` or `termination()` of that same subject. Doing so takes a lock the thread already
+holds: debug builds panic with a message saying so, and release builds panic (`Local`) or
+deadlock (`Shared`). `Drop` is not restricted: replaced, evicted and rejected values are dropped
+after the lock is released.
+
 ## Subjects
 
 A subject is both an `Observer` and an `Observable`: push into one end, subscribe to the other.

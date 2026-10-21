@@ -14,6 +14,10 @@
 //!
 //! Every subject terminates at most once, and reports it through [`Subject::termination`].
 //!
+//! A subject clones the values it replays, and the error it terminates with, under its lock, so
+//! their `Clone` must not reach back into that subject; their `Drop` runs outside the lock. See
+//! "Item and error types run under a lock" in the crate documentation.
+//!
 //! # Examples
 //! ```rust
 //! use rx_rust::{

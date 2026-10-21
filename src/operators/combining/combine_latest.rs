@@ -16,6 +16,9 @@ use educe::Educe;
 
 /// Emits the latest values of two observables as a pair whenever either of them emits, once both
 /// have emitted.
+///
+/// The pair is cloned from the latest values under the operator's lock, so the items' `Clone`
+/// must not reach back into this pipeline.
 /// See <https://reactivex.io/documentation/operators/combinelatest.html>
 ///
 /// # Examples

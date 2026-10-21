@@ -19,6 +19,9 @@ use std::marker::PhantomData;
 
 /// Emits a single boolean value that indicates whether two observables emit the same sequence of
 /// items.
+///
+/// The items are compared under the operator's lock, so their `PartialEq` must not reach back into
+/// this pipeline.
 /// See <https://reactivex.io/documentation/operators/sequenceequal.html>
 ///
 /// # Examples

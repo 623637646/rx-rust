@@ -79,10 +79,14 @@ where
 {
     /// The current value.
     ///
+    /// It is cloned under the subject's lock, which is what makes it the value the subject holds
+    /// right now, so its `Clone` must not reach back into this subject.
+    ///
     /// # Panics
     ///
     /// Panics once an observer's callback has panicked, which takes the subject's whole state with
-    /// it and leaves nothing to return.
+    /// it and leaves nothing to return. Panics too, in debug builds, when the value's `Clone`
+    /// reaches back into this subject; a `Shared` subject deadlocks there in release builds.
     pub fn value(&self) -> T {
         self.0
             .read(|value, _| value.clone())
