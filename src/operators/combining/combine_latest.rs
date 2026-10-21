@@ -106,7 +106,7 @@ where
         let model = Model {
             latest_1: None,
             latest_2: None,
-            should_completed: false,
+            one_is_completed: false,
         };
         subscribe_with_context(observer, model, |context| {
             let sub_1 = self.source_1.subscribe(ObserverImpl1(context.clone()));
@@ -120,7 +120,7 @@ where
 struct Model<T1, T2> {
     latest_1: Option<T1>,
     latest_2: Option<T2>,
-    should_completed: bool,
+    one_is_completed: bool,
 }
 
 macro_rules! impl_observer {
@@ -160,10 +160,10 @@ macro_rules! impl_observer {
             fn on_termination(self, termination: Termination<E>) {
                 let _ = self.0.update(|model| match termination {
                     completion @ Termination::Completed => {
-                        if model.should_completed || model.$field_self.is_none() {
+                        if model.one_is_completed || model.$field_self.is_none() {
                             UpdateOutcome::empty().with_termination_event(completion)
                         } else {
-                            model.should_completed = true;
+                            model.one_is_completed = true;
                             UpdateOutcome::empty().without_events()
                         }
                     }

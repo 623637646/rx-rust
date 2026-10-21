@@ -52,11 +52,7 @@ pub struct Collect<C, T, OE> {
 impl<C, T, OE> Collect<C, T, OE> {
     /// Creates a [`Collect`] over `source`;
     /// [`ObservableExt::collect`](crate::observable::ObservableExt::collect) is the fluent form.
-    pub fn new<E>(source: OE) -> Self
-    where
-        OE: ObservableTypes<Item = T, Error = E>,
-        C: Default + Extend<T>,
-    {
+    pub fn new(source: OE) -> Self {
         Self {
             source,
             _marker: PhantomData,

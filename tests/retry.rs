@@ -268,7 +268,7 @@ fn test_completed_synchronous_throw() {
 }
 
 #[test]
-fn test_erryr_no_retry() {
+fn test_error_no_retry() {
     let (checker, observer) = Checker::new();
 
     let (channels, observable) = test_channels();

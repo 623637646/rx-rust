@@ -311,6 +311,10 @@ fn selected_kinds() -> Vec<SchedulerKind> {
         .map(str::trim)
         .filter(|name| !name.is_empty())
         .collect();
+    assert!(
+        !names.is_empty(),
+        "RX_TEST_SCHEDULERS must select at least one scheduler"
+    );
     let known = SchedulerKind::ALL.map(SchedulerKind::name);
     if let Some(unknown) = names.iter().find(|name| !known.contains(name)) {
         panic!("RX_TEST_SCHEDULERS: unknown scheduler {unknown:?}, expected one of {known:?}");

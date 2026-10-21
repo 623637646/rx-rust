@@ -282,10 +282,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
 
     /// Gathers all the items into a collection built with `Default` and `Extend`, and emits it
     /// when the source completes. See [`to_vec`](ObservableExt::to_vec) for the `Vec<T>` case.
-    fn collect<C>(self) -> Collect<C, Self::Item, Self>
-    where
-        C: Default + Extend<Self::Item>,
-    {
+    fn collect<C>(self) -> Collect<C, Self::Item, Self> {
         Collect::new(self)
     }
 

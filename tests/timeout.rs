@@ -418,7 +418,7 @@ fn test_multiple_operation_timeout_at_first() {
 }
 
 #[test]
-fn test_multiple_operation_timeout_at_sencond() {
+fn test_multiple_operation_timeout_at_second() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
     let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();

@@ -25,22 +25,26 @@ impl<T> Poison for std::sync::Mutex<T> {
 /// The tests below, in a module `$name` where `Shared` and `Mutable` are the pointer and the lock
 /// of one mode, and `POISONS` says whether a panic under the lock poisons it.
 macro_rules! mutable_tests {
-    ($name:ident, $shared:ty, $mutable:ty, $poisons:literal) => {
+    ($name:ident, $shared:ty, $weak:ty, $mutable:ty, $poisons:literal) => {
         mod $name {
             use super::*;
 
             type Shared<T> = $shared;
+            type Weak<T> = $weak;
             type Mutable<T> = $mutable;
             const POISONS: bool = $poisons;
 
             /// A value whose drop takes the lock it was stored in, which deadlocks if it is dropped
             /// under it.
-            struct DropsIntoItsOwnLock(Shared<Mutable<Vec<DropsIntoItsOwnLock>>>);
+            struct DropsIntoItsOwnLock(Weak<Mutable<Vec<DropsIntoItsOwnLock>>>);
 
             impl Drop for DropsIntoItsOwnLock {
                 fn drop(&mut self) {
-                    self.0
-                        .with_mut(|values| values.push(DropsIntoItsOwnLock(self.0.clone())));
+                    if let Some(values) = self.0.upgrade() {
+                        values.with_mut(|values| {
+                            values.push(DropsIntoItsOwnLock(self.0.clone()));
+                        });
+                    }
                 }
             }
 
@@ -48,7 +52,7 @@ macro_rules! mutable_tests {
             fn test_take_value_drops_outside_the_lock() {
                 let values: Shared<Mutable<Vec<DropsIntoItsOwnLock>>> =
                     Shared::new(Mutable::new(Vec::new()));
-                values.with_mut(|slot| slot.push(DropsIntoItsOwnLock(values.clone())));
+                values.with_mut(|slot| slot.push(DropsIntoItsOwnLock(Shared::downgrade(&values))));
 
                 // `with_mut(Vec::clear)` would drop the element under the lock, and its drop takes
                 // that lock again. Taking the vec out hands the drop to this scope, where the lock
@@ -59,18 +63,24 @@ macro_rules! mutable_tests {
                 // proves it ran outside. That replacement is dropped by the same route.
                 assert_eq!(values.with_ref(Vec::len), 1);
                 drop(values.take_value());
+                let weak = Shared::downgrade(&values);
+                drop(values);
+                assert!(weak.upgrade().is_none());
             }
 
             #[test]
             fn test_replace_value_drops_outside_the_lock() {
                 let values: Shared<Mutable<Vec<DropsIntoItsOwnLock>>> =
                     Shared::new(Mutable::new(Vec::new()));
-                values.with_mut(|slot| slot.push(DropsIntoItsOwnLock(values.clone())));
+                values.with_mut(|slot| slot.push(DropsIntoItsOwnLock(Shared::downgrade(&values))));
 
                 drop(values.replace_value(Vec::new()));
 
                 assert_eq!(values.with_ref(Vec::len), 1);
                 drop(values.take_value());
+                let weak = Shared::downgrade(&values);
+                drop(values);
+                assert!(weak.upgrade().is_none());
             }
 
             #[test]
@@ -175,5 +185,17 @@ macro_rules! mutable_tests {
     };
 }
 
-mutable_tests!(local, std::rc::Rc<T>, std::cell::RefCell<T>, false);
-mutable_tests!(shared, std::sync::Arc<T>, std::sync::Mutex<T>, true);
+mutable_tests!(
+    local,
+    std::rc::Rc<T>,
+    std::rc::Weak<T>,
+    std::cell::RefCell<T>,
+    false
+);
+mutable_tests!(
+    shared,
+    std::sync::Arc<T>,
+    std::sync::Weak<T>,
+    std::sync::Mutex<T>,
+    true
+);

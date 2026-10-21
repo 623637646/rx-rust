@@ -232,28 +232,29 @@ where
     fn on_termination(self, termination: Termination<E>) {
         let _ = self.0.update(|model| {
             if model.sub_ids.latest() != Some(self.1) {
+                // An ignored error can re-enter this context when dropped.
                 return UpdateOutcome::empty()
                     .without_events()
-                    .without_drop_outside();
+                    .with_drop_outside((Some(termination), None));
             }
             match termination {
                 completion @ Termination::Completed => {
                     if model.is_source_completed {
                         UpdateOutcome::empty()
                             .with_termination_event(completion)
-                            .without_drop_outside()
+                            .with_drop_outside((None, None))
                     } else {
                         // The terminating inner is the current one, so its subscription is still
                         // held or being built: `release` itself rejects an idle slot, and does so
                         // without the in-lock assertion that would poison the lock on the way out.
                         UpdateOutcome::empty()
                             .without_events()
-                            .with_drop_outside(model.slot.release())
+                            .with_drop_outside((None, model.slot.release()))
                     }
                 }
                 error @ Termination::Error(_) => UpdateOutcome::empty()
                     .with_termination_event(error)
-                    .without_drop_outside(),
+                    .with_drop_outside((None, None)),
             }
         });
     }

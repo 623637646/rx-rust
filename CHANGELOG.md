@@ -267,6 +267,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `switch` drops errors from stale inner observables outside its context lock, so an error's
+  destructor can re-enter the operator without panicking or deadlocking.
+
 - `observe_on` delivers an error before the values still queued when it was sent, even when it
   comes while the task is delivering a batch of earlier values: the rest of that batch used to be
   delivered first.

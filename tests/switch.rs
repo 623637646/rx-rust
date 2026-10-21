@@ -1629,6 +1629,42 @@ fn test_error_on_unsub() {
 }
 
 #[test]
+fn test_stale_error_dropped_outside_lock() {
+    use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
+    use std::sync::{Arc, Mutex};
+    use tests_utils::drop_probe::DropProbe;
+
+    type Error = Arc<Mutex<DropProbe>>;
+    let old_observer = Arc::new(Mutex::new(None::<SendBoxedObserver<'_, i32, Error>>));
+    let old_observer_on_subscribe = old_observer.clone();
+    let old_source = Create::shared_boxed(move |observer| {
+        old_observer_on_subscribe.replace_value(Some(observer));
+        DisposeOnDrop::default()
+    })
+    .into_send_boxed();
+    let (mut inner_sender, inner_source, _) = test_channel::<i32, Error>();
+    let (mut sender, source, _) = test_channel();
+    let seen = Arc::new(Mutex::new(Vec::new()));
+    let seen_by_observer = seen.clone();
+    let _subscription = source.switch().subscribe_with_callback(
+        move |value| seen_by_observer.with_mut(|seen| seen.push(value)),
+        |_| unreachable!("the old inner's error must be ignored"),
+    );
+
+    assert!(sender.on_next(old_source).is_continue());
+    assert!(sender.on_next(inner_source.into_send_boxed()).is_continue());
+    let error = DropProbe::new().on_drop(Box::new(move || {
+        assert!(inner_sender.on_next(7).is_continue());
+    }));
+    old_observer
+        .take_value()
+        .unwrap()
+        .on_termination(Termination::Error(Arc::new(Mutex::new(error))));
+
+    assert_eq!(seen.clone_value(), [7]);
+}
+
+#[test]
 fn test_race_condition_next_after_unsub() {
     let mut sender_1 = None;
     let mut sender_2 = None;
