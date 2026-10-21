@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-21
+
 ### Added
 
 - `ConnectableController::reset_on_error(bool)` / `reset_on_complete(bool)` and
@@ -403,7 +405,8 @@ themes rather than every change.
 
 Initial public release on crates.io.
 
-[Unreleased]: https://github.com/623637646/rx-rust/compare/1.0.1...HEAD
+[Unreleased]: https://github.com/623637646/rx-rust/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/623637646/rx-rust/compare/1.0.1...2.0.0
 [1.0.1]: https://github.com/623637646/rx-rust/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/623637646/rx-rust/compare/0.3.0...1.0.0
 [0.3.0]: https://github.com/623637646/rx-rust/compare/0.2.2...0.3.0
