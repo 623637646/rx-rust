@@ -22,6 +22,12 @@
 //! `drop(guard)` where the scope ends before the enclosing block. When the returning path needs
 //! something back from the guard, park it in the guard's state and take it with
 //! [`OnPanic::disarm`], which ends the scope and hands the state over.
+//!
+//! A guard armed while its thread is already unwinding — by a `Drop` that runs during the unwind,
+//! disposing a subscription that delivers something — guards a scope that panic did not start in,
+//! so it never runs its action: `std::thread::panicking` stays `true` through the whole unwind,
+//! and would otherwise mistake the earlier panic for one of its own scope. A panic inside that
+//! scope aborts the process anyway.
 
 use educe::Educe;
 
@@ -32,27 +38,38 @@ use educe::Educe;
 #[must_use = "a guard that is not bound to a variable is dropped at once, guarding nothing"]
 #[derive(Educe)]
 #[educe(Debug)]
-pub(crate) struct OnPanic<T, F: FnOnce(T)>(Option<(T, F)>);
+pub(crate) struct OnPanic<T, F: FnOnce(T)> {
+    armed: Option<(T, F)>,
+    /// Whether the thread was already unwinding when the guard was armed: see the module
+    /// documentation.
+    armed_while_panicking: bool,
+}
 
 impl<T, F: FnOnce(T)> OnPanic<T, F> {
     /// Arms the guard, parking `state` in it until the scope ends one way or the other.
     pub(crate) fn new(state: T, action: F) -> Self {
-        Self(Some((state, action)))
+        Self {
+            armed: Some((state, action)),
+            armed_while_panicking: std::thread::panicking(),
+        }
     }
 
     /// Ends the guarded scope the returning way, handing the state back untouched.
     pub(crate) fn disarm(mut self) -> T {
-        let (state, _action) = self.0.take().expect("the guard is disarmed at most once");
+        let (state, _action) = self
+            .armed
+            .take()
+            .expect("the guard is disarmed at most once");
         state
     }
 }
 
 impl<T, F: FnOnce(T)> Drop for OnPanic<T, F> {
     fn drop(&mut self) {
-        if !std::thread::panicking() {
+        if self.armed_while_panicking || !std::thread::panicking() {
             return;
         }
-        if let Some((state, action)) = self.0.take() {
+        if let Some((state, action)) = self.armed.take() {
             action(state);
         }
     }
@@ -104,5 +121,29 @@ mod tests {
         assert!(result.is_err());
         // The action ran on the unwinding thread, with the state the guard was carrying.
         assert_eq!(seen.get(), Some(111));
+    }
+
+    #[cfg(panic = "unwind")]
+    #[test]
+    fn test_armed_while_panicking() {
+        /// Arms and drops a guard from its own `Drop`, as a disposal run by an unwind does.
+        struct ArmsOnDrop<'a>(&'a Cell<Option<i32>>);
+
+        impl Drop for ArmsOnDrop<'_> {
+            fn drop(&mut self) {
+                drop(OnPanic::new(111, |state| self.0.set(Some(state))));
+            }
+        }
+
+        let seen = Cell::new(None);
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let _arms_on_drop = ArmsOnDrop(&seen);
+            resume_unwind(Box::new(()));
+        }));
+
+        assert!(result.is_err());
+        // The guard's own scope returned: the unwind it was armed in is not its panic.
+        assert_eq!(seen.get(), None);
     }
 }
