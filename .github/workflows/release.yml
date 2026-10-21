@@ -3,7 +3,8 @@ name: Release
 # Publishes to crates.io and creates a GitHub Release when a version tag is pushed.
 #
 # Flow: bump `version` in Cargo.toml, move the `[Unreleased]` notes in CHANGELOG.md under the new
-# version, commit, `git tag <version>`, `git push origin master --tags`.
+# version, update the installation line in README.md to its `major.minor`, commit,
+# `git tag <version>`, `git push origin master --tags`.
 #
 # Authentication uses crates.io Trusted Publishing (OIDC) — no long-lived token is stored in
 # GitHub. The crate's settings page on crates.io must list this repository and the workflow file
@@ -37,6 +38,21 @@ jobs:
           version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
           if [ "$version" != "$GITHUB_REF_NAME" ]; then
             echo "::error::tag '$GITHUB_REF_NAME' does not match Cargo.toml version '$version'"
+            exit 1
+          fi
+
+      # The installation snippet asks for `major.minor`, so that it keeps resolving to the patch
+      # releases that follow.
+      - name: README must install this version
+        run: |
+          expected="${GITHUB_REF_NAME%.*}"
+          found=$(grep -E '^rx-rust = ' README.md | sed -E 's/^rx-rust = (\{ *version = )?"([^"]*)".*/\2/' | sort -u)
+          if [ -z "$found" ]; then
+            echo "::error::README.md has no 'rx-rust = ' installation line"
+            exit 1
+          fi
+          if [ "$found" != "$expected" ]; then
+            echo "::error::README.md installs rx-rust '$(echo $found)', expected '$expected' for tag '$GITHUB_REF_NAME'"
             exit 1
           fi
 
