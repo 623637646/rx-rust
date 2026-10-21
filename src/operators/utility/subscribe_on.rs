@@ -26,33 +26,16 @@ use educe::Educe;
 /// async fn main() {
 ///     use rx_rust::{
 ///         observable::ObservableExt,
-///         observer::Termination,
-///         operators::{
-///             creating::from_iter::FromIter,
-///             utility::subscribe_on::SubscribeOn,
-///         },
+///         operators::{creating::from_iter::FromIter, utility::subscribe_on::SubscribeOn},
 ///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
-///     use std::sync::{Arc, Mutex};
-///     use tokio::time::{sleep, Duration};
+///     use futures::StreamExt;
 ///
-///     let scheduler = TokioScheduler::current();
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let terminations = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///     let terminations_observer = Arc::clone(&terminations);
-///
-///     let subscription = SubscribeOn::new(FromIter::new(vec![1, 2, 3]), scheduler.clone())
-///         .subscribe_with_callback(
-///             move |value| values_observer.lock().unwrap().push(value),
-///             move |termination| terminations_observer.lock().unwrap().push(termination),
-///         );
-///
-///     sleep(Duration::from_millis(10)).await;
-///     drop(subscription);
-///
-///     assert_eq!(&*values.lock().unwrap(), &[1, 2, 3]);
-///     assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
+///     let values = SubscribeOn::new(FromIter::new([1, 2, 3]), TokioScheduler::current())
+///         .into_stream()
+///         .collect::<Vec<_>>()
+///         .await;
+///     assert_eq!(values, [1, 2, 3]);
 /// }
 /// ```
 ///

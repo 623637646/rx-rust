@@ -38,28 +38,18 @@ use std::{convert::Infallible, time::Duration};
 /// async fn main() {
 ///     use rx_rust::{
 ///         observable::ObservableExt,
-///         observer::Termination,
 ///         operators::creating::interval::Interval,
 ///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
-///     use std::{
-///         sync::{Arc, Mutex},
-///         time::Duration,
-///     };
+///     use futures::StreamExt;
+///     use std::time::Duration;
 ///
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///     let subscription = Interval::new(Duration::from_millis(1), TokioScheduler::current())
+///     let values = Interval::new(Duration::from_millis(1), TokioScheduler::current())
 ///         .take(3)
-///         .subscribe_with_callback(
-///             move |value| values_observer.lock().unwrap().push(value),
-///             |termination| assert_eq!(termination, Termination::Completed),
-///         );
-///
-///     tokio::time::sleep(Duration::from_millis(20)).await;
-///     drop(subscription);
-///
-///     assert_eq!(&*values.lock().unwrap(), &[0, 1, 2]);
+///         .into_stream()
+///         .collect::<Vec<_>>()
+///         .await;
+///     assert_eq!(values, [0, 1, 2]);
 /// }
 /// ```
 #[derive(Educe)]

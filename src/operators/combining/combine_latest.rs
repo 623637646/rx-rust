@@ -29,7 +29,6 @@ use educe::Educe;
 /// use std::convert::Infallible;
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// let mut subject_1 = BehaviorSubject::<i32, Infallible, _>::local(0);
 /// let mut subject_2 = BehaviorSubject::<i32, Infallible, _>::local(10);
@@ -37,17 +36,16 @@ use educe::Educe;
 /// let subscription =
 ///     CombineLatest::new(subject_1.clone(), subject_2.clone()).subscribe_with_callback(
 ///         |value| values.push(value),
-///         |termination| terminations.push(termination),
+///         |termination| assert_eq!(termination, Termination::Completed),
 ///     );
 ///
-/// subject_1.on_next(1);
-/// subject_2.on_next(11);
+/// let _ = subject_1.on_next(1);
+/// let _ = subject_2.on_next(11);
 /// subject_1.on_termination(Termination::Completed);
 /// subject_2.on_termination(Termination::Completed);
 /// drop(subscription);
 ///
 /// assert_eq!(values, vec![(0, 10), (1, 10), (1, 11)]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

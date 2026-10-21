@@ -25,29 +25,14 @@ use educe::Educe;
 /// async fn main() {
 ///     use rx_rust::{
 ///         observable::ObservableExt,
-///         observer::Termination,
 ///         operators::creating::from_try_future::FromTryFuture,
 ///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
-///     use std::{
-///         sync::{Arc, Mutex},
-///         time::Duration,
-///     };
 ///
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///
-///     let subscription =
-///         FromTryFuture::new(async { Err::<i32, _>("boom") }, TokioScheduler::current())
-///             .subscribe_with_callback(
-///                 move |value| values_observer.lock().unwrap().push(value),
-///                 |termination| assert_eq!(termination, Termination::Error("boom")),
-///             );
-///
-///     tokio::time::sleep(Duration::from_millis(20)).await;
-///     drop(subscription);
-///
-///     assert!(values.lock().unwrap().is_empty());
+///     let result = FromTryFuture::new(async { Err::<i32, _>("boom") }, TokioScheduler::current())
+///         .into_try_future()
+///         .await;
+///     assert_eq!(result, Err("boom"));
 /// }
 /// ```
 #[derive(Educe)]

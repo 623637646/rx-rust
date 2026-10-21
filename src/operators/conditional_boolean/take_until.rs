@@ -38,10 +38,10 @@ use educe::Educe;
 ///     move |termination| terminations_observer.lock().unwrap().push(termination),
 /// );
 ///
-/// source.on_next(1);
-/// source.on_next(2);
-/// stop.on_next(());
-/// source.on_next(3);
+/// let _ = source.on_next(1);
+/// let _ = source.on_next(2);
+/// let _ = stop.on_next(());
+/// let _ = source.on_next(3);
 /// drop(subscription);
 ///
 /// assert_eq!(&*values.lock().unwrap(), &[1, 2]);

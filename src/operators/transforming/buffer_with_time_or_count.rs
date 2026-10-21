@@ -36,50 +36,35 @@ use std::{num::NonZeroUsize, time::Duration};
 ///
 /// # Examples
 /// ```rust
-/// # #[cfg(not(feature = "tokio-scheduler"))]
-/// # fn main() {}
-/// # #[cfg(feature = "tokio-scheduler")]
-/// #[tokio::main]
-/// async fn main() {
-///     use rx_rust::{
-///         observable::ObservableExt,
-///         observer::Termination,
-///         operators::{
-///             creating::from_iter::FromIter,
-///             transforming::buffer_with_time_or_count::BufferWithTimeOrCount,
-///         },
-///         scheduler::runtime::tokio::TokioScheduler,
-///     };
-///     use std::{
-///         num::NonZeroUsize,
-///         sync::{Arc, Mutex},
-///         time::Duration,
-///     };
-///     use tokio::time::sleep;
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::Observer,
+///     operators::transforming::buffer_with_time_or_count::BufferWithTimeOrCount,
+///     scheduler::virtual_time::VirtualTime,
+///     subject::publish_subject::PublishSubject,
+///     thread_mode::mutable::{MutableExt, MutableHelper},
+/// };
+/// use std::{convert::Infallible, sync::{Arc, Mutex}, time::Duration};
 ///
-///     let scheduler = TokioScheduler::current();
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let terminations = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///     let terminations_observer = Arc::clone(&terminations);
+/// let time = VirtualTime::new();
+/// let span = Duration::from_millis(5);
+/// let values = Arc::new(Mutex::new(Vec::new()));
+/// let values_observer = values.clone();
+/// let mut source = PublishSubject::<i32, Infallible, _>::shared();
+/// let _subscription = BufferWithTimeOrCount::new(
+///     source.clone(), std::num::NonZeroUsize::new(2).unwrap(), span, time.scheduler(),
+/// )
+/// .subscribe_with_callback(
+///     move |value| values_observer.with_mut(|values| values.push(value)),
+///     |_| {},
+/// );
 ///
-///     let subscription = BufferWithTimeOrCount::new(
-///         FromIter::new(vec![1, 2, 3]),
-///         NonZeroUsize::new(2).unwrap(),
-///         Duration::from_millis(10),
-///         scheduler.clone(),
-///     )
-///     .subscribe_with_callback(
-///         move |value| values_observer.lock().unwrap().push(value),
-///         move |termination| terminations_observer.lock().unwrap().push(termination),
-///     );
-///
-///     sleep(Duration::from_millis(20)).await;
-///     drop(subscription);
-///
-///     assert_eq!(&*values.lock().unwrap(), &[vec![1, 2], vec![3]]);
-///     assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
-/// }
+/// let _ = source.on_next(1);
+/// let _ = source.on_next(2); // Full: emitted immediately.
+/// let _ = source.on_next(3);
+/// assert_eq!(values.clone_value(), [vec![1, 2]]);
+/// time.advance_by(span);
+/// assert_eq!(values.clone_value(), [vec![1, 2], vec![3]]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

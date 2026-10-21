@@ -28,7 +28,6 @@ use educe::Educe;
 /// use rx_rust::observer::Observer;
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// let observable =
 ///     HookOnTermination::new(FromIter::new(vec![1]), move |observer, termination| {
@@ -37,11 +36,10 @@ use educe::Educe;
 ///     });
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(values, vec![1]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 ///
 /// # `new` or `new_boxed`

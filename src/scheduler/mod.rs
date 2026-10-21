@@ -118,6 +118,8 @@ use std::time::{Duration, Instant};
 /// `Send` (a `Local` one), while every built-in clock is.
 pub trait Clock: Clone {
     /// The current time on this clock.
+    ///
+    /// Time must not move backwards, and clones must read the same clock.
     fn now(&self) -> Instant;
 }
 

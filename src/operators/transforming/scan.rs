@@ -25,16 +25,14 @@ use std::marker::PhantomData;
 /// };
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// let observable = Scan::new(FromIter::new(vec![1, 2, 3]), 0, |acc, value| acc + value);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(values, vec![1, 3, 6]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

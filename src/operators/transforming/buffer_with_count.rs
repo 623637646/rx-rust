@@ -26,17 +26,15 @@ use std::num::NonZeroUsize;
 /// use std::num::NonZeroUsize;
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// let observable =
 ///     BufferWithCount::new(FromIter::new(vec![1, 2, 3, 4]), NonZeroUsize::new(3).unwrap());
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(values, vec![vec![1, 2, 3], vec![4]]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

@@ -41,41 +41,28 @@ pub enum Error<E> {
 ///
 /// # Examples
 /// ```rust
-/// # #[cfg(not(feature = "tokio-scheduler"))]
-/// # fn main() {}
-/// # #[cfg(feature = "tokio-scheduler")]
-/// #[tokio::main]
-/// async fn main() {
-///     use rx_rust::{
-///         observable::ObservableExt,
-///         observer::{Observer, Termination},
-///         operators::utility::timeout::{Error, Timeout},
-///         subject::publish_subject::PublishSubject,
-///         scheduler::runtime::tokio::TokioScheduler,
-///     };
-///     use std::{convert::Infallible, sync::{Arc, Mutex}};
-///     use tokio::time::{sleep, Duration};
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::Termination,
+///     operators::{creating::never::Never, utility::timeout::{Error, Timeout}},
+///     scheduler::virtual_time::VirtualTime,
+///     thread_mode::mutable::MutableExt,
+/// };
+/// use std::{sync::{Arc, Mutex}, time::Duration};
 ///
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let terminations = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///     let terminations_observer = Arc::clone(&terminations);
-///     let mut subject = PublishSubject::<i32, Infallible, _>::shared();
+/// let time = VirtualTime::new();
+/// let termination = Arc::new(Mutex::new(None));
+/// let termination_observer = termination.clone();
+/// let _subscription = Timeout::new(Never, Duration::from_millis(5), time.scheduler())
+///     .subscribe_with_callback(
+///         |_| -> () { unreachable!("Never emits no values") },
+///         move |end| { termination_observer.replace_value(Some(end)); },
+///     );
 ///
-///     let scheduler = TokioScheduler::current();
-///     let subscription = Timeout::new(subject.clone(), Duration::from_millis(5), scheduler)
-///         .subscribe_with_callback(
-///             move |value| values_observer.lock().unwrap().push(value),
-///             move |termination| terminations_observer.lock().unwrap().push(termination),
-///         );
-///
-///     subject.on_next(1);
-///     sleep(Duration::from_millis(10)).await;
-///     drop(subscription);
-///
-///     assert_eq!(&*values.lock().unwrap(), &[1]);
-///     assert_eq!(&*terminations.lock().unwrap(), &[Termination::Error(Error::Timeout)]);
-/// }
+/// time.advance_by(Duration::from_millis(4));
+/// assert!(termination.clone_value().is_none());
+/// time.advance_by(Duration::from_millis(1));
+/// assert_eq!(termination.clone_value(), Some(Termination::Error(Error::Timeout)));
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

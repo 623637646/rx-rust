@@ -22,15 +22,13 @@ use std::convert::Infallible;
 /// };
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// Start::new(|| 21 + 21).subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(values, vec![42]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

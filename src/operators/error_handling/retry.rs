@@ -43,18 +43,16 @@ pub enum RetryAction<E, OE1> {
 /// };
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// let observable = Retry::new(Throw::new("boom").with_item_type(), |_| {
 ///     RetryAction::Retry(Just::new(42).with_error_type())
 /// });
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(values, vec![42]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

@@ -12,8 +12,8 @@ use crate::{
 };
 use educe::Educe;
 
-/// Given two or more source observables, mirrors only the first of them to emit an item or a
-/// termination.
+/// Mirrors the first source observable to emit an item or a termination.
+/// With no sources, completes immediately.
 /// See <https://reactivex.io/documentation/operators/amb.html>
 ///
 /// # Examples
@@ -28,7 +28,6 @@ use educe::Educe;
 /// };
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// let observable = Amb::new([
 ///     FromIter::new(vec![1, 2]),
@@ -36,11 +35,10 @@ use educe::Educe;
 /// ]);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(values, vec![1, 2]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

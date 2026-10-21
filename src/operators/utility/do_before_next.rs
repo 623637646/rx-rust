@@ -25,7 +25,6 @@ use educe::Educe;
 /// use std::sync::{Arc, Mutex};
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 /// let side_effects = Arc::new(Mutex::new(Vec::new()));
 /// let side_effects_observer = Arc::clone(&side_effects);
 ///
@@ -34,11 +33,10 @@ use educe::Educe;
 /// })
 /// .subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(values, vec![1, 2]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// assert_eq!(&*side_effects.lock().unwrap(), &[10, 20]);
 /// ```
 #[derive(Educe)]

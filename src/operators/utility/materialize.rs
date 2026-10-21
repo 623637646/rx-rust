@@ -25,11 +25,10 @@ use std::convert::Infallible;
 /// };
 ///
 /// let mut events = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// Materialize::new(FromIter::new(vec![1, 2])).subscribe_with_callback(
 ///     |event| events.push(event),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(
@@ -40,7 +39,6 @@ use std::convert::Infallible;
 ///         Event::Termination(Termination::Completed)
 ///     ]
 /// );
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

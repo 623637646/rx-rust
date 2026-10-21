@@ -26,28 +26,14 @@ use std::convert::Infallible;
 /// async fn main() {
 ///     use rx_rust::{
 ///         observable::ObservableExt,
-///         observer::Termination,
 ///         operators::creating::from_future::FromFuture,
 ///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
-///     use std::{
-///         sync::{Arc, Mutex},
-///         time::Duration,
-///     };
 ///
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///
-///     let subscription = FromFuture::new(async { 7 }, TokioScheduler::current())
-///         .subscribe_with_callback(
-///             move |value| values_observer.lock().unwrap().push(value),
-///             |termination| assert_eq!(termination, Termination::Completed),
-///         );
-///
-///     tokio::time::sleep(Duration::from_millis(20)).await;
-///     drop(subscription);
-///
-///     assert_eq!(&*values.lock().unwrap(), &[7]);
+///     let value = FromFuture::new(async { 7 }, TokioScheduler::current())
+///         .into_future()
+///         .await;
+///     assert_eq!(value, Some(7));
 /// }
 /// ```
 ///

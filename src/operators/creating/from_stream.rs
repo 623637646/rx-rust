@@ -20,31 +20,18 @@ use std::convert::Infallible;
 /// # #[cfg(feature = "tokio-scheduler")]
 /// #[tokio::main]
 /// async fn main() {
-///     use futures::stream;
 ///     use rx_rust::{
 ///         observable::ObservableExt,
-///         observer::Termination,
 ///         operators::creating::from_stream::FromStream,
 ///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
-///     use std::{
-///         sync::{Arc, Mutex},
-///         time::Duration,
-///     };
+///     use futures::{stream, StreamExt};
 ///
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///
-///     let subscription = FromStream::new(stream::iter([10, 20]), TokioScheduler::current())
-///         .subscribe_with_callback(
-///             move |value| values_observer.lock().unwrap().push(value),
-///             |termination| assert_eq!(termination, Termination::Completed),
-///         );
-///
-///     tokio::time::sleep(Duration::from_millis(20)).await;
-///     drop(subscription);
-///
-///     assert_eq!(&*values.lock().unwrap(), &[10, 20]);
+///     let values = FromStream::new(stream::iter([10, 20]), TokioScheduler::current())
+///         .into_stream()
+///         .collect::<Vec<_>>()
+///         .await;
+///     assert_eq!(values, [10, 20]);
 /// }
 /// ```
 #[derive(Educe)]

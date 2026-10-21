@@ -38,10 +38,10 @@ use std::time::{Duration, Instant};
 /// let subscription = Throttle::new(subject.clone(), Duration::from_millis(5), time.clock())
 ///     .subscribe_with_callback(|value| values.push(value), |_| {});
 ///
-/// subject.on_next(1);
-/// subject.on_next(2); // within 5 ms of `1`: dropped
+/// let _ = subject.on_next(1);
+/// let _ = subject.on_next(2); // within 5 ms of `1`: dropped
 /// time.advance_by(Duration::from_millis(5));
-/// subject.on_next(3);
+/// let _ = subject.on_next(3);
 /// subject.on_termination(Termination::Completed);
 /// drop(subscription);
 ///

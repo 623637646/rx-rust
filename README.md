@@ -10,7 +10,7 @@ Reactive Extensions for Rust. `rx-rust` is a toolkit for composing asynchronous 
 programs by chaining observables and operators in a declarative style, inspired by
 [ReactiveX](https://reactivex.io/).
 
-- 100+ operators, one per file, grouped the way reactivex.io groups them.
+- Operators grouped by ReactiveX category, one per file.
 - `#![forbid(unsafe_code)]`, no required runtime dependency: the async runtime (Tokio, smol, or
   the `futures` executors) is selected by a feature flag.
 - A built-in stop signal: an observer that has seen enough returns `Flow::Stop`, and the source
@@ -164,7 +164,7 @@ Feature                  | Scheduler value
 `tokio-scheduler`        | `rx_rust::scheduler::runtime::tokio::TokioScheduler::current()`, or `from_handle(runtime.handle().clone())` for a `Runtime` you own; `TokioLocalScheduler::ambient()` for the running `LocalSet`, or `from_local_set(&local_set)` for a given one (`Local` mode)
 `smol-scheduler`         | `rx_rust::scheduler::runtime::smol::SmolScheduler::global()`, or `from_executor(&executor)` for an `Executor` you own; `SmolLocalScheduler::from_executor(&executor)` for a `LocalExecutor` (`Local` mode)
 `futures-scheduler`      | `rx_rust::scheduler::runtime::futures::ThreadPoolScheduler::from_pool(pool)` for a `ThreadPool`; `LocalPoolScheduler::from_spawner(pool.spawner())` for a `LocalPool` (`Local` mode)
-(always)                 | `rx_rust::scheduler::virtual_time::VirtualTime::new().scheduler()`, on a virtual clock for tests (see [Testing on virtual time](#testing-on-virtual-time))
+(always)                 | `VirtualTimeScheduler`, from a `VirtualTime` kept alive by the test (see [Testing on virtual time](#testing-on-virtual-time))
 
 ```rust
 #[tokio::main]
@@ -320,9 +320,9 @@ let mut subject = PublishSubject::<_, Infallible, _>::local();
 let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
 assert_eq!(stream.next().now_or_never(), None); // the first poll subscribes
 
-subject.on_next(1);
-subject.on_next(2);
-subject.on_next(3);
+assert!(subject.on_next(1).is_continue());
+assert!(subject.on_next(2).is_continue());
+assert!(subject.on_next(3).is_continue());
 assert_eq!(stream.next().now_or_never(), Some(Some(3)));
 ```
 
@@ -360,9 +360,9 @@ crosses threads.
 
 Erasing the type is explicit and says what it keeps: `into_boxed` / `into_cloneable_boxed` for a
 single thread, `into_send_boxed` / `into_send_cloneable_boxed` for values that must be `Send`.
-The erased type keeps the mode, so a `Local` source such as `Just` that must sit next to `Shared`
-ones, or a chain of `Local` sources that must go into a `Send` box, is declared `Shared` first with
-`into_shared()`.
+The erased type keeps the mode. Use `into_shared()` before erasing a `Local` source that must
+share an erased type with `Shared` sources. A `Send` box can keep either mode; its source and
+disposal must be `Send`.
 
 ## Subjects
 
@@ -375,9 +375,9 @@ Subject                                     | Late subscribers get
 `BehaviorSubject`                           | The latest value first, then everything after.
 `ReplaySubject` (bounded or unbounded)      | The buffered values, then everything after; the termination is replayed too.
 `AsyncSubject`                              | The last value, delivered on completion; nothing on error.
-`unicast_subject()`                         | A single-consumer pipe: a `UnicastSender` and a `UnicastObservable` that can be subscribed once. Values sent before the subscription are buffered.
+`unicast_subject::{local, shared}`           | A single-consumer pipe: a `UnicastSender` and a `UnicastObservable` that can be subscribed once. Values sent before the subscription are buffered.
 
-Subjects are `Clone`; clone one to keep a sending end after subscribing the other:
+The multicast subjects are `Clone`; clone one to keep a sending end after subscribing the other:
 
 ```rust
 use rx_rust::{
@@ -471,8 +471,8 @@ Debugging                   | `debug`, `debug_to_stdout`, `hook_on_subscription`
 
 ## Contributing
 
-See [docs/testing.md](docs/testing.md) for the test case names every operator is expected to
-cover, [docs/decisions/](docs/decisions/) for design decisions, and [AGENTS.md](AGENTS.md) for the
+See [docs/testing.md](https://github.com/623637646/rx-rust/blob/master/docs/testing.md) for the test case names every operator is expected to
+cover, [docs/decisions/](https://github.com/623637646/rx-rust/tree/master/docs/decisions/) for design decisions, and [AGENTS.md](https://github.com/623637646/rx-rust/blob/master/AGENTS.md) for the
 build and test commands. Requires Rust 1.89 or later.
 
 ## License

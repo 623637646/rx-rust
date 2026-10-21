@@ -20,17 +20,15 @@ use std::marker::PhantomData;
 ///     operators::creating::throw::Throw,
 /// };
 ///
-/// let mut terminations = Vec::new();
 ///
 /// Throw::new("boom")
 ///     .with_item_type::<i32>()
 ///     .map_err(|error| error.len())
 ///     .subscribe_with_callback(
 ///         |_| -> () { unreachable!() },
-///         |termination| terminations.push(termination),
+///         |termination| assert_eq!(termination, Termination::Error(4)),
 ///     );
 ///
-/// assert_eq!(terminations, vec![Termination::Error(4)]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

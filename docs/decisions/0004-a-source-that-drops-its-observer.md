@@ -94,8 +94,8 @@ outlive their user.
 
 ### Mechanism
 
-The scheduler task of each of the six operators holds the context strongly: a clone of the
-`SubscriptionContext`, like the one the observer of the source holds. When the source lets go of
+Except for `observe_on`, whose task owns the observer directly (decision 0006), each operator's
+scheduler task holds a clone of the `SubscriptionContext`, like its source's observer. When the source lets go of
 its observer, terminated or not, the tasks keep the context until their work is done, and the last
 of them releases it, and the downstream observer with it. An operator without a task alive at that
 moment holds nothing, so the context is released at once. Nothing has to be promoted, and no

@@ -777,7 +777,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Declares the observable [`Shared`](crate::thread_mode::Shared), so that a `Local` source
-    /// can be erased into the same type as a `Shared` one, or into a `Send` box.
+    /// can be erased into the same type as a `Shared` one.
     fn into_shared(self) -> IntoShared<Self> {
         IntoShared::new(self)
     }
@@ -827,17 +827,17 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// use rx_rust::{
     ///     observable::ObservableExt, observer::Observer,
     ///     operators::others::observable_try_stream::Latest,
-    ///     subject::publish_subject::PublishSubject, thread_mode::Local,
+    ///     subject::publish_subject::PublishSubject,
     /// };
     /// use std::convert::Infallible;
     ///
-    /// let mut subject = PublishSubject::<_, Infallible, Local>::local();
+    /// let mut subject = PublishSubject::<_, Infallible, _>::local();
     /// let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
     /// assert_eq!(stream.next().now_or_never(), None); // subscribes
     ///
-    /// subject.on_next(1);
-    /// subject.on_next(2);
-    /// subject.on_next(3);
+    /// assert!(subject.on_next(1).is_continue());
+    /// assert!(subject.on_next(2).is_continue());
+    /// assert!(subject.on_next(3).is_continue());
     /// assert_eq!(stream.next().now_or_never(), Some(Some(3)));
     /// assert_eq!(stream.next().now_or_never(), None);
     /// ```

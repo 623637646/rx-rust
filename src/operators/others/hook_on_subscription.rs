@@ -32,7 +32,6 @@ use std::marker::PhantomData;
 /// use std::rc::Rc;
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 /// let subscribed = Rc::new(Cell::new(false));
 /// let subscribed_flag = Rc::clone(&subscribed);
 ///
@@ -42,12 +41,11 @@ use std::marker::PhantomData;
 /// });
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert!(subscribed.get());
 /// assert_eq!(values, vec![1, 2]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 ///
 /// # `new` or `new_boxed`

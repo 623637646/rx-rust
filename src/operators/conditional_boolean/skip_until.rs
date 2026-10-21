@@ -41,9 +41,9 @@ use educe::Educe;
 ///     move |termination| terminations_observer.lock().unwrap().push(termination),
 /// );
 ///
-/// source.on_next(1);
-/// gate.on_next(());
-/// source.on_next(2);
+/// let _ = source.on_next(1);
+/// let _ = gate.on_next(());
+/// let _ = source.on_next(2);
 /// source.on_termination(Termination::Completed);
 /// drop(subscription);
 ///

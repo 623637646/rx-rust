@@ -34,9 +34,9 @@ use std::time::Instant;
 /// let subscription = Timestamp::new(subject.clone(), time.clock())
 ///     .subscribe_with_callback(|timestamped_value| timestamped.push(timestamped_value), |_| {});
 ///
-/// subject.on_next(1);
+/// let _ = subject.on_next(1);
 /// time.advance_by(Duration::from_millis(5));
-/// subject.on_next(2);
+/// let _ = subject.on_next(2);
 /// subject.on_termination(Termination::Completed);
 /// drop(subscription);
 ///

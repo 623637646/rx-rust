@@ -13,8 +13,8 @@ use educe::Educe;
 ///
 /// A synchronous source such as `Just` or `Throw` is `Local`, and erasing an observable keeps its
 /// mode, so it cannot share an erased type with a `Shared` source, such as a subject, until it is
-/// declared `Shared` too. A chain of `Local` sources also keeps its state in an `Rc`, which this
-/// moves to an `Arc`, so that the chain can be erased into a `Send` box.
+/// declared `Shared` too. Only operators downstream of this declaration pick `Shared` state;
+/// existing state in the source is unchanged.
 ///
 /// Declaring `Shared` is always sound: it only makes the operators downstream pick the thread-safe
 /// pointers. Whatever the source itself holds is still checked for `Send` where it crosses a

@@ -64,7 +64,7 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
 ```
 
 1. **The observer is a trait parameter.** Each implementation states its own bounds for the
-   concrete observer it receives: only an operator that boxes its observer (a context, a subject,
+   concrete observer it receives: only an operator that boxes its observer (a subject,
    `create`, a boxed observable) or hands it to a scheduler asks for `Send` or `'static`. A chain
    of synchronous operators takes a non-`Send` observer and is monomorphized and inlined as before.
    Each implementation names the observer it subscribes its source with, e.g.
@@ -79,20 +79,20 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    source's disposal would appear in its own definition.
 3. **No `'or`, and `Item` / `Error` are associated types.** `'or` existed only because a context's
    disposal boxed a handle to the context, observer included. The disposal is now a
-   `ContextDisposal`: `SerializedDelivery` is split into the observer cell and an
-   observer-independent core (the model, the resources, the stop flag), and the disposal holds only
-   the core plus a `DeliveryStop` that releases the observer. It needs no box and no lifetime.
+   `subscribe_with_context::Disposal`: `SerializedDelivery` is split into the observer cell and
+   an observer-independent core. The disposal holds a `DeliveryStop`, which stops the core and
+   leaves the observer to be released by the next dropped context handle or event. It needs no
+   box and no lifetime.
 4. **The context helpers keep their contract.** A dispose stops the context before it returns, and
-   nothing is delivered after it. The observer is released when the last handle to the context
-   goes, which the source releases as it is disposed, so in practice still before `dispose`
-   returns. A scheduled task holds the context strongly, so that the work already accepted is not
-   lost when the source lets go of its observer; the handle the source drops as it is disposed then
-   releases the observer anyway, since a handle dropped once the context has stopped takes it out of
-   its cell. See [0004](0004-a-source-that-drops-its-observer.md).
+   nothing is delivered after it. The first context handle dropped after the stop releases the
+   parked observer, usually the source's handle as the source is disposed. A scheduled task holds
+   the context strongly, so work already accepted is not lost when the source lets go of its
+   observer. See [0004](0004-a-source-that-drops-its-observer.md).
 5. **The thread mode is an associated type.** Each source picks its mode (`Create::local` /
    `Create::shared`, `PublishSubject::local()` / `shared()`; value sources such as `Just` are
-   `Local`); an operator over several sources takes `Joined<A, B>`; a scheduler operator takes the
-   scheduler's `Mode`. State goes behind `M::Ptr<_>`, so a `Local` chain has no `Arc` and no atomic.
+   `Local`); an operator over several sources joins their modes. `observe_on` and scheduled
+   sources take the scheduler's mode; operators whose source and scheduler both access their state
+   join those modes. State goes behind `M::Ptr<_>`, so a `Local` chain has no `Arc` and no atomic.
    `Local` itself is `!Send + !Sync`, so the `PhantomData<Local>` in the `Emitter` a `Local`
    `Create` hands its builder makes the emitter `!Send`, and the declaration is enforced where it
    is made rather than by whatever state happens to be downstream. Nothing else carries it: a
@@ -157,8 +157,8 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
    rustc reports `E0275` (overflow). `retry` and `concat_all` (and so `concat_map`) re-subscribe
    that way. They carry a `utils::resubscribe::Resubscribe`, a function pointer
    `fn(OE, Self) -> DisposeOnDrop<D>` created where the operator is subscribed — where the bound is
-   stated and holds — and call it instead. It is public so that a user-written operator can do the
-   same. An observer that subscribes with a *different* observer type (`switch`, `merge_all`,
+   stated and holds — and call it instead. This helper is private to the crate. An observer that
+   subscribes with a *different* observer type (`switch`, `merge_all`,
    `catch`, `concat`) needs nothing special.
 2. **A bound that mentions a projection writes it qualified.** In
    `OE: Observable<X<<OE as ObservableTypes>::Disposal>>` the shorthand `OE::Disposal` would need

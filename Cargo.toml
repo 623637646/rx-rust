@@ -16,8 +16,9 @@ include = ["src/**", "Cargo.toml", "LICENSE", "README.md"]
 all-features = true
 
 [dependencies]
-educe = "0.8" # Using it to fix the issue: https://github.com/rust-lang/rust/issues/26925  Refer to: https://stackoverflow.com/a/79571732/9315497
-futures = { version = "0.3.34", optional = true } # It's optional even though most rust runtimes depend on it because users may implement their own runtimes without depending on futures.
+educe = "0.8" # Derive bounds from fields rather than every generic parameter.
+# Custom schedulers need not depend on futures.
+futures = { version = "0.3.34", optional = true }
 tokio = { version = "1", optional = true }
 smol = { version = "2", optional = true }
 async-io = { version = "2", optional = true }

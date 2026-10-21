@@ -24,33 +24,19 @@ use futures::Stream;
 /// # #[cfg(feature = "tokio-scheduler")]
 /// #[tokio::main]
 /// async fn main() {
-///     use futures::stream;
 ///     use rx_rust::{
 ///         observable::ObservableExt,
-///         observer::Termination,
 ///         operators::creating::from_try_stream::FromTryStream,
 ///         scheduler::runtime::tokio::TokioScheduler,
 ///     };
-///     use std::{
-///         sync::{Arc, Mutex},
-///         time::Duration,
-///     };
+///     use futures::{stream, StreamExt};
 ///
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///     // The values after the error are never polled.
 ///     let stream = stream::iter([Ok(10), Ok(20), Err("boom"), Ok(30)]);
-///
-///     let subscription = FromTryStream::new(stream, TokioScheduler::current())
-///         .subscribe_with_callback(
-///             move |value| values_observer.lock().unwrap().push(value),
-///             |termination| assert_eq!(termination, Termination::Error("boom")),
-///         );
-///
-///     tokio::time::sleep(Duration::from_millis(20)).await;
-///     drop(subscription);
-///
-///     assert_eq!(&*values.lock().unwrap(), &[10, 20]);
+///     let values = FromTryStream::new(stream, TokioScheduler::current())
+///         .into_try_stream()
+///         .collect::<Vec<_>>()
+///         .await;
+///     assert_eq!(values, [Ok(10), Ok(20), Err("boom")]);
 /// }
 /// ```
 #[derive(Educe)]

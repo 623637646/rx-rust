@@ -35,9 +35,9 @@ use std::time::{Duration, Instant};
 ///     .subscribe_with_callback(|interval| intervals.push(interval), |_| {});
 ///
 /// time.advance_by(Duration::from_millis(2));
-/// subject.on_next(1);
+/// let _ = subject.on_next(1);
 /// time.advance_by(Duration::from_millis(5));
-/// subject.on_next(2);
+/// let _ = subject.on_next(2);
 /// subject.on_termination(Termination::Completed);
 /// drop(subscription);
 ///

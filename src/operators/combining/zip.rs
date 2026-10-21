@@ -30,7 +30,6 @@ use std::collections::VecDeque;
 /// };
 ///
 /// let mut values = Vec::new();
-/// let mut terminations = Vec::new();
 ///
 /// let observable = Zip::new(
 ///     FromIter::new(vec![1, 2]),
@@ -38,11 +37,10 @@ use std::collections::VecDeque;
 /// );
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(values, vec![(1, 10), (2, 20)]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

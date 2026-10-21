@@ -35,46 +35,31 @@ use std::time::Duration;
 ///
 /// # Examples
 /// ```rust
-/// # #[cfg(not(feature = "tokio-scheduler"))]
-/// # fn main() {}
-/// # #[cfg(feature = "tokio-scheduler")]
-/// #[tokio::main]
-/// async fn main() {
-///     use rx_rust::{
-///         observable::ObservableExt,
-///         observer::Termination,
-///         operators::{
-///             creating::from_iter::FromIter,
-///             transforming::buffer_with_time::BufferWithTime,
-///         },
-///         scheduler::runtime::tokio::TokioScheduler,
-///     };
-///     use std::sync::{Arc, Mutex};
-///     use std::time::{Duration, Instant};
-///     use tokio::time::sleep;
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     observer::Observer,
+///     operators::transforming::buffer_with_time::BufferWithTime,
+///     scheduler::virtual_time::VirtualTime,
+///     subject::publish_subject::PublishSubject,
+///     thread_mode::mutable::{MutableExt, MutableHelper},
+/// };
+/// use std::{convert::Infallible, sync::{Arc, Mutex}, time::Duration};
 ///
-///     let scheduler = TokioScheduler::current();
-///     let values = Arc::new(Mutex::new(Vec::new()));
-///     let terminations = Arc::new(Mutex::new(Vec::new()));
-///     let values_observer = Arc::clone(&values);
-///     let terminations_observer = Arc::clone(&terminations);
+/// let time = VirtualTime::new();
+/// let span = Duration::from_millis(5);
+/// let values = Arc::new(Mutex::new(Vec::new()));
+/// let values_observer = values.clone();
+/// let mut source = PublishSubject::<i32, Infallible, _>::shared();
+/// let _subscription = BufferWithTime::new(source.clone(), span, time.scheduler())
+/// .subscribe_with_callback(
+///     move |value| values_observer.with_mut(|values| values.push(value)),
+///     |_| {},
+/// );
 ///
-///     let subscription = BufferWithTime::new(
-///         FromIter::new(vec![1, 2, 3]),
-///         Duration::from_millis(5),
-///         scheduler.clone(),
-///     )
-///     .subscribe_with_callback(
-///         move |value| values_observer.lock().unwrap().push(value),
-///         move |termination| terminations_observer.lock().unwrap().push(termination),
-///     );
-///
-///     sleep(Duration::from_millis(10)).await;
-///     drop(subscription);
-///
-///     assert_eq!(&*values.lock().unwrap(), &[vec![1, 2, 3]]);
-///     assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
-/// }
+/// let _ = source.on_next(1);
+/// let _ = source.on_next(2);
+/// time.advance_by(span);
+/// assert_eq!(values.clone_value(), [vec![1, 2]]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

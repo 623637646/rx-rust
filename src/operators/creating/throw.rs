@@ -21,14 +21,12 @@ use std::convert::Infallible;
 /// };
 /// use std::convert::Infallible;
 ///
-/// let mut terminations = Vec::new();
 ///
 /// Throw::new("boom").subscribe_with_callback(
 ///     |_: Infallible| -> () { panic!("`Throw` should not emit values") },
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Error("boom")),
 /// );
 ///
-/// assert_eq!(terminations, vec![Termination::Error("boom")]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

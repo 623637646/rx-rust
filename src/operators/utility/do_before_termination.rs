@@ -24,7 +24,6 @@ use educe::Educe;
 /// };
 /// use std::sync::{Arc, Mutex};
 ///
-/// let mut terminations = Vec::new();
 /// let callback_terminations = Arc::new(Mutex::new(Vec::new()));
 /// let callback_terminations_observer = Arc::clone(&callback_terminations);
 ///
@@ -36,11 +35,10 @@ use educe::Educe;
 /// })
 /// .subscribe_with_callback(
 ///     |_| {},
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert_eq!(&*callback_terminations.lock().unwrap(), &[Termination::Completed]);
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

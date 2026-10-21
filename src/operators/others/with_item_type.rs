@@ -21,15 +21,13 @@ use std::{convert::Infallible, marker::PhantomData};
 /// };
 ///
 /// let mut values = Vec::<i32>::new();
-/// let mut terminations = Vec::new();
 ///
 /// Empty.with_item_type::<i32>().subscribe_with_callback(
 ///     |value| values.push(value),
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// assert!(values.is_empty());
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

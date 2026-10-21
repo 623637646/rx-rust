@@ -219,6 +219,9 @@ where
 /// one, which is why the item the stream yields ([`Item`](Self::Item)) need not be the item
 /// the source pushes.
 ///
+/// `push` and `pop` run while the adapter's state is locked. They must not re-enter the adapter;
+/// return evicted values from `push` so that their destructors run outside that lock.
+///
 /// # Examples
 /// A buffer that adds up the numbers that arrive between two polls:
 /// ```rust
@@ -250,9 +253,9 @@ where
 /// let mut stream = subject.clone().into_stream_with_buffer(Sum::default());
 /// assert_eq!(stream.next().now_or_never(), None); // subscribes
 ///
-/// subject.on_next(1);
-/// subject.on_next(2);
-/// subject.on_next(3);
+/// assert!(subject.on_next(1).is_continue());
+/// assert!(subject.on_next(2).is_continue());
+/// assert!(subject.on_next(3).is_continue());
 /// assert_eq!(stream.next().now_or_never(), Some(Some(6)));
 /// ```
 pub trait StreamBuffer<T> {

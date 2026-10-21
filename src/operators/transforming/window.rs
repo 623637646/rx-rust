@@ -76,10 +76,10 @@ use std::marker::PhantomData;
 ///     move |termination| terminations_observer.lock().unwrap().push(termination),
 /// );
 ///
-/// source.on_next(1);
-/// source.on_next(2);
-/// boundary.on_next(());
-/// source.on_next(3);
+/// let _ = source.on_next(1);
+/// let _ = source.on_next(2);
+/// let _ = boundary.on_next(());
+/// let _ = source.on_next(3);
 /// source.on_termination(Termination::Completed);
 /// drop(subscription);
 /// inner_subscriptions.lock().unwrap().drain(..).for_each(drop);

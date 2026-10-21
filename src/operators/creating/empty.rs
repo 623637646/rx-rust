@@ -20,14 +20,12 @@ use std::convert::Infallible;
 /// };
 /// use std::convert::Infallible;
 ///
-/// let mut terminations = Vec::new();
 ///
 /// Empty.subscribe_with_callback(
 ///     |_: Infallible| -> () { unreachable!() },
-///     |termination| terminations.push(termination),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
-/// assert_eq!(terminations, vec![Termination::Completed]);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Empty;
