@@ -1,6 +1,5 @@
 mod tests_utils;
 
-use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::thread_checker_scheduler::{ThreadCheckerExecutor, get_thread_name};
 use crate::tests_utils::{
@@ -13,6 +12,7 @@ use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
+use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
@@ -23,6 +23,7 @@ use std::sync::Arc;
 use std::{
     convert::Infallible,
     sync::atomic::{AtomicUsize, Ordering},
+    time::Duration,
 };
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
@@ -1391,89 +1392,87 @@ fn test_error_on_sub() {
 
 #[test]
 fn test_next_on_unsub() {
-    block_on(|scheduler| async move {
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (checker, observer) = Checker::new();
 
-        // The source emits from inside its own disposal, so the value arrives while downstream is
-        // unsubscribing. SubscribeOn hands the observer to its source, so the value still reaches
-        // it.
-        let observable =
-            Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-                DisposeOnDrop::new(CallbackDisposal::new(move || {
-                    let mut observer = observer;
-                    assert!(observer.on_next(111).is_continue());
-                }))
-            });
-
-        let observable = observable.subscribe_on(scheduler.clone());
-
-        let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
-        subscription.dispose();
-        scheduler.sleep(DURATION_10_MS).await;
-        assert_eq!(checker.values(), [111]);
-        assert_eq!(checker.state(), State::Dropped);
+    // The source emits from inside its own disposal, so the value arrives while downstream is
+    // unsubscribing. SubscribeOn hands the observer to its source, so the value still reaches
+    // it.
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            let mut observer = observer;
+            assert!(observer.on_next(111).is_continue());
+        }))
     });
+
+    let observable = observable.subscribe_on(scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    time.advance_by(Duration::ZERO);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]
 fn test_complete_on_unsub() {
-    block_on(|scheduler| async move {
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (checker, observer) = Checker::new();
 
-        // The source completes from inside its own disposal, so it terminates while downstream is
-        // unsubscribing. SubscribeOn hands the observer to its source, so the completion still
-        // reaches it.
-        let observable =
-            Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
-                DisposeOnDrop::new(CallbackDisposal::new(move || {
-                    observer.on_termination(Termination::Completed);
-                }))
-            });
-
-        let observable = observable.subscribe_on(scheduler.clone());
-
-        let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
-        subscription.dispose();
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Completed);
+    // The source completes from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. SubscribeOn hands the observer to its source, so the completion still
+    // reaches it.
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Completed);
+        }))
     });
+
+    let observable = observable.subscribe_on(scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    time.advance_by(Duration::ZERO);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Completed);
 }
 
 #[test]
 fn test_error_on_unsub() {
-    block_on(|scheduler| async move {
-        let (checker, observer) = Checker::new();
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let (checker, observer) = Checker::new();
 
-        // The source fails from inside its own disposal, so it terminates while downstream is
-        // unsubscribing. SubscribeOn hands the observer to its source, so the error still reaches
-        // it.
-        let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
-            DisposeOnDrop::new(CallbackDisposal::new(move || {
-                observer.on_termination(Termination::Error("error"));
-            }))
-        });
-
-        let observable = observable.subscribe_on(scheduler.clone());
-
-        let subscription = observable.subscribe(observer);
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Active);
-
-        subscription.dispose();
-        scheduler.sleep(DURATION_10_MS).await;
-        assert!(checker.values().is_empty());
-        assert_eq!(checker.state(), State::Error("error"));
+    // The source fails from inside its own disposal, so it terminates while downstream is
+    // unsubscribing. SubscribeOn hands the observer to its source, so the error still reaches
+    // it.
+    let observable = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, &str>| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            observer.on_termination(Termination::Error("error"));
+        }))
     });
+
+    let observable = observable.subscribe_on(scheduler.clone());
+
+    let subscription = observable.subscribe(observer);
+    time.advance_by(Duration::ZERO);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    subscription.dispose();
+    time.advance_by(Duration::ZERO);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Error("error"));
 }
 
 #[test]

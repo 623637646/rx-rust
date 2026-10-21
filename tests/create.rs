@@ -1,5 +1,6 @@
 mod tests_utils;
 
+use crate::tests_utils::DURATION_1_MS;
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::DURATION_30_MS;
 use crate::tests_utils::DURATION_100_MS;
@@ -12,6 +13,7 @@ use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::error_handling::retry::RetryAction;
+use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::{
     observable::{Observable, ObservableExt},
@@ -96,60 +98,68 @@ fn test_error_from_source() {
 
 #[test]
 fn test_unsubscribe() {
-    block_on(|scheduler| async move {
-        let scheduler_cloned = scheduler.clone();
-        let observable = Create::shared_boxed(move |mut observer| {
-            assert!(observer.on_next(1).is_continue());
-            let scheduler = scheduler_cloned.clone();
-            let handle = scheduler_cloned.spawn_future(async move {
-                scheduler.sleep(DURATION_100_MS).await;
-                assert!(observer.on_next(2).is_continue());
-                scheduler.sleep(DURATION_100_MS).await;
-                assert!(observer.on_next(3).is_continue());
-                scheduler.sleep(DURATION_100_MS).await;
-                observer.on_termination(Termination::<String>::Completed);
-            });
-            DisposeOnDrop::new(CallbackDisposal::new(move || handle.dispose()))
-        });
-        let (checker_1, observer_1) = Checker::new();
-        let (checker_2, observer_2) = Checker::new();
-
-        let observable_1 = observable;
-        let observable_2 = observable_1.clone();
-
-        let subscription_1 = observable_1.subscribe(observer_1);
-        let _subscription_2 = observable_2.subscribe(observer_2);
-        assert_eq!(checker_1.values(), [1]);
-        assert_eq!(checker_1.state(), State::Active);
-        assert_eq!(checker_2.values(), [1]);
-        assert_eq!(checker_2.state(), State::Active);
-
-        scheduler.sleep(DURATION_30_MS).await;
-        assert_eq!(checker_1.values(), [1]);
-        assert_eq!(checker_1.state(), State::Active);
-        assert_eq!(checker_2.values(), [1]);
-        assert_eq!(checker_2.state(), State::Active);
-
-        scheduler.sleep(DURATION_100_MS).await;
-        assert_eq!(checker_1.values(), [1, 2]);
-        assert_eq!(checker_1.state(), State::Active);
-        assert_eq!(checker_2.values(), [1, 2]);
-        assert_eq!(checker_2.state(), State::Active);
-
-        subscription_1.dispose(); // unsubscribe
-
-        scheduler.sleep(DURATION_100_MS).await;
-        assert_eq!(checker_1.values(), [1, 2]);
-        assert_eq!(checker_1.state(), State::Dropped);
-        assert_eq!(checker_2.values(), [1, 2, 3]);
-        assert_eq!(checker_2.state(), State::Active);
-
-        scheduler.sleep(DURATION_100_MS).await;
-        assert_eq!(checker_1.values(), [1, 2]);
-        assert_eq!(checker_1.state(), State::Dropped);
-        assert_eq!(checker_2.values(), [1, 2, 3]);
-        assert_eq!(checker_2.state(), State::Completed);
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let observable = Create::shared_boxed(move |mut observer| {
+        assert!(observer.on_next(1).is_continue());
+        let mut observer = Some(observer);
+        // `2` after 100 ms, `3` after 200 ms, the completion after 300 ms.
+        let handle = scheduler.schedule_periodically(
+            move |count| {
+                if count < 2 {
+                    let observer = observer.as_mut().unwrap();
+                    assert!(observer.on_next(count as i32 + 2).is_continue());
+                    true
+                } else {
+                    let observer = observer.take().unwrap();
+                    observer.on_termination(Termination::<String>::Completed);
+                    false
+                }
+            },
+            DURATION_100_MS,
+            Some(DURATION_100_MS),
+        );
+        DisposeOnDrop::new(CallbackDisposal::new(move || handle.dispose()))
     });
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    let observable_1 = observable;
+    let observable_2 = observable_1.clone();
+
+    let subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_2 = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [1]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [1]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    subscription_1.dispose(); // unsubscribe
+    assert_eq!(checker_1.state(), State::Dropped);
+
+    time.advance_by(DURATION_100_MS);
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [1, 2, 3]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    time.advance_by(DURATION_100_MS);
+    assert_eq!(checker_1.values(), [1, 2]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [1, 2, 3]);
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]
@@ -461,45 +471,58 @@ fn test_emitter_error() {
 
 #[test]
 fn test_emitter_unsubscribe() {
-    block_on(|scheduler| async move {
-        let scheduler_cloned = scheduler.clone();
-        let observable = Create::shared(move |mut emitter| {
-            assert!(emitter.on_next(1).is_continue());
-            let scheduler = scheduler_cloned.clone();
-            let handle = scheduler_cloned.spawn_future(async move {
-                scheduler.sleep(DURATION_100_MS).await;
-                assert!(emitter.on_next(2).is_continue());
-                scheduler.sleep(DURATION_100_MS).await;
-                emitter.on_termination(Termination::<String>::Completed);
-            });
-            DisposeOnDrop::new(CallbackDisposal::new(move || handle.dispose()))
-        });
-        let (checker_1, observer_1) = Checker::new();
-        let (checker_2, observer_2) = Checker::new();
-
-        // Two observers of the same type: the unboxed form subscribes both.
-        let observable_1 = observable;
-        let observable_2 = observable_1.clone();
-
-        let subscription_1 = observable_1.subscribe(observer_1);
-        let _subscription_2 = observable_2.subscribe(observer_2);
-        assert_eq!(checker_1.values(), [1]);
-        assert_eq!(checker_2.values(), [1]);
-
-        scheduler.sleep(DURATION_30_MS).await;
-        subscription_1.dispose(); // unsubscribe
-
-        scheduler.sleep(DURATION_100_MS).await;
-        assert_eq!(checker_1.values(), [1]);
-        assert_eq!(checker_1.state(), State::Dropped);
-        assert_eq!(checker_2.values(), [1, 2]);
-        assert_eq!(checker_2.state(), State::Active);
-
-        scheduler.sleep(DURATION_100_MS).await;
-        assert_eq!(checker_1.state(), State::Dropped);
-        assert_eq!(checker_2.values(), [1, 2]);
-        assert_eq!(checker_2.state(), State::Completed);
+    let time = VirtualTime::new();
+    let scheduler = time.scheduler();
+    let observable = Create::shared(move |mut emitter| {
+        assert!(emitter.on_next(1).is_continue());
+        let mut emitter = Some(emitter);
+        // `2` after 100 ms, the completion after 200 ms.
+        let handle = scheduler.schedule_periodically(
+            move |count| {
+                if count == 0 {
+                    assert!(emitter.as_mut().unwrap().on_next(2).is_continue());
+                    true
+                } else {
+                    let emitter = emitter.take().unwrap();
+                    emitter.on_termination(Termination::<String>::Completed);
+                    false
+                }
+            },
+            DURATION_100_MS,
+            Some(DURATION_100_MS),
+        );
+        DisposeOnDrop::new(CallbackDisposal::new(move || handle.dispose()))
     });
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::new();
+
+    // Two observers of the same type: the unboxed form subscribes both.
+    let observable_1 = observable;
+    let observable_2 = observable_1.clone();
+
+    let subscription_1 = observable_1.subscribe(observer_1);
+    let _subscription_2 = observable_2.subscribe(observer_2);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_2.values(), [1]);
+
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    subscription_1.dispose(); // unsubscribe
+    assert_eq!(checker_1.state(), State::Dropped);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker_1.values(), [1]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert_eq!(checker_2.state(), State::Active);
+
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.values(), [1, 2]);
+    assert_eq!(checker_2.state(), State::Completed);
 }
 
 #[test]

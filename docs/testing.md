@@ -125,6 +125,16 @@ case about a real scheduler, and runs on all of them. It runs on real time six t
 it well under nextest's 3 s `leak-timeout`: a long test among millisecond ones gets those reported
 as leaky on macOS. Shorten its durations (`DURATION_100_MS / 2`, …) rather than drop its steps.
 
+A bridge between futures, streams and observables (`from_future`, `from_stream`, `into_stream`,
+their `try` twins, `subscribe_on`) waits on a waker rather than on the clock, and is tested on the
+virtual clock too: `time.advance_by(Duration::ZERO)` runs every task that is due now, a task woken
+since — by a `oneshot` sent to, an `unbounded_send`, a value pushed into the stream — included.
+Send with the channel's synchronous end (`unbounded_send`) rather than `send(…).await`, and
+consume a stream with `Checker::from_stream(stream, scheduler)` on the virtual scheduler. What
+really needs a runtime stays on `block_on`: `test_async`, and a stream that is always ready
+(`test_unsubscribe_with_always_ready_stream`), whose task yields after every item — on the virtual
+clock a yield is due at once, so `advance_by` would never finish.
+
 1. All cases from "Using a lock"
 2. `test_complete_after_next`
 3. `test_error_after_next`

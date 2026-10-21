@@ -1,7 +1,8 @@
 use crate::tests_utils::scheduler_ext::SchedulerExt;
-use crate::tests_utils::test_scheduler::TestScheduler;
 use educe::Educe;
+use futures::{FutureExt, future::BoxFuture};
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
+use rx_rust::scheduler::{FutureThenContext, Scheduler};
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::{
     disposable::Disposable,
@@ -135,28 +136,33 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
 }
 
 impl<T> Checker<T, Infallible> {
-    pub(crate) fn from_stream(
+    pub(crate) fn from_stream<S>(
         stream: impl Stream<Item = T> + Send + 'static,
-        scheduler: TestScheduler,
+        scheduler: S,
     ) -> (Self, DisposeOnDrop<impl Disposable + Send + 'static>)
     where
         T: Send + 'static,
+        S: Scheduler<FutureThenContext<(), ()>, BoxFuture<'static, ()>>,
+        S::Disposal: Send + 'static,
     {
         let values = Arc::new(Mutex::new(Vec::new()));
         let state = Arc::new(Mutex::new(State::Active));
 
         let values_cloned = values.clone();
         let state_cloned = state.clone();
-        let handle = scheduler.spawn_future(async move {
-            let mut stream = std::pin::pin!(stream);
-            while let Some(value) = stream.next().await {
-                values_cloned.with_mut(|values| values.push(value));
+        let handle = scheduler.spawn_future(
+            async move {
+                let mut stream = std::pin::pin!(stream);
+                while let Some(value) = stream.next().await {
+                    values_cloned.with_mut(|values| values.push(value));
+                }
+                match state_cloned.replace_value(State::Completed) {
+                    State::Active => {}
+                    State::Completed | State::Error(_) | State::Dropped => panic!(),
+                }
             }
-            match state_cloned.replace_value(State::Completed) {
-                State::Active => {}
-                State::Completed | State::Error(_) | State::Dropped => panic!(),
-            }
-        });
+            .boxed(),
+        );
         (
             Self {
                 values,
@@ -178,39 +184,44 @@ impl<T> Checker<T, Infallible> {
 impl<T, E> Checker<T, E> {
     /// Like [`Checker::from_stream`], for a stream of `Result`s: an `Err` is recorded as
     /// [`State::Error`], and nothing may follow it but the end of the stream.
-    pub(crate) fn from_try_stream(
+    pub(crate) fn from_try_stream<S>(
         stream: impl Stream<Item = Result<T, E>> + Send + 'static,
-        scheduler: TestScheduler,
+        scheduler: S,
     ) -> (Self, DisposeOnDrop<impl Disposable + Send + 'static>)
     where
         T: Send + 'static,
         E: Send + 'static,
+        S: Scheduler<FutureThenContext<(), ()>, BoxFuture<'static, ()>>,
+        S::Disposal: Send + 'static,
     {
         let values = Arc::new(Mutex::new(Vec::new()));
         let state = Arc::new(Mutex::new(State::Active));
 
         let values_cloned = values.clone();
         let state_cloned = state.clone();
-        let handle = scheduler.spawn_future(async move {
-            let mut stream = std::pin::pin!(stream);
-            while let Some(item) = stream.next().await {
-                match item {
-                    Ok(value) => {
-                        state_cloned.with_ref(|state| assert!(matches!(state, State::Active)));
-                        values_cloned.with_mut(|values| values.push(value));
+        let handle = scheduler.spawn_future(
+            async move {
+                let mut stream = std::pin::pin!(stream);
+                while let Some(item) = stream.next().await {
+                    match item {
+                        Ok(value) => {
+                            state_cloned.with_ref(|state| assert!(matches!(state, State::Active)));
+                            values_cloned.with_mut(|values| values.push(value));
+                        }
+                        Err(error) => match state_cloned.replace_value(State::Error(error)) {
+                            State::Active => {}
+                            State::Completed | State::Error(_) | State::Dropped => panic!(),
+                        },
                     }
-                    Err(error) => match state_cloned.replace_value(State::Error(error)) {
-                        State::Active => {}
-                        State::Completed | State::Error(_) | State::Dropped => panic!(),
-                    },
                 }
+                state_cloned.with_mut(|lock| match &*lock {
+                    State::Active => *lock = State::Completed,
+                    State::Error(_) => {}
+                    State::Completed | State::Dropped => panic!(),
+                });
             }
-            state_cloned.with_mut(|lock| match &*lock {
-                State::Active => *lock = State::Completed,
-                State::Error(_) => {}
-                State::Completed | State::Dropped => panic!(),
-            });
-        });
+            .boxed(),
+        );
         (
             Self {
                 values,
