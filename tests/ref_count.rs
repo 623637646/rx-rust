@@ -2189,3 +2189,98 @@ fn test_panicking_first_subscriber_gives_the_controller_back() {
     assert!(is_disconnected.read());
     drop(observable);
 }
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_connection_gives_the_controller_back() {
+    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
+
+    let connections = Arc::new(AtomicUsize::new(0));
+    let is_disconnected = Arc::new(AtomicBool::new(false));
+    let fuse: Arc<Mutex<Option<PanicOnDrop>>> = Arc::new(Mutex::new(None));
+    let observable = {
+        let connections = connections.clone();
+        let is_disconnected = is_disconnected.clone();
+        let fuse = fuse.clone();
+        Create::shared_boxed(
+            move |mut observer: SendBoxedObserver<'_, i32, Infallible>| {
+                connections.fetch_add(1, Ordering::SeqCst);
+                // Unwinds out of the connection while the fuse holds a panic.
+                drop(fuse.take_value());
+                let _ = observer.on_next(1);
+                let is_disconnected = is_disconnected.clone();
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    is_disconnected.write(true);
+                }))
+            },
+        )
+    }
+    .share();
+
+    let observable_of_panic = observable.clone();
+    expect_panic_on_drop(|panic_on_drop| {
+        drop(fuse.replace_value(Some(panic_on_drop)));
+        let (_, observer) = Checker::new();
+        let _subscription = observable_of_panic.subscribe(observer);
+    });
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
+
+    // The controller is back, disconnected, so the next subscriber connects again.
+    let (checker, observer) = Checker::new();
+    let subscription = observable.clone().subscribe(observer);
+    assert_eq!(connections.load(Ordering::SeqCst), 2);
+    assert_eq!(checker.values(), [1]);
+
+    // The subscriber whose connection panicked is counted out, so this one is the last.
+    drop(subscription);
+    assert!(is_disconnected.read());
+    drop(observable);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_disconnection_gives_the_controller_back() {
+    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
+
+    let connections = Arc::new(AtomicUsize::new(0));
+    let disconnections = Arc::new(AtomicUsize::new(0));
+    let fuse: Arc<Mutex<Option<PanicOnDrop>>> = Arc::new(Mutex::new(None));
+    let observable = {
+        let connections = connections.clone();
+        let disconnections = disconnections.clone();
+        let fuse = fuse.clone();
+        Create::shared_boxed(
+            move |mut observer: SendBoxedObserver<'_, i32, Infallible>| {
+                connections.fetch_add(1, Ordering::SeqCst);
+                let _ = observer.on_next(1);
+                let disconnections = disconnections.clone();
+                let fuse = fuse.clone();
+                DisposeOnDrop::new(CallbackDisposal::new(move || {
+                    disconnections.fetch_add(1, Ordering::SeqCst);
+                    // Unwinds out of the disconnection while the fuse holds a panic.
+                    drop(fuse.take_value());
+                }))
+            },
+        )
+    }
+    .share();
+
+    let (_, observer) = Checker::new();
+    let subscription = observable.clone().subscribe(observer);
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
+    expect_panic_on_drop(|panic_on_drop| {
+        drop(fuse.replace_value(Some(panic_on_drop)));
+        drop(subscription);
+    });
+    assert_eq!(disconnections.load(Ordering::SeqCst), 1);
+
+    // The controller is back, disconnected, so the next subscriber connects again.
+    let (checker, observer) = Checker::new();
+    let subscription = observable.clone().subscribe(observer);
+    assert_eq!(connections.load(Ordering::SeqCst), 2);
+    assert_eq!(checker.values(), [1]);
+
+    drop(subscription);
+    assert_eq!(disconnections.load(Ordering::SeqCst), 2);
+    drop(observable);
+}

@@ -15,7 +15,10 @@ use crate::{
     observer::Observer,
     subject::Subject,
     thread_mode::{ThreadMode, mutable::MutableHelper},
-    utils::{id_generator::Id, on_panic::OnPanic},
+    utils::{
+        id_generator::Id,
+        on_panic::{OnPanic, on_panic},
+    },
 };
 use educe::Educe;
 
@@ -81,22 +84,33 @@ where
     /// Carries the decision out, and returns the switched controller to give back. It runs with
     /// the lock released: connecting subscribes to the source, which may emit to subscribers that
     /// subscribe to or dispose this ref count from there.
-    fn carry_out<T, E>(self) -> Option<Controller<OE, S, C>>
+    ///
+    /// Connecting and disconnecting run the user's code, which may unwind: the controller is then
+    /// given back to `state` disconnected, since no connection is left, and nothing is decided on
+    /// the unwinding thread, where connecting again could panic once more. The next subscription
+    /// or disposal decides instead.
+    fn carry_out<T, E>(self, state: &StatePtr<OE, S, C>) -> Option<Controller<OE, S, C>>
     where
         OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
         S: Subject<T, E> + Clone,
     {
+        let give_back = |controller| {
+            state.with_mut(|current| current.give_back(Controller::Disconnected(controller)));
+        };
         match self {
             Self::Keep => None,
-            Self::Connect(controller) => Some(Controller::Connected(controller.connect())),
+            Self::Connect(controller) => {
+                Some(Controller::Connected(controller.connect_or_else(give_back)))
+            }
             Self::Disconnect {
                 controller,
                 replaced,
             } => {
+                let (controller, connection) = controller.take_connection();
+                let guard = OnPanic::new(controller, give_back);
                 drop(replaced);
-                Some(Controller::Disconnected(
-                    controller.disconnect_without_reset(),
-                ))
+                drop(connection);
+                Some(Controller::Disconnected(guard.disarm()))
             }
         }
     }
@@ -208,7 +222,7 @@ where
     OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
     S: Subject<T, E> + Clone,
 {
-    while let Some(switched) = decision.carry_out() {
+    while let Some(switched) = decision.carry_out(state) {
         decision = state.with_mut(|current| {
             current.give_back(switched);
             current.decide()
@@ -382,8 +396,7 @@ where
         // can unwind while this subscriber is counted in, and maybe holding the controller: the
         // guard counts it out and gives the controller back. Without it, the count would stay
         // inflated forever, so the last subscription would no longer disconnect, and the controller
-        // would be lost. Disarming the guard is what ends that scope: the connection that follows
-        // is not covered, and cannot be, since the controller is consumed by then.
+        // would be lost. Disarming the guard is what ends that scope.
         let state = self.state.clone();
         let guard = OnPanic::new(decision, move |decision| {
             let controller = decision.cancel();
@@ -399,7 +412,16 @@ where
             settle(&state, decision);
         });
         let subscription = subject.subscribe(observer);
-        settle(&self.state, guard.disarm());
+        let decision = guard.disarm();
+        // Connecting can unwind too, once `settle` has given the controller back: this guard then
+        // counts the subscriber out, without deciding again, as `Decision::carry_out` explains.
+        let guard = on_panic(|| {
+            if let Some(generation) = generation {
+                self.state.with_mut(|current| current.count_out(generation));
+            }
+        });
+        settle(&self.state, decision);
+        drop(guard);
         subscription
             .then(RefCountDisposal {
                 state: self.state,

@@ -12,7 +12,10 @@ use crate::{
     observer::{Flow, Observer, Termination},
     subject::Subject,
     thread_mode::{ThreadMode, mutable::MutableHelper},
-    utils::id_generator::{Id, IdGenerator},
+    utils::{
+        id_generator::{Id, IdGenerator},
+        on_panic::OnPanic,
+    },
 };
 use educe::Educe;
 
@@ -291,20 +294,42 @@ where
         OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
         S: Subject<T, E> + Clone,
     {
+        self.connect_or_else(drop)
+    }
+
+    /// Connects to the source, or hands the controller to `on_panic`, still disconnected, if
+    /// connecting unwinds: the subject factory, cloning the source and subscribing to it all run
+    /// the user's code.
+    pub(super) fn connect_or_else<T, E>(
+        self,
+        on_panic: impl FnOnce(Self),
+    ) -> ConnectableController<OE, S, C, Connected<OE::Disposal>>
+    where
+        OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
+        S: Subject<T, E> + Clone,
+    {
+        // The source is cloned and subscribed while the guard keeps the controller whole.
+        let guard = OnPanic::new(self, on_panic);
+        let controller = guard.state();
         let Current {
             subject,
             generation,
             ..
-        } = self.lifecycle.with_mut(SubjectLifecycle::current_or_create);
+        } = controller
+            .lifecycle
+            .with_mut(SubjectLifecycle::current_or_create);
         let observer = ConnectionObserver {
             subject,
-            lifecycle: S::Mode::downgrade(&self.lifecycle),
+            lifecycle: S::Mode::downgrade(&controller.lifecycle),
             generation,
         };
-        let connection = self.source.clone().subscribe(observer);
+        let connection = controller.source.clone().subscribe(observer);
+        let Self {
+            source, lifecycle, ..
+        } = guard.disarm();
         ConnectableController {
-            source: self.source,
-            lifecycle: self.lifecycle,
+            source,
+            lifecycle,
             state: Connected {
                 connection,
                 generation,
@@ -342,22 +367,31 @@ where
             self.lifecycle
                 .with_mut(|lifecycle| lifecycle.reset(generation)),
         );
-        self.disconnect_without_reset()
+        let (controller, connection) = self.take_connection();
+        drop(connection);
+        controller
     }
 
-    /// Disconnects the source, leaving the subject to the [`RefCount`], which resets it itself.
-    pub(super) fn disconnect_without_reset(self) -> ConnectableController<OE, S, C, Disconnected> {
+    /// Takes the connection out, leaving the subject to the [`RefCount`], which resets it itself.
+    /// Dropping the connection disconnects the source, which runs the user's code: the caller drops
+    /// it once it has made sure the controller survives that unwinding.
+    pub(super) fn take_connection(
+        self,
+    ) -> (
+        ConnectableController<OE, S, C, Disconnected>,
+        DisposeOnDrop<D>,
+    ) {
         let Self {
             source,
             lifecycle,
             state: Connected { connection, .. },
         } = self;
-        drop(connection);
-        ConnectableController {
+        let controller = ConnectableController {
             source,
             lifecycle,
             state: Disconnected,
-        }
+        };
+        (controller, connection)
     }
 
     /// The generation of the subject the source is connected to.

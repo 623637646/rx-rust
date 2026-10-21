@@ -270,6 +270,12 @@ All notable changes to this project are documented here. The format follows
 - `switch` drops errors from stale inner observables outside its context lock, so an error's
   destructor can re-enter the operator without panicking or deadlocking.
 
+- A `RefCount` whose source panics while it is connected or disconnected — the subject factory,
+  cloning the source, subscribing to it or disposing that subscription — keeps working once the
+  panic is caught: its controller is given back disconnected and the subscriber that was
+  connecting is counted out, so the next subscriber connects again. The controller used to be
+  lost, and the `RefCount` never connected again.
+
 - A subject that delivers from a `Drop` run by an unwinding panic — the disposal of a subscription
   the unwind drops, say — is no longer killed as if one of its observers had panicked: the guards
   that undo a panicking callback mistook the unwind already under way for one of their own.

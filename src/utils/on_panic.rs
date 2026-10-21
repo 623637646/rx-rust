@@ -54,6 +54,15 @@ impl<T, F: FnOnce(T)> OnPanic<T, F> {
         }
     }
 
+    /// The guarded state, for the guarded scope to work with while the guard keeps it.
+    pub(crate) fn state(&self) -> &T {
+        &self
+            .armed
+            .as_ref()
+            .expect("the guard is armed until it is dropped")
+            .0
+    }
+
     /// Ends the guarded scope the returning way, handing the state back untouched.
     pub(crate) fn disarm(mut self) -> T {
         let (state, _action) = self
@@ -92,6 +101,7 @@ mod tests {
     fn test_disarm() {
         let seen = Cell::new(None);
         let guard = OnPanic::new(111, |state| seen.set(Some(state)));
+        assert_eq!(*guard.state(), 111);
 
         // The scope ends the returning way, so the state comes back and the action never runs.
         assert_eq!(guard.disarm(), 111);
