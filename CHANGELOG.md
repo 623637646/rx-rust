@@ -266,11 +266,22 @@ All notable changes to this project are documented here. The format follows
   scheduler drops the cancelled task, on the scheduler's thread. A task dropped by its runtime
   before it finished now disposes the source. See
   `docs/decisions/0006-observe-on-task-owns-its-observer.md`.
+- **Breaking:** behind a source that requires a `Send` observer — any in the `Shared` mode —
+  `retry` requires its error type and its source's disposal to be `Send`. An error that arrives on
+  another thread while a subscription is being made waits for it to return and is retried by the
+  thread that made it, and the source's subscription is disposed by the first retry, on whichever
+  thread runs it. The `Local` mode has neither requirement.
 
 ### Fixed
 
 - `switch` drops errors from stale inner observables outside its context lock, so an error's
   destructor can re-enter the operator without panicking or deadlocking.
+
+- `retry` no longer overflows the stack when its sources keep failing synchronously: an observable
+  that fails while it is being subscribed is retried once its `subscribe` has returned, in a loop,
+  instead of from inside it, so each retry used to nest one subscription deeper. The subscription
+  of the observable that failed is now disposed before the next one is subscribed, rather than
+  after — and so is the source's, which used to be kept until the whole subscription was disposed.
 
 - A `RefCount` whose source panics while it is connected or disconnected — the subject factory,
   cloning the source, subscribing to it or disposing that subscription — keeps working once the

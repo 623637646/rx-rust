@@ -21,6 +21,14 @@ enum State<D: Disposable> {
     Disposed,
 }
 
+impl<D: Disposable> State<D> {
+    /// Whether the build `id` is still the current one: the slot was neither disposed nor
+    /// replaced again since it started.
+    fn is_current_build(&self, id: Id) -> bool {
+        matches!(self, State::Building(current) if *current == id)
+    }
+}
+
 #[derive(Educe)]
 #[educe(Debug, Default)]
 struct Inner<D: Disposable> {
@@ -81,7 +89,8 @@ impl<M: ThreadMode, D: Disposable> ReplaceableDisposal<M, D> {
     ///
     /// The builder runs with the lock released, so it may subscribe to anything. If the slot is
     /// disposed, or replaced again, while the builder runs, what it built is disposed at once;
-    /// once the slot has been disposed the builder is not run at all.
+    /// once the slot has been disposed the builder is not run at all — nor when the held disposal,
+    /// as it is disposed, disposes or replaces the slot.
     pub fn replace_with(&self, disposal_builder: impl FnOnce() -> DisposeOnDrop<D>) {
         // The superseded disposal is handed back rather than disposed under the lock.
         let (id, superseded) = self.0.with_mut(|inner| {
@@ -95,22 +104,23 @@ impl<M: ThreadMode, D: Disposable> ReplaceableDisposal<M, D> {
                 State::Disposed => unreachable!("the disposed state returned above"),
             }
         });
-        if let Some(disposal) = superseded {
-            disposal.dispose();
-        }
-
         let Some(id) = id else {
             return;
         };
 
+        if let Some(disposal) = superseded {
+            disposal.dispose();
+            // Disposing it runs code of its own, which may dispose or replace this slot: the
+            // builder must not run then.
+            if !self.0.with_ref(|inner| inner.state.is_current_build(id)) {
+                return;
+            }
+        }
+
         let disposable = disposal_builder();
 
         let stale = self.0.with_mut(|inner| {
-            let is_current = match &inner.state {
-                State::Building(current) => *current == id,
-                State::Idle | State::Active(_) | State::Disposed => false,
-            };
-            if is_current {
+            if inner.state.is_current_build(id) {
                 inner.state = State::Active(disposable);
                 None
             } else {

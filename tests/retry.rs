@@ -8,6 +8,7 @@ use crate::tests_utils::test_scheduler::block_on;
 use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
+use rx_rust::observable::boxed_observable::SendBoxedObservable;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
@@ -25,6 +26,7 @@ use rx_rust::{
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
@@ -265,6 +267,342 @@ fn test_completed_synchronous_throw() {
     assert_eq!(checker.state(), State::Completed);
     assert_eq!(channels.state(1), ChannelState::Completed);
     assert_eq!(errors.clone_value(), [-1, 0]);
+}
+
+/// How many synchronous failures the tests below go through: deep enough that retrying each one from
+/// inside the previous subscription would overflow the stack.
+const SYNCHRONOUS_THROWS: i32 = 10_000;
+
+/// Counts the subscriptions of [`throwing`] that are on the stack at once, and the most there ever
+/// were.
+#[derive(Clone, Default)]
+struct Nesting {
+    current: Arc<AtomicUsize>,
+    deepest: Arc<AtomicUsize>,
+}
+
+impl Nesting {
+    fn deepest(&self) -> usize {
+        self.deepest.load(Ordering::SeqCst)
+    }
+}
+
+/// Sends `value`, then fails with it, both from inside its own `subscribe`.
+fn throwing(
+    value: i32,
+    nesting: &Nesting,
+) -> SendBoxedObservable<'static, 'static, 'static, i32, i32, Shared> {
+    let nesting = nesting.clone();
+    Create::shared_boxed(move |mut observer: SendBoxedObserver<'_, i32, i32>| {
+        let current = nesting.current.fetch_add(1, Ordering::SeqCst) + 1;
+        nesting.deepest.fetch_max(current, Ordering::SeqCst);
+        if observer.on_next(value).is_continue() {
+            observer.on_termination(Termination::Error(value));
+        }
+        nesting.current.fetch_sub(1, Ordering::SeqCst);
+        DisposeOnDrop::default()
+    })
+    .into_send_boxed()
+}
+
+#[test]
+fn test_completed_after_many_synchronous_throws() {
+    let nesting = Nesting::default();
+    let (checker, observer) = Checker::new();
+
+    let nesting_of_callback = nesting.clone();
+    let observable = throwing(0, &nesting).retry(move |error| {
+        if error < SYNCHRONOUS_THROWS {
+            RetryAction::Retry(throwing(error + 1, &nesting_of_callback))
+        } else {
+            RetryAction::Retry(
+                Just::new(-1)
+                    .with_error_type()
+                    .into_shared()
+                    .into_send_boxed(),
+            )
+        }
+    });
+    let _subscription = observable.subscribe(observer);
+
+    let expected: Vec<_> = (0..=SYNCHRONOUS_THROWS).chain([-1]).collect();
+    assert_eq!(checker.values(), expected);
+    assert_eq!(checker.state(), State::Completed);
+    // Each retry is subscribed once the previous subscription has returned, not inside it.
+    assert_eq!(nesting.deepest(), 1);
+}
+
+#[test]
+fn test_error_after_many_synchronous_throws() {
+    let nesting = Nesting::default();
+    let (checker, observer) = Checker::new();
+
+    let nesting_of_callback = nesting.clone();
+    let observable = throwing(0, &nesting).retry(move |error| {
+        if error < SYNCHRONOUS_THROWS {
+            RetryAction::Retry(throwing(error + 1, &nesting_of_callback))
+        } else {
+            RetryAction::Stop(-error)
+        }
+    });
+    let _subscription = observable.subscribe(observer);
+
+    let expected: Vec<_> = (0..=SYNCHRONOUS_THROWS).collect();
+    assert_eq!(checker.values(), expected);
+    assert_eq!(checker.state(), State::Error(-SYNCHRONOUS_THROWS));
+    assert_eq!(nesting.deepest(), 1);
+}
+
+#[test]
+fn test_unsub_on_next_by_take_during_synchronous_throws() {
+    let nesting = Nesting::default();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let (checker, observer) = Checker::new();
+
+    let nesting_of_callback = nesting.clone();
+    let calls_of_callback = calls.clone();
+    let observable = throwing(0, &nesting)
+        .retry(move |error| {
+            calls_of_callback.fetch_add(1, Ordering::SeqCst);
+            RetryAction::Retry(throwing(error + 1, &nesting_of_callback))
+        })
+        .take(3);
+    let _subscription = observable.subscribe(observer);
+
+    // The third value stops the source before it fails again, which ends the retries.
+    assert_eq!(checker.values(), [0, 1, 2]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    assert_eq!(nesting.deepest(), 1);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_callback_during_synchronous_throws() {
+    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
+
+    let nesting = Nesting::default();
+    let fuse: Arc<Mutex<Option<PanicOnDrop>>> = Arc::new(Mutex::new(None));
+    let (checker, observer) = Checker::new();
+
+    expect_panic_on_drop(|panic_on_drop| {
+        drop(fuse.replace_value(Some(panic_on_drop)));
+        let fuse = fuse.clone();
+        let nesting_of_callback = nesting.clone();
+        let observable = throwing(0, &nesting).retry(move |error| {
+            if error == 2 {
+                drop(fuse.take_value());
+            }
+            RetryAction::Retry(throwing(error + 1, &nesting_of_callback))
+        });
+        let _subscription = observable.subscribe(observer);
+    });
+
+    // The unwind released the observer instead of leaving it parked.
+    assert_eq!(checker.values(), [0, 1, 2]);
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_source_after_its_synchronous_throw() {
+    use crate::tests_utils::panic::{PanicOnDrop, expect_panic_on_drop};
+
+    let nesting = Nesting::default();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let fuse: Arc<Mutex<Option<PanicOnDrop>>> = Arc::new(Mutex::new(None));
+    let (checker, observer) = Checker::new();
+
+    expect_panic_on_drop(|panic_on_drop| {
+        drop(fuse.replace_value(Some(panic_on_drop)));
+        let fuse = fuse.clone();
+        let calls_of_callback = calls.clone();
+        let observable = throwing(0, &nesting).retry(move |_| {
+            calls_of_callback.fetch_add(1, Ordering::SeqCst);
+            let fuse = fuse.clone();
+            // Fails, which parks the error until `subscribe` returns, then unwinds out of it.
+            RetryAction::Retry(
+                Create::shared_boxed(move |observer: SendBoxedObserver<'_, i32, i32>| {
+                    observer.on_termination(Termination::Error(1));
+                    drop(fuse.take_value());
+                    DisposeOnDrop::default()
+                })
+                .into_send_boxed(),
+            )
+        });
+        let _subscription = observable.subscribe(observer);
+    });
+
+    // The parked error was not retried, and the observer parked with it was released rather than
+    // kept alive by the trampoline it holds.
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(checker.values(), [0]);
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+/// What the sources of the disposal tests below did, in order.
+type Log = Arc<Mutex<Vec<String>>>;
+
+/// Where a source of the disposal tests below leaves its observer, for the test to fail it later.
+type Stash = Arc<Mutex<Option<SendBoxedObserver<'static, i32, i32>>>>;
+
+/// Records its subscription and its disposal in `log`. It fails with `index` from inside its own
+/// `subscribe` without a `stash`, and leaves its observer in `stash` otherwise.
+fn logged(
+    index: i32,
+    log: &Log,
+    stash: Option<&Stash>,
+) -> SendBoxedObservable<'static, 'static, 'static, i32, i32, Shared> {
+    let log = log.clone();
+    let stash = stash.cloned();
+    Create::shared_boxed(move |observer: SendBoxedObserver<'static, i32, i32>| {
+        log.with_mut(|log| log.push(format!("subscribe {index}")));
+        match &stash {
+            Some(stash) => drop(stash.replace_value(Some(observer))),
+            None => observer.on_termination(Termination::Error(index)),
+        }
+        let log = log.clone();
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            log.with_mut(|log| log.push(format!("dispose {index}")));
+        }))
+    })
+    .into_send_boxed()
+}
+
+#[test]
+fn test_failed_source_disposed_before_retry() {
+    let log = Log::default();
+    let stash = Stash::default();
+    let (_checker, observer) = Checker::new();
+
+    let log_of_callback = log.clone();
+    let stash_of_callback = stash.clone();
+    let observable = logged(0, &log, Some(&stash)).retry(move |error| {
+        RetryAction::Retry(logged(
+            error + 1,
+            &log_of_callback,
+            Some(&stash_of_callback),
+        ))
+    });
+    let subscription = observable.subscribe(observer);
+    assert_eq!(log.clone_value(), ["subscribe 0"]);
+
+    stash
+        .take_value()
+        .unwrap()
+        .on_termination(Termination::Error(0));
+    assert_eq!(
+        log.clone_value(),
+        ["subscribe 0", "dispose 0", "subscribe 1"]
+    );
+
+    stash
+        .take_value()
+        .unwrap()
+        .on_termination(Termination::Error(1));
+    assert_eq!(
+        log.clone_value(),
+        [
+            "subscribe 0",
+            "dispose 0",
+            "subscribe 1",
+            "dispose 1",
+            "subscribe 2"
+        ]
+    );
+
+    subscription.dispose();
+    assert_eq!(
+        log.clone_value(),
+        [
+            "subscribe 0",
+            "dispose 0",
+            "subscribe 1",
+            "dispose 1",
+            "subscribe 2",
+            "dispose 2"
+        ]
+    );
+}
+
+#[test]
+fn test_synchronously_failed_sources_disposed_before_retry() {
+    let log = Log::default();
+    let stash = Stash::default();
+    let (_checker, observer) = Checker::new();
+
+    let log_of_callback = log.clone();
+    let stash_of_callback = stash.clone();
+    let observable = logged(0, &log, None).retry(move |error| {
+        // The second retry is the first source that does not fail on its own.
+        let stash = (error == 1).then_some(&stash_of_callback);
+        RetryAction::Retry(logged(error + 1, &log_of_callback, stash))
+    });
+    let subscription = observable.subscribe(observer);
+    assert_eq!(
+        log.clone_value(),
+        [
+            "subscribe 0",
+            "dispose 0",
+            "subscribe 1",
+            "dispose 1",
+            "subscribe 2"
+        ]
+    );
+
+    subscription.dispose();
+    assert_eq!(
+        log.clone_value(),
+        [
+            "subscribe 0",
+            "dispose 0",
+            "subscribe 1",
+            "dispose 1",
+            "subscribe 2",
+            "dispose 2"
+        ]
+    );
+}
+
+/// Where a test leaves the disposal of its whole subscription, for a source to run it.
+type Unsubscribe = Arc<Mutex<Option<Box<dyn FnOnce() + Send>>>>;
+
+/// The subscription is disposed from the disposal of the source that failed, which the retry runs
+/// before subscribing the next one: the callback must not be asked, and nothing must be subscribed.
+#[test]
+fn test_unsub_on_unsub_of_failed_source() {
+    let stash = Stash::default();
+    let unsubscribe = Unsubscribe::default();
+    let calls = Arc::new(AtomicUsize::new(0));
+    let (checker, observer) = Checker::new();
+
+    let stash_of_source = stash.clone();
+    let unsubscribe_of_source = unsubscribe.clone();
+    let source = Create::shared_boxed(move |observer: SendBoxedObserver<'static, i32, i32>| {
+        drop(stash_of_source.replace_value(Some(observer)));
+        let unsubscribe = unsubscribe_of_source.clone();
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            if let Some(unsubscribe) = unsubscribe.take_value() {
+                unsubscribe();
+            }
+        }))
+    });
+    let calls_of_callback = calls.clone();
+    let observable = source.retry(move |_| {
+        calls_of_callback.fetch_add(1, Ordering::SeqCst);
+        RetryAction::Retry(Just::new(42).with_error_type().into_shared())
+    });
+    let subscription = observable.subscribe(observer);
+    drop(unsubscribe.replace_value(Some(Box::new(move || subscription.dispose()))));
+
+    stash
+        .take_value()
+        .unwrap()
+        .on_termination(Termination::Error(0));
+    assert!(unsubscribe.with_ref(Option::is_none));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
 }
 
 #[test]

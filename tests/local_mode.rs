@@ -13,7 +13,7 @@ mod tests_utils;
 
 use futures::executor::LocalPool;
 use rx_rust::{
-    disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt, ObservableTypes},
     observer::{
         Observer, Termination,
@@ -25,6 +25,7 @@ use rx_rust::{
         combining::{combine_latest::CombineLatest, merge::Merge},
         connectable::ref_count::RefCount,
         creating::{create::Create, from_iter::FromIter},
+        error_handling::retry::RetryAction,
     },
     scheduler::{
         SchedulerTypes, TaskWaker,
@@ -321,6 +322,28 @@ fn test_switch() {
     inner_2.on_termination(Termination::Completed);
     assert_eq!(record.values(), rcs([1, 3]));
     assert_eq!(record.termination(), Some(Termination::Completed));
+}
+
+#[test]
+fn test_retry() {
+    // Neither the error nor the source's disposal is `Send`, which the `Shared` mode requires.
+    let disposed = Rc::new(RefCell::new(false));
+    let disposed_cloned = disposed.clone();
+    let source = Create::local_boxed(move |observer| {
+        observer.on_termination(Termination::Error(Rc::new(1)));
+        let disposed = disposed_cloned.clone();
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            disposed.with_mut(|disposed| *disposed = true);
+        }))
+    });
+    let (record, _subscription) = record(source.retry(|error: Rc<i32>| {
+        assert_eq!(*error, 1);
+        RetryAction::Retry(FromIter::new(rcs([2])).with_error_type())
+    }));
+    assert_eq!(record.values(), rcs([2]));
+    assert_eq!(record.termination(), Some(Termination::Completed));
+    // The retry disposed the source's subscription, on this thread.
+    assert!(disposed.clone_value());
 }
 
 // MARK: - What is not `Send`
