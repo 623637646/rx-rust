@@ -10,15 +10,15 @@ use super::connectable_controller::{
 };
 use crate::{
     delegate_disposal,
-    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
+    disposable::{
+        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+        option_disposal::OptionDisposal,
+    },
     observable::{Observable, ObservableTypes},
     observer::Observer,
     subject::Subject,
     thread_mode::{ThreadMode, mutable::MutableHelper},
-    utils::{
-        id_generator::Id,
-        on_panic::{OnPanic, on_panic},
-    },
+    utils::{id_generator::Id, on_panic::OnPanic},
 };
 use educe::Educe;
 
@@ -81,40 +81,6 @@ where
     OE: ObservableTypes,
     S: ObservableTypes,
 {
-    /// Carries the decision out, and returns the switched controller to give back. It runs with
-    /// the lock released: connecting subscribes to the source, which may emit to subscribers that
-    /// subscribe to or dispose this ref count from there.
-    ///
-    /// Connecting and disconnecting run the user's code, which may unwind: the controller is then
-    /// given back to `state` disconnected, since no connection is left, and nothing is decided on
-    /// the unwinding thread, where connecting again could panic once more. The next subscription
-    /// or disposal decides instead.
-    fn carry_out<T, E>(self, state: &StatePtr<OE, S, C>) -> Option<Controller<OE, S, C>>
-    where
-        OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
-        S: Subject<T, E> + Clone,
-    {
-        let give_back = |controller| {
-            state.with_mut(|current| current.give_back(Controller::Disconnected(controller)));
-        };
-        match self {
-            Self::Keep => None,
-            Self::Connect(controller) => {
-                Some(Controller::Connected(controller.connect_or_else(give_back)))
-            }
-            Self::Disconnect {
-                controller,
-                replaced,
-            } => {
-                let (controller, connection) = controller.take_connection();
-                let guard = OnPanic::new(controller, give_back);
-                drop(replaced);
-                drop(connection);
-                Some(Controller::Disconnected(guard.disarm()))
-            }
-        }
-    }
-
     /// Calls the decision off, for a caller that gives the controller back without switching it:
     /// returns the controller taken out, as it was.
     ///
@@ -172,13 +138,19 @@ where
 
     /// Decides what to do with the controller, unless a caller is holding it: leaves it in place if
     /// it is where the subscribers need it, and takes it out to be switched over otherwise.
+    ///
+    /// A thread that is unwinding disconnects the source as any other, which only drops values,
+    /// but never connects it: connecting runs the source's subscription, which can panic once more
+    /// and abort the process. The controller stays disconnected instead, and the subscribers
+    /// waiting for it are connected by the next subscription or disposal.
     fn decide(&mut self) -> Decision<OE, S, C> {
         match self.controller.take() {
             Some(Controller::Disconnected(controller))
                 if self.subscribers > 0
                     && self
                         .generation
-                        .is_some_and(|generation| controller.is_live(generation)) =>
+                        .is_some_and(|generation| controller.is_live(generation))
+                    && !std::thread::panicking() =>
             {
                 Decision::Connect(controller)
             }
@@ -217,12 +189,35 @@ where
 /// Its callers change the state and decide under one lock (`state.with_mut(|current| { …;
 /// current.decide() })`), so that nothing can join a subject between the change and the decision
 /// it leads to, and hand the decision here to be carried out with the lock released.
+///
+/// Connecting and disconnecting run the user's code, which can subscribe to or dispose this ref
+/// count, or unwind. On an unwind the controller is given back disconnected; [`State::decide`]
+/// prevents the caller's cleanup from connecting again on the unwinding thread.
 fn settle<T, E, OE, S, C>(state: &StatePtr<OE, S, C>, mut decision: Decision<OE, S, C>)
 where
     OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
     S: Subject<T, E> + Clone,
 {
-    while let Some(switched) = decision.carry_out(state) {
+    let give_back = |controller| {
+        state.with_mut(|current| current.give_back(Controller::Disconnected(controller)));
+    };
+    loop {
+        let switched = match decision {
+            Decision::Keep => return,
+            Decision::Connect(controller) => {
+                Controller::Connected(controller.connect_or_else(give_back))
+            }
+            Decision::Disconnect {
+                controller,
+                replaced,
+            } => {
+                let (controller, connection) = controller.take_connection();
+                let guard = OnPanic::new(controller, give_back);
+                drop(replaced);
+                drop(connection);
+                Controller::Disconnected(guard.disarm())
+            }
+        };
         decision = state.with_mut(|current| {
             current.give_back(switched);
             current.decide()
@@ -240,6 +235,16 @@ where
 /// [`reset_on_complete`](ConnectableController::reset_on_complete) say, or when the last subscriber
 /// leaves, as [`reset_on_ref_count_zero`](Self::reset_on_ref_count_zero) says — the next
 /// subscriber starts over with a new subject and a new connection.
+///
+/// # Panics
+///
+/// A panic while the source is connected — in the subject factory, in cloning the source or in
+/// subscribing to it — or while it is disconnected, and one in an observer that the subject
+/// replays to inside `subscribe`, reaches the caller that subscribed or disposed. The ref count
+/// stays usable once the panic is caught: the subscriber that was subscribing is not counted, and
+/// the source is left disconnected. A thread that is unwinding never connects the source, since
+/// that could panic again and abort the process, so subscribers still waiting for a connection get
+/// it from the next subscription or disposal.
 ///
 /// # Examples
 /// ```rust
@@ -339,7 +344,7 @@ where
 
 delegate_disposal!(
     Disposal<OE, S, C>,
-    ChainDisposal<<S as ObservableTypes>::Disposal, RefCountDisposal<OE, S, C>>,
+    ChainDisposal<<S as ObservableTypes>::Disposal, OptionDisposal<RefCountDisposal<OE, S, C>>>,
     where OE: ObservableTypes,
         S: ObservableTypes
 );
@@ -363,7 +368,7 @@ where
     S: Subject<T, E> + Observable<OR> + Clone,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let (subject, generation, decision) = self.state.with_mut(|state| {
+        let (subject, counted) = self.state.with_mut(|state| {
             let Current {
                 subject,
                 generation,
@@ -372,7 +377,7 @@ where
             if finished {
                 // The source has terminated and its subject is kept: there is nothing to connect,
                 // and the subject only replays what it has to this subscriber, so it is not counted.
-                return (subject, None, Decision::Keep);
+                return (subject, None);
             }
             state.count_in(generation);
             // Deciding under the same lock reserves the connection for this subscriber: while it
@@ -390,43 +395,34 @@ where
                 ),
                 "counting a subscriber in resets nothing"
             );
-            (subject, Some(generation), decision)
+            (subject, Some((generation, decision)))
         });
+        let Some((generation, decision)) = counted else {
+            return subject
+                .subscribe(observer)
+                .then(OptionDisposal::none())
+                .map_inner_into();
+        };
+        let disposal = RefCountDisposal {
+            state: self.state,
+            generation,
+        };
         // Subscribing notifies the observer inline when the subject has something to replay, so it
         // can unwind while this subscriber is counted in, and maybe holding the controller: the
         // guard counts it out and gives the controller back. Without it, the count would stay
         // inflated forever, so the last subscription would no longer disconnect, and the controller
         // would be lost. Disarming the guard is what ends that scope.
-        let state = self.state.clone();
-        let guard = OnPanic::new(decision, move |decision| {
-            let controller = decision.cancel();
-            let decision = state.with_mut(|current| {
-                if let Some(generation) = generation {
-                    current.count_out(generation);
-                }
-                if let Some(controller) = controller {
-                    current.give_back(controller);
-                }
-                current.decide()
-            });
-            settle(&state, decision);
+        let guard = OnPanic::new((disposal, decision), |(disposal, decision)| {
+            disposal.leave(decision.cancel());
         });
         let subscription = subject.subscribe(observer);
-        let decision = guard.disarm();
+        let (disposal, decision) = guard.disarm();
         // Connecting can unwind too, once `settle` has given the controller back: this guard then
-        // counts the subscriber out, without deciding again, as `Decision::carry_out` explains.
-        let guard = on_panic(|| {
-            if let Some(generation) = generation {
-                self.state.with_mut(|current| current.count_out(generation));
-            }
-        });
-        settle(&self.state, decision);
-        drop(guard);
+        // counts the subscriber out.
+        let guard = OnPanic::new(disposal, Disposable::dispose);
+        settle(&guard.state().state, decision);
         subscription
-            .then(RefCountDisposal {
-                state: self.state,
-                generation,
-            })
+            .then(OptionDisposal::some(guard.disarm()))
             .map_inner_into()
     }
 }
@@ -437,8 +433,31 @@ where
     S: ObservableTypes,
 {
     state: StatePtr<OE, S, C>,
-    /// The generation this subscriber was counted for, `None` if it was not counted.
-    generation: Option<Id>,
+    /// The generation this subscriber was counted for.
+    generation: Id,
+}
+
+impl<OE, S, C> RefCountDisposal<OE, S, C>
+where
+    OE: ObservableTypes,
+    S: ObservableTypes,
+{
+    /// Counts the subscriber out, giving back first the controller it `held`, if any, and settles
+    /// what follows.
+    fn leave<T, E>(self, held: Option<Controller<OE, S, C>>)
+    where
+        OE: Observable<ConnectionObserver<S, C>, Item = T, Error = E> + Clone,
+        S: Subject<T, E> + Clone,
+    {
+        let decision = self.state.with_mut(|current| {
+            if let Some(controller) = held {
+                current.give_back(controller);
+            }
+            current.count_out(self.generation);
+            current.decide()
+        });
+        settle(&self.state, decision);
+    }
 }
 
 impl<T, E, OE, S, C> Disposable for RefCountDisposal<OE, S, C>
@@ -447,13 +466,6 @@ where
     S: Subject<T, E> + Clone,
 {
     fn dispose(self) {
-        let Some(generation) = self.generation else {
-            return;
-        };
-        let decision = self.state.with_mut(|current| {
-            current.count_out(generation);
-            current.decide()
-        });
-        settle(&self.state, decision);
+        self.leave(None);
     }
 }

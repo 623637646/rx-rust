@@ -2,7 +2,7 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
-use crate::tests_utils::drop_probe::DropProbe;
+use crate::tests_utils::drop_probe::{DropCount, DropProbe};
 use crate::tests_utils::test_channel::ChannelState;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_scheduler::block_on;
@@ -19,6 +19,7 @@ use rx_rust::operators::creating::throw::Throw;
 use rx_rust::subject::Subject;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::subject::replay_subject::ReplaySubject;
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::thread_mode::mutable::{MutableBoolHelper, MutableHelper};
 use rx_rust::{
@@ -1975,6 +1976,50 @@ fn test_race_condition_with_unsubscribe() {
 }
 
 #[test]
+fn test_finished_subscriber_releases_the_source() {
+    for termination in [Termination::Completed, Termination::Error("error")] {
+        let source_dropped = DropCount::new();
+        let context_dropped = DropCount::new();
+        let source_probe = Arc::new(Mutex::new(source_dropped.probe()));
+        let termination_of_source = termination.clone();
+        let source = Create::shared_boxed(move |mut observer: SendBoxedObserver<'_, i32, &str>| {
+            let _ = &source_probe;
+            assert!(observer.on_next(111).is_continue());
+            observer.on_termination(termination_of_source);
+            DisposeOnDrop::default()
+        });
+        let observable = ConnectableController::new(source, context_dropped.probe(), |_| {
+            ReplaySubject::shared(None)
+        })
+        .reset_on_complete(false)
+        .reset_on_error(false)
+        .ref_count();
+
+        let (_, observer) = Checker::new();
+        let subscription = observable.clone().subscribe(observer);
+        drop(subscription);
+        assert_eq!(source_dropped.get(), 0);
+        assert_eq!(context_dropped.get(), 0);
+
+        // This subscriber only replays the kept subject: it must not keep the source or the
+        // factory's context alive once the last observable handle is consumed.
+        let (checker, observer) = Checker::new();
+        let subscription = observable.subscribe(observer);
+        assert_eq!(checker.values(), [111]);
+        assert_eq!(
+            checker.state(),
+            match termination {
+                Termination::Completed => State::Completed,
+                Termination::Error(error) => State::Error(error),
+            }
+        );
+        assert_eq!(source_dropped.get(), 1);
+        assert_eq!(context_dropped.get(), 1);
+        drop(subscription);
+    }
+}
+
+#[test]
 fn test_lifetime_sub() {
     // OK
     let life_marker = TestStruct;
@@ -2282,5 +2327,198 @@ fn test_panicking_disconnection_gives_the_controller_back() {
 
     drop(subscription);
     assert_eq!(disconnections.load(Ordering::SeqCst), 2);
+    drop(observable);
+}
+
+/// Delegates to `source`, but unwinds out of a clone while `fuse` holds a panic: the clone a
+/// connection makes of its source.
+#[cfg(panic = "unwind")]
+struct PanicOnClone<OE> {
+    source: OE,
+    fuse: Arc<Mutex<Option<crate::tests_utils::panic::PanicOnDrop>>>,
+}
+
+#[cfg(panic = "unwind")]
+impl<OE: Clone> Clone for PanicOnClone<OE> {
+    fn clone(&self) -> Self {
+        drop(self.fuse.take_value());
+        Self {
+            source: self.source.clone(),
+            fuse: self.fuse.clone(),
+        }
+    }
+}
+
+#[cfg(panic = "unwind")]
+impl<OE: rx_rust::observable::ObservableTypes> rx_rust::observable::ObservableTypes
+    for PanicOnClone<OE>
+{
+    type Item = OE::Item;
+    type Error = OE::Error;
+    type Mode = OE::Mode;
+    type Disposal = OE::Disposal;
+}
+
+#[cfg(panic = "unwind")]
+impl<OE, OR> Observable<OR> for PanicOnClone<OE>
+where
+    OE: Observable<OR>,
+    OR: Observer<OE::Item, OE::Error>,
+{
+    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
+        self.source.subscribe(observer)
+    }
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_source_clone_gives_the_controller_back() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+
+    let connections = Arc::new(AtomicUsize::new(0));
+    let is_disconnected = Arc::new(AtomicBool::new(false));
+    let fuse = Arc::new(Mutex::new(None));
+    let observable = PanicOnClone {
+        source: connection_counting_source!(connections.clone(), is_disconnected.clone()),
+        fuse: fuse.clone(),
+    }
+    .share();
+
+    let observable_of_panic = observable.clone();
+    expect_panic_on_drop(|panic_on_drop| {
+        drop(fuse.replace_value(Some(panic_on_drop)));
+        let (_, observer) = Checker::new();
+        let _subscription = observable_of_panic.subscribe(observer);
+    });
+    // The source was never subscribed: the clone unwound first.
+    assert_eq!(connections.load(Ordering::SeqCst), 0);
+
+    // The controller is back, disconnected, so the next subscriber connects.
+    let (checker, observer) = Checker::new();
+    let subscription = observable.clone().subscribe(observer);
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
+    assert_eq!(checker.values(), [1]);
+
+    // The subscriber whose connection panicked is counted out, so this one is the last.
+    drop(subscription);
+    assert!(is_disconnected.read());
+    drop(observable);
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_panicking_subscriber_does_not_connect_while_unwinding() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+
+    let connections = Arc::new(AtomicUsize::new(0));
+    let is_disconnected = Arc::new(AtomicBool::new(false));
+    let observable = connection_counting_source!(connections.clone(), is_disconnected.clone())
+        .publish_behavior(0)
+        .ref_count();
+
+    let waiting = Arc::new(Mutex::new(None));
+    let observable_of_panic = observable.clone();
+    let observable_of_waiting = observable.clone();
+    let waiting_of_panic = waiting.clone();
+    expect_panic_on_drop(move |panic_on_drop| {
+        let mut panic_on_drop = Some(panic_on_drop);
+        let mut observable_of_waiting = Some(observable_of_waiting);
+        let _subscription = observable_of_panic.subscribe_with_callback(
+            move |_| {
+                // The subject hands `0` over inside `subscribe`, while this first subscriber holds
+                // the controller it was about to connect: a second subscriber joins and waits for
+                // that connection, then this one panics.
+                if let Some(observable) = observable_of_waiting.take() {
+                    let (_, observer) = Checker::new();
+                    drop(waiting_of_panic.replace_value(Some(observable.subscribe(observer))));
+                }
+                drop(panic_on_drop.take());
+            },
+            |_| {},
+        );
+    });
+    // The second subscriber still waits, but the unwinding thread did not connect for it.
+    assert_eq!(connections.load(Ordering::SeqCst), 0);
+
+    // The next subscription connects. It joins the subject the panic killed, which is the
+    // subject's business, so only the connection is checked.
+    let (_, observer) = Checker::new();
+    let subscription = observable.clone().subscribe(observer);
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
+
+    // The waiting subscriber is still counted, so it is the last one that disconnects.
+    drop(subscription);
+    assert!(!is_disconnected.read());
+    drop(waiting.take_value());
+    assert!(is_disconnected.read());
+    drop(observable);
+}
+
+/// Drops what is parked in it when it is dropped itself, whoever else holds the slot.
+#[cfg(panic = "unwind")]
+struct DropParked<T>(Arc<Mutex<Option<T>>>);
+
+#[cfg(panic = "unwind")]
+impl<T> Drop for DropParked<T> {
+    fn drop(&mut self) {
+        drop(self.0.take_value());
+    }
+}
+
+#[cfg(panic = "unwind")]
+#[test]
+fn test_disposal_does_not_connect_while_unwinding() {
+    use crate::tests_utils::panic::expect_panic_on_drop;
+
+    let connections = Arc::new(AtomicUsize::new(0));
+    let is_disconnected = Arc::new(AtomicBool::new(false));
+    let observable = connection_counting_source!(connections.clone(), is_disconnected.clone())
+        .publish_behavior(0)
+        .ref_count();
+
+    let waiting = Arc::new(Mutex::new(None));
+    let observable_of_panic = observable.clone();
+    let observable_of_waiting = observable.clone();
+    let waiting_of_panic = waiting.clone();
+    expect_panic_on_drop(move |panic_on_drop| {
+        // Declared before the panicking subscription, so the unwind drops it once that
+        // subscription has counted itself out and given the controller back.
+        let leaving = DropParked(Arc::new(Mutex::new(None)));
+        let leaving_of_panic = leaving.0.clone();
+        let mut panic_on_drop = Some(panic_on_drop);
+        let mut observable_of_waiting = Some(observable_of_waiting);
+        let _subscription = observable_of_panic.subscribe_with_callback(
+            move |_| {
+                // The subject hands `0` over inside `subscribe`, while this first subscriber holds
+                // the controller it was about to connect: two more subscribers join and wait for
+                // that connection, then this one panics.
+                if let Some(observable) = observable_of_waiting.take() {
+                    let (_, observer) = Checker::new();
+                    let subscription = observable.clone().subscribe(observer);
+                    drop(waiting_of_panic.replace_value(Some(subscription)));
+                    let (_, observer) = Checker::new();
+                    drop(leaving_of_panic.replace_value(Some(observable.subscribe(observer))));
+                }
+                drop(panic_on_drop.take());
+            },
+            |_| {},
+        );
+    });
+    // The unwind disposed of one waiting subscriber, which left the other one waiting, but did
+    // not connect for it.
+    assert_eq!(connections.load(Ordering::SeqCst), 0);
+
+    // The next subscription connects. It joins the subject the panic killed, which is the
+    // subject's business, so only the connection is checked.
+    let (_, observer) = Checker::new();
+    let subscription = observable.clone().subscribe(observer);
+    assert_eq!(connections.load(Ordering::SeqCst), 1);
+
+    // The subscriber disposed during the unwind is counted out, and the waiting one is still
+    // counted, so it is the last one that disconnects.
+    drop(subscription);
+    assert!(!is_disconnected.read());
+    drop(waiting.take_value());
+    assert!(is_disconnected.read());
     drop(observable);
 }

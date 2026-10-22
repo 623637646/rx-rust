@@ -14,8 +14,9 @@ All notable changes to this project are documented here. The format follows
   `RefCount::reset_on_ref_count_zero(bool)` choose when the subject of a connectable is reset: when
   its source fails, when it completes, and when the last subscriber of a ref count leaves. All
   three reset by default; `reset_on_complete(false)` keeps a completed subject, so that a late
-  subscriber still gets what it replays and the source is not connected again, and
-  `reset_on_ref_count_zero(false)` keeps the source connected without subscribers. See
+  subscriber still gets what it replays and the source is not connected again — nor kept alive by
+  that subscriber, which holds only the subject — and `reset_on_ref_count_zero(false)` keeps the
+  source connected without subscribers. See
   `docs/decisions/0007-a-subject-per-round.md`.
 - `ObservableExt::publish_behavior(initial_value)` and
   `ObservableExt::share_behavior(initial_value)` multicast through a `BehaviorSubject`, so every
@@ -287,7 +288,9 @@ All notable changes to this project are documented here. The format follows
   cloning the source, subscribing to it or disposing that subscription — keeps working once the
   panic is caught: its controller is given back disconnected and the subscriber that was
   connecting is counted out, so the next subscriber connects again. The controller used to be
-  lost, and the `RefCount` never connected again.
+  lost, and the `RefCount` never connected again. A thread that unwinds never connects the source
+  — a panic there would abort the process — so subscribers still waiting for a connection get it
+  from the next subscription or disposal.
 
 - A subject that delivers from a `Drop` run by an unwinding panic — the disposal of a subscription
   the unwind drops, say — is no longer killed as if one of its observers had panicked: the guards
