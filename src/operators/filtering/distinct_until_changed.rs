@@ -13,6 +13,9 @@ use educe::Educe;
 /// item.
 /// See <https://reactivex.io/documentation/operators/distinctuntilchanged.html>
 ///
+/// The keys are compared with [`PartialEq`], so a key that is not equal to itself, such as
+/// `f64::NAN`, never counts as a repeat: every item with such a key is emitted.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
@@ -76,7 +79,7 @@ impl<T, E, OE, F, K> ObservableTypes for DistinctUntilChanged<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
     F: FnMut(&T) -> K,
-    K: Eq,
+    K: PartialEq,
 {
     type Item = T;
     type Error = E;
@@ -89,7 +92,7 @@ where
     OR: Observer<T, E>,
     OE: Observable<DistinctUntilChangedObserver<OR, F, K>, Item = T, Error = E>,
     F: FnMut(&T) -> K,
-    K: Eq,
+    K: PartialEq,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = DistinctUntilChangedObserver {
@@ -112,7 +115,7 @@ impl<T, E, OR, F, K> Observer<T, E> for DistinctUntilChangedObserver<OR, F, K>
 where
     OR: Observer<T, E>,
     F: FnMut(&T) -> K,
-    K: Eq,
+    K: PartialEq,
 {
     fn on_next(&mut self, value: T) -> Flow {
         let key = (self.key_selector)(&value);

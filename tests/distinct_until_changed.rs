@@ -95,6 +95,45 @@ fn test_completed_with_key_selector() {
 }
 
 #[test]
+fn test_partial_eq_key() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    // `f64` is only `PartialEq`, and `NaN`, the key of `0`, is not equal to itself.
+    let observable = observable.distinct_until_changed_with_key_selector(|value| {
+        if *value == 0 {
+            f64::NAN
+        } else {
+            f64::from(*value)
+        }
+    });
+
+    let _subscription = observable.subscribe(observer);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+    assert!(sender.on_next(1).is_continue());
+    assert!(sender.on_next(1).is_continue());
+    assert_eq!(checker.values(), [1]);
+
+    // A `NaN` key never counts as a repeat.
+    assert!(sender.on_next(0).is_continue());
+    assert!(sender.on_next(0).is_continue());
+    assert_eq!(checker.values(), [1, 0, 0]);
+
+    assert!(sender.on_next(2).is_continue());
+    assert!(sender.on_next(2).is_continue());
+    assert_eq!(checker.values(), [1, 0, 0, 2]);
+    assert_eq!(checker.state(), State::Active);
+
+    sender.on_termination(Termination::Completed);
+    assert_eq!(checker.values(), [1, 0, 0, 2]);
+    assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+#[test]
 fn test_error() {
     let (mut sender, observable, channel_checker) = test_channel();
     let (checker, observer) = Checker::new();
