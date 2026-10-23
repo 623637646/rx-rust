@@ -131,7 +131,8 @@ cargo tarpaulin --out Html
   calling `on_next`, and both the context and observer locks before `on_termination`. One
   "transaction" should take the lock once, not repeatedly. Debug builds panic when a thread takes a
   lock it already holds. See the module docs in `src/thread_mode/mutable.rs`. The tests call those
-  methods directly too.
+  methods directly too. `Clone`, `PartialEq`, `Clock::now` and a connectable's subject factory
+  are exempt: they may run under a lock, and do not get moved out of one (decision 0008).
 - **Subscription helpers**: prefer the existing helpers over hand-rolled state:
   `subscribe_with_context` for an operator with shared state — its context owns the source
   subscription and disposes it as soon as it stops, on whichever thread stops it (decision 0005);
@@ -223,9 +224,9 @@ cargo tarpaulin --out Html
   measures time without scheduling anything (`throttle`, `timestamp`, `time_interval`) takes a
   `C: Clock`, not a scheduler: `scheduler.clock()`, `SystemClock`, or `time.clock()` in a test.
   That is what lets `VirtualTime` drive every operator; CI fails on an
-  `Instant::now` in `src/` outside `scheduler/mod.rs` and `scheduler/virtual_time.rs`. Read the
-  clock outside a context lock when the value is needed anyway (`let deadline =
-  self.clock.now() + span;` before `update`).
+  `Instant::now` in `src/` outside `scheduler/mod.rs` and `scheduler/virtual_time.rs`. The clock
+  may be read under a context lock (decision 0008); a value every path needs is read before it
+  (`let deadline = self.clock.now() + span;` before `update`), which keeps the lock short.
 - Public items get doc comments; operators link to their reactivex.io page. `#![deny(missing_docs)]`
   enforces it, so an item that is `pub` only because the type system demands it — an operator's
   observer — takes `#[doc(hidden)]` instead of a doc comment.

@@ -155,8 +155,8 @@ where
     E: Clone,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        // The copy kept in the buffer is made before the lock is taken: cloning runs arbitrary
-        // code, which may emit to this very subject.
+        // The copy kept in the buffer is made before the lock is taken, which keeps the lock
+        // short: every path but the terminated one needs it.
         let kept = value.clone();
         self.0
             .update(|buffer, terminated| {

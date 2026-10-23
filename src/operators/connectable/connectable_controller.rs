@@ -156,8 +156,12 @@ impl<S, C> SubjectLifecycle<S, C> {
 /// needs goes in the context — `()` when nothing, the initial value of a `BehaviorSubject`, the
 /// buffer size of a `ReplaySubject` — and a factory returning a clone of a subject kept in the
 /// context keeps that subject across every connection. It is called lazily, when a subscriber or a
-/// connection first needs a subject, with the controller's lock held, so it must not subscribe to,
-/// connect or disconnect that controller.
+/// connection first needs a subject, with the controller's lock held — and the [`RefCount`]'s too,
+/// when one of its subscribers needs it — so it must not subscribe to, connect or disconnect that
+/// controller, nor subscribe to or dispose a subscription of a [`RefCount`] of it. Whatever it
+/// runs is bound by that: the `Clone` of a value it copies from the context, such as the initial
+/// value of a `BehaviorSubject`. So is the subject's own `Clone`, which runs under the same locks
+/// each time a subscriber or a connection joins the subject.
 ///
 /// # Examples
 /// ```rust

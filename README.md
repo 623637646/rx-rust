@@ -378,6 +378,17 @@ holds: debug builds panic with a message saying so, and release builds panic (`L
 deadlock (`Shared`). `Drop` is not restricted: replaced, evicted and rejected values are dropped
 after the lock is released.
 
+The same goes for a `Clock` of your own, handed to an operator directly or through a scheduler: an
+operator may read its `now()` while it holds its lock, so `now()` must not reach back into that
+pipeline either.
+
+A connectable observable (`multicast`, `publish*`, `share*`, `replay`) runs its subject factory
+under its controller's lock, and under the lock of its `ref_count` too when a subscriber of that
+`ref_count` needs a new subject. So does what the factory runs — the `Clone` of the initial value
+of `publish_behavior` and `share_behavior` — and the `Clone` of the subject itself, each time a
+subscriber or a connection joins it. None of them may subscribe to, connect or disconnect that same
+connectable observable, nor dispose a subscription of its `ref_count`.
+
 ## Subjects
 
 A subject is both an `Observer` and an `Observable`: push into one end, subscribe to the other.

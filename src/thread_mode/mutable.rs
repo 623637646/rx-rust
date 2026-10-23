@@ -31,6 +31,13 @@
 //! - when the decision itself needs the lock, return an action from the callback and run it after
 //!   `with_mut` returns, as `ref_count`, `unicast_subject` and `serialized_delivery` do.
 //!
+//! The crate exempts four kinds of user code from this rule: `Clone`, `PartialEq`,
+//! [`Clock::now`](crate::scheduler::Clock::now) and the subject factory of a
+//! [`ConnectableController`](crate::operators::connectable::connectable_controller::ConnectableController)
+//! may run under a lock, since a re-entry through them is contrived and keeping them out costs code
+//! and speed. Not reaching back into the subject or pipeline that runs them is a contract on the
+//! user's code instead; see `docs/decisions/0008-user-code-under-a-lock.md`.
+//!
 //! Debug builds check the rule at runtime: taking a lock the current thread already holds panics
 //! at the offending call site instead of deadlocking.
 //!

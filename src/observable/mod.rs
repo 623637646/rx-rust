@@ -942,7 +942,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// the previous one is reset.
     ///
     /// The factory is a function pointer, a closure that captures nothing: what it needs goes in
-    /// `context`, `()` when nothing.
+    /// `context`, `()` when nothing. It runs under the controller's lock, and so does the
+    /// subject's `Clone`: see [`ConnectableController`] for what they must not do.
     ///
     /// ```rust
     /// use rx_rust::{
@@ -986,7 +987,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Multicasts the source using a `BehaviorSubject`: every subscriber receives the current
     /// value — `initial_value` until the source emits — before what follows it.
     ///
-    /// Each connection starts over from `initial_value`.
+    /// Each connection starts over from `initial_value`, which is cloned for it under the
+    /// controller's lock, so its `Clone` must not reach back into this controller: see
+    /// [`ConnectableController`].
     fn publish_behavior<'a>(
         self,
         initial_value: Self::Item,
@@ -1084,7 +1087,10 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// receives the current value, `initial_value` until the source emits.
     ///
     /// Like [`share`](Self::share), it starts over when the source terminates or the last
-    /// subscriber leaves, and the current value with it.
+    /// subscriber leaves, and the current value with it. `initial_value` is cloned for each
+    /// connection under the locks of the controller and of the [`RefCount`], so its `Clone` must
+    /// not subscribe to this observable nor dispose a subscription of it: see
+    /// [`ConnectableController`].
     fn share_behavior<'a>(
         self,
         initial_value: Self::Item,

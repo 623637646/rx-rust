@@ -62,6 +62,9 @@ type parameter of `ConnectableController<OE, S, C = ()>` and `RefCount<OE, S, C 
 return types read as what they build: `RefCount<Self, PublishSubjectOf<'a, Self>>`,
 `RefCount<Self, BehaviorSubjectOf<'a, Self>, Self::Item>`.
 
+The factory is called under the controller's lock, and the `RefCount`'s too when one of its
+subscribers needs a subject: decision 0008 exempts it from keeping user code out of a lock.
+
 ### Why
 
 - **Every type is nameable, with nothing added.** No factory type of the crate's own appears in a
