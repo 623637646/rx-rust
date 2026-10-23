@@ -23,6 +23,7 @@ impl<F: FnOnce()> CallbackDisposal<F> {
         Self(callback)
     }
 }
+
 impl<F: FnOnce()> Disposable for CallbackDisposal<F> {
     fn dispose(self) {
         self.0();

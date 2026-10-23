@@ -38,7 +38,9 @@ delegate_disposal!(
 ///     observer::{Flow, Observer, Termination, callback_observer::CallbackObserver},
 ///     operators::creating::range::Range,
 ///     thread_mode::Local,
-///     utils::subscribe_with_auto_dispose_on_termination::subscribe_with_auto_dispose_on_termination,
+///     utils::subscribe_with_auto_dispose_on_termination::{
+///         subscribe_with_auto_dispose_on_termination,
+///     },
 /// };
 ///
 /// // An operator that completes after the first value: the source is disposed by the helper.

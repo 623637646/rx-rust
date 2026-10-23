@@ -8,11 +8,15 @@ pub(crate) type CloneCallback = Box<dyn FnOnce() + Send>;
 
 /// A value that runs a callback the first time it, or any copy of it, is cloned.
 ///
-/// The counterpart of [`DropProbe`](super::drop_probe::DropProbe) for `Clone`: a subject keeps or
-/// hands out copies of the values it forwards, and cloning runs user code just as dropping does, so
-/// it must not happen while the state of the subject is locked. A test re-enters the code under
-/// test from the callback; a clone that broke that rule would panic on the re-entry check of debug
-/// builds, and deadlock otherwise, instead of running it.
+/// The counterpart of [`DropProbe`](super::drop_probe::DropProbe) for `Clone`: cloning runs user
+/// code just as dropping does. A subject copies a value it receives — the copy it keeps, or the
+/// copy each observer gets — outside its lock, so a test can re-enter the subject from the
+/// callback; a clone made under the lock would instead panic on the re-entry check of debug builds,
+/// and deadlock otherwise.
+///
+/// A snapshot is the exception: the copies a subject replays to a new subscriber, and its current
+/// value, are made under the lock, and must not re-enter it. See "Item and error types run under a
+/// lock" in the README.
 ///
 /// The copies share the callback, so it runs once, from whichever clone comes first.
 pub(crate) struct CloneProbe {

@@ -269,8 +269,8 @@ fn test_completed_synchronous_throw() {
     assert_eq!(errors.clone_value(), [-1, 0]);
 }
 
-/// How many synchronous failures the tests below go through: deep enough that retrying each one from
-/// inside the previous subscription would overflow the stack.
+/// How many synchronous failures the tests below go through: deep enough that retrying each one
+/// from inside the previous subscription would overflow the stack.
 const SYNCHRONOUS_THROWS: i32 = 10_000;
 
 /// Counts the subscriptions of [`throwing`] that are on the stack at once, and the most there ever

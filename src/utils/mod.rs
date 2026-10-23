@@ -50,8 +50,8 @@ use std::marker::PhantomData;
 pub(crate) type MarkerType<T> = PhantomData<fn(T) -> T>;
 
 /// Takes the values out of `values`, a buffer about to be filled again, leaving it with room for
-/// `room` of them; or, while it is empty, a new `Vec`, which allocates nothing and leaves the buffer
-/// the room it has.
+/// `room` of them; or, while it is empty, a new `Vec`, which allocates nothing and leaves the
+/// buffer the room it has.
 ///
 /// `room` is the caller's guess at the next batch: the length of this one, which follows the pace
 /// of the source and settles back after a burst, or a known bound such as a bundle's `count`.
