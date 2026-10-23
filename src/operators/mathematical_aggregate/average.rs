@@ -13,6 +13,8 @@ use std::marker::PhantomData;
 /// Calculates the average of numbers emitted by an observable and emits this average.
 /// See <https://reactivex.io/documentation/operators/average.html>
 ///
+/// A source that completes without an item completes it without one, rather than with a zero.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{

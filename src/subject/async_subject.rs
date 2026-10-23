@@ -52,9 +52,11 @@ pub struct AsyncSubject<'or, T, E, M: ObserverMode>(
     #[educe(Debug(ignore))] SerializedMulticast<'or, T, E, M, Option<T>>,
 );
 
-/// The [`AsyncSubject`] a source `OE` is multicast through: its items, its errors and its thread mode.
+/// The [`AsyncSubject`] a source `OE` is multicast through: its items, its errors and its
+/// thread mode.
 ///
-/// This is the subject [`ObservableExt::publish_last`](crate::observable::ObservableExt::publish_last) and
+/// This is the subject
+/// [`ObservableExt::publish_last`](crate::observable::ObservableExt::publish_last) and
 /// [`ObservableExt::share_last`](crate::observable::ObservableExt::share_last) build.
 pub type AsyncSubjectOf<'or, OE> = AsyncSubject<
     'or,

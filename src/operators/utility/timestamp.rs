@@ -10,7 +10,7 @@ use crate::{
 use educe::Educe;
 use std::time::Instant;
 
-/// Attaches the [`Instant`] it arrived at, on a [`Clock`], to each item emitted by an Observable:
+/// Attaches the [`Instant`] it arrived at, on a [`Clock`], to each item emitted by an observable:
 /// [`SystemClock`](crate::scheduler::SystemClock), or a scheduler's
 /// ([`SchedulerTypes::clock`](crate::scheduler::SchedulerTypes::clock)).
 /// See <https://reactivex.io/documentation/operators/timestamp.html>

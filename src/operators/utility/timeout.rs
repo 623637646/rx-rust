@@ -19,9 +19,9 @@ use crate::{
 use educe::Educe;
 use std::time::{Duration, Instant};
 
+/// The error type of [`Timeout`]: either the deadline passed, or the source itself failed.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
-/// The error type of [`Timeout`]: either the deadline passed, or the source itself failed.
 pub enum Error<E> {
     /// No item arrived within the duration.
     Timeout,

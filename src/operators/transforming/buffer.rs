@@ -19,7 +19,7 @@ use educe::Educe;
 /// `boundary` observable emits an item.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
-/// Terminating the `boundary` terminates the outer Observable: completing it emits the pending
+/// Terminating the `boundary` terminates the outer observable: completing it emits the pending
 /// bundle when non-empty and then completes, while an error from it discards the pending bundle
 /// and errors. Note that this differs from
 /// [`Window`](crate::operators::transforming::window::Window), where completing the `boundary`

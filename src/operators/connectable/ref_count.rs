@@ -368,7 +368,8 @@ where
             } = self.observable.join();
             if finished {
                 // The source has terminated and its subject is kept: there is nothing to connect,
-                // and the subject only replays what it has to this subscriber, so it is not counted.
+                // and the subject only replays what it has to this subscriber, so it is not
+                // counted.
                 return (subject, None);
             }
             state.count_in(generation);

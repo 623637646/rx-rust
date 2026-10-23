@@ -22,6 +22,7 @@ use std::{num::NonZeroUsize, time::Duration};
 
 /// Gathers items from an observable into bundles and emits these bundles as `Vec<T>`, either when
 /// the bundle reaches `count` items or every `time_span`, whichever happens first.
+/// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// The timer first fires one `time_span` after the subscription, as ReactiveX does. A bundle
 /// emitted because it is full restarts the timer, so the next timed bundle comes `time_span` after
@@ -33,7 +34,6 @@ use std::{num::NonZeroUsize, time::Duration};
 /// # Panics
 ///
 /// Subscribing panics if `time_span` is zero.
-/// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples
 /// ```rust
@@ -77,7 +77,9 @@ pub struct BufferWithTimeOrCount<OE, S> {
 }
 
 impl<OE, S> BufferWithTimeOrCount<OE, S> {
-    /// Creates a [`BufferWithTimeOrCount`] over `source`.
+    /// Creates a [`BufferWithTimeOrCount`] over `source`;
+    /// [`ObservableExt::buffer_with_time_or_count`](crate::observable::ObservableExt::buffer_with_time_or_count)
+    /// is the fluent form.
     pub fn new(source: OE, count: NonZeroUsize, time_span: Duration, scheduler: S) -> Self {
         Self {
             source,

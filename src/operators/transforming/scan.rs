@@ -111,7 +111,7 @@ where
         };
         let accumulated = (self.callback)(accumulated, value);
         // The one clone: the accumulator is kept and a copy of it goes downstream. It is put back
-        // before the notification, so a downstream that re-enters synchronously sees it.
+        // before the notification, so that only a panic of the callback itself can take it.
         let to_send = accumulated.clone();
         self.value = Some(accumulated);
         self.observer.on_next(to_send)

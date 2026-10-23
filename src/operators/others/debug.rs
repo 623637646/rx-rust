@@ -11,9 +11,9 @@ use crate::{
 use educe::Educe;
 use std::{fmt::Display, marker::PhantomData};
 
+/// What [`struct@Debug`] reports to its callback, with a borrow of the value where there is one.
 #[derive(Educe)]
 #[educe(Debug, Clone, PartialEq, Eq)]
-/// What [`struct@Debug`] reports to its callback, with a borrow of the value where there is one.
 pub enum DebugEvent<'a, T: 'a, E: 'a> {
     /// A value is about to be forwarded.
     OnNext(&'a T),

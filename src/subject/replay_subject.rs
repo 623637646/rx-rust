@@ -58,7 +58,8 @@ pub struct ReplaySubject<'or, T, E, M: ObserverMode>(
     #[educe(Debug(ignore))] SerializedMulticast<'or, T, E, M, Buffer<T>>,
 );
 
-/// The [`ReplaySubject`] a source `OE` is multicast through: its items, its errors and its thread mode.
+/// The [`ReplaySubject`] a source `OE` is multicast through: its items, its errors and its
+/// thread mode.
 ///
 /// This is the subject [`ObservableExt::replay`](crate::observable::ObservableExt::replay) and
 /// [`ObservableExt::share_replay`](crate::observable::ObservableExt::share_replay) build.

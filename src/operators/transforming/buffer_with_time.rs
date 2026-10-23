@@ -21,6 +21,7 @@ use std::time::Duration;
 
 /// Periodically gathers items from an observable into bundles and emits these bundles as `Vec<T>`,
 /// every `time_span`.
+/// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// The first bundle is emitted one `time_span` after the subscription, as ReactiveX does, and
 /// every following one `time_span` later, at a fixed rate, empty or not. On completion the pending
@@ -32,7 +33,6 @@ use std::time::Duration;
 /// # Panics
 ///
 /// Subscribing panics if `time_span` is zero.
-/// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
 /// # Examples
 /// ```rust

@@ -30,10 +30,10 @@ enum Command {
 }
 
 /// The owner of a thread, named for [`get_thread_name`], that runs its tasks only when the test
-/// asks for it. [`Scheduler::run_task`] only queues the task; [`Self::run_until_stalled`] runs every
-/// queued task until none can make progress. So the test decides when the scheduler's thread runs
-/// relative to its own, instead of racing it, and waits for exactly the work it started instead of
-/// sleeping.
+/// asks for it. [`Scheduler::run_task`] only queues the task; [`Self::run_until_stalled`] runs
+/// every queued task until none can make progress. So the test decides when the scheduler's thread
+/// runs relative to its own, instead of racing it, and waits for exactly the work it started
+/// instead of sleeping.
 ///
 /// Dropping the owner stops the thread, which releases all its tasks even if they hold scheduler
 /// clones or their cancellation handles remain alive. On any other thread, dropping the owner also

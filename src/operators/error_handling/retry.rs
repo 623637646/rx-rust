@@ -17,9 +17,9 @@ use crate::{
 };
 use educe::Educe;
 
+/// What the callback of [`Retry`] decides about an error.
 #[derive(Educe)]
 #[educe(Debug, Clone)]
-/// What the callback of [`Retry`] decides about an error.
 pub enum RetryAction<E, OE1> {
     /// Subscribe to this observable and keep going.
     Retry(OE1),
@@ -29,6 +29,7 @@ pub enum RetryAction<E, OE1> {
 
 /// Re-subscribes after an error, to the observable the callback returns, until the callback
 /// gives up with an error of its own.
+/// See <https://reactivex.io/documentation/operators/retry.html>
 ///
 /// Once the subscription is disposed, the callback is no longer called: an error that arrives
 /// after that is dropped, as it is by [`Catch`](crate::operators::error_handling::catch::Catch).
@@ -44,7 +45,6 @@ pub enum RetryAction<E, OE1> {
 /// it, the source's included, on the thread that runs the retry. So behind a source that requires
 /// a `Send` observer, the error type and the source's disposal must be `Send`; the `Local` mode
 /// does not require either.
-/// See <https://reactivex.io/documentation/operators/retry.html>
 ///
 /// # Examples
 /// ```rust

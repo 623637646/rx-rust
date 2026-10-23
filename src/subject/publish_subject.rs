@@ -92,7 +92,8 @@ pub struct PublishSubject<'or, T, E, M: ObserverMode>(
     #[educe(Debug(ignore))] SerializedMulticast<'or, T, E, M>,
 );
 
-/// The [`PublishSubject`] a source `OE` is multicast through: its items, its errors and its thread mode.
+/// The [`PublishSubject`] a source `OE` is multicast through: its items, its errors and its
+/// thread mode.
 ///
 /// This is the subject [`ObservableExt::publish`](crate::observable::ObservableExt::publish) and
 /// [`ObservableExt::share`](crate::observable::ObservableExt::share) build.

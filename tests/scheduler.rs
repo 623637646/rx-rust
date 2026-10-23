@@ -1073,7 +1073,8 @@ mod main_loop {
                 }
             }
 
-            // Step one ready task, if any; otherwise block until a message or the next sleeper is due.
+            // Step one ready task, if any; otherwise block until a message or the next sleeper is
+            // due.
             let message = if let Some(id) = ready.pop_front() {
                 if let Some((job, wait)) = jobs.get_mut(&id) {
                     let waker = Waker::from(Arc::new(JobWaker {
@@ -1119,8 +1120,8 @@ mod main_loop {
                     jobs.insert(id, (job, Wait::Until(at)));
                 }
                 Message::Wake(id) => {
-                    // A wake may arrive for a task that is already ready, sleeping or gone: only a task
-                    // waiting for its waker moves.
+                    // A wake may arrive for a task that is already ready, sleeping or gone: only a
+                    // task waiting for its waker moves.
                     if let Some((_, wait @ (Wait::Waker | Wait::WakerOrUntil(_)))) =
                         jobs.get_mut(&id)
                     {

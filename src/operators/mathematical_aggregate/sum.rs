@@ -11,6 +11,8 @@ use std::ops::AddAssign;
 /// Calculates the sum of numbers emitted by an observable and emits this sum.
 /// See <https://reactivex.io/documentation/operators/sum.html>
 ///
+/// A source that completes without an item completes it without one, rather than with a zero.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{

@@ -34,8 +34,8 @@ pub struct Connected<D: Disposable> {
 
 /// The state shared by a controller, the observables it hands out and the observer its source is
 /// subscribed with. It is private to this module: [`RefCount`] reaches it only through the
-/// `pub(super)` methods of [`ConnectableController`] and [`MulticastObservable`], each of which takes
-/// its lock once, after the ref count's own.
+/// `pub(super)` methods of [`ConnectableController`] and [`MulticastObservable`], each of which
+/// takes its lock once, after the ref count's own.
 type SubjectLifecyclePtr<S, C> =
     <<S as ObservableTypes>::Mode as ThreadMode>::Ptr<SubjectLifecycle<S, C>>;
 

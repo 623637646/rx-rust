@@ -126,9 +126,9 @@ where
     /// Relative to the thread that subscribes, the events come from the scheduler's thread, where
     /// the subscription is moved, and the source may move them again, so the mode is both joined.
     ///
-    /// It is not the source's mode alone: `Just.subscribe_on(pool).merge(Just)` would then share
-    /// the state of `merge` through an `Rc`, which both the pool's thread and the subscribing one
-    /// reach.
+    /// It is not the source's mode alone: `Just.subscribe_on(pool).merge_with(Just)` would then
+    /// share the state of `merge` through an `Rc`, which both the pool's thread and the subscribing
+    /// one reach.
     type Mode = JoinedSchedulerModeOf<OE, S>;
     /// First the task that subscribes, then the subscription it made.
     type Disposal = Disposal<JoinedSchedulerModeOf<OE, S>, S::Disposal, OE::Disposal>;

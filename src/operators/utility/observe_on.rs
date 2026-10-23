@@ -15,7 +15,7 @@ use crate::{
 };
 use educe::Educe;
 
-/// Specifies the `Scheduler` on which an observer will observe this Observable: every event is
+/// Specifies the `Scheduler` on which an observer will observe this observable: every event is
 /// delivered from a task of that scheduler, in order.
 /// See <https://reactivex.io/documentation/operators/observeon.html>
 ///

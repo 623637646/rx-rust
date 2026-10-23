@@ -59,10 +59,10 @@ use educe::Educe;
 /// is dropped, outside the lock, once the delivery stops — after the terminal notification when the
 /// delivery stops by terminating. Otherwise the observer is released without a notification, and
 /// only after `R` is dropped, so that its release tells downstream that its sources are gone. The
-/// exceptions are the stops that cannot reach the observer: a [`DeliveryStop`] leaves it parked for
-/// the next handle dropped or event, typically the handle of a source as `R` disposes it, and a stop
-/// that finds it held by a delivery loop on another thread leaves that loop to release it, which it
-/// may do while `R` is still being dropped.
+/// exceptions are the stops that cannot reach the observer: a [`DeliveryStop`] leaves it parked
+/// for the next event or the next handle dropped — typically the handle of a source, as `R`
+/// disposes it — and a stop that finds it held by a delivery loop on another thread leaves that
+/// loop to release it, which it may do while `R` is still being dropped.
 ///
 /// The pointers are the ones the thread mode `M` picks.
 #[derive(Educe)]

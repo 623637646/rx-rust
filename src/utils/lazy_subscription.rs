@@ -17,9 +17,8 @@ use crate::{
 ///
 /// The subscription is the parameter `S`, always `DisposeOnDrop<OE::Disposal>`, rather than
 /// spelled in the variant: there, the drop check asks the disposal type to outlive the adapter
-/// before
-/// normalizing it, so the projection `OE::Disposal` drags along every borrow of the source, and an
-/// adapter over a source that borrows a local would hold that borrow until the adapter is
+/// before normalizing it, so the projection `OE::Disposal` drags along every borrow of the source,
+/// and an adapter over a source that borrows a local would hold that borrow until the adapter is
 /// dropped (`test_mut_ref` of the stream tests).
 pub(crate) enum LazySubscription<OE, S> {
     /// Not polled yet.
