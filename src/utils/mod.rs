@@ -48,3 +48,43 @@ use std::marker::PhantomData;
 /// `MarkerType<&'a U>` is not `'static`, and no spelling of `PhantomData` avoids that — but the
 /// source observable already carries the same lifetime, so it costs nothing.
 pub(crate) type MarkerType<T> = PhantomData<fn(T) -> T>;
+
+/// Takes the values out of `values`, a buffer about to be filled again, leaving it with room for
+/// `room` of them; or, while it is empty, a new `Vec`, which allocates nothing and leaves the buffer
+/// the room it has.
+///
+/// `room` is the caller's guess at the next batch: the length of this one, which follows the pace
+/// of the source and settles back after a burst, or a known bound such as a bundle's `count`.
+pub(crate) fn take_leaving_room<T>(values: &mut Vec<T>, room: usize) -> Vec<T> {
+    if values.is_empty() {
+        return Vec::new();
+    }
+    std::mem::replace(values, Vec::with_capacity(room))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::take_leaving_room;
+
+    #[test]
+    fn test_take_leaving_room() {
+        let mut values = Vec::with_capacity(4);
+        values.extend([1, 2, 3]);
+
+        let taken = take_leaving_room(&mut values, 8);
+        assert_eq!(taken, [1, 2, 3]);
+        assert!(values.is_empty());
+        assert!(values.capacity() >= 8);
+    }
+
+    #[test]
+    fn test_take_leaving_room_empty() {
+        let mut values = Vec::<i32>::with_capacity(4);
+
+        // Nothing to take: nothing is allocated, and the buffer keeps its room.
+        let taken = take_leaving_room(&mut values, 8);
+        assert!(taken.is_empty());
+        assert_eq!(taken.capacity(), 0);
+        assert!(values.capacity() >= 4);
+    }
+}

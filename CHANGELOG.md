@@ -272,6 +272,12 @@ All notable changes to this project are documented here. The format follows
   another thread while a subscription is being made waits for it to return and is retried by the
   thread that made it, and the source's subscription is disposed by the first retry, on whichever
   thread runs it. The `Local` mode has neither requirement.
+- Fewer allocations in the buffering operators. `buffer_with_count` prepares each bundle with
+  room for `count` items, as `buffer_with_time_or_count` does, so a full bundle is built with a
+  single allocation. `buffer`, `buffer_with_time` and `buffer_with_time_or_count` emit an empty
+  bundle as a new `Vec`, which allocates nothing, and keep the room already prepared for the next
+  one. `observe_on` leaves its queue, each time it takes the values out to deliver them, with as
+  much room as they took, so the values queued meanwhile do not grow it from nothing.
 
 ### Fixed
 

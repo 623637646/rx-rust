@@ -13,6 +13,7 @@ use crate::{
     utils::{
         serialized_delivery::UpdateOutcome,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        take_leaving_room,
     },
 };
 use educe::Educe;
@@ -186,9 +187,9 @@ struct Model<T> {
 }
 
 impl<T> Model<T> {
-    /// Takes the bundle out, leaving an empty one of the same capacity.
+    /// Takes the bundle out, leaving room for a full one.
     fn take_bundle(&mut self) -> Vec<T> {
-        std::mem::replace(&mut self.values, Vec::with_capacity(self.count.get()))
+        take_leaving_room(&mut self.values, self.count.get())
     }
 }
 

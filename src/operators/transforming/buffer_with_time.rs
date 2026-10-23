@@ -13,6 +13,7 @@ use crate::{
     utils::{
         serialized_delivery::UpdateOutcome,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        take_leaving_room,
     },
 };
 use educe::Educe;
@@ -221,10 +222,8 @@ where
         |context, _| {
             context
                 .update(|values| {
-                    UpdateOutcome::new(true).with_next_event(std::mem::replace(
-                        values,
-                        Vec::with_capacity(values.len()),
-                    ))
+                    UpdateOutcome::new(true)
+                        .with_next_event(take_leaving_room(values, values.len()))
                 })
                 .unwrap_or(false)
         },

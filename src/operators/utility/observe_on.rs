@@ -11,7 +11,7 @@ use crate::{
     observer::{Event, Flow, Observer, Termination},
     scheduler::{Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
     thread_mode::{ThreadMode, mutable::MutableHelper},
-    utils::serialized_delivery::DeliveryStopped,
+    utils::{serialized_delivery::DeliveryStopped, take_leaving_room},
 };
 use educe::Educe;
 
@@ -138,10 +138,18 @@ impl<M: ThreadMode, T, E> InboxHandle<M, T, E> {
             .map_err(|_| DeliveryStopped)
     }
 
-    /// Takes everything queued, or `None` once the delivery has stopped.
+    /// Takes everything queued, or `None` once the delivery has stopped. The inbox is left with
+    /// room for as many values, so that those queued meanwhile do not grow a new `Vec` from
+    /// nothing.
     fn take(&self) -> Option<(Vec<T>, Option<Termination<E>>)> {
         self.0.with_mut(|inbox| {
-            (!inbox.stopped).then(|| (std::mem::take(&mut inbox.values), inbox.termination.take()))
+            (!inbox.stopped).then(|| {
+                let room = inbox.values.len();
+                (
+                    take_leaving_room(&mut inbox.values, room),
+                    inbox.termination.take(),
+                )
+            })
         })
     }
 

@@ -5,6 +5,7 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
+    utils::take_leaving_room,
 };
 use educe::Educe;
 use std::num::NonZeroUsize;
@@ -70,7 +71,7 @@ where
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let observer = BufferWithCountObserver {
             observer,
-            values: Vec::default(),
+            values: Vec::with_capacity(self.count.get()),
             count: self.count,
         };
         self.source.subscribe(observer)
@@ -91,7 +92,10 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         self.values.push(value);
         if self.values.len() >= self.count.get() {
-            self.observer.on_next(std::mem::take(&mut self.values))
+            // Every bundle but the last is full, so the next one is prepared with room for all of
+            // it: it is built with a single allocation.
+            let bundle = take_leaving_room(&mut self.values, self.count.get());
+            self.observer.on_next(bundle)
         } else {
             Flow::Continue
         }

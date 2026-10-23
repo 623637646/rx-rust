@@ -10,6 +10,7 @@ use crate::{
     utils::{
         serialized_delivery::UpdateOutcome,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        take_leaving_room,
     },
 };
 use educe::Educe;
@@ -172,8 +173,7 @@ where
 {
     fn on_next(&mut self, _: ()) -> Flow {
         self.0.update_flow(|values| {
-            UpdateOutcome::empty()
-                .with_next_event(std::mem::replace(values, Vec::with_capacity(values.len())))
+            UpdateOutcome::empty().with_next_event(take_leaving_room(values, values.len()))
         })
     }
 
