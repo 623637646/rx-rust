@@ -23,29 +23,24 @@ use educe::Educe;
 ///     operators::conditional_boolean::take_until::TakeUntil,
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+/// use std::convert::Infallible;
 ///
-/// let values = Arc::new(Mutex::new(Vec::new()));
-/// let terminations = Arc::new(Mutex::new(Vec::new()));
-///
+/// let mut values = Vec::new();
 /// let mut source = PublishSubject::<i32, Infallible, _>::local();
 /// let mut stop = PublishSubject::<(), Infallible, _>::local();
-/// let values_observer = Arc::clone(&values);
-/// let terminations_observer = Arc::clone(&terminations);
 ///
 /// let subscription = TakeUntil::new(source.clone(), stop.clone()).subscribe_with_callback(
-///     move |value| values_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer.lock().unwrap().push(termination),
+///     |value| values.push(value),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// let _ = source.on_next(1);
 /// let _ = source.on_next(2);
-/// let _ = stop.on_next(());
+/// let _ = stop.on_next(()); // Completes the result.
 /// let _ = source.on_next(3);
-/// drop(subscription);
 ///
-/// assert_eq!(&*values.lock().unwrap(), &[1, 2]);
-/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
+/// drop((subscription, source, stop));
+/// assert_eq!(values, [1, 2]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

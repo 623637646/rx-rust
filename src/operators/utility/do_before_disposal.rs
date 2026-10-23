@@ -20,25 +20,14 @@ use educe::Educe;
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
-///     operators::{
-///         creating::from_iter::FromIter,
-///         utility::do_before_disposal::DoBeforeDisposal,
-///     },
+///     operators::{creating::never::Never, utility::do_before_disposal::DoBeforeDisposal},
 /// };
-/// use std::sync::{Arc, Mutex};
 ///
-/// let disposed = Arc::new(Mutex::new(false));
-/// let disposed_observer = Arc::clone(&disposed);
-///
-/// let subscription = DoBeforeDisposal::new(
-///     FromIter::new(vec![1, 2]),
-///     move || *disposed_observer.lock().unwrap() = true,
-/// )
-/// .subscribe_with_callback(|_| {}, |_| {});
-///
+/// let mut disposed = false;
+/// let subscription = DoBeforeDisposal::new(Never, || disposed = true)
+///     .subscribe_with_callback(|_| {}, |_| {});
 /// drop(subscription);
-///
-/// assert!(*disposed.lock().unwrap());
+/// assert!(disposed);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

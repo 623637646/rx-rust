@@ -26,29 +26,24 @@ use educe::Educe;
 ///     operators::conditional_boolean::skip_until::SkipUntil,
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+/// use std::convert::Infallible;
 ///
-/// let values = Arc::new(Mutex::new(Vec::new()));
-/// let terminations = Arc::new(Mutex::new(Vec::new()));
-///
+/// let mut values = Vec::new();
 /// let mut source = PublishSubject::<i32, Infallible, _>::local();
 /// let mut gate = PublishSubject::<(), Infallible, _>::local();
-/// let values_observer = Arc::clone(&values);
-/// let terminations_observer = Arc::clone(&terminations);
 ///
 /// let subscription = SkipUntil::new(source.clone(), gate.clone()).subscribe_with_callback(
-///     move |value| values_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer.lock().unwrap().push(termination),
+///     |value| values.push(value),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
-/// let _ = source.on_next(1);
+/// let _ = source.on_next(1); // Skipped: the gate has not emitted yet.
 /// let _ = gate.on_next(());
 /// let _ = source.on_next(2);
 /// source.on_termination(Termination::Completed);
-/// drop(subscription);
 ///
-/// assert_eq!(&*values.lock().unwrap(), &[2]);
-/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
+/// drop((subscription, gate));
+/// assert_eq!(values, [2]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

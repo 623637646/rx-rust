@@ -16,28 +16,19 @@ use educe::Educe;
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
-///     observer::Termination,
-///     operators::{
-///         creating::from_iter::FromIter,
-///         utility::do_before_next::DoBeforeNext,
-///     },
+///     operators::{creating::from_iter::FromIter, utility::do_before_next::DoBeforeNext},
 /// };
-/// use std::sync::{Arc, Mutex};
+/// use std::cell::RefCell;
 ///
-/// let mut values = Vec::new();
-/// let side_effects = Arc::new(Mutex::new(Vec::new()));
-/// let side_effects_observer = Arc::clone(&side_effects);
-///
-/// DoBeforeNext::new(FromIter::new(vec![1, 2]), move |value: &i32| {
-///     side_effects_observer.lock().unwrap().push(*value * 10);
+/// let events = RefCell::new(Vec::new());
+/// DoBeforeNext::new(FromIter::new(vec![1, 2]), |value: &i32| {
+///     events.borrow_mut().push(("callback", *value))
 /// })
-/// .subscribe_with_callback(
-///     |value| values.push(value),
-///     |termination| assert_eq!(termination, Termination::Completed),
+/// .subscribe_with_callback(|value| events.borrow_mut().push(("downstream", value)), |_| {});
+/// assert_eq!(
+///     *events.borrow(),
+///     [("callback", 1), ("downstream", 1), ("callback", 2), ("downstream", 2)]
 /// );
-///
-/// assert_eq!(values, vec![1, 2]);
-/// assert_eq!(&*side_effects.lock().unwrap(), &[10, 20]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

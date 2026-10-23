@@ -18,27 +18,22 @@ use educe::Educe;
 ///     observable::ObservableExt,
 ///     observer::Termination,
 ///     operators::{
-///         creating::from_iter::FromIter,
-///         utility::do_after_termination::DoAfterTermination,
+///         creating::just::Just, utility::do_after_termination::DoAfterTermination,
 ///     },
 /// };
-/// use std::sync::{Arc, Mutex};
+/// use std::cell::RefCell;
 ///
-/// let callback_terminations = Arc::new(Mutex::new(Vec::new()));
-/// let callback_terminations_observer = Arc::clone(&callback_terminations);
-///
-/// DoAfterTermination::new(FromIter::new(vec![1, 2]), move |termination| {
-///     callback_terminations_observer
-///         .lock()
-///         .unwrap()
-///         .push(termination);
+/// let events = RefCell::new(Vec::new());
+/// DoAfterTermination::new(Just::new(1), |termination| {
+///     events.borrow_mut().push(("callback", termination))
 /// })
-/// .subscribe_with_callback(
-///     |_| {},
-///     |termination| assert_eq!(termination, Termination::Completed),
+/// .subscribe_with_callback(|_| {}, |termination| {
+///     events.borrow_mut().push(("downstream", termination))
+/// });
+/// assert_eq!(
+///     *events.borrow(),
+///     [("downstream", Termination::Completed), ("callback", Termination::Completed)]
 /// );
-///
-/// assert_eq!(&*callback_terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

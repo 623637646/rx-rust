@@ -442,17 +442,16 @@ use rx_rust::{
     observable::ObservableExt, operators::creating::from_iter::FromIter,
     subject::replay_subject::ReplaySubject,
 };
-use std::{cell::RefCell, rc::Rc};
+use std::cell::RefCell;
 
+let seen = RefCell::new(Vec::new());
 let cached = FromIter::new([1, 2, 3])
     .multicast(Some(1), |buffer_size| ReplaySubject::local(*buffer_size))
     .reset_on_complete(false)
     .ref_count();
 
-let seen = Rc::new(RefCell::new(Vec::new()));
 for _ in 0..2 {
-    let seen = seen.clone();
-    cached.clone().subscribe_with_callback(move |value| seen.borrow_mut().push(value), |_| {});
+    cached.clone().subscribe_with_callback(|value| seen.borrow_mut().push(value), |_| {});
 }
 // The second subscriber gets the kept `3`, and the source is not connected again.
 assert_eq!(*seen.borrow(), [1, 2, 3, 3]);

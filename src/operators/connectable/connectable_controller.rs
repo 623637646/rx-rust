@@ -167,47 +167,32 @@ impl<S, C> SubjectLifecycle<S, C> {
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
-///     observer::Termination,
 ///     operators::{
 ///         connectable::connectable_controller::ConnectableController,
 ///         creating::from_iter::FromIter,
 ///     },
 ///     subject::publish_subject::PublishSubject,
 /// };
+/// use std::{cell::RefCell, convert::Infallible};
 ///
-/// use std::{convert::Infallible, sync::{Arc, Mutex}};
-///
-/// let values_1 = Arc::new(Mutex::new(Vec::new()));
-/// let values_2 = Arc::new(Mutex::new(Vec::new()));
-/// let terminations = Arc::new(Mutex::new(Vec::new()));
-///
+/// let values = RefCell::new(Vec::new());
 /// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), (), |_| {
 ///     PublishSubject::<i32, Infallible, _>::local()
 /// });
 /// let observable = controller.observable();
-/// let values_1_observer = Arc::clone(&values_1);
-/// let values_2_observer = Arc::clone(&values_2);
-/// let terminations_observer = Arc::clone(&terminations);
+/// let _subscription_1 = observable
+///     .clone()
+///     .subscribe_with_callback(|value| values.borrow_mut().push(("first", value)), |_| {});
+/// let _subscription_2 = observable
+///     .subscribe_with_callback(|value| values.borrow_mut().push(("second", value)), |_| {});
+/// assert!(values.borrow().is_empty()); // Nothing is emitted until the source is connected.
 ///
-/// let subscription_1 = observable.clone().subscribe_with_callback(
-///     move |value| values_1_observer.lock().unwrap().push(value),
-///     |_| {},
+/// // Dropping the connected controller would disconnect the source.
+/// let _connected = controller.connect();
+/// assert_eq!(
+///     *values.borrow(),
+///     [("first", 1), ("second", 1), ("first", 2), ("second", 2)]
 /// );
-/// let subscription_2 = observable.subscribe_with_callback(
-///     move |value| values_2_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer.lock().unwrap().push(termination),
-/// );
-///
-/// // Nothing is emitted until the source is connected.
-/// let connected = controller.connect();
-/// // Dropping the connected controller disconnects the source.
-/// drop(connected);
-/// drop(subscription_1);
-/// drop(subscription_2);
-///
-/// assert_eq!(&*values_1.lock().unwrap(), &[1, 2]);
-/// assert_eq!(&*values_2.lock().unwrap(), &[1, 2]);
-/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug)]

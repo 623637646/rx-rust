@@ -20,32 +20,22 @@ use std::marker::PhantomData;
 /// # Examples
 /// ```rust
 /// use rx_rust::{
-///     observable::ObservableExt,
-///     observer::Termination,
+///     observable::{Observable, ObservableExt},
 ///     operators::{
-///         creating::from_iter::FromIter,
-///         others::hook_on_subscription::HookOnSubscription,
+///         creating::from_iter::FromIter, others::hook_on_subscription::HookOnSubscription,
 ///     },
 /// };
-/// use rx_rust::observable::{Observable, ObservableTypes};
-/// use std::cell::Cell;
-/// use std::rc::Rc;
 ///
+/// let mut subscribed = false;
 /// let mut values = Vec::new();
-/// let subscribed = Rc::new(Cell::new(false));
-/// let subscribed_flag = Rc::clone(&subscribed);
-///
-/// let observable = HookOnSubscription::new(FromIter::new(vec![1, 2]), move |source, observer| {
-///     subscribed_flag.set(true);
+/// HookOnSubscription::new(FromIter::new(vec![1, 2]), |source, observer| {
+///     subscribed = true;
 ///     source.subscribe(observer)
-/// });
-/// observable.subscribe_with_callback(
-///     |value| values.push(value),
-///     |termination| assert_eq!(termination, Termination::Completed),
-/// );
+/// })
+/// .subscribe_with_callback(|value| values.push(value), |_| {});
 ///
-/// assert!(subscribed.get());
-/// assert_eq!(values, vec![1, 2]);
+/// assert!(subscribed);
+/// assert_eq!(values, [1, 2]);
 /// ```
 ///
 /// # `new` or `new_boxed`

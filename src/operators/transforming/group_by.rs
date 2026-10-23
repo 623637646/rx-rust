@@ -46,53 +46,17 @@ use std::{
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
-///     observer::Termination,
-///     operators::{
-///         creating::from_iter::FromIter,
-///         transforming::group_by::GroupBy,
-///     },
+///     operators::{creating::from_iter::FromIter, transforming::group_by::GroupBy},
 /// };
-/// use std::sync::{Arc, Mutex};
 ///
-/// let groups = Arc::new(Mutex::new(Vec::<Vec<i32>>::new()));
-/// let terminations = Arc::new(Mutex::new(Vec::new()));
-/// let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
-/// let groups_observer = Arc::clone(&groups);
-/// let terminations_observer = Arc::clone(&terminations);
-/// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
+/// let mut groups = Vec::new();
+/// GroupBy::new(FromIter::new(vec![1, 2, 3, 4]), |value| value % 2)
+///     .flat_map(|group| group.to_vec())
+///     .subscribe_with_callback(|values| groups.push(values), |_| {});
 ///
-/// let subscription = GroupBy::new(FromIter::new(vec![1, 2, 3, 4]), |value| value % 2)
-///     .subscribe_with_callback(
-///         move |group| {
-///             let index = {
-///                 let mut groups = groups_observer.lock().unwrap();
-///                 groups.push(Vec::new());
-///                 groups.len() - 1
-///             };
-///             let groups_for_values = Arc::clone(&groups_observer);
-///             let sub = group.subscribe_with_callback(
-///                 move |value| {
-///                     groups_for_values.lock().unwrap()[index].push(value);
-///                 },
-///                 |_| {},
-///             );
-///             inner_subscriptions_observer.lock().unwrap().push(sub);
-///         },
-///         move |termination| terminations_observer.lock().unwrap().push(termination),
-///     );
-///
-/// drop(subscription);
-/// inner_subscriptions
-///     .lock()
-///     .unwrap()
-///     .drain(..)
-///     .for_each(drop);
-///
-/// let mut grouped = groups.lock().unwrap().clone();
-/// grouped.iter_mut().for_each(|values| values.sort());
-/// grouped.sort();
-/// assert_eq!(grouped, vec![vec![1, 3], vec![2, 4]]);
-/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
+/// // The groups end together, with the source, in no particular order.
+/// groups.sort();
+/// assert_eq!(groups, [vec![1, 3], vec![2, 4]]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

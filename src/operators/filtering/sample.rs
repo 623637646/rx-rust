@@ -26,31 +26,26 @@ use educe::Educe;
 ///     operators::filtering::sample::Sample,
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+/// use std::convert::Infallible;
 ///
-/// let values = Arc::new(Mutex::new(Vec::new()));
-/// let terminations = Arc::new(Mutex::new(Vec::new()));
-///
+/// let mut values = Vec::new();
 /// let mut source = PublishSubject::<i32, Infallible, _>::local();
 /// let mut sampler = PublishSubject::<(), Infallible, _>::local();
-/// let values_observer = Arc::clone(&values);
-/// let terminations_observer = Arc::clone(&terminations);
 ///
 /// let subscription = Sample::new(source.clone(), sampler.clone()).subscribe_with_callback(
-///     move |value| values_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer.lock().unwrap().push(termination),
+///     |value| values.push(value),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// let _ = source.on_next(1);
 /// let _ = sampler.on_next(());
 /// let _ = source.on_next(2);
 /// let _ = source.on_next(3);
-/// let _ = sampler.on_next(());
+/// let _ = sampler.on_next(()); // Only the latest value since the last sample.
 /// source.on_termination(Termination::Completed);
 ///
-/// drop(subscription);
-/// assert_eq!(&*values.lock().unwrap(), &[1, 3]);
-/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
+/// drop((subscription, sampler));
+/// assert_eq!(values, [1, 3]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

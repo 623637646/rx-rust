@@ -45,47 +45,27 @@ use std::marker::PhantomData;
 ///     operators::transforming::window::Window,
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+/// use std::convert::Infallible;
 ///
-/// let windows = Arc::new(Mutex::new(Vec::<Vec<i32>>::new()));
-/// let terminations = Arc::new(Mutex::new(Vec::new()));
-/// let inner_subscriptions = Arc::new(Mutex::new(Vec::new()));
-///
+/// let mut windows = Vec::new();
 /// let mut source = PublishSubject::<i32, Infallible, _>::local();
 /// let mut boundary = PublishSubject::<(), Infallible, _>::local();
-/// let windows_observer = Arc::clone(&windows);
-/// let terminations_observer = Arc::clone(&terminations);
-/// let inner_subscriptions_observer = Arc::clone(&inner_subscriptions);
 ///
-/// let subscription = Window::new(source.clone(), boundary.clone()).subscribe_with_callback(
-///     move |window| {
-///         let index = {
-///             let mut windows = windows_observer.lock().unwrap();
-///             windows.push(Vec::new());
-///             windows.len() - 1
-///         };
-///         let windows_for_values = Arc::clone(&windows_observer);
-///         let sub = window.subscribe_with_callback(
-///             move |value| {
-///                 windows_for_values.lock().unwrap()[index].push(value);
-///             },
-///             |_| {},
-///         );
-///         inner_subscriptions_observer.lock().unwrap().push(sub);
-///     },
-///     move |termination| terminations_observer.lock().unwrap().push(termination),
-/// );
+/// let subscription = Window::new(source.clone(), boundary.clone())
+///     .concat_map(|window| window.to_vec())
+///     .subscribe_with_callback(
+///         |values| windows.push(values),
+///         |termination| assert_eq!(termination, Termination::Completed),
+///     );
 ///
 /// let _ = source.on_next(1);
 /// let _ = source.on_next(2);
-/// let _ = boundary.on_next(());
+/// let _ = boundary.on_next(()); // Completes the first window and opens the second.
 /// let _ = source.on_next(3);
 /// source.on_termination(Termination::Completed);
-/// drop(subscription);
-/// inner_subscriptions.lock().unwrap().drain(..).for_each(drop);
 ///
-/// assert_eq!(&*windows.lock().unwrap(), &[vec![1, 2], vec![3]]);
-/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
+/// drop((subscription, boundary));
+/// assert_eq!(windows, [vec![1, 2], vec![3]]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

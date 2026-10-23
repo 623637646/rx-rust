@@ -257,31 +257,23 @@ where
 ///     },
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+/// use std::{cell::RefCell, convert::Infallible};
 ///
-/// let values = Arc::new(Mutex::new(Vec::new()));
-/// let terminations = Arc::new(Mutex::new(Vec::new()));
-///
-/// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), (), |_| {
+/// let values = RefCell::new(Vec::new());
+/// let observable = ConnectableController::new(FromIter::new(vec![1, 2]), (), |_| {
 ///     PublishSubject::<i32, Infallible, _>::local()
-/// });
-/// let observable = controller.ref_count();
+/// })
+/// .ref_count();
 ///
 /// for _ in 0..2 {
-///     let values_observer = Arc::clone(&values);
-///     let terminations_observer = Arc::clone(&terminations);
-///     observable.clone().subscribe_with_callback(
-///         move |value| values_observer.lock().unwrap().push(value),
-///         move |termination| terminations_observer.lock().unwrap().push(termination),
+///     let _subscription = observable.clone().subscribe_with_callback(
+///         |value| values.borrow_mut().push(value),
+///         |termination| assert_eq!(termination, Termination::Completed),
 ///     );
 /// }
 ///
 /// // The source completed, so the second subscriber started over with a new subject.
-/// assert_eq!(&*values.lock().unwrap(), &[1, 2, 1, 2]);
-/// assert_eq!(
-///     &*terminations.lock().unwrap(),
-///     &[Termination::Completed, Termination::Completed],
-/// );
+/// assert_eq!(*values.borrow(), [1, 2, 1, 2]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone(bound()))]

@@ -75,7 +75,7 @@ impl<C, M: ThreadMode> Task<WakeableContext<C, M>> {
     /// let (task, waker): (_, TaskWaker<Shared>) = Task::wakeable(
     ///     (inbox.clone(), taken.clone()),
     ///     |(inbox, taken), closed, _| {
-    ///         let values = inbox.with_mut(std::mem::take);
+    ///         let values = inbox.take_value();
     ///         taken.with_mut(|taken| taken.extend(values));
     ///         if closed { Next::Finished } else { Next::Pending }
     ///     },

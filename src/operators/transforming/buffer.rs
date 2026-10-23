@@ -54,30 +54,25 @@ use educe::Educe;
 ///     operators::transforming::buffer::Buffer,
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{convert::Infallible, sync::{Arc, Mutex}};
+/// use std::convert::Infallible;
 ///
-/// let values = Arc::new(Mutex::new(Vec::new()));
-/// let terminations = Arc::new(Mutex::new(Vec::new()));
-///
+/// let mut values = Vec::new();
 /// let mut source = PublishSubject::<i32, Infallible, _>::local();
 /// let mut boundary = PublishSubject::<(), Infallible, _>::local();
-/// let values_observer = Arc::clone(&values);
-/// let terminations_observer = Arc::clone(&terminations);
 ///
 /// let subscription = Buffer::new(source.clone(), boundary.clone()).subscribe_with_callback(
-///     move |value| values_observer.lock().unwrap().push(value),
-///     move |termination| terminations_observer.lock().unwrap().push(termination),
+///     |value| values.push(value),
+///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
 /// let _ = source.on_next(1);
 /// let _ = source.on_next(2);
 /// let _ = boundary.on_next(());
 /// let _ = source.on_next(3);
-/// source.on_termination(Termination::Completed);
-/// drop(subscription);
+/// source.on_termination(Termination::Completed); // Emits the pending buffer.
 ///
-/// assert_eq!(&*values.lock().unwrap(), &[vec![1, 2], vec![3]]);
-/// assert_eq!(&*terminations.lock().unwrap(), &[Termination::Completed]);
+/// drop((subscription, boundary));
+/// assert_eq!(values, [vec![1, 2], vec![3]]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]

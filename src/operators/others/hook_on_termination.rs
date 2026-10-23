@@ -19,27 +19,25 @@ use educe::Educe;
 /// ```rust
 /// use rx_rust::{
 ///     observable::ObservableExt,
-///     observer::Termination,
+///     observer::{Observer, Termination},
 ///     operators::{
-///         creating::from_iter::FromIter,
-///         others::hook_on_termination::HookOnTermination,
+///         creating::from_iter::FromIter, others::hook_on_termination::HookOnTermination,
 ///     },
 /// };
-/// use rx_rust::observer::Observer;
 ///
 /// let mut values = Vec::new();
-///
-/// let observable =
-///     HookOnTermination::new(FromIter::new(vec![1]), move |observer, termination| {
-///         // The callback decides what reaches the observer: here, the termination as it is.
+/// HookOnTermination::new(FromIter::new(vec![1]), |mut observer, termination| {
+///     // One more value before the termination; a stopped observer takes neither.
+///     if observer.on_next(2).is_continue() {
 ///         observer.on_termination(termination);
-///     });
-/// observable.subscribe_with_callback(
+///     }
+/// })
+/// .subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),
 /// );
 ///
-/// assert_eq!(values, vec![1]);
+/// assert_eq!(values, [1, 2]);
 /// ```
 ///
 /// # `new` or `new_boxed`

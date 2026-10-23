@@ -16,21 +16,16 @@ use educe::Educe;
 /// use rx_rust::{
 ///     observable::ObservableExt,
 ///     operators::{
-///         creating::from_iter::FromIter,
-///         utility::do_before_subscription::DoBeforeSubscription,
+///         creating::just::Just, utility::do_before_subscription::DoBeforeSubscription,
 ///     },
 /// };
-/// use std::sync::{Arc, Mutex};
+/// use std::cell::RefCell;
 ///
-/// let called = Arc::new(Mutex::new(false));
-/// let called_observer = Arc::clone(&called);
-///
-/// DoBeforeSubscription::new(FromIter::new(vec![1]), move || {
-///     *called_observer.lock().unwrap() = true;
-/// })
-/// .subscribe_with_callback(|_| {}, |_| {});
-///
-/// assert!(*called.lock().unwrap());
+/// // `Just` emits while it is being subscribed to, so its value comes after the callback.
+/// let events = RefCell::new(Vec::new());
+/// DoBeforeSubscription::new(Just::new(1), || events.borrow_mut().push("callback"))
+///     .subscribe_with_callback(|_| events.borrow_mut().push("value"), |_| {});
+/// assert_eq!(*events.borrow(), ["callback", "value"]);
 /// ```
 #[derive(Educe)]
 #[educe(Debug, Clone)]
