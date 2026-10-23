@@ -2,6 +2,7 @@
 
 use super::{Flow, Observer, Termination};
 use crate::thread_mode::ThreadMode;
+use educe::Educe;
 use std::marker::PhantomData;
 
 /// The downstream observer itself, unboxed, as user code gets it: the builder of
@@ -17,6 +18,8 @@ use std::marker::PhantomData;
 /// source: `source.subscribe(emitter)`. Its `PhantomData<M>` makes it `!Send + !Sync` for
 /// [`Local`](crate::thread_mode::Local), and as `Send` as the observer for
 /// [`Shared`](crate::thread_mode::Shared).
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct Emitter<M: ThreadMode, OR> {
     observer: OR,
     /// Enforces the `local` declaration; memory safety does not need it. Without it, a `Local`

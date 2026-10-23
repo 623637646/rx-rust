@@ -231,10 +231,14 @@ impl<T, E, M: ThreadMode, OR> Pipe<T, E, M, OR> {
 ///
 /// Dropping it without terminating it ends the stream without a termination. See the
 /// [module documentation](self).
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct UnicastSender<T, E, M: ThreadMode, OR> {
+    #[educe(Debug(ignore))]
     pipe: Pipe<T, E, M, OR>,
     /// The observer, from the first event that picks it up from [`State::Attached`] until the pipe
     /// ends. Holding it here is what lets an event be delivered without the lock.
+    #[educe(Debug(ignore))]
     observer: Option<OR>,
 }
 
@@ -377,7 +381,11 @@ impl<T, E, M: ThreadMode, OR: Observer<T, E>> UnicastSender<T, E, M, OR> {
 /// [module documentation](self).
 ///
 /// [`Observable::subscribe`] consumes it, so the pipe cannot be subscribed to twice.
-pub struct UnicastObservable<T, E, M: ThreadMode, OR>(Option<Pipe<T, E, M, OR>>);
+#[derive(Educe)]
+#[educe(Debug)]
+pub struct UnicastObservable<T, E, M: ThreadMode, OR>(
+    #[educe(Debug(ignore))] Option<Pipe<T, E, M, OR>>,
+);
 
 impl<T, E, M: ThreadMode, OR> Drop for UnicastObservable<T, E, M, OR> {
     fn drop(&mut self) {
@@ -415,8 +423,10 @@ where
 /// the [module documentation](self).
 ///
 /// [`Observable::subscribe`] consumes it, so the pipe cannot be subscribed to twice.
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct BoxedUnicastObservable<'or, T, E, M: ObserverMode>(
-    UnicastObservable<T, E, M, M::BoxedObserver<'or, T, E>>,
+    #[educe(Debug(ignore))] UnicastObservable<T, E, M, M::BoxedObserver<'or, T, E>>,
 );
 
 impl<'or, T, E, M: ObserverMode> ObservableTypes for BoxedUnicastObservable<'or, T, E, M> {
@@ -441,7 +451,9 @@ where
 ///
 /// It only raises the flag that closes the pipe; see the
 /// [module documentation](self#releasing-the-observer) for when the observer is released.
-pub struct Disposal<M: ThreadMode>(M::Flag);
+#[derive(Educe)]
+#[educe(Debug)]
+pub struct Disposal<M: ThreadMode>(#[educe(Debug(ignore))] M::Flag);
 
 impl<M: ThreadMode> Disposable for Disposal<M> {
     fn dispose(self) {

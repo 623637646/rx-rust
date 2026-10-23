@@ -106,9 +106,11 @@ pub trait ThreadMode: sealed::Mode + 'static {
 /// downstream) or is correct anyway (there is none). When unsure, declare [`Shared`]: it only costs
 /// a lock. To have the declaration enforced, put a `PhantomData<M>` into the observer wrapper the
 /// emitting code receives: `Local` is `!Send + !Sync`, so the wrapper is too.
+#[derive(Debug)]
 pub struct Local(PhantomData<*const ()>);
 
 /// Events can arrive from another thread than the one that subscribed.
+#[derive(Debug)]
 pub struct Shared(());
 
 impl ThreadMode for Local {

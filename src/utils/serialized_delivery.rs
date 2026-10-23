@@ -152,14 +152,16 @@ enum Step<T, E, OR, R> {
 ///
 /// Stopping is terminal: once a delivery has stopped, every later update returns this instead of
 /// running, and the update and everything it captured are dropped outside the lock.
-#[derive(Educe)]
-#[educe(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeliveryStopped;
 
 /// The marker of an [`UpdateOutcome`] that has not decided what to drop outside the lock yet.
+#[derive(Debug)]
 pub struct DropUndecided;
 
 /// The marker of an [`UpdateOutcome`] that has decided, carrying the value to drop, if any.
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct DropDecided<T>(Option<T>);
 
 /// What an update performed under the lock produced: the events to queue, a value to drop once

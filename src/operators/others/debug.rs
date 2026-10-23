@@ -141,10 +141,15 @@ where
 
 /// The disposal of a [`struct@Debug`] subscription: disposes the source, then reports
 /// [`DebugEvent::Disposed`].
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct Disposal<D: Disposable, C, F, T, E> {
     source_disposal: DisposeOnDrop<D>,
+    #[educe(Debug(ignore))]
     context: C,
+    #[educe(Debug(ignore))]
     callback: F,
+    #[educe(Debug(ignore))]
     _marker: MarkerType<(T, E)>,
 }
 

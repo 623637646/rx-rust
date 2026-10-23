@@ -19,6 +19,7 @@ pub use periodic::PeriodicContext;
 pub use stream::StreamThenContext;
 pub use wakeable::{TaskWaker, WakeableContext};
 
+use educe::Educe;
 use std::{pin::Pin, task::Context, time::Instant};
 
 /// What a scheduler runs: a plain state `TC`, a state `P` that must be pinned (usually a future,
@@ -32,8 +33,12 @@ use std::{pin::Pin, task::Context, time::Instant};
 /// A task runs either through [`drive()`](super::drive()), on an async executor, or step by step
 /// through [`split`](Self::split) and [`Stepper::step`], from a synchronous loop (a UI event loop,
 /// a game frame loop).
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct Task<TC, P = ()> {
+    #[educe(Debug(ignore))]
     context: TC,
+    #[educe(Debug(ignore))]
     pinned: P,
     handler: TaskHandler<TC, P>,
 }
@@ -143,7 +148,10 @@ impl<TC, P> Task<TC, P> {
 ///
 /// The `delay` of [`run_task`](crate::scheduler::Scheduler::run_task) is the caller's to
 /// implement: wait that long before the first `step`.
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct Stepper<TC, P> {
+    #[educe(Debug(ignore))]
     context: TC,
     handler: TaskHandler<TC, P>,
 }

@@ -283,7 +283,9 @@ where
 }
 
 /// The disposal of an [`Amb`] subscription: it disposes every source still racing, or the winner.
-pub struct Disposal<M: ThreadMode, D: Disposable>(M::Ptr<AmbState<D>>);
+#[derive(Educe)]
+#[educe(Debug)]
+pub struct Disposal<M: ThreadMode, D: Disposable>(#[educe(Debug(ignore))] M::Ptr<AmbState<D>>);
 
 impl<M, D> Disposable for Disposal<M, D>
 where
