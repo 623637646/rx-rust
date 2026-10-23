@@ -97,7 +97,7 @@ impl<T, E, OE, C> Debug<OE, C, DebugPrintCallback<C, T, E>> {
                     println!("[{}]: OnTermination({:?})", label, termination)
                 }
                 DebugEvent::Subscribed => println!("[{}]: Subscribed", label),
-                DebugEvent::Disposed => println!("[{}]: Dispose", label),
+                DebugEvent::Disposed => println!("[{}]: Disposed", label),
             },
         }
     }

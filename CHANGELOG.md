@@ -284,6 +284,8 @@ All notable changes to this project are documented here. The format follows
   bundle as a new `Vec`, which allocates nothing, and keep the room already prepared for the next
   one. `observe_on` leaves its queue, each time it takes the values out to deliver them, with as
   much room as they took, so the values queued meanwhile do not grow it from nothing.
+- `debug_to_stdout` prints a disposal as `Disposed`, the name of its `DebugEvent`, instead of
+  `Dispose`.
 
 ### Fixed
 
