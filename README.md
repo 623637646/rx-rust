@@ -400,7 +400,7 @@ Subject                                     | Late subscribers get
 `BehaviorSubject`                           | The latest value first, then everything after.
 `ReplaySubject` (bounded or unbounded)      | The buffered values, then everything after; the termination is replayed too.
 `AsyncSubject`                              | The last value, delivered on completion; nothing on error.
-`unicast_subject::{local, shared}`           | A single-consumer pipe: a `UnicastSender` and a `UnicastObservable` that can be subscribed once. Values sent before the subscription are buffered.
+`unicast_subject::{local, shared}`          | A single-consumer pipe: a `UnicastSender` and a `UnicastObservable` that can be subscribed once. Values sent before the subscription are buffered.
 
 The multicast subjects are `Clone`; clone one to keep a sending end after subscribing the other:
 
@@ -495,8 +495,10 @@ Debugging                   | `debug`, `debug_to_stdout`, `hook_on_subscription`
 
 ## Contributing
 
-See [docs/testing.md](https://github.com/623637646/rx-rust/blob/master/docs/testing.md) for the test case names every operator is expected to
-cover, [docs/decisions/](https://github.com/623637646/rx-rust/tree/master/docs/decisions/) for design decisions, and [AGENTS.md](https://github.com/623637646/rx-rust/blob/master/AGENTS.md) for the
+See [docs/testing.md](https://github.com/623637646/rx-rust/blob/master/docs/testing.md) for the
+test case names every operator is expected to cover,
+[docs/decisions/](https://github.com/623637646/rx-rust/tree/master/docs/decisions) for design
+decisions, and [AGENTS.md](https://github.com/623637646/rx-rust/blob/master/AGENTS.md) for the
 build and test commands. Requires Rust 1.89 or later.
 
 ## License

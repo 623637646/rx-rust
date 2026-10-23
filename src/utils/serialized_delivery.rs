@@ -22,14 +22,11 @@
 //! use rx_rust::{
 //!     observer::{callback_observer::CallbackObserver, EventBatch, Flow, Termination},
 //!     thread_mode::Local,
-//!     thread_mode::mutable::MutableHelper,
 //!     utils::serialized_delivery::{SerializedDelivery, UpdateOutcome},
 //! };
-//! use std::cell::RefCell;
 //!
-//! let seen = RefCell::new(Vec::new());
-//! let observer =
-//!     CallbackObserver::new(|value| seen.with_mut(|seen| seen.push(value)), |_| {});
+//! let mut seen = Vec::new();
+//! let observer = CallbackObserver::new(|value| seen.push(value), |_| {});
 //!
 //! // The resources here are a counter the host updates under the delivery's lock.
 //! let delivery = SerializedDelivery::<Local, i32, (), _, i32>::idle(observer, 0);
@@ -40,7 +37,8 @@
 //! });
 //! assert_eq!(count, Ok(1));
 //! assert_eq!(delivery.send(EventBatch::Termination(Termination::Completed)), Flow::Stop);
-//! seen.with_ref(|seen| assert_eq!(seen, &[1, 10]));
+//! drop(delivery);
+//! assert_eq!(seen, [1, 10]);
 //! ```
 
 use crate::{

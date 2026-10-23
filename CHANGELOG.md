@@ -68,7 +68,7 @@ All notable changes to this project are documented here. The format follows
   operators it is given.
 - `ObservableExt::into_shared` (`operators::others::into_shared::IntoShared`) declares an
   observable `Shared`, so that a `Local` source such as `Just` erases into the same type as a
-  `Shared` one, and a chain of `Local` sources can be erased into a `Send` box.
+  `Shared` one.
 - `Debug` for the public types that lacked it: `thread_mode::{Local, Shared}`,
   `observer::emitter::Emitter`, `scheduler::{Task, Stepper}`, the `UnicastSender`,
   `UnicastObservable`, `BoxedUnicastObservable` and `Disposal` of `subject::unicast_subject`, the
