@@ -4,7 +4,7 @@ use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
     observable::{Observable, ObservableTypes},
     observer::Observer,
-    operators::creating::{defer::Defer, just::Just},
+    operators::creating::just::Just,
     thread_mode::Local,
 };
 use educe::Educe;
@@ -60,6 +60,6 @@ where
     F: FnOnce() -> T,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        Defer::new(|| Just::new(self.0())).subscribe(observer)
+        Just::new((self.0)()).subscribe(observer)
     }
 }

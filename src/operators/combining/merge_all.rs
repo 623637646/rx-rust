@@ -179,27 +179,26 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: OE1) -> Flow {
-        let result = self
+        let Ok(key) = self
             .0
-            .update(|model| UpdateOutcome::new(model.insert_placeholder()));
-        let key = match result {
-            Ok(key) => key,
-            Err(_) => return Flow::Stop,
+            .update(|model| UpdateOutcome::new(model.insert_placeholder()))
+        else {
+            return Flow::Stop;
         };
         let observer = MergeAllInnerObserver {
             context: self.0.clone(),
             key,
         };
-        let sub = value.subscribe(observer);
+        let subscription = value.subscribe(observer);
 
         self.0.update_flow(|model| {
             if let Some(slot) = model.subscriptions.get_mut(&key) {
-                *slot = Some(sub);
+                *slot = Some(subscription);
                 UpdateOutcome::empty().without_drop_outside()
             } else {
                 // The inner observable completed while it was being subscribed, and removed its
                 // own entry.
-                UpdateOutcome::empty().with_drop_outside(sub)
+                UpdateOutcome::empty().with_drop_outside(subscription)
             }
         })
     }

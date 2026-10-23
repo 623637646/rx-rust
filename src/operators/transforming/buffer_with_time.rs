@@ -148,11 +148,11 @@ where
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         subscribe_with_context(observer, Vec::new(), |context| {
-            let sub = self
+            let subscription = self
                 .source
                 .subscribe(BufferWithTimeObserver(context.clone()));
             let timer = setup_emit_timer(context, self.scheduler, self.time_span);
-            sub.preceded_by(timer)
+            subscription.preceded_by(timer)
         })
         .map_inner_into()
     }

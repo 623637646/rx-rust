@@ -95,12 +95,26 @@ where
     T1: Clone,
     T2: Clone,
     OE1: Observable<
-            ObserverImpl1<JoinedModeOf<OE1, OE2>, T1, T2, E, OR, ChainDisposalOf<OE2, OE1>>,
+            CombineLatestObserver1<
+                JoinedModeOf<OE1, OE2>,
+                T1,
+                T2,
+                E,
+                OR,
+                ChainDisposalOf<OE2, OE1>,
+            >,
             Item = T1,
             Error = E,
         >,
     OE2: Observable<
-            ObserverImpl2<JoinedModeOf<OE1, OE2>, T1, T2, E, OR, ChainDisposalOf<OE2, OE1>>,
+            CombineLatestObserver2<
+                JoinedModeOf<OE1, OE2>,
+                T1,
+                T2,
+                E,
+                OR,
+                ChainDisposalOf<OE2, OE1>,
+            >,
             Item = T2,
             Error = E,
         >,
@@ -112,9 +126,11 @@ where
             one_is_completed: false,
         };
         subscribe_with_context(observer, model, |context| {
-            let sub_1 = self.source_1.subscribe(ObserverImpl1(context.clone()));
-            let sub_2 = self.source_2.subscribe(ObserverImpl2(context));
-            sub_1.preceded_by_wrapped(sub_2)
+            let subscription_1 = self
+                .source_1
+                .subscribe(CombineLatestObserver1(context.clone()));
+            let subscription_2 = self.source_2.subscribe(CombineLatestObserver2(context));
+            subscription_1.preceded_by_wrapped(subscription_2)
         })
         .map_inner_into()
     }
@@ -127,32 +143,32 @@ struct Model<T1, T2> {
 }
 
 macro_rules! impl_observer {
-    ($name:ident, $t_self:ident, $field_self:ident, $field_other:ident, $combine:expr) => {
+    ($name:ident, $input_t:ident, $this_field:ident, $other_field:ident, $combine:expr) => {
         #[doc(hidden)]
         pub struct $name<M: ThreadMode, T1, T2, E, OR, D: Disposable>(
             SubscriptionContext<M, (T1, T2), E, OR, Model<T1, T2>, D>,
         );
 
-        impl<M: ThreadMode, T1, T2, E, OR, D> Observer<$t_self, E> for $name<M, T1, T2, E, OR, D>
+        impl<M: ThreadMode, T1, T2, E, OR, D> Observer<$input_t, E> for $name<M, T1, T2, E, OR, D>
         where
             T1: Clone,
             T2: Clone,
             OR: Observer<(T1, T2), E>,
             D: Disposable,
         {
-            fn on_next(&mut self, val: $t_self) -> Flow {
+            fn on_next(&mut self, value: $input_t) -> Flow {
                 self.0.update_flow(|model| {
                     // The latest value this one replaces is handed back, so that the `Drop` of
                     // the user's value runs outside the lock. Building the pair still clones
                     // under it: whether there is a pair to build at all is only known here.
-                    if let Some(other) = &model.$field_other {
-                        let pair = $combine(val.clone(), other.clone());
-                        let replaced = model.$field_self.replace(val);
+                    if let Some(other) = &model.$other_field {
+                        let pair = $combine(value.clone(), other.clone());
+                        let replaced = model.$this_field.replace(value);
                         UpdateOutcome::empty()
                             .with_drop_outside(replaced)
                             .with_next_event(pair)
                     } else {
-                        let replaced = model.$field_self.replace(val);
+                        let replaced = model.$this_field.replace(value);
                         UpdateOutcome::empty()
                             .with_drop_outside(replaced)
                             .without_events()
@@ -163,7 +179,7 @@ macro_rules! impl_observer {
             fn on_termination(self, termination: Termination<E>) {
                 let _ = self.0.update(|model| match termination {
                     completion @ Termination::Completed => {
-                        if model.one_is_completed || model.$field_self.is_none() {
+                        if model.one_is_completed || model.$this_field.is_none() {
                             UpdateOutcome::empty().with_termination_event(completion)
                         } else {
                             model.one_is_completed = true;
@@ -179,5 +195,17 @@ macro_rules! impl_observer {
     };
 }
 
-impl_observer!(ObserverImpl1, T1, latest_1, latest_2, |v, o| (v, o));
-impl_observer!(ObserverImpl2, T2, latest_2, latest_1, |v, o| (o, v));
+impl_observer!(
+    CombineLatestObserver1,
+    T1,
+    latest_1,
+    latest_2,
+    |this, other| (this, other)
+);
+impl_observer!(
+    CombineLatestObserver2,
+    T2,
+    latest_2,
+    latest_1,
+    |this, other| (other, this)
+);

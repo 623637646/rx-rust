@@ -165,9 +165,9 @@ where
                 context: context.clone(),
                 clock: self.scheduler.clock(),
             };
-            let sub = self.source.subscribe(buffer_observer);
+            let subscription = self.source.subscribe(buffer_observer);
             let timer = setup_emit_timer(context, self.scheduler, self.time_span);
-            sub.preceded_by(timer)
+            subscription.preceded_by(timer)
         })
         .map_inner_into()
     }

@@ -376,7 +376,7 @@ impl VirtualTime {
         let target = target.unwrap_or_else(|message| panic!("{message}"));
         let _guard = AdvancingGuard(&self.state);
         while let Some((id, mut job, now)) = self.state.with_mut(|state| state.next_due(target)) {
-            let waker = Waker::from(Arc::new(TaskWaker {
+            let waker = Waker::from(Arc::new(QueueWaker {
                 id,
                 state: Arc::downgrade(&self.state),
             }));
@@ -430,12 +430,12 @@ impl Drop for AdvancingGuard<'_> {
 
 /// Wakes a task by queueing it again. Called from anywhere, a running task included: the lock is
 /// never held while a task runs.
-struct TaskWaker {
+struct QueueWaker {
     id: Id,
     state: Weak<Mutex<State>>,
 }
 
-impl Wake for TaskWaker {
+impl Wake for QueueWaker {
     fn wake(self: Arc<Self>) {
         self.wake_by_ref();
     }

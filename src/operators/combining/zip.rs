@@ -158,7 +158,7 @@ macro_rules! impl_zip_observer {
                     error @ Termination::Error(_) => {
                         self.0.send_termination(error);
                     }
-                };
+                }
             }
         }
     };

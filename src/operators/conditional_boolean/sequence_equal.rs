@@ -220,6 +220,6 @@ where
             error @ Termination::Error(_) => {
                 self.context.send_termination(error);
             }
-        };
+        }
     }
 }

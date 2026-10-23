@@ -87,15 +87,15 @@ where
     OE2: Observable<OR, Item = T, Error = E>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let sub_2 = ReplaceableDisposal::default();
+        let subscription_2 = ReplaceableDisposal::default();
         let observer = ConcatObserver {
             observer,
             source_2: self.source_2,
-            sub_2: sub_2.clone(),
+            subscription_2: subscription_2.clone(),
         };
         self.source_1
             .subscribe(observer)
-            .preceded_by(sub_2)
+            .preceded_by(subscription_2)
             .map_inner_into()
     }
 }
@@ -104,7 +104,7 @@ where
 pub struct ConcatObserver<M: ThreadMode, OR, OE2, D: Disposable> {
     observer: OR,
     source_2: OE2,
-    sub_2: ReplaceableDisposal<M, D>,
+    subscription_2: ReplaceableDisposal<M, D>,
 }
 
 impl<M, T, E, OR, OE2> Observer<T, E> for ConcatObserver<M, OR, OE2, OE2::Disposal>
@@ -123,7 +123,7 @@ where
                 // `replace_with` does not run the builder once the subscription was disposed,
                 // so the second source is never subscribed after downstream unsubscribed, and a
                 // subscription built while downstream unsubscribes is disposed right away.
-                self.sub_2
+                self.subscription_2
                     .replace_with(|| self.source_2.subscribe(self.observer));
             }
             error @ Termination::Error(_) => {

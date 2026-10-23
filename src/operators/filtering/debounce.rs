@@ -1,17 +1,17 @@
 //! The [`Debounce`] operator, behind
 //! [`ObservableExt::debounce`](crate::observable::ObservableExt::debounce).
 
-use crate::delegate_disposal;
-use crate::disposable::{
-    Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-};
-use crate::thread_mode::ThreadMode;
-use crate::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
-use crate::utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context};
 use crate::{
+    delegate_disposal,
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{ChainSchedulerDisposalOf, JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
+    thread_mode::ThreadMode,
+    utils::{
+        serialized_delivery::{DeliveryStopped, UpdateOutcome},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    },
 };
 use educe::Educe;
 use std::time::{Duration, Instant};

@@ -131,7 +131,7 @@ where
         let model = Model {
             slot: ReservationSlot::Idle,
             is_source_completed: false,
-            sub_ids: IdGenerator::default(),
+            inner_ids: IdGenerator::default(),
         };
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(SwitchObserver(context))
@@ -147,7 +147,7 @@ struct Model<D: Disposable> {
     /// is [`IdGenerator::latest`]. An inner observer whose id is no longer the latest was
     /// superseded, and its events are dropped: the subscription it replaced is disposed outside
     /// the lock, so it can still deliver one after being replaced.
-    sub_ids: IdGenerator,
+    inner_ids: IdGenerator,
 }
 
 #[doc(hidden)]
@@ -167,20 +167,18 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: OE1) -> Flow {
-        let result = self.0.update(|model| {
-            UpdateOutcome::new(model.sub_ids.next_id())
+        let Ok(id) = self.0.update(|model| {
+            UpdateOutcome::new(model.inner_ids.next_id())
                 .with_drop_outside(model.slot.reserve_replacing())
-        });
-        let sub_id = match result {
-            Ok(sub_id) => sub_id,
-            Err(_) => return Flow::Stop,
+        }) else {
+            return Flow::Stop;
         };
-        let observer = SwitchInnerObserver(self.0.clone(), sub_id);
-        let sub = value.subscribe(observer);
+        let subscription = value.subscribe(SwitchInnerObserver(self.0.clone(), id));
         // `fill` gives the subscription back when the slot was released while it was being built,
         // which means the operator already terminated.
-        self.0
-            .update_flow(|model| UpdateOutcome::empty().with_drop_outside(model.slot.fill(sub)))
+        self.0.update_flow(|model| {
+            UpdateOutcome::empty().with_drop_outside(model.slot.fill(subscription))
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
@@ -216,7 +214,7 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         self.0.update_flow(|model| {
-            if model.sub_ids.latest() != Some(self.1) {
+            if model.inner_ids.latest() != Some(self.1) {
                 // A value of a superseded inner observable is dropped outside the lock: dropping
                 // it can run arbitrary code.
                 return UpdateOutcome::empty()
@@ -231,7 +229,7 @@ where
 
     fn on_termination(self, termination: Termination<E>) {
         let _ = self.0.update(|model| {
-            if model.sub_ids.latest() != Some(self.1) {
+            if model.inner_ids.latest() != Some(self.1) {
                 // An ignored error can re-enter this context when dropped.
                 return UpdateOutcome::empty()
                     .without_events()

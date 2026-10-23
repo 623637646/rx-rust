@@ -12,8 +12,7 @@ use crate::{
     utils::MarkerType,
 };
 use educe::Educe;
-use std::marker::PhantomData;
-use std::{cmp::Ordering, num::NonZeroUsize};
+use std::{marker::PhantomData, num::NonZeroUsize};
 
 /// Subdivides the items of an observable into observable windows of a specified number of items.
 /// See <https://reactivex.io/documentation/operators/window.html>
@@ -165,24 +164,18 @@ where
     fn on_next(&mut self, value: T) -> Flow {
         // The consumer of one window stops that window, not the operator: only what the observer
         // of the windows themselves answers can stop the source.
-        match (self.sent_count + 1).cmp(&self.count.get()) {
-            Ordering::Less => {
-                let _ = self.sender.on_next(value);
-                self.sent_count += 1;
-                Flow::Continue
-            }
-            Ordering::Equal => {
-                let (new_sender, new_window) = unicast_subject::new_boxed();
-                let mut old_sender = std::mem::replace(&mut self.sender, new_sender);
-                let _ = old_sender.on_next(value);
-                old_sender.on_termination(Termination::Completed);
-                self.sent_count = 0;
-                self.observer.on_next(new_window)
-            }
-            Ordering::Greater => {
-                unreachable!("the count is reset as soon as a window is full")
-            }
+        self.sent_count += 1;
+        if self.sent_count < self.count.get() {
+            let _ = self.sender.on_next(value);
+            return Flow::Continue;
         }
+        // This value fills the window: it is completed, and the next one opened.
+        let (new_sender, new_window) = unicast_subject::new_boxed();
+        let mut old_sender = std::mem::replace(&mut self.sender, new_sender);
+        let _ = old_sender.on_next(value);
+        old_sender.on_termination(Termination::Completed);
+        self.sent_count = 0;
+        self.observer.on_next(new_window)
     }
 
     fn on_termination(self, termination: Termination<E>) {

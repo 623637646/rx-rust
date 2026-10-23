@@ -1,19 +1,15 @@
 use crate::tests_utils::scheduler_ext::SchedulerExt;
 use educe::Educe;
-use futures::{FutureExt, future::BoxFuture};
-use rx_rust::disposable::callback_disposal::CallbackDisposal;
-use rx_rust::scheduler::{FutureThenContext, Scheduler};
-use rx_rust::thread_mode::mutable::MutableExt;
+use futures::{FutureExt, Stream, future::BoxFuture, stream::StreamExt};
 use rx_rust::{
-    disposable::Disposable,
+    disposable::{Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observer::{Flow, Observer, Termination},
-    thread_mode::mutable::MutableHelper,
+    scheduler::{FutureThenContext, Scheduler},
+    thread_mode::mutable::{MutableExt, MutableHelper},
 };
-use std::sync::{Arc, Mutex};
-use {
-    futures::{Stream, stream::StreamExt},
-    rx_rust::disposable::dispose_on_drop::DisposeOnDrop,
-    std::convert::Infallible,
+use std::{
+    convert::Infallible,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Educe)]
@@ -169,7 +165,6 @@ impl<T> Checker<T, Infallible> {
                 state: state.clone(),
             },
             DisposeOnDrop::new(CallbackDisposal::new(move || {
-                use rx_rust::disposable::Disposable;
                 handle.dispose();
                 state.with_mut(|lock| match &*lock {
                     State::Active => *lock = State::Dropped,
@@ -228,7 +223,6 @@ impl<T, E> Checker<T, E> {
                 state: state.clone(),
             },
             DisposeOnDrop::new(CallbackDisposal::new(move || {
-                use rx_rust::disposable::Disposable;
                 handle.dispose();
                 state.with_mut(|lock| match &*lock {
                     State::Active => *lock = State::Dropped,

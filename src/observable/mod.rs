@@ -773,12 +773,6 @@ pub trait ObservableExt: ObservableTypes + Sized {
         SendCloneableBoxedObservableFor::new(self)
     }
 
-    /// Declares the observable [`Shared`](crate::thread_mode::Shared), so that a `Local` source
-    /// can be erased into the same type as a `Shared` one.
-    fn into_shared(self) -> IntoShared<Self> {
-        IntoShared::new(self)
-    }
-
     /// Converts the observable into a future of its first item: `Some(item)`, or `None` when the
     /// source completes without one. The source is stopped as soon as the item is in.
     ///
@@ -790,6 +784,12 @@ pub trait ObservableExt: ObservableTypes + Sized {
         Self: ObservableTypes<Error = std::convert::Infallible>,
     {
         ObservableFuture::new(self)
+    }
+
+    /// Declares the observable [`Shared`](crate::thread_mode::Shared), so that a `Local` source
+    /// can be erased into the same type as a `Shared` one.
+    fn into_shared(self) -> IntoShared<Self> {
+        IntoShared::new(self)
     }
 
     /// Converts the observable into an async stream.
