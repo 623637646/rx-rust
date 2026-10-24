@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **Breaking:** `ObservableExt::catch`, `combine_latest`, `concat_all`, `concat_map`, `flat_map`,
+  `merge_all`, `switch`, `switch_map` and `zip` drop a type parameter that appeared in their bounds
+  only — the item type of the other or inner observable, or the error type of the one `catch`
+  switches to — and that nothing could infer it from. A call that names its type parameters with a
+  turbofish names one fewer; every other call is unchanged.
 - `distinct_until_changed` and `distinct_until_changed_with_key_selector` compare their keys with
   `PartialEq` instead of requiring `Eq`, so a key such as an `f64` works. A key that is not equal
   to itself, such as `f64::NAN`, never counts as a repeat.

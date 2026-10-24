@@ -272,9 +272,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Recovers from errors by switching to another observable yielded by the callback.
-    fn catch<E1, OE1, F>(self, callback: F) -> Catch<Self::Error, Self, F>
+    fn catch<OE1, F>(self, callback: F) -> Catch<Self::Error, Self, F>
     where
-        OE1: ObservableTypes<Item = Self::Item, Error = E1>,
+        OE1: ObservableTypes<Item = Self::Item>,
         F: FnOnce(Self::Error) -> OE1,
     {
         Catch::new(self, callback)
@@ -287,25 +287,25 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Combines the latest values from both observables whenever either produces a new item.
-    fn combine_latest<T1, OE2>(self, source_2: OE2) -> CombineLatest<Self, OE2>
+    fn combine_latest<OE2>(self, source_2: OE2) -> CombineLatest<Self, OE2>
     where
-        OE2: ObservableTypes<Item = T1, Error = Self::Error>,
+        OE2: ObservableTypes<Error = Self::Error>,
     {
         CombineLatest::new(self, source_2)
     }
 
     /// Flattens an observable-of-observables by concatenating each inner observable sequentially.
-    fn concat_all<T1>(self) -> ConcatAll<Self, Self::Item>
+    fn concat_all(self) -> ConcatAll<Self, Self::Item>
     where
-        Self::Item: ObservableTypes<Item = T1, Error = Self::Error>,
+        Self::Item: ObservableTypes<Error = Self::Error>,
     {
         ConcatAll::new(self)
     }
 
     /// Maps each item to an observable and concatenates the resulting inner sequences.
-    fn concat_map<T1, OE1, F>(self, callback: F) -> ConcatMap<Self::Item, Self, OE1, F>
+    fn concat_map<OE1, F>(self, callback: F) -> ConcatMap<Self::Item, Self, OE1, F>
     where
-        OE1: ObservableTypes<Item = T1, Error = Self::Error>,
+        OE1: ObservableTypes<Error = Self::Error>,
         F: FnMut(Self::Item) -> OE1,
     {
         ConcatMap::new(self, callback)
@@ -492,9 +492,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Maps each item to an observable and merges the resulting inner sequences concurrently.
-    fn flat_map<T1, OE1, F>(self, callback: F) -> FlatMap<Self::Item, Self, OE1, F>
+    fn flat_map<OE1, F>(self, callback: F) -> FlatMap<Self::Item, Self, OE1, F>
     where
-        OE1: ObservableTypes<Item = T1, Error = Self::Error>,
+        OE1: ObservableTypes<Error = Self::Error>,
         F: FnMut(Self::Item) -> OE1,
     {
         FlatMap::new(self, callback)
@@ -917,9 +917,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Merges an observable-of-observables by interleaving items from inner streams.
-    fn merge_all<T1>(self) -> MergeAll<Self, Self::Item>
+    fn merge_all(self) -> MergeAll<Self, Self::Item>
     where
-        Self::Item: ObservableTypes<Item = T1, Error = Self::Error>,
+        Self::Item: ObservableTypes<Error = Self::Error>,
     {
         MergeAll::new(self)
     }
@@ -1199,17 +1199,17 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Switches to the most recent inner observable emitted by the source.
-    fn switch<T1>(self) -> Switch<Self, Self::Item>
+    fn switch(self) -> Switch<Self, Self::Item>
     where
-        Self::Item: ObservableTypes<Item = T1, Error = Self::Error>,
+        Self::Item: ObservableTypes<Error = Self::Error>,
     {
         Switch::new(self)
     }
 
     /// Maps each item to an observable and switches to the latest inner sequence.
-    fn switch_map<T1, OE1, F>(self, callback: F) -> SwitchMap<Self::Item, Self, OE1, F>
+    fn switch_map<OE1, F>(self, callback: F) -> SwitchMap<Self::Item, Self, OE1, F>
     where
-        OE1: ObservableTypes<Item = T1, Error = Self::Error>,
+        OE1: ObservableTypes<Error = Self::Error>,
         F: FnMut(Self::Item) -> OE1,
     {
         SwitchMap::new(self, callback)
@@ -1307,9 +1307,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     }
 
     /// Pairs items from both observables by index and emits tuples of corresponding values.
-    fn zip<T1, OE2>(self, source_2: OE2) -> Zip<Self, OE2>
+    fn zip<OE2>(self, source_2: OE2) -> Zip<Self, OE2>
     where
-        OE2: ObservableTypes<Item = T1, Error = Self::Error>,
+        OE2: ObservableTypes<Error = Self::Error>,
     {
         Zip::new(self, source_2)
     }
