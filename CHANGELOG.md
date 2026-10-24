@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `SubscriptionContext::update_with_flow`, for an operator observer whose answer depends on its
+  model as well as on downstream: it returns what the update decided together with the flow of
+  the events it queued, under one lock, as `SerializedDelivery::update_with_flow` does.
+
 ### Changed
 
 - **Breaking:** `ObservableExt::catch`, `combine_latest`, `concat_all`, `concat_map`, `flat_map`,
@@ -33,6 +39,12 @@ All notable changes to this project are documented here. The format follows
 - **Breaking:** `skip_until` answers its notifier `Flow::Stop` on its first item, as ReactiveX
   unsubscribes from it there: what the notifier sends afterwards, an error included, no longer
   reaches the result. A notifier that failed after opening the gate used to fail the result.
+
+### Fixed
+
+- `switch` answers `Flow::Stop` to a value of an inner observable it has already switched away
+  from. The value was dropped, but the inner was told to go on: one that had not honored its
+  disposal yet kept sending into nothing.
 
 ## [2.0.0] - 2026-10-21
 

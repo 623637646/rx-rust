@@ -12,7 +12,7 @@ use crate::{
         MarkerType,
         id_generator::{Id, IdGenerator},
         reservation_slot::ReservationSlot,
-        serialized_delivery::UpdateOutcome,
+        serialized_delivery::{DeliveryStopped, UpdateOutcome},
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
     },
 };
@@ -145,8 +145,8 @@ struct Model<D: Disposable> {
     is_source_completed: bool,
     /// The current inner subscription is always the one subscribed last, so the id it was handed
     /// is [`IdGenerator::latest`]. An inner observer whose id is no longer the latest was
-    /// superseded, and its events are dropped: the subscription it replaced is disposed outside
-    /// the lock, so it can still deliver one after being replaced.
+    /// superseded: its subscription is disposed outside the lock, so it can still deliver an event
+    /// after being replaced, which is dropped, and a value is answered [`Flow::Stop`].
     inner_ids: IdGenerator,
 }
 
@@ -213,18 +213,25 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        self.0.update_flow(|model| {
+        let outcome = self.0.update_with_flow(|model| {
             if model.inner_ids.latest() != Some(self.1) {
                 // A value of a superseded inner observable is dropped outside the lock: dropping
                 // it can run arbitrary code.
-                return UpdateOutcome::empty()
+                return UpdateOutcome::new(true)
                     .with_drop_outside(value)
                     .without_events();
             }
-            UpdateOutcome::empty()
+            UpdateOutcome::new(false)
                 .without_drop_outside()
                 .with_next_event(value)
-        })
+        });
+        match outcome {
+            Ok((false, flow)) => flow,
+            // Superseded, so nothing it sends is wanted anymore, as if downstream had stopped: the
+            // disposal on its way does the same, but a source that is not done with this value
+            // yet stops here already.
+            Ok((true, _)) | Err(DeliveryStopped) => Flow::Stop,
+        }
     }
 
     fn on_termination(self, termination: Termination<E>) {

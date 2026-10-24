@@ -255,13 +255,24 @@ where
         &self,
         callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, (), DO, EVENTS_DECIDED>,
     ) -> Flow {
-        match self
-            .delivery
-            .update_with_flow(|resources| callback(&mut resources.model))
-        {
+        match self.update_with_flow(callback) {
             Ok(((), flow)) => flow,
             Err(DeliveryStopped) => Flow::Stop,
         }
+    }
+
+    /// [`Self::update`], also reporting the flow: what delivering the events the update produced
+    /// answered, and [`Flow::Continue`] when it produced none.
+    ///
+    /// This is for an `on_next` whose answer depends on the model as well as on downstream, which
+    /// [`Self::update_flow`] cannot express: the result says what the model decided, under the
+    /// same lock that queued the events.
+    pub fn update_with_flow<R, DO, const EVENTS_DECIDED: bool>(
+        &self,
+        callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
+    ) -> Result<(R, Flow), DeliveryStopped> {
+        self.delivery
+            .update_with_flow(|resources| callback(&mut resources.model))
     }
 
     /// Sends `value` downstream. Returns the flow of the delivery, as [`Self::send`] does.

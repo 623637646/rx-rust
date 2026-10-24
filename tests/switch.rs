@@ -1710,7 +1710,8 @@ fn test_race_condition_next_after_unsub() {
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
-    assert!(sender_1.as_mut().unwrap().on_next(-1).is_continue());
+    // The superseded inner ignored its disposal: its value is dropped, and it is told to stop.
+    assert!(sender_1.as_mut().unwrap().on_next(-1).is_stop());
     assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Active);
 
