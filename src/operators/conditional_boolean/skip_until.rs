@@ -18,6 +18,10 @@ use educe::Educe;
 /// observable that completes before emitting completes the result.
 /// See <https://reactivex.io/documentation/operators/skipuntil.html>
 ///
+/// The first item of the second observable opens the gate for good, so that observable is answered
+/// [`Flow::Stop`] right then, as ReactiveX unsubscribes from it: whatever it sends afterwards, an
+/// error included, no longer reaches the result.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
@@ -99,10 +103,7 @@ where
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model { started: false };
         subscribe_with_context(observer, model, |context| {
-            let subscription_1 = self.start.subscribe(StartObserver {
-                context: context.clone(),
-                started: false,
-            });
+            let subscription_1 = self.start.subscribe(StartObserver(context.clone()));
             let subscription_2 = self.source.subscribe(SkipUntilObserver(context));
             subscription_1.preceded_by_wrapped(subscription_2)
         })
@@ -145,10 +146,9 @@ where
 }
 
 #[doc(hidden)]
-pub struct StartObserver<M: ThreadMode, T, E, OR, D: Disposable> {
-    context: SubscriptionContext<M, T, E, OR, Model, D>,
-    started: bool,
-}
+pub struct StartObserver<M: ThreadMode, T, E, OR, D: Disposable>(
+    SubscriptionContext<M, T, E, OR, Model, D>,
+);
 
 impl<M: ThreadMode, T, E, OR, D> Observer<(), E> for StartObserver<M, T, E, OR, D>
 where
@@ -156,27 +156,19 @@ where
     D: Disposable,
 {
     fn on_next(&mut self, _: ()) -> Flow {
-        if !self.started {
-            self.started = true;
-            self.context.update_flow(|model| {
-                model.started = true;
-                UpdateOutcome::empty()
-            })
-        } else {
-            Flow::Continue
-        }
+        // The gate stays open from here on, so nothing the notifier sends later matters: it is told
+        // to stop, whether or not the context has stopped already.
+        let _ = self.0.update(|model| {
+            model.started = true;
+            UpdateOutcome::empty()
+        });
+        Flow::Stop
     }
 
     fn on_termination(self, termination: Termination<E>) {
-        match termination {
-            completion @ Termination::Completed => {
-                if !self.started {
-                    self.context.send_termination(completion);
-                }
-            }
-            error @ Termination::Error(_) => {
-                self.context.send_termination(error);
-            }
-        }
+        // Only a notifier that has not emitted gets here, since the first item stops it: completing
+        // before the gate opens completes the result, which would skip everything, and an error
+        // fails it.
+        self.0.send_termination(termination);
     }
 }

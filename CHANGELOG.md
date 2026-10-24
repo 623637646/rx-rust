@@ -11,6 +11,9 @@ All notable changes to this project are documented here. The format follows
 - `distinct_until_changed` and `distinct_until_changed_with_key_selector` compare their keys with
   `PartialEq` instead of requiring `Eq`, so a key such as an `f64` works. A key that is not equal
   to itself, such as `f64::NAN`, never counts as a repeat.
+- **Breaking:** `skip_until` answers its notifier `Flow::Stop` on its first item, as ReactiveX
+  unsubscribes from it there: what the notifier sends afterwards, an error included, no longer
+  reaches the result. A notifier that failed after opening the gate used to fail the result.
 
 ## [2.0.0] - 2026-10-21
 
