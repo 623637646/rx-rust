@@ -42,9 +42,9 @@ pub struct Filter<OE, F> {
 impl<OE, F> Filter<OE, F> {
     /// Creates a [`Filter`] over `source`;
     /// [`ObservableExt::filter`](crate::observable::ObservableExt::filter) is the fluent form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new<T>(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
         F: FnMut(&T) -> bool,
     {
         Self { source, callback }

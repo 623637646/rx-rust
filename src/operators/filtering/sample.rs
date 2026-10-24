@@ -57,9 +57,9 @@ pub struct Sample<OE, OE1> {
 impl<OE, OE1> Sample<OE, OE1> {
     /// Creates a [`Sample`] over `source`;
     /// [`ObservableExt::sample`](crate::observable::ObservableExt::sample) is the fluent form.
-    pub fn new<T, E>(source: OE, sampler: OE1) -> Self
+    pub fn new<E>(source: OE, sampler: OE1) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Error = E>,
         OE1: ObservableTypes<Item = (), Error = E>,
     {
         Self { source, sampler }

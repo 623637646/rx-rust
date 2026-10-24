@@ -13,6 +13,15 @@ All notable changes to this project are documented here. The format follows
   only — the item type of the other or inner observable, or the error type of the one `catch`
   switches to — and that nothing could infer it from. A call that names its type parameters with a
   turbofish names one fewer; every other call is unchanged.
+- **Breaking:** the constructors of the operators drop the same kind of type parameter: the item
+  or error type that appeared in a single `Item = …` or `Error = …` bound and in nothing else.
+  `new` — and `new_from_iter` or `new_with_key_selector` where there is one — changes for `All`,
+  `Average`, `Buffer`, `Catch`, `CombineLatest`, `ConcatAll`, `ConcatMap`, `Contains`, `Count`,
+  `DefaultIfEmpty`, `Distinct`, `DistinctUntilChanged`, `DoAfterNext`, `DoAfterTermination`,
+  `DoBeforeNext`, `DoBeforeTermination`, `Filter`, `FlatMap`, `GroupBy`, `Map`, `MapErr`,
+  `MergeAll`, `Reduce`, `Sample`, `Scan`, `SkipUntil`, `SkipWhile`, `StartWith`, `Switch`,
+  `SwitchMap`, `TakeUntil`, `TakeWhile`, `Window` and `Zip`. The type parameters that unify two
+  sources, or give a closure its signature, stay. Again only a turbofish call changes.
 - **Breaking:** the future and stream adapters move out of `operators::others`, since they are
   not operators but what an observable becomes, next to the boxed observables:
   `ObservableFuture` and `ObservableTryFuture` to `observable::future`, and `ObservableStream`,

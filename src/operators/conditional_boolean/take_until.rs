@@ -53,9 +53,9 @@ impl<OE, OE1> TakeUntil<OE, OE1> {
     /// Creates a [`TakeUntil`] over `source`;
     /// [`ObservableExt::take_until`](crate::observable::ObservableExt::take_until) is the fluent
     /// form.
-    pub fn new<T, E>(source: OE, stop: OE1) -> Self
+    pub fn new<E>(source: OE, stop: OE1) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Error = E>,
         OE1: ObservableTypes<Item = (), Error = E>,
     {
         Self { source, stop }

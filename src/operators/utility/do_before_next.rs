@@ -41,9 +41,9 @@ impl<OE, F> DoBeforeNext<OE, F> {
     /// Creates a [`DoBeforeNext`] over `source`;
     /// [`ObservableExt::do_before_next`](crate::observable::ObservableExt::do_before_next) is the
     /// fluent form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new<T>(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
         F: FnMut(&T),
     {
         Self { source, callback }

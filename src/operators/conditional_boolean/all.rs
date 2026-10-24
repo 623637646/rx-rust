@@ -50,9 +50,9 @@ pub struct All<T, OE, F> {
 impl<T, OE, F> All<T, OE, F> {
     /// Creates an [`All`] over `source`;
     /// [`ObservableExt::all`](crate::observable::ObservableExt::all) is the fluent form.
-    pub fn new<E>(source: OE, callback: F) -> Self
+    pub fn new(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
         F: FnMut(T) -> bool,
     {
         Self {

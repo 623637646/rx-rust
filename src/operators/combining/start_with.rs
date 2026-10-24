@@ -46,9 +46,9 @@ impl<OE, I> StartWith<OE, I> {
     /// Creates a [`StartWith`] over `source`;
     /// [`ObservableExt::start_with`](crate::observable::ObservableExt::start_with) is the fluent
     /// form.
-    pub fn new<T, E>(source: OE, values: I) -> Self
+    pub fn new<T>(source: OE, values: I) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
         I: IntoIterator<Item = T>,
     {
         Self { source, values }

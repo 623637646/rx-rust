@@ -44,9 +44,9 @@ pub struct Map<T0, OE, F> {
 impl<T0, OE, F> Map<T0, OE, F> {
     /// Creates a [`Map`] over `source`;
     /// [`ObservableExt::map`](crate::observable::ObservableExt::map) is the fluent form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new<T>(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T0, Error = E>,
+        OE: ObservableTypes<Item = T0>,
         F: FnMut(T0) -> T,
     {
         Self {

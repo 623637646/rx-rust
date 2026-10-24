@@ -61,10 +61,10 @@ impl<OE1, OE2> CombineLatest<OE1, OE2> {
     /// Creates a [`CombineLatest`] over `source_1` and `source_2`;
     /// [`ObservableExt::combine_latest`](crate::observable::ObservableExt::combine_latest) is the
     /// fluent form.
-    pub fn new<T1, T2, E>(source_1: OE1, source_2: OE2) -> Self
+    pub fn new<E>(source_1: OE1, source_2: OE2) -> Self
     where
-        OE1: ObservableTypes<Item = T1, Error = E>,
-        OE2: ObservableTypes<Item = T2, Error = E>,
+        OE1: ObservableTypes<Error = E>,
+        OE2: ObservableTypes<Error = E>,
     {
         Self { source_1, source_2 }
     }

@@ -47,9 +47,9 @@ pub struct DistinctUntilChanged<OE, F> {
 impl<OE, F> DistinctUntilChanged<OE, F> {
     /// Creates a [`DistinctUntilChanged`] over `source` that compares the keys `key_selector`
     /// computes.
-    pub fn new_with_key_selector<T, E, K>(source: OE, key_selector: F) -> Self
+    pub fn new_with_key_selector<T, K>(source: OE, key_selector: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
         F: FnMut(&T) -> K,
     {
         Self {
@@ -63,10 +63,10 @@ impl<T, OE> DistinctUntilChanged<OE, fn(&T) -> T> {
     /// Creates a [`DistinctUntilChanged`] over `source`;
     /// [`ObservableExt::distinct_until_changed`](crate::observable::ObservableExt::distinct_until_changed)
     /// is the fluent form.
-    pub fn new<E>(source: OE) -> Self
+    pub fn new(source: OE) -> Self
     where
         T: Clone,
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
     {
         Self {
             source,

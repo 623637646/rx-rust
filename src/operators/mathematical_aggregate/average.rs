@@ -46,9 +46,9 @@ pub struct Average<T, OE> {
 impl<T, OE> Average<T, OE> {
     /// Creates an [`Average`] over `source`;
     /// [`ObservableExt::average`](crate::observable::ObservableExt::average) is the fluent form.
-    pub fn new<E>(source: OE) -> Self
+    pub fn new(source: OE) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
     {
         Self {
             source,

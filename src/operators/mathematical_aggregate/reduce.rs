@@ -47,9 +47,9 @@ pub struct Reduce<T, T1, OE, F> {
 impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
     /// Creates a [`Reduce`] over `source`;
     /// [`ObservableExt::reduce`](crate::observable::ObservableExt::reduce) is the fluent form.
-    pub fn new<E>(source: OE, initial_value: T, callback: F) -> Self
+    pub fn new(source: OE, initial_value: T, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T1, Error = E>,
+        OE: ObservableTypes<Item = T1>,
         F: FnMut(T, T1) -> T,
     {
         Self {

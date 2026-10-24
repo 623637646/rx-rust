@@ -58,10 +58,10 @@ impl<OE, OE1> MergeAll<OE, OE1> {
     /// Creates a [`MergeAll`] over `source`;
     /// [`ObservableExt::merge_all`](crate::observable::ObservableExt::merge_all) is the fluent
     /// form.
-    pub fn new<T, E>(source: OE) -> Self
+    pub fn new<E>(source: OE) -> Self
     where
         OE: ObservableTypes<Item = OE1, Error = E>,
-        OE1: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Error = E>,
     {
         Self {
             source,
@@ -72,10 +72,10 @@ impl<OE, OE1> MergeAll<OE, OE1> {
 
 impl<E, OE1, I> MergeAll<WithErrorType<E, FromIter<I>>, OE1> {
     /// Creates a [`MergeAll`] over the observables of `into_iterator`.
-    pub fn new_from_iter<T>(into_iterator: I) -> Self
+    pub fn new_from_iter(into_iterator: I) -> Self
     where
         I: IntoIterator<Item = OE1>,
-        OE1: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Error = E>,
     {
         Self {
             source: WithErrorType::new(FromIter::new(into_iterator)),

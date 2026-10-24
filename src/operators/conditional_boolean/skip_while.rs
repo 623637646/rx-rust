@@ -43,9 +43,9 @@ impl<OE, F> SkipWhile<OE, F> {
     /// Creates a [`SkipWhile`] over `source`;
     /// [`ObservableExt::skip_while`](crate::observable::ObservableExt::skip_while) is the fluent
     /// form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new<T>(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
         F: FnMut(&T) -> bool,
     {
         Self { source, callback }

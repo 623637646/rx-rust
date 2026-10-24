@@ -44,9 +44,9 @@ pub struct Count<T, OE> {
 impl<T, OE> Count<T, OE> {
     /// Creates a [`Count`] over `source`;
     /// [`ObservableExt::count`](crate::observable::ObservableExt::count) is the fluent form.
-    pub fn new<E>(source: OE) -> Self
+    pub fn new(source: OE) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
     {
         Self {
             source,

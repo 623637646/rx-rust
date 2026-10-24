@@ -41,9 +41,9 @@ pub struct MapErr<E, OE, F> {
 impl<E, OE, F> MapErr<E, OE, F> {
     /// Creates a [`MapErr`] over `source`;
     /// [`ObservableExt::map_err`](crate::observable::ObservableExt::map_err) is the fluent form.
-    pub fn new<T, E1>(source: OE, callback: F) -> Self
+    pub fn new<E1>(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Error = E>,
         F: FnOnce(E) -> E1,
     {
         Self {

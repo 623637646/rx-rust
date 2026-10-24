@@ -84,9 +84,9 @@ pub struct Buffer<OE, OE1> {
 impl<OE, OE1> Buffer<OE, OE1> {
     /// Creates a [`Buffer`] over `source`;
     /// [`ObservableExt::buffer`](crate::observable::ObservableExt::buffer) is the fluent form.
-    pub fn new<T, E>(source: OE, boundary: OE1) -> Self
+    pub fn new<E>(source: OE, boundary: OE1) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Error = E>,
         OE1: ObservableTypes<Item = (), Error = E>,
     {
         Self { source, boundary }

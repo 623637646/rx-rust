@@ -46,9 +46,9 @@ impl<OE, F> DoBeforeTermination<OE, F> {
     /// Creates a [`DoBeforeTermination`] over `source`;
     /// [`ObservableExt::do_before_termination`](crate::observable::ObservableExt::do_before_termination)
     /// is the fluent form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new<E>(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Error = E>,
         F: FnOnce(&Termination<E>),
     {
         Self { source, callback }

@@ -50,10 +50,10 @@ pub struct Catch<E0, OE, F> {
 impl<E0, OE, F> Catch<E0, OE, F> {
     /// Creates a [`Catch`] over `source`;
     /// [`ObservableExt::catch`](crate::observable::ObservableExt::catch) is the fluent form.
-    pub fn new<T, E, OE1>(source: OE, callback: F) -> Self
+    pub fn new<T, OE1>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T, Error = E0>,
-        OE1: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Item = T>,
         F: FnOnce(E0) -> OE1,
     {
         Self {

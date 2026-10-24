@@ -72,9 +72,9 @@ pub struct GroupBy<'a, OE, F, K> {
 impl<OE, F, K> GroupBy<'_, OE, F, K> {
     /// Creates a [`GroupBy`] over `source`;
     /// [`ObservableExt::group_by`](crate::observable::ObservableExt::group_by) is the fluent form.
-    pub fn new<T, E>(source: OE, key_selector: F) -> Self
+    pub fn new<T>(source: OE, key_selector: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
         F: FnMut(&T) -> K,
     {
         Self {

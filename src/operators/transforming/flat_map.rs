@@ -52,10 +52,10 @@ pub struct FlatMap<T0, OE, OE1, F> {
 impl<T0, OE, OE1, F> FlatMap<T0, OE, OE1, F> {
     /// Creates a [`FlatMap`] over `source`;
     /// [`ObservableExt::flat_map`](crate::observable::ObservableExt::flat_map) is the fluent form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new<E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T0, Error = E>,
-        OE1: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Error = E>,
         F: FnMut(T0) -> OE1,
     {
         Self {

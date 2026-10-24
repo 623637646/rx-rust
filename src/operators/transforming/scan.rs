@@ -46,9 +46,9 @@ pub struct Scan<T, T1, OE, F> {
 impl<T, T1, OE, F> Scan<T, T1, OE, F> {
     /// Creates a [`Scan`] over `source`;
     /// [`ObservableExt::scan`](crate::observable::ObservableExt::scan) is the fluent form.
-    pub fn new<E>(source: OE, initial_value: T, callback: F) -> Self
+    pub fn new(source: OE, initial_value: T, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T1, Error = E>,
+        OE: ObservableTypes<Item = T1>,
         F: FnMut(T, T1) -> T,
     {
         Self {

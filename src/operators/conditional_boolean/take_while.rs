@@ -46,9 +46,9 @@ impl<OE, F> TakeWhile<OE, F> {
     /// Creates a [`TakeWhile`] over `source`;
     /// [`ObservableExt::take_while`](crate::observable::ObservableExt::take_while) is the fluent
     /// form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new<T>(source: OE, callback: F) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
         F: FnMut(&T) -> bool,
     {
         Self { source, callback }

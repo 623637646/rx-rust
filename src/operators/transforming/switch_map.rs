@@ -54,10 +54,10 @@ impl<T0, OE, OE1, F> SwitchMap<T0, OE, OE1, F> {
     /// Creates a [`SwitchMap`] over `source`;
     /// [`ObservableExt::switch_map`](crate::observable::ObservableExt::switch_map) is the fluent
     /// form.
-    pub fn new<T, E>(source: OE, callback: F) -> Self
+    pub fn new<E>(source: OE, callback: F) -> Self
     where
         OE: ObservableTypes<Item = T0, Error = E>,
-        OE1: ObservableTypes<Item = T, Error = E>,
+        OE1: ObservableTypes<Error = E>,
         F: FnMut(T0) -> OE1,
     {
         Self {

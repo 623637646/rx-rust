@@ -43,9 +43,9 @@ impl<T, OE> DefaultIfEmpty<T, OE> {
     /// Creates a [`DefaultIfEmpty`] over `source`;
     /// [`ObservableExt::default_if_empty`](crate::observable::ObservableExt::default_if_empty) is
     /// the fluent form.
-    pub fn new<E>(source: OE, default_value: T) -> Self
+    pub fn new(source: OE, default_value: T) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Item = T>,
     {
         Self {
             source,

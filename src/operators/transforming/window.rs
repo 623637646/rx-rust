@@ -81,9 +81,9 @@ pub struct Window<'a, OE, OE1> {
 impl<OE, OE1> Window<'_, OE, OE1> {
     /// Creates a [`Window`] over `source`;
     /// [`ObservableExt::window`](crate::observable::ObservableExt::window) is the fluent form.
-    pub fn new<T, E>(source: OE, boundary: OE1) -> Self
+    pub fn new<E>(source: OE, boundary: OE1) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Error = E>,
         OE1: ObservableTypes<Item = (), Error = E>,
     {
         Self {

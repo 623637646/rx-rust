@@ -60,9 +60,9 @@ impl<OE, OE1> SkipUntil<OE, OE1> {
     /// Creates a [`SkipUntil`] over `source`;
     /// [`ObservableExt::skip_until`](crate::observable::ObservableExt::skip_until) is the fluent
     /// form.
-    pub fn new<T, E>(source: OE, start: OE1) -> Self
+    pub fn new<E>(source: OE, start: OE1) -> Self
     where
-        OE: ObservableTypes<Item = T, Error = E>,
+        OE: ObservableTypes<Error = E>,
         OE1: ObservableTypes<Item = (), Error = E>,
     {
         Self { source, start }
