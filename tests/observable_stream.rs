@@ -14,9 +14,8 @@ use rx_rust::operators::creating::empty::Empty;
 use rx_rust::scheduler::virtual_time::VirtualTime;
 use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
-    observable::ObservableExt,
+    observable::{ObservableExt, stream::ObservableStream},
     observer::{Observer, Termination},
-    operators::others::observable_stream::ObservableStream,
 };
 use std::convert::Infallible;
 use std::sync::Arc;

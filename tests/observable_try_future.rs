@@ -15,9 +15,8 @@ use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::{
-    observable::ObservableExt,
+    observable::{ObservableExt, future::ObservableTryFuture},
     observer::{Observer, Termination},
-    operators::others::observable_try_future::ObservableTryFuture,
 };
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

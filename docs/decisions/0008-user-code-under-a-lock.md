@@ -79,7 +79,7 @@ same lock again runs under it:
 - **Reading the clock before the lock in `buffer_with_time_or_count`**, and keeping the deadline
   from moving earlier with a `max` against a concurrent tick: a clock read per value instead of per
   full bundle. Written and reverted.
-- **Cloning the waker before the lock in `observable_try_future`**: an executor's waker cannot reach
+- **Cloning the waker before the lock in `ObservableTryFuture`**: an executor's waker cannot reach
   the operator's private lock. Written and reverted.
 - **Calling the subject factory outside the lock.** The factory needs `&mut C`, so the context
   would have to leave the controller for the call, behind a "creating" state that the other

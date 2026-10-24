@@ -310,8 +310,8 @@ implementation of your own:
 ```rust
 use futures::{FutureExt, StreamExt};
 use rx_rust::{
-    observable::ObservableExt, observer::Observer,
-    operators::others::observable_try_stream::Latest,
+    observable::{ObservableExt, stream::Latest},
+    observer::Observer,
     subject::publish_subject::PublishSubject,
 };
 use std::convert::Infallible;
@@ -478,8 +478,8 @@ Debugging                   | `debug`, `debug_to_stdout`, `hook_on_subscription`
 
 ## Project layout
 
-- `src/observable` – The `Observable` trait, `ObservableExt` (every operator as a method), and the
-  boxed observables.
+- `src/observable` – The `Observable` trait, `ObservableExt` (every operator as a method), the
+  boxed observables, and what an observable becomes as a `Future` or a `Stream`.
 - `src/observer` – The `Observer` trait, `Flow`, `Termination`, and the callback observer.
 - `src/disposable` – `Disposable` and the `DisposeOnDrop` that disposes on drop.
 - `src/operators` – One operator per file, grouped by category to mirror ReactiveX terminology.

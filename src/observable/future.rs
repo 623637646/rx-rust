@@ -1,5 +1,7 @@
-//! The [`ObservableTryFuture`] adapter, behind
-//! [`ObservableExt::into_try_future`](crate::observable::ObservableExt::into_try_future).
+//! What an observable becomes as a `Future` of its first item: [`ObservableTryFuture`], behind
+//! [`ObservableExt::into_try_future`](crate::observable::ObservableExt::into_try_future), and
+//! [`ObservableFuture`] for a source that cannot fail, behind
+//! [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future).
 
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -9,7 +11,10 @@ use crate::{
     utils::lazy_subscription::LazySubscription,
 };
 use educe::Educe;
-use std::task::{Poll, Waker};
+use std::{
+    convert::Infallible,
+    task::{Poll, Waker},
+};
 
 struct ObservableTryFutureContext<T, E> {
     result: Option<Result<Option<T>, E>>,
@@ -23,7 +28,7 @@ struct ObservableTryFutureContext<T, E> {
 /// fails first. That makes its output the `Maybe` of ReactiveX; an operator that always emits,
 /// such as `collect` or `reduce`, in front of it gives a `Single`, and `last` picks the last item
 /// instead of the first. A source that cannot fail goes through
-/// [`ObservableFuture`](crate::operators::others::observable_future::ObservableFuture) instead.
+/// [`ObservableFuture`] instead.
 ///
 /// Like any future, it does nothing until it is polled: that first poll is what subscribes to the
 /// source. The subscription is dropped as soon as the future resolves, and dropping the future
@@ -165,5 +170,74 @@ impl<T, E> Observer<T, E> for ObservableTryFutureObserver<T, E> {
             Termination::Completed => Ok(None),
             Termination::Error(error) => Err(error),
         });
+    }
+}
+
+/// A `Future` of the first item of an observable that cannot fail.
+///
+/// It resolves with `Some(item)` on the first item, stopping the source right there, and with
+/// `None` when the source completes without one. This is
+/// [`ObservableTryFuture`] without the error it can never carry; see there for how it subscribes
+/// and when it releases the source.
+///
+/// # Examples
+/// ```rust
+/// # #[cfg(not(feature = "tokio-scheduler"))]
+/// # fn main() {}
+/// # #[cfg(feature = "tokio-scheduler")]
+/// #[tokio::main]
+/// async fn main() {
+///     use rx_rust::{
+///         observable::ObservableExt,
+///         operators::creating::{empty::Empty, from_iter::FromIter},
+///     };
+///
+///     let first = FromIter::new([10, 20, 30]).into_future().await;
+///     assert_eq!(first, Some(10));
+///
+///     let none = Empty.with_item_type::<i32>().into_future().await;
+///     assert_eq!(none, None);
+/// }
+/// ```
+#[derive(Educe)]
+#[educe(Debug)]
+pub struct ObservableFuture<OE>
+where
+    OE: ObservableTypes<Error = Infallible>,
+{
+    #[educe(Debug(ignore))]
+    future: ObservableTryFuture<OE>,
+}
+
+impl<OE> ObservableFuture<OE>
+where
+    OE: ObservableTypes<Error = Infallible>,
+{
+    /// Creates an [`ObservableFuture`] over `source`;
+    /// [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future) is the fluent
+    /// form.
+    pub fn new(source: OE) -> Self {
+        Self {
+            future: ObservableTryFuture::new(source),
+        }
+    }
+}
+
+impl<OE> Unpin for ObservableFuture<OE> where OE: ObservableTypes<Error = Infallible> {}
+
+impl<T, OE> Future for ObservableFuture<OE>
+where
+    OE: Observable<ObservableTryFutureObserver<T, Infallible>, Item = T, Error = Infallible>,
+{
+    type Output = Option<T>;
+
+    fn poll(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Self::Output> {
+        std::pin::Pin::new(&mut self.future).poll(cx).map(|result| {
+            let Ok(value) = result;
+            value
+        })
     }
 }

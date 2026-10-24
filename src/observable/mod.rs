@@ -7,7 +7,9 @@
 //! calls.
 //!
 //! [`BoxedObservable`] and [`CloneableBoxedObservable`] erase an observable's type;
-//! [`EitherObservable`] picks one of two types without boxing.
+//! [`EitherObservable`] picks one of two types without boxing. [`future`] and `stream` (with the
+//! `futures` feature) hold what an observable becomes as a `Future` or a `Stream`, through
+//! [`into_future`](ObservableExt::into_future), `into_stream` and their siblings.
 //!
 //! # Examples
 //! ```rust
@@ -29,12 +31,12 @@
 
 pub mod boxed_observable;
 pub mod either_observable;
+pub mod future;
+#[cfg(feature = "futures")]
+pub mod stream;
 
 #[cfg(feature = "futures")]
-use crate::operators::others::{
-    observable_stream::ObservableStream,
-    observable_try_stream::{ObservableTryStream, StreamBuffer},
-};
+use crate::observable::stream::{ObservableStream, ObservableTryStream, StreamBuffer};
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{
@@ -44,6 +46,7 @@ use crate::{
             SendCloneableBoxedObservable, SendCloneableBoxedObservableFor,
         },
         either_observable::EitherObservable,
+        future::{ObservableFuture, ObservableTryFuture},
     },
     observer::{
         Flow, Observer, Termination,
@@ -83,8 +86,6 @@ use crate::{
             hook_on_subscription::HookOnSubscription,
             hook_on_termination::HookOnTermination,
             into_shared::IntoShared,
-            observable_future::ObservableFuture,
-            observable_try_future::ObservableTryFuture,
             with_error_type::WithErrorType,
             with_item_type::WithItemType,
         },
@@ -811,9 +812,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Converts the observable into an async stream that keeps the items arriving between two
     /// polls in `buffer`, which decides what a source faster than the consumer costs.
     ///
-    /// [`Latest`](crate::operators::others::observable_try_stream::Latest) keeps only the newest
-    /// item, [`Bounded`](crate::operators::others::observable_try_stream::Bounded) a fixed number
-    /// of them and [`Unbounded`](crate::operators::others::observable_try_stream::Unbounded) —
+    /// [`Latest`](crate::observable::stream::Latest) keeps only the newest
+    /// item, [`Bounded`](crate::observable::stream::Bounded) a fixed number
+    /// of them and [`Unbounded`](crate::observable::stream::Unbounded) —
     /// what [`into_stream`](Self::into_stream) uses — everything; a [`StreamBuffer`] of your own
     /// can fold them instead. Whatever the buffer, the source is never slowed down: a `Stream`
     /// only pulls from the buffer, not from the source.
@@ -822,8 +823,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// ```rust
     /// use futures::{FutureExt, StreamExt};
     /// use rx_rust::{
-    ///     observable::ObservableExt, observer::Observer,
-    ///     operators::others::observable_try_stream::Latest,
+    ///     observable::{ObservableExt, stream::Latest},
+    ///     observer::Observer,
     ///     subject::publish_subject::PublishSubject,
     /// };
     /// use std::convert::Infallible;

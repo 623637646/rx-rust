@@ -13,9 +13,8 @@ use rx_rust::operators::creating::from_iter::FromIter;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::subject::publish_subject::PublishSubject;
 use rx_rust::{
-    observable::ObservableExt,
+    observable::{ObservableExt, future::ObservableFuture},
     observer::{Observer, Termination},
-    operators::others::observable_future::ObservableFuture,
 };
 use std::convert::Infallible;
 use tests_utils::test_struct::TestStruct;

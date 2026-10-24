@@ -13,6 +13,11 @@ All notable changes to this project are documented here. The format follows
   only — the item type of the other or inner observable, or the error type of the one `catch`
   switches to — and that nothing could infer it from. A call that names its type parameters with a
   turbofish names one fewer; every other call is unchanged.
+- **Breaking:** the future and stream adapters move out of `operators::others`, since they are
+  not operators but what an observable becomes, next to the boxed observables:
+  `ObservableFuture` and `ObservableTryFuture` to `observable::future`, and `ObservableStream`,
+  `ObservableTryStream` and the buffers `StreamBuffer`, `Unbounded`, `Latest`, `Bounded` and
+  `Overflow` to `observable::stream`. The `into_future`, `into_stream`, … methods are unchanged.
 - `distinct_until_changed` and `distinct_until_changed_with_key_selector` compare their keys with
   `PartialEq` instead of requiring `Eq`, so a key such as an `f64` works. A key that is not equal
   to itself, such as `f64::NAN`, never counts as a repeat.

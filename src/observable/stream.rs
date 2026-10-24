@@ -1,6 +1,8 @@
-//! The [`ObservableTryStream`] adapter, behind
-//! [`ObservableExt::into_try_stream`](crate::observable::ObservableExt::into_try_stream),
-//! [`ObservableExt::into_try_stream_with_buffer`](crate::observable::ObservableExt::into_try_stream_with_buffer).
+//! What an observable becomes as a `futures::Stream` of its items: [`ObservableTryStream`], behind
+//! [`ObservableExt::into_try_stream`](crate::observable::ObservableExt::into_try_stream), and
+//! [`ObservableStream`] for a source that cannot fail, behind
+//! [`ObservableExt::into_stream`](crate::observable::ObservableExt::into_stream); and the
+//! [`StreamBuffer`] that decides what either keeps between two polls.
 
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
@@ -13,6 +15,7 @@ use educe::Educe;
 use futures::Stream;
 use std::{
     collections::VecDeque,
+    convert::Infallible,
     num::NonZeroUsize,
     task::{Poll, Waker},
 };
@@ -31,7 +34,7 @@ struct ObservableTryStreamContext<E, B> {
 /// Each item becomes `Ok(item)`. An error from the source becomes the last item, `Err(error)`,
 /// after which the stream ends; completion ends the stream without an item. A source that cannot
 /// fail goes through
-/// [`ObservableStream`](crate::operators::others::observable_stream::ObservableStream) instead.
+/// [`ObservableStream`] instead.
 ///
 /// Like any stream, it does nothing until it is polled: that first poll is what subscribes to the
 /// source. Items are buffered until they are polled, so the stream never stops the source itself;
@@ -209,6 +212,86 @@ where
     }
 }
 
+/// Converts an observable that cannot fail into a `futures::Stream` that can be used with
+/// `async/await`.
+///
+/// Each item is yielded as is and completion ends the stream. This is [`ObservableTryStream`]
+/// without the error it can never carry; see there for how it subscribes and buffers.
+///
+/// # Examples
+/// ```rust
+/// use futures::StreamExt;
+/// use rx_rust::{
+///     observable::stream::ObservableStream, operators::creating::from_iter::FromIter,
+/// };
+///
+/// futures::executor::block_on(async {
+///     let source = FromIter::new(vec![1, 2, 3]);
+///     let mut stream = ObservableStream::new(source);
+///     let values: Vec<_> = (&mut stream).collect().await;
+///     assert_eq!(values, vec![1, 2, 3]);
+/// });
+/// ```
+#[derive(Educe)]
+#[educe(Debug)]
+pub struct ObservableStream<T, OE, B = Unbounded<T>>
+where
+    OE: ObservableTypes<Item = T, Error = Infallible>,
+{
+    stream: ObservableTryStream<T, Infallible, OE, B>,
+}
+
+impl<T, OE> ObservableStream<T, OE>
+where
+    OE: ObservableTypes<Item = T, Error = Infallible>,
+{
+    /// Buffers every item until it is polled; see [`Unbounded`].
+    pub fn new(source: OE) -> Self {
+        Self::with_buffer(source, Unbounded::new())
+    }
+}
+
+impl<T, OE, B> ObservableStream<T, OE, B>
+where
+    OE: ObservableTypes<Item = T, Error = Infallible>,
+    B: StreamBuffer<T>,
+{
+    /// Keeps the items that arrive between two polls in `buffer`; see
+    /// [`ObservableTryStream::with_buffer`].
+    pub fn with_buffer(source: OE, buffer: B) -> Self {
+        Self {
+            stream: ObservableTryStream::with_buffer(source, buffer),
+        }
+    }
+}
+
+impl<T, OE, B> Unpin for ObservableStream<T, OE, B> where
+    OE: ObservableTypes<Item = T, Error = Infallible>
+{
+}
+
+impl<T, OE, B> Stream for ObservableStream<T, OE, B>
+where
+    OE: Observable<ObservableTryStreamObserver<Infallible, B>, Item = T, Error = Infallible>,
+    B: StreamBuffer<T>,
+{
+    type Item = B::Item;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        std::pin::Pin::new(&mut self.stream)
+            .poll_next(cx)
+            .map(|item| {
+                item.map(|result| {
+                    let Ok(value) = result;
+                    value
+                })
+            })
+    }
+}
+
 /// Decides what
 /// [`into_stream_with_buffer`](crate::observable::ObservableExt::into_stream_with_buffer) keeps
 /// when the source pushes faster than the stream is polled.
@@ -233,8 +316,8 @@ where
 /// ```rust
 /// use futures::{FutureExt, StreamExt};
 /// use rx_rust::{
-///     observable::ObservableExt, observer::Observer,
-///     operators::others::observable_try_stream::StreamBuffer,
+///     observable::{ObservableExt, stream::StreamBuffer},
+///     observer::Observer,
 ///     subject::publish_subject::PublishSubject,
 /// };
 /// use std::convert::Infallible;
