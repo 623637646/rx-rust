@@ -6,13 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Added
-
-- `SubscriptionContext::update_with_flow`, for an operator observer whose answer depends on its
-  model as well as on downstream: it returns what the update decided together with the flow of
-  the events it queued, under one lock, as `SerializedDelivery::update_with_flow` does.
-
 ### Changed
+
+- `SubscriptionContext::update_flow` takes an update whose result is `IntoFlow`: `()`, as before,
+  when downstream alone decides the answer, or a `Flow` when the model decides too, under the
+  same lock that queued the events. `Flow::Stop` from either side is the answer.
+- **Breaking:** `IntoFlow` moves from `observer::callback_observer` to `observer`, next to `Flow`,
+  since `update_flow` takes it as well as `CallbackObserver`.
 
 - **Breaking:** `ObservableExt::catch`, `combine_latest`, `concat_all`, `concat_map`, `flat_map`,
   `merge_all`, `switch`, `switch_map` and `zip` drop a type parameter that appeared in their bounds
