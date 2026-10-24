@@ -97,7 +97,7 @@
 
 use crate::{
     disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
-    observer::{EventBatch, Flow, Observer, Termination},
+    observer::{EventBatch, Flow, Observer, Termination, callback_observer::IntoFlow},
     thread_mode::ThreadMode,
     utils::{
         serialized_delivery::{DeliveryStop, DeliveryStopped, SerializedDelivery, UpdateOutcome},
@@ -249,30 +249,24 @@ where
 
     /// [`Self::update`] for an operator's `on_next`, reporting the flow instead of a result.
     ///
-    /// The flow is what delivering the events the update produced answered, and [`Flow::Stop`]
-    /// when the context has stopped, so an operator observer can return it directly.
-    pub fn update_flow<DO, const EVENTS_DECIDED: bool>(
-        &self,
-        callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, (), DO, EVENTS_DECIDED>,
-    ) -> Flow {
-        match self.update_with_flow(callback) {
-            Ok(((), flow)) => flow,
-            Err(DeliveryStopped) => Flow::Stop,
-        }
-    }
-
-    /// [`Self::update`], also reporting the flow: what delivering the events the update produced
-    /// answered, and [`Flow::Continue`] when it produced none.
-    ///
-    /// This is for an `on_next` whose answer depends on the model as well as on downstream, which
-    /// [`Self::update_flow`] cannot express: the result says what the model decided, under the
-    /// same lock that queued the events.
-    pub fn update_with_flow<R, DO, const EVENTS_DECIDED: bool>(
+    /// The flow is [`Flow::Stop`] when the result of the update says so, when delivering the events
+    /// the update produced answered it, or when the context has stopped, so an operator observer
+    /// can return it directly. The result is `()` when only downstream decides, or a [`Flow`] when
+    /// the model decides too: under the same lock that queued the events.
+    pub fn update_flow<R: IntoFlow, DO, const EVENTS_DECIDED: bool>(
         &self,
         callback: impl FnOnce(&mut MD) -> UpdateOutcome<T, E, R, DO, EVENTS_DECIDED>,
-    ) -> Result<(R, Flow), DeliveryStopped> {
-        self.delivery
+    ) -> Flow {
+        match self
+            .delivery
             .update_with_flow(|resources| callback(&mut resources.model))
+        {
+            Ok((result, flow)) => match result.into_flow() {
+                Flow::Continue => flow,
+                Flow::Stop => Flow::Stop,
+            },
+            Err(DeliveryStopped) => Flow::Stop,
+        }
     }
 
     /// Sends `value` downstream. Returns the flow of the delivery, as [`Self::send`] does.

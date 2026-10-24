@@ -12,7 +12,7 @@ use crate::{
         MarkerType,
         id_generator::{Id, IdGenerator},
         reservation_slot::ReservationSlot,
-        serialized_delivery::{DeliveryStopped, UpdateOutcome},
+        serialized_delivery::UpdateOutcome,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
     },
 };
@@ -213,25 +213,20 @@ where
     SD: Disposable,
 {
     fn on_next(&mut self, value: T) -> Flow {
-        let outcome = self.0.update_with_flow(|model| {
+        self.0.update_flow(|model| {
             if model.inner_ids.latest() != Some(self.1) {
-                // A value of a superseded inner observable is dropped outside the lock: dropping
-                // it can run arbitrary code.
-                return UpdateOutcome::new(true)
+                // Superseded, so nothing it sends is wanted anymore, as if downstream had stopped:
+                // the disposal on its way does the same, but a source that is not done with this
+                // value yet stops here already. The value is dropped outside the lock: dropping it
+                // can run arbitrary code.
+                return UpdateOutcome::new(Flow::Stop)
                     .with_drop_outside(value)
                     .without_events();
             }
-            UpdateOutcome::new(false)
+            UpdateOutcome::new(Flow::Continue)
                 .without_drop_outside()
                 .with_next_event(value)
-        });
-        match outcome {
-            Ok((false, flow)) => flow,
-            // Superseded, so nothing it sends is wanted anymore, as if downstream had stopped: the
-            // disposal on its way does the same, but a source that is not done with this value
-            // yet stops here already.
-            Ok((true, _)) | Err(DeliveryStopped) => Flow::Stop,
-        }
+        })
     }
 
     fn on_termination(self, termination: Termination<E>) {
