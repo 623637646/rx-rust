@@ -97,7 +97,7 @@
 
 use crate::{
     disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
-    observer::{EventBatch, Flow, Observer, Termination, callback_observer::IntoFlow},
+    observer::{EventBatch, Flow, IntoFlow, Observer, Termination},
     thread_mode::ThreadMode,
     utils::{
         serialized_delivery::{DeliveryStop, DeliveryStopped, SerializedDelivery, UpdateOutcome},

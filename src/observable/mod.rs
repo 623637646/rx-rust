@@ -49,9 +49,9 @@ use crate::{
         future::{ObservableFuture, ObservableTryFuture},
     },
     observer::{
-        Flow, Observer, Termination,
+        Flow, IntoFlow, Observer, Termination,
         boxed_observer::{BoxedObserver, ObserverMode, SendBoxedObserver},
-        callback_observer::{CallbackObserver, IntoFlow},
+        callback_observer::CallbackObserver,
         emitter::Emitter,
     },
     operators::{

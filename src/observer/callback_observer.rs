@@ -1,34 +1,7 @@
 //! An observer made of closures.
 
-use super::{Flow, Observer, Termination};
+use super::{Flow, IntoFlow, Observer, Termination};
 use educe::Educe;
-
-/// What a plain callback may answer in place of a [`Flow`].
-///
-/// A callback bound as `FnMut(T) -> R` with `R: IntoFlow` may return `()`, which keeps the source
-/// going — so the common `|value| { ... }` needs no trailing [`Flow::Continue`] — or a [`Flow`],
-/// which lets it end its own stream. [`CallbackObserver`] relies on it.
-///
-/// A callback that only diverges, such as `|_| unreachable!()`, is inferred to return `!`, which
-/// no stable impl can cover: spell its return type out, as `|_| -> () { unreachable!() }`.
-pub trait IntoFlow {
-    /// The flow this answer stands for.
-    fn into_flow(self) -> Flow;
-}
-
-impl IntoFlow for () {
-    #[inline]
-    fn into_flow(self) -> Flow {
-        Flow::Continue
-    }
-}
-
-impl IntoFlow for Flow {
-    #[inline]
-    fn into_flow(self) -> Flow {
-        self
-    }
-}
 
 /// An [`Observer`] made of two closures, one per event.
 ///

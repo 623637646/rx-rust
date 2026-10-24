@@ -240,8 +240,8 @@ cargo tarpaulin --out Html
   operator gets it from `SubscriptionContext::update_flow` / `send_next`; `send_termination` answers
   nothing, since a termination is the last event anyway. The `#[must_use]` is what catches a
   forgotten forward — `let _ =` only where ignoring it is deliberate. User callbacks
-  (`subscribe_with_callback`) return `()` or a `Flow`, via `callback_observer::IntoFlow` (a
-  diverging `|_| unreachable!()` needs `-> ()`).
+  (`subscribe_with_callback`) return `()` or a `Flow`, via `observer::IntoFlow` (a
+  diverging `|_| unreachable!()` needs `-> ()`), and so may the result of an `update_flow`.
 
 ## Test conventions
 

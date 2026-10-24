@@ -100,6 +100,36 @@ impl Flow {
     }
 }
 
+/// What may answer in place of a [`Flow`].
+///
+/// A callback bound as `FnMut(T) -> R` with `R: IntoFlow` may return `()`, which keeps the source
+/// going — so the common `|value| { ... }` needs no trailing [`Flow::Continue`] — or a [`Flow`],
+/// which lets it end its own stream. [`CallbackObserver`](callback_observer::CallbackObserver)
+/// relies on it, and so does
+/// [`SubscriptionContext::update_flow`](crate::utils::subscribe_with_context::SubscriptionContext::update_flow)
+/// for the result of its update.
+///
+/// A callback that only diverges, such as `|_| unreachable!()`, is inferred to return `!`, which
+/// no stable impl can cover: spell its return type out, as `|_| -> () { unreachable!() }`.
+pub trait IntoFlow {
+    /// The flow this answer stands for.
+    fn into_flow(self) -> Flow;
+}
+
+impl IntoFlow for () {
+    #[inline]
+    fn into_flow(self) -> Flow {
+        Flow::Continue
+    }
+}
+
+impl IntoFlow for Flow {
+    #[inline]
+    fn into_flow(self) -> Flow {
+        self
+    }
+}
+
 /// Receives the values of a stream, then its termination. See the [module documentation](self).
 pub trait Observer<T, E> {
     /// Receives the next value.
