@@ -1,7 +1,11 @@
 use super::{Next, Task};
+use educe::Educe;
 
 /// The state of [`Task::once`].
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct OnceContext<C> {
+    #[educe(Debug(ignore))]
     state: Option<C>,
     run: fn(C),
 }

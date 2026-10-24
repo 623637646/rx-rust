@@ -1,8 +1,12 @@
 use super::{Next, Task};
+use educe::Educe;
 use std::time::{Duration, Instant};
 
 /// The state of [`Task::periodic`].
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct PeriodicContext<C> {
+    #[educe(Debug(ignore))]
     state: C,
     step: fn(&mut C, usize) -> bool,
     period: Duration,

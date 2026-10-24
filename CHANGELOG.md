@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `Debug` for the task states `scheduler::{OnceContext, PeriodicContext, FutureThenContext,
+  StreamThenContext, WakeableContext}`, whatever state they carry, which is not printed.
+
 ### Changed
 
 - `SubscriptionContext::update_flow` takes an update whose result is `IntoFlow`: `()`, as before,

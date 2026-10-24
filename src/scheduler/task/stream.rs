@@ -1,9 +1,13 @@
 use super::{Next, Task};
+use educe::Educe;
 use futures::Stream;
 use std::task::Poll;
 
 /// The state of [`Task::from_stream_then`]. `I` is the element type.
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct StreamThenContext<C, I> {
+    #[educe(Debug(ignore))]
     state: Option<C>,
     on_item: fn(&mut C, I) -> bool,
     on_end: fn(C),

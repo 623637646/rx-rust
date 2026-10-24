@@ -7,9 +7,13 @@ use std::{task::Waker, time::Instant};
 ///
 /// Dropping it — the task finished, or was disposed — clears the waker it registered, so that a
 /// [`TaskWaker`] that outlives the task neither keeps that waker alive nor wakes it.
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct WakeableContext<C, M: ThreadMode> {
+    #[educe(Debug(ignore))]
     state: C,
     step: fn(&mut C, bool, Instant) -> Next,
+    #[educe(Debug(ignore))]
     slot: M::Ptr<Slot>,
 }
 

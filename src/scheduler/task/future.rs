@@ -1,8 +1,12 @@
 use super::{Next, Task};
+use educe::Educe;
 use std::{future::Future, task::Poll};
 
 /// The state of [`Task::from_future_then`]. `O` is the future's output.
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct FutureThenContext<C, O> {
+    #[educe(Debug(ignore))]
     state: Option<C>,
     on_ready: fn(C, O),
 }
