@@ -70,7 +70,7 @@ impl<OE> WindowWithCount<'_, OE> {
 
 delegate_disposal!(
     Disposal<D>,
-    OptionDisposal<DisposeOnDrop<D>>,
+    OptionDisposal<D>,
     where D: Disposable
 );
 
@@ -112,8 +112,8 @@ where
         };
         self.source
             .subscribe(observer)
-            .into_option()
-            .into_dispose_on_drop()
+            .map_inner(OptionDisposal::some)
+            .map_inner_into()
     }
 }
 

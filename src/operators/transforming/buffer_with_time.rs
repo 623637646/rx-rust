@@ -85,7 +85,7 @@ impl<OE, S> BufferWithTime<OE, S> {
 
 /// The source subscription a [`BufferWithTime`] context owns: the timer, then the source.
 type BufferWithTimeSources<OE, S> = ChainDisposal<
-    OptionDisposal<DisposeOnDrop<<S as SchedulerTypes>::Disposal>>,
+    OptionDisposal<<S as SchedulerTypes>::Disposal>,
     <OE as ObservableTypes>::Disposal,
 >;
 
@@ -112,7 +112,7 @@ delegate_disposal!(
         Vec<T>,
         E,
         Vec<T>,
-        ChainDisposal<OptionDisposal<DisposeOnDrop<SD>>, D>,
+        ChainDisposal<OptionDisposal<SD>, D>,
     >,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
@@ -152,7 +152,7 @@ where
                 .source
                 .subscribe(BufferWithTimeObserver(context.clone()));
             let timer = setup_emit_timer(context, self.scheduler, self.time_span);
-            subscription.preceded_by(timer)
+            subscription.preceded_by_wrapped(timer)
         })
         .map_inner_into()
     }
@@ -199,7 +199,7 @@ fn setup_emit_timer<M, T, E, OR, D, S>(
     context: SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
     scheduler: S,
     time_span: Duration,
-) -> OptionDisposal<DisposeOnDrop<S::Disposal>>
+) -> DisposeOnDrop<OptionDisposal<S::Disposal>>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
@@ -211,7 +211,7 @@ where
         .update(|_| UpdateOutcome::new(()).without_events())
         .is_err()
     {
-        return OptionDisposal::none();
+        return DisposeOnDrop::new(OptionDisposal::none());
     }
 
     // The context owns only the task's disposal, through its source subscription, never the task,
@@ -232,5 +232,7 @@ where
         // for an `Instant` never ends: the first step never comes, so it needs no anchor.
         scheduler.clock().now().checked_add(time_span),
     );
-    OptionDisposal::some(scheduler.run_task(task, Some(time_span)))
+    scheduler
+        .run_task(task, Some(time_span))
+        .map_inner(OptionDisposal::some)
 }

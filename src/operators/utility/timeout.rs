@@ -86,7 +86,7 @@ impl<OE, S> Timeout<OE, S> {
 
 /// The source subscription a [`Timeout`] context owns: the timer, then the source.
 type TimeoutSources<OE, S> = ChainDisposal<
-    OptionDisposal<DisposeOnDrop<<S as SchedulerTypes>::Disposal>>,
+    OptionDisposal<<S as SchedulerTypes>::Disposal>,
     <OE as ObservableTypes>::Disposal,
 >;
 
@@ -110,7 +110,7 @@ delegate_disposal!(
         T,
         Error<E>,
         Model,
-        ChainDisposal<OptionDisposal<DisposeOnDrop<SD>>, D>,
+        ChainDisposal<OptionDisposal<SD>, D>,
     >,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
@@ -155,7 +155,7 @@ where
                 clock: self.scheduler.clock(),
             });
             let timer = setup_timer(context, &self.scheduler);
-            source_subscription.preceded_by(timer)
+            source_subscription.preceded_by_wrapped(timer)
         })
         .map_inner_into()
     }
@@ -206,7 +206,7 @@ where
 fn setup_timer<M, T, E, OR, S, D>(
     context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     scheduler: &S,
-) -> OptionDisposal<DisposeOnDrop<S::Disposal>>
+) -> DisposeOnDrop<OptionDisposal<S::Disposal>>
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,
@@ -217,7 +217,7 @@ where
     // `Err`: the source terminated synchronously while it was being subscribed. `Ok(None)`: the
     // timeout never fires, so no timer is needed.
     let Ok(Some(deadline)) = deadline else {
-        return OptionDisposal::none();
+        return DisposeOnDrop::new(OptionDisposal::none());
     };
 
     // The context owns only the task's disposal, never the task, which its runtime owns: holding
@@ -236,9 +236,10 @@ where
             })
             .unwrap_or(Next::Finished)
     });
-    let timer = scheduler.run_task(
-        task,
-        Some(deadline.saturating_duration_since(scheduler.clock().now())),
-    );
-    OptionDisposal::some(timer)
+    scheduler
+        .run_task(
+            task,
+            Some(deadline.saturating_duration_since(scheduler.clock().now())),
+        )
+        .map_inner(OptionDisposal::some)
 }

@@ -45,7 +45,7 @@ delegate_disposal!(
     /// The disposal of an [`EitherObservable`] subscription: the subscription of the side that was
     /// subscribed to.
     Disposal<D1, D2>,
-    EitherDisposal<DisposeOnDrop<D1>, DisposeOnDrop<D2>>,
+    EitherDisposal<D1, D2>,
     where D1: Disposable, D2: Disposable
 );
 
@@ -69,12 +69,14 @@ where
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         match self {
-            Self::Left(observable) => {
-                DisposeOnDrop::new(EitherDisposal::Left(observable.subscribe(observer)).into())
-            }
-            Self::Right(observable) => {
-                DisposeOnDrop::new(EitherDisposal::Right(observable.subscribe(observer)).into())
-            }
+            Self::Left(observable) => observable
+                .subscribe(observer)
+                .map_inner(EitherDisposal::Left)
+                .map_inner_into(),
+            Self::Right(observable) => observable
+                .subscribe(observer)
+                .map_inner(EitherDisposal::Right)
+                .map_inner_into(),
         }
     }
 }

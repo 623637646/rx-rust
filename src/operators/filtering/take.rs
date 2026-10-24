@@ -55,7 +55,7 @@ impl<OE> Take<OE> {
 
 delegate_disposal!(
     Disposal<M, D>,
-    OptionDisposal<DisposeOnDrop<subscribe_with_auto_dispose_on_termination::Disposal<M, D>>>,
+    OptionDisposal<subscribe_with_auto_dispose_on_termination::Disposal<M, D>>,
     where M: ThreadMode, D: Disposable
 );
 
@@ -89,8 +89,8 @@ where
                     count: self.count,
                 })
             })
-            .into_option()
-            .into_dispose_on_drop()
+            .map_inner(OptionDisposal::some)
+            .map_inner_into()
         }
     }
 }
