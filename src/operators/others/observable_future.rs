@@ -4,7 +4,6 @@
 use crate::{
     observable::{Observable, ObservableTypes},
     operators::others::observable_try_future::{ObservableTryFuture, ObservableTryFutureObserver},
-    thread_mode::Shared,
 };
 use educe::Educe;
 use std::{convert::Infallible, task::Poll};
@@ -63,7 +62,7 @@ impl<OE> Unpin for ObservableFuture<OE> where OE: ObservableTypes<Error = Infall
 
 impl<T, OE> Future for ObservableFuture<OE>
 where
-    OE: Observable<ObservableTryFutureObserver<Shared, T, Infallible>, Item = T, Error = Infallible>,
+    OE: Observable<ObservableTryFutureObserver<T, Infallible>, Item = T, Error = Infallible>,
 {
     type Output = Option<T>;
 

@@ -68,13 +68,17 @@ where
 {
     #[educe(Debug(ignore))]
     subscription: LazySubscription<OE, DisposeOnDrop<OE::Disposal>>,
-    /// Always behind the thread-safe pointer, whatever the source's mode: every synchronous source
-    /// is `Local`, and many of them are `Send`, so a pointer picked from the mode would make the
-    /// stream over them `!Send` and keep it out of a multi-threaded executor. A source that really
-    /// is bound to its thread keeps the stream `!Send` by itself.
     #[educe(Debug(ignore))]
-    context: <Shared as ThreadMode>::Ptr<ObservableTryStreamContext<E, B>>,
+    context: ContextPtr<E, B>,
 }
+
+/// The state the stream shares with its observer. It is always behind the thread-safe pointer,
+/// whatever the source's mode, so neither the stream nor its observer is generic over one: every
+/// synchronous source is `Local`, and many of them are `Send`, so a pointer picked from the mode
+/// would make the stream over them `!Send` and keep it out of a multi-threaded executor. A source
+/// that really is bound to its thread keeps the stream `!Send` by itself. On one thread the lock is
+/// never contended, and the observer is the crate's own, so the mode has nothing else to decide.
+type ContextPtr<E, B> = <Shared as ThreadMode>::Ptr<ObservableTryStreamContext<E, B>>;
 
 impl<T, E, OE> ObservableTryStream<T, E, OE>
 where
@@ -113,7 +117,7 @@ impl<T, E, OE, B> Unpin for ObservableTryStream<T, E, OE, B> where
 
 impl<T, E, OE, B> Stream for ObservableTryStream<T, E, OE, B>
 where
-    OE: Observable<ObservableTryStreamObserver<Shared, E, B>, Item = T, Error = E>,
+    OE: Observable<ObservableTryStreamObserver<E, B>, Item = T, Error = E>,
     B: StreamBuffer<T>,
 {
     type Item = Result<B::Item, E>;
@@ -161,12 +165,14 @@ where
     }
 }
 
+// Not generic over a mode: the context it shares with the stream is always `Shared`'s, see
+// `ContextPtr`.
 #[doc(hidden)]
-pub struct ObservableTryStreamObserver<M: ThreadMode, E, B> {
-    context: M::Ptr<ObservableTryStreamContext<E, B>>,
+pub struct ObservableTryStreamObserver<E, B> {
+    context: ContextPtr<E, B>,
 }
 
-impl<M: ThreadMode, T, E, B> Observer<T, E> for ObservableTryStreamObserver<M, E, B>
+impl<T, E, B> Observer<T, E> for ObservableTryStreamObserver<E, B>
 where
     B: StreamBuffer<T>,
 {

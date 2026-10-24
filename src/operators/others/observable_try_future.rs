@@ -60,17 +60,16 @@ where
     #[educe(Debug(ignore))]
     subscription: LazySubscription<OE, DisposeOnDrop<OE::Disposal>>,
     #[educe(Debug(ignore))]
-    context: ContextPtr<OE>,
+    context: ContextPtr<OE::Item, OE::Error>,
 }
 
-/// The state shared with the observer. It is always behind the thread-safe pointer, whatever the
-/// source's mode: every synchronous source is `Local`, and many of them are `Send`, so a pointer
-/// picked from the mode would make the future over them `!Send` and keep it out of a
-/// multi-threaded executor. A source that really is bound to its thread keeps the future `!Send`
-/// by itself.
-type ContextPtr<OE> = <Shared as ThreadMode>::Ptr<
-    ObservableTryFutureContext<<OE as ObservableTypes>::Item, <OE as ObservableTypes>::Error>,
->;
+/// The state the future shares with its observer. It is always behind the thread-safe pointer,
+/// whatever the source's mode, so neither the future nor its observer is generic over one: every
+/// synchronous source is `Local`, and many of them are `Send`, so a pointer picked from the mode
+/// would make the future over them `!Send` and keep it out of a multi-threaded executor. A source
+/// that really is bound to its thread keeps the future `!Send` by itself. On one thread the lock is
+/// never contended, and the observer is the crate's own, so the mode has nothing else to decide.
+type ContextPtr<T, E> = <Shared as ThreadMode>::Ptr<ObservableTryFutureContext<T, E>>;
 
 impl<OE> ObservableTryFuture<OE>
 where
@@ -94,7 +93,7 @@ impl<OE> Unpin for ObservableTryFuture<OE> where OE: ObservableTypes {}
 
 impl<T, E, OE> Future for ObservableTryFuture<OE>
 where
-    OE: Observable<ObservableTryFutureObserver<Shared, T, E>, Item = T, Error = E>,
+    OE: Observable<ObservableTryFutureObserver<T, E>, Item = T, Error = E>,
 {
     type Output = Result<Option<T>, E>;
 
@@ -130,12 +129,14 @@ where
     }
 }
 
+// Not generic over a mode: the context it shares with the future is always `Shared`'s, see
+// `ContextPtr`.
 #[doc(hidden)]
-pub struct ObservableTryFutureObserver<M: ThreadMode, T, E> {
-    context: M::Ptr<ObservableTryFutureContext<T, E>>,
+pub struct ObservableTryFutureObserver<T, E> {
+    context: ContextPtr<T, E>,
 }
 
-impl<M: ThreadMode, T, E> ObservableTryFutureObserver<M, T, E> {
+impl<T, E> ObservableTryFutureObserver<T, E> {
     fn resolve(&self, result: Result<Option<T>, E>) {
         // The waker is taken under the lock and woken after it is released, because waking runs
         // external code, which must not run under the lock. The result this one replaces is
@@ -151,7 +152,7 @@ impl<M: ThreadMode, T, E> ObservableTryFutureObserver<M, T, E> {
     }
 }
 
-impl<M: ThreadMode, T, E> Observer<T, E> for ObservableTryFutureObserver<M, T, E> {
+impl<T, E> Observer<T, E> for ObservableTryFutureObserver<T, E> {
     fn on_next(&mut self, value: T) -> Flow {
         self.resolve(Ok(Some(value)));
         // The first item is all the future wants: the source stops here and does not terminate

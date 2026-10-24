@@ -7,7 +7,6 @@ use crate::{
     operators::others::observable_try_stream::{
         ObservableTryStream, ObservableTryStreamObserver, StreamBuffer, Unbounded,
     },
-    thread_mode::Shared,
 };
 use educe::Educe;
 use futures::Stream;
@@ -76,7 +75,7 @@ impl<T, OE, B> Unpin for ObservableStream<T, OE, B> where
 
 impl<T, OE, B> Stream for ObservableStream<T, OE, B>
 where
-    OE: Observable<ObservableTryStreamObserver<Shared, Infallible, B>, Item = T, Error = Infallible>,
+    OE: Observable<ObservableTryStreamObserver<Infallible, B>, Item = T, Error = Infallible>,
     B: StreamBuffer<T>,
 {
     type Item = B::Item;
