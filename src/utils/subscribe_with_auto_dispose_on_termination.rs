@@ -96,8 +96,10 @@ where
 /// Whether `OR` is an [`AutoDisposeOnTerminationObserver`], whatever its generic arguments are.
 ///
 /// Only the outermost type is recognized: an auto-disposing observer wrapped inside another
-/// observer is not detected. This is a best-effort check meant for `debug_assert!`, not a complete
-/// one.
+/// observer is not detected. This is a best-effort check for the debug builds of
+/// [`subscribe_with_context`](crate::utils::subscribe_with_context::subscribe_with_context), not a
+/// complete one, so it is compiled into debug builds only.
+#[cfg(debug_assertions)]
 pub(crate) fn is_auto_dispose_on_termination_observer<OR>() -> bool {
     fn type_name_without_generics<T>() -> &'static str {
         let name = std::any::type_name::<T>();

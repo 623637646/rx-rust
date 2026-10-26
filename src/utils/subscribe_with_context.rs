@@ -95,13 +95,14 @@
 //! assert_eq!(seen, [1, 3, 6]);
 //! ```
 
+#[cfg(debug_assertions)]
+use crate::utils::subscribe_with_auto_dispose_on_termination::is_auto_dispose_on_termination_observer;
 use crate::{
     disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
     observer::{EventBatch, Flow, IntoFlow, Observer, Termination},
     thread_mode::ThreadMode,
-    utils::{
-        serialized_delivery::{DeliveryStop, DeliveryStopped, SerializedDelivery, UpdateOutcome},
-        subscribe_with_auto_dispose_on_termination::is_auto_dispose_on_termination_observer,
+    utils::serialized_delivery::{
+        DeliveryStop, DeliveryStopped, SerializedDelivery, UpdateOutcome,
     },
 };
 use educe::Educe;
@@ -151,7 +152,14 @@ where
     D: Disposable,
     F: FnOnce(SubscriptionContext<M, T, E, OR, MD, D>) -> DisposeOnDrop<D>,
 {
-    debug_assert_observer_compatibility::<OR>();
+    // A best-effort check of a misuse, so debug builds only: see
+    // `is_auto_dispose_on_termination_observer`.
+    #[cfg(debug_assertions)]
+    assert!(
+        !is_auto_dispose_on_termination_observer::<OR>(),
+        "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. \
+         subscribe_with_context handles \"auto dispose on termination\" itself."
+    );
     let context = SubscriptionContext::<M, T, E, OR, MD, D>::new(observer, model);
     let disposal = context.disposal();
     let subscription = builder(context.clone());
@@ -291,12 +299,4 @@ where
     pub fn send(&self, events: EventBatch<T, E>) -> Flow {
         self.delivery.send(events)
     }
-}
-
-fn debug_assert_observer_compatibility<OR>() {
-    debug_assert!(
-        !is_auto_dispose_on_termination_observer::<OR>(),
-        "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. \
-         subscribe_with_context handles \"auto dispose on termination\" itself."
-    );
 }
