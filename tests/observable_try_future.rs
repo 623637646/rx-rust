@@ -10,6 +10,7 @@ use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::from_iter::FromIter;
+use rx_rust::operators::creating::never::Never;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::subject::behavior_subject::BehaviorSubject;
 use rx_rust::subject::publish_subject::PublishSubject;
@@ -18,6 +19,7 @@ use rx_rust::{
     observable::{ObservableExt, future::ObservableTryFuture},
     observer::{Observer, Termination},
 };
+use std::convert::Infallible;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use tests_utils::test_struct::TestStruct;
@@ -106,6 +108,20 @@ fn test_unsubscribe() {
         assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
         drop(sender);
     });
+}
+
+/// `Never` lets go of its observer as soon as it is subscribed, without a termination: nothing more
+/// will come, but nothing says the stream succeeded either, so the future does not resolve on its
+/// behalf and stays pending, unlike the one of `Empty` (decision 0004).
+#[test]
+fn test_never() {
+    let mut future = Never.with_item_type::<i32>().into_try_future();
+
+    // The first poll subscribes, and `Never` lets go of the observer right then.
+    let first: Option<Result<Option<i32>, Infallible>> = (&mut future).now_or_never();
+    assert_eq!(first, None);
+    // Polled again once the observer is gone, it is still pending.
+    assert_eq!((&mut future).now_or_never(), None);
 }
 
 #[test]

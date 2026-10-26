@@ -56,6 +56,40 @@ struct ObservableTryFutureContext<T, E> {
 ///     assert_eq!(failed, Err("boom"));
 /// }
 /// ```
+///
+/// # A source that never answers
+///
+/// The future stays pending until the source sends an item or a termination, so a source that
+/// sends neither keeps it pending forever. That is the case of a source that falls silent while it
+/// holds its observer, and also of one that lets go of the observer without a termination, as
+/// [`Never`](crate::operators::creating::never::Never) does at once: letting go says that nothing
+/// more will come, but not whether the stream succeeded, so the future does not resolve on the
+/// source's behalf (see `docs/decisions/0004-a-source-that-drops-its-observer.md`).
+///
+/// To bound the wait, put a [`timeout`](crate::observable::ObservableExt::timeout) in front of it:
+/// it fires on such a source too, and the future then resolves with
+/// `Err(timeout::Error::Timeout)`. A runtime's own timeout, such as `tokio::time::timeout`, works
+/// as well.
+///
+/// ```rust
+/// use futures::FutureExt;
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     operators::{creating::never::Never, utility::timeout::Error},
+///     scheduler::virtual_time::VirtualTime,
+/// };
+/// use std::time::Duration;
+///
+/// let time = VirtualTime::new();
+/// let mut future = Never
+///     .with_item_type::<i32>()
+///     .timeout(Duration::from_secs(1), time.scheduler())
+///     .into_try_future();
+/// assert_eq!((&mut future).now_or_never(), None); // Subscribes; still pending.
+///
+/// time.advance_by(Duration::from_secs(1));
+/// assert_eq!(future.now_or_never(), Some(Err(Error::Timeout)));
+/// ```
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct ObservableTryFuture<OE>
@@ -179,6 +213,11 @@ impl<T, E> Observer<T, E> for ObservableTryFutureObserver<T, E> {
 /// `None` when the source completes without one. This is
 /// [`ObservableTryFuture`] without the error it can never carry; see there for how it subscribes
 /// and when it releases the source.
+///
+/// A source that never sends an item or a completion keeps it pending forever, `Never` among them;
+/// see [`ObservableTryFuture`]. A [`timeout`](crate::observable::ObservableExt::timeout) in front
+/// bounds the wait, and makes the source fallible, so the future of that one is an
+/// [`into_try_future`](crate::observable::ObservableExt::into_try_future).
 ///
 /// # Examples
 /// ```rust

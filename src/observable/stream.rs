@@ -63,6 +63,41 @@ struct ObservableTryStreamContext<E, B> {
 ///     assert_eq!(values, Err("boom"));
 /// });
 /// ```
+///
+/// # A source that never terminates
+///
+/// The stream ends only with a termination of the source, so after the last item of a source that
+/// never terminates it stays pending forever. That is the case of a source that falls silent while
+/// it holds its observer, and also of one that lets go of the observer without a termination, as
+/// [`Never`](crate::operators::creating::never::Never) does at once: letting go says that nothing
+/// more will come, but not whether the stream succeeded, so the stream does not end on the
+/// source's behalf (see `docs/decisions/0004-a-source-that-drops-its-observer.md`).
+///
+/// To bound the wait, put a [`timeout`](crate::observable::ObservableExt::timeout) in front of it:
+/// it fires once its duration passes without an item, on such a source too, and the stream then
+/// yields `Err(timeout::Error::Timeout)` and ends. A runtime's own timeout around each poll, such
+/// as `tokio::time::timeout`, works as well.
+///
+/// ```rust
+/// use futures::{FutureExt, StreamExt};
+/// use rx_rust::{
+///     observable::ObservableExt,
+///     operators::{creating::never::Never, utility::timeout::Error},
+///     scheduler::virtual_time::VirtualTime,
+/// };
+/// use std::time::Duration;
+///
+/// let time = VirtualTime::new();
+/// let mut stream = Never
+///     .with_item_type::<i32>()
+///     .timeout(Duration::from_secs(1), time.scheduler())
+///     .into_try_stream();
+/// assert_eq!(stream.next().now_or_never(), None); // Subscribes; still pending.
+///
+/// time.advance_by(Duration::from_secs(1));
+/// assert_eq!(stream.next().now_or_never(), Some(Some(Err(Error::Timeout))));
+/// assert_eq!(stream.next().now_or_never(), Some(None));
+/// ```
 #[derive(Educe)]
 #[educe(Debug)]
 pub struct ObservableTryStream<T, E, OE, B = Unbounded<T>>
@@ -217,6 +252,11 @@ where
 ///
 /// Each item is yielded as is and completion ends the stream. This is [`ObservableTryStream`]
 /// without the error it can never carry; see there for how it subscribes and buffers.
+///
+/// A source that never completes keeps it pending after its last item, `Never` among them; see
+/// [`ObservableTryStream`]. A [`timeout`](crate::observable::ObservableExt::timeout) in front
+/// bounds the wait, and makes the source fallible, so the stream of that one is an
+/// [`into_try_stream`](crate::observable::ObservableExt::into_try_stream).
 ///
 /// # Examples
 /// ```rust

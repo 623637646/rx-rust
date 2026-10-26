@@ -780,6 +780,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// This is only for a source that cannot fail; a fallible one goes through
     /// [`into_try_future`](Self::into_try_future). An operator that picks another item, such as
     /// `last`, or one that always emits, such as `collect`, goes in front of it.
+    ///
+    /// A source that never sends an item or a completion keeps the future pending forever; see
+    /// [`ObservableTryFuture`] for how to bound the wait.
     fn into_future(self) -> ObservableFuture<Self>
     where
         Self: ObservableTypes<Error = std::convert::Infallible>,
@@ -801,6 +804,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// The items that arrive between two polls are all kept, so a source faster than the
     /// consumer grows the buffer without bound;
     /// [`into_stream_with_buffer`](Self::into_stream_with_buffer) takes a buffer of your choice.
+    ///
+    /// A source that never completes keeps the stream pending after its last item; see
+    /// [`ObservableTryStream`] for how to bound the wait.
     #[cfg(feature = "futures")]
     fn into_stream(self) -> ObservableStream<Self::Item, Self>
     where
@@ -854,6 +860,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///
     /// The output is the `Maybe` of ReactiveX; an operator that always emits, such as `collect`,
     /// in front of it makes it a `Single`, and `last` picks the last item instead of the first.
+    ///
+    /// A source that never sends an item or a termination keeps the future pending forever; see
+    /// [`ObservableTryFuture`] for how to bound the wait.
     fn into_try_future(self) -> ObservableTryFuture<Self> {
         ObservableTryFuture::new(self)
     }
@@ -865,6 +874,9 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// consumer grows the buffer without bound;
     /// [`into_try_stream_with_buffer`](Self::into_try_stream_with_buffer) takes a buffer of your
     /// choice.
+    ///
+    /// A source that never terminates keeps the stream pending after its last item; see
+    /// [`ObservableTryStream`] for how to bound the wait.
     #[cfg(feature = "futures")]
     fn into_try_stream(self) -> ObservableTryStream<Self::Item, Self::Error, Self> {
         ObservableTryStream::new(self)
