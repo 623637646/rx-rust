@@ -1,7 +1,7 @@
 //! Records which locks the current thread holds, so that taking one of them again — which
 //! deadlocks a `Mutex` and panics a `RefCell` — is reported at the offending call site instead.
 //!
-//! Debug builds only; [`held_lock`] compiles to nothing otherwise.
+//! Debug builds only; elsewhere [`held_lock`] returns an empty guard, which costs nothing.
 //!
 //! A lock is identified by its address and its size. The address alone is not enough: a lock
 //! nested in another one — a `Mutex<RefCell<_>>`, or a state whose first field is a lock — may sit
@@ -61,5 +61,12 @@ pub(super) fn held_lock<T>(lock: &T) -> enabled::HeldLock {
     enabled::HeldLock::enter((std::ptr::from_ref(lock) as usize, size_of::<T>()))
 }
 
+/// The guard of a release build, which records nothing. It is a type of its own rather than `()`,
+/// so that the callers bind it the same way in every build.
 #[cfg(not(debug_assertions))]
-pub(super) fn held_lock<T>(_lock: &T) {}
+pub(super) struct HeldLock;
+
+#[cfg(not(debug_assertions))]
+pub(super) fn held_lock<T>(_lock: &T) -> HeldLock {
+    HeldLock
+}
