@@ -11,7 +11,7 @@ use crate::{
     observer::{Event, Flow, Observer, Termination},
     scheduler::{Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
     thread_mode::{ThreadMode, mutable::MutableHelper},
-    utils::{serialized_delivery::DeliveryStopped, take_leaving_room},
+    utils::take_leaving_room,
 };
 use educe::Educe;
 
@@ -104,6 +104,26 @@ struct Inbox<T, E> {
     stopped: bool,
 }
 
+/// What [`InboxHandle::push`] did with an event.
+enum Pushed {
+    /// Queued in an empty inbox: the task must be woken.
+    Wake,
+    /// Queued behind events that a task already woken has not taken yet, and takes this one too.
+    Behind,
+    /// The delivery has stopped: the event was dropped, outside the lock.
+    Stopped,
+}
+
+/// What [`InboxHandle::take_preempting_error`] tells the task before each value it delivers.
+enum BeforeValue<E> {
+    /// Nothing preempts the value: deliver it.
+    Deliver,
+    /// An error queued since the step took its values, taken: it is delivered instead of them.
+    Preempted(Termination<E>),
+    /// The delivery has stopped.
+    Stopped,
+}
+
 /// A handle on an [`Inbox`], the only place its lock is taken. Disposing it stops the delivery, so
 /// that nothing is delivered once the subscription is disposed, even while the task is running.
 #[derive(Educe)]
@@ -119,23 +139,25 @@ impl<M: ThreadMode, T, E> InboxHandle<M, T, E> {
         }))
     }
 
-    /// Queues `event`, and returns whether the inbox was empty: the task must then be woken, while
-    /// a task woken for an earlier event that it has not taken yet takes this one too. Once the
-    /// delivery has stopped, drops `event` instead, outside the lock.
-    fn push(&self, event: Event<T, E>) -> Result<bool, DeliveryStopped> {
+    /// Queues `event`, unless the delivery has stopped: `event` is then dropped, outside the lock.
+    fn push(&self, event: Event<T, E>) -> Pushed {
         self.0
             .with_mut(|inbox| {
                 if inbox.stopped {
                     return Err(event);
                 }
-                let was_empty = inbox.values.is_empty() && inbox.termination.is_none();
+                let pushed = if inbox.values.is_empty() && inbox.termination.is_none() {
+                    Pushed::Wake
+                } else {
+                    Pushed::Behind
+                };
                 match event {
                     Event::Next(value) => inbox.values.push(value),
                     Event::Termination(termination) => inbox.termination = Some(termination),
                 }
-                Ok(was_empty)
+                Ok(pushed)
             })
-            .map_err(|_| DeliveryStopped)
+            .unwrap_or(Pushed::Stopped)
     }
 
     /// Takes everything queued, or `None` once the delivery has stopped. The inbox is left with
@@ -157,17 +179,19 @@ impl<M: ThreadMode, T, E> InboxHandle<M, T, E> {
         self.0.with_ref(|inbox| inbox.stopped)
     }
 
-    /// What the task checks before each value it delivers: `Err` once the delivery has stopped,
-    /// the error once one is queued, which it takes, since it preempts the values not delivered
-    /// yet, and `None` otherwise. A completion does not preempt them, so it is left queued.
-    fn take_preempting_error(&self) -> Result<Option<Termination<E>>, DeliveryStopped> {
+    /// What the task checks before each value it delivers. An error queued is taken, since it
+    /// preempts the values not delivered yet; a completion does not, so it is left queued.
+    fn take_preempting_error(&self) -> BeforeValue<E> {
         self.0.with_mut(|inbox| {
             if inbox.stopped {
-                Err(DeliveryStopped)
-            } else if let Some(Termination::Error(_)) = inbox.termination {
-                Ok(inbox.termination.take())
+                BeforeValue::Stopped
+            } else if let Some(error) = inbox
+                .termination
+                .take_if(|termination| matches!(termination, Termination::Error(_)))
+            {
+                BeforeValue::Preempted(error)
             } else {
-                Ok(None)
+                BeforeValue::Deliver
             }
         })
     }
@@ -245,12 +269,12 @@ where
     fn deliver(&mut self, values: Vec<T>) -> bool {
         for value in values {
             match self.inbox.take_preempting_error() {
-                Err(DeliveryStopped) => return false,
-                Ok(Some(error)) => {
+                BeforeValue::Deliver => {}
+                BeforeValue::Preempted(error) => {
                     self.terminate(error);
                     return false;
                 }
-                Ok(None) => {}
+                BeforeValue::Stopped => return false,
             }
             let Some(observer) = self.observer.as_mut() else {
                 return false;
@@ -360,13 +384,12 @@ impl<M: ThreadMode, T, E> ObserveOnObserver<M, T, E> {
     /// delivers, so this is otherwise [`Flow::Continue`].
     fn queue_event(&self, event: Event<T, E>) -> Flow {
         match self.inbox.push(event) {
-            Ok(was_empty) => {
-                if was_empty {
-                    self.waker.wake();
-                }
+            Pushed::Wake => {
+                self.waker.wake();
                 Flow::Continue
             }
-            Err(DeliveryStopped) => Flow::Stop,
+            Pushed::Behind => Flow::Continue,
+            Pushed::Stopped => Flow::Stop,
         }
     }
 }
