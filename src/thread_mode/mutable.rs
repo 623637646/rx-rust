@@ -63,6 +63,7 @@
 //! assert!(numbers.with_ref(Vec::is_empty));
 //! ```
 
+#[cfg(debug_assertions)]
 mod reentrancy;
 
 use std::{
@@ -153,10 +154,12 @@ impl<T> MutableHelper for RefCell<T> {
     type Value = T;
 
     fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
+        #[cfg(debug_assertions)]
         let _held = reentrancy::held_lock(self);
         callback(&mut self.borrow_mut())
     }
     fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
+        #[cfg(debug_assertions)]
         let _held = reentrancy::held_lock(self);
         callback(&self.borrow())
     }
@@ -166,10 +169,12 @@ impl<T> MutableHelper for Mutex<T> {
     type Value = T;
 
     fn with_mut<R>(&self, callback: impl FnOnce(&mut T) -> R) -> R {
+        #[cfg(debug_assertions)]
         let _held = reentrancy::held_lock(self);
         callback(&mut self.lock().unwrap_or_else(PoisonError::into_inner))
     }
     fn with_ref<R>(&self, callback: impl FnOnce(&T) -> R) -> R {
+        #[cfg(debug_assertions)]
         let _held = reentrancy::held_lock(self);
         callback(&self.lock().unwrap_or_else(PoisonError::into_inner))
     }
