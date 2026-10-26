@@ -1,5 +1,4 @@
-//! The queue of events waiting behind a running delivery, fed by
-//! [`EventBatch`](crate::observer::EventBatch)es.
+//! The queue of events waiting behind a running delivery, fed by [`EventBatch`]es.
 
 use crate::observer::{Event, EventBatch, Termination};
 use educe::Educe;

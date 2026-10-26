@@ -14,9 +14,9 @@ use std::{
 /// `sleep` is the runtime's timer (tokio's `time::sleep`, smol's `Timer::after`, …), which must run
 /// on that clock.
 ///
-/// A `delay` too long for an [`Instant`](std::time::Instant) to represent never ends: the task
-/// waits, without a timer, until it is disposed, whatever `sleep` would make of that duration
-/// (tokio's wakes after some thirty years).
+/// A `delay` too long for an [`Instant`] to represent never ends: the task waits, without a timer,
+/// until it is disposed, whatever `sleep` would make of that duration (tokio's wakes after some
+/// thirty years).
 ///
 /// Every step gets `clock.now()`, and a [`Next::SleepUntil`] is measured against it.
 /// Between two steps the task yields through `yield_now`, also for a `SleepUntil` whose instant

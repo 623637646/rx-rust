@@ -39,7 +39,7 @@
 //! example below.
 //!
 //! Implementing a scheduler takes [`SchedulerTypes`] and [`Scheduler::run_task`]. On an async
-//! executor, spawn the future [`drive`] returns, given the scheduler's clock; a synchronous loop
+//! executor, spawn the future [`drive()`] returns, given the scheduler's clock; a synchronous loop
 //! drives the task itself through [`Task::split`] and [`Stepper::step`].
 //!
 //! # Time
@@ -189,7 +189,7 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
     /// Spawns `task`, to start after `delay`. Dropping or disposing the returned handle cancels it.
     ///
     /// A `delay` too long for an [`Instant`] to represent never ends: the task is never stepped,
-    /// and is kept until it is disposed. [`drive`] does that for the schedulers built on it.
+    /// and is kept until it is disposed. [`drive()`] does that for the schedulers built on it.
     fn run_task(&self, task: Task<TC, P>, delay: Option<Duration>)
     -> DisposeOnDrop<Self::Disposal>;
 }
