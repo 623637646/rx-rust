@@ -1962,3 +1962,38 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// The source drops its observer without a termination (decision 0004): it sends nothing more, but
+/// the inner observables it already sent run their course, the queued one included, which is
+/// subscribed once the first completes. The source never completed, so neither does the result:
+/// once the last inner completes, the observer is dropped, never terminated.
+#[test]
+fn test_abandon_after_next() {
+    let (inner_channels, inner) = test_channels::<'_, i32, Infallible>();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.concat_all().subscribe(observer);
+    assert!(sender.on_next(inner.clone()).is_continue());
+    assert!(sender.on_next(inner).is_continue());
+    sender.abandon();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    assert_eq!(inner_channels.state(0), ChannelState::Subscribed);
+    assert_eq!(inner_channels.state(1), ChannelState::Initialized);
+
+    assert!(inner_channels.on_next(0, 111).is_continue());
+    inner_channels.on_termination(0, Termination::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(inner_channels.state(1), ChannelState::Subscribed);
+
+    assert!(inner_channels.on_next(1, 222).is_continue());
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Active);
+
+    inner_channels.on_termination(1, Termination::Completed);
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Dropped);
+}

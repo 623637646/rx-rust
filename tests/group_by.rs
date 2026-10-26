@@ -1096,3 +1096,32 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// The source drops its observer without a termination (decision 0004): it sends nothing more, but
+/// a group subscribed to afterwards still receives what was sent to it, and is then dropped, never
+/// terminated; so is the observer of the groups.
+#[test]
+fn test_abandon_after_next() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let groups = Arc::new(Mutex::new(Vec::new()));
+    let groups_observer = groups.clone();
+    let groups_terminated = Arc::new(Mutex::new(false));
+    let groups_terminated_observer = groups_terminated.clone();
+
+    let _subscription = observable
+        .group_by(|value| value % 2)
+        .subscribe_with_callback(
+            move |group| groups_observer.with_mut(|groups| groups.push(group)),
+            move |_| groups_terminated_observer.with_mut(|terminated| *terminated = true),
+        );
+    assert!(sender.on_next(111).is_continue());
+    sender.abandon();
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    assert!(!groups_terminated.clone_value());
+
+    let group = groups.with_mut(Vec::pop).expect("the value opened a group");
+    let (checker, observer) = Checker::new();
+    let _group_subscription = group.subscribe(observer);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+}

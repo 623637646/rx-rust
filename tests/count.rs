@@ -481,3 +481,22 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| false);
 }
+
+/// The source drops its observer without a termination (decision 0004): it has not completed, so
+/// no count is emitted on its behalf, and the observer is dropped, never terminated.
+#[test]
+fn test_abandon_after_next() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.count().subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert!(sender.on_next(222).is_continue());
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+
+    sender.abandon();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+}

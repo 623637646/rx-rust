@@ -34,6 +34,15 @@ Downstream ends its own stream with `Flow::Stop`; the source must stop and must 
 
 1. `test_multiple_operation`
 2. `test_without_convenient_api`
+3. `test_abandon_after_next` — for an operator with work of its own, or one that waits for a
+   termination: a source drops its observer without a termination (`sender.abandon()`), which is
+   neither a disposal nor a termination
+   ([decision 0004](decisions/0004-a-source-that-drops-its-observer.md)). What the operator has
+   already accepted runs its course — another source or a notifier goes on, a queued or running
+   inner observable is delivered, a group gets what was sent to it — and nothing is emitted on the
+   source's behalf: no final value, no termination, no callback that a termination would call. The
+   observer is dropped, never terminated, once nothing more can come. The scheduler-based
+   operators have their own form of this case, below.
 
 ## Revertible observable
 
@@ -144,10 +153,9 @@ clock a yield is due at once, so `advance_by` would never finish.
 7. `test_order_with_continuous_next`
 8. `test_completed_zero_initial_delay` (if applicable: the operator takes an initial delay, which
    `Duration::ZERO` makes start at once)
-9. `test_abandon_after_next` — the source drops its observer without a termination
-   (`sender.abandon()`) while the operator still has work of its own: queued or delayed values, a
-   pending debounce, a timer. That work runs its course, and the observer is dropped, never
-   terminated, once nothing more can come. See
+9. `test_abandon_after_next` — as for any non-creating observable, above, where the work of the
+   operator runs in its task: queued or delayed values, a pending debounce, a timer. That work runs
+   its course, and the observer is dropped, never terminated, once nothing more can come. See
    [decision 0004](decisions/0004-a-source-that-drops-its-observer.md).
 10. `test_unsub_after_abandon` — the same, then the subscription is disposed before that work ran:
     the disposal cancels it, and nothing is delivered.

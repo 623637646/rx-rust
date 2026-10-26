@@ -1226,3 +1226,30 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// The source drops its observer without a termination (decision 0004): it sends nothing more, but
+/// the sampler goes on, and still emits the value the source sent last. Once the sampler lets go
+/// too, nothing more can come, and the observer is dropped, never terminated.
+#[test]
+fn test_abandon_after_next() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
+    let (mut sampler_sender, sampler, sampler_checker) = test_channel::<'_, (), Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.sample(sampler).subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    sender.abandon();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    assert_eq!(sampler_checker.state(), ChannelState::Subscribed);
+
+    assert!(sampler_sender.on_next(()).is_continue());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
+    sampler_sender.abandon();
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(sampler_checker.state(), ChannelState::Abandoned);
+}

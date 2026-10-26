@@ -1694,3 +1694,32 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// A source that drops its observer without a termination (decision 0004) sends nothing more, but
+/// the values it already sent still pair with those of the other one. Once the other lets go too,
+/// nothing more can come, and the observer is dropped, never terminated.
+#[test]
+fn test_abandon_after_next() {
+    let (mut sender_1, observable_1, channel_checker_1) = test_channel::<'_, i32, Infallible>();
+    let (mut sender_2, observable_2, channel_checker_2) = test_channel::<'_, i32, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable_1.zip(observable_2).subscribe(observer);
+    assert!(sender_1.on_next(1).is_continue());
+    assert!(sender_1.on_next(2).is_continue());
+    sender_1.abandon();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker_1.state(), ChannelState::Abandoned);
+    assert_eq!(channel_checker_2.state(), ChannelState::Subscribed);
+
+    assert!(sender_2.on_next(10).is_continue());
+    assert!(sender_2.on_next(20).is_continue());
+    assert_eq!(checker.values(), [(1, 10), (2, 20)]);
+    assert_eq!(checker.state(), State::Active);
+
+    sender_2.abandon();
+    assert_eq!(checker.values(), [(1, 10), (2, 20)]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker_2.state(), ChannelState::Abandoned);
+}

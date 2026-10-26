@@ -1652,3 +1652,29 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// The source drops its observer without a termination (decision 0004): it sends nothing more, but
+/// the inner observable it already sent runs its course. The source never completed, so neither
+/// does the result: once the inner completes, the observer is dropped, never terminated.
+#[test]
+fn test_abandon_after_next() {
+    let (inner_channels, inner) = test_channels::<'_, i32, Infallible>();
+    let (mut sender, observable, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.merge_all().subscribe(observer);
+    assert!(sender.on_next(inner).is_continue());
+    sender.abandon();
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Active);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+    assert_eq!(inner_channels.state(0), ChannelState::Subscribed);
+
+    assert!(inner_channels.on_next(0, 111).is_continue());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
+    inner_channels.on_termination(0, Termination::Completed);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+}

@@ -7,6 +7,11 @@ only stopped sending, so the work the operator has already accepted runs its cou
 
 Status: adopted. `test_abandon_after_next` and `test_unsub_after_abandon`, in the files of the
 six operators listed below, specify it, and `timeout::test_timeout_never` the case of `Never`.
+`test_abandon_after_next` also specifies it for the operators without a task that have work of
+their own, or wait for a termination: `sample`, `buffer`, `merge`, `zip`, `combine_latest`,
+`concat`, `concat_all`, `merge_all`, `switch`, `group_by`, `retry`, `catch`, `count`,
+`materialize`, `do_after_termination`, `hook_on_termination` and `share` (in `ref_count`); and
+`test_never` of the future adapters for `into_future`.
 
 ### Before
 

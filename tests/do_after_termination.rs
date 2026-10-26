@@ -501,3 +501,29 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// The source drops its observer without a termination (decision 0004): there is no termination to
+/// hand to the callback, so it is not called, and the observer is dropped, never terminated. The
+/// callback is dropped with the operator, and the observer it holds with it.
+#[test]
+fn test_abandon_after_next() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
+    let (checker_1, observer_1) = Checker::new();
+    let (checker_2, observer_2) = Checker::<(), _>::new();
+
+    let observable = observable.do_after_termination(move |termination| {
+        observer_2.on_termination(termination);
+    });
+
+    let _subscription = observable.subscribe(observer_1);
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Active);
+    assert_eq!(checker_2.state(), State::Active);
+
+    sender.abandon();
+    assert_eq!(checker_1.values(), [111]);
+    assert_eq!(checker_1.state(), State::Dropped);
+    assert_eq!(checker_2.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+}

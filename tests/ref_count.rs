@@ -2522,3 +2522,31 @@ fn test_disposal_does_not_connect_while_unwinding() {
     assert!(is_disconnected.read());
     drop(observable);
 }
+
+/// The source drops its observer without a termination (decision 0004): it sends nothing more, but
+/// nothing ends the round on its behalf either, so the subject is not terminated and its
+/// subscribers keep waiting, as they do for a source that falls silent.
+#[test]
+fn test_abandon_after_next() {
+    use std::sync::{Arc, Mutex};
+
+    let slot = Arc::new(Mutex::new(None::<SendBoxedObserver<'_, i32, Infallible>>));
+    let slot_on_subscribe = slot.clone();
+    let source = Create::shared_boxed(move |observer| {
+        slot_on_subscribe.replace_value(Some(observer));
+        DisposeOnDrop::default()
+    });
+    let (checker, observer) = Checker::new();
+
+    let _subscription = source.share().subscribe(observer);
+    assert!(
+        slot.with_mut(|slot| slot.as_mut().map(|observer| observer.on_next(111)))
+            .expect("subscribed")
+            .is_continue()
+    );
+    assert_eq!(checker.values(), [111]);
+
+    drop(slot.take_value()); // The source lets go of its observer.
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+}

@@ -539,3 +539,21 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// The source drops its observer without a termination (decision 0004): there is no termination to
+/// materialize, so none is invented, and the observer is dropped, never terminated.
+#[test]
+fn test_abandon_after_next() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
+    let (checker, observer) = Checker::new();
+
+    let _subscription = observable.materialize().subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(checker.values(), [Event::Next(111)]);
+    assert_eq!(checker.state(), State::Active);
+
+    sender.abandon();
+    assert_eq!(checker.values(), [Event::Next(111)]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+}

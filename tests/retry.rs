@@ -1472,3 +1472,25 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+/// The source drops its observer without a termination (decision 0004): that is not an error, so
+/// the callback is not asked, and the observer is dropped, never terminated.
+#[test]
+fn test_abandon_after_next() {
+    let (mut sender, observable, channel_checker) = test_channel::<'_, i32, &str>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.retry(|_| -> RetryAction<_, ReceiverObservable<'_, i32, &str>> {
+        unreachable!("an abandoned source has not failed")
+    });
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Active);
+
+    sender.abandon();
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+    assert_eq!(channel_checker.state(), ChannelState::Abandoned);
+}
