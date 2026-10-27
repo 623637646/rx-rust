@@ -121,6 +121,12 @@ cargo tarpaulin --out Html
 ## Code conventions
 
 - No `unsafe`. The crate-level `forbid` makes this a hard error.
+- **Debug-only code**: `cfg(debug_assertions)` gates whole items — a check, the helpers only it
+  uses, their imports (the `thread_mode::mutable::reentrancy` module,
+  `is_auto_dispose_on_termination_observer`) — and never selects between two implementations:
+  no `cfg(not(debug_assertions))` twin, no function whose body or return type differs between the
+  builds. A release build then compiles a subset of the debug build, not code of its own. CI lints
+  and tests both profiles anyway.
 - **Locks**: reach a lock (`RefCell` / `Mutex`, or the `M::Ptr` wrapping one) through
   `MutableHelper::with_mut` / `with_ref`, or through the one-shot helpers in `MutableExt`
   (`clone_value`, `replace_value`, `take_value`) — never `lock()` / `borrow_mut()`. The callback
