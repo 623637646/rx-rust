@@ -1,5 +1,9 @@
 name: CI
 
+# Every job runs one subcommand of `ci/check.sh`, which holds what is checked and how strictly, so
+# that a local `ci/check.sh <job>` checks exactly what the job does. This file only says where it
+# runs: the toolchain, the tools it needs, and the matrix of profiles.
+
 on:
   push:
     branches: [master]
@@ -18,8 +22,8 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  fmt:
-    name: rustfmt
+  static:
+    name: formatting and source rules
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -27,101 +31,74 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - run: cargo fmt --all --check
-      # Time comes from the scheduler's clock (`SchedulerTypes::clock`, or the `now` a task step
-      # gets), so that a virtual-time scheduler drives every operator. Only `SystemClock::now` and
-      # the origin of a virtual clock read it directly; comments and doc examples are skipped.
-      - name: No system clock outside the scheduler
-        run: |
-          if grep -rn 'Instant::now' src \
-            | grep -vE '^[^:]+:[0-9]+:\s*//' \
-            | grep -vE '^src/scheduler/(mod|virtual_time)\.rs:'; then
-            echo "Read the time from the scheduler instead of Instant::now()" >&2
-            exit 1
-          fi
+      - run: ci/check.sh static
 
-  clippy:
-    name: clippy
+  lint:
+    # Clippy, which runs every rustc lint as well, on the library in every combination of its
+    # features and on the tests. Each profile builds code the other does not: a release build
+    # leaves out the `cfg(debug_assertions)` code.
+    name: clippy (${{ matrix.profile }})
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [dev, release]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
-      # The tests enable every scheduler feature themselves (the dev-dependency on the crate itself),
-      # so one build covers all of the code.
-      - run: cargo clippy --locked --all-targets -- -D warnings
+        with:
+          key: ${{ matrix.profile }}
+      - run: ci/check.sh lint ${{ matrix.profile }}
 
-  check:
-    # The features are additive: the library is checked with each feature, none and all of them.
-    # The tests always enable every feature.
-    name: check every feature
+  doc:
+    name: docs and doctests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # Clippy denies warnings for the all-features build only; a warning that only one feature set
-    # produces (an unused import, dead code) must fail here.
-    env:
-      RUSTFLAGS: -D warnings
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-hack
       - uses: Swatinem/rust-cache@v2
-      # No `--locked` here: `--no-dev-deps` rewrites Cargo.toml for the duration of the run,
-      # which changes the resolved lock file. `futures` is the implicit feature of the optional
-      # dependency, which a user can enable on its own; cargo-hack skips it unless told.
-      - name: Library, each feature and no feature
-        run: cargo hack --each-feature --optional-deps futures --no-dev-deps check --lib
-      # Every other build is a debug build, which never compiles the `not(debug_assertions)` code.
-      - name: Library, release
-        run: cargo check --locked --release --lib --all-features
-      - name: Tests
-        run: cargo check --locked --tests
-
-  msrv:
-    name: MSRV (rust-version)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - name: Read rust-version from Cargo.toml
-        id: msrv
-        run: echo "version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].rust_version')" >> "$GITHUB_OUTPUT"
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ steps.msrv.outputs.version }}
-      - uses: Swatinem/rust-cache@v2
-      # Every feature, so that the code of every scheduler is checked against the MSRV.
-      - run: cargo check --locked --all-features --lib
-
-  doc:
-    name: docs and doctests
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      RUSTDOCFLAGS: -D warnings
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # Same features docs.rs builds with (see `[package.metadata.docs.rs]`).
-      - run: cargo doc --locked --no-deps --all-features
-      # nextest does not run doctests, and the README examples are doctests. Every feature, so that
-      # the examples of every scheduler run.
-      - run: cargo test --locked --doc --all-features
+      - run: ci/check.sh doc
 
   test:
-    name: test
+    name: test (${{ matrix.profile }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [dev, release]
+    env:
+      # `.config/nextest.toml`: retries the timing-sensitive tests, and reports the ones that only
+      # passed on a retry as flaky, so they stay visible without failing the run.
+      NEXTEST_PROFILE: ci
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@nextest
       - uses: Swatinem/rust-cache@v2
-      # One build: `block_on` runs each async test on every scheduler in turn.
-      # The `ci` profile in `.config/nextest.toml` retries timing-sensitive tests and reports the
-      # ones that only passed on retry as flaky, so they stay visible without failing the run.
-      - run: cargo nextest run --locked --profile ci
+        with:
+          key: ${{ matrix.profile }}
+      - run: ci/check.sh test ${{ matrix.profile }}
+
+  msrv:
+    name: MSRV (rust-version)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read rust-version from Cargo.toml
+        id: msrv
+        run: echo "version=$(sed -n 's/^rust-version = "\(.*\)"$/\1/p' Cargo.toml)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: Swatinem/rust-cache@v2
+      - run: ci/check.sh msrv

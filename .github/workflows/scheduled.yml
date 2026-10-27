@@ -1,0 +1,71 @@
+name: Scheduled
+
+# What a pull request does not wait for: the next toolchain, whose new lints and changes show up
+# here before they reach stable, and another platform, whose schedulers time differently. A failure
+# does not block anything; it opens an issue, or comments on the one already open.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Mondays, 03:00 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  beta:
+    name: beta, ${{ matrix.check }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [lint dev, lint release, doc, test dev]
+    env:
+      NEXTEST_PROFILE: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@beta
+        with:
+          components: clippy
+      - uses: taiki-e/install-action@cargo-hack
+      - uses: taiki-e/install-action@nextest
+      - run: ci/check.sh ${{ matrix.check }}
+
+  macos:
+    name: macOS, test dev
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      NEXTEST_PROFILE: ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@nextest
+      - run: ci/check.sh test dev
+
+  report:
+    needs: [beta, macos]
+    if: failure()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TITLE: Scheduled CI failed
+      RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    steps:
+      - name: Open an issue, or comment on the open one
+        run: |
+          number=$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --body "Failed again: $RUN"
+          else
+            gh issue create --title "$TITLE" --body "The scheduled run failed: $RUN"
+          fi

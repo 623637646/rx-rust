@@ -53,7 +53,7 @@ Rules of thumb:
 
 The tests need no `--features`: `Cargo.toml` has a dev-dependency on the crate itself that enables
 every scheduler feature, so `cargo test` builds them all. The features only matter for the library
-(`cargo check --lib --features …`, `cargo hack --each-feature --no-dev-deps check --lib`).
+(`cargo check --lib --features …`; `ci/check.sh lint dev` lints every combination of them).
 
 `block_on` in `tests/tests_utils/test_scheduler.rs` runs the test body once on every scheduler of
 the crate, in this order: `tokio`, `tokio-local` (`TokioLocalScheduler` on a `LocalSet`), `smol`,
@@ -86,6 +86,16 @@ cargo clippy --all-targets
 cargo doc --open
 cargo tarpaulin --out Html
 ```
+
+CI is `ci/check.sh`: each job of `.github/workflows/ci.yml` runs one of its subcommands (`static`,
+`lint dev|release`, `doc`, `test dev|release`, `msrv`), so a local run of one checks exactly what
+the job does, warnings denied. `ci/check.sh all` runs them all, the full test suite twice: before
+a release, not after a local change. CI builds every configuration the code compiles differently
+in — each feature combination, both profiles, the MSRV — and `ci/cfg_coverage.py` (in `static`)
+fails on a `cfg` key that `ci/cfg-dimensions.toml` does not list: a new key, such as a
+`target_os`, is a configuration CI does not build yet, so extend the matrix before listing it.
+`.github/workflows/scheduled.yml` runs the beta toolchain and macOS weekly, and opens an issue
+when they fail.
 
 ## Layout
 

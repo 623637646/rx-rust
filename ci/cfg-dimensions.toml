@@ -1,0 +1,22 @@
+# Every `cfg` key the code compiles differently on, and how CI builds both sides of it.
+#
+# `ci/cfg_coverage.py` fails on a key the code uses that is missing here, on a value that `values`
+# does not allow, and on a key listed here that no code uses anymore. A new key is a new
+# configuration: extend the CI matrix (`ci/check.sh`, `.github/workflows/ci.yml`) so that its
+# other side is built and linted too, then say here how.
+
+[feature]
+# Any value that Cargo.toml declares: every combination is built.
+covered_by = "lint, doc and msrv run cargo hack --feature-powerset"
+
+[debug_assertions]
+covered_by = "lint and test run in the dev and the release profile"
+
+[test]
+covered_by = "lint runs clippy --all-targets, which builds the unit tests"
+
+[panic]
+values = ["unwind"]
+# Only tests are gated on it. Running the tests with panic=abort needs the nightly
+# -Zpanic-abort-tests, and would only skip the tests that catch a panic.
+covered_by = "test runs with panic=unwind; panic=abort is deliberately not run"
