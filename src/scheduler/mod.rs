@@ -84,8 +84,8 @@
 //!     assert!(*ran.lock().unwrap());
 //! }
 //! ```
-// The link to `ThreadPoolScheduler` above resolves only with `futures-scheduler`; docs.rs and CI
-// build the docs with every feature, and other builds leave it as text instead of failing.
+// The link to `ThreadPoolScheduler` above resolves only with `futures-scheduler`; docs.rs builds
+// the docs with every feature, and a build without it leaves it as text instead of failing.
 #![cfg_attr(
     not(feature = "futures-scheduler"),
     allow(rustdoc::broken_intra_doc_links)

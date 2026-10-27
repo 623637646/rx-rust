@@ -146,6 +146,12 @@ where
 ///     assert_eq!(*values.borrow(), [1, 2, 3]);
 /// }
 /// ```
+// The link to `TokioLocalScheduler` above resolves only with `tokio-scheduler`; a build without it
+// leaves it as text instead of failing.
+#[cfg_attr(
+    not(feature = "tokio-scheduler"),
+    allow(rustdoc::broken_intra_doc_links)
+)]
 #[derive(Debug, Clone)]
 pub struct SmolLocalScheduler {
     /// Held weakly (see the [module docs](crate::scheduler)).
