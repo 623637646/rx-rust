@@ -4,54 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-
-- `Debug` for the task states `scheduler::{OnceContext, PeriodicContext, FutureThenContext,
-  StreamThenContext, WakeableContext}`, whatever state they carry, which is not printed.
-
-### Changed
-
-- `SubscriptionContext::update_flow` takes an update whose result is `IntoFlow`: `()`, as before,
-  when downstream alone decides the answer, or a `Flow` when the model decides too, under the
-  same lock that queued the events. `Flow::Stop` from either side is the answer.
-- **Breaking:** `IntoFlow` moves from `observer::callback_observer` to `observer`, next to `Flow`,
-  since `update_flow` takes it as well as `CallbackObserver`.
-
-- **Breaking:** `ObservableExt::catch`, `combine_latest`, `concat_all`, `concat_map`, `flat_map`,
-  `merge_all`, `switch`, `switch_map` and `zip` drop a type parameter that appeared in their bounds
-  only — the item type of the other or inner observable, or the error type of the one `catch`
-  switches to — and that nothing could infer it from. A call that names its type parameters with a
-  turbofish names one fewer; every other call is unchanged.
-- **Breaking:** the constructors of the operators drop the same kind of type parameter: the item
-  or error type that appeared in a single `Item = …` or `Error = …` bound and in nothing else.
-  `new` — and `new_from_iter` or `new_with_key_selector` where there is one — changes for `All`,
-  `Average`, `Buffer`, `Catch`, `CombineLatest`, `ConcatAll`, `ConcatMap`, `Contains`, `Count`,
-  `DefaultIfEmpty`, `Distinct`, `DistinctUntilChanged`, `DoAfterNext`, `DoAfterTermination`,
-  `DoBeforeNext`, `DoBeforeTermination`, `Filter`, `FlatMap`, `GroupBy`, `Map`, `MapErr`,
-  `MergeAll`, `Reduce`, `Sample`, `Scan`, `SkipUntil`, `SkipWhile`, `StartWith`, `Switch`,
-  `SwitchMap`, `TakeUntil`, `TakeWhile`, `Window` and `Zip`. The type parameters that unify two
-  sources, or give a closure its signature, stay. Again only a turbofish call changes.
-- **Breaking:** the future and stream adapters move out of `operators::others`, since they are
-  not operators but what an observable becomes, next to the boxed observables:
-  `ObservableFuture` and `ObservableTryFuture` to `observable::future`, and `ObservableStream`,
-  `ObservableTryStream` and the buffers `StreamBuffer`, `Unbounded`, `Latest`, `Bounded` and
-  `Overflow` to `observable::stream`. The `into_future`, `into_stream`, … methods are unchanged.
-- `distinct_until_changed` and `distinct_until_changed_with_key_selector` compare their keys with
-  `PartialEq` instead of requiring `Eq`, so a key such as an `f64` works. A key that is not equal
-  to itself, such as `f64::NAN`, never counts as a repeat.
-- **Breaking:** `skip_until` answers its notifier `Flow::Stop` on its first item, as ReactiveX
-  unsubscribes from it there: what the notifier sends afterwards, an error included, no longer
-  reaches the result. A notifier that failed after opening the gate used to fail the result.
-
-### Fixed
-
-- `switch` answers `Flow::Stop` to a value of an inner observable it has already switched away
-  from. The value was dropped, but the inner was told to go on: one that had not honored its
-  disposal yet kept sending into nothing.
-
-## [2.0.0] - 2026-10-21
+## [2.0.0] - 2026-10-27
 
 ### Added
 
@@ -120,6 +73,8 @@ All notable changes to this project are documented here. The format follows
   disposals of `amb` and `debug`, and `utils::serialized_delivery::{DropUndecided, DropDecided}`.
   With the disposals, the `DisposeOnDrop` a `subscribe` returns can be printed for those operators
   too.
+- `Debug` for the task states `scheduler::{OnceContext, PeriodicContext, FutureThenContext,
+  StreamThenContext, WakeableContext}`, whatever state they carry, which is not printed.
 
 ### Changed
 
@@ -331,11 +286,45 @@ All notable changes to this project are documented here. The format follows
   much room as they took, so the values queued meanwhile do not grow it from nothing.
 - `debug_to_stdout` prints a disposal as `Disposed`, the name of its `DebugEvent`, instead of
   `Dispose`.
+- `SubscriptionContext::update_flow` takes an update whose result is `IntoFlow`: `()`, as before,
+  when downstream alone decides the answer, or a `Flow` when the model decides too, under the
+  same lock that queued the events. `Flow::Stop` from either side is the answer.
+- **Breaking:** `IntoFlow` moves from `observer::callback_observer` to `observer`, next to `Flow`,
+  since `update_flow` takes it as well as `CallbackObserver`.
+- **Breaking:** `ObservableExt::catch`, `combine_latest`, `concat_all`, `concat_map`, `flat_map`,
+  `merge_all`, `switch`, `switch_map` and `zip` drop a type parameter that appeared in their bounds
+  only — the item type of the other or inner observable, or the error type of the one `catch`
+  switches to — and that nothing could infer it from. A call that names its type parameters with a
+  turbofish names one fewer; every other call is unchanged.
+- **Breaking:** the constructors of the operators drop the same kind of type parameter: the item
+  or error type that appeared in a single `Item = …` or `Error = …` bound and in nothing else.
+  `new` — and `new_from_iter` or `new_with_key_selector` where there is one — changes for `All`,
+  `Average`, `Buffer`, `Catch`, `CombineLatest`, `ConcatAll`, `ConcatMap`, `Contains`, `Count`,
+  `DefaultIfEmpty`, `Distinct`, `DistinctUntilChanged`, `DoAfterNext`, `DoAfterTermination`,
+  `DoBeforeNext`, `DoBeforeTermination`, `Filter`, `FlatMap`, `GroupBy`, `Map`, `MapErr`,
+  `MergeAll`, `Reduce`, `Sample`, `Scan`, `SkipUntil`, `SkipWhile`, `StartWith`, `Switch`,
+  `SwitchMap`, `TakeUntil`, `TakeWhile`, `Window` and `Zip`. The type parameters that unify two
+  sources, or give a closure its signature, stay. Again only a turbofish call changes.
+- **Breaking:** the future and stream adapters move out of `operators::others`, since they are
+  not operators but what an observable becomes, next to the boxed observables:
+  `ObservableFuture` and `ObservableTryFuture` to `observable::future`, and `ObservableStream`,
+  `ObservableTryStream` and the buffers `StreamBuffer`, `Unbounded`, `Latest`, `Bounded` and
+  `Overflow` to `observable::stream`. The `into_future`, `into_stream`, … methods are unchanged.
+- `distinct_until_changed` and `distinct_until_changed_with_key_selector` compare their keys with
+  `PartialEq` instead of requiring `Eq`, so a key such as an `f64` works. A key that is not equal
+  to itself, such as `f64::NAN`, never counts as a repeat.
+- **Breaking:** `skip_until` answers its notifier `Flow::Stop` on its first item, as ReactiveX
+  unsubscribes from it there: what the notifier sends afterwards, an error included, no longer
+  reaches the result. A notifier that failed after opening the gate used to fail the result.
 
 ### Fixed
 
 - `switch` drops errors from stale inner observables outside its context lock, so an error's
   destructor can re-enter the operator without panicking or deadlocking.
+
+- `switch` answers `Flow::Stop` to a value of an inner observable it has already switched away
+  from. The value was dropped, but the inner was told to go on: one that had not honored its
+  disposal yet kept sending into nothing.
 
 - `retry` no longer overflows the stack when its sources keep failing synchronously: an observable
   that fails while it is being subscribed is retried once its `subscribe` has returned, in a loop,
@@ -478,7 +467,6 @@ themes rather than every change.
 
 Initial public release on crates.io.
 
-[Unreleased]: https://github.com/623637646/rx-rust/compare/2.0.0...HEAD
 [2.0.0]: https://github.com/623637646/rx-rust/compare/1.0.1...2.0.0
 [1.0.1]: https://github.com/623637646/rx-rust/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/623637646/rx-rust/compare/0.3.0...1.0.0

@@ -8,7 +8,7 @@ repository = "https://github.com/623637646/rx-rust"
 description = "Reactive Programming in Rust inspired by ReactiveX https://reactivex.io/"
 keywords = ["reactive", "rx", "reactivex", "observable", "stream"]
 categories = ["asynchronous", "rust-patterns"]
-include = ["src/**", "Cargo.toml", "LICENSE", "README.md"]
+include = ["/src/**", "/Cargo.toml", "/LICENSE", "/README.md"]
 
 [package.metadata.docs.rs]
 # Every scheduler module is compiled only with its feature, and the README (the crate-level docs)
