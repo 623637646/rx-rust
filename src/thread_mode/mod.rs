@@ -19,6 +19,32 @@
 //! picks ([`mutable`]), depend on nothing else in it. What a mode means for an observer — which
 //! box it is erased into — is an extension of the mode defined with the observers:
 //! [`ObserverMode`](crate::observer::boxed_observer::ObserverMode).
+//!
+//! # User code under a lock
+//!
+//! A subject or an operator with shared state (`combine_latest`, `sequence_equal`, …) clones and
+//! compares items and errors while it holds its lock: `BehaviorSubject::value()`, the snapshot a
+//! replaying subject takes for a new subscriber, the pair `combine_latest` builds, the `PartialEq`
+//! `sequence_equal` calls, the error a subject records as it terminates. A snapshot taken without
+//! the lock could miss a value or repeat one, and taking it out of the lock would ask `T: Sync` of
+//! items that are only `Send`. So the `Clone` and `PartialEq` of an item or an error must not
+//! reach back into the subject or the pipeline that is handling it — no `on_next`, no `subscribe`,
+//! no `value()` or `termination()` of that same subject. Doing so takes a lock the thread already
+//! holds: debug builds panic with a message saying so, and release builds panic (`Local`) or
+//! deadlock (`Shared`). `Drop` is not restricted: replaced, evicted and rejected values are dropped
+//! after the lock is released.
+//!
+//! The same goes for a [`Clock`](crate::scheduler::Clock) of your own, handed to an operator
+//! directly or through a scheduler: an operator may read its `now()` while it holds its lock, so
+//! `now()` must not reach back into that pipeline either.
+//!
+//! A connectable observable (`multicast`, `publish*`, `share*`, `replay`) runs its subject factory
+//! under its controller's lock, and under the lock of its `ref_count` too when a subscriber of that
+//! `ref_count` needs a new subject. So does what the factory runs — the `Clone` of the initial value
+//! of `publish_behavior` and `share_behavior` — and the `Clone` of the subject itself, each time a
+//! subscriber or a connection joins it. None of them may subscribe to, connect or disconnect that same
+//! connectable observable, nor dispose a subscription of its `ref_count`. See
+//! [`ConnectableController`](crate::operators::connectable::connectable_controller::ConnectableController).
 
 pub mod mutable;
 

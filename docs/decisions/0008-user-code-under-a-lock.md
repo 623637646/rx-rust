@@ -25,8 +25,8 @@ when that is free: a value every path needs, read or cloned before the lock is t
 the lock short. Moving a call out is not worth new code, a second lock or a call that only some
 paths need.
 
-The rule that remains for these is a contract on the user's types, in the README ("Item and error
-types run under a lock"): their `Clone`, `PartialEq` and `now` must not reach back into the subject
+The rule that remains for these is a contract on the user's types, in the documentation of
+`thread_mode` ("User code under a lock"): their `Clone`, `PartialEq` and `now` must not reach back into the subject
 or the pipeline that is running them — no `on_next`, no `subscribe`, no `value()` or
 `termination()` of that same subject, no subscription to the same connectable. A subject factory
 must not subscribe to, connect or disconnect its own connectable, nor dispose a subscription of its

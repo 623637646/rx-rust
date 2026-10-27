@@ -10,38 +10,37 @@ Reactive Extensions for Rust. `rx-rust` is a toolkit for composing asynchronous 
 programs by chaining observables and operators in a declarative style, inspired by
 [ReactiveX](https://reactivex.io/).
 
-- Operators grouped by ReactiveX category, one per file.
 - `#![forbid(unsafe_code)]`, no required runtime dependency: the async runtime (Tokio, smol, or
   the `futures` executors) is selected by a feature flag.
+- Single- or multi-threaded is part of a pipeline's type: one that stays on its thread pays for
+  no `Arc<Mutex<_>>` and asks nothing to be `Send`, and one build can mix both.
 - A built-in stop signal: an observer that has seen enough returns `Flow::Stop`, and the source
   stops pushing, even a synchronous one that is still inside `subscribe`.
+- Time-based pipelines are testable on a virtual clock: synchronously, on exact boundaries,
+  without sleeping.
 - Crosses into `async` freely: a `Future` or a `Stream` becomes an observable, and an observable
   becomes a `Future` of its first item or a `Stream` of all of them.
 
 ## Installation
-
-Add the crate with the scheduler feature for the runtime you use:
 
 ```toml
 [dependencies]
 rx-rust = { version = "2.0", features = ["tokio-scheduler"] }
 ```
 
-Enable the scheduler feature for your runtime; `tokio-scheduler` is the most common choice, and the
-features can be combined. The time-based operators (`delay`, `debounce`, `timeout`, `Interval`,
-`Timer`, …) take a scheduler argument: one of these, or your own implementation of `Scheduler`.
+Enable the scheduler feature of the runtime you use; the features can be combined. The schedulers
+live in `rx_rust::scheduler::runtime`:
 
-### Feature flags
+Feature             | Schedulers
+------------------- | ----------
+`tokio-scheduler`   | `tokio::TokioScheduler::current()`, or `from_handle(handle)` for a `Runtime` you own; `TokioLocalScheduler::ambient()` for the running `LocalSet`, or `from_local_set(&local_set)`
+`smol-scheduler`    | `smol::SmolScheduler::global()`, or `from_executor(&executor)`; `SmolLocalScheduler::from_executor(&local_executor)`
+`futures-scheduler` | `futures::ThreadPoolScheduler::from_pool(pool)`; `LocalPoolScheduler::from_spawner(pool.spawner())`
+`futures`           | No scheduler: the `Stream` bridges (`FromStream`, `into_stream`, …). Enabled by every scheduler feature.
+(always)            | `rx_rust::scheduler::virtual_time::VirtualTime`, for tests
 
-Feature                  | Description                                                                                    | Pulls in
------------------------- | ---------------------------------------------------------------------------------------------- | --------
-`tokio-scheduler`        | Schedule on Tokio. The schedulers are `TokioScheduler` and `TokioLocalScheduler`.               | `futures`, `tokio/rt`, `tokio/time`
-`smol-scheduler`         | Schedule on smol. The schedulers are `SmolScheduler` and `SmolLocalScheduler`.                 | `futures`, `smol`
-`futures-scheduler`      | Schedule on the executors of `futures`. The schedulers are `ThreadPoolScheduler` and `LocalPoolScheduler`. | `futures/thread-pool`, `async-io`
-`futures`                | Enabled by every scheduler feature. Gates the `Stream` bridges: `FromStream`, `FromTryStream`, `into_stream`, `into_try_stream`. | `futures`
-
-Whether a pipeline is single- or multi-threaded is not a build setting but part of its type — see
-[Thread modes](#thread-modes) — so one build can mix both.
+The `*Local*` schedulers run `Local` pipelines, the others `Shared` ones (see
+[Thread modes](#thread-modes)).
 
 ## Quick start
 
@@ -84,28 +83,9 @@ async fn main() {
 
 ## Core concepts
 
-An observable is a source of `Item`s that ends with a `Termination<Error>`: either `Completed` or
-`Error(E)`. A source that cannot fail uses `Error = Infallible`, and some conversions
-(`into_future`, `into_stream`) are only available for those. What an observable produces is
-described once, by `ObservableTypes`:
-
-```rust,ignore
-pub trait ObservableTypes {
-    type Item;
-    type Error;
-    type Mode: ThreadMode;      // Local or Shared, see below
-    type Disposal: Disposable;  // what `subscribe` returns, independent of the observer
-}
-
-pub trait Observable<OR>: ObservableTypes {
-    fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal>;
-}
-```
-
-`Observable` is generic over the observer `OR`, so an operator is monomorphized for the observer it
-is given and needs no boxing; the disposal it returns never names that observer.
-
-An `Observer<T, E>` has two methods:
+An observable is a source of items that ends with a `Termination<E>`: either `Completed` or
+`Error(E)`. A source that cannot fail uses `E = Infallible`, and some conversions (`into_future`,
+`into_stream`) are only available for those. An `Observer<T, E>` receives them:
 
 ```rust
 use rx_rust::observer::{Flow, Observer, Termination};
@@ -126,12 +106,9 @@ impl Observer<i32, std::convert::Infallible> for Printer {
 
 `on_termination` takes `self`: a termination is the last event, and the observer is consumed by it.
 
-### Stopping from the observer
-
-`on_next` returns a `Flow`. `Flow::Continue` lets the source go on; `Flow::Stop` is a promise that
-the observer accepts nothing more, not even a termination. The source stops pushing and drops the
-observer. This is how a consumer ends an infinite synchronous source, which never leaves `subscribe`
-and so has no subscription to drop yet:
+`on_next` returns a `Flow`. `Flow::Stop` is a promise that the observer accepts nothing more, not
+even a termination: the source stops pushing and drops the observer. This is how a consumer ends an
+infinite synchronous source, which never leaves `subscribe` and so has no subscription to drop yet:
 
 ```rust
 use rx_rust::{observable::ObservableExt, observer::Flow, operators::creating::range::Range};
@@ -147,24 +124,34 @@ Range::new(1..).subscribe_with_callback(
 assert_eq!(seen, [1, 2, 3]);
 ```
 
-A callback that returns `()` is `Flow::Continue`, so the common case needs no trailing value.
-Operators forward the answer of their downstream to the source, so `take`, `first`, `take_until`
-and friends stop their source the same way. When the source is not the one calling
-`on_next` — when it delivers through a scheduler — the value is queued and the stop reaches the
-source with the next push, which is why `Flow::Continue` is only a hint and disposal is still
-needed.
+A callback that returns `()` means `Flow::Continue`. Operators forward their downstream's answer to
+the source, so `take`, `first`, `take_until` and friends stop their source the same way. A stop
+does not replace disposal: a source that emits later is still ended by dropping its subscription.
+
+## Thread modes
+
+Every observable declares a `Mode`: `thread_mode::Local` or `thread_mode::Shared`. A `Local`
+pipeline keeps its shared state in `Rc<RefCell<_>>` and needs nothing to be `Send`; a `Shared` one
+uses `Arc<Mutex<_>>` and can be driven from several threads. Sources pick their mode
+(`Create::local` / `Create::shared`, `PublishSubject::local()` / `PublishSubject::shared()`, …;
+plain values such as `Just` or `FromIter` are `Local`), an operator with several sources is
+`Shared` as soon as one of them is, and a scheduler fixes the mode of what runs on it.
+
+Erasing the type is explicit: `into_boxed` / `into_cloneable_boxed`, or `into_send_boxed` /
+`into_send_cloneable_boxed` for a box that must be `Send`. The erased type keeps the mode;
+`into_shared()` lifts a `Local` source to share an erased type with `Shared` ones.
+
+Some user code runs under an internal lock — the `Clone` and `PartialEq` of items and errors, a
+custom `Clock::now`, a connectable's subject factory — and must not reach back into the same
+subject or pipeline; see the `thread_mode` module documentation.
 
 ## Schedulers
 
-Every time-based operator takes a value implementing `Scheduler`, so nothing is global and one
-program can drive different pipelines on different runtimes:
-
-Feature                  | Scheduler value
------------------------- | ---------------
-`tokio-scheduler`        | `rx_rust::scheduler::runtime::tokio::TokioScheduler::current()`, or `from_handle(runtime.handle().clone())` for a `Runtime` you own; `TokioLocalScheduler::ambient()` for the running `LocalSet`, or `from_local_set(&local_set)` for a given one (`Local` mode)
-`smol-scheduler`         | `rx_rust::scheduler::runtime::smol::SmolScheduler::global()`, or `from_executor(&executor)` for an `Executor` you own; `SmolLocalScheduler::from_executor(&executor)` for a `LocalExecutor` (`Local` mode)
-`futures-scheduler`      | `rx_rust::scheduler::runtime::futures::ThreadPoolScheduler::from_pool(pool)` for a `ThreadPool`; `LocalPoolScheduler::from_spawner(pool.spawner())` for a `LocalPool` (`Local` mode)
-(always)                 | `VirtualTimeScheduler`, from a `VirtualTime` kept alive by the test (see [Testing on virtual time](#testing-on-virtual-time))
+Every time-based operator (`delay`, `debounce`, `timeout`, `Interval`, …) takes a value
+implementing `Scheduler`, so nothing is global and one program can drive different pipelines on
+different runtimes. `subscribe_on` and `observe_on` move the subscription, or the delivery of
+events, onto a scheduler; the operators without a scheduler argument run synchronously on whichever
+thread pushes into them.
 
 ```rust
 #[tokio::main]
@@ -186,21 +173,12 @@ async fn main() {
 }
 ```
 
-`subscribe_on` and `observe_on` move the subscription, or the delivery of events, onto a scheduler;
-the operators without a scheduler argument run synchronously on whichever thread pushes into them.
-
-Time comes from the scheduler too: every deadline reads the scheduler's clock
-(`scheduler.clock().now()`, the `Clock` of `SchedulerTypes::clock`), never the system's directly.
-`timestamp`, `time_interval` and `throttle`, which schedule nothing, take that clock rather than
-the scheduler: `.timestamp(scheduler.clock())`, or `.timestamp(SystemClock)` without a runtime.
-
 ### Testing on virtual time
 
-`VirtualTime` is a clock that moves only when told to, and its `scheduler()` is a `Scheduler` like
-the others. A test hands that scheduler to the operators, then moves the clock with `advance_by`,
-which runs every task due by then on the calling thread, each at the instant it was due. Time-based
-pipelines are then tested on exact boundaries, synchronously, without sleeping and without an async
-runtime:
+Time comes from the scheduler's clock, never from the system's directly, so a virtual clock drives
+every operator. `VirtualTime` is a clock that moves only when told to, and its `scheduler()` is a
+`Scheduler` like the others. `advance_by` runs every task due by then on the calling thread, each
+at the instant it was due:
 
 ```rust
 use rx_rust::{
@@ -228,17 +206,11 @@ time.advance_by(Duration::from_secs(3 * 60 * 60));
 assert_eq!(*values.lock().unwrap(), [0, 1, 2]);
 ```
 
-`run_task` only queues a task, even without a delay, so `advance_by(Duration::ZERO)` is what runs
-the work an `observe_on` or a `delay` of zero has queued. The scheduler is `Shared`. A pipeline
-that waits on something else than the clock — real IO, a timer of another runtime — belongs on a
-real scheduler.
-
 ## Futures and streams
 
-A future becomes an observable with `FromFuture`, or `FromTryFuture` when its output is a `Result`
-whose `Err` should become the observable's error; both need a scheduler to run the future on. This
-is how a one-shot call (an HTTP request, a database lookup) goes inside `flat_map`, `concat_map` or
-`switch_map`:
+A future becomes an observable with `FromFuture`, or `FromTryFuture` when its `Err` should become
+the observable's error; both run the future on a scheduler. This is how a one-shot call (an HTTP
+request, a database lookup) goes inside `flat_map`, `concat_map` or `switch_map`:
 
 ```rust
 #[tokio::main]
@@ -266,9 +238,9 @@ async fn main() {
 ```
 
 In the other direction, `into_future()` — or `into_try_future()` for a source that can fail —
-turns an observable into a future of its first item, stopping the source as soon as that item is
-in. It resolves with an `Option<T>`, or a `Result<Option<T>, E>`. Put `last()`, `collect()` or
-`reduce()` in front of it to pick another item or to make the source always emit:
+resolves with the first item, as an `Option<T>` or a `Result<Option<T>, E>`, and stops the source
+as soon as that item is in. Put `last()`, `collect()` or `reduce()` in front of it to pick another
+item:
 
 ```rust
 #[tokio::main]
@@ -289,48 +261,12 @@ async fn main() {
 }
 ```
 
-A whole sequence, rather than one item of it, is consumed through `into_stream()` /
-`into_try_stream()`, which turn an observable into a `Stream` of its items; `FromStream` /
-`FromTryStream` go the other way. These four need the `futures` feature, which every scheduler
-feature enables.
+A whole sequence goes through `into_stream()` / `into_try_stream()`, and back with `FromStream` /
+`FromTryStream`. There is no `request(n)`: demand-driven consumption is what `Stream` is for, and
+`into_stream_with_buffer` bounds what a fast source leaves between two polls (see the
+`observable::stream` module documentation).
 
-### Backpressure
-
-`rx-rust` has no `request(n)`: an observable pushes, and the only word its observer has is
-`Flow::Stop`. Demand-driven consumption is what `Stream` is for, so the pull side lives there
-rather than in a second observable type — the `Flowable` of RxJava — and the two meet at the
-conversions. `FromStream` polls its stream only after `on_next` returns, so the stream's pace is
-kept through every synchronous operator, up to the first asynchronous one. In the other direction
-`into_stream()` keeps every item that arrives between two polls, so a source faster than the
-consumer grows its buffer without bound; `into_stream_with_buffer(buffer)` bounds it with a
-`StreamBuffer` that decides what survives — `Latest` keeps the newest item, `Bounded` a fixed
-number of them, dropping the oldest or the newest — or folds the items into one, in an
-implementation of your own:
-
-```rust
-use futures::{FutureExt, StreamExt};
-use rx_rust::{
-    observable::{ObservableExt, stream::Latest},
-    observer::Observer,
-    subject::publish_subject::PublishSubject,
-};
-use std::convert::Infallible;
-
-let mut subject = PublishSubject::<_, Infallible, _>::local();
-let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
-assert_eq!(stream.next().now_or_never(), None); // the first poll subscribes
-
-assert!(subject.on_next(1).is_continue());
-assert!(subject.on_next(2).is_continue());
-assert!(subject.on_next(3).is_continue());
-assert_eq!(stream.next().now_or_never(), Some(Some(3)));
-```
-
-### Single, Maybe and Completable
-
-`rx-rust` deliberately has no `Single`, `Maybe` or `Completable` types. ReactiveX added them for
-languages that lack a native way to express "one asynchronous result"; Rust has one, and
-`async`/`await` composes it better than any operator set could:
+There is no `Single`, `Maybe` or `Completable` either: a one-shot result is a `Future`.
 
 ReactiveX     | Rust
 ------------- | ----
@@ -338,61 +274,9 @@ ReactiveX     | Rust
 `Maybe<T>`    | `Future<Output = Result<Option<T>, E>>`
 `Completable` | `Future<Output = Result<(), E>>`
 
-The operators of `Single` map onto plain async code — `map`/`flatMap` is
-`async { f(future.await?) }`, `zip` is `futures::try_join!`, `amb` is `futures::future::select`,
-`timeout`/`delay` are the runtime's `timeout`/`sleep`, `retry` is a `loop` around `.await`, `cache`
-is `FutureExt::shared`, and dropping the future is its `Disposable`. `into_try_future()` is the
-bridge: its output is exactly a `Maybe`, and with `collect()` in front, a `Single`. Keeping one-shot
-results as futures also keeps this crate's operator set a single one: every operator works on
-`Observable`, and none needs a second implementation for `Single`.
-
-## Thread modes
-
-Every observable declares a `Mode`: `thread_mode::Local` or `thread_mode::Shared`. A `Local`
-pipeline keeps its shared state in `Rc<RefCell<_>>` and needs nothing to be `Send`; a `Shared` one
-uses `Arc<Mutex<_>>` and can be driven from several threads. Sources pick their mode
-(`Create::local` / `Create::shared` and their `_boxed` variants, `PublishSubject::local()` /
-`PublishSubject::shared()`, …; plain values such as `Just` or `FromIter` are `Local`), an operator
-with several sources is `Shared` as soon as one of them is, and a scheduler fixes the mode of what
-runs on it: `Local` for the single-threaded schedulers (`TokioLocalScheduler`, `SmolLocalScheduler`,
-`LocalPoolScheduler`), `Shared` for the others. `Send` is only asked for where a value really
-crosses threads.
-
-Erasing the type is explicit and says what it keeps: `into_boxed` / `into_cloneable_boxed` for a
-single thread, `into_send_boxed` / `into_send_cloneable_boxed` for values that must be `Send`.
-The erased type keeps the mode. Use `into_shared()` before erasing a `Local` source that must
-share an erased type with `Shared` sources. A `Send` box can keep either mode; its source and
-disposal must be `Send`.
-
-### Item and error types run under a lock
-
-A subject or an operator with shared state (`combine_latest`, `sequence_equal`, …) clones and
-compares items and errors while it holds its lock: `BehaviorSubject::value()`, the snapshot a
-replaying subject takes for a new subscriber, the pair `combine_latest` builds, the `PartialEq`
-`sequence_equal` calls, the error a subject records as it terminates. A snapshot taken without
-the lock could miss a value or repeat one, and taking it out of the lock would ask `T: Sync` of
-items that are only `Send`. So the `Clone` and `PartialEq` of an item or an error must not
-reach back into the subject or the pipeline that is handling it — no `on_next`, no `subscribe`,
-no `value()` or `termination()` of that same subject. Doing so takes a lock the thread already
-holds: debug builds panic with a message saying so, and release builds panic (`Local`) or
-deadlock (`Shared`). `Drop` is not restricted: replaced, evicted and rejected values are dropped
-after the lock is released.
-
-The same goes for a `Clock` of your own, handed to an operator directly or through a scheduler: an
-operator may read its `now()` while it holds its lock, so `now()` must not reach back into that
-pipeline either.
-
-A connectable observable (`multicast`, `publish*`, `share*`, `replay`) runs its subject factory
-under its controller's lock, and under the lock of its `ref_count` too when a subscriber of that
-`ref_count` needs a new subject. So does what the factory runs — the `Clone` of the initial value
-of `publish_behavior` and `share_behavior` — and the `Clone` of the subject itself, each time a
-subscriber or a connection joins it. None of them may subscribe to, connect or disconnect that same
-connectable observable, nor dispose a subscription of its `ref_count`.
-
 ## Subjects
 
 A subject is both an `Observer` and an `Observable`: push into one end, subscribe to the other.
-They are the hot sources of the crate, and what `publish` / `share` / `replay` multicast through.
 
 Subject                                     | Late subscribers get
 ------------------------------------------- | --------------------
@@ -400,7 +284,7 @@ Subject                                     | Late subscribers get
 `BehaviorSubject`                           | The latest value first, then everything after.
 `ReplaySubject` (bounded or unbounded)      | The buffered values, then everything after; the termination is replayed too.
 `AsyncSubject`                              | The last value, delivered on completion; nothing on error.
-`unicast_subject::{local, shared}`          | A single-consumer pipe: a `UnicastSender` and a `UnicastObservable` that can be subscribed once. Values sent before the subscription are buffered.
+`unicast_subject::{local, shared}`          | A single-consumer pipe that buffers what is sent before the subscription.
 
 The multicast subjects are `Clone`; clone one to keep a sending end after subscribing the other:
 
@@ -425,37 +309,9 @@ drop(subscription);
 assert_eq!(seen, [1, 2]);
 ```
 
-A cold observable is turned into a shared, hot one with `share()` (`publish().ref_count()`): the
-source is subscribed when the first observer arrives and unsubscribed when the last leaves.
-`publish()` / `replay()` / `multicast()` give the `ConnectableController` back for manual
-`connect()` / `disconnect()`.
-
-The subject is created by a subject factory, a `fn(&mut C) -> S` called with a context `C`, and a
-new one replaces it when it is reset, so each round starts over. By default the source
-terminating, the last subscriber leaving and a manual `disconnect()` all reset it.
-`reset_on_error(false)` / `reset_on_complete(false)` on the controller keep a terminated subject
-for late subscribers, and `reset_on_ref_count_zero(false)` on the `RefCount` keeps the source
-connected without subscribers:
-
-```rust
-use rx_rust::{
-    observable::ObservableExt, operators::creating::from_iter::FromIter,
-    subject::replay_subject::ReplaySubject,
-};
-use std::cell::RefCell;
-
-let seen = RefCell::new(Vec::new());
-let cached = FromIter::new([1, 2, 3])
-    .multicast(Some(1), |buffer_size| ReplaySubject::local(*buffer_size))
-    .reset_on_complete(false)
-    .ref_count();
-
-for _ in 0..2 {
-    cached.clone().subscribe_with_callback(|value| seen.borrow_mut().push(value), |_| {});
-}
-// The second subscriber gets the kept `3`, and the source is not connected again.
-assert_eq!(*seen.borrow(), [1, 2, 3, 3]);
-```
+`share()` turns a cold observable into a hot one, subscribed while it has subscribers;
+`publish()`, `replay()` and `multicast()` connect manually. See the `operators::connectable`
+module documentation.
 
 ## Operators
 
@@ -473,33 +329,18 @@ Mathematical and aggregate  | `count`, `sum`, `average`, `min`, `max`, `reduce`,
 Error handling              | `catch`, `map_err`, `retry`
 Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
 Connectable                 | `multicast`, `publish`, `publish_behavior`, `publish_last`, `replay`, `share`, `share_behavior`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
-Conversion                  | `into_future`, `into_try_future`, `into_stream`, `into_stream_with_buffer`, `into_try_stream`, `into_try_stream_with_buffer`, `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
+Async conversion            | `into_future`, `into_try_future`, `into_stream`, `into_stream_with_buffer`, `into_try_stream`, `into_try_stream_with_buffer`
+Type conversion             | `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`
 Debugging                   | `debug`, `debug_to_stdout`, `hook_on_subscription`, `hook_on_next`, `hook_on_termination`
-
-## Project layout
-
-- `src/observable` – The `Observable` trait, `ObservableExt` (every operator as a method), the
-  boxed observables, and what an observable becomes as a `Future` or a `Stream`.
-- `src/observer` – The `Observer` trait, `Flow`, `Termination`, and the callback observer.
-- `src/disposable` – `Disposable` and the `DisposeOnDrop` that disposes on drop.
-- `src/operators` – One operator per file, grouped by category to mirror ReactiveX terminology.
-- `src/subject` – The subjects.
-- `src/scheduler` – The `Scheduler` trait and its adapters for the supported runtimes.
-- `src/thread_mode` – `ThreadMode`, `Local` and `Shared`, and the pointers, locks and flags each
-  mode uses (`thread_mode::mutable`). The boxed observer each mode uses is `ObserverMode`, in
-  `src/observer/boxed_observer.rs`.
-- `src/utils` – Shared machinery for writing operators: serialized delivery, the subscription
-  context most stateful operators are written with.
-- `tests/` – One integration test file per operator, using the same checklist of cases for each;
-  great as executable documentation.
 
 ## Contributing
 
+`cargo test --test <operator>` runs the tests of one operator, and `ci/check.sh` runs what CI runs.
 See [docs/testing.md](https://github.com/623637646/rx-rust/blob/master/docs/testing.md) for the
-test case names every operator is expected to cover,
+test cases every operator is expected to cover,
 [docs/decisions/](https://github.com/623637646/rx-rust/tree/master/docs/decisions) for design
 decisions, and [AGENTS.md](https://github.com/623637646/rx-rust/blob/master/AGENTS.md) for the
-build and test commands. Requires Rust 1.89 or later.
+code conventions and the layout of the sources.
 
 ## License
 

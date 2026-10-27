@@ -2,6 +2,26 @@
 //! [`ObservableExt::into_try_future`](crate::observable::ObservableExt::into_try_future), and
 //! [`ObservableFuture`] for a source that cannot fail, behind
 //! [`ObservableExt::into_future`](crate::observable::ObservableExt::into_future).
+//!
+//! # Single, Maybe and Completable
+//!
+//! The crate deliberately has no `Single`, `Maybe` or `Completable` types. ReactiveX added them for
+//! languages that lack a native way to express "one asynchronous result"; Rust has one, and
+//! `async`/`await` composes it better than any operator set could:
+//!
+//! | ReactiveX     | Rust                                      |
+//! |---------------|-------------------------------------------|
+//! | `Single<T>`   | `Future<Output = Result<T, E>>`           |
+//! | `Maybe<T>`    | `Future<Output = Result<Option<T>, E>>`   |
+//! | `Completable` | `Future<Output = Result<(), E>>`          |
+//!
+//! The operators of `Single` map onto plain async code — `map`/`flatMap` is
+//! `async { f(future.await?) }`, `zip` is `futures::try_join!`, `amb` is `futures::future::select`,
+//! `timeout`/`delay` are the runtime's `timeout`/`sleep`, `retry` is a `loop` around `.await`, `cache`
+//! is `FutureExt::shared`, and dropping the future is its `Disposable`. `into_try_future()` is the
+//! bridge: its output is exactly a `Maybe`, and with `collect()` in front, a `Single`. Keeping
+//! one-shot results as futures also keeps the operator set a single one: every operator works on
+//! `Observable`, and none needs a second implementation for `Single`.
 
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,

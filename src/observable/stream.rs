@@ -3,6 +3,41 @@
 //! [`ObservableStream`] for a source that cannot fail, behind
 //! [`ObservableExt::into_stream`](crate::observable::ObservableExt::into_stream); and the
 //! [`StreamBuffer`] that decides what either keeps between two polls.
+//!
+//! # Backpressure
+//!
+//! The crate has no `request(n)`: an observable pushes, and the only word its observer has is
+//! [`Flow::Stop`]. Demand-driven consumption is what `Stream` is for, so the pull side lives there
+//! rather than in a second observable type — the `Flowable` of RxJava — and the two meet at the
+//! conversions.
+//!
+//! - From a stream: `FromStream` polls its stream only after `on_next` returns, so the stream's
+//!   pace is kept through every synchronous operator, up to the first asynchronous one.
+//! - To a stream: `into_stream()` keeps every item that arrives between two polls, so a source
+//!   faster than the consumer grows its buffer without bound.
+//!   [`into_stream_with_buffer`](crate::observable::ObservableExt::into_stream_with_buffer) bounds
+//!   it with a [`StreamBuffer`] that decides what survives: [`Latest`] keeps the newest item,
+//!   [`Bounded`] a fixed number of them, dropping the oldest or the newest; an implementation of
+//!   your own may fold the items into one.
+//!
+//! ```rust
+//! use futures::{FutureExt, StreamExt};
+//! use rx_rust::{
+//!     observable::{ObservableExt, stream::Latest},
+//!     observer::Observer,
+//!     subject::publish_subject::PublishSubject,
+//! };
+//! use std::convert::Infallible;
+//!
+//! let mut subject = PublishSubject::<_, Infallible, _>::local();
+//! let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
+//! assert_eq!(stream.next().now_or_never(), None); // the first poll subscribes
+//!
+//! assert!(subject.on_next(1).is_continue());
+//! assert!(subject.on_next(2).is_continue());
+//! assert!(subject.on_next(3).is_continue());
+//! assert_eq!(stream.next().now_or_never(), Some(Some(3)));
+//! ```
 
 use crate::{
     disposable::dispose_on_drop::DisposeOnDrop,
