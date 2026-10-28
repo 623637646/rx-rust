@@ -21,6 +21,13 @@ programs by chaining observables and operators in a declarative style, inspired 
 - Crosses into `async` freely: a `Future` or a `Stream` becomes an observable, and an observable
   becomes a `Future` of its first item or a `Stream` of all of them.
 
+Why not a `Stream`? A stream is pulled by its one consumer, which suits I/O that must keep the
+consumer's pace. An observable is pushed to every subscriber, which suits events that are shaped
+in time (`debounce`, `timeout`) and combined from several sources (`switch_map`,
+`combine_latest`). The two convert into each other, so a program can use both.
+[rx-rust and `Stream`](https://github.com/623637646/rx-rust/blob/master/docs/stream-comparison.md)
+writes the same program both ways.
+
 ## Installation
 
 ```toml
