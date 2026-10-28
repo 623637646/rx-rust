@@ -39,7 +39,7 @@ use std::time::{Duration, Instant};
 /// let span = Duration::from_millis(5);
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let values_observer = values.clone();
-/// let mut source = PublishSubject::<i32, Infallible, _>::shared();
+/// let mut source = PublishSubject::<_, Infallible, _>::shared();
 /// let _subscription = Debounce::new(source.clone(), span, time.scheduler())
 /// .subscribe_with_callback(
 ///     move |value| values_observer.with_mut(|values| values.push(value)),
@@ -125,7 +125,7 @@ where
     >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        subscribe_with_context(observer, Model::<T>::Idle, |context| {
+        subscribe_with_context(observer, Model::Idle, |context| {
             let (task, waker) = Task::wakeable(context.clone(), step_timer);
             let source_subscription = self.source.subscribe(DebounceObserver {
                 context,

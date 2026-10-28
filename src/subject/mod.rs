@@ -27,7 +27,7 @@
 //! };
 //!
 //! let mut seen = Vec::new();
-//! let subject = PublishSubject::<i32, std::convert::Infallible, _>::local();
+//! let subject = PublishSubject::<_, std::convert::Infallible, _>::local();
 //! let mut sender = subject.clone();
 //! let subscription = subject.subscribe_with_callback(|value| seen.push(value), |_| {});
 //!
@@ -90,7 +90,7 @@ impl<T, E, S> SubjectExt<T, E> for S where S: Subject<T, E> {}
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let mut sender = PublishSubject::<i32, std::convert::Infallible, _>::local();
+/// let mut sender = PublishSubject::<_, std::convert::Infallible, _>::local();
 /// let observable = sender.clone().into_observable(); // `on_next` is not available on it.
 ///
 /// let subscription = observable.subscribe_with_callback(|value| seen.push(value), |_| {});

@@ -81,6 +81,20 @@ async fn main() {
 }
 ```
 
+## Examples
+
+The [examples](https://github.com/623637646/rx-rust/tree/master/examples) directory holds
+complete programs, each run with `cargo run --example <name>`. In order, from the first steps:
+
+Example                | Shows
+---------------------- | -----
+`basics`               | a pipeline of `filter`, `map` and `take`, subscribed with callbacks
+`subject`              | pushing values by hand to several subscribers, and unsubscribing
+`search_as_you_type`   | `debounce` waiting for a pause, `switch_map` cancelling a stale search
+`retry`                | `retry` after an error, and the pipeline awaited as a `Future`
+`virtual_time`         | testing a `debounce` on a virtual clock, without waiting
+`form_validation`      | `combine_latest` of `BehaviorSubject`s on a single thread
+
 ## Core concepts
 
 An observable is a source of items that ends with a `Termination<E>`: either `Completed` or
@@ -297,7 +311,7 @@ use rx_rust::{
 
 let mut seen = Vec::new();
 
-let subject = PublishSubject::<i32, std::convert::Infallible, _>::local();
+let subject = PublishSubject::<_, std::convert::Infallible, _>::local();
 let mut sender = subject.clone();
 let subscription = subject.subscribe_with_callback(|value| seen.push(value), |_| {});
 

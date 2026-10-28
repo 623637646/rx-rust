@@ -35,7 +35,7 @@ use educe::Educe;
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let mut sender = BehaviorSubject::<i32, std::convert::Infallible, _>::local(0);
+/// let mut sender = BehaviorSubject::<_, std::convert::Infallible, _>::local(0);
 /// let _ = sender.on_next(1);
 /// assert_eq!(sender.value(), 1);
 ///

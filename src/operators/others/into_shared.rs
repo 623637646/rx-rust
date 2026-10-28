@@ -31,7 +31,7 @@ use educe::Educe;
 /// };
 /// use std::convert::Infallible;
 ///
-/// let subject = PublishSubject::<i32, Infallible, _>::shared();
+/// let subject = PublishSubject::shared();
 /// let sources: Vec<SendBoxedObservable<'_, '_, '_, i32, Infallible, Shared>> = vec![
 ///     Just::new(1).into_shared().into_send_boxed(),
 ///     subject.into_send_boxed(),

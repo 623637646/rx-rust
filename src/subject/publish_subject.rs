@@ -33,7 +33,7 @@ use educe::Educe;
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let mut sender = PublishSubject::<i32, std::convert::Infallible, _>::local();
+/// let mut sender = PublishSubject::<_, std::convert::Infallible, _>::local();
 /// let _ = sender.on_next(1); // Nobody is subscribed yet: dropped.
 ///
 /// let subscription = sender.clone().subscribe_with_callback(|value| seen.push(value), |_| {});

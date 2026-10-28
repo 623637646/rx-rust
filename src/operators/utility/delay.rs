@@ -122,7 +122,7 @@ where
     >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        let model = Model::<T> {
+        let model = Model {
             values: VecDeque::new(),
             completion: None,
         };

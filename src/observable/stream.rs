@@ -27,9 +27,8 @@
 //!     observer::Observer,
 //!     subject::publish_subject::PublishSubject,
 //! };
-//! use std::convert::Infallible;
 //!
-//! let mut subject = PublishSubject::<_, Infallible, _>::local();
+//! let mut subject = PublishSubject::local();
 //! let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
 //! assert_eq!(stream.next().now_or_never(), None); // the first poll subscribes
 //!
@@ -395,7 +394,6 @@ where
 ///     observer::Observer,
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::convert::Infallible;
 ///
 /// #[derive(Default)]
 /// struct Sum(Option<i32>);
@@ -413,7 +411,7 @@ where
 ///     }
 /// }
 ///
-/// let mut subject = PublishSubject::<_, Infallible, _>::local();
+/// let mut subject = PublishSubject::local();
 /// let mut stream = subject.clone().into_stream_with_buffer(Sum::default());
 /// assert_eq!(stream.next().now_or_never(), None); // subscribes
 ///

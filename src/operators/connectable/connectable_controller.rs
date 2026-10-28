@@ -173,11 +173,11 @@ impl<S, C> SubjectLifecycle<S, C> {
 ///     },
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{cell::RefCell, convert::Infallible};
+/// use std::cell::RefCell;
 ///
 /// let values = RefCell::new(Vec::new());
 /// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), (), |_| {
-///     PublishSubject::<i32, Infallible, _>::local()
+///     PublishSubject::local()
 /// });
 /// let observable = controller.observable();
 /// let _subscription_1 = observable

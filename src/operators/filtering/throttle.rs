@@ -33,7 +33,7 @@ use std::time::{Duration, Instant};
 ///
 /// let time = VirtualTime::new();
 /// let mut values = Vec::new();
-/// let mut subject = PublishSubject::<i32, Infallible, _>::local();
+/// let mut subject = PublishSubject::<_, Infallible, _>::local();
 ///
 /// let subscription = Throttle::new(subject.clone(), Duration::from_millis(5), time.clock())
 ///     .subscribe_with_callback(|value| values.push(value), |_| {});

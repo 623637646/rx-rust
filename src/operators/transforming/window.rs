@@ -48,8 +48,8 @@ use std::marker::PhantomData;
 /// use std::convert::Infallible;
 ///
 /// let mut windows = Vec::new();
-/// let mut source = PublishSubject::<i32, Infallible, _>::local();
-/// let mut boundary = PublishSubject::<(), Infallible, _>::local();
+/// let mut source = PublishSubject::local();
+/// let mut boundary = PublishSubject::<_, Infallible, _>::local();
 ///
 /// let subscription = Window::new(source.clone(), boundary.clone())
 ///     .concat_map(|window| window.to_vec())

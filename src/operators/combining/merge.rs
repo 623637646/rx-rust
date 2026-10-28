@@ -50,11 +50,11 @@ use educe::Educe;
 ///     observable::ObservableExt, operators::creating::just::Just,
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{cell::RefCell, convert::Infallible, rc::Rc};
+/// use std::{cell::RefCell, rc::Rc};
 ///
 /// let values = Rc::new(RefCell::new(Vec::new()));
 /// let _subscription = Just::new(1)
-///     .merge_with(PublishSubject::<_, Infallible, _>::local())
+///     .merge_with(PublishSubject::local())
 ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
 /// ```
 ///
@@ -65,11 +65,11 @@ use educe::Educe;
 ///     observable::ObservableExt, operators::creating::just::Just,
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{cell::RefCell, convert::Infallible, rc::Rc};
+/// use std::{cell::RefCell, rc::Rc};
 ///
 /// let values = Rc::new(RefCell::new(Vec::new()));
 /// let _subscription = Just::new(1)
-///     .merge_with(PublishSubject::<_, Infallible, _>::shared())
+///     .merge_with(PublishSubject::shared())
 ///     .subscribe_with_callback(move |value| values.borrow_mut().push(value), |_| {});
 /// ```
 #[derive(Educe)]

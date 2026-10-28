@@ -85,7 +85,7 @@ boxed_observer!(
     /// use std::rc::Rc;
     ///
     /// let offset = Rc::new(1);
-    /// let _observer = SendBoxedObserver::<i32, ()>::new(CallbackObserver::new(
+    /// let _observer = SendBoxedObserver::new(CallbackObserver::new(
     ///     move |value: i32| println!("{}", value + *offset),
     ///     |_: Termination<()>| {},
     /// ));
@@ -100,7 +100,7 @@ boxed_observer!(
     /// use std::sync::Arc;
     ///
     /// let offset = Arc::new(1);
-    /// let _observer = SendBoxedObserver::<i32, ()>::new(CallbackObserver::new(
+    /// let _observer = SendBoxedObserver::new(CallbackObserver::new(
     ///     move |value: i32| println!("{}", value + *offset),
     ///     |_: Termination<()>| {},
     /// ));

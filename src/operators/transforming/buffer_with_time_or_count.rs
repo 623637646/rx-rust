@@ -51,7 +51,7 @@ use std::{num::NonZeroUsize, time::Duration};
 /// let span = Duration::from_millis(5);
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let values_observer = values.clone();
-/// let mut source = PublishSubject::<i32, Infallible, _>::shared();
+/// let mut source = PublishSubject::<_, Infallible, _>::shared();
 /// let _subscription = BufferWithTimeOrCount::new(
 ///     source.clone(), std::num::NonZeroUsize::new(2).unwrap(), span, time.scheduler(),
 /// )
@@ -156,7 +156,7 @@ where
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         assert!(!self.time_span.is_zero(), "time_span must be non-zero");
-        let model = Model::<T> {
+        let model = Model {
             values: Vec::with_capacity(self.count.get()),
             deadline: self.scheduler.clock().now().checked_add(self.time_span),
             time_span: self.time_span,

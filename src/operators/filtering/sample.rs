@@ -29,8 +29,8 @@ use educe::Educe;
 /// use std::convert::Infallible;
 ///
 /// let mut values = Vec::new();
-/// let mut source = PublishSubject::<i32, Infallible, _>::local();
-/// let mut sampler = PublishSubject::<(), Infallible, _>::local();
+/// let mut source = PublishSubject::local();
+/// let mut sampler = PublishSubject::<_, Infallible, _>::local();
 ///
 /// let subscription = Sample::new(source.clone(), sampler.clone()).subscribe_with_callback(
 ///     |value| values.push(value),

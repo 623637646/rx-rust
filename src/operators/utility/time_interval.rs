@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 ///
 /// let time = VirtualTime::new();
 /// let mut intervals = Vec::new();
-/// let mut subject = PublishSubject::<i32, Infallible, _>::local();
+/// let mut subject = PublishSubject::<_, Infallible, _>::local();
 ///
 /// let subscription = TimeInterval::new(subject.clone(), time.clock())
 ///     .subscribe_with_callback(|interval| intervals.push(interval), |_| {});

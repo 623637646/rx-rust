@@ -38,7 +38,7 @@ use std::collections::VecDeque;
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let subject = ReplaySubject::<i32, std::convert::Infallible, _>::local(Some(2));
+/// let subject = ReplaySubject::<_, std::convert::Infallible, _>::local(Some(2));
 /// let mut sender = subject.clone();
 /// let _ = sender.on_next(1);
 /// let _ = sender.on_next(2);

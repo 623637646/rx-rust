@@ -29,7 +29,7 @@
 //! let observer = CallbackObserver::new(|value| seen.push(value), |_| {});
 //!
 //! // The resources here are a counter the host updates under the delivery's lock.
-//! let delivery = SerializedDelivery::<Local, i32, (), _, i32>::idle(observer, 0);
+//! let delivery = SerializedDelivery::<Local, _, (), _, _>::idle(observer, 0);
 //! assert_eq!(delivery.send(EventBatch::Next(1)), Flow::Continue);
 //! let count = delivery.update(|count| {
 //!     *count += 1;

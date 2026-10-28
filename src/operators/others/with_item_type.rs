@@ -20,7 +20,7 @@ use std::{convert::Infallible, marker::PhantomData};
 ///     operators::creating::empty::Empty,
 /// };
 ///
-/// let mut values = Vec::<i32>::new();
+/// let mut values = Vec::new();
 ///
 /// Empty.with_item_type::<i32>().subscribe_with_callback(
 ///     |value| values.push(value),

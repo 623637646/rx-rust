@@ -21,7 +21,7 @@ use educe::Educe;
 ///
 /// let mut values = Vec::new();
 ///
-/// FromResult::new(Ok::<i32, &str>(10)).subscribe_with_callback(
+/// FromResult::new(Ok::<_, &str>(10)).subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),
 /// );

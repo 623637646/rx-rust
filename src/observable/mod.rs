@@ -833,9 +833,8 @@ pub trait ObservableExt: ObservableTypes + Sized {
     ///     observer::Observer,
     ///     subject::publish_subject::PublishSubject,
     /// };
-    /// use std::convert::Infallible;
     ///
-    /// let mut subject = PublishSubject::<_, Infallible, _>::local();
+    /// let mut subject = PublishSubject::local();
     /// let mut stream = subject.clone().into_stream_with_buffer(Latest::new());
     /// assert_eq!(stream.next().now_or_never(), None); // subscribes
     ///

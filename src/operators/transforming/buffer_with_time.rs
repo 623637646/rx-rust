@@ -50,7 +50,7 @@ use std::time::Duration;
 /// let span = Duration::from_millis(5);
 /// let values = Arc::new(Mutex::new(Vec::new()));
 /// let values_observer = values.clone();
-/// let mut source = PublishSubject::<i32, Infallible, _>::shared();
+/// let mut source = PublishSubject::<_, Infallible, _>::shared();
 /// let _subscription = BufferWithTime::new(source.clone(), span, time.scheduler())
 /// .subscribe_with_callback(
 ///     move |value| values_observer.with_mut(|values| values.push(value)),

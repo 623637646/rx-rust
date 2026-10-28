@@ -57,8 +57,8 @@ use educe::Educe;
 /// use std::convert::Infallible;
 ///
 /// let mut values = Vec::new();
-/// let mut source = PublishSubject::<i32, Infallible, _>::local();
-/// let mut boundary = PublishSubject::<(), Infallible, _>::local();
+/// let mut source = PublishSubject::local();
+/// let mut boundary = PublishSubject::<_, Infallible, _>::local();
 ///
 /// let subscription = Buffer::new(source.clone(), boundary.clone()).subscribe_with_callback(
 ///     |value| values.push(value),

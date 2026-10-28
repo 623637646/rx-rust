@@ -33,8 +33,8 @@ use educe::Educe;
 ///
 /// let mut values = Vec::new();
 ///
-/// let mut subject_1 = BehaviorSubject::<i32, Infallible, _>::local(0);
-/// let mut subject_2 = BehaviorSubject::<i32, Infallible, _>::local(10);
+/// let mut subject_1 = BehaviorSubject::local(0);
+/// let mut subject_2 = BehaviorSubject::<_, Infallible, _>::local(10);
 ///
 /// let subscription =
 ///     CombineLatest::new(subject_1.clone(), subject_2.clone()).subscribe_with_callback(

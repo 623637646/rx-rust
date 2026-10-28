@@ -160,7 +160,7 @@ where
         "Do not combine subscribe_with_auto_dispose_on_termination with a context subscription. \
          subscribe_with_context handles \"auto dispose on termination\" itself."
     );
-    let context = SubscriptionContext::<M, T, E, OR, MD, D>::new(observer, model);
+    let context = SubscriptionContext::new(observer, model);
     let disposal = context.disposal();
     let subscription = builder(context.clone());
     // The context owns the source subscription from here on. The field is private and set only

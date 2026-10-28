@@ -246,6 +246,17 @@ when they fail.
 - Public items get doc comments; operators link to their reactivex.io page. `#![deny(missing_docs)]`
   enforces it, so an item that is `pub` only because the type system demands it — an operator's
   observer — takes `#[doc(hidden)]` instead of a doc comment.
+- **Turbofish**: write only the type arguments inference cannot reach — in the sources, the doc
+  examples, the README and `examples/`, for every operator, subject and method call
+  (`.collect::<…>()`, `Err::<…>`), not only constructors. Drop the turbofish when the code still
+  builds; otherwise turn every argument that can be inferred into `_`:
+  `PublishSubject::<_, Infallible, _>::local()`, not `PublishSubject::<&str, Infallible, _>`. A
+  subject's error type is the usual exception, since nothing but a termination names it, unless
+  the subject is joined to a source that fixes it
+  (`Just::new(1).merge_with(PublishSubject::local())`).
+  Check each change by running the doctest or example it is in — and see that the doctest filter
+  matched some test, since one that matches none passes. A `compile_fail` example changes together
+  with its twin, and must still fail for its own reason, not for a type annotation now missing.
 - `Termination<E>` (`Completed` / `Error`) is the single termination type — do not introduce
   parallel representations.
 - **`Flow`**: `Observer::on_next` returns `Flow::Continue` / `Flow::Stop`. `Stop` is a guarantee —

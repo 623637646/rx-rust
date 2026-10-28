@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn test_release_rejects_released_build_in_flight() {
-        let mut slot = ReservationSlot::<()>::Idle;
+        let mut slot = ReservationSlot::Idle;
         assert!(slot.reserve_if_idle());
         assert!(slot.release().is_none());
 
@@ -321,7 +321,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "the slot was released without being reserved")]
     fn test_release_rejects_already_released_value() {
-        let mut slot = ReservationSlot::<()>::Idle;
+        let mut slot = ReservationSlot::Idle;
         assert!(slot.reserve_if_idle());
         assert!(slot.fill(()).is_none());
         assert_eq!(slot.release(), Some(()));

@@ -257,11 +257,11 @@ where
 ///     },
 ///     subject::publish_subject::PublishSubject,
 /// };
-/// use std::{cell::RefCell, convert::Infallible};
+/// use std::cell::RefCell;
 ///
 /// let values = RefCell::new(Vec::new());
 /// let observable = ConnectableController::new(FromIter::new(vec![1, 2]), (), |_| {
-///     PublishSubject::<i32, Infallible, _>::local()
+///     PublishSubject::local()
 /// })
 /// .ref_count();
 ///

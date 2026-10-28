@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_nothing_after_termination() {
-        let mut pending = PendingEvents::<i32, ()>::new();
+        let mut pending = PendingEvents::<_, ()>::new();
         assert!(pending.push(Event::Next(1)).is_none());
         assert!(
             pending

@@ -72,7 +72,7 @@
 //!     sync::{Arc, Mutex},
 //! };
 //!
-//! let (mut sender, observable) = unicast_subject::shared::<i32, Infallible, _>();
+//! let (mut sender, observable) = unicast_subject::shared::<_, Infallible, _>();
 //!
 //! // The values sent before the subscription are buffered instead of being dropped.
 //! let _ = sender.on_next(111);
@@ -516,7 +516,7 @@ fn deliver<T, E, M: ThreadMode, OR: Observer<T, E>>(pipe: &Pipe<T, E, M, OR>, mu
             Step::Terminate(next_observer, termination) => {
                 // The pipe is closed already, so a panic here needs no guard. Notified
                 // outside the lock.
-                Observer::<T, E>::on_termination(next_observer, termination);
+                Observer::on_termination(next_observer, termination);
                 return;
             }
             Step::Park => return,

@@ -481,7 +481,7 @@ mod tests {
     #[test]
     fn test_two_observers_and_a_disposal() {
         let seen = Arc::new(Mutex::new(Vec::new()));
-        let multicast = SerializedMulticast::<i32, (), Local, ()>::idle(());
+        let multicast = SerializedMulticast::<_, (), Local, _>::idle(());
 
         let seen_by_first = Arc::clone(&seen);
         let first = multicast

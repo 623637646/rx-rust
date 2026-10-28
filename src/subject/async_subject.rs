@@ -37,7 +37,7 @@ use educe::Educe;
 /// };
 ///
 /// let mut seen = Vec::new();
-/// let mut sender = AsyncSubject::<i32, std::convert::Infallible, _>::local();
+/// let mut sender = AsyncSubject::<_, std::convert::Infallible, _>::local();
 /// let subscription = sender.clone().subscribe_with_callback(|value| seen.push(value), |_| {});
 ///
 /// let _ = sender.on_next(1);
