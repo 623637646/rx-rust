@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] - 2026-10-28
+
+### Added
+
+- `examples/`: runnable programs, from the first steps to common scenarios — `basics`, `subject`,
+  `search_as_you_type`, `retry`, `virtual_time` and `form_validation` — each run with
+  `cargo run --example <name>` and listed in the README.
+- `docs/stream-comparison.md`: when to reach for an observable rather than a `Stream`, with the
+  same program written both ways, and how the two convert into each other. The README links it.
+
+### Changed
+
+- The examples in the documentation write only the type arguments that inference cannot reach.
+
 ## [2.0.0] - 2026-10-27
 
 ### Added
@@ -467,6 +481,7 @@ themes rather than every change.
 
 Initial public release on crates.io.
 
+[2.0.1]: https://github.com/623637646/rx-rust/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/623637646/rx-rust/compare/1.0.1...2.0.0
 [1.0.1]: https://github.com/623637646/rx-rust/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/623637646/rx-rust/compare/0.3.0...1.0.0
