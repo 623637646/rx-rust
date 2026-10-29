@@ -28,6 +28,14 @@ in time (`debounce`, `timeout`) and combined from several sources (`switch_map`,
 [rx-rust and `Stream`](https://github.com/623637646/rx-rust/blob/master/docs/stream-comparison.md)
 writes the same program both ways.
 
+Why not rxRust? [rxRust](https://github.com/rxRust/rxRust) shares the choice of `Local` or `Shared`
+in the type. rx-rust asks for the scheduler at each time-based operator, rather than taking an
+ambient Tokio runtime by default, so it runs on Tokio, smol or the `futures` executors and every
+pipeline can be tested on virtual time; it also stops a source with `Flow::Stop`, forbids `unsafe`,
+and has `catch`, `timeout` and `replay`. rxRust lends `&mut` items and runs on WebAssembly.
+[rx-rust and rxRust](https://github.com/623637646/rx-rust/blob/master/docs/rxrust-comparison.md)
+compares the two.
+
 ## Installation
 
 ```toml
