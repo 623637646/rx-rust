@@ -18,6 +18,7 @@ Stopping a source | `on_next` returns `Flow::Stop`                     | the sou
 Borrowed items    | items are owned                                    | `&mut T` can be lent to each subscriber in turn (`multicast_mut_ref`)
 Virtual time      | `VirtualTime`, a value: any number per test        | `TestScheduler`, one clock per thread
 `unsafe`          | `#![forbid(unsafe_code)]`                          | a few `Pin` projections
+Dependencies      | one required, `educe`, a compile-time derive; each runtime behind its feature | five required, run-time code; Tokio by default
 Platforms         | no wasm target                                     | wasm out of the box
 
 ## Thread mode
@@ -129,6 +130,33 @@ Both libraries test time-based pipelines on a clock that moves only when told to
 needs, gives `time.scheduler()` to the operators, and calls `time.advance_by`, synchronously and
 without a runtime. Every operator reads time from its scheduler's clock and never from
 `Instant::now()`, which CI checks, so the virtual clock drives all of them.
+
+## Dependencies
+
+What each library requires, and what its features add:
+
+Dependencies     | rx-rust | rxRust
+---------------- | ------- | ------
+Required         | `educe` | `futures-core`, `pin-project-lite`, `smallvec`, `crossbeam-utils`, `rclite`
+Default features | none | `scheduler`: Tokio (`rt`, `rt-multi-thread`, `time`); on wasm, `gloo-timers` and `wasm-bindgen-futures`
+Optional         | `tokio-scheduler`: Tokio and `futures`; `smol-scheduler`: smol and `futures`; `futures-scheduler`: `futures` with its thread pool, and `async-io` | none besides `scheduler`
+On wasm          | no wasm target | `web-time` too
+
+rx-rust's one required dependency puts no code in a binary. `educe` is a proc-macro that derives
+`Debug` and `Clone` with the bounds the fields need rather than one per type parameter (see
+[decision 0009](decisions/0009-keep-educe.md)); what it costs is compile time, the build of
+`syn`, `quote` and `proc-macro2`, which the `futures` crate of every scheduler feature builds
+anyway, through `futures-macro`. With no scheduler feature, what runs is the crate's own code and
+`std`; a runtime arrives only with the feature that names it.
+
+rxRust's required dependencies are run-time code: its own `Rc` and `Arc` from `rclite`,
+`crossbeam-utils`' `AtomicCell` for lock-free state, `SmallVec` for subscriber lists and wakers,
+and `futures-core` for `from_stream`. None is a proc-macro, and the Tokio features it enables do
+not include `macros`, so its build compiles no `syn`, default features included. But `scheduler`
+is a default feature: Tokio comes with the crate unless it is added with
+`default-features = false`, which also removes `LocalScheduler` and `SharedScheduler` and the
+`Local` and `Shared` contexts built on them, so that each chain then names a scheduler of one's
+own (`LocalCtx<T, MyScheduler>`).
 
 ## Operators
 
