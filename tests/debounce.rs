@@ -854,6 +854,8 @@ fn test_complete_on_sub() {
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
     assert_eq!(checker.state(), State::Completed);
+    // The completion ends the stream at once, so the timer is not started.
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]
@@ -867,6 +869,8 @@ fn test_error_on_sub() {
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
     assert_eq!(checker.state(), State::Error("error"));
+    // The same for an error, which is not debounced either.
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]

@@ -44,9 +44,7 @@ impl<T> Repeat<T> {
     }
 }
 
-impl<T> ObservableTypes for Repeat<T>
-where
-{
+impl<T> ObservableTypes for Repeat<T> {
     type Item = T;
     type Error = Infallible;
     type Mode = Local;

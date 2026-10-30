@@ -1022,6 +1022,8 @@ fn test_complete_on_sub() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Active);
+    // The completion is delayed like a value, so the timer is still needed.
+    assert_eq!(time.pending_tasks(), 1);
 
     time.advance_by(DURATION_100_MS - DURATION_1_MS);
     assert!(checker.values().is_empty());
@@ -1043,6 +1045,8 @@ fn test_error_on_sub() {
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
     assert_eq!(checker.state(), State::Error("error"));
+    // An error is not delayed: the stream is over, and the timer is not started.
+    assert_eq!(time.pending_tasks(), 0);
 }
 
 #[test]
