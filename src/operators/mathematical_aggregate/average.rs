@@ -15,6 +15,10 @@ use std::marker::PhantomData;
 ///
 /// A source that completes without an item completes it without one, rather than with a zero.
 ///
+/// Values are summed in `f64`, switching to a running mean if adding finite values overflows.
+/// Results still have `f64` rounding and cancellation errors. An input NaN produces NaN;
+/// infinite inputs produce their signed infinity, or NaN if both signs occur.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
@@ -60,12 +64,67 @@ impl<T, OE> Average<T, OE> {
 #[doc(hidden)]
 pub struct AverageObserver<T, OR> {
     observer: OR,
-    /// Accumulated in `f64`, the type of the result. Summing in the source's own type overflows
-    /// for the narrow ones long before the stream ends: three `100u8` items already exceed
-    /// `u8::MAX`.
-    sum: f64,
-    count: usize,
+    accumulator: Accumulator,
     _marker: MarkerType<T>,
+}
+
+/// The items seen so far: their plain sum, with its ordinary rounding, until adding finite items
+/// overflows `f64`, and their running mean from then on. Only `f64` items get there: the others
+/// stay below `3.5e38` once converted, too small for `usize::MAX` of them to pass `f64::MAX`.
+struct Accumulator {
+    total: Total,
+    count: usize,
+}
+
+enum Total {
+    Sum(f64),
+    Mean(f64),
+}
+
+impl Accumulator {
+    fn new() -> Self {
+        Self {
+            total: Total::Sum(0.0),
+            count: 0,
+        }
+    }
+
+    fn push(&mut self, value: f64) {
+        self.count += 1;
+        let count = self.count as f64;
+        self.total = match self.total {
+            Total::Sum(sum) => {
+                let next = sum + value;
+                if next.is_infinite() && sum.is_finite() && value.is_finite() {
+                    // Divide the preceding total and the new item by the new count before adding.
+                    Total::Mean(sum / count + value / count)
+                } else {
+                    Total::Sum(next)
+                }
+            }
+            Total::Mean(mean) => {
+                let delta = value - mean;
+                Total::Mean(if delta.is_finite() {
+                    mean + delta / count
+                } else if mean.is_finite() && value.is_finite() {
+                    // Opposite-sign finite values can overflow their difference.
+                    mean - mean / count + value / count
+                } else {
+                    // An infinity or a NaN. Adding keeps it, where the difference would turn two
+                    // same-sign infinities into NaN.
+                    mean + value
+                })
+            }
+        };
+    }
+
+    /// `None` before the first item.
+    fn average(&self) -> Option<f64> {
+        (self.count != 0).then(|| match self.total {
+            Total::Sum(sum) => sum / self.count as f64,
+            Total::Mean(mean) => mean,
+        })
+    }
 }
 
 macro_rules! average_observer_impl {
@@ -89,8 +148,7 @@ macro_rules! average_observer_impl {
             fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
                 let observer = AverageObserver {
                     observer,
-                    sum: 0f64,
-                    count: 0,
+                    accumulator: Accumulator::new(),
                     _marker: PhantomData,
                 };
                 self.source.subscribe(observer)
@@ -102,8 +160,7 @@ macro_rules! average_observer_impl {
             OR: Observer<f64, E>,
         {
             fn on_next(&mut self, value: $t) -> Flow {
-                self.sum += value as f64;
-                self.count += 1;
+                self.accumulator.push(value as f64);
                 Flow::Continue
             }
 
@@ -111,8 +168,8 @@ macro_rules! average_observer_impl {
                 // The final value ends the stream, so a downstream that stopped on it is not
                 // completed on top of that: it has already ended itself.
                 if matches!(termination, Termination::Completed)
-                    && self.count != 0
-                    && self.observer.on_next(self.sum / self.count as f64).is_stop()
+                    && let Some(average) = self.accumulator.average()
+                    && self.observer.on_next(average).is_stop()
                 {
                     return;
                 }

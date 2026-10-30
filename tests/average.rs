@@ -172,9 +172,7 @@ fn test_completed_precision_f32() {
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
-/// `f64` is where the widening stops: it is already the accumulator and the result type, so a sum
-/// that leaves its range still saturates to infinity. This documents that limit rather than
-/// guarding against a regression.
+/// A representable average stays finite even when the sum exceeds `f64`'s range.
 #[test]
 fn test_completed_sum_overflows_f64() {
     let (mut sender, observable, channel_checker) = test_channel::<'_, f64, Infallible>();
@@ -198,8 +196,148 @@ fn test_completed_sum_overflows_f64() {
     assert_eq!(channel_checker.state(), ChannelState::Subscribed);
 
     sender.on_termination(Termination::<Infallible>::Completed);
-    assert_eq!(checker.values(), [f64::INFINITY]);
+    assert_eq!(checker.values(), [f64::MAX]);
     assert_eq!(checker.state(), State::Completed);
+    assert_eq!(channel_checker.state(), ChannelState::Completed);
+}
+
+#[test]
+fn test_completed_after_sum_overflow_f64() {
+    let max = f64::MAX;
+    let cases: &[(&[f64], f64)] = &[
+        (&[-max, -max], -max),
+        (&[max, max, max], max),
+        (&[-max, -max, -max], -max),
+        (&[max, max, 0.0], (max / 3.0) * 2.0),
+        (&[max, max, -max], max / 3.0),
+        (&[-max, -max, max], -max / 3.0),
+        (&[max, max, -max, -max], 0.0),
+    ];
+    for &(input, expected) in cases {
+        let (mut sender, source, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+        let _subscription = source.average().subscribe(observer);
+
+        for &value in input {
+            assert!(sender.on_next(value).is_continue());
+            assert!(checker.values().is_empty());
+            assert_eq!(checker.state(), State::Active);
+            assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+        }
+
+        sender.on_termination(Termination::Completed);
+        let values = checker.values();
+        assert_eq!(values.len(), 1);
+        assert!(values[0].is_finite());
+        // Allow rounding at the inputs' scale, including when they nearly cancel.
+        assert!(
+            (values[0] / max - expected / max).abs() <= 4.0 * f64::EPSILON,
+            "{input:?}: expected approximately {expected}, got {}",
+            values[0],
+        );
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+    }
+}
+
+#[test]
+fn test_completed_precision_f64() {
+    let tiny = f64::from_bits(1);
+    let cases: &[(&[f64], f64)] = &[
+        (&[tiny, 0.0], 0.0),
+        (&[tiny, tiny], tiny),
+        (&[tiny, -tiny], 0.0),
+        (&[-0.0], 0.0),
+        (&[1e16, 1.0, -1e16], 0.0),
+        (&[1e16, -1e16, 1.0], 1.0 / 3.0),
+    ];
+    for &(input, expected) in cases {
+        let (mut sender, source, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+        let _subscription = source.average().subscribe(observer);
+
+        for &value in input {
+            assert!(sender.on_next(value).is_continue());
+            assert!(checker.values().is_empty());
+            assert_eq!(checker.state(), State::Active);
+        }
+
+        sender.on_termination(Termination::Completed);
+        let values = checker.values();
+        assert_eq!(values.len(), 1);
+        assert_eq!(values[0].to_bits(), expected.to_bits(), "{input:?}");
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+    }
+}
+
+#[test]
+fn test_completed_non_finite_f64() {
+    let max = f64::MAX;
+    let inf = f64::INFINITY;
+    let nan = f64::NAN;
+    let cases: &[(&[f64], f64)] = &[
+        (&[inf, inf, 1.0], inf),
+        (&[-inf, -inf, 1.0], -inf),
+        (&[inf, -inf], nan),
+        (&[nan, 1.0], nan),
+        (&[max, max, inf, inf, 1.0], inf),
+        (&[max, max, -inf, -inf, 1.0], -inf),
+        (&[max, max, inf, -inf], nan),
+        (&[max, max, nan, 1.0], nan),
+    ];
+    for &(input, expected) in cases {
+        let (mut sender, source, channel_checker) = test_channel::<'_, _, Infallible>();
+        let (checker, observer) = Checker::new();
+        let _subscription = source.average().subscribe(observer);
+
+        for &value in input {
+            assert!(sender.on_next(value).is_continue());
+            assert!(checker.values().is_empty());
+            assert_eq!(checker.state(), State::Active);
+        }
+
+        sender.on_termination(Termination::Completed);
+        let values = checker.values();
+        assert_eq!(values.len(), 1);
+        if expected.is_nan() {
+            assert!(values[0].is_nan(), "{input:?}");
+        } else {
+            assert_eq!(values[0], expected, "{input:?}");
+        }
+        assert_eq!(checker.state(), State::Completed);
+        assert_eq!(channel_checker.state(), ChannelState::Completed);
+    }
+}
+
+#[test]
+fn test_error_after_sum_overflow() {
+    let (mut sender, source, channel_checker) = test_channel();
+    let (checker, observer) = Checker::new();
+    let _subscription = source.average().subscribe(observer);
+
+    assert!(sender.on_next(f64::MAX).is_continue());
+    assert!(sender.on_next(f64::MAX).is_continue());
+    assert!(checker.values().is_empty());
+    sender.on_termination(Termination::Error("error"));
+
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Error("error"));
+    assert_eq!(channel_checker.state(), ChannelState::Error("error"));
+}
+
+#[test]
+fn test_stop_on_next() {
+    let (mut sender, source, channel_checker) = test_channel::<'_, _, Infallible>();
+    let (checker, observer) = Checker::stopping_after(1);
+    let _subscription = source.average().subscribe(observer);
+
+    assert!(sender.on_next(f64::MAX).is_continue());
+    assert!(sender.on_next(f64::MAX).is_continue());
+    sender.on_termination(Termination::Completed);
+
+    assert_eq!(checker.values(), [f64::MAX]);
+    assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Completed);
 }
 
