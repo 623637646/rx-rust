@@ -109,6 +109,7 @@ Example                | Shows
 `retry`                | `retry` after an error, and the pipeline awaited as a `Future`
 `virtual_time`         | testing a `debounce` on a virtual clock, without waiting
 `form_validation`      | `combine_latest` of `BehaviorSubject`s on a single thread
+`large_file`           | a file read chunk by chunk, each chunk uploaded before the next is read
 
 ## Core concepts
 
@@ -291,9 +292,43 @@ async fn main() {
 ```
 
 A whole sequence goes through `into_stream()` / `into_try_stream()`, and back with `FromStream` /
-`FromTryStream`. There is no `request(n)`: demand-driven consumption is what `Stream` is for, and
-`into_stream_with_buffer` bounds what a fast source leaves between two polls (see the
-`observable::stream` module documentation).
+`FromTryStream`. An observable has no `request(n)`: its observer's only word is `Flow::Stop`, so
+demand-driven consumption stays with `Stream`, and `into_stream_with_buffer` bounds what a fast
+source leaves between two polls (see the `observable::stream` module documentation).
+
+A stream that must be read only as fast as each item is handled, asynchronously — a large file
+read chunk by chunk, each chunk uploaded before the next is read — goes through `FromStreamAcked`
+or `FromTryStreamAcked`. The demand still lives in the stream: the source polls it only once the
+`StreamAck` sent with the previous item is dropped, and `hold` keeps that `StreamAck` in the
+observable made of the item until that ends:
+
+```rust
+#[tokio::main]
+async fn main() {
+    use futures::{StreamExt, stream};
+    use rx_rust::{
+        observable::ObservableExt,
+        operators::creating::{from_future::FromFuture, from_stream_acked::FromStreamAcked},
+        scheduler::runtime::tokio::TokioScheduler,
+    };
+
+    async fn upload(chunk: &str) -> usize {
+        chunk.len()
+    }
+
+    let scheduler = TokioScheduler::current();
+    let chunks = stream::iter(["first", "second"]);
+    let sizes = FromStreamAcked::new(chunks, scheduler.clone())
+        .concat_map(move |(chunk, ack)| {
+            FromFuture::new(upload(chunk), scheduler.clone()).hold(ack)
+        })
+        .into_stream()
+        .collect::<Vec<_>>()
+        .await;
+
+    assert_eq!(sizes, [5, 6]);
+}
+```
 
 There is no `Single`, `Maybe` or `Completable` either: a one-shot result is a `Future`.
 
@@ -349,14 +384,14 @@ types in `rx_rust::operators::creating`; everything else is a method of `Observa
 
 Category                    | Operators
 --------------------------- | ---------
-Creating                    | `Create`, `Defer`, `Empty`, `FromFuture`, `FromTryFuture`, `FromIter`, `FromResult`, `FromStream`, `FromTryStream`, `Interval`, `Just`, `Never`, `Range`, `Repeat`, `Start`, `Throw`, `Timer`
+Creating                    | `Create`, `Defer`, `Empty`, `FromFuture`, `FromTryFuture`, `FromIter`, `FromResult`, `FromStream`, `FromTryStream`, `FromStreamAcked`, `FromTryStreamAcked`, `Interval`, `Just`, `Never`, `Range`, `Repeat`, `Start`, `Throw`, `Timer`
 Transforming                | `map`, `scan`, `flat_map`, `concat_map`, `switch_map`, `group_by`, `buffer`, `buffer_with_count`, `buffer_with_time`, `buffer_with_time_or_count`, `window`, `window_with_count`
 Filtering                   | `filter`, `first`, `last`, `element_at`, `take`, `take_last`, `skip`, `skip_last`, `distinct`, `distinct_with_key_selector`, `distinct_until_changed`, `distinct_until_changed_with_key_selector`, `debounce`, `throttle`, `sample`, `ignore_elements`
 Combining                   | `merge_with`, `merge_all`, `concat_with`, `concat_all`, `switch`, `zip`, `combine_latest`, `start_with`
 Conditional and boolean     | `all`, `contains`, `sequence_equal`, `default_if_empty`, `amb_with`, `take_while`, `take_until`, `skip_while`, `skip_until`
 Mathematical and aggregate  | `count`, `sum`, `average`, `min`, `max`, `reduce`, `collect`, `to_vec`
 Error handling              | `catch`, `map_err`, `retry`
-Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
+Utility                     | `delay`, `timeout`, `timestamp`, `time_interval`, `hold`, `materialize`, `dematerialize`, `subscribe_on`, `observe_on`, `do_before_subscription`, `do_after_subscription`, `do_before_next`, `do_after_next`, `do_before_termination`, `do_after_termination`, `do_before_disposal`, `do_after_disposal`
 Connectable                 | `multicast`, `publish`, `publish_behavior`, `publish_last`, `replay`, `share`, `share_behavior`, `share_last`, `share_replay`, `ConnectableController::{connect, disconnect, ref_count}`
 Async conversion            | `into_future`, `into_try_future`, `into_stream`, `into_stream_with_buffer`, `into_try_stream`, `into_try_stream_with_buffer`
 Type conversion             | `into_boxed`, `into_send_boxed`, `into_cloneable_boxed`, `into_send_cloneable_boxed`, `into_shared`, `with_item_type`, `with_error_type`

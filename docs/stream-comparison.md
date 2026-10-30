@@ -12,10 +12,12 @@ inside an async task, and its state is whatever that task holds between two `awa
 
 An **observable is pushed**. The source calls its observer each time something happens, at the
 source's own pace. A subject or `share()` delivers each value to every subscriber at once. There is
-no backpressure: an observer takes what arrives, or answers `Flow::Stop`, or is unsubscribed. An
-observable whose source is synchronous, such as a subject fed from a GUI callback, needs no async
-runtime at all. The state of each step (the pending value of a `debounce`, the running inner
-subscription of a `switch_map`) belongs to the operator, not to the code that consumes it.
+no backpressure: an observer takes what arrives, or answers `Flow::Stop`, or is unsubscribed. (The
+one exception starts from a stream: `FromStreamAcked`, below, polls it again only once the item
+before has been handled.) An observable whose source is synchronous, such as a subject fed from a
+GUI callback, needs no async runtime at all. The state of each step (the pending value of a
+`debounce`, the running inner subscription of a `switch_map`) belongs to the operator, not to the
+code that consumes it.
 
 ## Side by side
 
@@ -81,14 +83,15 @@ nor `tokio-stream` has a `debounce` or a `switch_map`. Some time operators come 
 
 ## Which one to use
 
-Situation                                                                  | Use
--------------------------------------------------------------------------- | --------
-The consumer sets the pace: a file, a socket, a database cursor            | `Stream`
-I/O that ends in a framework taking a `Stream`, such as `axum` or `tonic`  | `Stream`
-Events from a UI, a sensor or a message bus, read by several consumers     | rx-rust
-Logic shaped by time: `debounce`, `throttle`, `sample`, `timeout`          | rx-rust
+Situation                                                                     | Use
+----------------------------------------------------------------------------- | --------
+The consumer sets the pace: a file, a socket, a database cursor               | `Stream`
+A stream read only as fast as operators handle it: `FromStreamAcked` + `hold` | rx-rust
+I/O that ends in a framework taking a `Stream`, such as `axum` or `tonic`     | `Stream`
+Events from a UI, a sensor or a message bus, read by several consumers        | rx-rust
+Logic shaped by time: `debounce`, `throttle`, `sample`, `timeout`             | rx-rust
 Several sources combined: `switch_map`, `combine_latest`, `zip`, `merge_with` | rx-rust
-Synchronous code with no async runtime                                     | rx-rust
+Synchronous code with no async runtime                                        | rx-rust
 
 Both can be tested without waiting for real time. Tokio's paused clock (`start_paused`,
 `tokio::time::advance`) does it for anything that sleeps on Tokio's timer. rx-rust's
@@ -101,6 +104,9 @@ The two meet at the conversions, so each part of a program can use the one that 
 
 - `FromStream` and `FromTryStream` turn a stream into an observable. They poll the stream only
   after `on_next` returns, so the stream's pace is kept up to the first asynchronous operator.
+  `FromStreamAcked` and `FromTryStreamAcked` keep it past one: they poll again only once the
+  `StreamAck` sent with an item is dropped, which `hold` does when the observable it is held by
+  ends (decision 0010).
 - `into_stream()` and `into_try_stream()` turn an observable into a stream. A source faster than
   the consumer then grows the buffer between two polls. `into_stream_with_buffer` bounds that
   buffer: `Latest` keeps the newest item, `Bounded` a fixed number of them.

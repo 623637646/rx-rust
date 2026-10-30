@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `operators::creating::from_stream_acked::FromStreamAcked` and
+  `from_try_stream_acked::FromTryStreamAcked` convert a stream as `FromStream` and `FromTryStream`
+  do, but send each item with a `StreamAck`, and poll the stream only while they hold a permit:
+  one by default, `with_permits(n)` for `n`. Dropping a `StreamAck` gives its permit back, so a
+  downstream that keeps it until the item is handled — asynchronously or not — sets the pace at
+  which the stream is read: a large file read chunk by chunk, each chunk uploaded before the next
+  is read. See `docs/decisions/0010-acknowledged-stream-sources.md`.
+- `ObservableExt::hold(resource)` keeps a value for as long as the subscription to its source
+  lasts, and drops it when the subscription ends. Holding a `StreamAck` in the observable made of
+  an item, inside a `concat_map` or a `flat_map`, acknowledges the item once that observable has
+  ended. It is ReactiveX's `Using`, without the factories.
+- `scheduler::Task::from_stream_acked_then`, with `scheduler::StreamAck` and
+  `StreamAckedThenContext`: the task behind the two sources, public like `from_stream_then`, for
+  operators written outside the crate.
+- `examples/large_file.rs`: a file read chunk by chunk, each chunk uploaded before the next is
+  read.
+
 ## [2.0.1] - 2026-10-28
 
 ### Added
@@ -481,6 +502,7 @@ themes rather than every change.
 
 Initial public release on crates.io.
 
+[Unreleased]: https://github.com/623637646/rx-rust/compare/2.0.1...HEAD
 [2.0.1]: https://github.com/623637646/rx-rust/compare/2.0.0...2.0.1
 [2.0.0]: https://github.com/623637646/rx-rust/compare/1.0.1...2.0.0
 [1.0.1]: https://github.com/623637646/rx-rust/compare/1.0.0...1.0.1
