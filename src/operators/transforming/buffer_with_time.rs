@@ -2,22 +2,19 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-        option_disposal::OptionDisposal,
-    },
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     scheduler::{Clock, PeriodicContext, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
     utils::{
         serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
         take_leaving_room,
     },
 };
 use educe::Educe;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Periodically gathers items from an observable into bundles and emits these bundles as `Vec<T>`,
 /// every `time_span`.
@@ -26,6 +23,7 @@ use std::time::Duration;
 /// The first bundle is emitted one `time_span` after the subscription, as ReactiveX does, and
 /// every following one `time_span` later, at a fixed rate, empty or not. On completion the pending
 /// bundle is emitted before the completion.
+/// A late timer cuts overdue bundles without waiting another span, keeping the original rate.
 ///
 /// A time too far out for an `Instant` to represent never comes: with a `time_span` that long, no
 /// bundle is emitted by time, and what is gathered is emitted by the completion.
@@ -84,10 +82,8 @@ impl<OE, S> BufferWithTime<OE, S> {
 }
 
 /// The source subscription a [`BufferWithTime`] context owns: the timer, then the source.
-type BufferWithTimeSources<OE, S> = ChainDisposal<
-    OptionDisposal<<S as SchedulerTypes>::Disposal>,
-    <OE as ObservableTypes>::Disposal,
->;
+type BufferWithTimeSources<OE, S> =
+    ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
 
 /// The task of a [`BufferWithTime`] timer. It holds the context strongly, so that the buffers keep
 /// being cut after the source has let go of its observer without a termination, until the
@@ -112,7 +108,7 @@ delegate_disposal!(
         Vec<T>,
         E,
         Vec<T>,
-        ChainDisposal<OptionDisposal<SD>, D>,
+        ChainDisposal<SD, D>,
     >,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
@@ -147,13 +143,26 @@ where
     S: Scheduler<BufferWithTimeTask<T, E, OR, OE, S>>,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        subscribe_with_context(observer, Vec::new(), |context| {
-            let subscription = self
-                .source
-                .subscribe(BufferWithTimeObserver(context.clone()));
-            let timer = setup_emit_timer(context, self.scheduler, self.time_span);
-            subscription.preceded_by_wrapped(timer)
-        })
+        assert!(!self.time_span.is_zero(), "time_span must be non-zero");
+        let deadline = self.scheduler.clock().now().checked_add(self.time_span);
+        subscribe_with_context_two_steps(
+            observer,
+            Vec::new(),
+            |context| {
+                Some(
+                    self.source
+                        .subscribe(BufferWithTimeObserver(context.clone())),
+                )
+            },
+            |context| {
+                Some(setup_emit_timer(
+                    context,
+                    self.scheduler,
+                    self.time_span,
+                    deadline,
+                ))
+            },
+        )
         .map_inner_into()
     }
 }
@@ -196,29 +205,22 @@ where
 }
 
 fn setup_emit_timer<M, T, E, OR, D, S>(
-    context: SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
+    context: &SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
     scheduler: S,
     time_span: Duration,
-) -> DisposeOnDrop<OptionDisposal<S::Disposal>>
+    deadline: Option<Instant>,
+) -> DisposeOnDrop<S::Disposal>
 where
     M: ThreadMode,
     OR: Observer<Vec<T>, E>,
     D: Disposable,
     S: Scheduler<PeriodicContext<SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>>>,
 {
-    // The source terminated synchronously while it was being subscribed: no bundle is left to cut.
-    if context
-        .update(|_| UpdateOutcome::new(()).without_events())
-        .is_err()
-    {
-        return DisposeOnDrop::new(OptionDisposal::none());
-    }
-
     // The context owns only the task's disposal, through its source subscription, never the task,
     // which its runtime owns: holding the context strongly forms no cycle. Stopping the context
     // disposes its source subscription, which cancels the task.
     let task = Task::periodic(
-        context,
+        context.clone(),
         |context, _| {
             context
                 .update(|values| {
@@ -228,11 +230,10 @@ where
                 .unwrap_or(false)
         },
         time_span,
-        // Fixed-rate, anchored to the time of the subscription plus `time_span`. A span too long
-        // for an `Instant` never ends: the first step never comes, so it needs no anchor.
-        scheduler.clock().now().checked_add(time_span),
+        deadline,
     );
-    scheduler
-        .run_task(task, Some(time_span))
-        .map_inner(OptionDisposal::some)
+    // The task waits for its absolute anchor, even if subscribing or its first poll ran late.
+    // An unrepresentable deadline keeps the task parked until disposal.
+    let delay = deadline.is_none().then_some(time_span);
+    scheduler.run_task(task, delay)
 }

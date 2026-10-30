@@ -31,6 +31,39 @@ use std::{convert::Infallible, time::Duration};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
+fn test_first_tick_after_slow_subscription() {
+    for subscription_time in [DURATION_30_MS, DURATION_100_MS + DURATION_30_MS] {
+        let time = VirtualTime::new();
+        let (mut sender, source, channel_checker) = test_channel::<'_, _, Infallible>();
+        let source = source.hook_on_subscription(|source, observer| {
+            time.advance_by(subscription_time);
+            source.start_with([111]).subscribe(observer)
+        });
+        let (checker, observer) = Checker::new();
+        let _subscription = source
+            .buffer_with_time(DURATION_100_MS, time.scheduler())
+            .subscribe(observer);
+
+        if subscription_time < DURATION_100_MS {
+            time.advance_by(DURATION_100_MS - subscription_time - DURATION_1_MS);
+            assert!(checker.values().is_empty());
+            time.advance_by(DURATION_1_MS);
+        } else {
+            time.advance_by(Duration::ZERO);
+        }
+        assert_eq!(checker.values(), [vec![111]]);
+        assert_eq!(channel_checker.state(), ChannelState::Subscribed);
+
+        assert!(sender.on_next(222).is_continue());
+        let elapsed = subscription_time.max(DURATION_100_MS);
+        time.advance_by(DURATION_100_MS * 2 - elapsed - DURATION_1_MS);
+        assert_eq!(checker.values(), [vec![111]]);
+        time.advance_by(DURATION_1_MS);
+        assert_eq!(checker.values(), [vec![111], vec![222]]);
+    }
+}
+
+#[test]
 fn test_completed_last_empty() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();
