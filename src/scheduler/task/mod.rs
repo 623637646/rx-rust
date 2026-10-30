@@ -10,6 +10,8 @@ mod once;
 mod periodic;
 #[cfg(feature = "futures")]
 mod stream;
+#[cfg(feature = "futures")]
+mod stream_acked;
 mod wakeable;
 
 pub use future::FutureThenContext;
@@ -17,6 +19,8 @@ pub use once::OnceContext;
 pub use periodic::PeriodicContext;
 #[cfg(feature = "futures")]
 pub use stream::StreamThenContext;
+#[cfg(feature = "futures")]
+pub use stream_acked::{StreamAck, StreamAckedThenContext};
 pub use wakeable::{TaskWaker, WakeableContext};
 
 use educe::Educe;

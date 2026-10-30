@@ -97,12 +97,12 @@ mod task;
 pub mod virtual_time;
 
 pub use drive::drive;
-#[cfg(feature = "futures")]
-pub use task::StreamThenContext;
 pub use task::{
     FutureThenContext, Next, OnceContext, PeriodicContext, Stepper, Task, TaskHandler, TaskWaker,
     WakeableContext,
 };
+#[cfg(feature = "futures")]
+pub use task::{StreamAck, StreamAckedThenContext, StreamThenContext};
 
 use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
