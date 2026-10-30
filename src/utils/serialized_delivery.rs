@@ -326,6 +326,20 @@ impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R> {
             stopped_by_handle: self.stopped_by_handle.clone(),
         }
     }
+
+    /// Whether the delivery still accepts events: it has not stopped, and no termination is
+    /// queued behind a delivery running elsewhere.
+    ///
+    /// A stop concurrent with this call may land right after it, so a host uses this to skip work
+    /// a stream that is already over has no use for, never as a guarantee that the work it then
+    /// starts outlives the check.
+    pub fn is_active(&self) -> bool {
+        self.core.with_mut(|core| match core {
+            Core::Idle { .. } => true,
+            Core::Delivering { pending, .. } => !pending.is_terminated(),
+            Core::Stopped => false,
+        })
+    }
 }
 
 impl<M: ThreadMode, T, E, OR, R> SerializedDelivery<M, T, E, OR, R>

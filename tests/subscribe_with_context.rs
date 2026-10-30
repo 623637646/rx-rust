@@ -7,10 +7,10 @@ use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::thread_mode::mutable::MutableExt;
 use rx_rust::utils::serialized_delivery::{DeliveryStopped, UpdateOutcome};
 use rx_rust::{
-    disposable::dispose_on_drop::DisposeOnDrop,
+    disposable::{callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{EventBatch, Flow, Observer, Termination},
-    utils::subscribe_with_context::subscribe_with_context,
+    utils::subscribe_with_context::{subscribe_with_context, subscribe_with_context_two_steps},
 };
 use std::convert::Infallible;
 use std::sync::atomic::AtomicBool;
@@ -243,4 +243,49 @@ fn dispose_during_batch_unsubscribes_upstream() {
     assert_eq!(checker.values(), [1, 2]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+}
+
+// A step that ends the stream while the subscription is still being assembled keeps the step
+// after it from subscribing at all, and what it did subscribe is released at once.
+#[test]
+fn termination_in_the_first_step_skips_the_second_and_releases_the_first() {
+    let (checker, observer) = Checker::<i32, Infallible>::new();
+    let disposed = Arc::new(AtomicBool::new(false));
+    let disposed_first = disposed.clone();
+
+    let _subscription = subscribe_with_context_two_steps::<Shared, _, _, _, _, _, _, _, _>(
+        observer,
+        (),
+        |context| {
+            let subscription =
+                DisposeOnDrop::new(CallbackDisposal::new(move || disposed_first.write(true)));
+            context.send_termination(Termination::Completed);
+            Some(subscription)
+        },
+        |_| -> Option<DisposeOnDrop<()>> {
+            panic!("a stream that is over must not subscribe the step after it")
+        },
+    );
+
+    assert!(disposed.read());
+    assert_eq!(checker.state(), State::Completed);
+}
+
+// `None` ends the assembly: the step after it does not run. With no step left holding a clone of
+// the context, the observer is released as the subscription is handed back — without a
+// termination, the way a source letting go of it would end the stream.
+#[test]
+fn a_first_step_that_subscribes_nothing_skips_the_second() {
+    let (checker, observer) = Checker::<i32, Infallible>::new();
+
+    let _subscription = subscribe_with_context_two_steps::<Shared, _, _, _, _, _, _, _, _>(
+        observer,
+        (),
+        |_| -> Option<DisposeOnDrop<()>> { None },
+        |_| -> Option<DisposeOnDrop<()>> {
+            panic!("the step after one that subscribed nothing must not run")
+        },
+    );
+
+    assert_eq!(checker.state(), State::Dropped);
 }

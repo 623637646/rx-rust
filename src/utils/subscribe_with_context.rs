@@ -11,6 +11,10 @@
 //! whatever stopped it: a disposal, a termination — from the source, a notifier, a scheduler task
 //! or another source — or a downstream that answered [`Flow::Stop`].
 //!
+//! An operator with two of them — two sources, or a source and a scheduler task — is written
+//! with [`subscribe_with_context_two_steps`], which subscribes them in order, skips the second
+//! one once the stream is already over, and disposes them in the opposite order.
+//!
 //! # Examples
 //! An operator that emits the running total and completes on its own once it exceeds a limit,
 //! which disposes its source:
@@ -98,7 +102,9 @@
 #[cfg(debug_assertions)]
 use crate::utils::subscribe_with_auto_dispose_on_termination::is_auto_dispose_on_termination_observer;
 use crate::{
-    disposable::{Disposable, DisposableExt, dispose_on_drop::DisposeOnDrop},
+    disposable::{
+        Disposable, DisposableExt, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
+    },
     observer::{EventBatch, Flow, IntoFlow, Observer, Termination},
     thread_mode::ThreadMode,
     utils::serialized_delivery::{
@@ -152,6 +158,83 @@ where
     D: Disposable,
     F: FnOnce(SubscriptionContext<M, T, E, OR, MD, D>) -> DisposeOnDrop<D>,
 {
+    subscribe_with_context_opt(observer, model, |context| Some(builder(context.clone())))
+}
+
+/// The context handed to each step of [`subscribe_with_context_two_steps`]: it owns both steps'
+/// subscriptions, so its disposal type names them both, whichever step is being assembled.
+pub type TwoStepsContext<M, T, E, OR, MD, D1, D2> =
+    SubscriptionContext<M, T, E, OR, MD, ChainDisposal<D2, D1>>;
+
+/// The disposal of a [`subscribe_with_context_two_steps`] subscription: the second step is
+/// disposed first, the last subscribed first.
+pub type TwoStepsDisposal<M, T, E, MD, D1, D2> = Disposal<M, T, E, MD, ChainDisposal<D2, D1>>;
+
+/// Creates a subscription whose sources are assembled in two steps, either of which may decide
+/// that nothing more is to be subscribed.
+///
+/// `builder_1` runs first, and `builder_2` only while the context still accepts events, so a
+/// source that ends the stream as it is subscribed — synchronously, or through a notifier — keeps
+/// the step after it from starting its own subscription at all. The sources are subscribed in
+/// that order and disposed in the opposite one, the last subscribed first.
+///
+/// A builder returns `None` to end the assembly: the step after it does not run, whatever the
+/// steps before it subscribed is disposed at once, outside the lock, and the context ends up
+/// owning no source subscription at all. So `None` says "this stream is over", not "I have
+/// nothing of my own to dispose" — a step that installs nothing yet must leave the stream running
+/// returns an empty disposal instead, as `timeout` does for a timeout that never fires.
+///
+/// Returning `None` does not stop the context by itself. It does leave no step holding a clone of
+/// it, though, so the observer is released as this function returns — without a termination, the
+/// way a source letting go of it would end the stream. A builder that means downstream to be told
+/// sends a termination first, and the context stops as that is delivered.
+///
+/// Hence the `Option` the builders answer with, where the builder of [`subscribe_with_context`]
+/// hands over a subscription and nothing else: that one is a free assembly, of whatever its
+/// operator needs in whatever order, while these two are the fixed steps of one that may end part
+/// way through.
+///
+/// `M` is the thread mode the context's pointers are picked for: the mode of the operator.
+pub fn subscribe_with_context_two_steps<M, T, E, OR, D1, D2, MD, F1, F2>(
+    observer: OR,
+    model: MD,
+    builder_1: F1,
+    builder_2: F2,
+) -> DisposeOnDrop<TwoStepsDisposal<M, T, E, MD, D1, D2>>
+where
+    M: ThreadMode,
+    OR: Observer<T, E>,
+    D1: Disposable,
+    D2: Disposable,
+    F1: FnOnce(&TwoStepsContext<M, T, E, OR, MD, D1, D2>) -> Option<DisposeOnDrop<D1>>,
+    F2: FnOnce(&TwoStepsContext<M, T, E, OR, MD, D1, D2>) -> Option<DisposeOnDrop<D2>>,
+{
+    subscribe_with_context_opt(observer, model, |context| {
+        // The first step needs no check of its own: nothing can have stopped a context that was
+        // only just created, whose disposal is still held here alone and whose observer has not
+        // been handed a single event.
+        let subscription_1 = builder_1(context)?;
+        if !context.delivery.is_active() {
+            return None;
+        }
+        let subscription_2 = builder_2(context)?;
+        Some(subscription_1.preceded_by_wrapped(subscription_2))
+    })
+}
+
+/// [`subscribe_with_context`] whose builder may leave the context owning no source subscription,
+/// which is what every step of it being skipped comes down to.
+fn subscribe_with_context_opt<M, T, E, OR, D, MD, F>(
+    observer: OR,
+    model: MD,
+    builder: F,
+) -> DisposeOnDrop<Disposal<M, T, E, MD, D>>
+where
+    M: ThreadMode,
+    OR: Observer<T, E>,
+    D: Disposable,
+    F: FnOnce(&SubscriptionContext<M, T, E, OR, MD, D>) -> Option<DisposeOnDrop<D>>,
+{
     // A best-effort check of a misuse, so debug builds only: see
     // `is_auto_dispose_on_termination_observer`.
     #[cfg(debug_assertions)]
@@ -162,15 +245,16 @@ where
     );
     let context = SubscriptionContext::new(observer, model);
     let disposal = context.disposal();
-    let subscription = builder(context.clone());
-    // The context owns the source subscription from here on. The field is private and set only
-    // here, so it is still `None` and nothing is dropped under the lock. A context that already
-    // stopped while `builder` ran does not run this update: it drops `subscription`, which
-    // disposes the source, outside the lock.
-    let _ = context.delivery.update(|resources| {
-        resources.source_subscription = Some(subscription);
-        UpdateOutcome::new(())
-    });
+    if let Some(subscription) = builder(&context) {
+        // The context owns the source subscription from here on. The field is private and set only
+        // here, so it is still `None` and nothing is dropped under the lock. A context that already
+        // stopped while `builder` ran does not run this update: it drops `subscription`, which
+        // disposes the source, outside the lock.
+        let _ = context.delivery.update(|resources| {
+            resources.source_subscription = Some(subscription);
+            UpdateOutcome::new(())
+        });
+    }
     disposal.into_dispose_on_drop()
 }
 
@@ -298,5 +382,63 @@ where
     /// or that the stream is over: `events` carried a termination, or delivering them ended it.
     pub fn send(&self, events: EventBatch<T, E>) -> Flow {
         self.delivery.send(events)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::subscribe_with_context_two_steps;
+    use crate::{
+        disposable::{
+            Disposable, callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop,
+        },
+        observer::{Termination, callback_observer::CallbackObserver},
+        thread_mode::Shared,
+    };
+    use std::{
+        convert::Infallible,
+        sync::{
+            Arc, Barrier,
+            atomic::{AtomicBool, Ordering},
+        },
+        thread,
+    };
+
+    // A stop concurrent with a step, which needs the context's own disposal: the public surface
+    // only hands one out once the assembly has returned. The rest is covered from outside, in
+    // `tests/subscribe_with_context.rs`.
+    #[test]
+    fn test_disposes_steps_started_before_a_concurrent_stop() {
+        let disposed = Arc::new(AtomicBool::new(false));
+        let disposed_source = disposed.clone();
+        let observer = CallbackObserver::new(
+            |_: i32| {},
+            |_: Termination<Infallible>| {
+                panic!("disposal must not terminate the observer");
+            },
+        );
+        let _subscription = subscribe_with_context_two_steps::<Shared, _, _, _, _, _, _, _, _>(
+            observer,
+            (),
+            |_| Some(DisposeOnDrop::new(())),
+            |context| {
+                let barrier = Barrier::new(2);
+                thread::scope(|scope| {
+                    let stop = context.disposal();
+                    let barrier_thread = &barrier;
+                    scope.spawn(move || {
+                        barrier_thread.wait();
+                        stop.dispose();
+                        barrier_thread.wait();
+                    });
+                    barrier.wait();
+                    barrier.wait();
+                    Some(DisposeOnDrop::new(CallbackDisposal::new(move || {
+                        disposed_source.store(true, Ordering::SeqCst)
+                    })))
+                })
+            },
+        );
+        assert!(disposed.load(Ordering::SeqCst));
     }
 }

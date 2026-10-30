@@ -29,6 +29,10 @@ All notable changes to this project are documented here. The format follows
 - `scheduler::Task::from_stream_acked_then`, with `scheduler::StreamAck` and
   `StreamAckedThenContext`: the task behind the two sources, public like `from_stream_then`, for
   operators written outside the crate.
+- `utils::subscribe_with_context::subscribe_with_context_two_steps`, with `TwoStepsContext` and
+  `TwoStepsDisposal`: subscribes an operator's two sources — or its source and its scheduler
+  task — in order, skips the second one once the stream is already over, and disposes them in the
+  opposite order. Public like `subscribe_with_context`, for operators written outside the crate.
 - `examples/large_file.rs`: a file read chunk by chunk, each chunk uploaded before the next is
   read.
 
