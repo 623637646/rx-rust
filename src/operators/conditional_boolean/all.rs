@@ -66,7 +66,6 @@ impl<T, OE, F> All<T, OE, F> {
 impl<T, E, OE, F> ObservableTypes for All<T, OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(T) -> bool,
 {
     type Item = bool;
     type Error = E;

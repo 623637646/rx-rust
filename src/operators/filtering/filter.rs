@@ -54,7 +54,6 @@ impl<OE, F> Filter<OE, F> {
 impl<T, E, OE, F> ObservableTypes for Filter<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(&T) -> bool,
 {
     type Item = T;
     type Error = E;

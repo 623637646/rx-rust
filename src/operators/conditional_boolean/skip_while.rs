@@ -55,7 +55,6 @@ impl<OE, F> SkipWhile<OE, F> {
 impl<T, E, OE, F> ObservableTypes for SkipWhile<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(&T) -> bool,
 {
     type Item = T;
     type Error = E;

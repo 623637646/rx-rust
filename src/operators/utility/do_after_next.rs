@@ -52,9 +52,7 @@ impl<OE, F> DoAfterNext<OE, F> {
 
 impl<T, E, OE, F> ObservableTypes for DoAfterNext<OE, F>
 where
-    T: Clone,
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(T),
 {
     type Item = T;
     type Error = E;

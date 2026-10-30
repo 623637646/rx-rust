@@ -88,10 +88,7 @@ impl<OE, F, K> GroupBy<'_, OE, F, K> {
 impl<'a, T, E, OE, F, K> ObservableTypes for GroupBy<'a, OE, F, K>
 where
     <OE as ObservableTypes>::Mode: ObserverMode,
-    E: Clone,
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(&T) -> K,
-    K: Eq + Hash,
 {
     type Item = BoxedUnicastObservable<'a, T, E, OE::Mode>;
     type Error = E;

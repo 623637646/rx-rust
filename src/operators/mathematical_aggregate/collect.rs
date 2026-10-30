@@ -62,7 +62,6 @@ impl<C, T, OE> Collect<C, T, OE> {
 
 impl<C, T, E, OE> ObservableTypes for Collect<C, T, OE>
 where
-    C: Default + Extend<T>,
     OE: ObservableTypes<Item = T, Error = E>,
 {
     type Item = C;

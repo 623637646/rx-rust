@@ -70,7 +70,6 @@ impl<T0, T, E, OE, OE1, F> ObservableTypes for FlatMap<T0, OE, OE1, F>
 where
     OE: ObservableTypes<Item = T0, Error = E>,
     OE1: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(T0) -> OE1,
 {
     type Item = T;
     type Error = E;

@@ -53,7 +53,6 @@ impl<OE, F> DoBeforeNext<OE, F> {
 impl<T, E, OE, F> ObservableTypes for DoBeforeNext<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(&T),
 {
     type Item = T;
     type Error = E;

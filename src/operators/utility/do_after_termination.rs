@@ -57,9 +57,7 @@ impl<OE, F> DoAfterTermination<OE, F> {
 
 impl<T, E, OE, F> ObservableTypes for DoAfterTermination<OE, F>
 where
-    E: Clone,
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnOnce(Termination<E>),
 {
     type Item = T;
     type Error = E;

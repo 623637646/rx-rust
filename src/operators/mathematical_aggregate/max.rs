@@ -51,7 +51,6 @@ impl<OE> Max<OE> {
 
 impl<T, E, OE> ObservableTypes for Max<OE>
 where
-    T: PartialOrd,
     OE: ObservableTypes<Item = T, Error = E>,
 {
     type Item = T;

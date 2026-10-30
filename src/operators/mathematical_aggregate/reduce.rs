@@ -64,7 +64,6 @@ impl<T, T1, OE, F> Reduce<T, T1, OE, F> {
 impl<T, T1, E, OE, F> ObservableTypes for Reduce<T, T1, OE, F>
 where
     OE: ObservableTypes<Item = T1, Error = E>,
-    F: FnMut(T, T1) -> T,
 {
     type Item = T;
     type Error = E;

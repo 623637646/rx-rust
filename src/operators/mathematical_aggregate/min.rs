@@ -51,7 +51,6 @@ impl<OE> Min<OE> {
 
 impl<T, E, OE> ObservableTypes for Min<OE>
 where
-    T: PartialOrd,
     OE: ObservableTypes<Item = T, Error = E>,
 {
     type Item = T;

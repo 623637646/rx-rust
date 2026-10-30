@@ -106,8 +106,7 @@ impl<T, E, OE, C> Debug<OE, C, DebugPrintCallback<C, T, E>> {
 impl<T, E, OE, C, F> ObservableTypes for Debug<OE, C, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    C: Clone,
-    F: Fn(C, DebugEvent<'_, T, E>) + Clone,
+    F: Fn(C, DebugEvent<'_, T, E>),
 {
     type Item = T;
     type Error = E;

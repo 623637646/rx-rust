@@ -57,7 +57,6 @@ impl<T, OE> Contains<T, OE> {
 impl<T, E, OE> ObservableTypes for Contains<T, OE>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    T: PartialEq,
 {
     type Item = bool;
     type Error = E;

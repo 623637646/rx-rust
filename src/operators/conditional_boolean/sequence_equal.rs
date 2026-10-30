@@ -81,7 +81,6 @@ delegate_disposal!(
 
 impl<T, E, OE1, OE2> ObservableTypes for SequenceEqual<T, OE1, OE2>
 where
-    T: PartialEq,
     OE1: ObservableTypes<Item = T, Error = E>,
     OE2: ObservableTypes<Item = T, Error = E>,
 {

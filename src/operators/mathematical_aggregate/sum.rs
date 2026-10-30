@@ -50,7 +50,6 @@ impl<OE> Sum<OE> {
 
 impl<T, E, OE> ObservableTypes for Sum<OE>
 where
-    T: AddAssign,
     OE: ObservableTypes<Item = T, Error = E>,
 {
     type Item = T;

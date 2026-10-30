@@ -79,7 +79,6 @@ impl<T, E, OE, F, K> ObservableTypes for DistinctUntilChanged<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
     F: FnMut(&T) -> K,
-    K: PartialEq,
 {
     type Item = T;
     type Error = E;

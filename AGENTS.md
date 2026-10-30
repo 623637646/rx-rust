@@ -170,7 +170,8 @@ when they fail.
   the slot is disposed: an event that arrives after a disposal is then dropped with the observer,
   rather than running the callback and delivering to an observer that is already released.
 - **Implementing an observable** takes two impls: `ObservableTypes` with the associated `Item`,
-  `Error`, `Mode` and `Disposal` — which must not mention the observer — and `Observable<OR>`,
+  `Error`, `Mode` and `Disposal` — which must not mention the observer, and whose where-clause
+  carries only what those four types need — and `Observable<OR>`,
   whose bounds name the observer the source is subscribed with
   (`OE: Observable<MapObserver<OR, F>, Item = T0>`). That observer type is `pub` but
   `#[doc(hidden)]`, and its fields are not public: the non-boxed `create`,
@@ -223,6 +224,16 @@ when they fail.
   checks anyway (`Repeat`'s `T: Clone`, `S: Subject` on `ConnectableController::new`) is left out:
   it moves the error earlier and nothing more. A callback's `Fn*` bound stays even with no
   arguments (`F: FnOnce()`), as the only place its signature is written.
+- **A bound an `ObservableTypes` impl does not need is not neutral**: the same rule as for a
+  constructor, with a cost of its own. `Scan`'s `T: Clone` or `Filter`'s `F: FnMut(&T) -> bool`
+  says nothing about `Item`, `Error`, `Mode` or `Disposal`, so leaving it there only moves the
+  error earlier — and, since `ObservableTypes` is the trait one asks for a type alone
+  (`JoinedModeOf`, `ChainDisposalOf`, every `OE: ObservableTypes` where-clause), it propagates:
+  a caller that merely reads `OE::Item` then has to prove `T: Clone` too. The `Observable<OR>`
+  impl and the fluent method carry those bounds, which is where they belong. What the where-clause
+  does need is what the associated types name (`OE: ObservableTypes<Item = T, Error = E>`,
+  `<OE as ObservableTypes>::Mode: ObserverMode` for an `Item` built on the mode, `F: Fn(…)` when
+  the `Disposal` names `F`).
 - **Derives** on a generic type go through `#[derive(Educe)]`, not `#[derive(...)]` (which bounds
   every type parameter) and not hand-written impls. A field that cannot or should not be printed
   gets `#[educe(Debug(ignore))]`. Educe infers the bounds from the field types, and leaves out those

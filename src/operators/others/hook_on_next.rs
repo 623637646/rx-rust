@@ -57,7 +57,6 @@ impl<OE, F> HookOnNext<OE, F> {
 impl<T, E, OE, F> ObservableTypes for HookOnNext<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(&mut dyn Observer<T, E>, T) -> Flow,
 {
     type Item = T;
     type Error = E;

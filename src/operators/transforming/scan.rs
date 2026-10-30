@@ -62,9 +62,7 @@ impl<T, T1, OE, F> Scan<T, T1, OE, F> {
 
 impl<T, T1, E, OE, F> ObservableTypes for Scan<T, T1, OE, F>
 where
-    T: Clone,
     OE: ObservableTypes<Item = T1, Error = E>,
-    F: FnMut(T, T1) -> T,
 {
     type Item = T;
     type Error = E;

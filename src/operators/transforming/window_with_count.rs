@@ -77,7 +77,6 @@ delegate_disposal!(
 impl<'a, T, E, OE> ObservableTypes for WindowWithCount<'a, OE>
 where
     <OE as ObservableTypes>::Mode: ObserverMode,
-    E: Clone,
     OE: ObservableTypes<Item = T, Error = E>,
 {
     type Item = BoxedUnicastObservable<'a, T, E, OE::Mode>;

@@ -425,7 +425,7 @@ where
 
 impl<S, C> ObservableTypes for MulticastObservable<S, C>
 where
-    S: ObservableTypes + Clone,
+    S: ObservableTypes,
 {
     type Item = S::Item;
     type Error = S::Error;

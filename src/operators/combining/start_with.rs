@@ -64,7 +64,6 @@ delegate_disposal!(
 impl<T, E, OE, I> ObservableTypes for StartWith<OE, I>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    I: IntoIterator<Item = T>,
 {
     type Item = T;
     type Error = E;

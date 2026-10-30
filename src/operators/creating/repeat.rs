@@ -46,7 +46,6 @@ impl<T> Repeat<T> {
 
 impl<T> ObservableTypes for Repeat<T>
 where
-    T: Clone,
 {
     type Item = T;
     type Error = Infallible;

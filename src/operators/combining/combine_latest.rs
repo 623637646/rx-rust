@@ -78,8 +78,6 @@ delegate_disposal!(
 
 impl<T1, T2, E, OE1, OE2> ObservableTypes for CombineLatest<OE1, OE2>
 where
-    T1: Clone,
-    T2: Clone,
     OE1: ObservableTypes<Item = T1, Error = E>,
     OE2: ObservableTypes<Item = T2, Error = E>,
 {

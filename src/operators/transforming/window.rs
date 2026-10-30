@@ -103,7 +103,6 @@ delegate_disposal!(
 impl<'a, T, E, OE, OE1> ObservableTypes for Window<'a, OE, OE1>
 where
     JoinedModeOf<OE, OE1>: ObserverMode,
-    E: Clone,
     OE: ObservableTypes<Item = T, Error = E>,
     OE1: ObservableTypes<Item = (), Error = E>,
 {

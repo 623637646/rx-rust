@@ -58,7 +58,6 @@ impl<OE, F> DoBeforeTermination<OE, F> {
 impl<T, E, OE, F> ObservableTypes for DoBeforeTermination<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnOnce(&Termination<E>),
 {
     type Item = T;
     type Error = E;

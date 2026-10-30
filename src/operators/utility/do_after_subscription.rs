@@ -50,7 +50,6 @@ impl<OE, F> DoAfterSubscription<OE, F> {
 impl<T, E, OE, F> ObservableTypes for DoAfterSubscription<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnOnce(),
 {
     type Item = T;
     type Error = E;
