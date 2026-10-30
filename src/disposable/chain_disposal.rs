@@ -1,6 +1,6 @@
 //! A disposal that disposes two others in order.
 
-use crate::disposable::Disposable;
+use crate::disposable::{Disposable, dispose_on_drop::DisposeOnDrop};
 use educe::Educe;
 
 /// A disposal that disposes `first`, then `second`.
@@ -8,6 +8,7 @@ use educe::Educe;
 /// The order is a guarantee operators rely on: `do_before_disposal` puts its callback in `first`
 /// and `do_after_disposal` in `second`.
 /// [`DisposableExt::then`](crate::disposable::DisposableExt::then) builds one from any disposal.
+/// If disposing `first` panics, `second` is still disposed during unwinding.
 ///
 /// # Examples
 /// ```rust
@@ -44,7 +45,8 @@ where
     D2: Disposable,
 {
     fn dispose(self) {
+        let second = DisposeOnDrop::new(self.second);
         self.first.dispose();
-        self.second.dispose();
+        second.dispose();
     }
 }

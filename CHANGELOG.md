@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `ChainDisposal` disposes its second resource even if disposing the first panics.
+
 ### Added
 
 - `operators::creating::from_stream_acked::FromStreamAcked` and

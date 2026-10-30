@@ -4,6 +4,23 @@ use rx_rust::disposable::boxed_disposal::SendBoxedDisposal;
 use rx_rust::disposable::{Disposable, callback_disposal::CallbackDisposal};
 use tests_utils::test_struct::TestStruct;
 
+#[cfg(panic = "unwind")]
+#[test]
+fn test_chain_disposes_second_on_panic() {
+    use rx_rust::disposable::chain_disposal::ChainDisposal;
+    use tests_utils::panic::expect_panic_on_drop;
+
+    let mut disposed = false;
+    expect_panic_on_drop(|panic_on_drop| {
+        ChainDisposal::new(
+            CallbackDisposal::new(|| drop(panic_on_drop)),
+            CallbackDisposal::new(|| disposed = true),
+        )
+        .dispose();
+    });
+    assert!(disposed);
+}
+
 #[test]
 fn test_callback_disposal() {
     let mut called = false;
