@@ -16,44 +16,50 @@
 //! one once the stream is already over, and disposes them in the opposite order.
 //!
 //! # Examples
-//! An operator that emits the running total and completes on its own once it exceeds a limit,
-//! which disposes its source:
+//! An operator that emits the running total of two sources and completes on its own once it
+//! exceeds a limit, which disposes both. The observers of the two sources share the total and the
+//! downstream observer through the context:
 //! ```rust
 //! use rx_rust::{
 //!     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
-//!     observable::{Observable, ObservableExt, ObservableTypes},
+//!     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableExt, ObservableTypes},
 //!     observer::{Flow, Observer, Termination},
-//!     operators::creating::range::Range,
+//!     subject::publish_subject::PublishSubject,
 //!     thread_mode::ThreadMode,
 //!     utils::{
 //!         serialized_delivery::UpdateOutcome,
 //!         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
 //!     },
 //! };
+//! use std::convert::Infallible;
 //!
-//! struct TotalUntil<OE> { source: OE, limit: i32 }
+//! struct TotalUntil<A, B> { first: A, second: B, limit: i32 }
 //!
 //! // Nothing here depends on the observer: the disposal names the mode, the events, the model and
-//! // the source's disposal, never the observer's type.
-//! impl<E, OE: ObservableTypes<Item = i32, Error = E>> ObservableTypes for TotalUntil<OE> {
+//! // the sources' disposals, never the observer's type.
+//! impl<E, A, B> ObservableTypes for TotalUntil<A, B>
+//! where
+//!     A: ObservableTypes<Item = i32, Error = E>,
+//!     B: ObservableTypes<Item = i32, Error = E>,
+//! {
 //!     type Item = i32;
 //!     type Error = E;
-//!     type Mode = OE::Mode;
-//!     type Disposal = subscribe_with_context::Disposal<OE::Mode, i32, E, i32, OE::Disposal>;
+//!     type Mode = JoinedModeOf<A, B>;
+//!     type Disposal =
+//!         subscribe_with_context::Disposal<JoinedModeOf<A, B>, i32, E, i32, ChainDisposalOf<A, B>>;
 //! }
 //!
-//! // The source is subscribed with the operator's own observer, which is named here. A disposal
-//! // written inside the bound of `OE` is spelled out in full.
-//! impl<E, OE, OR> Observable<OR> for TotalUntil<OE>
+//! // Both sources are subscribed with the operator's own observer, which is named here.
+//! impl<E, A, B, OR> Observable<OR> for TotalUntil<A, B>
 //! where
 //!     OR: Observer<i32, E>,
-//!     OE: Observable<
-//!             TotalObserver<
-//!                 <OE as ObservableTypes>::Mode,
-//!                 OR,
-//!                 E,
-//!                 <OE as ObservableTypes>::Disposal,
-//!             >,
+//!     A: Observable<
+//!             TotalObserver<JoinedModeOf<A, B>, OR, E, ChainDisposalOf<A, B>>,
+//!             Item = i32,
+//!             Error = E,
+//!         >,
+//!     B: Observable<
+//!             TotalObserver<JoinedModeOf<A, B>, OR, E, ChainDisposalOf<A, B>>,
 //!             Item = i32,
 //!             Error = E,
 //!         >,
@@ -61,7 +67,9 @@
 //!     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
 //!         let limit = self.limit;
 //!         subscribe_with_context(observer, 0, |context| {
-//!             self.source.subscribe(TotalObserver { context, limit })
+//!             let first = self.first.subscribe(TotalObserver { context: context.clone(), limit });
+//!             let second = self.second.subscribe(TotalObserver { context, limit });
+//!             second.preceded_by_wrapped(first)
 //!         })
 //!     }
 //! }
@@ -87,15 +95,26 @@
 //!         })
 //!     }
 //!     fn on_termination(self, termination: Termination<E>) {
+//!         // The first termination, from either source, ends the stream.
 //!         self.context.send_termination(termination);
 //!     }
 //! }
 //!
 //! let mut seen = Vec::new();
-//! TotalUntil { source: Range::new(1..), limit: 5 }.subscribe_with_callback(
-//!     |total| seen.push(total),
-//!     |t| assert_eq!(t, Termination::Completed),
-//! );
+//! let mut first = PublishSubject::local();
+//! let mut second = PublishSubject::<_, Infallible, _>::local();
+//! let subscription = TotalUntil { first: first.clone(), second: second.clone(), limit: 5 }
+//!     .subscribe_with_callback(
+//!         |total| seen.push(total),
+//!         |t| assert_eq!(t, Termination::Completed),
+//!     );
+//!
+//! let _ = first.on_next(1);
+//! let _ = second.on_next(2);
+//! let _ = first.on_next(3); // Exceeds the limit: completes, and disposes both sources.
+//! let _ = second.on_next(4);
+//!
+//! drop((subscription, first, second));
 //! assert_eq!(seen, [1, 3, 6]);
 //! ```
 
