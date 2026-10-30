@@ -24,7 +24,11 @@ use rx_rust::{
     operators::{
         combining::{combine_latest::CombineLatest, merge::Merge},
         connectable::ref_count::RefCount,
-        creating::{create::Create, from_iter::FromIter},
+        creating::{
+            create::Create,
+            from_iter::FromIter,
+            from_stream_acked::{FromStreamAcked, StreamAck},
+        },
         error_handling::retry::RetryAction,
     },
     scheduler::{
@@ -405,6 +409,10 @@ assert_send!(RefCount<FromIter<Vec<i32>>, PublishSubject<'static, i32, (), Share
 assert_not_send!(TaskWaker<Local>);
 assert_send!(TaskWaker<Shared>);
 
+// An acknowledgement crosses threads only in the `Shared` mode.
+assert_not_send!(StreamAck<Local>);
+assert_send!(StreamAck<Shared>);
+
 assert_not_send!(LocalPoolScheduler);
 assert_send!(ThreadPoolScheduler);
 assert_not_send!(TokioLocalScheduler);
@@ -470,6 +478,24 @@ on_local_schedulers!(test_switch_map_delayed, |scheduler| async move {
     assert_eq!(record.values(), rcs([2]));
     assert_eq!(record.termination(), Some(Termination::Completed));
 });
+
+on_local_schedulers!(
+    test_from_stream_acked_concat_map_hold,
+    |scheduler| async move {
+        // Neither the items of the stream nor those of the inners are `Send`.
+        let stream = futures::stream::iter(rcs([1, 2]));
+        let (record, _subscription) = record(
+            FromStreamAcked::new(stream, scheduler.clone()).concat_map(move |(value, ack)| {
+                FromIter::new(vec![value.clone(), Rc::new(*value * 10)])
+                    .delay(DURATION_10_MS, scheduler.clone())
+                    .hold(ack)
+            }),
+        );
+        sleep(DURATION_100_MS).await;
+        assert_eq!(record.values(), rcs([1, 10, 2, 20]));
+        assert_eq!(record.termination(), Some(Termination::Completed));
+    }
+);
 
 // MARK: - The clock of a single-threaded scheduler
 

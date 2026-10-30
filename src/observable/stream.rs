@@ -13,6 +13,12 @@
 //!
 //! - From a stream: `FromStream` polls its stream only after `on_next` returns, so the stream's
 //!   pace is kept through every synchronous operator, up to the first asynchronous one.
+//! - From a stream, at the pace of an asynchronous handling:
+//!   [`FromStreamAcked`](crate::operators::creating::from_stream_acked::FromStreamAcked) polls
+//!   its stream only once the [`StreamAck`](crate::scheduler::StreamAck) sent with an earlier item
+//!   is dropped, which [`hold`](crate::observable::ObservableExt::hold) delays until the
+//!   observable that handles the item has ended. The demand is still the stream's, polled or not;
+//!   the `StreamAck` only carries the consumer's "done" back to it.
 //! - To a stream: `into_stream()` keeps every item that arrives between two polls, so a source
 //!   faster than the consumer grows its buffer without bound.
 //!   [`into_stream_with_buffer`](crate::observable::ObservableExt::into_stream_with_buffer) bounds

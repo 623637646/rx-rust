@@ -12,9 +12,13 @@ pub mod from_iter;
 pub mod from_result;
 #[cfg(feature = "futures")]
 pub mod from_stream;
+#[cfg(feature = "futures")]
+pub mod from_stream_acked;
 pub mod from_try_future;
 #[cfg(feature = "futures")]
 pub mod from_try_stream;
+#[cfg(feature = "futures")]
+pub mod from_try_stream_acked;
 pub mod interval;
 pub mod just;
 pub mod never;
