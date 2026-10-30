@@ -12,8 +12,8 @@ use crate::{
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task},
     thread_mode::ThreadMode,
     utils::{
-        serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        serialized_delivery::{DeliveryStopped, UpdateOutcome},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
 use educe::Educe;
@@ -148,15 +148,18 @@ where
         let model = Model {
             deadline: self.scheduler.clock().now().checked_add(self.duration),
         };
-        subscribe_with_context(observer, model, |context| {
-            let source_subscription = self.source.subscribe(TimeoutObserver {
-                context: context.clone(),
-                duration: self.duration,
-                clock: self.scheduler.clock(),
-            });
-            let timer = setup_timer(context, &self.scheduler);
-            source_subscription.preceded_by_wrapped(timer)
-        })
+        subscribe_with_context_two_steps(
+            observer,
+            model,
+            |context| {
+                Some(self.source.subscribe(TimeoutObserver {
+                    context: context.clone(),
+                    duration: self.duration,
+                    clock: self.scheduler.clock(),
+                }))
+            },
+            |context| setup_timer(context, &self.scheduler),
+        )
         .map_inner_into()
     }
 }
@@ -204,26 +207,29 @@ where
 /// Source values only move `deadline` forward. If the task wakes at an obsolete deadline, it
 /// continues at the latest one; no scheduler task needs to be cancelled or spawned per value.
 fn setup_timer<M, T, E, OR, S, D>(
-    context: SubscriptionContext<M, T, Error<E>, OR, Model, D>,
+    context: &SubscriptionContext<M, T, Error<E>, OR, Model, D>,
     scheduler: &S,
-) -> DisposeOnDrop<OptionDisposal<S::Disposal>>
+) -> Option<DisposeOnDrop<OptionDisposal<S::Disposal>>>
 where
     M: ThreadMode,
     OR: Observer<T, Error<E>>,
     S: Scheduler<SubscriptionContext<M, T, Error<E>, OR, Model, D>>,
     D: Disposable,
 {
-    let deadline = context.update(|model| UpdateOutcome::new(model.deadline).without_events());
-    // `Err`: the source terminated synchronously while it was being subscribed. `Ok(None)`: the
-    // timeout never fires, so no timer is needed.
-    let Ok(Some(deadline)) = deadline else {
-        return DisposeOnDrop::new(OptionDisposal::none());
+    let deadline = match context.update(|model| UpdateOutcome::new(model.deadline).without_events())
+    {
+        Ok(Some(deadline)) => deadline,
+        // The timeout never fires, so there is no timer to install — but the source stays
+        // subscribed, so this step is not the one to end the assembly.
+        Ok(None) => return Some(DisposeOnDrop::new(OptionDisposal::none())),
+        // The source terminated synchronously while it was being subscribed.
+        Err(DeliveryStopped) => return None,
     };
 
     // The context owns only the task's disposal, never the task, which its runtime owns: holding
     // the context strongly forms no cycle. Stopping the context disposes the timer, which cancels
     // the task.
-    let task = Task::new(context, |context, _, _, now| {
+    let task = Task::new(context.clone(), |context, _, _, now| {
         context
             .update(|model| match model.deadline {
                 Some(deadline) if now < deadline => {
@@ -236,10 +242,12 @@ where
             })
             .unwrap_or(Next::Finished)
     });
-    scheduler
-        .run_task(
-            task,
-            Some(deadline.saturating_duration_since(scheduler.clock().now())),
-        )
-        .map_inner(OptionDisposal::some)
+    Some(
+        scheduler
+            .run_task(
+                task,
+                Some(deadline.saturating_duration_since(scheduler.clock().now())),
+            )
+            .map_inner(OptionDisposal::some),
+    )
 }

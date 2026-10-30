@@ -13,12 +13,14 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::operators::creating::empty::Empty;
 use rx_rust::operators::creating::throw::Throw;
 use rx_rust::subject::publish_subject::PublishSubject;
+use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Observer, Termination},
     operators::combining::merge::Merge,
 };
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::{checker::Checker, test_channel::test_channel, test_struct::TestStruct};
 
 #[test]
@@ -897,7 +899,7 @@ fn test_error_on_sub() {
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
     assert_eq!(checker.state(), State::Error("error"));
-    assert_eq!(channel_checker_1.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker_1.state(), ChannelState::Initialized);
 }
 
 #[test]
@@ -1140,4 +1142,42 @@ fn test_abandon_after_next() {
     assert_eq!(checker.values(), [111, 222]);
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(channel_checker_2.state(), ChannelState::Completed);
+}
+
+#[test]
+fn test_no_second_subscription_after_downstream_stops() {
+    let (_, first, first_checker) = test_channel::<'_, i32, Infallible>();
+    let (_, second, second_checker) = test_channel();
+    let (checker, observer) = Checker::stopping_after(1);
+    let _subscription = first
+        .start_with([111])
+        .merge_with(second)
+        .subscribe(observer);
+
+    assert_eq!(first_checker.state(), ChannelState::Initialized);
+    assert_eq!(second_checker.state(), ChannelState::Initialized);
+    assert_eq!(checker.values(), [111]);
+    assert_eq!(checker.state(), State::Dropped);
+}
+
+#[test]
+fn test_disposal_order() {
+    let order = Arc::new(Mutex::new(Vec::new()));
+    let first_order = order.clone();
+    let first = Create::shared_boxed(|_: SendBoxedObserver<'_, i32, Infallible>| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            first_order.with_mut(|order| order.push(1));
+        }))
+    });
+    let second_order = order.clone();
+    let second = Create::shared_boxed(|_| {
+        DisposeOnDrop::new(CallbackDisposal::new(move || {
+            second_order.with_mut(|order| order.push(2));
+        }))
+    });
+    let (_, observer) = Checker::new();
+    let subscription = first.merge_with(second).subscribe(observer);
+
+    subscription.dispose();
+    assert_eq!(order.clone_value(), [2, 1]);
 }

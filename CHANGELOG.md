@@ -11,6 +11,10 @@ All notable changes to this project are documented here. The format follows
 - `ChainDisposal` disposes its second resource even if disposing the first panics.
 - Observable stream adapters retain the caller's waker only while a poll is pending, releasing
   it when a value, an error or the end of the stream is returned.
+- Operators that subscribe two sources, or a source and a timer, skip the second subscription
+  once their result stream is over while they are being assembled: a source that terminates as it
+  is subscribed, a notifier that fires at once, a downstream answering `Flow::Stop`, or the first
+  window of `window` being refused.
 - `Task::periodic` waits for its anchor before its first step, even without an initial delay.
 
 ### Added

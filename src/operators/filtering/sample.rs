@@ -9,7 +9,7 @@ use crate::{
     thread_mode::ThreadMode,
     utils::{
         serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
 use educe::Educe;
@@ -99,13 +99,12 @@ where
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model { last_value: None };
-        subscribe_with_context(observer, model, |context| {
-            let sample_observer = SampleObserver(context.clone());
-            let sampler_observer = SamplerObserver(context);
-            let subscription_1 = self.sampler.subscribe(sampler_observer);
-            let subscription_2 = self.source.subscribe(sample_observer);
-            subscription_1.preceded_by_wrapped(subscription_2)
-        })
+        subscribe_with_context_two_steps(
+            observer,
+            model,
+            |context| Some(self.sampler.subscribe(SamplerObserver(context.clone()))),
+            |context| Some(self.source.subscribe(SampleObserver(context.clone()))),
+        )
         .map_inner_into()
     }
 }

@@ -9,7 +9,7 @@ use crate::{
     thread_mode::ThreadMode,
     utils::{
         serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
         take_leaving_room,
     },
 };
@@ -125,11 +125,12 @@ where
         >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        subscribe_with_context(observer, Vec::new(), |context| {
-            let subscription_1 = self.boundary.subscribe(BoundaryObserver(context.clone()));
-            let subscription_2 = self.source.subscribe(BufferObserver(context));
-            subscription_1.preceded_by_wrapped(subscription_2)
-        })
+        subscribe_with_context_two_steps(
+            observer,
+            Vec::new(),
+            |context| Some(self.boundary.subscribe(BoundaryObserver(context.clone()))),
+            |context| Some(self.source.subscribe(BufferObserver(context.clone()))),
+        )
         .map_inner_into()
     }
 }

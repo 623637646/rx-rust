@@ -842,3 +842,39 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+#[test]
+fn test_no_source_subscription_after_notifier_termination() {
+    for termination in [Termination::Completed, Termination::Error("error")] {
+        let (_, source, source_checker) = test_channel::<'_, i32, &str>();
+        let expected = termination.clone();
+        let notifier = Create::shared_boxed(|observer| {
+            observer.on_termination(termination);
+            DisposeOnDrop::default()
+        });
+        let (checker, observer) = Checker::new();
+        let _subscription = source.take_until(notifier).subscribe(observer);
+
+        assert_eq!(source_checker.state(), ChannelState::Initialized);
+        assert!(checker.values().is_empty());
+        assert_eq!(
+            checker.state(),
+            match expected {
+                Termination::Completed => State::Completed,
+                Termination::Error(error) => State::Error(error),
+            }
+        );
+    }
+}
+
+#[test]
+fn test_no_source_subscription_after_notifier_next() {
+    let (_, source, source_checker) = test_channel::<'_, i32, Infallible>();
+    let (_, stop, stop_checker) = test_channel::<'_, (), _>();
+    let (checker, observer) = Checker::new();
+    let _subscription = source.take_until(stop.start_with([()])).subscribe(observer);
+
+    assert_eq!(source_checker.state(), ChannelState::Initialized);
+    assert_eq!(stop_checker.state(), ChannelState::Initialized);
+    assert_eq!(checker.state(), State::Completed);
+}

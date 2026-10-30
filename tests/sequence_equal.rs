@@ -1716,3 +1716,17 @@ fn test_type_inference_without_subscribe() {
 
     observable.filter(|_| true);
 }
+
+#[test]
+fn test_no_second_subscription_after_first_error() {
+    let (_, source, source_checker) = test_channel::<'_, i32, &str>();
+    let (checker, observer) = Checker::new();
+    let _subscription = Throw::new("error")
+        .with_item_type::<i32>()
+        .sequence_equal(source)
+        .subscribe(observer);
+
+    assert_eq!(source_checker.state(), ChannelState::Initialized);
+    assert!(checker.values().is_empty());
+    assert_eq!(checker.state(), State::Error("error"));
+}

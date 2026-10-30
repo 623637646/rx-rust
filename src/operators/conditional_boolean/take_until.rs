@@ -7,7 +7,7 @@ use crate::{
     observable::{ChainDisposalOf, JoinedModeOf, Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
     thread_mode::ThreadMode,
-    utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+    utils::subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
 };
 use educe::Educe;
 
@@ -94,11 +94,12 @@ where
         >,
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
-        subscribe_with_context(observer, (), |context| {
-            let subscription_1 = self.stop.subscribe(StopObserver(context.clone()));
-            let subscription_2 = self.source.subscribe(TakeUntilObserver(context));
-            subscription_1.preceded_by_wrapped(subscription_2)
-        })
+        subscribe_with_context_two_steps(
+            observer,
+            (),
+            |context| Some(self.stop.subscribe(StopObserver(context.clone()))),
+            |context| Some(self.source.subscribe(TakeUntilObserver(context.clone()))),
+        )
         .map_inner_into()
     }
 }

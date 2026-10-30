@@ -8,7 +8,7 @@ use crate::{
     thread_mode::ThreadMode,
     utils::{
         serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
 use educe::Educe;
@@ -97,11 +97,12 @@ where
             first: (VecDeque::new(), false),
             second: (VecDeque::new(), false),
         };
-        subscribe_with_context(observer, model, |context| {
-            let subscription_1 = self.source_1.subscribe(ZipObserver1(context.clone()));
-            let subscription_2 = self.source_2.subscribe(ZipObserver2(context));
-            subscription_1.preceded_by_wrapped(subscription_2)
-        })
+        subscribe_with_context_two_steps(
+            observer,
+            model,
+            |context| Some(self.source_1.subscribe(ZipObserver1(context.clone()))),
+            |context| Some(self.source_2.subscribe(ZipObserver2(context.clone()))),
+        )
         .map_inner_into()
     }
 }

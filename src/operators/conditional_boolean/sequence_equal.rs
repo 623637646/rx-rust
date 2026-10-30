@@ -10,7 +10,7 @@ use crate::{
     utils::{
         MarkerType,
         serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
 use educe::Educe;
@@ -117,19 +117,22 @@ where
                 completed: false,
             },
         };
-        subscribe_with_context(observer, model, |context| {
-            let observer_1 = SequenceEqualObserver {
-                context: context.clone(),
-                is_first: true,
-            };
-            let observer_2 = SequenceEqualObserver {
-                context,
-                is_first: false,
-            };
-            let subscription_1 = self.source_1.subscribe(observer_1);
-            let subscription_2 = self.source_2.subscribe(observer_2);
-            subscription_1.preceded_by_wrapped(subscription_2)
-        })
+        subscribe_with_context_two_steps(
+            observer,
+            model,
+            |context| {
+                Some(self.source_1.subscribe(SequenceEqualObserver {
+                    context: context.clone(),
+                    is_first: true,
+                }))
+            },
+            |context| {
+                Some(self.source_2.subscribe(SequenceEqualObserver {
+                    context: context.clone(),
+                    is_first: false,
+                }))
+            },
+        )
         .map_inner_into()
     }
 }

@@ -1253,3 +1253,27 @@ fn test_abandon_after_next() {
     assert_eq!(checker.state(), State::Dropped);
     assert_eq!(sampler_checker.state(), ChannelState::Abandoned);
 }
+
+#[test]
+fn test_no_source_subscription_after_notifier_termination() {
+    for termination in [Termination::Completed, Termination::Error("error")] {
+        let (_, source, source_checker) = test_channel::<'_, i32, &str>();
+        let expected = termination.clone();
+        let notifier = Create::shared_boxed(|observer| {
+            observer.on_termination(termination);
+            DisposeOnDrop::default()
+        });
+        let (checker, observer) = Checker::new();
+        let _subscription = source.sample(notifier).subscribe(observer);
+
+        assert_eq!(source_checker.state(), ChannelState::Initialized);
+        assert!(checker.values().is_empty());
+        assert_eq!(
+            checker.state(),
+            match expected {
+                Termination::Completed => State::Completed,
+                Termination::Error(error) => State::Error(error),
+            }
+        );
+    }
+}

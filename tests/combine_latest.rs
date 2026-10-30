@@ -1273,7 +1273,7 @@ fn test_complete_on_sub() {
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
     assert_eq!(checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 }
 
 #[test]
@@ -1286,7 +1286,7 @@ fn test_error_on_sub() {
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
     assert_eq!(checker.state(), State::Error("error"));
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 }
 
 #[test]

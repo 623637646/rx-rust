@@ -10,7 +10,7 @@ use crate::{
     thread_mode::ThreadMode,
     utils::{
         MarkerType,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
 use educe::Educe;
@@ -136,15 +136,20 @@ where
         };
         // The windows own their buffered items, so the context needs no model of its own: it only
         // serializes the actions below and owns the source and boundary subscriptions.
-        subscribe_with_context(observer, (), |context| {
-            // The first window is opened before subscribing, so that a synchronous source has a
-            // window to deliver its values to. An observer that stops on that first window stops
-            // the context, which disposes the subscriptions below as soon as they are installed.
-            let _ = context.send_next(DelegateAction::EmitWindow);
-            let boundary_subscription = self.boundary.subscribe(BoundaryObserver(context.clone()));
-            let source_subscription = self.source.subscribe(SourceObserver(context));
-            boundary_subscription.preceded_by_wrapped(source_subscription)
-        })
+        subscribe_with_context_two_steps(
+            observer,
+            (),
+            |context| {
+                // The first window is opened before subscribing, so that a synchronous source has
+                // a window to deliver its values to. An observer that stops on that first window
+                // leaves the stream over, and then neither source is subscribed.
+                if matches!(context.send_next(DelegateAction::EmitWindow), Flow::Stop) {
+                    return None;
+                }
+                Some(self.boundary.subscribe(BoundaryObserver(context.clone())))
+            },
+            |context| Some(self.source.subscribe(SourceObserver(context.clone()))),
+        )
         .map_inner_into()
     }
 }

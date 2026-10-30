@@ -1837,8 +1837,8 @@ fn test_unsub_on_next_by_take() {
         }
     });
     assert_eq!(termination_checker.state(), State::Completed);
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
-    assert_eq!(boundary_channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
+    assert_eq!(boundary_channel_checker.state(), ChannelState::Initialized);
 }
 
 #[test]
@@ -3159,7 +3159,7 @@ fn test_error_on_sub_from_boundary() {
         }
     });
     assert_eq!(termination_checker.state(), State::Error("boundary error"));
-    assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+    assert_eq!(channel_checker.state(), ChannelState::Initialized);
 }
 
 #[test]
@@ -4339,4 +4339,17 @@ fn test_type_inference_without_subscribe() {
     let observable = observable.window(boundary_observable);
 
     observable.filter(|_| true);
+}
+
+#[test]
+fn test_no_subscriptions_after_initial_window_stops() {
+    let (_, source, source_checker) = test_channel::<'_, i32, Infallible>();
+    let (_, boundary, boundary_checker) = test_channel::<'_, (), _>();
+    let _subscription = source.window(boundary).subscribe_with_callback(
+        |_| rx_rust::observer::Flow::Stop,
+        |_| panic!("a stopped observer must not be terminated"),
+    );
+
+    assert_eq!(source_checker.state(), ChannelState::Initialized);
+    assert_eq!(boundary_checker.state(), ChannelState::Initialized);
 }

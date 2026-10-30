@@ -9,7 +9,7 @@ use crate::{
     thread_mode::ThreadMode,
     utils::{
         serialized_delivery::UpdateOutcome,
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
 use educe::Educe;
@@ -127,11 +127,12 @@ where
         let model = Model {
             one_is_completed: false,
         };
-        subscribe_with_context(observer, model, |context| {
-            let subscription_1 = self.source_1.subscribe(MergeObserver(context.clone()));
-            let subscription_2 = self.source_2.subscribe(MergeObserver(context));
-            subscription_1.preceded_by_wrapped(subscription_2)
-        })
+        subscribe_with_context_two_steps(
+            observer,
+            model,
+            |context| Some(self.source_1.subscribe(MergeObserver(context.clone()))),
+            |context| Some(self.source_2.subscribe(MergeObserver(context.clone()))),
+        )
         .map_inner_into()
     }
 }
