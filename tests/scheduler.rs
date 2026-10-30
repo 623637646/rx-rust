@@ -32,6 +32,70 @@ use std::time::{Duration, Instant};
 const RECURSION_EXECUTION_TIMES: usize = 200;
 
 #[test]
+fn test_thread_checker_executor_runs_nested_tasks_until_stalled() {
+    let executor = ThreadCheckerExecutor::new("nested_tasks");
+    let scheduler = executor.scheduler();
+    let nested_scheduler = scheduler.clone();
+    let child_disposal = Arc::new(Mutex::new(None));
+    let child_disposal_task = child_disposal.clone();
+    let ran = Arc::new(AtomicBool::new(false));
+    let ran_task = ran.clone();
+    let _parent = scheduler.schedule(
+        move || {
+            let child = nested_scheduler.schedule(
+                move || {
+                    assert_eq!(get_thread_name(), Some("nested_tasks"));
+                    ran_task.store(true, Ordering::SeqCst);
+                },
+                None,
+            );
+            child_disposal_task.replace_value(Some(child));
+        },
+        None,
+    );
+
+    futures::executor::block_on(executor.run_until_stalled());
+    assert!(ran.load(Ordering::SeqCst));
+}
+
+#[test]
+fn test_thread_checker_executor_concurrent_waiters() {
+    let executor = ThreadCheckerExecutor::new("concurrent_waiters");
+    let (release, released) = mpsc::channel();
+    let _task = executor.scheduler().schedule(
+        move || released.recv_timeout(Duration::from_secs(1)).unwrap(),
+        None,
+    );
+    let mut first = pin!(executor.run_until_stalled());
+    let mut second = pin!(executor.run_until_stalled());
+    let mut cx = Context::from_waker(Waker::noop());
+    assert!(first.as_mut().poll(&mut cx).is_pending());
+    assert!(second.as_mut().poll(&mut cx).is_pending());
+    release.send(()).unwrap();
+    futures::executor::block_on(async {
+        futures::join!(first, second);
+    });
+}
+
+#[test]
+#[should_panic(expected = "nested task panicked")]
+fn test_thread_checker_executor_reports_nested_panic() {
+    let executor = ThreadCheckerExecutor::new("nested_panic");
+    let scheduler = executor.scheduler();
+    let nested_scheduler = scheduler.clone();
+    let child_disposal = Arc::new(Mutex::new(None));
+    let child_disposal_task = child_disposal.clone();
+    let _parent = scheduler.schedule(
+        move || {
+            let child = nested_scheduler.schedule(|| panic!("nested task panicked"), None);
+            child_disposal_task.replace_value(Some(child));
+        },
+        None,
+    );
+    futures::executor::block_on(executor.run_until_stalled());
+}
+
+#[test]
 fn test_periodic_anchor_with_late_first_poll() {
     for first_poll_delay in [DURATION_30_MS, DURATION_100_MS + DURATION_30_MS] {
         let time = VirtualTime::new();
