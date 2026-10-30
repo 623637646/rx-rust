@@ -214,7 +214,7 @@ where
         // only just created, whose disposal is still held here alone and whose observer has not
         // been handed a single event.
         let subscription_1 = builder_1(context)?;
-        if !context.delivery.is_active() {
+        if !context.is_active() {
             return None;
         }
         let subscription_2 = builder_2(context)?;
@@ -313,6 +313,20 @@ impl<M: ThreadMode, T, E, OR, MD, D: Disposable> SubscriptionContext<M, T, E, OR
     /// Creates the disposal that stops this context.
     fn disposal(&self) -> Disposal<M, T, E, MD, D> {
         Disposal(self.delivery.stop_handle())
+    }
+
+    /// Whether the stream is still running: the context has not stopped, and no termination is
+    /// queued behind a delivery running elsewhere.
+    ///
+    /// An operator that assembles its subscription in several steps asks this before a step whose
+    /// side effects a stream that is already over has no use for — subscribing another source,
+    /// starting a scheduler task, opening a file — as
+    /// [`subscribe_with_context_two_steps`] does between its two. A stop concurrent with the
+    /// check may land right after it, so it says what is pointless to start, never that what is
+    /// started next outlives the check: that is what the context owning the subscription is for,
+    /// as it disposes whatever it was handed once it has stopped.
+    pub fn is_active(&self) -> bool {
+        self.delivery.is_active()
     }
 }
 

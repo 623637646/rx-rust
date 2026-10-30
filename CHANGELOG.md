@@ -41,6 +41,10 @@ All notable changes to this project are documented here. The format follows
   `TwoStepsDisposal`: subscribes an operator's two sources — or its source and its scheduler
   task — in order, skips the second one once the stream is already over, and disposes them in the
   opposite order. Public like `subscribe_with_context`, for operators written outside the crate.
+- `SubscriptionContext::is_active` and `SerializedDelivery::is_active` answer whether the stream is
+  still running — not stopped, and no termination queued. An operator assembling its subscription
+  in more steps than two, or in an order of its own, asks before a step whose side effects a
+  stream that is already over has no use for.
 - `examples/large_file.rs`: a file read chunk by chunk, each chunk uploaded before the next is
   read.
 

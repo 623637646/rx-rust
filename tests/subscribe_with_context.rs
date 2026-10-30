@@ -289,3 +289,47 @@ fn a_first_step_that_subscribes_nothing_skips_the_second() {
 
     assert_eq!(checker.state(), State::Dropped);
 }
+
+// `is_active` is false as soon as the stream is over, even while the delivery that ends it is
+// still running — the case an empty `update` cannot tell apart from a live stream.
+#[test]
+fn is_active_sees_a_termination_queued_during_a_delivery() {
+    let (checker, observer) = Checker::<i32, Infallible>::new();
+    let context_slot = Arc::new(Mutex::new(None));
+    let hook_slot = context_slot.clone();
+    let seen = Arc::new(Mutex::new(None));
+    let seen_in_hook = seen.clone();
+    let mut context_out = None;
+
+    let _subscription = Create::shared_boxed(|observer: SendBoxedObserver<'_, i32, Infallible>| {
+        subscribe_with_context::<Shared, _, _, _, _, _, _>(observer, (), |context| {
+            context_slot.replace_value(Some(context.clone()));
+            context_out = Some(context);
+            DisposeOnDrop::default()
+        })
+    })
+    .hook_on_next(move |observer, value| {
+        assert!(observer.on_next(value).is_continue());
+        let context = hook_slot.clone_value().unwrap();
+        // Queued behind the delivery this runs in, so the state is still `Delivering`.
+        context.send_termination(Termination::Completed);
+        seen_in_hook.replace_value(Some((
+            context.is_active(),
+            context
+                .update(|_: &mut ()| UpdateOutcome::new(()).without_events())
+                .is_ok(),
+        )));
+        Flow::Continue
+    })
+    .subscribe(observer);
+    let context = context_out.unwrap();
+    assert!(context.is_active());
+
+    let _ = context.send_next(1);
+
+    // Inactive, while an `update` is still accepted: asking the state answers what probing with
+    // an empty update does not.
+    assert_eq!(seen.clone_value(), Some((false, true)));
+    assert!(!context.is_active());
+    assert_eq!(checker.state(), State::Completed);
+}
