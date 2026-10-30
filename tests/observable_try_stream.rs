@@ -32,6 +32,55 @@ use std::{convert::Infallible, num::NonZeroUsize};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
+fn test_waker_released_after_ready() {
+    use std::{
+        pin::Pin,
+        sync::atomic::{AtomicUsize, Ordering},
+        task::{Context, Poll, Wake, Waker},
+    };
+
+    struct CountingWake(AtomicUsize);
+    impl Wake for CountingWake {
+        fn wake(self: Arc<Self>) {
+            self.0.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    for termination in [Termination::Completed, Termination::Error("boom")] {
+        let target = Arc::new(CountingWake(AtomicUsize::new(0)));
+        let waker = Waker::from(target.clone());
+        let mut cx = Context::from_waker(&waker);
+        let (mut sender, source, _) = test_channel::<'_, i32, &str>();
+        let mut stream = source.into_try_stream();
+
+        assert_eq!(Pin::new(&mut stream).poll_next(&mut cx), Poll::Pending);
+        assert_eq!(Arc::strong_count(&target), 3);
+        assert!(sender.on_next(1).is_continue());
+        assert_eq!(target.0.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            Pin::new(&mut stream).poll_next(&mut cx),
+            Poll::Ready(Some(Ok(1)))
+        );
+        assert_eq!(Arc::strong_count(&target), 2);
+
+        assert_eq!(Pin::new(&mut stream).poll_next(&mut cx), Poll::Pending);
+        sender.on_termination(termination.clone());
+        assert_eq!(target.0.load(Ordering::SeqCst), 2);
+        let expected = match termination {
+            Termination::Completed => None,
+            Termination::Error(error) => Some(Err(error)),
+        };
+        assert_eq!(
+            Pin::new(&mut stream).poll_next(&mut cx),
+            Poll::Ready(expected)
+        );
+        assert_eq!(Arc::strong_count(&target), 2);
+        assert_eq!(Pin::new(&mut stream).poll_next(&mut cx), Poll::Ready(None));
+        assert_eq!(Arc::strong_count(&target), 2);
+    }
+}
+
+#[test]
 fn test_completed() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();

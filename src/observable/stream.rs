@@ -210,11 +210,9 @@ where
                 context: this.context.clone(),
             });
 
-        let waker = cx.waker().clone();
         // The waker this one replaces is handed back, because dropping a `Waker` runs the
         // external code of its vtable, which must not run under the lock.
         let (poll, previous_waker) = self.context.with_mut(|context| {
-            let previous_waker = context.waker.replace(waker);
             let poll = if let Some(value) = context.buffer.pop() {
                 Poll::Ready(Some(Ok(value)))
             } else {
@@ -230,6 +228,11 @@ where
                         }
                     }
                 }
+            };
+            let previous_waker = if poll.is_pending() {
+                context.waker.replace(cx.waker().clone())
+            } else {
+                context.waker.take()
             };
             (poll, previous_waker)
         });

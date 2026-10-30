@@ -9,6 +9,8 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 
 - `ChainDisposal` disposes its second resource even if disposing the first panics.
+- Observable stream adapters retain the caller's waker only while a poll is pending, releasing
+  it when a value, an error or the end of the stream is returned.
 
 ### Added
 
