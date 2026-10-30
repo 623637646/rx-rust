@@ -44,6 +44,18 @@ All notable changes to this project are documented here. The format follows
 - `examples/large_file.rs`: a file read chunk by chunk, each chunk uploaded before the next is
   read.
 
+### Changed
+
+- `scheduler::drive` accepts a `sleep` whose future resolves to anything, not only to `()`; what
+  it resolves to is ignored, only its completion counts. A runtime timer that answers a value —
+  smol's `Timer::after`, which resolves to an `Instant` — is handed over as it is, instead of
+  being wrapped in a future of its own.
+- The `ObservableTypes` impls of the operators carry only the bounds their `Item`, `Error`, `Mode`
+  and `Disposal` need. `Scan`'s `T: Clone`, `Filter`'s `F: FnMut(&T) -> bool` and 37 more are
+  gone, so naming an operator's types no longer asks a caller that reads `OE::Item` alone to
+  prove them. The `Observable` impls and the fluent methods still check them, where a mismatch is
+  now reported: on subscription rather than on the type.
+
 ## [2.0.1] - 2026-10-28
 
 ### Added
