@@ -177,6 +177,31 @@ fn test_periodic_rate() {
 }
 
 #[test]
+fn test_periodic_waits_until_anchor_without_initial_delay() {
+    let time = VirtualTime::new();
+    let ticks = Arc::new(Mutex::new(Vec::new()));
+    let _disposal = time.scheduler().run_task(
+        Task::periodic(
+            ticks.clone(),
+            |ticks, count| {
+                ticks.with_mut(|ticks| ticks.push(count));
+                true
+            },
+            DURATION_10_MS,
+            Some(time.now() + DURATION_100_MS),
+        ),
+        None,
+    );
+
+    time.advance_by(DURATION_100_MS - DURATION_1_MS);
+    assert!(ticks.clone_value().is_empty());
+    time.advance_by(DURATION_1_MS);
+    assert_eq!(ticks.clone_value(), [0]);
+    time.advance_by(DURATION_10_MS);
+    assert_eq!(ticks.clone_value(), [0, 1]);
+}
+
+#[test]
 fn test_yield_lets_others_run_first() {
     let time = VirtualTime::new();
     let scheduler = time.scheduler();

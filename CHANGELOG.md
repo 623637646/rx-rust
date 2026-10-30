@@ -11,6 +11,7 @@ All notable changes to this project are documented here. The format follows
 - `ChainDisposal` disposes its second resource even if disposing the first panics.
 - Observable stream adapters retain the caller's waker only while a poll is pending, releasing
   it when a value, an error or the end of the stream is returned.
+- `Task::periodic` waits for its anchor before its first step, even without an initial delay.
 
 ### Added
 

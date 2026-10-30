@@ -32,6 +32,41 @@ use std::time::{Duration, Instant};
 const RECURSION_EXECUTION_TIMES: usize = 200;
 
 #[test]
+fn test_periodic_anchor_with_late_first_poll() {
+    for first_poll_delay in [DURATION_30_MS, DURATION_100_MS + DURATION_30_MS] {
+        let time = VirtualTime::new();
+        let ticks = Arc::new(AtomicUsize::new(0));
+        let task = Task::periodic(
+            ticks.clone(),
+            |ticks, _| {
+                ticks.fetch_add(1, Ordering::SeqCst);
+                true
+            },
+            DURATION_100_MS,
+            Some(time.now() + DURATION_100_MS),
+        );
+        let waits = Arc::new(Mutex::new(Vec::new()));
+        let waits_task = waits.clone();
+        let future = drive(task, None, time.clock(), move |delay| {
+            waits_task.with_mut(|waits| waits.push(delay));
+            std::future::pending()
+        });
+        time.advance_by(first_poll_delay);
+        let mut future = pin!(future);
+        assert!(
+            future
+                .as_mut()
+                .poll(&mut Context::from_waker(Waker::noop()))
+                .is_pending()
+        );
+
+        let expected_ticks = usize::from(first_poll_delay >= DURATION_100_MS);
+        assert_eq!(ticks.load(Ordering::SeqCst), expected_ticks);
+        assert_eq!(waits.clone_value(), [DURATION_100_MS - DURATION_30_MS]);
+    }
+}
+
+#[test]
 fn test_thread_checker_executor_shutdown_while_pending() {
     let executor = ThreadCheckerExecutor::new("shutdown_while_pending");
     let scheduler = executor.scheduler();

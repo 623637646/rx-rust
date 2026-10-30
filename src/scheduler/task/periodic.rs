@@ -46,6 +46,9 @@ impl<C> Task<PeriodicContext<C>> {
             },
             |context, _, _, now| {
                 let next_time = context.next_time.get_or_insert(now);
+                if now < *next_time {
+                    return Next::SleepUntil(*next_time);
+                }
                 if !(context.step)(&mut context.state, context.count) {
                     return Next::Finished;
                 }
