@@ -113,7 +113,7 @@ fn test_periodic_anchor_with_late_first_poll() {
         let waits_task = waits.clone();
         let future = drive(task, None, time.clock(), move |delay| {
             waits_task.with_mut(|waits| waits.push(delay));
-            std::future::pending()
+            std::future::pending::<()>()
         });
         time.advance_by(first_poll_delay);
         let mut future = pin!(future);

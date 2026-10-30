@@ -78,10 +78,6 @@ impl SmolScheduler {
     }
 }
 
-async fn sleep(duration: Duration) {
-    smol::Timer::after(duration).await;
-}
-
 impl SchedulerTypes for SmolScheduler {
     type Mode = Shared;
     type Disposal = SmolDisposal;
@@ -102,7 +98,7 @@ where
         task: Task<TC, P>,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal> {
-        let future = drive(task, delay, self.clock(), sleep);
+        let future = drive(task, delay, self.clock(), smol::Timer::after);
         let task = match &self.target {
             SharedTarget::Global => smol::spawn(future),
             SharedTarget::Handle(executor) => executor
@@ -192,7 +188,7 @@ where
         task: Task<TC, P>,
         delay: Option<Duration>,
     ) -> DisposeOnDrop<Self::Disposal> {
-        let future = drive(task, delay, self.clock(), sleep);
+        let future = drive(task, delay, self.clock(), smol::Timer::after);
         let executor = self
             .executor
             .upgrade()

@@ -12,7 +12,7 @@ use std::{
 /// Runs `task` after `delay` on an async executor: a scheduler spawns the future it returns, as
 /// every built-in one does, passing its own [`clock`](super::SchedulerTypes::clock).
 /// `sleep` is the runtime's timer (tokio's `time::sleep`, smol's `Timer::after`, …), which must run
-/// on that clock.
+/// on that clock; whatever it resolves to is ignored, only its completion counts.
 ///
 /// A `delay` too long for an [`Instant`] to represent never ends: the task waits, without a timer,
 /// until it is disposed, whatever `sleep` would make of that duration (tokio's wakes after some
@@ -30,7 +30,7 @@ pub async fn drive<TC, P, C, SF>(
     sleep: impl Fn(Duration) -> SF,
 ) where
     C: Clock,
-    SF: Future<Output = ()>,
+    SF: Future,
 {
     let (mut stepper, pinned) = task.split();
     let mut pinned = pin!(pinned);
@@ -52,10 +52,12 @@ pub async fn drive<TC, P, C, SF>(
             Next::Finished => break,
             Next::Yield => yield_now().await,
             Next::SleepUntil(at) => match delay_until(at) {
-                Some(delay) => sleep(delay).await,
+                Some(delay) => {
+                    sleep(delay).await;
+                }
                 None => yield_now().await,
             },
-            Next::Pending => until_woken(pending()).await,
+            Next::Pending => until_woken(pending::<()>()).await,
             Next::PendingUntil(at) => match delay_until(at) {
                 Some(delay) => until_woken(sleep(delay)).await,
                 None => yield_now().await,
@@ -71,14 +73,14 @@ pub async fn drive<TC, P, C, SF>(
 /// task — the handler's event, the timer, or a spurious wake — polls this again, which ends the
 /// wait. A wake that came while the handler was still running polls it again at once, as the
 /// executor re-polls a task woken during its own poll.
-async fn until_woken(sleep: impl Future<Output = ()>) {
+async fn until_woken(sleep: impl Future) {
     let mut sleep = pin!(sleep);
     let mut polled = false;
     poll_fn(|cx| {
         if std::mem::replace(&mut polled, true) {
             return Poll::Ready(());
         }
-        sleep.as_mut().poll(cx)
+        sleep.as_mut().poll(cx).map(|_| ())
     })
     .await;
 }

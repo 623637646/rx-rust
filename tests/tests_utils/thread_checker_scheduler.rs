@@ -193,9 +193,7 @@ where
         // No test schedules a delayed task here yet; the timer keeps one faithful to the runtime
         // schedulers rather than silently parking forever.
         let (future, abort_handle) =
-            abortable(drive(task, delay, self.clock(), |duration| async move {
-                async_io::Timer::after(duration).await;
-            }));
+            abortable(drive(task, delay, self.clock(), async_io::Timer::after));
         self.spawn(future.map(drop).boxed());
         DisposeOnDrop::new(ThreadCheckerDisposal(abort_handle))
     }

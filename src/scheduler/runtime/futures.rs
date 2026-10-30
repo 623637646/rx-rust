@@ -80,7 +80,7 @@ where
     ) -> DisposeOnDrop<Self::Disposal> {
         let handle = self
             .pool
-            .spawn_with_handle(drive(task, delay, self.clock(), sleep))
+            .spawn_with_handle(drive(task, delay, self.clock(), async_io::Timer::after))
             .expect("failed to spawn future");
         DisposeOnDrop::new(FuturesDisposal(handle))
     }
@@ -152,14 +152,10 @@ where
     ) -> DisposeOnDrop<Self::Disposal> {
         let handle = self
             .spawner
-            .spawn_local_with_handle(drive(task, delay, self.clock(), sleep))
+            .spawn_local_with_handle(drive(task, delay, self.clock(), async_io::Timer::after))
             .expect("failed to spawn future");
         DisposeOnDrop::new(FuturesDisposal(handle))
     }
-}
-
-async fn sleep(duration: Duration) {
-    async_io::Timer::after(duration).await;
 }
 
 /// The handle of a task spawned by a [`ThreadPoolScheduler`] or a [`LocalPoolScheduler`];
