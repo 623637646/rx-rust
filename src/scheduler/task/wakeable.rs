@@ -19,6 +19,10 @@ pub struct WakeableContext<C, M: ThreadMode> {
 
 impl<C, M: ThreadMode> Drop for WakeableContext<C, M> {
     fn drop(&mut self) {
+        // The slot outlives the task while the `TaskWaker` does. A task dropped while it waits
+        // left its waker there, which would keep the executor's task alive, and be woken by the
+        // next `wake` or by the drop of the `TaskWaker`. Taken under the lock, dropped after it:
+        // dropping a waker can run arbitrary code of its executor.
         drop(self.slot.with_mut(|slot| slot.waker.take()));
     }
 }
@@ -32,8 +36,10 @@ impl<C, M: ThreadMode> Drop for WakeableContext<C, M> {
 pub struct TaskWaker<M: ThreadMode>(#[educe(Debug(ignore))] M::Ptr<Slot>);
 
 /// What the task and its [`TaskWaker`] share, behind one lock: the waker the task registered
-/// before its step.
+/// before its step. The `TaskWaker` keeps it alive, so it may outlive the task.
 struct Slot {
+    /// Registered before every step: taken by the wake that follows, or cleared by the task's
+    /// context when the task is dropped.
     waker: Option<Waker>,
     /// Set once the [`TaskWaker`] is dropped.
     closed: bool,
@@ -133,6 +139,9 @@ impl<M: ThreadMode> TaskWaker<M> {
     /// Wakes the task, after a change its step must see. A task that is stepping steps once more;
     /// one already woken since its last step, or finished, is left as it is.
     pub fn wake(&self) {
+        // Taken, not cloned: a second wake before the next step finds the slot empty, and the
+        // task is stepped once for both. Woken outside the lock, since waking can run arbitrary
+        // code of the executor.
         if let Some(waker) = self.0.with_mut(|slot| slot.waker.take()) {
             waker.wake();
         }
@@ -141,6 +150,9 @@ impl<M: ThreadMode> TaskWaker<M> {
 
 impl<M: ThreadMode> Drop for TaskWaker<M> {
     fn drop(&mut self) {
+        // `closed` and the wake go together: the step that follows sees that nothing will wake
+        // the task anymore, and finishes if it has nothing left to wait for. Woken outside the
+        // lock, as in `wake`.
         let waker = self.0.with_mut(|slot| {
             slot.closed = true;
             slot.waker.take()
