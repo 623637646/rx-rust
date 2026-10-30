@@ -1,7 +1,7 @@
 //! Form validation: the submit button follows the latest value of every field.
 //!
 //! The subjects are `local()`: everything stays on this thread, so nothing needs to be `Send`
-//! and no lock is taken.
+//! and no mutex is needed.
 //!
 //! ```bash
 //! cargo run --example form_validation

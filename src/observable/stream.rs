@@ -92,11 +92,11 @@ struct ObservableTryStreamContext<E, B> {
 /// };
 ///
 /// futures::executor::block_on(async {
-///     let source = FromIter::new(vec![1, 2, 3]).with_error_type::<&str>();
+///     let source = FromIter::new([1, 2, 3]).with_error_type::<&str>();
 ///     let values: Result<Vec<_>, _> = source.into_try_stream().try_collect().await;
 ///     assert_eq!(values, Ok(vec![1, 2, 3]));
 ///
-///     let source = FromIter::new(vec![1, 2])
+///     let source = FromIter::new([1, 2])
 ///         .with_error_type()
 ///         .concat_with(Throw::new("boom").with_item_type());
 ///     let values: Result<Vec<_>, _> = source.into_try_stream().try_collect().await;
@@ -306,7 +306,7 @@ where
 /// };
 ///
 /// futures::executor::block_on(async {
-///     let source = FromIter::new(vec![1, 2, 3]);
+///     let source = FromIter::new([1, 2, 3]);
 ///     let mut stream = ObservableStream::new(source);
 ///     let values: Vec<_> = (&mut stream).collect().await;
 ///     assert_eq!(values, vec![1, 2, 3]);

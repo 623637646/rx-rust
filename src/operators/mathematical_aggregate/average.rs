@@ -28,7 +28,7 @@ use std::marker::PhantomData;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = Average::new(FromIter::new(vec![1.0_f64, 3.0, 5.0]));
+/// let observable = Average::new(FromIter::new([1.0_f64, 3.0, 5.0]));
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

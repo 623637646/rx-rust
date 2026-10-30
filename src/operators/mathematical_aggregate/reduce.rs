@@ -27,7 +27,7 @@ use std::marker::PhantomData;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = Reduce::new(FromIter::new(vec![1, 2, 3]), 0, |acc, value| acc + value);
+/// let observable = Reduce::new(FromIter::new([1, 2, 3]), 0, |acc, value| acc + value);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

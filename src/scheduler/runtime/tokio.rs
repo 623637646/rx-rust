@@ -39,7 +39,7 @@ use tokio::{
 ///     };
 ///     use std::time::Duration;
 ///
-///     let values = FromIter::new(vec![1, 2, 3])
+///     let values = FromIter::new([1, 2, 3])
 ///         .delay(Duration::from_millis(5), TokioScheduler::current())
 ///         .into_stream()
 ///         .collect::<Vec<_>>()
@@ -166,7 +166,7 @@ where
 ///     // Subscribed before the `LocalSet` runs: the delayed values wait in it.
 ///     let values = Rc::new(RefCell::new(Vec::new()));
 ///     let values_observer = Rc::clone(&values);
-///     let _subscription = FromIter::new(vec![1, 2, 3])
+///     let _subscription = FromIter::new([1, 2, 3])
 ///         .delay(Duration::from_millis(5), scheduler)
 ///         .subscribe_with_callback(move |value| values_observer.borrow_mut().push(value), |_| {});
 ///

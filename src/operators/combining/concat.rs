@@ -31,7 +31,7 @@ use educe::Educe;
 /// let mut values = Vec::new();
 ///
 /// let observable =
-///     Concat::new(FromIter::new(vec![1, 2]), FromIter::new(vec![3, 4]));
+///     Concat::new(FromIter::new([1, 2]), FromIter::new([3, 4]));
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

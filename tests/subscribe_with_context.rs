@@ -137,8 +137,8 @@ fn reentrant_send_is_queued_after_pending_events() {
     assert_eq!(checker.state(), State::Active);
 
     drop(subscription);
-    // The disposal cannot name the observer, so it cannot drop it: the observer goes with the last
-    // handle of the context, or with the next event, which the stopped context rejects.
+    // The disposal cannot name the observer: the next dropped context handle or rejected event
+    // releases the parked observer.
     assert_eq!(checker.state(), State::Active);
     let _ = context.send_next(4);
     assert_eq!(checker.values(), [1, 2, 3, 10]);
@@ -176,7 +176,7 @@ fn stopped_update_drops_callback_outside_lock() {
         });
     let context = context_out.unwrap();
     drop(subscription);
-    // Released with the last handle of the context or the next event, see
+    // Released with the next dropped context handle or rejected event, see
     // `reentrant_send_is_queued_after_pending_events`.
     assert_eq!(checker.state(), State::Active);
 

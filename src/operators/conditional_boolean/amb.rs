@@ -30,8 +30,8 @@ use educe::Educe;
 /// let mut values = Vec::new();
 ///
 /// let observable = Amb::new([
-///     FromIter::new(vec![1, 2]),
-///     FromIter::new(vec![3, 4]),
+///     FromIter::new([1, 2]),
+///     FromIter::new([3, 4]),
 /// ]);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),

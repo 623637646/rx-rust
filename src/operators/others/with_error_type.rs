@@ -22,7 +22,7 @@ use std::{convert::Infallible, marker::PhantomData};
 ///
 /// let mut values = Vec::new();
 ///
-/// FromIter::new(vec![1, 2])
+/// FromIter::new([1, 2])
 ///     .with_error_type::<String>()
 ///     .subscribe_with_callback(
 ///         |value| values.push(value),

@@ -260,7 +260,7 @@ where
 /// use std::cell::RefCell;
 ///
 /// let values = RefCell::new(Vec::new());
-/// let observable = ConnectableController::new(FromIter::new(vec![1, 2]), (), |_| {
+/// let observable = ConnectableController::new(FromIter::new([1, 2]), (), |_| {
 ///     PublishSubject::local()
 /// })
 /// .ref_count();

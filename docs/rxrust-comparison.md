@@ -85,10 +85,11 @@ of both, and was rejected:
   and `TokioLocalScheduler` (`Local`). A default would have to follow the source's mode, so `Range`
   and `Just`, which are `Local`, would land on `TokioLocalScheduler`, and panic outside a
   `LocalSet`.
-- **It doubles the API.** Rust has neither overloading nor default arguments, so each of the
-  thirteen places that take a scheduler — `delay`, `debounce`, `timeout`, `buffer_with_time`,
+- **It doubles the API.** Rust has neither overloading nor default arguments, so each place
+  that takes a scheduler — `delay`, `debounce`, `timeout`, `buffer_with_time`,
   `buffer_with_time_or_count`, `observe_on`, `subscribe_on`, `Interval`, `Timer`, `FromFuture`,
-  `FromTryFuture`, `FromStream`, `FromTryStream` — would need a second form.
+  `FromTryFuture`, `FromStream`, `FromTryStream`, `FromStreamAcked`, `FromTryStreamAcked` — would
+  need a second form.
 - **The saving is small.** It is one argument, `TokioScheduler::current()`, and `TokioScheduler`
   already implements `Default`.
 

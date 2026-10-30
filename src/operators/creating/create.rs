@@ -101,8 +101,9 @@ use std::marker::PhantomData;
 /// };
 ///
 /// let source = Create::local(|mut emitter| {
-///     let _ = emitter.on_next(1);
-///     emitter.on_termination(Termination::<()>::Completed);
+///     if emitter.on_next(1).is_continue() {
+///         emitter.on_termination(Termination::<()>::Completed);
+///     }
 ///     DisposeOnDrop::default()
 /// });
 /// source.clone().map(|value: i32| value + 1).subscribe_with_callback(|_| {}, |_| {});
@@ -120,8 +121,9 @@ use std::marker::PhantomData;
 /// };
 ///
 /// let source = Create::local_boxed(|mut observer| {
-///     let _ = observer.on_next(1);
-///     observer.on_termination(Termination::<()>::Completed);
+///     if observer.on_next(1).is_continue() {
+///         observer.on_termination(Termination::<()>::Completed);
+///     }
 ///     DisposeOnDrop::default()
 /// });
 /// source.clone().map(|value: i32| value + 1).subscribe_with_callback(|_| {}, |_| {});
@@ -131,7 +133,7 @@ use std::marker::PhantomData;
 /// # Thread mode
 ///
 /// Where the builder emits from is known to its author only, so the thread mode is declared here,
-/// with no default: `local` when it emits only on the subscribing thread, synchronously, and
+/// with no default: `local` when it emits only on the subscribing thread, and
 /// `shared` when it may emit from another one. A `Local` builder gets an observer that is not
 /// `Send` (an [`Emitter`] carrying the `!Send` [`Local`] as a `PhantomData`, or a
 /// [`BoxedObserver`]), so moving it to another thread does not compile, whatever the observer
@@ -200,7 +202,7 @@ pub struct Create<T, E, D, F, M, const BOXED: bool = false> {
 }
 
 impl<T, E, D, F> Create<T, E, D, F, Local> {
-    /// Creates a [`Create`] whose builder emits only on the subscribing thread, synchronously, to
+    /// Creates a [`Create`] whose builder emits only on the subscribing thread, to
     /// the unboxed downstream observer. See the [type documentation](Create) for when to prefer
     /// [`local_boxed`](Create::local_boxed).
     ///

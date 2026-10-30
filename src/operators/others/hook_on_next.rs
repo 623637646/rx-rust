@@ -24,7 +24,7 @@ use educe::Educe;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = HookOnNext::new(FromIter::new(vec![1, 2]), |observer, value| {
+/// let observable = HookOnNext::new(FromIter::new([1, 2]), |observer, value| {
 ///     observer.on_next(value * 10)
 /// });
 /// observable.subscribe_with_callback(

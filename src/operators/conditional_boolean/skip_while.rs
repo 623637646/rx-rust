@@ -24,7 +24,7 @@ use educe::Educe;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = SkipWhile::new(FromIter::new(vec![1, 2, 3, 4]), |value| *value < 3);
+/// let observable = SkipWhile::new(FromIter::new([1, 2, 3, 4]), |value| *value < 3);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

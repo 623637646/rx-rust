@@ -193,7 +193,7 @@ async fn main() {
     };
     use std::time::Duration;
 
-    let values = FromIter::new(vec![1, 2, 3])
+    let values = FromIter::new([1, 2, 3])
         .delay(Duration::from_millis(5), TokioScheduler::current())
         .into_stream()
         .collect::<Vec<_>>()

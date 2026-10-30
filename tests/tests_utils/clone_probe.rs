@@ -14,9 +14,8 @@ pub(crate) type CloneCallback = Box<dyn FnOnce() + Send>;
 /// callback; a clone made under the lock would instead panic on the re-entry check of debug builds,
 /// and deadlock otherwise.
 ///
-/// A snapshot is the exception: the copies a subject replays to a new subscriber, and its current
-/// value, are made under the lock, and must not re-enter it. See "Item and error types run under a
-/// lock" in the README.
+/// Snapshots and recorded errors are cloned under the subject's lock and must not re-enter it.
+/// See "User code under a lock" in the `thread_mode` module.
 ///
 /// The copies share the callback, so it runs once, from whichever clone comes first.
 pub(crate) struct CloneProbe {

@@ -27,7 +27,7 @@ use educe::Educe;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = StartWith::new(FromIter::new(vec![3, 4]), vec![1, 2]);
+/// let observable = StartWith::new(FromIter::new([3, 4]), [1, 2]);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

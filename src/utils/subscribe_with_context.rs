@@ -238,7 +238,7 @@ where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    /// Updates the model and sends the events that update produced, while the context is locked.
+    /// Updates the model and queues its events under one lock, then delivers them outside it.
     ///
     /// An update that emits nothing simply decides no events, and then nothing is sent here.
     ///

@@ -26,7 +26,7 @@ use educe::Educe;
 /// };
 ///
 /// let mut values = Vec::new();
-/// HookOnTermination::new(FromIter::new(vec![1]), |mut observer, termination| {
+/// HookOnTermination::new(FromIter::new([1]), |mut observer, termination| {
 ///     // One more value before the termination; a stopped observer takes neither.
 ///     if observer.on_next(2).is_continue() {
 ///         observer.on_termination(termination);

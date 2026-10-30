@@ -32,7 +32,7 @@ use std::convert::Infallible;
 ///
 /// let mut values = Vec::new();
 ///
-/// Dematerialize::new(Materialize::new(FromIter::new(vec![1, 2])))
+/// Dematerialize::new(Materialize::new(FromIter::new([1, 2])))
 ///     .subscribe_with_callback(
 ///         |value| values.push(value),
 ///         |termination| assert_eq!(termination, Termination::Completed),

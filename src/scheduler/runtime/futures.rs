@@ -35,7 +35,7 @@ use std::time::Duration;
 ///
 ///     let scheduler = ThreadPoolScheduler::from_pool(ThreadPool::new().unwrap());
 ///     let values = block_on(
-///         FromIter::new(vec![1, 2, 3])
+///         FromIter::new([1, 2, 3])
 ///             .delay(Duration::from_millis(5), scheduler)
 ///             .into_stream()
 ///             .collect::<Vec<_>>(),
@@ -106,7 +106,7 @@ where
 ///     let mut pool = LocalPool::new();
 ///     let scheduler = LocalPoolScheduler::from_spawner(pool.spawner());
 ///     let values = pool.run_until(
-///         FromIter::new(vec![1, 2, 3])
+///         FromIter::new([1, 2, 3])
 ///             .delay(Duration::from_millis(5), scheduler)
 ///             .into_stream()
 ///             .collect::<Vec<_>>(),

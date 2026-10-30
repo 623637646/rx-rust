@@ -32,8 +32,8 @@ use std::marker::PhantomData;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = SwitchMap::new(FromIter::new(vec![1, 2]), |value| {
-///     FromIter::new(vec![value, value + 10])
+/// let observable = SwitchMap::new(FromIter::new([1, 2]), |value| {
+///     FromIter::new([value, value + 10])
 /// });
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),

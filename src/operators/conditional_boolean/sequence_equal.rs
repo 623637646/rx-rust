@@ -38,8 +38,8 @@ use std::marker::PhantomData;
 /// let mut values = Vec::new();
 ///
 /// let observable = SequenceEqual::new(
-///     FromIter::new(vec![1, 2]),
-///     FromIter::new(vec![1, 2]),
+///     FromIter::new([1, 2]),
+///     FromIter::new([1, 2]),
 /// );
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),

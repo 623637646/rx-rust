@@ -25,7 +25,7 @@ use std::collections::VecDeque;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = SkipLast::new(FromIter::new(vec![1, 2, 3, 4]), 1);
+/// let observable = SkipLast::new(FromIter::new([1, 2, 3, 4]), 1);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

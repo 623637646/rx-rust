@@ -29,7 +29,7 @@ use std::num::NonZeroUsize;
 /// let mut values = Vec::new();
 ///
 /// let observable =
-///     BufferWithCount::new(FromIter::new(vec![1, 2, 3, 4]), NonZeroUsize::new(3).unwrap());
+///     BufferWithCount::new(FromIter::new([1, 2, 3, 4]), NonZeroUsize::new(3).unwrap());
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

@@ -32,8 +32,8 @@ use std::collections::VecDeque;
 /// let mut values = Vec::new();
 ///
 /// let observable = Zip::new(
-///     FromIter::new(vec![1, 2]),
-///     FromIter::new(vec![10, 20]),
+///     FromIter::new([1, 2]),
+///     FromIter::new([10, 20]),
 /// );
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),

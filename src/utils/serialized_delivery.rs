@@ -15,7 +15,7 @@
 //! A host that must change its own data, and emit the resulting events atomically, does so through
 //! [`SerializedDelivery::update`], which runs its callback under the same lock that then queues
 //! the events. The callback describes its outcome with an [`UpdateOutcome`], the one way to hand
-//! this module events to queue and a value to drop once they were delivered.
+//! this module events to queue and a value to drop after sending or queueing them.
 //!
 //! # Examples
 //! ```rust
@@ -162,8 +162,8 @@ pub struct DropUndecided;
 #[educe(Debug)]
 pub struct DropDecided<T>(Option<T>);
 
-/// What an update performed under the lock produced: the events to queue, a value to drop once
-/// they were delivered, and the result to give back to the caller.
+/// What an update performed under the lock produced: the events to queue, a value to drop outside
+/// the lock, and the result to give back to the caller.
 ///
 /// The two type-state parameters make each effect settable at most once, and let the arms of a
 /// branching update share one type: an arm that sets no events next to one that does still has to
@@ -208,8 +208,9 @@ impl<T, E, R, DO, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DO, EVENTS_
 }
 
 impl<T, E, R, const EVENTS_DECIDED: bool> UpdateOutcome<T, E, R, DropUndecided, EVENTS_DECIDED> {
-    /// Hands `drop_outside` over to be dropped after the lock is released — and after the events
-    /// are delivered. This is where a value the update displaced, or rejected, goes.
+    /// Drops `drop_outside` after releasing the lock and sending or queueing the events.
+    /// Events queued behind a running delivery may be delivered after this value is dropped.
+    /// This is where a value the update displaced, or rejected, goes.
     pub fn with_drop_outside<DO>(
         self,
         drop_outside: DO,
@@ -401,7 +402,7 @@ where
             }
         };
         let flow = self.perform(action);
-        drop(drop_outside); // Drop after the delivery, outside the lock
+        drop(drop_outside); // Drop after sending or queueing the events, outside the lock.
         Ok((result, flow))
     }
 

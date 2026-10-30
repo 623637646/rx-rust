@@ -34,7 +34,7 @@ use std::marker::PhantomData;
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = FromIter::new(vec![1, 2, 2, 3]).collect::<BTreeSet<_>>();
+/// let observable = FromIter::new([1, 2, 2, 3]).collect::<BTreeSet<_>>();
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

@@ -36,8 +36,8 @@ use std::marker::PhantomData;
 ///
 /// let mut values = Vec::new();
 ///
-/// let inner_1 = FromIter::new(vec![1, 2]);
-/// let inner_2 = FromIter::new(vec![3, 4]);
+/// let inner_1 = FromIter::new([1, 2]);
+/// let inner_2 = FromIter::new([3, 4]);
 /// let observable = Switch::new_from_iter([inner_1, inner_2]);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),

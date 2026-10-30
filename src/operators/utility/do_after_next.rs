@@ -21,7 +21,7 @@ use educe::Educe;
 /// use std::cell::RefCell;
 ///
 /// let events = RefCell::new(Vec::new());
-/// DoAfterNext::new(FromIter::new(vec![1, 2]), |value| {
+/// DoAfterNext::new(FromIter::new([1, 2]), |value| {
 ///     events.borrow_mut().push(("callback", value))
 /// })
 /// .subscribe_with_callback(|value| events.borrow_mut().push(("downstream", value)), |_| {});

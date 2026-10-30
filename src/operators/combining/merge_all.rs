@@ -37,8 +37,8 @@ use std::marker::PhantomData;
 /// let mut values = Vec::new();
 ///
 /// let observable = MergeAll::new_from_iter([
-///     FromIter::new(vec![1, 3]),
-///     FromIter::new(vec![2, 4]),
+///     FromIter::new([1, 3]),
+///     FromIter::new([2, 4]),
 /// ]);
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),

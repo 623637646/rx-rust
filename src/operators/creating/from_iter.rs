@@ -22,7 +22,7 @@ use std::convert::Infallible;
 ///
 /// let mut values = Vec::new();
 ///
-/// FromIter::new(vec![1, 2, 3]).subscribe_with_callback(
+/// FromIter::new([1, 2, 3]).subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),
 /// );

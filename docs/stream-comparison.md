@@ -6,8 +6,8 @@ other, so a program does not have to pick only one.
 
 ## Pull and push
 
-A **`Stream` is pulled**. Its one consumer polls it for the next item, and nothing happens until
-it does. A slow consumer slows the producer down, so backpressure comes built in. A stream lives
+A **`Stream` is pulled**. Its one consumer polls it for the next item. A demand-driven producer
+advances only when polled; a stream wrapping a push source may buffer instead. A stream lives
 inside an async task, and its state is whatever that task holds between two `await`s.
 
 An **observable is pushed**. The source calls its observer each time something happens, at the
@@ -53,14 +53,24 @@ async fn search_as_you_type(mut input: impl Stream<Item = &'static str> + Unpin)
     tokio::pin!(debounce);
     let mut pending = None; // the text typed since the last pause
     let mut running: Option<Pin<Box<dyn Future<Output = String> + Send>>> = None;
+    let mut input_closed = false;
     loop {
+        if input_closed && running.is_none() {
+            break;
+        }
         tokio::select! {
-            text = input.next() => match text {
+            text = input.next(), if !input_closed => match text {
                 Some(text) => {
                     pending = Some(text);
                     debounce.as_mut().reset(Instant::now() + Duration::from_millis(300));
                 }
-                None => break,
+                None => {
+                    input_closed = true;
+                    // Like `debounce`, flush the last query when the input completes.
+                    if let Some(text) = pending.take() {
+                        running = Some(Box::pin(search(text)));
+                    }
+                }
             },
             () = &mut debounce, if pending.is_some() => {
                 // Replacing the future drops the old one, which cancels its search.

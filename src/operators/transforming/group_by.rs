@@ -50,7 +50,7 @@ use std::{
 /// };
 ///
 /// let mut groups = Vec::new();
-/// GroupBy::new(FromIter::new(vec![1, 2, 3, 4]), |value| value % 2)
+/// GroupBy::new(FromIter::new([1, 2, 3, 4]), |value| value % 2)
 ///     .flat_map(|group| group.to_vec())
 ///     .subscribe_with_callback(|values| groups.push(values), |_| {});
 ///

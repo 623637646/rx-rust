@@ -36,7 +36,7 @@ use std::{
 ///     use std::time::Duration;
 ///
 ///     let values = smol::block_on(
-///         FromIter::new(vec![1, 2, 3])
+///         FromIter::new([1, 2, 3])
 ///             .delay(Duration::from_millis(5), SmolScheduler::global())
 ///             .into_stream()
 ///             .collect::<Vec<_>>(),
@@ -138,7 +138,7 @@ where
 ///
 ///     let values = Rc::new(RefCell::new(Vec::new()));
 ///     let values_observer = Rc::clone(&values);
-///     let _subscription = FromIter::new(vec![1, 2, 3])
+///     let _subscription = FromIter::new([1, 2, 3])
 ///         .delay(Duration::from_millis(5), scheduler)
 ///         .subscribe_with_callback(move |value| values_observer.borrow_mut().push(value), |_| {});
 ///

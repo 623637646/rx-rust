@@ -26,7 +26,7 @@ use std::convert::Infallible;
 ///
 /// let mut events = Vec::new();
 ///
-/// Materialize::new(FromIter::new(vec![1, 2])).subscribe_with_callback(
+/// Materialize::new(FromIter::new([1, 2])).subscribe_with_callback(
 ///     |event| events.push(event),
 ///     |termination| assert_eq!(termination, Termination::Completed),
 /// );

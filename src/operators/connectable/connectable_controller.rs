@@ -176,7 +176,7 @@ impl<S, C> SubjectLifecycle<S, C> {
 /// use std::cell::RefCell;
 ///
 /// let values = RefCell::new(Vec::new());
-/// let controller = ConnectableController::new(FromIter::new(vec![1, 2]), (), |_| {
+/// let controller = ConnectableController::new(FromIter::new([1, 2]), (), |_| {
 ///     PublishSubject::local()
 /// });
 /// let observable = controller.observable();

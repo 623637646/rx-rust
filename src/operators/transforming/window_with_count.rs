@@ -37,7 +37,7 @@ use std::{marker::PhantomData, num::NonZeroUsize};
 /// use std::num::NonZeroUsize;
 ///
 /// let mut windows = Vec::new();
-/// WindowWithCount::new(FromIter::new(vec![1, 2, 3, 4]), NonZeroUsize::new(2).unwrap())
+/// WindowWithCount::new(FromIter::new([1, 2, 3, 4]), NonZeroUsize::new(2).unwrap())
 ///     .concat_map(|window| window.to_vec())
 ///     .subscribe_with_callback(|values| windows.push(values), |_| {});
 ///

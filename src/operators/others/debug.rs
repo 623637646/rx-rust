@@ -40,7 +40,7 @@ pub enum DebugEvent<'a, T: 'a, E: 'a> {
 ///
 /// let mut values = Vec::new();
 ///
-/// let observable = Debug::with_stdout(FromIter::new(vec![1, 2]), "trace");
+/// let observable = Debug::with_stdout(FromIter::new([1, 2]), "trace");
 /// observable.subscribe_with_callback(
 ///     |value| values.push(value),
 ///     |termination| assert_eq!(termination, Termination::Completed),

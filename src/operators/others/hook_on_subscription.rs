@@ -28,7 +28,7 @@ use std::marker::PhantomData;
 ///
 /// let mut subscribed = false;
 /// let mut values = Vec::new();
-/// HookOnSubscription::new(FromIter::new(vec![1, 2]), |source, observer| {
+/// HookOnSubscription::new(FromIter::new([1, 2]), |source, observer| {
 ///     subscribed = true;
 ///     source.subscribe(observer)
 /// })
