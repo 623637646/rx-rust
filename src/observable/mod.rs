@@ -100,7 +100,7 @@ use crate::{
             do_after_next::DoAfterNext, do_after_subscription::DoAfterSubscription,
             do_after_termination::DoAfterTermination, do_before_disposal::DoBeforeDisposal,
             do_before_next::DoBeforeNext, do_before_subscription::DoBeforeSubscription,
-            do_before_termination::DoBeforeTermination, materialize::Materialize,
+            do_before_termination::DoBeforeTermination, hold::Hold, materialize::Materialize,
             observe_on::ObserveOn, subscribe_on::SubscribeOn, time_interval::TimeInterval,
             timeout::Timeout, timestamp::Timestamp,
         },
@@ -508,6 +508,12 @@ pub trait ObservableExt: ObservableTypes + Sized {
         F: FnMut(&Self::Item) -> K,
     {
         GroupBy::new(self, key_selector)
+    }
+
+    /// Holds `resource` for as long as the subscription lasts, and drops it when the subscription
+    /// ends; see [`Hold`].
+    fn hold<R>(self, resource: R) -> Hold<Self, R> {
+        Hold::new(self, resource)
     }
 
     /// Hands each item, together with the downstream observer, to a callback that decides what to
