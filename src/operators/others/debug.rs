@@ -6,10 +6,9 @@ use crate::{
     disposable::{Disposable, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableTypes},
     observer::{Flow, Observer, Termination},
-    utils::MarkerType,
 };
 use educe::Educe;
-use std::{fmt::Display, marker::PhantomData};
+use std::fmt::Display;
 
 /// What [`struct@Debug`] reports to its callback, with a borrow of the value where there is one.
 #[derive(Educe)]
@@ -106,12 +105,11 @@ impl<T, E, OE, C> Debug<OE, C, DebugPrintCallback<C, T, E>> {
 impl<T, E, OE, C, F> ObservableTypes for Debug<OE, C, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: Fn(C, DebugEvent<'_, T, E>),
 {
     type Item = T;
     type Error = E;
     type Mode = OE::Mode;
-    type Disposal = Disposal<OE::Disposal, C, F, T, E>;
+    type Disposal = Disposal<OE::Disposal, C, F>;
 }
 
 impl<T, E, OE, C, F, OR> Observable<OR> for Debug<OE, C, F>
@@ -133,7 +131,7 @@ where
             source_disposal,
             context: self.context,
             callback: self.callback,
-            _marker: PhantomData,
+            report_disposed: report_disposed::<C, F, T, E>,
         })
     }
 }
@@ -142,25 +140,31 @@ where
 /// [`DebugEvent::Disposed`].
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct Disposal<D: Disposable, C, F, T, E> {
+pub struct Disposal<D: Disposable, C, F> {
     source_disposal: DisposeOnDrop<D>,
     #[educe(Debug(ignore))]
     context: C,
     #[educe(Debug(ignore))]
     callback: F,
+    /// Calls `callback` with the item and error types it takes, which this type does not name: a
+    /// parameter, even a marker, would tie the subscription to the lifetimes the items borrow for,
+    /// although it stores none of them.
     #[educe(Debug(ignore))]
-    _marker: MarkerType<(T, E)>,
+    report_disposed: fn(C, &F),
 }
 
-impl<D, C, F, T, E> Disposable for Disposal<D, C, F, T, E>
-where
-    D: Disposable,
-    F: Fn(C, DebugEvent<'_, T, E>),
-{
+impl<D: Disposable, C, F> Disposable for Disposal<D, C, F> {
     fn dispose(self) {
         self.source_disposal.dispose();
-        (self.callback)(self.context, DebugEvent::Disposed);
+        (self.report_disposed)(self.context, &self.callback);
     }
+}
+
+fn report_disposed<C, F, T, E>(context: C, callback: &F)
+where
+    F: Fn(C, DebugEvent<'_, T, E>),
+{
+    callback(context, DebugEvent::Disposed);
 }
 
 #[doc(hidden)]

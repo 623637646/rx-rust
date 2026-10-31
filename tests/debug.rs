@@ -9,6 +9,7 @@ use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::creating::create::Create;
+use rx_rust::operators::creating::just::Just;
 use rx_rust::thread_mode::mutable::{MutableExt, MutableHelper};
 use rx_rust::{
     observable::{Observable, ObservableExt},
@@ -484,6 +485,48 @@ fn test_lifetime_sub() {
         let (_, observer) = Checker::new();
         _subscription = observable.subscribe(observer);
     }
+}
+
+#[test]
+fn test_lifetime_sub_with_ref() {
+    fn dispose_on_another_thread<D: Send + 'static>(subscription: D) {
+        std::thread::spawn(move || drop(subscription))
+            .join()
+            .unwrap();
+    }
+
+    let value = 111;
+    let (checker, observer) = Checker::new();
+    let log = new_log();
+    // Not `record`: a fn item names its type arguments, the borrowed item type among them, where a
+    // closure is tied only to what it captures.
+    let subscription = Just::new(&value)
+        .debug(log.clone(), |log, event| {
+            let recorded = match event {
+                DebugEvent::Subscribed => Recorded::Subscribed,
+                DebugEvent::OnNext(value) => Recorded::Next(**value),
+                DebugEvent::OnTermination(termination) => {
+                    Recorded::Termination(termination.clone())
+                }
+                DebugEvent::Disposed => Recorded::Disposed,
+            };
+            log.with_mut(|log| log.push(recorded));
+        })
+        .subscribe(observer);
+    assert_eq!(checker.values(), [&value]);
+    assert_eq!(checker.state(), State::Completed);
+
+    // The subscription stores none of the borrowed items, so it outlives what they borrow.
+    dispose_on_another_thread(subscription);
+    assert_eq!(
+        log.clone_value(),
+        [
+            Recorded::Subscribed,
+            Recorded::Next(value),
+            Recorded::Termination(Termination::Completed),
+            Recorded::Disposed,
+        ]
+    );
 }
 
 #[test]

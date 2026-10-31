@@ -47,6 +47,10 @@ use std::marker::PhantomData;
 /// spelling the types it converts between. The marker ties the struct's lifetime to `T` —
 /// `MarkerType<&'a U>` is not `'static`, and no spelling of `PhantomData` avoids that — but the
 /// source observable already carries the same lifetime, so it costs nothing.
+///
+/// A disposal carries no source, so a marker there would tie the subscription to lifetimes it
+/// does not store anything of. A disposal that must name such a type to call a callback names it
+/// in a fn pointer instead, whose type leaves it out (`debug::Disposal`).
 pub(crate) type MarkerType<T> = PhantomData<fn(T) -> T>;
 
 /// Takes the values out of `values`, a buffer about to be filled again, leaving it with room for
