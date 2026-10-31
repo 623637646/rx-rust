@@ -15,6 +15,9 @@ use educe::Educe;
 /// terminates.
 /// See <https://reactivex.io/documentation/operators/takeuntil.html>
 ///
+/// The values of the second observable are dropped — only their arrival matters — so it can be
+/// an observable of any item type.
+///
 /// # Examples
 /// ```rust
 /// use rx_rust::{
@@ -56,7 +59,7 @@ impl<OE, OE1> TakeUntil<OE, OE1> {
     pub fn new<E>(source: OE, stop: OE1) -> Self
     where
         OE: ObservableTypes<Error = E>,
-        OE1: ObservableTypes<Item = (), Error = E>,
+        OE1: ObservableTypes<Error = E>,
     {
         Self { source, stop }
     }
@@ -71,7 +74,7 @@ delegate_disposal!(
 impl<T, E, OE, OE1> ObservableTypes for TakeUntil<OE, OE1>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    OE1: ObservableTypes<Item = (), Error = E>,
+    OE1: ObservableTypes<Error = E>,
 {
     type Item = T;
     type Error = E;
@@ -89,7 +92,6 @@ where
         >,
     OE1: Observable<
             StopObserver<JoinedModeOf<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
-            Item = (),
             Error = E,
         >,
 {
@@ -128,13 +130,16 @@ pub struct StopObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, T, E, OR, (), D>,
 );
 
-impl<M: ThreadMode, T, E, OR, D> Observer<(), E> for StopObserver<M, T, E, OR, D>
+impl<M: ThreadMode, T, T1, E, OR, D> Observer<T1, E> for StopObserver<M, T, E, OR, D>
 where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) -> Flow {
+    fn on_next(&mut self, value: T1) -> Flow {
         self.0.send_termination(Termination::Completed);
+        // Only the arrival of a notification matters, never its value, which is dropped here,
+        // after the termination and outside the lock, since dropping it can run arbitrary code.
+        drop(value);
         // The first notification ends the stream, so the notifier is of no use afterwards.
         Flow::Stop
     }

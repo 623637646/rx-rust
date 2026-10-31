@@ -188,7 +188,7 @@ fn test_completed_with_interval() {
     let sampler = Interval::with_initial_delay(Duration::ZERO, DURATION_100_MS, scheduler.clone());
     let (checker, observer) = Checker::new();
 
-    let observable = observable.sample(sampler.map(|_| ()));
+    let observable = observable.sample(sampler);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -998,7 +998,7 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    let observable = Empty.sample(Empty.with_item_type());
+    let observable = Empty.sample(Empty);
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -1009,7 +1009,7 @@ fn test_complete_on_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
-    let observable = Throw::new("error").sample(Throw::new("error").with_item_type());
+    let observable = Throw::new("error").sample(Throw::new("error"));
 
     let _subscription = observable.subscribe(observer);
     assert_eq!(checker.values(), vec![]);
@@ -1144,7 +1144,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             DisposeOnDrop::default()
         });
-        let sampler_subject = Create::shared_boxed(|observer| {
+        let sampler_subject = Create::shared_boxed(|observer: SendBoxedObserver<'_, (), _>| {
             life_marker_2 = Some(observer);
             DisposeOnDrop::default()
         });
@@ -1202,7 +1202,8 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         DisposeOnDrop::default()
     });
-    let sampler_subject = Create::shared_boxed(|_| DisposeOnDrop::default());
+    let sampler_subject =
+        Create::shared_boxed(|_: SendBoxedObserver<'_, (), _>| DisposeOnDrop::default());
     let observable = observable.sample(sampler_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
@@ -1210,7 +1211,7 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let (_, sampler_observable, _) = test_channel();
+    let (_, sampler_observable, _) = test_channel::<'_, (), _>();
     let observable = observable.sample(sampler_observable);
 
     let observable = observable.filter(|_| true);
@@ -1259,7 +1260,7 @@ fn test_no_source_subscription_after_notifier_termination() {
     for termination in [Termination::Completed, Termination::Error("error")] {
         let (_, source, source_checker) = test_channel::<'_, i32, &str>();
         let expected = termination.clone();
-        let notifier = Create::shared_boxed(|observer| {
+        let notifier = Create::shared_boxed(|observer: SendBoxedObserver<'_, (), _>| {
             observer.on_termination(termination);
             DisposeOnDrop::default()
         });
@@ -1276,4 +1277,39 @@ fn test_no_source_subscription_after_notifier_termination() {
             }
         );
     }
+}
+
+#[test]
+fn test_drop_notifier_value_outside_lock() {
+    use crate::tests_utils::drop_probe::{DropCount, DropProbe};
+
+    let (mut sender, observable, _channel_checker) = test_channel::<i32, Infallible>();
+    let (mut sampler_sender, sampler_observable, _sampler_channel_checker) =
+        test_channel::<DropProbe, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.sample(sampler_observable);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+
+    // The sampler carries values of its own, which the operator drops outside its lock, after the
+    // update that took the pending value: a drop that re-enters the operator would deadlock
+    // otherwise, or panic on the re-entrancy check of a debug build.
+    let drops = DropCount::new();
+    let probe = DropProbe::new()
+        .on_drop(drops.callback())
+        .on_drop(Box::new(move || {
+            assert!(sender.on_next(222).is_continue());
+        }));
+    assert!(sampler_sender.on_next(probe).is_continue());
+
+    assert_eq!(drops.get(), 1);
+    // The sample emitted the value that was pending when it arrived, and the value the drop sent
+    // became the pending one, which the next sample emits.
+    assert_eq!(checker.values(), [111]);
+
+    assert!(sampler_sender.on_next(DropProbe::new()).is_continue());
+    assert_eq!(checker.values(), [111, 222]);
+    assert_eq!(checker.state(), State::Active);
 }

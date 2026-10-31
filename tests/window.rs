@@ -1807,7 +1807,8 @@ fn test_subscribe_by_different_observer() {
 #[test]
 fn test_unsub_on_next_by_take() {
     let (_sender, observable, channel_checker) = test_channel::<'_, i32, Infallible>();
-    let (_boundary_sender, boundary_observable, boundary_channel_checker) = test_channel();
+    let (_boundary_sender, boundary_observable, boundary_channel_checker) =
+        test_channel::<'_, (), _>();
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
@@ -2937,7 +2938,7 @@ fn test_complete_on_sub() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    let observable = Empty.into_shared().window(Empty.with_item_type());
+    let observable = Empty.into_shared().window(Empty);
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(
@@ -2972,7 +2973,7 @@ fn test_error_on_sub() {
 
     let observable = Throw::new("error")
         .into_shared()
-        .window(Empty.with_item_type().with_error_type());
+        .window(Empty.with_error_type());
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(
@@ -3130,7 +3131,7 @@ fn test_error_on_sub_from_boundary() {
     let (termination_checker, termination_observer) = Checker::<Infallible, _>::new();
     let checker_sub_vec = Arc::new(Mutex::new(Vec::new()));
 
-    let observable = observable.window(Throw::new("boundary error").with_item_type());
+    let observable = observable.window(Throw::new("boundary error"));
 
     let checker_sub_vec_cloned = checker_sub_vec.clone();
     let _subscription = observable.subscribe_with_callback(
@@ -4301,7 +4302,8 @@ fn test_lifetime_or_sub() {
                     life_marker_sub.consume_ref();
                 }))
             });
-        let boundary_subject = Create::shared_boxed(|_| DisposeOnDrop::default());
+        let boundary_subject =
+            Create::shared_boxed(|_: SendBoxedObserver<'_, (), _>| DisposeOnDrop::default());
         let observable = observable.window(boundary_subject);
 
         let (_, observer) = Checker::new();
@@ -4316,7 +4318,8 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         DisposeOnDrop::default()
     });
-    let boundary_subject = Create::shared_boxed(|_| DisposeOnDrop::default());
+    let boundary_subject =
+        Create::shared_boxed(|_: SendBoxedObserver<'_, (), _>| DisposeOnDrop::default());
     let observable = observable.window(boundary_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
@@ -4324,7 +4327,7 @@ fn test_clone() {
 #[test]
 fn test_type_inference_with_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let (_, boundary_observable, _) = test_channel();
+    let (_, boundary_observable, _) = test_channel::<'_, (), _>();
     let observable = observable.window(boundary_observable);
 
     let observable = observable.filter(|_| true);
@@ -4352,4 +4355,41 @@ fn test_no_subscriptions_after_initial_window_stops() {
 
     assert_eq!(source_checker.state(), ChannelState::Initialized);
     assert_eq!(boundary_checker.state(), ChannelState::Initialized);
+}
+
+#[test]
+fn test_drop_notifier_value_outside_lock() {
+    use crate::tests_utils::drop_probe::{DropCount, DropProbe};
+
+    let (mut sender, observable, _channel_checker) = test_channel::<i32, Infallible>();
+    let (mut boundary_sender, boundary_observable, _boundary_channel_checker) =
+        test_channel::<DropProbe, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable
+        .window(boundary_observable)
+        .concat_map(|window| window.to_vec());
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+
+    // The boundary carries values of its own, which the operator drops outside its lock, after the
+    // actions that rotated the window: a drop that re-enters the operator would deadlock
+    // otherwise, or panic on the re-entrancy check of a debug build.
+    let drops = DropCount::new();
+    let probe = DropProbe::new()
+        .on_drop(drops.callback())
+        .on_drop(Box::new(move || {
+            assert!(sender.on_next(222).is_continue());
+        }));
+    assert!(boundary_sender.on_next(probe).is_continue());
+
+    assert_eq!(drops.get(), 1);
+    // The first window was completed before the drop, so the value the drop sent went into the
+    // second one, which the next boundary completes.
+    assert_eq!(checker.values(), [vec![111]]);
+
+    assert!(boundary_sender.on_next(DropProbe::new()).is_continue());
+    assert_eq!(checker.values(), [vec![111], vec![222]]);
+    assert_eq!(checker.state(), State::Active);
 }

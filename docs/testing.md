@@ -118,6 +118,13 @@ subscriber joins. `publish`, `publish_behavior`, `publish_last` and `replay` cov
 7. `test_error_on_unsub`
 8. `test_sub_on_unsub` — same as 4, hot observables only.
 9. `test_race_condition` (only a few operators have it so far)
+10. `test_drop_notifier_value_outside_lock` — for an operator driven by a notifier whose values it
+    ignores (`skip_until`, `sample`, `buffer`, `window`): the notifier carries values of its own,
+    which the operator drops after the update they triggered and outside the lock, so a drop that
+    re-enters the operator goes through instead of tripping the re-entrancy check. `take_until`
+    ends the stream instead, leaving nothing to re-enter, and gets
+    `test_drop_stop_value_after_completion`: the value is dropped once the completion has been
+    delivered and the source let go.
 
 ## Using a scheduler (the operator or source takes a `Scheduler`)
 

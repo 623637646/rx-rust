@@ -214,7 +214,7 @@ fn test_same_source_stop_next() {
 
 #[test]
 fn test_same_source_stop_completed() {
-    let subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
+    let subject: PublishSubject<'_, (), Infallible, _> = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     let observable = subject.clone();
@@ -231,7 +231,7 @@ fn test_same_source_stop_completed() {
 
 #[test]
 fn test_same_source_stop_error() {
-    let subject = PublishSubject::shared();
+    let subject: PublishSubject<'_, (), _, _> = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     let observable = subject.clone();
@@ -317,7 +317,7 @@ fn test_ref() {
     let error = -1;
 
     let (mut sender, observable, channel_checker) = test_channel();
-    let (stop_sender, stop_observable, stop_channel_checker) = test_channel();
+    let (stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
     let (checker, observer) = Checker::new();
 
     let observable = observable.take_until(stop_observable);
@@ -357,7 +357,7 @@ fn test_mut_ref() {
         DisposeOnDrop::default()
     });
 
-    let (stop_sender, stop_observable, stop_channel_checker) = test_channel();
+    let (stop_sender, stop_observable, stop_channel_checker) = test_channel::<'_, (), _>();
     let observable = observable.take_until(stop_observable);
 
     let subscription = observable.subscribe_with_callback(
@@ -848,7 +848,7 @@ fn test_no_source_subscription_after_notifier_termination() {
     for termination in [Termination::Completed, Termination::Error("error")] {
         let (_, source, source_checker) = test_channel::<'_, i32, &str>();
         let expected = termination.clone();
-        let notifier = Create::shared_boxed(|observer| {
+        let notifier = Create::shared_boxed(|observer: SendBoxedObserver<'_, (), _>| {
             observer.on_termination(termination);
             DisposeOnDrop::default()
         });
@@ -876,5 +876,37 @@ fn test_no_source_subscription_after_notifier_next() {
 
     assert_eq!(source_checker.state(), ChannelState::Initialized);
     assert_eq!(stop_checker.state(), ChannelState::Initialized);
+    assert_eq!(checker.state(), State::Completed);
+}
+
+#[test]
+fn test_drop_stop_value_after_completion() {
+    use crate::tests_utils::drop_probe::{DropCount, DropProbe};
+
+    let (mut sender, observable, channel_checker) = test_channel::<i32, Infallible>();
+    let (mut stop_sender, stop_observable, _stop_channel_checker) =
+        test_channel::<DropProbe, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.take_until(stop_observable);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+
+    // The notifier carries values of its own, which the operator drops outside its lock, once it
+    // has completed the stream and let the source go: a drop that re-enters the operator would
+    // deadlock otherwise, or panic on the re-entrancy check of a debug build.
+    let drops = DropCount::new();
+    let checker_on_drop = checker.clone();
+    let probe = DropProbe::new()
+        .on_drop(drops.callback())
+        .on_drop(Box::new(move || {
+            assert_eq!(checker_on_drop.state(), State::Completed);
+            assert_eq!(channel_checker.state(), ChannelState::Unsubscribed);
+        }));
+    assert!(stop_sender.on_next(probe).is_stop());
+
+    assert_eq!(drops.get(), 1);
+    assert_eq!(checker.values(), [111]);
     assert_eq!(checker.state(), State::Completed);
 }

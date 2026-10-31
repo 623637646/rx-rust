@@ -19,6 +19,9 @@ use educe::Educe;
 /// `boundary` observable emits an item.
 /// See <https://reactivex.io/documentation/operators/buffer.html>
 ///
+/// The values of the `boundary` are dropped — only their arrival matters — so it can be an
+/// observable of any item type.
+///
 /// Terminating the `boundary` terminates the outer observable: completing it emits the pending
 /// bundle when non-empty and then completes, while an error from it discards the pending bundle
 /// and errors. Note that this differs from
@@ -87,7 +90,7 @@ impl<OE, OE1> Buffer<OE, OE1> {
     pub fn new<E>(source: OE, boundary: OE1) -> Self
     where
         OE: ObservableTypes<Error = E>,
-        OE1: ObservableTypes<Item = (), Error = E>,
+        OE1: ObservableTypes<Error = E>,
     {
         Self { source, boundary }
     }
@@ -102,7 +105,7 @@ delegate_disposal!(
 impl<T, E, OE, OE1> ObservableTypes for Buffer<OE, OE1>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    OE1: ObservableTypes<Item = (), Error = E>,
+    OE1: ObservableTypes<Error = E>,
 {
     type Item = Vec<T>;
     type Error = E;
@@ -120,7 +123,6 @@ where
         >,
     OE1: Observable<
             BoundaryObserver<JoinedModeOf<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
-            Item = (),
             Error = E,
         >,
 {
@@ -162,15 +164,19 @@ pub struct BoundaryObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, Vec<T>, E, OR, Vec<T>, D>,
 );
 
-impl<M: ThreadMode, T, E, OR, D> Observer<(), E> for BoundaryObserver<M, T, E, OR, D>
+impl<M: ThreadMode, T, T1, E, OR, D> Observer<T1, E> for BoundaryObserver<M, T, E, OR, D>
 where
     OR: Observer<Vec<T>, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) -> Flow {
-        self.0.update_flow(|values| {
+    fn on_next(&mut self, value: T1) -> Flow {
+        let flow = self.0.update_flow(|values| {
             UpdateOutcome::empty().with_next_event(take_leaving_room(values, values.len()))
-        })
+        });
+        // Only the arrival of a boundary matters, never its value, which is dropped here, after
+        // the bundle it emitted and outside the lock, since dropping it can run arbitrary code.
+        drop(value);
+        flow
     }
 
     fn on_termination(self, termination: Termination<E>) {

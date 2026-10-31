@@ -1002,7 +1002,7 @@ fn test_next_on_sub() {
 fn test_complete_on_sub() {
     let (checker, observer) = Checker::new();
 
-    let observable = Empty.buffer(Empty.with_item_type());
+    let observable = Empty.buffer(Empty);
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1013,7 +1013,7 @@ fn test_complete_on_sub() {
 fn test_error_on_sub() {
     let (checker, observer) = Checker::new();
 
-    let observable = Throw::new("error").buffer(Throw::new("error").with_item_type());
+    let observable = Throw::new("error").buffer(Throw::new("error"));
 
     let _subscription = observable.subscribe(observer);
     assert!(checker.values().is_empty());
@@ -1148,7 +1148,7 @@ fn test_lifetime_or() {
             life_marker_1 = Some(observer);
             DisposeOnDrop::default()
         });
-        let boundary_subject = Create::shared_boxed(|observer| {
+        let boundary_subject = Create::shared_boxed(|observer: SendBoxedObserver<'_, (), _>| {
             life_marker_2 = Some(observer);
             DisposeOnDrop::default()
         });
@@ -1206,7 +1206,8 @@ fn test_clone() {
         observer.on_termination(Termination::Error(TestStruct));
         DisposeOnDrop::default()
     });
-    let boundary_subject = Create::shared_boxed(|_| DisposeOnDrop::default());
+    let boundary_subject =
+        Create::shared_boxed(|_: SendBoxedObserver<'_, (), _>| DisposeOnDrop::default());
     let observable = observable.buffer(boundary_subject);
     _ = observable.clone(); // Make sure it's Clone when T and E are not Clone.
 }
@@ -1251,7 +1252,7 @@ fn test_equivalent_to_window_and_collect() {
 #[test]
 fn test_diverges_from_window_and_collect_on_completed_boundary() {
     let mut subject = PublishSubject::shared();
-    let boundary_subject = PublishSubject::shared();
+    let boundary_subject: PublishSubject<'_, (), _, _> = PublishSubject::shared();
     let (buffer_checker, buffer_observer) = Checker::new();
     let (window_checker, window_observer) = Checker::new();
 
@@ -1317,7 +1318,7 @@ fn test_diverges_from_window_and_collect_on_empty_pending_bundle() {
 #[test]
 fn test_type_inference_with_subscribe() {
     let (_, observable, _) = test_channel::<'_, i32, String>();
-    let (_, boundary_observable, _) = test_channel();
+    let (_, boundary_observable, _) = test_channel::<'_, (), _>();
     let observable = observable.buffer(boundary_observable);
 
     let observable = observable.filter(|_| true);
@@ -1367,7 +1368,7 @@ fn test_no_source_subscription_after_notifier_termination() {
     for termination in [Termination::Completed, Termination::Error("error")] {
         let (_, source, source_checker) = test_channel::<'_, i32, &str>();
         let expected = termination.clone();
-        let notifier = Create::shared_boxed(|observer| {
+        let notifier = Create::shared_boxed(|observer: SendBoxedObserver<'_, (), _>| {
             observer.on_termination(termination);
             DisposeOnDrop::default()
         });
@@ -1384,4 +1385,39 @@ fn test_no_source_subscription_after_notifier_termination() {
             }
         );
     }
+}
+
+#[test]
+fn test_drop_notifier_value_outside_lock() {
+    use crate::tests_utils::drop_probe::{DropCount, DropProbe};
+
+    let (mut sender, observable, _channel_checker) = test_channel::<i32, Infallible>();
+    let (mut boundary_sender, boundary_observable, _boundary_channel_checker) =
+        test_channel::<DropProbe, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.buffer(boundary_observable);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue());
+
+    // The boundary carries values of its own, which the operator drops outside its lock, after the
+    // update that emitted the pending bundle: a drop that re-enters the operator would deadlock
+    // otherwise, or panic on the re-entrancy check of a debug build.
+    let drops = DropCount::new();
+    let probe = DropProbe::new()
+        .on_drop(drops.callback())
+        .on_drop(Box::new(move || {
+            assert!(sender.on_next(222).is_continue());
+        }));
+    assert!(boundary_sender.on_next(probe).is_continue());
+
+    assert_eq!(drops.get(), 1);
+    // The bundle the boundary emitted was closed before the drop, so the value the drop sent went
+    // into the next one.
+    assert_eq!(checker.values(), [vec![111]]);
+
+    assert!(boundary_sender.on_next(DropProbe::new()).is_continue());
+    assert_eq!(checker.values(), [vec![111], vec![222]]);
+    assert_eq!(checker.state(), State::Active);
 }

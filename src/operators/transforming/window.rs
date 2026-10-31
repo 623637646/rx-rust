@@ -20,6 +20,9 @@ use std::marker::PhantomData;
 /// `boundary` observable emits an item.
 /// See <https://reactivex.io/documentation/operators/window.html>
 ///
+/// The values of the `boundary` are dropped — only their arrival matters — so it can be an
+/// observable of any item type.
+///
 /// Completing the `boundary` stops future window rotation without terminating the current window
 /// or the outer observable. An error from the `boundary` terminates the current window and the
 /// outer observable.
@@ -84,7 +87,7 @@ impl<OE, OE1> Window<'_, OE, OE1> {
     pub fn new<E>(source: OE, boundary: OE1) -> Self
     where
         OE: ObservableTypes<Error = E>,
-        OE1: ObservableTypes<Item = (), Error = E>,
+        OE1: ObservableTypes<Error = E>,
     {
         Self {
             source,
@@ -104,7 +107,7 @@ impl<'a, T, E, OE, OE1> ObservableTypes for Window<'a, OE, OE1>
 where
     JoinedModeOf<OE, OE1>: ObserverMode,
     OE: ObservableTypes<Item = T, Error = E>,
-    OE1: ObservableTypes<Item = (), Error = E>,
+    OE1: ObservableTypes<Error = E>,
 {
     type Item = BoxedUnicastObservable<'a, T, E, JoinedModeOf<OE, OE1>>;
     type Error = E;
@@ -124,7 +127,6 @@ where
         >,
     OE1: Observable<
             BoundaryObserver<'a, JoinedModeOf<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
-            Item = (),
             Error = E,
         >,
 {
@@ -199,20 +201,24 @@ pub struct BoundaryObserver<'a, M: ObserverMode, T, E, OR, D: Disposable>(
     WindowContext<'a, M, T, E, OR, D>,
 );
 
-impl<'a, M, T, E, OR, D> Observer<(), E> for BoundaryObserver<'a, M, T, E, OR, D>
+impl<'a, M, T, T1, E, OR, D> Observer<T1, E> for BoundaryObserver<'a, M, T, E, OR, D>
 where
     M: ObserverMode,
     E: Clone,
     OR: Observer<BoxedUnicastObservable<'a, T, E, M>, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) -> Flow {
+    fn on_next(&mut self, value: T1) -> Flow {
         // Two events rather than one, so that disposing the outer subscription while the current
         // window is completing suppresses the new window.
-        self.0.send(EventBatch::NextBatch(vec![
+        let flow = self.0.send(EventBatch::NextBatch(vec![
             DelegateAction::TerminateWindow(Termination::Completed),
             DelegateAction::EmitWindow,
-        ]))
+        ]));
+        // Only the arrival of a boundary matters, never its value, which is dropped here, after
+        // the window rotation and outside its lock, since dropping it can run arbitrary code.
+        drop(value);
+        flow
     }
 
     fn on_termination(self, termination: Termination<E>) {

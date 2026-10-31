@@ -253,7 +253,7 @@ fn test_same_source_start_next() {
 
 #[test]
 fn test_same_source_start_completed() {
-    let subject: PublishSubject<'_, _, Infallible, _> = PublishSubject::shared();
+    let subject: PublishSubject<'_, (), Infallible, _> = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     let observable = subject.clone();
@@ -270,7 +270,7 @@ fn test_same_source_start_completed() {
 
 #[test]
 fn test_same_source_start_error() {
-    let subject = PublishSubject::shared();
+    let subject: PublishSubject<'_, (), _, _> = PublishSubject::shared();
     let (checker, observer) = Checker::new();
 
     let observable = subject.clone();
@@ -1012,7 +1012,7 @@ fn test_no_source_subscription_after_notifier_termination() {
     for termination in [Termination::Completed, Termination::Error("error")] {
         let (_, source, source_checker) = test_channel::<'_, i32, &str>();
         let expected = termination.clone();
-        let notifier = Create::shared_boxed(|observer| {
+        let notifier = Create::shared_boxed(|observer: SendBoxedObserver<'_, (), _>| {
             observer.on_termination(termination);
             DisposeOnDrop::default()
         });
@@ -1029,4 +1029,35 @@ fn test_no_source_subscription_after_notifier_termination() {
             }
         );
     }
+}
+
+#[test]
+fn test_drop_notifier_value_outside_lock() {
+    use crate::tests_utils::drop_probe::{DropCount, DropProbe};
+
+    let (mut sender, observable, _channel_checker) = test_channel::<i32, Infallible>();
+    let (mut start_sender, start_observable, _start_channel_checker) =
+        test_channel::<DropProbe, Infallible>();
+    let (checker, observer) = Checker::new();
+
+    let observable = observable.skip_until(start_observable);
+
+    let _subscription = observable.subscribe(observer);
+    assert!(sender.on_next(111).is_continue()); // Skipped: the gate is still closed.
+
+    // The notifier carries values of its own, which the operator drops outside its lock, after the
+    // update that opened the gate: a drop that re-enters the operator would deadlock otherwise, or
+    // panic on the re-entrancy check of a debug build. The gate is open by then, so the value the
+    // drop sends goes through.
+    let drops = DropCount::new();
+    let probe = DropProbe::new()
+        .on_drop(drops.callback())
+        .on_drop(Box::new(move || {
+            assert!(sender.on_next(222).is_continue());
+        }));
+    assert!(start_sender.on_next(probe).is_stop());
+
+    assert_eq!(drops.get(), 1);
+    assert_eq!(checker.values(), [222]);
+    assert_eq!(checker.state(), State::Active);
 }

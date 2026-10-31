@@ -245,7 +245,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// leave the current buffer open.
     fn buffer<OE1>(self, boundary: OE1) -> Buffer<Self, OE1>
     where
-        OE1: ObservableTypes<Item = (), Error = Self::Error>,
+        OE1: ObservableTypes<Error = Self::Error>,
     {
         Buffer::new(self, boundary)
     }
@@ -1066,7 +1066,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// Samples the source whenever the sampler observable emits an event.
     fn sample<OE1>(self, sampler: OE1) -> Sample<Self, OE1>
     where
-        OE1: ObservableTypes<Item = (), Error = Self::Error>,
+        OE1: ObservableTypes<Error = Self::Error>,
     {
         Sample::new(self, sampler)
     }
@@ -1166,7 +1166,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// completes without emitting completes the result.
     fn skip_until<OE1>(self, start: OE1) -> SkipUntil<Self, OE1>
     where
-        OE1: ObservableTypes<Item = (), Error = Self::Error>,
+        OE1: ObservableTypes<Error = Self::Error>,
     {
         SkipUntil::new(self, start)
     }
@@ -1247,7 +1247,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     /// terminates first terminates the result the same way.
     fn take_until<OE1>(self, stop: OE1) -> TakeUntil<Self, OE1>
     where
-        OE1: ObservableTypes<Item = (), Error = Self::Error>,
+        OE1: ObservableTypes<Error = Self::Error>,
     {
         TakeUntil::new(self, stop)
     }
@@ -1301,7 +1301,7 @@ pub trait ObservableExt: ObservableTypes + Sized {
     fn window<'a, OE1>(self, boundary: OE1) -> Window<'a, Self, OE1>
     where
         Self::Mode: ObserverMode,
-        OE1: ObservableTypes<Item = (), Error = Self::Error>,
+        OE1: ObservableTypes<Error = Self::Error>,
     {
         Window::new(self, boundary)
     }

@@ -18,6 +18,9 @@ use educe::Educe;
 /// observable that completes before emitting completes the result.
 /// See <https://reactivex.io/documentation/operators/skipuntil.html>
 ///
+/// The values of the second observable are dropped — only their arrival matters — so it can be
+/// an observable of any item type.
+///
 /// The first item of the second observable opens the gate for good, so that observable is answered
 /// [`Flow::Stop`] right then, as ReactiveX unsubscribes from it: whatever it sends afterwards, an
 /// error included, no longer reaches the result.
@@ -63,7 +66,7 @@ impl<OE, OE1> SkipUntil<OE, OE1> {
     pub fn new<E>(source: OE, start: OE1) -> Self
     where
         OE: ObservableTypes<Error = E>,
-        OE1: ObservableTypes<Item = (), Error = E>,
+        OE1: ObservableTypes<Error = E>,
     {
         Self { source, start }
     }
@@ -78,7 +81,7 @@ delegate_disposal!(
 impl<T, E, OE, OE1> ObservableTypes for SkipUntil<OE, OE1>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    OE1: ObservableTypes<Item = (), Error = E>,
+    OE1: ObservableTypes<Error = E>,
 {
     type Item = T;
     type Error = E;
@@ -96,7 +99,6 @@ where
         >,
     OE1: Observable<
             StartObserver<JoinedModeOf<OE, OE1>, T, E, OR, ChainDisposalOf<OE, OE1>>,
-            Item = (),
             Error = E,
         >,
 {
@@ -151,18 +153,21 @@ pub struct StartObserver<M: ThreadMode, T, E, OR, D: Disposable>(
     SubscriptionContext<M, T, E, OR, Model, D>,
 );
 
-impl<M: ThreadMode, T, E, OR, D> Observer<(), E> for StartObserver<M, T, E, OR, D>
+impl<M: ThreadMode, T, T1, E, OR, D> Observer<T1, E> for StartObserver<M, T, E, OR, D>
 where
     OR: Observer<T, E>,
     D: Disposable,
 {
-    fn on_next(&mut self, _: ()) -> Flow {
+    fn on_next(&mut self, value: T1) -> Flow {
         // The gate stays open from here on, so nothing the notifier sends later matters: it is told
         // to stop, whether or not the context has stopped already.
         let _ = self.0.update(|model| {
             model.started = true;
             UpdateOutcome::empty()
         });
+        // Only the arrival of a notification matters, never its value, which is dropped here,
+        // after the update and outside its lock, since dropping it can run arbitrary code.
+        drop(value);
         Flow::Stop
     }
 
