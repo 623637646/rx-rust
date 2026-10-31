@@ -3,21 +3,19 @@
 
 use crate::{
     delegate_disposal,
-    disposable::{
-        Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop,
-        option_disposal::OptionDisposal,
-    },
+    disposable::{Disposable, chain_disposal::ChainDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{JoinedSchedulerModeOf, Observable, ObservableTypes},
     observer::{EventBatch, Flow, Observer, Termination},
     scheduler::{Clock, Next, Scheduler, SchedulerTypes, Task, TaskWaker, WakeableContext},
     thread_mode::ThreadMode,
     utils::{
         serialized_delivery::{DeliveryStopped, UpdateOutcome},
-        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
+        subscribe_with_context::{self, SubscriptionContext, subscribe_with_context_two_steps},
     },
 };
 use educe::Educe;
 use std::{
+    cell::Cell,
     collections::VecDeque,
     time::{Duration, Instant},
 };
@@ -86,16 +84,13 @@ type DelayContext<M, T, E, OR, D> = SubscriptionContext<M, T, E, OR, Model<T>, D
 /// disposed, and a handle dropped once the context has stopped releases the observer.
 type DelayTask<M, T, E, OR, D> = WakeableContext<DelayContext<M, T, E, OR, D>, M>;
 
-/// The source subscription a [`Delay`] context owns: the timer, then the source. The timer is
-/// optional: a source that ends the stream as it is subscribed leaves no work to schedule.
-type DelaySources<OE, S> = ChainDisposal<
-    OptionDisposal<<S as SchedulerTypes>::Disposal>,
-    <OE as ObservableTypes>::Disposal,
->;
+/// The source subscription a [`Delay`] context owns: the timer, then the source.
+type DelaySources<OE, S> =
+    ChainDisposal<<S as SchedulerTypes>::Disposal, <OE as ObservableTypes>::Disposal>;
 
 delegate_disposal!(
     Disposal<M, T, E, SD, D>,
-    subscribe_with_context::Disposal<M, T, E, Model<T>, ChainDisposal<OptionDisposal<SD>, D>>,
+    subscribe_with_context::Disposal<M, T, E, Model<T>, ChainDisposal<SD, D>>,
     where M: ThreadMode, SD: Disposable, D: Disposable
 );
 
@@ -134,28 +129,28 @@ where
             values: VecDeque::new(),
             completion: None,
         };
-        subscribe_with_context(observer, model, |context| {
-            let (task, waker) = Task::wakeable(context.clone(), step_timer);
-            let source_subscription = self.source.subscribe(DelayObserver {
-                context: context.clone(),
-                delay: self.delay,
-                clock: self.scheduler.clock(),
-                waker,
-            });
-            // The context owns only the task's disposal, through its source subscription, never
-            // the task, which its runtime owns: holding the context strongly forms no cycle.
-            // Stopping the context disposes the timer, which cancels the task.
-            let timer = if context.is_active() {
-                self.scheduler
-                    .run_task(task, None)
-                    .map_inner(OptionDisposal::some)
-            } else {
-                // The source ended the stream as it was subscribed — an error is not delayed — so
-                // nothing is left to deliver late, and the task would end on its first poll.
-                DisposeOnDrop::new(OptionDisposal::none())
-            };
-            source_subscription.preceded_by_wrapped(timer)
-        })
+        // The task is created with the source's observer, which wakes it, and started by the
+        // second step, which takes it over from the first.
+        let timer = Cell::new(None);
+        subscribe_with_context_two_steps(
+            observer,
+            model,
+            |context| {
+                let (task, waker) = Task::wakeable(context.clone(), step_timer);
+                timer.set(Some(task));
+                Some(self.source.subscribe(DelayObserver {
+                    context: context.clone(),
+                    delay: self.delay,
+                    clock: self.scheduler.clock(),
+                    waker,
+                }))
+            },
+            // Skipped when the source ended the stream as it was subscribed — an error is not
+            // delayed — so nothing is left to deliver late. The context owns only the task's
+            // disposal, never the task, which its runtime owns: holding the context strongly forms
+            // no cycle. Stopping the context disposes the timer, which cancels the task.
+            |_| timer.take().map(|task| self.scheduler.run_task(task, None)),
+        )
         .map_inner_into()
     }
 }
