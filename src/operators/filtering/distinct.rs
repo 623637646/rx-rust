@@ -70,10 +70,9 @@ impl<T, OE> Distinct<OE, fn(&T) -> T> {
     }
 }
 
-impl<T, E, OE, F, K> ObservableTypes for Distinct<OE, F>
+impl<T, E, OE, F> ObservableTypes for Distinct<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(&T) -> K,
 {
     type Item = T;
     type Error = E;

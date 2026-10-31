@@ -75,10 +75,9 @@ impl<T, OE> DistinctUntilChanged<OE, fn(&T) -> T> {
     }
 }
 
-impl<T, E, OE, F, K> ObservableTypes for DistinctUntilChanged<OE, F>
+impl<T, E, OE, F> ObservableTypes for DistinctUntilChanged<OE, F>
 where
     OE: ObservableTypes<Item = T, Error = E>,
-    F: FnMut(&T) -> K,
 {
     type Item = T;
     type Error = E;
