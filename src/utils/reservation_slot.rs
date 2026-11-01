@@ -1,4 +1,4 @@
-//! A slot reserved before building the value it will hold, such as a subscription or task handle.
+//! A slot reserved before building the value it will hold, the subscription to an inner observable.
 //!
 //! An operator such as [`Switch`](crate::operators::combining::switch::Switch) or
 //! [`ConcatAll`](crate::operators::combining::concat_all::ConcatAll) is subscribed to at most one
@@ -8,9 +8,6 @@
 //! Between the two steps the inner observable can complete and release the slot. That release
 //! keeps the reservation occupied until the fill returns the new subscription instead of storing
 //! it: another build must not reuse the slot while the first one is still returning.
-//! The same reserve/build/fill sequence holds a scheduled task in
-//! [`ObserveOn`](crate::operators::utility::observe_on::ObserveOn) or a timer in
-//! [`Delay`](crate::operators::utility::delay::Delay).
 //!
 //! [`ReservationSlot`] is that three-step state machine and nothing else. It carries no lock of
 //! its own — it lives inside a model guarded by a
@@ -100,8 +97,10 @@ impl<D> ReservationSlot<D> {
     /// Reserves the slot only if it is [`Idle`](Self::Idle), so nothing is ever evicted, and
     /// returns whether it did.
     ///
-    /// This is the form used by a host that keeps one task alive while there is work to do: it
-    /// starts a task only when none is running, instead of replacing a running one.
+    /// This is the form used by a host that queues what it cannot build yet, as
+    /// [`ConcatAll`](crate::operators::combining::concat_all::ConcatAll) does: it subscribes to the
+    /// next inner observable only when no subscription is in flight or held, instead of replacing
+    /// the current one.
     #[must_use = "a reservation that is not followed by a build leaves the slot reserved forever"]
     pub(crate) fn reserve_if_idle(&mut self) -> bool {
         match self {
