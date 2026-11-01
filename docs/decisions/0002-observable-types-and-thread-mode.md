@@ -155,7 +155,7 @@ pub trait Scheduler<TC, P = ()>: SchedulerTypes + Clone {
 1. **An observer that subscribes an observable with itself cannot require `Observable<Self>` on
    its own `Observer` implementation.** Proving that implementation would depend on itself, and
    rustc reports `E0275` (overflow). `retry` and `concat_all` (and so `concat_map`) re-subscribe
-   that way. They carry a `utils::resubscribe::Resubscribe`, a function pointer
+   that way. They carry a `utils::subscribe_fn::SubscribeFn`, a function pointer
    `fn(OE, Self) -> DisposeOnDrop<D>` created where the operator is subscribed — where the bound is
    stated and holds — and call it instead. This helper is private to the crate. An observer that
    subscribes with a *different* observer type (`switch`, `merge_all`,

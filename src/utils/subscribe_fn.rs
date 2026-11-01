@@ -9,7 +9,7 @@
 //! and rustc rejects the cycle as an overflow (`E0275`).
 //!
 //! The bound does hold where the operator itself is subscribed, because the operator's
-//! `Observable<OR>` implementation states it. [`Resubscribe::new`] is called there: the
+//! `Observable<OR>` implementation states it. [`SubscribeFn::new`] is called there: the
 //! subscription is monomorphized at that point and carried along as a function pointer, whose type
 //! names no bound. The observer's `Observer` implementation then only needs
 //! `OE: ObservableTypes`.
@@ -21,7 +21,7 @@
 //! # Usage
 //!
 //! [`Retry`](crate::operators::error_handling::retry::Retry) is the reference: its observer holds
-//! a `Resubscribe<OE1, Self>`, created in `Retry`'s `Observable<OR>::subscribe`, and calls it with
+//! a `SubscribeFn<OE1, Self>`, created in `Retry`'s `Observable<OR>::subscribe`, and calls it with
 //! itself when the callback asks for a retry.
 
 use crate::{
@@ -38,11 +38,11 @@ use educe::Educe;
 /// [module documentation](self) for why the bound cannot be stated on the observer instead.
 #[derive(Educe)]
 #[educe(Debug, Clone, Copy)]
-pub(crate) struct Resubscribe<OE: ObservableTypes, OR>(
+pub(crate) struct SubscribeFn<OE: ObservableTypes, OR>(
     #[educe(Debug(ignore))] fn(OE, OR) -> DisposeOnDrop<OE::Disposal>,
 );
 
-impl<OE: ObservableTypes, OR> Resubscribe<OE, OR> {
+impl<OE: ObservableTypes, OR> SubscribeFn<OE, OR> {
     /// Captures the subscription of `OE` with `OR`, while the bound that allows it is in scope.
     pub(crate) fn new() -> Self
     where

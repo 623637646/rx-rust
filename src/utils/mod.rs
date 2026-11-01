@@ -14,7 +14,7 @@
 //! [`thread_mode::mutable`](crate::thread_mode::mutable).
 //!
 //! The other modules are private to the crate: the serialized delivery to many observers that the
-//! subjects are made of, the re-subscription of an observer that subscribes an observable with an
+//! subjects are made of, the subscribe function of an observer that subscribes an observable with an
 //! observer of its own type (as `retry` and `concat_all` do), the queue behind a running delivery,
 //! the reservation slot, the id generator, the panic guard and the lazy subscription of the
 //! future and stream adapters. They serve the crate's own operators and appear in no public
@@ -28,9 +28,9 @@ pub(crate) mod lazy_subscription;
 pub(crate) mod on_panic;
 pub(crate) mod pending_events;
 pub(crate) mod reservation_slot;
-pub(crate) mod resubscribe;
 pub mod serialized_delivery;
 pub(crate) mod serialized_multicast;
+pub(crate) mod subscribe_fn;
 pub mod subscribe_with_auto_dispose_on_termination;
 pub mod subscribe_with_context;
 

@@ -11,8 +11,8 @@ use crate::{
     utils::{
         MarkerType,
         reservation_slot::ReservationSlot,
-        resubscribe::Resubscribe,
         serialized_delivery::{DeliveryStopped, DropDecided, UpdateOutcome},
+        subscribe_fn::SubscribeFn,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
     },
 };
@@ -124,7 +124,7 @@ where
         subscribe_with_context(observer, model, |context| {
             self.source.subscribe(SourceObserver {
                 context: context.clone(),
-                subscribe_inner: Resubscribe::new(),
+                subscribe_inner: SubscribeFn::new(),
             })
         })
         .map_inner_into()
@@ -150,7 +150,7 @@ where
 {
     context: SubscriptionContext<M, T, E, OR, Model<OE1>, SD>,
     /// Subscribes an inner observable with an [`InnerObserver`].
-    subscribe_inner: Resubscribe<OE1, InnerObserver<M, T, E, OR, OE1, SD>>,
+    subscribe_inner: SubscribeFn<OE1, InnerObserver<M, T, E, OR, OE1, SD>>,
 }
 
 impl<M: ThreadMode, T, E, OR, OE1, SD> Observer<OE1, E> for SourceObserver<M, T, E, OR, OE1, SD>
@@ -209,7 +209,7 @@ where
 {
     context: SubscriptionContext<M, T, E, OR, Model<OE1>, SD>,
     /// Subscribes the next inner observable with another inner observer.
-    subscribe_inner: Resubscribe<OE1, Self>,
+    subscribe_inner: SubscribeFn<OE1, Self>,
 }
 
 impl<M: ThreadMode, T, E, OR, OE1, SD> Observer<T, E> for InnerObserver<M, T, E, OR, OE1, SD>
@@ -274,7 +274,7 @@ where
 fn subscribe_observables<M: ThreadMode, T, E, OR, OE1, SD>(
     context: &SubscriptionContext<M, T, E, OR, Model<OE1>, SD>,
     mut observable: OE1,
-    subscribe_inner: Resubscribe<OE1, InnerObserver<M, T, E, OR, OE1, SD>>,
+    subscribe_inner: SubscribeFn<OE1, InnerObserver<M, T, E, OR, OE1, SD>>,
 ) -> Result<(), DeliveryStopped>
 where
     OR: Observer<T, E>,

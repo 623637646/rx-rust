@@ -13,7 +13,7 @@ use crate::{
         ThreadMode,
         mutable::{MutableExt, MutableHelper},
     },
-    utils::{on_panic::on_panic, resubscribe::Resubscribe},
+    utils::{on_panic::on_panic, subscribe_fn::SubscribeFn},
 };
 use educe::Educe;
 
@@ -133,7 +133,7 @@ where
             observer,
             callback: self.callback,
             replaceable_disposal: replaceable_disposal.clone(),
-            resubscribe: Resubscribe::new(),
+            resubscribe: SubscribeFn::new(),
             trampoline: trampoline.clone(),
         };
         // The source's subscription goes into the same slot as the retries', so that the first
@@ -160,7 +160,7 @@ pub struct RetryObserver<M: ThreadMode, OR, F, D: Disposable, OE1: ObservableTyp
     /// nothing once the callback gave up.
     replaceable_disposal: ReplaceableDisposal<M, AttemptDisposal<D, OE1::Disposal>>,
     /// Subscribes the observable the callback returned, with this observer.
-    resubscribe: Resubscribe<OE1, Self>,
+    resubscribe: SubscribeFn<OE1, Self>,
     /// Where an error that arrives while this operator is subscribing waits for the subscription
     /// to return, so that retries follow one another instead of nesting.
     trampoline: Trampoline<M, Self, OE1::Error>,

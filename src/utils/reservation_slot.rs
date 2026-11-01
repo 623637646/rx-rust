@@ -60,7 +60,7 @@ pub(crate) enum ReservationSlot<D> {
     /// `fill` hands back the built value and makes the slot idle.
     ReleasedWhileReserved,
     /// A value is held.
-    Active(D),
+    Filled(D),
 }
 
 impl<D> ReservationSlot<D> {
@@ -87,8 +87,8 @@ impl<D> ReservationSlot<D> {
                 *self = Self::Reserved;
                 None
             }
-            Self::Active(_) => match std::mem::replace(self, Self::Reserved) {
-                Self::Active(value) => Some(value),
+            Self::Filled(_) => match std::mem::replace(self, Self::Reserved) {
+                Self::Filled(value) => Some(value),
                 _ => unreachable!(),
             },
         }
@@ -108,7 +108,7 @@ impl<D> ReservationSlot<D> {
                 *self = Self::Reserved;
                 true
             }
-            Self::Reserved | Self::ReleasedWhileReserved | Self::Active(_) => false,
+            Self::Reserved | Self::ReleasedWhileReserved | Self::Filled(_) => false,
         }
     }
 
@@ -120,18 +120,18 @@ impl<D> ReservationSlot<D> {
     ///
     /// # Panics
     ///
-    /// Panics if no build is in flight: the slot is idle or already active.
+    /// Panics if no build is in flight: the slot is idle or already filled.
     pub(crate) fn fill(&mut self, value: D) -> Option<D> {
         match self {
             Self::Reserved => {
-                *self = Self::Active(value);
+                *self = Self::Filled(value);
                 None
             }
             Self::ReleasedWhileReserved => {
                 *self = Self::Idle;
                 Some(value)
             }
-            Self::Idle | Self::Active(_) => {
+            Self::Idle | Self::Filled(_) => {
                 panic!("the slot was filled without being reserved")
             }
         }
@@ -140,7 +140,7 @@ impl<D> ReservationSlot<D> {
     /// Releases the slot, giving back the held value, if any, to drop outside the lock.
     ///
     /// Releasing a reserved slot returns `None` and keeps the reservation occupied until the
-    /// pending [`fill`](Self::fill) gives its value back. Releasing an active slot makes
+    /// pending [`fill`](Self::fill) gives its value back. Releasing a filled slot makes
     /// it idle and returns its value; if this starts another build, reserve it
     /// under the same lock as this release.
     ///
@@ -154,8 +154,8 @@ impl<D> ReservationSlot<D> {
                 *self = Self::ReleasedWhileReserved;
                 None
             }
-            Self::Active(_) => match std::mem::replace(self, Self::Idle) {
-                Self::Active(value) => Some(value),
+            Self::Filled(_) => match std::mem::replace(self, Self::Idle) {
+                Self::Filled(value) => Some(value),
                 _ => unreachable!(),
             },
             Self::Idle => panic!("the slot was released without being reserved"),
@@ -266,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn test_reserve_replacing_active_value() {
+    fn test_reserve_replacing_filled_value() {
         let drops = DropCount::new();
         let mut slot = ReservationSlot::Idle;
         assert!(slot.reserve_replacing().is_none());

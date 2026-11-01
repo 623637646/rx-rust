@@ -120,7 +120,7 @@ when they fail.
 - `src/utils/` — shared machinery. Public modules are for users writing their own operators:
   `subscribe_with_context`, `subscribe_with_auto_dispose_on_termination`, `serialized_delivery`.
   A module shared inside the crate only is `pub(crate) mod`: `serialized_multicast`,
-  `resubscribe`, `pending_events`, `reservation_slot`, `id_generator`, `on_panic`,
+  `subscribe_fn`, `pending_events`, `reservation_slot`, `id_generator`, `on_panic`,
   `lazy_subscription`. A module stays public only when a public signature names its items or a
   user writing an operator needs them; otherwise it is `pub(crate)`, and so is everything in it —
   the crate's `#![warn(unreachable_pub)]` is what catches a `pub` left behind in one, and CI denies
@@ -187,7 +187,7 @@ when they fail.
   Inside the bounds of the impl being written, project qualified —
   `<OE as ObservableTypes>::Disposal`, `<OE as ObservableTypes>::Mode` — not `OE::Disposal` (the
   shorthand is a cycle error there). An observer that re-subscribes with itself (`retry`,
-  `concat_all`) carries a `utils::resubscribe::Resubscribe` created where the operator is
+  `concat_all`) carries a `utils::subscribe_fn::SubscribeFn` created where the operator is
   subscribed, instead of bounding its own `Observer` impl. See
   `docs/decisions/0002-observable-types-and-thread-mode.md`.
 - **The `Disposal`** is one of three: one passed through — the source's or scheduler's
