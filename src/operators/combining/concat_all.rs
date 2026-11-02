@@ -173,8 +173,7 @@ where
                 result: Some(observable),
                 ..
             } => subscribe_observables(&self.context, observable, self.subscribe_inner),
-            Updated::Ran { result: None, .. } => Flow::Continue,
-            Updated::Stopped => Flow::Stop,
+            queued => queued.flow(),
         }
     }
 
@@ -274,7 +273,8 @@ where
 /// before their subscription is filled. An inner that stays active hands the continuation to its
 /// completion callback instead, so immediately completing chains never recurse.
 ///
-/// Answers [`Flow::Stop`] once the context has stopped, and [`Flow::Continue`] otherwise.
+/// Answers the flow of the last update, the one that filled the slot: the inner observable may
+/// have ended the stream while it was being subscribed.
 fn subscribe_observables<M: ThreadMode, T, E, OR, OE1, SD>(
     context: &SubscriptionContext<M, T, E, OR, Model<OE1>, SD>,
     mut observable: OE1,
@@ -301,8 +301,7 @@ where
             Updated::Ran {
                 result: Some(next), ..
             } => observable = next,
-            Updated::Ran { result: None, .. } => return Flow::Continue,
-            Updated::Stopped => return Flow::Stop,
+            last => return last.flow(),
         }
     }
 }

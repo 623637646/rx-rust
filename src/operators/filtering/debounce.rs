@@ -252,15 +252,10 @@ where
                 UpdateOutcome::new(false).with_drop_outside(previous_value)
             }
         });
-        match updated {
-            Updated::Ran { result: wake, .. } => {
-                if wake {
-                    self.waker.wake();
-                }
-                Flow::Continue
-            }
-            Updated::Stopped => Flow::Stop,
+        if let Updated::Ran { result: true, .. } = updated {
+            self.waker.wake();
         }
+        updated.flow()
     }
 
     fn on_termination(self, termination: Termination<E>) {

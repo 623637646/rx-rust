@@ -264,15 +264,10 @@ where
             }
             UpdateOutcome::new(wake).without_events()
         });
-        match updated {
-            Updated::Ran { result: wake, .. } => {
-                if wake {
-                    self.waker.wake();
-                }
-                Flow::Continue
-            }
-            Updated::Stopped => Flow::Stop,
+        if let Updated::Ran { result: true, .. } = updated {
+            self.waker.wake();
         }
+        updated.flow()
     }
 }
 
