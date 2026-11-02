@@ -7,7 +7,7 @@
 //!   [`ReplaceableDisposal`](crate::disposable::replaceable_disposal::ReplaceableDisposal) and
 //!   [`Switch`](crate::operators::combining::switch::Switch);
 //! - a *key*, identifying an entry of a collection — see
-//!   [`MergeAll`](crate::operators::combining::merge_all::MergeAll) and the observers of
+//!   [`ReservationMap`](crate::utils::reservation_map::ReservationMap) and the observers of
 //!   [`SerializedMulticast`](crate::utils::serialized_multicast::SerializedMulticast).
 //!
 //! An [`Id`] can only come from an [`IdGenerator`], which never hands the same one out twice, so a

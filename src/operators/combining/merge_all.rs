@@ -10,13 +10,13 @@ use crate::{
     thread_mode::ThreadMode,
     utils::{
         MarkerType,
-        id_generator::{Id, IdGenerator},
+        id_generator::Id,
+        reservation_map::ReservationMap,
         serialized_delivery::UpdateOutcome,
         subscribe_with_context::{self, SubscriptionContext, subscribe_with_context},
     },
 };
 use educe::Educe;
-use std::collections::HashMap;
 use std::marker::PhantomData;
 
 /// Flattens an observable of observables by emitting the values of every inner observable as they
@@ -131,8 +131,7 @@ where
 {
     fn subscribe(self, observer: OR) -> DisposeOnDrop<Self::Disposal> {
         let model = Model {
-            subscriptions: HashMap::new(),
-            keys: IdGenerator::default(),
+            subscriptions: ReservationMap::default(),
             is_source_completed: false,
         };
         subscribe_with_context(observer, model, |context| {
@@ -146,20 +145,10 @@ struct Model<D: Disposable> {
     /// Keys are never reused, so a late inner observer can never remove another
     /// inner observer's subscription.
     ///
-    /// They are disposed in no particular order when the context stops, which rejects their events
-    /// first: the order among them cannot be observed downstream.
-    subscriptions: HashMap<Id, Option<DisposeOnDrop<D>>>,
-    keys: IdGenerator,
+    /// They are disposed in the order they were subscribed in when the context stops, which rejects
+    /// their events first: the order among them cannot be observed downstream.
+    subscriptions: ReservationMap<DisposeOnDrop<D>>,
     is_source_completed: bool,
-}
-
-impl<D: Disposable> Model<D> {
-    /// Inserts a placeholder subscription and returns its key.
-    fn insert_placeholder(&mut self) -> Id {
-        let key = self.keys.next_id();
-        self.subscriptions.insert(key, None);
-        key
-    }
 }
 
 #[doc(hidden)]
@@ -181,7 +170,7 @@ where
     fn on_next(&mut self, value: OE1) -> Flow {
         let Ok(key) = self
             .0
-            .update(|model| UpdateOutcome::new(model.insert_placeholder()))
+            .update(|model| UpdateOutcome::new(model.subscriptions.reserve()))
         else {
             return Flow::Stop;
         };
@@ -191,15 +180,10 @@ where
         };
         let subscription = value.subscribe(observer);
 
+        // `fill` gives the subscription back when the inner observable completed while it was being
+        // subscribed, and released its own entry.
         self.0.update_flow(|model| {
-            if let Some(slot) = model.subscriptions.get_mut(&key) {
-                *slot = Some(subscription);
-                UpdateOutcome::empty().without_drop_outside()
-            } else {
-                // The inner observable completed while it was being subscribed, and removed its
-                // own entry.
-                UpdateOutcome::empty().with_drop_outside(subscription)
-            }
+            UpdateOutcome::empty().with_drop_outside(model.subscriptions.fill(key, subscription))
         })
     }
 
@@ -242,7 +226,7 @@ where
         match termination {
             completion @ Termination::Completed => {
                 let _ = self.context.update(|model| {
-                    let subscription = model.subscriptions.remove(&self.key);
+                    let subscription = model.subscriptions.release(self.key);
                     if model.is_source_completed && model.subscriptions.is_empty() {
                         UpdateOutcome::empty()
                             .with_termination_event(completion)

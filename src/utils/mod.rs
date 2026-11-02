@@ -16,9 +16,9 @@
 //! The other modules are private to the crate: the serialized delivery to many observers that the
 //! subjects are made of, the subscribe function of an observer that subscribes an observable with an
 //! observer of its own type (as `retry` and `concat_all` do), the queue behind a running delivery,
-//! the reservation slot, the id generator, the panic guard and the lazy subscription of the
-//! future and stream adapters. They serve the crate's own operators and appear in no public
-//! signature.
+//! the reservation slot and its keyed form, the id generator, the panic guard and the lazy
+//! subscription of the future and stream adapters. They serve the crate's own operators and appear
+//! in no public signature.
 //!
 //! Nothing here is needed to *use* the operators; see the module documentation of each part for
 //! the rules it enforces.
@@ -27,6 +27,7 @@ pub(crate) mod id_generator;
 pub(crate) mod lazy_subscription;
 pub(crate) mod on_panic;
 pub(crate) mod pending_events;
+pub(crate) mod reservation_map;
 pub(crate) mod reservation_slot;
 pub mod serialized_delivery;
 pub(crate) mod serialized_multicast;

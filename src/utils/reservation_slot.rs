@@ -18,8 +18,8 @@
 //! [`Reserved`](ReservationSlot::Reserved) and
 //! [`ReleasedWhileReserved`](ReservationSlot::ReleasedWhileReserved) distinguish a build in
 //! flight from an idle slot. Use this for a *single* value built with the lock released;
-//! several of them are keyed, and an absent key already means idle, as in
-//! [`MergeAll`](crate::operators::combining::merge_all::MergeAll). It is not built on
+//! several of them are keyed, and an absent key already means idle: that is
+//! [`ReservationMap`](crate::utils::reservation_map::ReservationMap). It is not built on
 //! [`ReplaceableDisposal`](crate::disposable::replaceable_disposal::ReplaceableDisposal), which is
 //! itself a disposal with its own lock and a terminal state — neither of which a slot needs.
 //!
@@ -76,6 +76,7 @@ impl<D> ReservationSlot<D> {
     ///
     /// Panics if a build is still in flight, including after a release: only one build may be
     /// outstanding, and it must fill the slot before another can reserve it.
+    #[must_use = "an evicted value must be dropped outside the lock that guards the slot"]
     pub(crate) fn reserve_replacing(&mut self) -> Option<D> {
         match self {
             // Reject a second build before touching the state, so that a caught panic leaves the
@@ -121,6 +122,7 @@ impl<D> ReservationSlot<D> {
     /// # Panics
     ///
     /// Panics if no build is in flight: the slot is idle or already filled.
+    #[must_use = "a value handed back must be dropped outside the lock that guards the slot"]
     pub(crate) fn fill(&mut self, value: D) -> Option<D> {
         match self {
             Self::Reserved => {
@@ -148,6 +150,7 @@ impl<D> ReservationSlot<D> {
     ///
     /// Panics if the slot is idle or was already released while its build is still in flight.
     /// Each reservation may be released only once.
+    #[must_use = "a released value must be dropped outside the lock that guards the slot"]
     pub(crate) fn release(&mut self) -> Option<D> {
         match self {
             Self::Reserved => {
@@ -293,13 +296,13 @@ mod tests {
         let mut slot = ReservationSlot::<()>::Idle;
         assert!(slot.reserve_if_idle());
         assert!(slot.release().is_none());
-        slot.reserve_replacing();
+        let _ = slot.reserve_replacing();
     }
 
     #[test]
     #[should_panic(expected = "the slot was released without being reserved")]
     fn test_release_rejects_idle_slot() {
-        ReservationSlot::<()>::Idle.release();
+        let _ = ReservationSlot::<()>::Idle.release();
     }
 
     #[test]
@@ -324,6 +327,6 @@ mod tests {
         assert!(slot.reserve_if_idle());
         assert!(slot.fill(()).is_none());
         assert_eq!(slot.release(), Some(()));
-        slot.release();
+        let _ = slot.release();
     }
 }
