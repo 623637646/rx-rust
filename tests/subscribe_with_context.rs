@@ -5,12 +5,13 @@ use rx_rust::operators::creating::create::Create;
 use rx_rust::thread_mode::Shared;
 use rx_rust::thread_mode::mutable::MutableBoolHelper;
 use rx_rust::thread_mode::mutable::MutableExt;
-use rx_rust::utils::serialized_delivery::{UpdateOutcome, Updated};
 use rx_rust::{
     disposable::{callback_disposal::CallbackDisposal, dispose_on_drop::DisposeOnDrop},
     observable::{Observable, ObservableExt},
     observer::{EventBatch, Flow, Observer, Termination},
-    utils::subscribe_with_context::{subscribe_with_context, subscribe_with_context_two_steps},
+    utils::subscribe_with_context::{
+        UpdateOutcome, Updated, subscribe_with_context, subscribe_with_context_two_steps,
+    },
 };
 use std::convert::Infallible;
 use std::sync::atomic::AtomicBool;

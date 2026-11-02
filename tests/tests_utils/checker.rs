@@ -99,12 +99,17 @@ impl<T, E> CheckerObserver<T, E> {
 
 impl<T, E> Drop for CheckerObserver<T, E> {
     fn drop(&mut self) {
-        self.state.with_mut(|lock| match &*lock {
-            State::Active => *lock = State::Dropped,
-            State::Completed | State::Error(_) => {}
-            State::Dropped => panic!(),
-        })
+        mark_dropped(&self.state);
     }
+}
+
+/// Records that the observer went away: [`State::Dropped`], unless it was terminated first.
+fn mark_dropped<E>(state: &Mutex<State<E>>) {
+    state.with_mut(|lock| match &*lock {
+        State::Active => *lock = State::Dropped,
+        State::Completed | State::Error(_) => {}
+        State::Dropped => panic!(),
+    })
 }
 
 impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
@@ -132,6 +137,8 @@ impl<T, E> Observer<T, E> for CheckerObserver<T, E> {
 }
 
 impl<T> Checker<T, Infallible> {
+    /// Drives `stream` on `scheduler`, recording each item, and [`State::Completed`] at its end.
+    /// Disposing the returned subscription stops it and records [`State::Dropped`].
     pub(crate) fn from_stream<S>(
         stream: impl Stream<Item = T> + Send + 'static,
         scheduler: S,
@@ -141,43 +148,12 @@ impl<T> Checker<T, Infallible> {
         S: Scheduler<FutureThenContext<(), ()>, BoxFuture<'static, ()>>,
         S::Disposal: Send + 'static,
     {
-        let values = Arc::new(Mutex::new(Vec::new()));
-        let state = Arc::new(Mutex::new(State::Active));
-
-        let values_cloned = values.clone();
-        let state_cloned = state.clone();
-        let handle = scheduler.spawn_future(
-            async move {
-                let mut stream = std::pin::pin!(stream);
-                while let Some(value) = stream.next().await {
-                    values_cloned.with_mut(|values| values.push(value));
-                }
-                match state_cloned.replace_value(State::Completed) {
-                    State::Active => {}
-                    State::Completed | State::Error(_) | State::Dropped => panic!(),
-                }
-            }
-            .boxed(),
-        );
-        (
-            Self {
-                values,
-                state: state.clone(),
-            },
-            DisposeOnDrop::new(CallbackDisposal::new(move || {
-                handle.dispose();
-                state.with_mut(|lock| match &*lock {
-                    State::Active => *lock = State::Dropped,
-                    State::Completed | State::Error(_) => {}
-                    State::Dropped => panic!(),
-                });
-            })),
-        )
+        Self::from_try_stream(stream.map(Ok), scheduler)
     }
 }
 
 impl<T, E> Checker<T, E> {
-    /// Like [`Checker::from_stream`], for a stream of `Result`s: an `Err` is recorded as
+    /// [`Checker::from_stream`] for a stream of `Result`s: an `Err` is recorded as
     /// [`State::Error`], and nothing may follow it but the end of the stream.
     pub(crate) fn from_try_stream<S>(
         stream: impl Stream<Item = Result<T, E>> + Send + 'static,
@@ -224,11 +200,7 @@ impl<T, E> Checker<T, E> {
             },
             DisposeOnDrop::new(CallbackDisposal::new(move || {
                 handle.dispose();
-                state.with_mut(|lock| match &*lock {
-                    State::Active => *lock = State::Dropped,
-                    State::Completed | State::Error(_) => {}
-                    State::Dropped => panic!(),
-                });
+                mark_dropped(&state);
             })),
         )
     }

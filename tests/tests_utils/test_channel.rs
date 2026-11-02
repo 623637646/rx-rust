@@ -1,3 +1,4 @@
+use crate::tests_utils::parked_observer::ParkedObserver;
 use educe::Educe;
 use rx_rust::observer::boxed_observer::SendBoxedObserver;
 use rx_rust::thread_mode::Shared;
@@ -9,7 +10,6 @@ use rx_rust::{
         EventBatch, Flow, Observer, Termination,
         boxed_observer::{IntoBoxedObserver, ObserverMode},
     },
-    utils::serialized_delivery::SerializedDelivery,
 };
 use std::mem;
 use std::sync::{Arc, Mutex};
@@ -28,9 +28,9 @@ pub(crate) use channels::test_channels;
 /// change there fail the tests of the operators that have nothing to do with it, and would let a
 /// bug of that implementation hide itself behind the very tests that should catch it.
 ///
-/// The one thing it does share is the [`SerializedDelivery`] the observer is parked in: that is
-/// what lets an event be delivered with no lock of this module held, and it is covered by its own
-/// tests. Everything above it is kept dumb: the channel buffers nothing and replays nothing. It
+/// The one thing it does share is the context the observer is parked in, a [`ParkedObserver`]: that
+/// is what lets an event be delivered with no lock of this module held, and it is covered by its
+/// own tests. Everything above it is kept dumb: the channel buffers nothing and replays nothing. It
 /// panics whenever it is used out of order, which is what a test double is for: subscribing twice,
 /// disposing twice, or sending a value before the subscription, after the end of the channel, or
 /// after the subscription was disposed.
@@ -67,7 +67,7 @@ fn new_channel<'or, T, E>() -> SharedChannel<'or, T, E> {
 /// subscribed to: the subscription parks it, and whichever of the termination and the disposal
 /// comes first takes it out.
 ///
-/// The delivery handle is cloned or taken out under the lock and used after it was released, so
+/// The parked observer is cloned or taken out under the lock and used after it was released, so
 /// nothing is notified nor dropped while the lock is held: the values of the tests run arbitrary
 /// code when they are dropped, which is what the tests use to re-enter the pipeline.
 enum Channel<'or, T, E> {
@@ -98,7 +98,7 @@ where
 
 type SharedChannel<'or, T, E> = Arc<Mutex<Channel<'or, T, E>>>;
 
-type Delivery<'or, T, E> = SerializedDelivery<Shared, T, E, SendBoxedObserver<'or, T, E>, ()>;
+type Delivery<'or, T, E> = ParkedObserver<T, E, SendBoxedObserver<'or, T, E>>;
 
 pub(crate) struct SenderObserver<'or, T, E> {
     channel: SharedChannel<'or, T, E>,
@@ -110,7 +110,7 @@ where
 {
     fn on_next(&mut self, value: T) -> Flow {
         let delivery = self.channel.with_ref(|channel| match channel {
-            Channel::Subscribed(delivery) => Some(delivery.clone()),
+            Channel::Subscribed(delivery) => Some(delivery.sender()),
             Channel::Initialized
             | Channel::Completed
             | Channel::Error(_)
@@ -195,9 +195,8 @@ where
         let mut observer = Some(Shared::boxed(observer));
         let initialized = self.channel.with_mut(|channel| match channel {
             Channel::Initialized => {
-                *channel = Channel::Subscribed(SerializedDelivery::idle(
+                *channel = Channel::Subscribed(ParkedObserver::new(
                     observer.take().expect("the observer is parked once"),
-                    (),
                 ));
                 true
             }

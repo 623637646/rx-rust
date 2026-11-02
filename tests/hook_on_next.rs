@@ -2,7 +2,6 @@ mod tests_utils;
 
 use crate::tests_utils::DURATION_10_MS;
 use crate::tests_utils::checker::State;
-use crate::tests_utils::shared_sender::SharedSender;
 use crate::tests_utils::test_channel::test_channels;
 use crate::tests_utils::test_channel::{ChannelState, test_channel};
 use crate::tests_utils::test_scheduler::block_on;
@@ -10,12 +9,14 @@ use rx_rust::disposable::Disposable;
 use rx_rust::disposable::callback_disposal::CallbackDisposal;
 use rx_rust::disposable::dispose_on_drop::DisposeOnDrop;
 use rx_rust::operators::creating::create::Create;
+use rx_rust::thread_mode::mutable::MutableHelper;
 use rx_rust::{
     observable::{Observable, ObservableExt},
     observer::{Flow, Observer, Termination},
     operators::others::hook_on_next::HookOnNext,
 };
 use std::convert::Infallible;
+use std::sync::{Arc, Mutex};
 use tests_utils::{checker::Checker, test_struct::TestStruct};
 
 #[test]
@@ -150,9 +151,9 @@ fn test_unsubscribe() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::<_, String>::new();
 
-    let observer_3 = SharedSender::new(observer_3);
+    let observer_3 = Arc::new(Mutex::new(observer_3));
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_3.on_next(value);
+        assert!(observer_3.with_mut(|observer_3| observer_3.on_next(value).is_continue()));
         observer.on_next(value * 2)
     });
     let observable_1 = observable;
@@ -335,9 +336,9 @@ fn test_subscribe_by_different_observer() {
     let (checker_2, observer_2) = Checker::new();
     let (checker_3, observer_3) = Checker::<_, String>::new();
 
-    let observer_3 = SharedSender::new(observer_3);
+    let observer_3 = Arc::new(Mutex::new(observer_3));
     let observable = observable.hook_on_next(move |observer, value| {
-        observer_3.on_next(value);
+        assert!(observer_3.with_mut(|observer_3| observer_3.on_next(value).is_continue()));
         observer.on_next(value * 2)
     });
     let observable_1 = observable;
